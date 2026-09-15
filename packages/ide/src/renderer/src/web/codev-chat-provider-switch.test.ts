@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const launchAgentInNewTab = vi.fn()
 const closeTab = vi.fn()
 let storeState: {
-  tabsByWorktree: Record<string, Array<{ id: string }>>
+  tabsByWorktree: Record<string, { id: string }[]>
   closeTab: typeof closeTab
 }
 
@@ -36,19 +36,13 @@ afterEach(() => {
 })
 
 describe('codevChatProviders / isCodevChatProvider / otherCodevChatProvider', () => {
-  it('offers only claude and codex when no Cursor credential is linked', () => {
-    expect(codevChatProviders({})).toEqual(['claude', 'codex'])
-    expect(isCodevChatProvider('claude', {})).toBe(true)
-    expect(isCodevChatProvider('codex', {})).toBe(true)
-    expect(isCodevChatProvider('cursor', {})).toBe(false)
-    expect(isCodevChatProvider('gemini', {})).toBe(false)
-    expect(isCodevChatProvider(null, {})).toBe(false)
-  })
-
-  it('adds cursor once the member has a linked Cursor credential', () => {
-    const win = { __CODEV_CURSOR_AVAILABLE__: true }
-    expect(codevChatProviders(win)).toEqual(['claude', 'codex', 'cursor'])
-    expect(isCodevChatProvider('cursor', win)).toBe(true)
+  it('offers only claude and codex', () => {
+    expect(codevChatProviders()).toEqual(['claude', 'codex'])
+    expect(isCodevChatProvider('claude')).toBe(true)
+    expect(isCodevChatProvider('codex')).toBe(true)
+    expect(isCodevChatProvider('cursor')).toBe(false)
+    expect(isCodevChatProvider('gemini')).toBe(false)
+    expect(isCodevChatProvider(null)).toBe(false)
   })
 
   it('toggles between the two hosted providers', () => {

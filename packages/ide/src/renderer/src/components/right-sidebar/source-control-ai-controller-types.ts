@@ -8,7 +8,7 @@ import type {
 
 export type SourceControlAiStoreSnapshot = Pick<
   AppState,
-  'settings' | 'repos' | 'ensureDetectedAgents' | 'ensureRemoteDetectedAgents'
+  'settings' | 'repos' | 'ensureDetectedAgents'
 >
 
 export type SourceControlAiControllerParams = {

@@ -12,7 +12,6 @@ import {
 import { toast } from 'sonner'
 import { User } from 'lucide-react'
 import type { GlobalSettings, OrcaHooks, ProjectHostSetup, Repo } from '../../../../shared/types'
-import type { SpeechModelState } from '../../../../shared/speech-types'
 import type {
   SourceControlAiSettings,
   SourceControlAiSettingsPatch
@@ -29,7 +28,7 @@ import {
   getFallbackTerminalFonts,
   mergeFontSuggestions
 } from './SettingsConstants'
-import { DEFAULT_APP_FONT_FAMILY, getDefaultVoiceSettings } from '../../../../shared/constants'
+import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -49,29 +48,21 @@ import { GitPane } from './GitPane'
 import { CommitMessageAiPane } from './CommitMessageAiPane'
 import { GitProviderApiBudgetPane } from './GitProviderApiBudgetPane'
 import { NotificationsPane } from './NotificationsPane'
-import { VoicePane } from './VoicePane'
-import { SshPane } from './SshPane'
 import { ExperimentalPane } from './ExperimentalPane'
 import { PluginsSettingsSection } from './PluginsSettingsSection'
 import { AgentsPane } from './AgentsPane'
 import { OrchestrationPane } from './OrchestrationPane'
-import { LinearAgentSkillPane } from './LinearAgentSkillPane'
 import { AccountsPane } from './AccountsPane'
 import { CodevProviderConnectionsSection } from './CodevProviderConnectionsSection'
 import { CodevProfileSection } from './CodevProfileSection'
-import { StatsPane } from '../stats/StatsPane'
 import { IntegrationsPane } from './IntegrationsPane'
-import { TasksPane } from './TasksPane'
-import { QuickCommandsPane } from './QuickCommandsPane'
 import { DeveloperPermissionsPane } from './DeveloperPermissionsPane'
 import { ComputerUsePane } from './ComputerUsePane'
-import { MobileSettingsPane } from './MobileSettingsPane'
 import { MobileEmulatorSettingsPane } from './MobileEmulatorSettingsPane'
 import { RuntimeEnvironmentsPane } from './RuntimeEnvironmentsPane'
 import { PrivacyPane } from './PrivacyPane'
 import { AdvancedPane } from './AdvancedPane'
 import { SettingsSidebar } from './SettingsSidebar'
-import { SettingsSetupGuidePane } from './SettingsSetupGuidePane'
 import { ActiveSettingsSectionProvider, SettingsSection } from './SettingsSection'
 import { getSettingsSectionSearchEntries, rankSettingsSearchItems } from './settings-search'
 import { resolveAppearanceAccordionDeepLink } from './appearance-usage-percentage-search'
@@ -101,21 +92,15 @@ import type {
 } from '@/lib/settings-navigation-types'
 import {
   COMPUTER_USE_SKILL_NAME,
-  LINEAR_AGENT_SKILL_NAMES,
   ORCHESTRATION_SKILL_NAME
 } from '@/lib/agent-feature-install-commands'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
-  useInstalledAgentSkill,
-  useInstalledAgentSkillNames
+  useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
-import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
 import { useSkillFreshness } from '@/hooks/useSkillFreshness'
-import {
-  getAgentSkillNavInstallStatus,
-  getLinearAgentSkillNavInstallStatus
-} from '@/lib/agent-skill-nav-install-status'
+import { getAgentSkillNavInstallStatus } from '@/lib/agent-skill-nav-install-status'
 import { deriveNeededSectionIds, getInitialMountedSectionIds } from './settings-load-performance'
 import { translate } from '@/i18n/i18n'
 import { getProjectHostSetupProjectionFromState } from '../../store/selectors'
@@ -220,20 +205,6 @@ function getSettingsNavGroupDefinitionsForSearch(
   })
 }
 
-function hasReadyVoiceModel(
-  settings: GlobalSettings,
-  modelStates: readonly SpeechModelState[]
-): boolean {
-  const voiceSettings = settings.voice ?? getDefaultVoiceSettings()
-  if (
-    voiceSettings.sttModel !== '' &&
-    modelStates.some((state) => state.id === voiceSettings.sttModel && state.status === 'ready')
-  ) {
-    return true
-  }
-  return modelStates.some((state) => state.status === 'ready')
-}
-
 function getSettingsScrollTarget(
   sectionId: string,
   container?: HTMLElement | null
@@ -310,8 +281,6 @@ function Settings(): React.JSX.Element {
   const settingsSearchInputQuery = useAppStore((s) => s.settingsSearchInputQuery)
   const settingsSearchQuery = useAppStore((s) => s.settingsSearchQuery)
   const setSettingsSearchQuery = useAppStore((s) => s.setSettingsSearchQuery)
-  const modelStates = useAppStore((s) => s.modelStates)
-  const refreshModelStates = useAppStore((s) => s.refreshModelStates)
 
   // Why: one entry per project (derived from repos to match nav metadata) — the source of truth for the pane list.
   const settingsProjectList = useMemo(() => buildSettingsProjectList(repos), [repos])
@@ -339,15 +308,8 @@ function Settings(): React.JSX.Element {
   const isMac = isMacUserAgent()
   const isWebClient = isWebClientLocation()
   const showDesktopOnlySettings = !isWebClient
-  // Why: mirror the nav registry's gate so the Linear sidebar entry and section appear/disappear together.
-  const linearConnected = useLinearProviderConnected()
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   const orchestrationSkill = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
-    discoveryTarget: activeSkillRuntime.discoveryTarget,
-    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
-  })
-  const linearSkill = useInstalledAgentSkillNames(LINEAR_AGENT_SKILL_NAMES, {
-    enabled: linearConnected,
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
@@ -358,7 +320,6 @@ function Settings(): React.JSX.Element {
   })
   const skillFreshnessApplies = activeSkillRuntime.canUseLocalSkillFreshness
   const { inventory: skillFreshnessInventory } = useSkillFreshness(skillFreshnessApplies)
-  const [voiceModelStatesLoading, setVoiceModelStatesLoading] = useState(showDesktopOnlySettings)
   // Why: trim platform-only Terminal entries from the shared search index so search never reveals hidden controls.
   const [scrollbackMode, setScrollbackMode] = useState<'preset' | 'custom'>('preset')
   const [prevScrollbackRows, setPrevScrollbackRows] = useState(settings?.terminalScrollbackRows)
@@ -380,8 +341,6 @@ function Settings(): React.JSX.Element {
   const [highlightedSettingsTargetId, setHighlightedSettingsTargetId] = useState<string | null>(
     null
   )
-  const [quickCommandAddIntentSignal, setQuickCommandAddIntentSignal] = useState(0)
-  const [sshHostAddIntentSignal, setSshHostAddIntentSignal] = useState(0)
   const [remoteServerAddIntentSignal, setRemoteServerAddIntentSignal] = useState(0)
   const [hasUnsavedCommitPromptChanges, setHasUnsavedCommitPromptChanges] = useState(false)
   const [hasUnsavedBranchPromptChanges, setHasUnsavedBranchPromptChanges] = useState(false)
@@ -533,24 +492,6 @@ function Settings(): React.JSX.Element {
   }, [fetchKeybindings, fetchSettings])
 
   useEffect(() => {
-    if (!showDesktopOnlySettings) {
-      setVoiceModelStatesLoading(false)
-      return
-    }
-    let canceled = false
-    // Why: modelStates starts empty, so Voice shouldn't look missing before the first speech-model scan reports state.
-    setVoiceModelStatesLoading(true)
-    void refreshModelStates().finally(() => {
-      if (!canceled) {
-        setVoiceModelStatesLoading(false)
-      }
-    })
-    return () => {
-      canceled = true
-    }
-  }, [refreshModelStates, showDesktopOnlySettings])
-
-  useEffect(() => {
     const hasVisibleOverlay = (): boolean =>
       Array.from(
         document.querySelectorAll('[role="dialog"], [role="listbox"], [role="menu"]')
@@ -692,11 +633,7 @@ function Settings(): React.JSX.Element {
         useAppStore.getState().setAppearanceAccordionDeepLink(accordion)
       }
     }
-    if (settingsNavigationTarget.intent === 'add-quick-command') {
-      setQuickCommandAddIntentSignal((signal) => signal + 1)
-    } else if (settingsNavigationTarget.intent === 'add-ssh-host') {
-      setSshHostAddIntentSignal((signal) => signal + 1)
-    } else if (settingsNavigationTarget.intent === 'add-remote-orca-server') {
+    if (settingsNavigationTarget.intent === 'add-remote-orca-server') {
       setRemoteServerAddIntentSignal((signal) => signal + 1)
     }
     setMountedSectionIds((previous) => {
@@ -740,11 +677,6 @@ function Settings(): React.JSX.Element {
   const baseNavSections = useSettingsNavigationMetadata()
   const { installed: orchestrationSkillInstalled, loading: orchestrationSkillLoading } =
     orchestrationSkill
-  const {
-    installed: linearSkillInstalled,
-    loading: linearSkillLoading,
-    skills: linearSkills
-  } = linearSkill
   const { installed: computerUseSkillInstalled, loading: computerUseSkillLoading } =
     computerUseSkill
   const capabilityInstallStatusBySectionId = useMemo(() => {
@@ -760,17 +692,6 @@ function Settings(): React.JSX.Element {
         })
       ]
     ])
-    if (linearConnected) {
-      next.set(
-        'linear',
-        getLinearAgentSkillNavInstallStatus({
-          skills: linearSkills,
-          installed: linearSkillInstalled,
-          loading: linearSkillLoading,
-          inventory: applicableFreshnessInventory
-        })
-      )
-    }
     if (showDesktopOnlySettings) {
       next.set(
         'computer-use',
@@ -781,33 +702,16 @@ function Settings(): React.JSX.Element {
           inventory: applicableFreshnessInventory
         })
       )
-      if (settings) {
-        next.set(
-          'voice',
-          voiceModelStatesLoading
-            ? 'checking'
-            : hasReadyVoiceModel(settings, modelStates)
-              ? 'installed'
-              : 'install'
-        )
-      }
     }
     return next
   }, [
     computerUseSkillInstalled,
     computerUseSkillLoading,
-    linearConnected,
-    linearSkillInstalled,
-    linearSkillLoading,
-    linearSkills,
-    modelStates,
     orchestrationSkillInstalled,
     orchestrationSkillLoading,
-    settings,
     showDesktopOnlySettings,
     skillFreshnessApplies,
-    skillFreshnessInventory,
-    voiceModelStatesLoading
+    skillFreshnessInventory
   ])
   const codevSettingsOnly = useMemo(() => isCodevSettingsOnly(), [])
   // Why: Profile has no upstream nav entry at all — it's a CoDev-only concept
@@ -1205,7 +1109,7 @@ function Settings(): React.JSX.Element {
       title: translate(group.titleKey, group.titleDefault),
       sections: generalNavSections.filter((section) => section.group === group.id)
     }))
-    .filter((group) => group.sections.length > 0 || group.id === 'setup')
+    .filter((group) => group.sections.length > 0)
   const repoNavSections = visibleNavSections
     .filter((section) => section.id.startsWith('repo-'))
     .map((section) => {
@@ -1221,8 +1125,6 @@ function Settings(): React.JSX.Element {
   const isSectionMounted = (sectionId: string): boolean => neededSectionIds.has(sectionId)
   const isFocusedShortcutsPane =
     activeSectionId === 'shortcuts' && settingsSearchQuery.trim() === ''
-  const isFocusedSetupGuidePane =
-    activeSectionId === 'setup-guide' && settingsSearchQuery.trim() === ''
 
   return (
     <div
@@ -1254,7 +1156,7 @@ function Settings(): React.JSX.Element {
             className={cn(
               'mx-auto flex w-full flex-col gap-10 px-8 pt-10',
               isFocusedShortcutsPane ? 'h-full pb-6' : 'pb-24',
-              isFocusedSetupGuidePane ? 'max-w-6xl' : 'max-w-4xl'
+              'max-w-4xl'
             )}
           >
             {visibleNavSections.length === 0 ? (
@@ -1334,68 +1236,22 @@ function Settings(): React.JSX.Element {
                   {isSectionMounted('orchestration') ? <OrchestrationPane /> : null}
                 </SettingsSection>
 
-                {linearConnected ? (
+                {showDesktopOnlySettings ? (
                   <SettingsSection
-                    id="linear"
-                    title={translate('auto.components.settings.Settings.linearTitle', 'Linear')}
-                    description={translate(
-                      'auto.components.settings.Settings.linearDescription',
-                      'How Linear works in Orca, setup checklist, agent skill, and example prompts.'
+                    id="computer-use"
+                    title={translate(
+                      'auto.components.settings.Settings.c9841721cb',
+                      'Computer Use'
                     )}
-                    searchEntries={getSectionSearchEntries('linear')}
+                    description={translate(
+                      'auto.components.settings.Settings.7118953f14',
+                      'Enable agents to control any app on your computer.'
+                    )}
+                    searchEntries={getSectionSearchEntries('computer-use')}
                   >
-                    {isSectionMounted('linear') ? <LinearAgentSkillPane /> : null}
+                    {isSectionMounted('computer-use') ? <ComputerUsePane /> : null}
                   </SettingsSection>
                 ) : null}
-
-                {showDesktopOnlySettings ? (
-                  <>
-                    <SettingsSection
-                      id="computer-use"
-                      title={translate(
-                        'auto.components.settings.Settings.c9841721cb',
-                        'Computer Use'
-                      )}
-                      description={translate(
-                        'auto.components.settings.Settings.7118953f14',
-                        'Enable agents to control any app on your computer.'
-                      )}
-                      searchEntries={getSectionSearchEntries('computer-use')}
-                    >
-                      {isSectionMounted('computer-use') ? <ComputerUsePane /> : null}
-                    </SettingsSection>
-
-                    <SettingsSection
-                      id="voice"
-                      title={translate('auto.components.settings.Settings.5063bb47a5', 'Voice')}
-                      description={translate(
-                        'auto.components.settings.Settings.eb1176a14e',
-                        'Local speech-to-text dictation with on-device models.'
-                      )}
-                      searchEntries={getSectionSearchEntries('voice')}
-                    >
-                      {isSectionMounted('voice') ? (
-                        <VoicePane settings={settings} updateSettings={updateSettings} />
-                      ) : null}
-                    </SettingsSection>
-                  </>
-                ) : null}
-
-                <SettingsSection
-                  id="setup-guide"
-                  title={translate(
-                    'auto.components.settings.Settings.6d119427ef',
-                    'Onboarding checklist'
-                  )}
-                  description={translate(
-                    'auto.components.settings.Settings.6855b0f77d',
-                    'Finish the core workflows that make Orca useful for parallel agent work.'
-                  )}
-                  searchEntries={getSectionSearchEntries('setup-guide')}
-                  bodyClassName="overflow-hidden rounded-none border-0 bg-transparent p-0 shadow-none"
-                >
-                  {isSectionMounted('setup-guide') ? <SettingsSetupGuidePane /> : null}
-                </SettingsSection>
 
                 {isSectionMounted('codev-profile') ? (
                   <SettingsSection
@@ -1436,28 +1292,13 @@ function Settings(): React.JSX.Element {
                   title={translate('auto.components.settings.Settings.c9ca101a3b', 'Integrations')}
                   description={translate(
                     'auto.components.settings.Settings.b07041697f',
-                    'Connect GitHub, GitLab, Linear, and source-hosting services.'
+                    'Connect GitHub and source-hosting services.'
                   )}
                   searchEntries={getSectionSearchEntries('integrations')}
                   bodyClassName="rounded-none border-0 bg-transparent p-0 shadow-none"
                 >
                   {isSectionMounted('integrations') ? <IntegrationsPane /> : null}
                 </SettingsSection>
-
-                {showDesktopOnlySettings ? (
-                  <SettingsSection
-                    id="mobile"
-                    title={translate('auto.components.settings.Settings.c40dadaac8', 'Mobile')}
-                    badge="Beta"
-                    description={translate(
-                      'auto.components.settings.Settings.c6c01ac209',
-                      'Control terminals and agents from your phone.'
-                    )}
-                    searchEntries={getSectionSearchEntries('mobile')}
-                  >
-                    {isSectionMounted('mobile') ? <MobileSettingsPane /> : null}
-                  </SettingsSection>
-                ) : null}
 
                 <SettingsSection
                   id="git"
@@ -1498,20 +1339,6 @@ function Settings(): React.JSX.Element {
                 </SettingsSection>
 
                 <SettingsSection
-                  id="tasks"
-                  title={translate('auto.components.settings.Settings.11faa2f7dd', 'Task Sources')}
-                  description={translate(
-                    'auto.components.settings.Settings.tasksDescription',
-                    'Connect providers, install the Linear skill, and choose what appears in Tasks.'
-                  )}
-                  searchEntries={getSectionSearchEntries('tasks')}
-                >
-                  {isSectionMounted('tasks') ? (
-                    <TasksPane settings={settings} updateSettings={updateSettings} />
-                  ) : null}
-                </SettingsSection>
-
-                <SettingsSection
                   id="terminal"
                   title={translate('auto.components.settings.Settings.3de4bbb841', 'Terminal')}
                   description={translate(
@@ -1532,27 +1359,6 @@ function Settings(): React.JSX.Element {
                       pwshAvailable={windowsTerminalCapabilities.pwshAvailable}
                       gitBashAvailable={windowsTerminalCapabilities.gitBashAvailable}
                       isWindowsTerminalHost={isWindowsTerminalHost}
-                    />
-                  ) : null}
-                </SettingsSection>
-
-                <SettingsSection
-                  id="quick-commands"
-                  title={translate(
-                    'auto.components.settings.Settings.13d4fe30ad',
-                    'Quick Commands'
-                  )}
-                  description={translate(
-                    'auto.components.settings.Settings.6742c7932c',
-                    'Saved terminal commands, scoped globally or per project.'
-                  )}
-                  searchEntries={getSectionSearchEntries('quick-commands')}
-                >
-                  {isSectionMounted('quick-commands') ? (
-                    <QuickCommandsPane
-                      settings={settings}
-                      updateSettings={updateSettings}
-                      addCommandIntentSignal={quickCommandAddIntentSignal}
                     />
                   ) : null}
                 </SettingsSection>
@@ -1697,18 +1503,6 @@ function Settings(): React.JSX.Element {
                 </SettingsSection>
 
                 <SettingsSection
-                  id="stats"
-                  title={translate('auto.components.settings.Settings.954a8f5aef', 'Stats & Usage')}
-                  description={translate(
-                    'auto.components.settings.Settings.8acf3f22e0',
-                    'Orca stats plus Claude, Codex, OpenCode token analytics and Grok subscription usage.'
-                  )}
-                  searchEntries={getSectionSearchEntries('stats')}
-                >
-                  {isSectionMounted('stats') ? <StatsPane /> : null}
-                </SettingsSection>
-
-                <SettingsSection
                   id="servers"
                   title={translate(
                     'auto.components.settings.Settings.bd0181eeca',
@@ -1738,22 +1532,6 @@ function Settings(): React.JSX.Element {
                     />
                   ) : null}
                 </SettingsSection>
-
-                {showDesktopOnlySettings ? (
-                  <SettingsSection
-                    id="ssh"
-                    title={translate('auto.components.settings.Settings.9b02492d1f', 'SSH Hosts')}
-                    description={translate(
-                      'auto.components.settings.Settings.c2ee313198',
-                      'Use existing machines over SSH for files, terminals, Git, and workspaces.'
-                    )}
-                    searchEntries={getSectionSearchEntries('ssh')}
-                  >
-                    {isSectionMounted('ssh') ? (
-                      <SshPane addTargetIntentSignal={sshHostAddIntentSignal} />
-                    ) : null}
-                  </SettingsSection>
-                ) : null}
 
                 {showDesktopOnlySettings && isMac ? (
                   <SettingsSection

@@ -1,6 +1,5 @@
 import type { BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
-import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
   createWorktreeHeadIdentityRefreshState,
   refreshWorktreeHeadIdentities,
@@ -8,7 +7,6 @@ import {
 } from './worktree-head-identity-refresh'
 import {
   collectLocalWorktreeBaseChanges,
-  collectRemoteWorktreeBaseChanges,
   hasCollectedWorktreeBaseChanges
 } from './worktree-base-directory-change-collector'
 import {
@@ -87,31 +85,6 @@ function handleLocalWatchEvents(
   }
 }
 
-function handleRemoteWatchEvents(
-  watch: ActiveWatch,
-  events: Parameters<typeof collectRemoteWorktreeBaseChanges>[1]
-): void {
-  if (watch.disposed || watch.mainWindow.isDestroyed()) {
-    return
-  }
-  invalidateGitStatusRefResolutionForPaths(
-    watch,
-    events.flatMap((event) =>
-      event.kind === 'overflow' ? [] : [event.absolutePath, event.oldAbsolutePath]
-    ),
-    () => activeWatches.values()
-  )
-  const changes = collectRemoteWorktreeBaseChanges(watch, events)
-  if (changes.overflow) {
-    invalidateActiveGitStatusRefResolution(watch, () => activeWatches.values())
-    scheduleWorktreeBaseNotification(watch, { structureRepoIds: [...watch.repos.keys()] })
-    return
-  }
-  if (hasCollectedWorktreeBaseChanges(changes)) {
-    scheduleWorktreeBaseNotification(watch, changes)
-  }
-}
-
 function createActiveWatch(
   target: WorktreeBaseWatchTarget,
   mainWindow: BrowserWindow,
@@ -140,27 +113,6 @@ async function subscribeTarget(
   let activeWatch: ActiveWatch | null = null
   const gitStatusRefPaths = new Set<string>()
   applyActiveGitStatusRefBinding({ ...target, gitStatusRefPaths })
-  if (target.connectionId) {
-    const provider = getSshFilesystemProvider(target.connectionId)
-    if (!provider) {
-      throw new Error(`SSH filesystem provider unavailable for ${target.connectionId}`)
-    }
-    const unwatch = await provider.watch(target.path, (events) => {
-      const currentWatch = activeWatches.get(target.key) ?? activeWatch
-      if (!currentWatch || currentWatch.disposed) {
-        return
-      }
-      handleRemoteWatchEvents(currentWatch, events)
-    })
-    activeWatch = createActiveWatch(
-      target,
-      mainWindow,
-      { unsubscribe: async () => unwatch() },
-      gitStatusRefPaths
-    )
-    return activeWatch
-  }
-
   // Why: a recursive native watcher here forced fseventsd to deliver every
   // event under the whole workspace root (all worktrees) / whole common .git
   // (objects included) just to observe a few shallow paths. The poller reads

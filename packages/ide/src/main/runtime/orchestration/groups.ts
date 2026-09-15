@@ -1,4 +1,3 @@
-import { isCursorAgentTitle } from '../../../shared/agent-title-core'
 import { buildAgentNameRe } from '../../../shared/agent-name-token-match'
 import type { RuntimeTerminalSummary } from '../../../shared/runtime-types'
 
@@ -6,17 +5,7 @@ import type { RuntimeTerminalSummary } from '../../../shared/runtime-types'
 // Resolution is done at send-time: one message record per recipient, same thread_id,
 // so each recipient gets their own read-tracking (Section 4.5).
 
-const AGENT_NAME_GROUPS = [
-  'claude',
-  'openclaude',
-  'codex',
-  'opencode',
-  'mimo',
-  'gemini',
-  'droid',
-  'grok',
-  'cursor'
-] as const
+const AGENT_NAME_GROUPS = ['claude', 'codex'] as const
 
 type AgentNameGroup = (typeof AGENT_NAME_GROUPS)[number]
 
@@ -24,13 +13,10 @@ export function isGroupAddress(to: string): boolean {
   return to.startsWith('@')
 }
 
-// Why: a name token identifies an agent only when the name is a coined word. `cursor` is
-// also ordinary vocabulary in another agent's task-summary title ("fix the text cursor
-// blink"), so token-matching it would route @cursor into a live Claude/Codex prompt. Names
-// with that ambiguity register the identity predicate delivery already applies to them.
-const GROUP_TITLE_MATCHERS: Partial<Record<AgentNameGroup, (title: string) => boolean>> = {
-  cursor: isCursorAgentTitle
-}
+// Why: a name token identifies an agent only when the name is a coined word. A name
+// that is also ordinary vocabulary in another agent's task-summary title would need an
+// identity predicate registered here instead of token matching.
+const GROUP_TITLE_MATCHERS: Partial<Record<AgentNameGroup, (title: string) => boolean>> = {}
 
 function titleMatchesAgentNameGroup(title: string, agentName: string): boolean {
   const identityMatcher = GROUP_TITLE_MATCHERS[agentName as AgentNameGroup]

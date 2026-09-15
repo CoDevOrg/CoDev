@@ -6,7 +6,6 @@ import { useAppStore } from '@/store'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
 import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
-import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { translate } from '@/i18n/i18n'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { extractIpcErrorMessage } from './rich-markdown-ipc-error-message'
@@ -47,12 +46,7 @@ export async function insertRichMarkdownImageFromPath({
             worktreeId,
             worktreePath,
             connectionId,
-            expectedExecutionHostId: connectionId
-              ? (`ssh:${encodeURIComponent(connectionId)}` as const)
-              : ('local' as const),
-            ...(connectionId
-              ? captureDirectSshMutationExpectation(state, connectionId, runtimeEnvironmentId)
-              : {})
+            expectedExecutionHostId: 'local' as const
           }
     const settings = fileContext.settings
     if (settings?.activeRuntimeEnvironmentId?.trim() && !worktreePath) {

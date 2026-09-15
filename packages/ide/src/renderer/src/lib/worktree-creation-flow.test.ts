@@ -441,32 +441,31 @@ describe('staged background worktree creation', () => {
     expect(createCall?.[0]).toBe('repo-1')
     expect(createCall?.[1]).toBe('feature')
     expect(createCall?.[3]).toBe('run')
-    expect(createCall?.[18]).toBe('creation-1')
+    expect(createCall?.[15]).toBe('creation-1')
     expect(store.setActivePendingWorktreeCreation).toHaveBeenCalledWith('creation-1')
     expect(store.setActiveView).toHaveBeenCalledWith('terminal')
     expect(store.setSidebarOpen).toHaveBeenCalledWith(true)
   })
 
-  it('preserves linked Jira context through staged creation and retry', async () => {
+  it('preserves linked GitHub issue context through staged creation and retry', async () => {
     const linkedWorkItem = {
-      provider: 'jira' as const,
+      provider: 'github' as const,
       type: 'issue' as const,
-      number: 0,
-      title: 'ORCA-123 Durable Jira link',
-      url: 'https://company.atlassian.net/browse/ORCA-123',
-      jiraIdentifier: 'ORCA-123'
+      number: 123,
+      title: 'Durable GitHub link',
+      url: 'https://github.com/acme/repo/issues/123',
+      repoId: 'repo-1'
     }
     const linkedTaskSourceContext = {
       kind: 'task-source' as const,
-      provider: 'jira' as const,
+      provider: 'github' as const,
       projectId: 'project-1',
       hostId: 'local' as const,
       repoId: 'repo-1',
       providerIdentity: {
-        provider: 'jira' as const,
-        siteId: 'site-1',
-        siteUrl: 'https://company.atlassian.net',
-        projectKey: 'ORCA'
+        provider: 'github' as const,
+        owner: 'acme',
+        repo: 'repo'
       },
       accountLabel: 'dev@company.test'
     }
@@ -476,13 +475,13 @@ describe('staged background worktree creation', () => {
     expect(continueBackgroundWorktreeCreation('creation-1', request)).toBe(true)
     await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalledTimes(1))
     const stagedCreateCall = store.createWorktree.mock.calls[0] as unknown[] | undefined
-    expect(stagedCreateCall?.[25]).toEqual(expectedOptions)
+    expect(stagedCreateCall?.[17]).toEqual(expectedOptions)
 
     store.createWorktree.mockClear()
     retryBackgroundWorktreeCreation('creation-1')
     await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalledTimes(1))
     const retryCreateCall = store.createWorktree.mock.calls[0] as unknown[] | undefined
-    expect(retryCreateCall?.[25]).toEqual(expectedOptions)
+    expect(retryCreateCall?.[17]).toEqual(expectedOptions)
   })
 
   it('can continue without revealing a staged create after background preflight', async () => {
@@ -764,7 +763,7 @@ describe('staged background worktree creation', () => {
 
     await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalled())
     const createCall = store.createWorktree.mock.calls[0] as unknown[] | undefined
-    expect(createCall?.[16]).toEqual({
+    expect(createCall?.[13]).toEqual({
       command: `${agent} --prefill x`,
       launchAgent: agent,
       viewMode

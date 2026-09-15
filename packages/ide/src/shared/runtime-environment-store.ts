@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { JsonStringifyByteLimitError } from './node-bounded-json-stringify'
 import { readNodeFileSyncWithinLimit } from './node-bounded-file-reader'
 import { parsePairingCode, type PairingOffer } from './pairing'
-import { classifyRemotePairingHostname } from './remote-pairing-address'
 import { writeSecureJsonFileWithinLimit } from './bounded-secure-json-file'
 import { hardenExistingSecureFile } from './secure-file'
 import {
@@ -47,7 +46,6 @@ export function addEnvironmentFromPairingCode(
     pairingCode: string
     now?: number
     source?: RuntimeEnvironmentSource
-    connectionDependency?: 'ssh-tunnel'
   }
 ): KnownRuntimeEnvironment {
   const offer = parsePairingCode(args.pairingCode)
@@ -73,7 +71,6 @@ export function addEnvironmentFromPairingCode(
     offer,
     runtimeId: null,
     ...(args.source ? { source: args.source } : {}),
-    ...getPairingConnectionDependency(args.connectionDependency, offer)
   })
   const next = {
     version: 1 as const,
@@ -119,7 +116,6 @@ export function updateEnvironmentFromPairingCode(
     offer,
     runtimeId: existing.runtimeId,
     ...(existing.source ? { source: existing.source } : {}),
-    ...getPairingConnectionDependency(existing.connectionDependency, offer)
   })
   const next = {
     ...environment,
@@ -135,23 +131,6 @@ export function updateEnvironmentFromPairingCode(
       .sort((a, b) => a.name.localeCompare(b.name))
   })
   return next
-}
-
-function getPairingConnectionDependency(
-  dependency: 'ssh-tunnel' | undefined,
-  offer: PairingOffer
-): { connectionDependency?: 'ssh-tunnel' } {
-  if (!dependency) {
-    return {}
-  }
-  try {
-    const endpoint = new URL(offer.endpoint)
-    return classifyRemotePairingHostname(endpoint.hostname) === 'loopback'
-      ? { connectionDependency: dependency }
-      : {}
-  } catch {
-    return {}
-  }
 }
 
 export function resolveEnvironment(

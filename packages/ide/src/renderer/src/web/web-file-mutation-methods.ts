@@ -1,11 +1,10 @@
 import type { PreloadApi } from '../../../preload/api-types'
 import { parseExecutionHostId } from '../../../shared/execution-host'
-import type { SshConnectionState, SshMutationExpectation } from '../../../shared/ssh-types'
 import type { Worktree } from '../../../shared/types'
 import { toRuntimeWorktreeSelector } from '../runtime/runtime-worktree-selector'
 
-const SSH_OWNER_CHANGED_MESSAGE =
-  "Couldn't verify the SSH connection. Reconnect the host and try again."
+const OWNER_CHANGED_MESSAGE =
+  "Couldn't verify which host owns this file. Reopen the file after the connection settles."
 
 type WebFileMutationMethod = Pick<
   NonNullable<PreloadApi['fs']>,
@@ -21,38 +20,22 @@ type WebFileMutationSession = {
   resolveFilePath: (filePath: string) => Promise<ResolvedWebRuntimeFile>
   assertMutationSupported: () => Promise<void>
   callRuntimeResult: (method: string, params: unknown) => Promise<unknown>
-  getSshState: (targetId: string) => Promise<SshConnectionState | null>
 }
 
 type WebFileMutationDependencies = {
   captureSession: () => WebFileMutationSession
 }
 
-type WebFileMutationProvenance = SshMutationExpectation & {
-  expectedExecutionHostId: 'local' | `ssh:${string}`
+type WebFileMutationProvenance = {
+  expectedExecutionHostId: 'local'
 }
 
-async function captureWebFileMutationProvenance(
-  file: ResolvedWebRuntimeFile,
-  getSshState: WebFileMutationSession['getSshState']
-): Promise<WebFileMutationProvenance> {
+function captureWebFileMutationProvenance(file: ResolvedWebRuntimeFile): WebFileMutationProvenance {
   const host = parseExecutionHostId(file.worktree.hostId)
   if (file.worktree.hostId !== undefined && !host) {
-    throw new Error(SSH_OWNER_CHANGED_MESSAGE)
+    throw new Error(OWNER_CHANGED_MESSAGE)
   }
-  if (!host || host.kind === 'local' || host.kind === 'runtime') {
-    return { expectedExecutionHostId: 'local' }
-  }
-
-  const state = await getSshState(host.targetId)
-  if (state?.targetId !== host.targetId || state.connectionGeneration === undefined) {
-    throw new Error(SSH_OWNER_CHANGED_MESSAGE)
-  }
-  return {
-    expectedExecutionHostId: host.id,
-    expectedSshTargetId: host.targetId,
-    expectedSshConnectionGeneration: state.connectionGeneration
-  }
+  return { expectedExecutionHostId: 'local' }
 }
 
 function assertSameWorktree(
@@ -74,7 +57,7 @@ export function createWebFileMutationMethods(
     params: Record<string, unknown>
   ): Promise<void> => {
     await session.assertMutationSupported()
-    const provenance = await captureWebFileMutationProvenance(file, session.getSshState)
+    const provenance = captureWebFileMutationProvenance(file)
     await session.callRuntimeResult(method, {
       worktree: toRuntimeWorktreeSelector(file.worktree.id),
       ...params,

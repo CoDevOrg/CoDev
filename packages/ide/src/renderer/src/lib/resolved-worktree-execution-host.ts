@@ -1,7 +1,6 @@
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
@@ -36,10 +35,6 @@ function getResolvedFolderHost(
   if (explicitHost) {
     return explicitHost.id
   }
-  const connectionId = folder?.connectionId?.trim() || group?.connectionId?.trim()
-  if (connectionId) {
-    return toSshExecutionHostId(connectionId)
-  }
   const restoredHost = parseExecutionHostId(
     state.restoredRuntimeHostIdByWorkspaceSessionKey?.[folderWorkspaceKey(folderWorkspaceId)]
   )
@@ -50,7 +45,7 @@ function getResolvedFolderHost(
 }
 
 /**
- * Resolves a host only when hydrated ownership proves it. Why: a restored SSH
+ * Resolves a host only when hydrated ownership proves it. Why: a restored remote
  * worktree can temporarily collide with a local repo row during catalog load.
  */
 export function getResolvedExecutionHostIdForWorktree(
@@ -91,7 +86,5 @@ export function getResolvedExecutionHostIdForWorktree(
   if (explicitRepoHost) {
     return explicitRepoHost.id
   }
-  return repo.connectionId?.trim()
-    ? toSshExecutionHostId(repo.connectionId)
-    : LOCAL_EXECUTION_HOST_ID
+  return LOCAL_EXECUTION_HOST_ID
 }

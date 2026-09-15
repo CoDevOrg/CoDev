@@ -91,7 +91,6 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
     comment: 'existing note',
     linkedIssue: null,
     linkedPR: null,
-    linkedLinearIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,

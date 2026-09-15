@@ -141,10 +141,6 @@ vi.mock('./use-workspace-kanban-outside-dismiss', () => ({
   useWorkspaceKanbanOutsideDismiss: vi.fn()
 }))
 
-vi.mock('@/components/contextual-tours/use-contextual-tour', () => ({
-  useContextualTour: vi.fn()
-}))
-
 vi.mock('./use-workspace-kanban-card-pointer-drag', () => ({
   useWorkspaceKanbanCardPointerDrag: (params: PointerDragCapture) => {
     pointerDragState.current = params

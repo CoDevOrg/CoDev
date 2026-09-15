@@ -48,13 +48,11 @@ function createPlatformAssertion() {
 
 function createService(
   blocker = createBlocker(),
-  macosAssertion = createPlatformAssertion(),
   linuxAssertion = createPlatformAssertion()
 ): AgentAwakeService {
   return new AgentAwakeService({
     blocker,
     linuxAssertion,
-    macosAssertion,
     now: () => 1_000,
     powerMonitor: null,
     logger: {
@@ -65,34 +63,13 @@ function createService(
 }
 
 describe('AgentAwakeService platform assertions', () => {
-  it('keeps Electron blocker active when macOS assertion start fails', () => {
-    const blocker = createBlocker()
-    const macosAssertion = createPlatformAssertion()
-    const linuxAssertion = createPlatformAssertion()
-    macosAssertion.start.mockImplementation(() => {
-      throw new Error('caffeinate failed')
-    })
-    const service = createService(blocker, macosAssertion, linuxAssertion)
-
-    service.setEnabled(true)
-    service.setStatuses([workingStatus()])
-    service.setEnabled(false)
-
-    expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
-    expect(blocker.stop).toHaveBeenCalledWith(1)
-    expect(macosAssertion.stop).toHaveBeenCalled()
-    expect(linuxAssertion.start).toHaveBeenCalledTimes(1)
-    expect(linuxAssertion.stop).toHaveBeenCalled()
-  })
-
   it('keeps Electron blocker active when Linux assertion start fails', () => {
     const blocker = createBlocker()
-    const macosAssertion = createPlatformAssertion()
     const linuxAssertion = createPlatformAssertion()
     linuxAssertion.start.mockImplementation(() => {
       throw new Error('systemd-inhibit failed')
     })
-    const service = createService(blocker, macosAssertion, linuxAssertion)
+    const service = createService(blocker, linuxAssertion)
 
     service.setEnabled(true)
     service.setStatuses([workingStatus()])
@@ -100,8 +77,6 @@ describe('AgentAwakeService platform assertions', () => {
 
     expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
     expect(blocker.stop).toHaveBeenCalledWith(1)
-    expect(macosAssertion.start).toHaveBeenCalledTimes(1)
-    expect(macosAssertion.stop).toHaveBeenCalled()
     expect(linuxAssertion.stop).toHaveBeenCalled()
   })
 
@@ -110,16 +85,13 @@ describe('AgentAwakeService platform assertions', () => {
     blocker.start.mockImplementation(() => {
       throw new Error('electron failed')
     })
-    const macosAssertion = createPlatformAssertion()
     const linuxAssertion = createPlatformAssertion()
-    const service = createService(blocker, macosAssertion, linuxAssertion)
+    const service = createService(blocker, linuxAssertion)
 
     service.setEnabled(true)
     service.setStatuses([workingStatus()])
     service.setEnabled(false)
 
-    expect(macosAssertion.start).toHaveBeenCalledTimes(1)
-    expect(macosAssertion.stop).toHaveBeenCalled()
     expect(linuxAssertion.start).toHaveBeenCalledTimes(1)
     expect(linuxAssertion.stop).toHaveBeenCalled()
     expect(blocker.stop).not.toHaveBeenCalled()

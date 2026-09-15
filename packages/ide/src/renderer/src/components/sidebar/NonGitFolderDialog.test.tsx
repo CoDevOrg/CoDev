@@ -99,7 +99,6 @@ function makeWorktree(id: string, path: string, hostId: Worktree['hostId']): Wor
     comment: '',
     linkedIssue: null,
     linkedPR: null,
-    linkedLinearIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,

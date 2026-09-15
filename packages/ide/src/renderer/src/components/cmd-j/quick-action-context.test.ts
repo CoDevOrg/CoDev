@@ -107,8 +107,7 @@ describe('Cmd+J quick action context', () => {
       openNewMarkdownFile: async () => {},
       openNewTerminalTab: async () => {},
       openCreateWorkspace: () => {},
-      deleteActiveWorkspace: () => {},
-      openAddQuickCommand: () => {}
+      deleteActiveWorkspace: () => {}
     } satisfies CmdJQuickActionContext
 
     expect(
@@ -121,17 +120,12 @@ describe('Cmd+J quick action context', () => {
         .find((action) => action.id === 'create-workspace')
         ?.isAvailable(context)
     ).toEqual({ available: true })
-    expect(
-      getCmdJQuickActions()
-        .find((action) => action.id === 'add-quick-command')
-        ?.isAvailable(context)
-    ).toEqual({ available: true })
   })
 
   it('applies the availability matrix across curated actions', () => {
     const workspaceActions = ['new-browser-tab', 'new-markdown-file', 'new-terminal-tab']
     const currentWorkspaceActions = ['delete-workspace']
-    const workspaceAgnosticActions = ['create-workspace', 'add-quick-command']
+    const workspaceAgnosticActions = ['create-workspace']
     const actionById = new Map(getCmdJQuickActions().map((action) => [action.id, action]))
     const baseContext = {
       ...ctx({}),
@@ -141,8 +135,7 @@ describe('Cmd+J quick action context', () => {
       openNewMarkdownFile: async () => {},
       openNewTerminalTab: async () => {},
       openCreateWorkspace: () => {},
-      deleteActiveWorkspace: () => {},
-      openAddQuickCommand: () => {}
+      deleteActiveWorkspace: () => {}
     } satisfies CmdJQuickActionContext
 
     for (const actionId of workspaceActions) {
@@ -221,8 +214,7 @@ describe('Cmd+J quick action context', () => {
       openNewMarkdownFile: async () => {},
       openNewTerminalTab: async () => {},
       openCreateWorkspace: () => {},
-      deleteActiveWorkspace: () => {},
-      openAddQuickCommand: () => {}
+      deleteActiveWorkspace: () => {}
     })
 
     expect(context.activeGroupId).toBe('first-group')
@@ -247,8 +239,7 @@ describe('Cmd+J quick action context', () => {
       openNewMarkdownFile: async () => {},
       openNewTerminalTab: async () => {},
       openCreateWorkspace: () => {},
-      deleteActiveWorkspace: () => {},
-      openAddQuickCommand: () => {}
+      deleteActiveWorkspace: () => {}
     })
 
     expect(context.isLoading).toBe(true)
@@ -267,8 +258,7 @@ describe('Cmd+J quick action context', () => {
         calls.push(groupId)
       },
       openCreateWorkspace: () => {},
-      deleteActiveWorkspace: () => {},
-      openAddQuickCommand: () => {}
+      deleteActiveWorkspace: () => {}
     } satisfies CmdJQuickActionContext
 
     await expect(action?.run(context)).resolves.toEqual({
@@ -291,8 +281,7 @@ describe('Cmd+J quick action context', () => {
       openCreateWorkspace: () => {},
       deleteActiveWorkspace: () => {
         calls.push('delete')
-      },
-      openAddQuickCommand: () => {}
+      }
     } satisfies CmdJQuickActionContext
 
     await expect(action?.run(context)).resolves.toEqual({ status: 'ok' })

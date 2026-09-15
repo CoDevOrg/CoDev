@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PreloadApi } from '../../../preload/api-types'
 import type { FeatureInteractionState } from '../../../shared/feature-interactions'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { MIN_COMPATIBLE_RUNTIME_SERVER_VERSION } from '../../../shared/protocol-version'
 
 const TEST_COMMIT_OID = '0123456789abcdef0123456789abcdef01234567'
@@ -1103,47 +1102,6 @@ describe('web settings preload API', () => {
     expect(runtimeCalls).toEqual([{ method: 'settings.get', params: undefined }])
   })
 
-  it('hydrates MiniMax usage settings from a paired runtime', async () => {
-    const runtimeCalls: { method: string; params: unknown }[] = []
-    vi.doMock('./web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
-          runtimeCalls.push({ method, params })
-          return Promise.resolve({
-            id: `call-${runtimeCalls.length}`,
-            ok: true,
-            result: {
-              settings: {
-                minimaxGroupId: 'group-42',
-                minimaxUsageModels: 'general,abab6.5'
-              }
-            },
-            _meta: { runtimeId: 'runtime-1' }
-          })
-        }
-
-        close(): void {}
-      }
-    }))
-
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage)
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    const settings = await globals.window.api.settings.get()
-    const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
-      minimaxGroupId?: string
-      minimaxUsageModels?: string
-    }
-
-    expect(settings.minimaxGroupId).toBe('group-42')
-    expect(settings.minimaxUsageModels).toBe('general,abab6.5')
-    expect(stored.minimaxGroupId).toBe('group-42')
-    expect(stored.minimaxUsageModels).toBe('general,abab6.5')
-    expect(runtimeCalls).toEqual([{ method: 'settings.get', params: undefined }])
-  })
-
   it('hydrates bot-author overrides from paired runtime settings', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
     vi.doMock('./web-runtime-client', () => ({
@@ -1246,59 +1204,6 @@ describe('web settings preload API', () => {
     expect(settings.experimentalNewWorktreeCardStyle).toBe(true)
     expect(runtimeCalls).toEqual([
       { method: 'settings.update', params: { experimentalNewWorktreeCardStyle: true } }
-    ])
-  })
-
-  it('forwards MiniMax usage setting updates to a paired runtime', async () => {
-    const runtimeCalls: { method: string; params: unknown }[] = []
-    vi.doMock('./web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
-          runtimeCalls.push({ method, params })
-          return Promise.resolve({
-            id: `call-${runtimeCalls.length}`,
-            ok: true,
-            result: {
-              settings: {
-                minimaxGroupId: 'group-42',
-                minimaxUsageModels: 'general,abab6.5'
-              }
-            },
-            _meta: { runtimeId: 'runtime-1' }
-          })
-        }
-
-        close(): void {}
-      }
-    }))
-
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage)
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    const settings = await globals.window.api.settings.set({
-      minimaxGroupId: 'group-42',
-      minimaxUsageModels: 'general,abab6.5'
-    })
-
-    const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
-      minimaxGroupId?: string
-      minimaxUsageModels?: string
-    }
-
-    expect(settings.minimaxGroupId).toBe('group-42')
-    expect(settings.minimaxUsageModels).toBe('general,abab6.5')
-    expect(stored.minimaxGroupId).toBe('group-42')
-    expect(stored.minimaxUsageModels).toBe('general,abab6.5')
-    expect(runtimeCalls).toEqual([
-      {
-        method: 'settings.update',
-        params: {
-          minimaxGroupId: 'group-42',
-          minimaxUsageModels: 'general,abab6.5'
-        }
-      }
     ])
   })
 
@@ -1481,24 +1386,6 @@ describe('web native chat preload API', () => {
         lifecycle
       }
     ])
-  })
-})
-
-describe('web MiniMax preload API', () => {
-  beforeEach(() => {
-    vi.resetModules()
-  })
-
-  afterEach(() => {
-    vi.unstubAllGlobals()
-  })
-
-  it('exposes desktop-only MiniMax credential reads as unconfigured and rejects saves', async () => {
-    const { api } = await installApi('Linux')
-
-    await expect(api.minimaxCredentials.getStatus()).resolves.toEqual({ configured: false })
-    await expect(api.minimaxCredentials.saveCookie('_token=abc')).rejects.toThrow(/desktop app/i)
-    await expect(api.minimaxCredentials.clearCookie()).resolves.toEqual({ configured: false })
   })
 })
 
@@ -3124,9 +3011,6 @@ describe('web worktree preload API', () => {
       comment: '',
       linkedIssue: null,
       linkedPR: null,
-      linkedLinearIssue: null,
-      linkedGitLabMR: null,
-      linkedGitLabIssue: null,
       isArchived: false,
       isUnread: false,
       isPinned: false,
@@ -3241,17 +3125,6 @@ describe('web worktree preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
-          if (method === 'worktree.resolveMrBase') {
-            return Promise.resolve({
-              id: `call-${runtimeCalls.length}`,
-              ok: true,
-              result: {
-                baseBranch: 'origin/source',
-                compareBaseRef: 'refs/remotes/origin/release'
-              },
-              _meta: { runtimeId: 'runtime-1' }
-            })
-          }
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
@@ -3296,13 +3169,6 @@ describe('web worktree preload API', () => {
       baseRefName: 'main',
       isCrossRepository: true
     })
-    await globals.window.api.worktrees.resolveMrBase({
-      repoId: 'repo-1',
-      mrIid: 7,
-      sourceBranch: 'feature/mr',
-      targetBranch: 'release',
-      isCrossRepository: false
-    })
 
     expect(runtimeCalls).toEqual([
       {
@@ -3331,16 +3197,6 @@ describe('web worktree preload API', () => {
           headRefName: 'feature/fix',
           baseRefName: 'main',
           isCrossRepository: true
-        }
-      },
-      {
-        method: 'worktree.resolveMrBase',
-        params: {
-          repo: 'repo-1',
-          mrIid: 7,
-          sourceBranch: 'feature/mr',
-          targetBranch: 'release',
-          isCrossRepository: false
         }
       }
     ])
@@ -3501,9 +3357,6 @@ describe('web file preload API', () => {
       comment: '',
       linkedIssue: null,
       linkedPR: null,
-      linkedLinearIssue: null,
-      linkedGitLabMR: null,
-      linkedGitLabIssue: null,
       isArchived: false,
       isUnread: false,
       isPinned: false,
@@ -3583,9 +3436,6 @@ describe('web git preload API', () => {
       comment: '',
       linkedIssue: null,
       linkedPR: null,
-      linkedLinearIssue: null,
-      linkedGitLabMR: null,
-      linkedGitLabIssue: null,
       isArchived: false,
       isUnread: false,
       isPinned: false,
@@ -3665,9 +3515,6 @@ describe('web git preload API', () => {
       comment: '',
       linkedIssue: null,
       linkedPR: null,
-      linkedLinearIssue: null,
-      linkedGitLabMR: null,
-      linkedGitLabIssue: null,
       isArchived: false,
       isUnread: false,
       isPinned: false,
@@ -4231,483 +4078,6 @@ describe('web GitHub preload API', () => {
           fallbackPRNumber: 9,
           currentHeadOid: 'head-oid',
           acceptMergedFallbackPR: true
-        }
-      }
-    ])
-  })
-})
-
-describe('web GitLab preload API', () => {
-  beforeEach(() => {
-    vi.resetModules()
-  })
-
-  afterEach(() => {
-    vi.unstubAllGlobals()
-    vi.doUnmock('./web-runtime-client')
-    vi.doUnmock('electron')
-  })
-
-  it('keeps the web GitLab preload key set in parity with desktop preload', async () => {
-    vi.doMock('electron', () => ({
-      ipcRenderer: { invoke: vi.fn() }
-    }))
-    const globals = installBrowserGlobals('Linux')
-    const { glApi } = (await import(
-      new URL('../../../preload/gitlab.ts', import.meta.url).href
-    )) as {
-      glApi: Record<string, unknown>
-    }
-    const { installWebPreloadApi } = await import('./web-preload-api')
-
-    installWebPreloadApi()
-
-    expect(Object.keys(globals.window.api.gl).sort()).toEqual(Object.keys(glApi).sort())
-  })
-
-  it('routes every runtime-backed GitLab method through the expected RPC method', async () => {
-    type GitLabApi = NonNullable<PreloadApi['gl']>
-    const runtimeCalls: { method: string; params: unknown }[] = []
-    vi.doMock('./web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
-          runtimeCalls.push({ method, params })
-          return Promise.resolve({
-            id: `call-${runtimeCalls.length}`,
-            ok: true,
-            result: { ok: true, items: [] },
-            _meta: { runtimeId: 'runtime-1' }
-          })
-        }
-
-        close(): void {}
-      }
-    }))
-
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage)
-    const { GITLAB_WEB_RPC_METHODS, installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-    const api = globals.window.api
-    const repoPath = '/workspace/repo'
-
-    const routeCases: {
-      key: keyof typeof GITLAB_WEB_RPC_METHODS
-      invoke: (gl: GitLabApi) => Promise<unknown>
-      expectedMethod: string
-      expectedParams: unknown
-    }[] = [
-      {
-        key: 'diagnoseAuth',
-        invoke: (gl) => gl.diagnoseAuth(),
-        expectedMethod: 'gitlab.diagnoseAuth',
-        expectedParams: undefined
-      },
-      {
-        key: 'rateLimit',
-        invoke: (gl) => gl.rateLimit({ force: true, host: 'gitlab.example.com' }),
-        expectedMethod: 'gitlab.rateLimit',
-        expectedParams: { force: true, host: 'gitlab.example.com' }
-      },
-      {
-        key: 'listMRs',
-        invoke: (gl) => gl.listMRs({ repoPath, state: 'opened', page: 1, perPage: 50 }),
-        expectedMethod: 'gitlab.listMRs',
-        expectedParams: { repoPath, repo: repoPath, state: 'opened', page: 1, perPage: 50 }
-      },
-      {
-        key: 'listWorkItems',
-        invoke: (gl) => gl.listWorkItems({ repoPath, state: 'closed', page: 2, perPage: 25 }),
-        expectedMethod: 'gitlab.listWorkItems',
-        expectedParams: { repoPath, repo: repoPath, state: 'closed', page: 2, perPage: 25 }
-      },
-      {
-        key: 'listIssues',
-        invoke: (gl) => gl.listIssues({ repoPath, state: 'all', assignee: '@me', limit: 30 }),
-        expectedMethod: 'gitlab.listIssues',
-        expectedParams: { repoPath, repo: repoPath, state: 'all', assignee: '@me', limit: 30 }
-      },
-      {
-        key: 'createIssue',
-        invoke: (gl) => gl.createIssue({ repoPath, title: 'Bug', body: 'Details' }),
-        expectedMethod: 'gitlab.createIssue',
-        expectedParams: { repoPath, repo: repoPath, title: 'Bug', body: 'Details' }
-      },
-      {
-        key: 'updateIssue',
-        invoke: (gl) => gl.updateIssue({ repoPath, number: 7, updates: { state: 'closed' } }),
-        expectedMethod: 'gitlab.updateIssue',
-        expectedParams: { repoPath, repo: repoPath, number: 7, updates: { state: 'closed' } }
-      },
-      {
-        key: 'addIssueComment',
-        invoke: (gl) => gl.addIssueComment({ repoPath, number: 7, body: 'Fixed' }),
-        expectedMethod: 'gitlab.addIssueComment',
-        expectedParams: { repoPath, repo: repoPath, number: 7, body: 'Fixed' }
-      },
-      {
-        key: 'listLabels',
-        invoke: (gl) => gl.listLabels({ repoPath }),
-        expectedMethod: 'gitlab.listLabels',
-        expectedParams: { repoPath, repo: repoPath }
-      },
-      {
-        key: 'todos',
-        invoke: (gl) => gl.todos({ repoPath }),
-        expectedMethod: 'gitlab.todos',
-        expectedParams: { repoPath, repo: repoPath }
-      },
-      {
-        key: 'workItemDetails',
-        invoke: (gl) => gl.workItemDetails({ repoPath, iid: 8, type: 'mr' }),
-        expectedMethod: 'gitlab.workItemDetails',
-        expectedParams: { repoPath, repo: repoPath, iid: 8, type: 'mr' }
-      },
-      {
-        key: 'closeMR',
-        invoke: (gl) => gl.closeMR({ repoPath, iid: 8 }),
-        expectedMethod: 'gitlab.updateMRState',
-        expectedParams: { repoPath, repo: repoPath, iid: 8, state: 'closed' }
-      },
-      {
-        key: 'reopenMR',
-        invoke: (gl) => gl.reopenMR({ repoPath, iid: 8 }),
-        expectedMethod: 'gitlab.updateMRState',
-        expectedParams: { repoPath, repo: repoPath, iid: 8, state: 'opened' }
-      },
-      {
-        key: 'mergeMR',
-        invoke: (gl) => gl.mergeMR({ repoPath, iid: 8, method: 'squash' }),
-        expectedMethod: 'gitlab.mergeMR',
-        expectedParams: { repoPath, repo: repoPath, iid: 8, method: 'squash' }
-      },
-      {
-        key: 'updateMR',
-        invoke: (gl) => gl.updateMR({ repoPath, iid: 8, updates: { title: 'New title' } }),
-        expectedMethod: 'gitlab.updateMR',
-        expectedParams: { repoPath, repo: repoPath, iid: 8, updates: { title: 'New title' } }
-      },
-      {
-        key: 'updateMRReviewers',
-        invoke: (gl) => gl.updateMRReviewers({ repoPath, iid: 8, reviewerIds: [1, 2] }),
-        expectedMethod: 'gitlab.updateMRReviewers',
-        expectedParams: { repoPath, repo: repoPath, iid: 8, reviewerIds: [1, 2] }
-      },
-      {
-        key: 'addMRComment',
-        invoke: (gl) => gl.addMRComment({ repoPath, iid: 8, body: 'Ship it' }),
-        expectedMethod: 'gitlab.addMRComment',
-        expectedParams: { repoPath, repo: repoPath, iid: 8, body: 'Ship it' }
-      },
-      {
-        key: 'addMRInlineComment',
-        invoke: (gl) =>
-          gl.addMRInlineComment({
-            repoPath,
-            iid: 8,
-            input: {
-              body: 'Please fix',
-              path: 'src/app.ts',
-              line: 12,
-              baseSha: 'base',
-              startSha: 'start',
-              headSha: 'head'
-            }
-          }),
-        expectedMethod: 'gitlab.addMRInlineComment',
-        expectedParams: {
-          repoPath,
-          repo: repoPath,
-          iid: 8,
-          input: {
-            body: 'Please fix',
-            path: 'src/app.ts',
-            line: 12,
-            baseSha: 'base',
-            startSha: 'start',
-            headSha: 'head'
-          }
-        }
-      },
-      {
-        key: 'resolveMRDiscussion',
-        invoke: (gl) =>
-          gl.resolveMRDiscussion({
-            repoPath,
-            iid: 8,
-            discussionId: 'discussion-1',
-            resolved: true
-          }),
-        expectedMethod: 'gitlab.resolveMRDiscussion',
-        expectedParams: {
-          repoPath,
-          repo: repoPath,
-          iid: 8,
-          discussionId: 'discussion-1',
-          resolved: true
-        }
-      },
-      {
-        key: 'jobTrace',
-        invoke: (gl) => gl.jobTrace({ repoPath, jobId: 99 }),
-        expectedMethod: 'gitlab.jobTrace',
-        expectedParams: { repoPath, repo: repoPath, jobId: 99 }
-      },
-      {
-        key: 'retryJob',
-        invoke: (gl) => gl.retryJob({ repoPath, jobId: 99 }),
-        expectedMethod: 'gitlab.retryJob',
-        expectedParams: { repoPath, repo: repoPath, jobId: 99 }
-      },
-      {
-        key: 'workItemByPath',
-        invoke: (gl) =>
-          gl.workItemByPath({
-            repoPath,
-            host: 'gitlab.example.com',
-            path: 'group/project',
-            iid: 7,
-            type: 'issue'
-          }),
-        expectedMethod: 'gitlab.workItemByPath',
-        expectedParams: {
-          repoPath,
-          repo: repoPath,
-          host: 'gitlab.example.com',
-          path: 'group/project',
-          iid: 7,
-          type: 'issue'
-        }
-      }
-    ]
-
-    expect(routeCases.map((routeCase) => routeCase.key).sort()).toEqual(
-      Object.keys(GITLAB_WEB_RPC_METHODS).sort()
-    )
-
-    for (const routeCase of routeCases) {
-      await routeCase.invoke(api.gl)
-    }
-
-    expect(runtimeCalls).toEqual(
-      routeCases.map((routeCase) => ({
-        method: routeCase.expectedMethod,
-        params: routeCase.expectedParams
-      }))
-    )
-  })
-
-  it('routes GitLab repo selectors through repo id when provided', async () => {
-    const runtimeCalls: { method: string; params: unknown }[] = []
-    vi.doMock('./web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
-          runtimeCalls.push({ method, params })
-          return Promise.resolve({
-            id: `call-${runtimeCalls.length}`,
-            ok: true,
-            result: method === 'gitlab.workItemDetails' ? null : { ok: true, items: [] },
-            _meta: { runtimeId: 'runtime-1' }
-          })
-        }
-
-        close(): void {}
-      }
-    }))
-
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage)
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-    const api = globals.window.api
-    const sourceContext: TaskSourceContext = {
-      kind: 'task-source',
-      provider: 'gitlab',
-      projectId: 'gitlab:gitlab.example.com/group/project',
-      hostId: 'runtime:web-env-1',
-      repoId: 'repo-gitlab-runtime',
-      providerIdentity: {
-        provider: 'gitlab',
-        projectId: '42',
-        namespace: 'group',
-        project: 'project',
-        webUrl: 'https://gitlab.example.com/group/project'
-      }
-    }
-
-    await api.gl.listIssues({
-      repoPath: '/workspace/repo',
-      repoId: 'repo-gitlab-runtime',
-      sourceContext,
-      state: 'opened'
-    })
-    await api.gl.updateMR({
-      repoPath: '/workspace/repo',
-      repoId: 'repo-gitlab-runtime',
-      sourceContext,
-      iid: 9,
-      updates: { title: 'New title' }
-    })
-    await api.gl.workItemDetails({
-      repoPath: '/workspace/repo',
-      repoId: 'repo-gitlab-runtime',
-      sourceContext,
-      iid: 9,
-      type: 'mr'
-    })
-
-    expect(runtimeCalls).toEqual([
-      {
-        method: 'gitlab.listIssues',
-        params: {
-          repoPath: '/workspace/repo',
-          repoId: 'repo-gitlab-runtime',
-          sourceContext,
-          repo: 'id:repo-gitlab-runtime',
-          state: 'opened'
-        }
-      },
-      {
-        method: 'gitlab.updateMR',
-        params: {
-          repoPath: '/workspace/repo',
-          repoId: 'repo-gitlab-runtime',
-          sourceContext,
-          repo: 'id:repo-gitlab-runtime',
-          iid: 9,
-          updates: { title: 'New title' }
-        }
-      },
-      {
-        method: 'gitlab.workItemDetails',
-        params: {
-          repoPath: '/workspace/repo',
-          repoId: 'repo-gitlab-runtime',
-          sourceContext,
-          repo: 'id:repo-gitlab-runtime',
-          iid: 9,
-          type: 'mr'
-        }
-      }
-    ])
-  })
-
-  it('exposes the GitLab task methods used by the shared Tasks page', async () => {
-    const runtimeCalls: { method: string; params: unknown }[] = []
-    vi.doMock('./web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
-          runtimeCalls.push({ method, params })
-          if (method === 'gitlab.listMRs') {
-            return Promise.resolve({
-              id: `call-${runtimeCalls.length}`,
-              ok: true,
-              result: {
-                items: [{ id: 'mr-1', type: 'mr', number: 1 }]
-              },
-              _meta: { runtimeId: 'runtime-1' }
-            })
-          }
-          if (method === 'gitlab.listIssues') {
-            return Promise.resolve({
-              id: `call-${runtimeCalls.length}`,
-              ok: true,
-              result: {
-                items: [{ id: 'issue-2', type: 'issue', number: 2 }]
-              },
-              _meta: { runtimeId: 'runtime-1' }
-            })
-          }
-          if (method === 'gitlab.workItemByPath') {
-            return Promise.resolve({
-              id: `call-${runtimeCalls.length}`,
-              ok: true,
-              result: { id: 'issue-7', type: 'issue', number: 7 },
-              _meta: { runtimeId: 'runtime-1' }
-            })
-          }
-          return Promise.resolve({
-            id: `call-${runtimeCalls.length}`,
-            ok: true,
-            result: { ok: true },
-            _meta: { runtimeId: 'runtime-1' }
-          })
-        }
-
-        close(): void {}
-      }
-    }))
-
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage)
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-    const api = globals.window.api
-
-    const mergeRequests = await api.gl.listMRs({
-      repoPath: '/workspace/repo',
-      state: 'opened',
-      page: 1,
-      perPage: 50
-    })
-    const issues = await api.gl.listIssues({
-      repoPath: '/workspace/repo',
-      state: 'opened',
-      assignee: '@me',
-      limit: 50
-    })
-    const item = await api.gl.workItemByPath({
-      repoPath: '/workspace/repo',
-      host: 'gitlab.example.com',
-      path: 'group/project',
-      iid: 7,
-      type: 'issue'
-    })
-    await api.gl.closeMR({ repoPath: '/workspace/repo', iid: 7 })
-
-    expect(mergeRequests.items).toEqual([{ id: 'mr-1', type: 'mr', number: 1 }])
-    expect(issues.items).toEqual([{ id: 'issue-2', type: 'issue', number: 2 }])
-    expect(item).toEqual({ id: 'issue-7', type: 'issue', number: 7 })
-    expect(runtimeCalls.map((call) => call.method)).not.toContain('gitlab.listWorkItems')
-    expect(runtimeCalls).toEqual([
-      {
-        method: 'gitlab.listMRs',
-        params: {
-          repoPath: '/workspace/repo',
-          repo: '/workspace/repo',
-          state: 'opened',
-          page: 1,
-          perPage: 50
-        }
-      },
-      {
-        method: 'gitlab.listIssues',
-        params: {
-          repoPath: '/workspace/repo',
-          repo: '/workspace/repo',
-          state: 'opened',
-          assignee: '@me',
-          limit: 50
-        }
-      },
-      {
-        method: 'gitlab.workItemByPath',
-        params: {
-          repoPath: '/workspace/repo',
-          repo: '/workspace/repo',
-          host: 'gitlab.example.com',
-          path: 'group/project',
-          iid: 7,
-          type: 'issue'
-        }
-      },
-      {
-        method: 'gitlab.updateMRState',
-        params: {
-          repoPath: '/workspace/repo',
-          repo: '/workspace/repo',
-          iid: 7,
-          state: 'closed'
         }
       }
     ])

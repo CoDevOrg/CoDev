@@ -7,13 +7,11 @@ import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
 import { sourceControlAiSettingsFromLegacy } from '../../shared/source-control-ai'
-import { SSH_MUX_REQUEST_TIMEOUT_CODE } from '../ssh/ssh-channel-multiplexer'
 import type { GlobalSettings } from '../../shared/types'
 import {
   cancelGenerateCommitMessageLocal,
   cancelGeneratePullRequestFieldsLocal,
   discoverCommitMessageModelsLocal,
-  discoverCommitMessageModelsRemote,
   generateBranchNameFromContext,
   generateCommitMessageFromContext,
   generatePullRequestFieldsFromContext,
@@ -69,6 +67,40 @@ function withPlatform<T>(platform: NodeJS.Platform, fn: () => T): T {
   } finally {
     Object.defineProperty(process, 'platform', { configurable: true, value: original })
   }
+}
+
+// Why: the remote execution plan is gone; these formatting tests drive the local spawn
+// path with a scripted child so stdout/stderr/exit shapes stay under test.
+function localAgentRunTarget(result: {
+  stdout: string
+  stderr: string
+  exitCode: number | null
+}): { kind: 'local'; cwd: string } {
+  const listeners = new Map<string, (value: unknown) => void>()
+  const emit = (): void => {
+    if (result.stdout) {
+      listeners.get('stdout:data')?.(Buffer.from(result.stdout))
+    }
+    if (result.stderr) {
+      listeners.get('stderr:data')?.(Buffer.from(result.stderr))
+    }
+    listeners.get('close')?.(result.exitCode)
+  }
+  const child = {
+    pid: 123,
+    kill: vi.fn(),
+    stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
+    stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+    stdin: { end: vi.fn() },
+    on: vi.fn((event, callback) => {
+      listeners.set(event, callback)
+      if (event === 'close') {
+        void Promise.resolve().then(emit)
+      }
+    })
+  }
+  spawnMock.mockReturnValue(child as never)
+  return { kind: 'local', cwd: '/repo' }
 }
 
 function expectChildTerminated(child: { pid: number; kill: ReturnType<typeof vi.fn> }): void {
@@ -158,10 +190,10 @@ describe('resolveCommitMessageSettings', () => {
     const settings = getDefaultSettings('/tmp')
     settings.commitMessageAi = {
       enabled: true,
-      agentId: 'cursor',
-      selectedModelByAgent: { cursor: 'gpt-5.2' },
+      agentId: 'codex',
+      selectedModelByAgent: { codex: 'gpt-5.2' },
       discoveredModelsByAgent: {
-        cursor: [
+        codex: [
           {
             id: 'gpt-5.2',
             label: 'GPT 5.2',
@@ -181,7 +213,7 @@ describe('resolveCommitMessageSettings', () => {
     expect(result).toMatchObject({
       ok: true,
       params: {
-        agentId: 'cursor',
+        agentId: 'codex',
         model: 'gpt-5.2',
         thinkingLevel: 'xhigh'
       }
@@ -192,12 +224,12 @@ describe('resolveCommitMessageSettings', () => {
     const settings = getDefaultSettings('/tmp')
     settings.commitMessageAi = {
       enabled: true,
-      agentId: 'cursor',
-      selectedModelByAgent: { cursor: 'auto' },
-      selectedModelByAgentByHost: { 'ssh:conn-1': { cursor: 'remote-only' } },
-      discoveredModelsByAgent: { cursor: [{ id: 'auto', label: 'Auto' }] },
+      agentId: 'codex',
+      selectedModelByAgent: { codex: 'auto' },
+      selectedModelByAgentByHost: { 'ssh:conn-1': { codex: 'remote-only' } },
+      discoveredModelsByAgent: { codex: [{ id: 'auto', label: 'Auto' }] },
       discoveredModelsByAgentByHost: {
-        'ssh:conn-1': { cursor: [{ id: 'remote-only', label: 'Remote Only' }] }
+        'ssh:conn-1': { codex: [{ id: 'remote-only', label: 'Remote Only' }] }
       },
       selectedThinkingByModel: {},
       customPrompt: '',
@@ -210,7 +242,7 @@ describe('resolveCommitMessageSettings', () => {
     expect(result).toMatchObject({
       ok: true,
       params: {
-        agentId: 'cursor',
+        agentId: 'codex',
         model: 'remote-only'
       }
     })
@@ -268,8 +300,8 @@ describe('resolveCommitMessageSettings', () => {
     const settings = getDefaultSettings('/tmp')
     settings.commitMessageAi = {
       enabled: true,
-      agentId: 'cursor',
-      selectedModelByAgent: { cursor: 'gpt-5.2' },
+      agentId: 'codex',
+      selectedModelByAgent: { codex: 'gpt-5.2' },
       selectedThinkingByModel: { 'gpt-5.2': 'xhigh' },
       customPrompt: '',
       customAgentCommand: ''
@@ -281,7 +313,7 @@ describe('resolveCommitMessageSettings', () => {
     expect(result).toMatchObject({
       ok: true,
       params: {
-        agentId: 'cursor',
+        agentId: 'codex',
         model: 'auto'
       }
     })
@@ -308,7 +340,7 @@ describe('resolveCommitMessageSettings', () => {
 
 describe('discoverCommitMessageModelsLocal', () => {
   it('returns static catalog models without spawning for static agents', async () => {
-    const result = await discoverCommitMessageModelsLocal('amp', undefined)
+    const result = await discoverCommitMessageModelsLocal('claude', undefined)
 
     expect(result).toMatchObject({
       success: true,
@@ -316,38 +348,6 @@ describe('discoverCommitMessageModelsLocal', () => {
       defaultModelId: 'smart'
     })
     expect(spawnMock).not.toHaveBeenCalled()
-  })
-
-  it('discovers dynamic models through the agent CLI', async () => {
-    const listeners = new Map<string, (value: unknown) => void>()
-    const child = {
-      pid: 123,
-      kill: vi.fn(),
-      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
-      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
-      stdin: { end: vi.fn() },
-      on: vi.fn((event, callback) => listeners.set(event, callback))
-    }
-    spawnMock.mockReturnValue(child as never)
-
-    const pending = discoverCommitMessageModelsLocal('cursor', undefined)
-
-    listeners.get('stdout:data')?.(Buffer.from('auto - Auto\ngpt-5.2 - GPT-5.2\n'))
-    listeners.get('close')?.(0)
-
-    await expect(pending).resolves.toMatchObject({
-      success: true,
-      defaultModelId: 'auto',
-      models: [
-        { id: 'auto', label: 'Auto' },
-        { id: 'gpt-5.2', label: 'GPT-5.2' }
-      ]
-    })
-    expect(spawnMock).toHaveBeenCalledWith(
-      'cursor-agent',
-      ['--list-models'],
-      expect.objectContaining({ windowsHide: true })
-    )
   })
 
   it('writes the Claude list_models request to stdin and parses the control response', async () => {
@@ -438,83 +438,6 @@ describe('discoverCommitMessageModelsLocal', () => {
     })
   })
 
-  it('discovers dynamic models through the configured agent command override', async () => {
-    const listeners = new Map<string, (value: unknown) => void>()
-    const child = {
-      pid: 123,
-      kill: vi.fn(),
-      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
-      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
-      stdin: { end: vi.fn() },
-      on: vi.fn((event, callback) => listeners.set(event, callback))
-    }
-    spawnMock.mockReturnValue(child as never)
-
-    const pending = discoverCommitMessageModelsLocal('cursor', undefined, 'npx cursor-agent')
-
-    listeners.get('stdout:data')?.(Buffer.from('auto - Auto\n'))
-    listeners.get('close')?.(0)
-
-    await expect(pending).resolves.toMatchObject({
-      success: true,
-      defaultModelId: 'auto'
-    })
-    if (process.platform === 'win32') {
-      expect(spawnMock).toHaveBeenCalledWith(
-        expect.stringMatching(/cmd\.exe$/i),
-        ['/d', '/c', expect.stringMatching(/npx\.cmd$/i), 'cursor-agent', '--list-models'],
-        expect.objectContaining({ windowsHide: true })
-      )
-    } else {
-      expect(spawnMock).toHaveBeenCalledWith(
-        'npx',
-        ['cursor-agent', '--list-models'],
-        expect.objectContaining({ windowsHide: true })
-      )
-    }
-  })
-
-  it('discovers dynamic models through the selected WSL distro login shell', async () => {
-    await withPlatform('win32', async () => {
-      const listeners = new Map<string, (value: unknown) => void>()
-      const child = {
-        pid: 123,
-        kill: vi.fn(),
-        stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
-        stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
-        stdin: { end: vi.fn() },
-        on: vi.fn((event, callback) => listeners.set(event, callback))
-      }
-      spawnMock.mockReturnValue(child as never)
-
-      const pending = discoverCommitMessageModelsLocal('cursor', undefined, undefined, {
-        cwd: 'C:\\repo',
-        wslDistro: 'Ubuntu'
-      })
-
-      listeners.get('stdout:data')?.(Buffer.from('auto - Auto\n'))
-      listeners.get('close')?.(0)
-
-      await expect(pending).resolves.toMatchObject({
-        success: true,
-        defaultModelId: 'auto'
-      })
-      expect(spawnMock).toHaveBeenCalledWith(
-        'wsl.exe',
-        ['-d', 'Ubuntu', '--', 'sh', '-lc', expect.any(String)],
-        expect.objectContaining({
-          cwd: undefined,
-          windowsHide: true
-        })
-      )
-      const shellCommand = spawnMock.mock.calls[0]?.[1]?.[5] as string
-      expect(shellCommand).toContain('getent passwd')
-      expect(shellCommand).toContain('/mnt/c/repo')
-      expect(shellCommand).toContain("'cursor-agent'")
-      expect(shellCommand).toContain('--list-models')
-    })
-  })
-
   it('falls back to static models when dynamic discovery returns no parseable models', async () => {
     const listeners = new Map<string, (value: unknown) => void>()
     const child = {
@@ -527,7 +450,7 @@ describe('discoverCommitMessageModelsLocal', () => {
     }
     spawnMock.mockReturnValue(child as never)
 
-    const pending = discoverCommitMessageModelsLocal('pi', undefined)
+    const pending = discoverCommitMessageModelsLocal('codex', undefined)
 
     listeners.get('stdout:data')?.(Buffer.from('provider model\n'))
     listeners.get('close')?.(0)
@@ -539,45 +462,13 @@ describe('discoverCommitMessageModelsLocal', () => {
     })
   })
 
-  it('parses Pi model discovery from stderr when the CLI exits successfully', async () => {
-    const listeners = new Map<string, (value: unknown) => void>()
-    const child = {
-      pid: 123,
-      kill: vi.fn(),
-      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
-      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
-      stdin: { end: vi.fn() },
-      on: vi.fn((event, callback) => listeners.set(event, callback))
-    }
-    spawnMock.mockReturnValue(child as never)
-
-    const pending = discoverCommitMessageModelsLocal('pi', undefined)
-
-    listeners.get('stderr:data')?.(
-      Buffer.from(
-        [
-          'provider        model                   context  max-out  thinking  images',
-          'github-copilot  gpt-5.4-mini            400K     128K     yes       yes',
-          'openai-codex    gpt-5.5                 272K     128K     yes       yes'
-        ].join('\n')
-      )
-    )
-    listeners.get('close')?.(0)
-
-    await expect(pending).resolves.toMatchObject({
-      success: true,
-      defaultModelId: 'github-copilot/gpt-5.4-mini',
-      models: [{ id: 'github-copilot/gpt-5.4-mini' }, { id: 'openai-codex/gpt-5.5' }]
-    })
-  })
-
   it('settles and detaches model discovery when timeout kill is ignored', async () => {
     vi.useFakeTimers()
     const child = createMockDiscoveryChild()
     spawnMock.mockReturnValue(child as never)
 
     try {
-      const pending = discoverCommitMessageModelsLocal('cursor', undefined)
+      const pending = discoverCommitMessageModelsLocal('codex', undefined)
       const assertion = expect(pending).resolves.toMatchObject({
         success: false,
         error: 'Cursor model discovery timed out after 60s.'
@@ -666,7 +557,7 @@ describe('discoverCommitMessageModelsLocal', () => {
     const child = createMockDiscoveryChild()
     spawnMock.mockReturnValue(child as never)
 
-    const pending = discoverCommitMessageModelsLocal('cursor', undefined)
+    const pending = discoverCommitMessageModelsLocal('codex', undefined)
 
     child.stdout.emit('data', Buffer.alloc(4 * 1024 * 1024 + 1))
 
@@ -683,117 +574,6 @@ describe('discoverCommitMessageModelsLocal', () => {
 })
 
 describe('generateCommitMessageFromContext', () => {
-  it('discovers dynamic models through a remote execution plan', async () => {
-    const execute = vi.fn(async (plan, cwd, timeoutMs) => {
-      expect(plan).toEqual({
-        binary: 'npx',
-        args: ['cursor-agent', '--list-models'],
-        stdinPayload: null,
-        label: 'Cursor'
-      })
-      expect(cwd).toBe('/remote/repo')
-      expect(timeoutMs).toBe(60_000)
-      return {
-        stdout: 'auto - Auto\ngpt-5.2 - GPT-5.2\n',
-        stderr: '',
-        exitCode: 0,
-        timedOut: false
-      }
-    })
-
-    const result = await discoverCommitMessageModelsRemote(
-      'cursor',
-      '/remote/repo',
-      execute,
-      'npx cursor-agent'
-    )
-
-    expect(result).toMatchObject({
-      success: true,
-      defaultModelId: 'auto',
-      models: [
-        { id: 'auto', label: 'Auto' },
-        { id: 'gpt-5.2', label: 'GPT-5.2' }
-      ]
-    })
-  })
-
-  it('reports remote model discovery transport timeouts without PATH guidance', async () => {
-    const transportTimeout = Object.assign(
-      new Error('Request "agent.execNonInteractive" timed out after 65000ms'),
-      { code: SSH_MUX_REQUEST_TIMEOUT_CODE }
-    )
-    const result = await discoverCommitMessageModelsRemote(
-      'cursor',
-      '/remote/repo',
-      async () => {
-        throw transportTimeout
-      },
-      'npx cursor-agent'
-    )
-
-    expect(result).toEqual({
-      success: false,
-      error:
-        'Cursor model discovery took longer than 60s and may still be running on the remote host.'
-    })
-  })
-
-  it('reports remote model discovery spawn failures with remote install guidance', async () => {
-    const result = await discoverCommitMessageModelsRemote('cursor', '/remote/repo', async () => ({
-      stdout: '',
-      stderr: '',
-      exitCode: null,
-      timedOut: false,
-      spawnError: 'ENOENT'
-    }))
-
-    expect(result).toEqual({
-      success: false,
-      error: 'cursor-agent not found on the remote PATH. Install Cursor there.'
-    })
-  })
-
-  it('uses a prepared remote execution plan instead of running git on the remote side', async () => {
-    const result = await generateCommitMessageFromContext(
-      {
-        branch: 'main',
-        stagedSummary: 'M\tREADME.md',
-        stagedPatch: '+hello'
-      },
-      {
-        agentId: 'custom',
-        model: '',
-        customAgentCommand: 'agent --message {prompt}'
-      },
-      {
-        kind: 'remote',
-        cwd: '/repo',
-        missingBinaryLocation: 'remote PATH',
-        execute: async (plan, cwd, timeoutMs) => {
-          expect(cwd).toBe('/repo')
-          expect(timeoutMs).toBe(60_000)
-          expect(plan.binary).toBe('agent')
-          expect(plan.args).toHaveLength(2)
-          expect(plan.args[0]).toBe('--message')
-          expect(plan.args[1]).toContain('Staged files:\nM\tREADME.md')
-          return {
-            stdout: 'Add README note.\n',
-            stderr: '',
-            exitCode: 0,
-            timedOut: false
-          }
-        }
-      }
-    )
-
-    expect(result).toEqual({
-      success: true,
-      message: 'Add README note',
-      agentLabel: 'agent'
-    })
-  })
-
   it('exposes raw CLI failure output only after path sanitization', async () => {
     const result = await generateCommitMessageFromContext(
       {
@@ -806,17 +586,12 @@ describe('generateCommitMessageFromContext', () => {
         model: '',
         customAgentCommand: 'agent'
       },
-      {
-        kind: 'remote',
-        cwd: '/repo',
-        missingBinaryLocation: 'remote PATH',
-        execute: async () => ({
+      localAgentRunTarget({
           stdout: 'You are generating a single git commit message for /secret/repo',
           stderr: 'raw failure output with /Users/thebr/My Repo/secret/file.ts',
-          exitCode: 1,
-          timedOut: false
-        })
-      }
+          exitCode: 1
+        
+      })
     )
 
     expect(result).toEqual({
@@ -837,17 +612,12 @@ describe('generateCommitMessageFromContext', () => {
         model: '',
         customAgentCommand: 'agent'
       },
-      {
-        kind: 'remote',
-        cwd: '/repo',
-        missingBinaryLocation: 'remote PATH',
-        execute: async () => ({
+      localAgentRunTarget({
           stdout: 'ERROR: fatal: C:\\Users\\Brennan Doe\\secret\\file.ts failed',
           stderr: '',
-          exitCode: 1,
-          timedOut: false
-        })
-      }
+          exitCode: 1
+        
+      })
     )
 
     expect(result).toEqual({
@@ -868,17 +638,12 @@ describe('generateCommitMessageFromContext', () => {
         model: '',
         customAgentCommand: 'agent'
       },
-      {
-        kind: 'remote',
-        cwd: '/repo',
-        missingBinaryLocation: 'remote PATH',
-        execute: async () => ({
+      localAgentRunTarget({
           stdout: '',
           stderr: 'ERROR: failed at \\\\server\\share\\Brennan Repo\\secret\\file.ts',
-          exitCode: 1,
-          timedOut: false
-        })
-      }
+          exitCode: 1
+        
+      })
     )
 
     expect(result).toEqual({
@@ -899,17 +664,12 @@ describe('generateCommitMessageFromContext', () => {
         model: '',
         customAgentCommand: 'agent'
       },
-      {
-        kind: 'remote',
-        cwd: '/repo',
-        missingBinaryLocation: 'remote PATH',
-        execute: async () => ({
+      localAgentRunTarget({
           stdout: '',
           stderr: '\u001b[91m\u001b[1mError: \u001b[0mNo payment method',
-          exitCode: 0,
-          timedOut: false
-        })
-      }
+          exitCode: 0
+        
+      })
     )
 
     expect(result).toEqual({
@@ -926,14 +686,10 @@ describe('generateCommitMessageFromContext', () => {
         stagedPatch: '+hello'
       },
       {
-        agentId: 'pi',
+        agentId: 'codex',
         model: 'github-copilot/gpt-5.5'
       },
-      {
-        kind: 'remote',
-        cwd: '/repo',
-        missingBinaryLocation: 'remote PATH',
-        execute: async () => ({
+      localAgentRunTarget({
           stdout: '',
           stderr: [
             'No API key found for github-copilot.',
@@ -942,10 +698,9 @@ describe('generateCommitMessageFromContext', () => {
             '  /private/tmp/pi-exit1-repro/node_modules/@earendil-works/pi-coding-agent/docs/providers.md',
             '  /private/tmp/pi-exit1-repro/node_modules/@earendil-works/pi-coding-agent/docs/models.md'
           ].join('\n'),
-          exitCode: 1,
-          timedOut: false
-        })
-      }
+          exitCode: 1
+        
+      })
     )
 
     expect(result).toEqual({
@@ -967,17 +722,12 @@ describe('generateCommitMessageFromContext', () => {
         model: '',
         customAgentCommand: 'agent'
       },
-      {
-        kind: 'remote',
-        cwd: '/repo',
-        missingBinaryLocation: 'remote PATH',
-        execute: async () => ({
+      localAgentRunTarget({
           stdout: '',
           stderr: 'ERROR: run /login then check /Users/name/repo',
-          exitCode: 1,
-          timedOut: false
-        })
-      }
+          exitCode: 1
+        
+      })
     )
 
     expect(result).toEqual({
@@ -994,20 +744,15 @@ describe('generateCommitMessageFromContext', () => {
         stagedPatch: '+hello'
       },
       {
-        agentId: 'pi',
+        agentId: 'codex',
         model: 'github-copilot/gpt-5.5'
       },
-      {
-        kind: 'remote',
-        cwd: '/repo',
-        missingBinaryLocation: 'remote PATH',
-        execute: async () => ({
+      localAgentRunTarget({
           stdout: '',
           stderr: '401: {"message":"Invalid key loaded from /Users/name/.config/pi/auth.json"}',
-          exitCode: 1,
-          timedOut: false
-        })
-      }
+          exitCode: 1
+        
+      })
     )
 
     expect(result).toEqual({
@@ -1024,20 +769,15 @@ describe('generateCommitMessageFromContext', () => {
         stagedPatch: '+hello'
       },
       {
-        agentId: 'pi',
+        agentId: 'codex',
         model: 'github-copilot/gpt-5.5'
       },
-      {
-        kind: 'remote',
-        cwd: '/repo',
-        missingBinaryLocation: 'remote PATH',
-        execute: async () => ({
+      localAgentRunTarget({
           stdout: '',
           stderr: '401: {"message":"Invalid key loaded from C:\\\\Users\\\\name\\\\auth.json"}',
-          exitCode: 1,
-          timedOut: false
-        })
-      }
+          exitCode: 1
+        
+      })
     )
 
     expect(result).toEqual({
@@ -1054,21 +794,16 @@ describe('generateCommitMessageFromContext', () => {
         stagedPatch: '+hello'
       },
       {
-        agentId: 'pi',
+        agentId: 'codex',
         model: 'github-copilot/gpt-5.5'
       },
-      {
-        kind: 'remote',
-        cwd: '/repo',
-        missingBinaryLocation: 'remote PATH',
-        execute: async () => ({
+      localAgentRunTarget({
           stdout: '',
           stderr:
             '401: Visit https://console.anthropic.com/settings/keys then check /Users/name/.config/pi/auth.json',
-          exitCode: 1,
-          timedOut: false
-        })
-      }
+          exitCode: 1
+        
+      })
     )
 
     expect(result).toEqual({
@@ -1086,20 +821,15 @@ describe('generateCommitMessageFromContext', () => {
         stagedPatch: '+hello'
       },
       {
-        agentId: 'pi',
+        agentId: 'codex',
         model: 'github-copilot/gpt-5.5'
       },
-      {
-        kind: 'remote',
-        cwd: '/repo',
-        missingBinaryLocation: 'remote PATH',
-        execute: async () => ({
+      localAgentRunTarget({
           stdout: '',
           stderr: '401: {"message":"rejected credential_path=/Users/name/.config/pi/auth.json"}',
-          exitCode: 1,
-          timedOut: false
-        })
-      }
+          exitCode: 1
+        
+      })
     )
 
     expect(result).toEqual({
@@ -1127,20 +857,15 @@ describe('generateCommitMessageFromContext', () => {
         stagedPatch: '+hello'
       },
       {
-        agentId: 'pi',
+        agentId: 'codex',
         model: 'github-copilot/gpt-5.5'
       },
-      {
-        kind: 'remote',
-        cwd: '/repo',
-        missingBinaryLocation: 'remote PATH',
-        execute: async () => ({
+      localAgentRunTarget({
           stdout: '',
           stderr,
-          exitCode: 1,
-          timedOut: false
-        })
-      }
+          exitCode: 1
+        
+      })
     )
 
     expect(result).toEqual({ success: false, error: expected })
@@ -1154,21 +879,16 @@ describe('generateCommitMessageFromContext', () => {
         stagedPatch: '+hello'
       },
       {
-        agentId: 'pi',
+        agentId: 'codex',
         model: 'github-copilot/gpt-5.5'
       },
-      {
-        kind: 'remote',
-        cwd: '/repo',
-        missingBinaryLocation: 'remote PATH',
-        execute: async () => ({
+      localAgentRunTarget({
           stdout: '',
           stderr:
             '400 {"type":"error","error":{"type":"invalid_request_error","message":"Third-party apps now draw from your extra usage, not your plan limits. Add more at claude.ai/settings/usage and keep going."},"request_id":"req_011CcsZLJ5ZiLLNvpxcxDuU4"}',
-          exitCode: 1,
-          timedOut: false
-        })
-      }
+          exitCode: 1
+        
+      })
     )
 
     expect(result.success).toBe(false)
@@ -1195,17 +915,12 @@ describe('generateCommitMessageFromContext', () => {
         model: '',
         customAgentCommand: 'agent'
       },
-      {
-        kind: 'remote',
-        cwd: '/repo',
-        missingBinaryLocation: 'remote PATH',
-        execute: async () => ({
+      localAgentRunTarget({
           stdout: 'Update README.\n\n- Explain the generated commit-message flow\n',
           stderr: '',
-          exitCode: 0,
-          timedOut: false
-        })
-      }
+          exitCode: 0
+        
+      })
     )
 
     expect(result).toEqual({
@@ -2082,17 +1797,12 @@ describe('generateBranchNameFromContext', () => {
         model: '',
         customAgentCommand: 'agent'
       },
-      {
-        kind: 'remote',
-        cwd: '/repo',
-        missingBinaryLocation: 'remote PATH',
-        execute: async () => ({
+      localAgentRunTarget({
           stdout: '"Fix/Login Flow now please"\n',
           stderr: '',
-          exitCode: 0,
-          timedOut: false
-        })
-      }
+          exitCode: 0
+        
+      })
     )
 
     expect(result).toEqual({
@@ -2110,17 +1820,12 @@ describe('generateBranchNameFromContext', () => {
         model: '',
         customAgentCommand: 'agent'
       },
-      {
-        kind: 'remote',
-        cwd: '/repo',
-        missingBinaryLocation: 'remote PATH',
-        execute: async () => ({
+      localAgentRunTarget({
           stdout: '!!! ___\n',
           stderr: '',
-          exitCode: 0,
-          timedOut: false
-        })
-      }
+          exitCode: 0
+        
+      })
     )
 
     expect(result).toEqual({
@@ -2134,20 +1839,15 @@ describe('generateBranchNameFromContext', () => {
     const result = await generateBranchNameFromContext(
       { firstPrompt: 'Fix login flow' },
       {
-        agentId: 'pi',
+        agentId: 'codex',
         model: 'github-copilot/gpt-5.5'
       },
-      {
-        kind: 'remote',
-        cwd: '/repo',
-        missingBinaryLocation: 'remote PATH',
-        execute: async () => ({
+      localAgentRunTarget({
           stdout: 'partial',
           stderr: 'No API key found for github-copilot.',
-          exitCode: 1,
-          timedOut: false
-        })
-      }
+          exitCode: 1
+        
+      })
     )
 
     expect(result.success).toBe(false)
@@ -2170,17 +1870,12 @@ describe('generateBranchNameFromContext', () => {
         model: '',
         customAgentCommand: 'agent'
       },
-      {
-        kind: 'remote',
-        cwd: '/repo',
-        missingBinaryLocation: 'remote PATH',
-        execute: async () => ({
+      localAgentRunTarget({
           stdout: 'Customer secret in the first prompt',
           stderr: '',
-          exitCode: 1,
-          timedOut: false
-        })
-      }
+          exitCode: 1
+        
+      })
     )
 
     expect(result).toEqual({
@@ -2199,20 +1894,15 @@ describe('generateBranchNameFromContext', () => {
     const result = await generateBranchNameFromContext(
       { firstPrompt: 'Fix login flow' },
       {
-        agentId: 'pi',
+        agentId: 'codex',
         model: 'github-copilot/gpt-5.5'
       },
-      {
-        kind: 'remote',
-        cwd: '/repo',
-        missingBinaryLocation: 'remote PATH',
-        execute: async () => ({
+      localAgentRunTarget({
           stdout: '',
           stderr: 'Process killed by host',
-          exitCode: null,
-          timedOut: false
-        })
-      }
+          exitCode: null
+        
+      })
     )
 
     expect(result).toMatchObject({

@@ -51,7 +51,6 @@ const worktree: Worktree = {
   isMainWorktree: false,
   linkedIssue: null,
   linkedPR: null,
-  linkedLinearIssue: null,
   isArchived: false,
   comment: '',
   isUnread: false,

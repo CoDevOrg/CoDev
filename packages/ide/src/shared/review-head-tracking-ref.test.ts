@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  githubPullRequestHeadLocalRef,
-  gitlabMergeRequestHeadLocalRef,
-  reviewHeadRemoteRefComponent
-} from './review-head-tracking-ref'
+import { githubPullRequestHeadLocalRef, reviewHeadRemoteRefComponent } from './review-head-tracking-ref'
 
 describe('reviewHeadRemoteRefComponent', () => {
   it('is deterministic for the same remote identity', () => {
@@ -32,8 +28,5 @@ describe('reviewHeadRemoteRefComponent', () => {
   it('builds provider refs under the orca namespace', () => {
     const component = reviewHeadRemoteRefComponent('origin', 'git@github.com:org/repo.git')
     expect(githubPullRequestHeadLocalRef(component, 42)).toBe(`refs/orca/pull/${component}/42`)
-    expect(gitlabMergeRequestHeadLocalRef(component, 77)).toBe(
-      `refs/orca/merge-requests/${component}/77`
-    )
   })
 })

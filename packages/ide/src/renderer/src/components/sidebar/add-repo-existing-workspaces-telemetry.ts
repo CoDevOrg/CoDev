@@ -87,7 +87,6 @@ export function shouldTrackAddRepoExistingWorkspacesDetected(
   // not evidence of a pre-existing workspace migration opportunity.
   return (
     payload.source === 'local_folder_picker' ||
-    payload.source === 'runtime_server_path' ||
-    payload.source === 'ssh_remote_path'
+    payload.source === 'runtime_server_path'
   )
 }

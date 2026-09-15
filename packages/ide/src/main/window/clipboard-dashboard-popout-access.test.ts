@@ -37,10 +37,6 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('./dashboard-popout-window', () => ({ isDashboardPopoutRenderer }))
-vi.mock('./clipboard-remote-file-copy', () => ({
-  cleanupExpiredRemoteClipboardFiles: vi.fn(async () => undefined),
-  writeRemoteFileToClipboard: vi.fn()
-}))
 
 import {
   registerClipboardHandlers,
@@ -107,8 +103,7 @@ describe('dashboard popout clipboard access', () => {
     )
     expect(() =>
       handlers.get('clipboard:writeFile')?.(popoutEvent, {
-        filePath: '/tmp/copied-file.txt',
-        connectionId: 'ssh-secret'
+        filePath: '/tmp/copied-file.txt'
       })
     ).toThrow('Unauthorized clipboard IPC sender')
     expect(() =>

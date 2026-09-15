@@ -5,7 +5,6 @@ import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import {
@@ -174,8 +173,7 @@ export function getNewWorkspaceProjectGroupHostId(group: ProjectGroup): Executio
   if (executionHost) {
     return executionHost.id
   }
-  const connectionId = group.connectionId?.trim()
-  return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+  return LOCAL_EXECUTION_HOST_ID
 }
 
 /**

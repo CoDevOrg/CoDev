@@ -24,13 +24,10 @@ export async function detectAgentSessionContinuationAgents(
   worktreeId: string
 ): Promise<TuiAgent[]> {
   const state = useAppStore.getState()
-  const connectionId = getConnectionIdFromState(state, worktreeId)
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
-  return connectionId
-    ? state.ensureRemoteDetectedAgents(connectionId)
-    : runtimeEnvironmentId
-      ? state.ensureRuntimeDetectedAgents(runtimeEnvironmentId)
-      : state.ensureDetectedAgents(worktreeId)
+  return runtimeEnvironmentId
+    ? state.ensureRuntimeDetectedAgents(runtimeEnvironmentId)
+    : state.ensureDetectedAgents(worktreeId)
 }
 
 async function ensureAgentAvailable(agent: TuiAgent, worktreeId: string): Promise<boolean> {

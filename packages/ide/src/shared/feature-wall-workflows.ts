@@ -35,11 +35,11 @@ export const FEATURE_WALL_WORKFLOWS: readonly FeatureWallWorkflow[] = [
   {
     id: 'tasks',
     title: 'Tasks',
-    meta: 'GitHub · Linear',
-    lede: 'Start work directly from GitHub or Linear.',
+    meta: 'GitHub',
+    lede: 'Start work directly from GitHub.',
     primaryTileId: 'tile-03',
     relatedTileIds: [],
-    docsUrl: 'https://www.onorca.dev/docs/review/linear'
+    docsUrl: 'https://www.onorca.dev/docs/review'
   },
   {
     id: 'agents-orchestration',

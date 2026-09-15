@@ -14,7 +14,6 @@ import {
 } from './tab-agent'
 import { resolveExplicitTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'
 import { resolveCompatibleAgentTypeForOwner } from '../../../shared/agent-title-owner'
-import { isOpenCodeNativeTitle } from '../../../shared/opencode-terminal-title'
 import { resolvePaneAgentOwner } from '../../../shared/pane-agent-owner'
 import type { TerminalTab, TuiAgent } from '../../../shared/types'
 
@@ -114,18 +113,13 @@ export function resolveTabAgentFromSignals(args: {
     owner
   )
   const priorIdentity = idleFocusedIdentity ?? launchAgent
-  const nativeOpenCodeTitle = explicitTitleAgent === 'opencode' && isOpenCodeNativeTitle(args.title)
-  // Why: native OpenCode titles can reclaim stale launch intent before any observed hook signal.
   const titleReclaimsReusedPane =
     priorIdentity !== null &&
     explicitTitleAgent !== null &&
     explicitTitleAgent !== priorIdentity &&
-    (args.hasObservedAgentSignal || hasCompletedHook || nativeOpenCodeTitle)
-  // Why: native OpenCode titles lack a provider generation and cannot displace durable ownership.
+    (args.hasObservedAgentSignal || hasCompletedHook)
   const titleAgent =
-    processProvesShell ||
-    sleepingSessionAgent ||
-    (nativeOpenCodeTitle && idleFocusedIdentity !== null)
+    processProvesShell || sleepingSessionAgent
       ? null
       : titleReclaimsReusedPane
         ? explicitTitleAgent

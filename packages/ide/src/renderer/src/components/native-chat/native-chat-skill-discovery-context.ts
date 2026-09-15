@@ -33,7 +33,7 @@ type NativeChatSkillWorktreeState = {
 export type NativeChatSkillDiscoveryContext = {
   key: string
   cwd: string
-  executionHostKind: 'local' | 'runtime' | 'ssh'
+  executionHostKind: 'local' | 'runtime'
   runtimeTarget: RuntimeClientTarget
   discoveryTarget: SkillDiscoveryTarget
 }
@@ -99,13 +99,7 @@ export function resolveNativeChatSkillDiscoveryContext(
   const hostId = getExecutionHostIdForWorktree(state, worktreeId)
   const parsedHost = parseExecutionHostId(hostId)
   if (parsedHost?.kind === 'ssh') {
-    return {
-      key: JSON.stringify(['ssh', hostId, cwd]),
-      cwd,
-      executionHostKind: 'ssh',
-      runtimeTarget: { kind: 'local' },
-      discoveryTarget: { cwd, worktreeId }
-    }
+    return null
   }
 
   const runtimeEnvironmentId = getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId)

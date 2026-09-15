@@ -20,7 +20,6 @@ function makeWorktree(id: string, overrides: Partial<Worktree> = {}): Worktree {
     comment: '',
     linkedIssue: null,
     linkedPR: null,
-    linkedLinearIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,

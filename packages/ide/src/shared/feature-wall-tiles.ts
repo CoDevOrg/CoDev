@@ -82,14 +82,14 @@ export const FEATURE_WALL_TILES: readonly FeatureWallTile[] = [
   {
     id: 'tile-03',
     kind: 'media',
-    title: 'GitHub & Linear, native',
+    title: 'GitHub, native',
     caption:
-      'Find connected GitHub or Linear work in Tasks, open its context, and start workspaces without switching tools.',
+      'Find connected GitHub work in Tasks, open its context, and start workspaces without switching tools.',
     gifPath: 'tile-03.gif',
     posterPath: 'tile-03.poster.jpg',
     recordedAtPath: 'tile-03.recorded-at.json',
     owner: 'task-integrations',
-    docsUrl: 'https://www.onorca.dev/docs/review/linear'
+    docsUrl: 'https://www.onorca.dev/docs/review'
   },
   {
     id: 'tile-04',

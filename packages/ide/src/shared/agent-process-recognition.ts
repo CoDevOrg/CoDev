@@ -49,12 +49,8 @@ const INTERPRETER_OPTIONS_WITH_VALUE = new Set([
 ])
 const INTERPRETER_OPTIONS_WITH_INLINE_SOURCE = new Set(['-e', '--eval', '-p', '--print', '--check'])
 const NODE_PACKAGE_SCRIPT_ENTRYPOINTS: Record<string, readonly string[]> = {
-  codex: ['node_modules/@openai/codex/'],
-  gemini: ['node_modules/@google/gemini-cli/']
+  codex: ['node_modules/@openai/codex/']
 }
-const CURSOR_AGENT_NODE_ENTRYPOINT_RE = /(?:^|\/)cursor-agent\/versions\/[^/]+\/index\.js$/
-const PI_AGENT_NODE_ENTRYPOINT_RE =
-  /(?:^|\/)node_modules\/@(?:earendil-works|mariozechner)\/pi-coding-agent\/dist\/cli\.js$/
 const PYTHON_SCRIPT_ENTRYPOINT_DIRECTORIES = ['/bin/', '/scripts/', '/site-packages/']
 
 const PROCESS_TO_AGENT = new Map<string, TuiAgent>()
@@ -91,9 +87,6 @@ function agentForNormalizedProcess(normalized: string): TuiAgent | undefined {
   // (for example codex-aarch64-ap) instead of the launch command.
   if (normalized.startsWith('codex-')) {
     return PROCESS_TO_AGENT.get('codex')
-  }
-  if (normalized.startsWith('grok-')) {
-    return PROCESS_TO_AGENT.get('grok')
   }
   return undefined
 }
@@ -206,15 +199,6 @@ function comparablePath(token: string): string {
 
 function recognizeNodeScriptEntrypoint(token: string): RecognizedAgentProcess | null {
   const path = comparablePath(token)
-  // Why: Cursor's native Windows launcher runs a generic versioned index.js,
-  // so its install path is the only stable identity that avoids ordinary Node apps.
-  if (CURSOR_AGENT_NODE_ENTRYPOINT_RE.test(path)) {
-    return { agent: 'cursor', processName: 'cursor-agent' }
-  }
-  // Why: Pi's npm shim launches a generic cli.js; only the exact package path is authoritative.
-  if (PI_AGENT_NODE_ENTRYPOINT_RE.test(path)) {
-    return { agent: 'pi', processName: 'pi' }
-  }
   const normalized = normalizeProcessName(token, { stripInterpreterScriptExtension: true })
   const markers = NODE_PACKAGE_SCRIPT_ENTRYPOINTS[normalized]
   if (!markers) {

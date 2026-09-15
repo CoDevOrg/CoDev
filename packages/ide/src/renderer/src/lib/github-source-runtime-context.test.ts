@@ -4,7 +4,6 @@ import { getActiveRuntimeTarget } from '../runtime/runtime-rpc-client'
 import {
   canUseGitHubRepoContext,
   getGitHubMutationRoutingSettings,
-  getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeHost,
   getGitHubSourceRuntimeTarget
 } from './github-source-runtime-context'
@@ -31,28 +30,10 @@ describe('GitHub source runtime context', () => {
     })
   })
 
-  it('does not treat non-runtime or non-GitHub sources as runtime GitHub sources', () => {
-    expect(getGitHubSourceRuntimeHost({ ...runtimeSourceContext, hostId: 'local' })).toBeNull()
-    expect(getGitHubSourceRuntimeHost({ ...runtimeSourceContext, provider: 'gitlab' })).toBeNull()
-    expect(getGitHubSourceRuntimeTarget({ ...runtimeSourceContext, provider: 'gitlab' })).toEqual({
-      kind: 'local'
-    })
-  })
-
   it('allows a repo context from either a local path or runtime source', () => {
     expect(canUseGitHubRepoContext('', runtimeSourceContext)).toBe(true)
     expect(canUseGitHubRepoContext('C:\\workspace\\repo', null)).toBe(true)
     expect(canUseGitHubRepoContext('', { ...runtimeSourceContext, hostId: 'local' })).toBe(false)
-  })
-
-  it('uses the source repo id for GitHub runtime calls when available', () => {
-    expect(getGitHubRuntimeRepoId(runtimeSourceContext, 'fallback-repo')).toBe('runtime-repo')
-    expect(getGitHubRuntimeRepoId({ ...runtimeSourceContext, repoId: null }, 'fallback-repo')).toBe(
-      'fallback-repo'
-    )
-    expect(
-      getGitHubRuntimeRepoId({ ...runtimeSourceContext, provider: 'gitlab' }, 'fallback')
-    ).toBe('fallback')
   })
 })
 
@@ -109,16 +90,6 @@ describe('getGitHubMutationRoutingSettings', () => {
         repoId: 'repo-1'
       })
     ).toEqual({ kind: 'local' })
-  })
-
-  it('ignores runtime hosts on non-GitHub sources', () => {
-    expect(
-      resolveTarget(runtimeOwnedRepo, 'repo-1', {
-        ...runtimeSourceContext,
-        provider: 'gitlab',
-        hostId: 'runtime:source-runtime'
-      })
-    ).toEqual({ kind: 'environment', environmentId: 'owner-runtime' })
   })
 
   it('never routes a repo without an explicit owner to the globally focused runtime', () => {

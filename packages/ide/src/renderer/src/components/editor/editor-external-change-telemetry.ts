@@ -7,7 +7,7 @@ import { getConnectionIdForFile } from '@/lib/connection-context'
 import type { OpenFile } from '@/store/slices/editor'
 
 type ConflictSurface = 'edit' | 'unstaged-diff'
-type ConflictTransport = 'local' | 'ssh' | 'runtime'
+type ConflictTransport = 'local' | 'runtime'
 
 export type ExternalChangeConflictAction =
   | 'reload'
@@ -21,12 +21,9 @@ function conflictSurface(file: Pick<OpenFile, 'mode'>): ConflictSurface {
 }
 
 export function conflictTransport(
-  connectionId: string | undefined,
+  _connectionId: string | undefined,
   runtimeEnvironmentId: string | null | undefined
 ): ConflictTransport {
-  if (connectionId) {
-    return 'ssh'
-  }
   if (runtimeEnvironmentId?.trim()) {
     return 'runtime'
   }

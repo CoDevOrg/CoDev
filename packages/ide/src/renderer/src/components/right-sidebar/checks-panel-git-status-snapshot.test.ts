@@ -63,49 +63,32 @@ describe('buildChecksPanelGitStatusContextKey', () => {
     const unlinkedContext = buildChecksPanelGitStatusContextKey({
       ...base,
       linkedGitHubPR: null,
-      linkedGitLabMR: null,
-      linkedBitbucketPR: null,
-      linkedAzureDevOpsPR: null,
-      linkedGiteaPR: null
     })
 
     expect(
       buildChecksPanelGitStatusContextKey({
         ...base,
         linkedGitHubPR: 12,
-        linkedGitLabMR: null,
-        linkedBitbucketPR: null,
-        linkedAzureDevOpsPR: null,
-        linkedGiteaPR: null
       })
     ).not.toBe(unlinkedContext)
     expect(
       buildChecksPanelGitStatusContextKey({
         ...base,
         linkedGitHubPR: null,
-        linkedGitLabMR: null,
         linkedBitbucketPR: 34,
-        linkedAzureDevOpsPR: null,
-        linkedGiteaPR: null
       })
     ).not.toBe(unlinkedContext)
     expect(
       buildChecksPanelGitStatusContextKey({
         ...base,
         linkedGitHubPR: null,
-        linkedGitLabMR: null,
-        linkedBitbucketPR: null,
         linkedAzureDevOpsPR: 56,
-        linkedGiteaPR: null
       })
     ).not.toBe(unlinkedContext)
     expect(
       buildChecksPanelGitStatusContextKey({
         ...base,
         linkedGitHubPR: null,
-        linkedGitLabMR: null,
-        linkedBitbucketPR: null,
-        linkedAzureDevOpsPR: null,
         linkedGiteaPR: 78
       })
     ).not.toBe(unlinkedContext)

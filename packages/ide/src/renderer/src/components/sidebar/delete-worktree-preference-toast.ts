@@ -14,7 +14,6 @@ export function persistDeleteWorktreeConfirmSkipPreference({
     pane: SettingsNavTarget
     repoId: string | null
     sectionId?: string
-    intent?: 'add-quick-command'
   }) => void
 }): void {
   void updateSettings({ skipDeleteWorktreeConfirm: true })

@@ -2,7 +2,6 @@
 import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
-import type { SshRepoReadoption } from '../../../../shared/ssh-types'
 import type {
   GlobalSettings,
   Project,
@@ -32,7 +31,6 @@ import {
   FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY,
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY,
-  WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import {
   FOLDER_WORKSPACE_PATH_STATUS_TTL_MS,
@@ -48,12 +46,6 @@ import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 import { selectProjectGroupRemovalTargets } from './project-group-removal-targets'
 import { reconcileFetchedRepos } from './repo-identity-reconcile'
-import {
-  mergeSshRepoReadoptions,
-  reconcileReadoptedSshRepoRows,
-  type SshRepoReconciliation
-} from './superseded-ssh-repo-rows'
-import { reconcileReadoptedSshWorktreesByRepo } from './readopted-ssh-worktree-rows'
 import { splitRepoReorderByHost } from './repo-reorder-host-split'
 import { omitSparsePresetsForRepos } from './sparse-presets'
 import {
@@ -78,18 +70,14 @@ import { notifyInstalledAgentSkillsChanged } from '@/hooks/installed-agent-skill
 import { translate } from '@/i18n/i18n'
 import {
   getRepoExecutionHostId,
-  isRuntimeOwnedSshTargetId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { isRemovedRuntimeHostId } from './stale-runtime-host-rows'
-import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { formatFolderWorkspaceCreateError } from '../../lib/folder-workspace-path-status'
-import { getEnvironmentSshStateGeneration } from './runtime-environment-ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from './runtime-status'
 import {
   findFolderWorkspaceOwner,
@@ -109,7 +97,6 @@ type HostCatalogFence = {
   key: string
   generation: number
   target: ReturnType<typeof getActiveRuntimeTarget>
-  sshStateGeneration: number | null
   runtimeConnectionGeneration: number | null
 }
 
@@ -438,9 +425,6 @@ function projectGroupWithFetchedOwner(
   if (target.kind === 'environment') {
     return { ...projectGroup, executionHostId: getRuntimeTargetHostId(target) }
   }
-  if (projectGroup.connectionId) {
-    return { ...projectGroup, executionHostId: toSshExecutionHostId(projectGroup.connectionId) }
-  }
   return { ...projectGroup, executionHostId: LOCAL_EXECUTION_HOST_ID }
 }
 
@@ -458,7 +442,7 @@ function setupWithFetchedOwner(
     hostId,
     executionHostId: executionHostId === LOCAL_EXECUTION_HOST_ID ? hostId : executionHostId,
     runtimeOwnerEnvironmentId: target.environmentId,
-    // Why: paired clients route through the HUB and must not treat its private SSH target as client-local configuration.
+    // Why: paired clients route through the HUB and must not treat its private host as client-local configuration.
     connectionId: null
   }
 }
@@ -804,9 +788,8 @@ function mergeFetchedProjectCompatibilityForHost({
     if (hostId !== LOCAL_EXECUTION_HOST_ID) {
       return setup.hostId === hostId
     }
-    const owner = parseExecutionHostId(setup.hostId)
-    // Why: desktop persistence owns local and direct-SSH setups; runtime setups stay authoritative on their remote Orca server.
-    return setup.hostId === LOCAL_EXECUTION_HOST_ID || owner?.kind === 'ssh'
+    // Why: desktop persistence owns local setups; runtime setups stay authoritative on their remote Orca server.
+    return setup.hostId === LOCAL_EXECUTION_HOST_ID
   }
   const fetchedSetupsForHost = fetched.projectHostSetups.filter(setupBelongsToFetchedCatalog)
   const preservedSetups = previous.projectHostSetups.filter(
@@ -957,7 +940,7 @@ function getProjectGroupHostId(group: Pick<ProjectGroup, 'connectionId' | 'execu
   if (group.executionHostId) {
     return group.executionHostId
   }
-  return group.connectionId ? toSshExecutionHostId(group.connectionId) : LOCAL_EXECUTION_HOST_ID
+  return LOCAL_EXECUTION_HOST_ID
 }
 
 function getProjectGroupHostIdentity(group: ProjectGroup): string {
@@ -994,9 +977,6 @@ function getFolderWorkspaceHostId(
   const explicitHostId = parseExecutionHostId(workspace.executionHostId)?.id
   if (explicitHostId) {
     return explicitHostId
-  }
-  if (workspace.connectionId) {
-    return toSshExecutionHostId(workspace.connectionId)
   }
   const matchingHosts = new Set(
     projectGroups
@@ -1122,13 +1102,6 @@ function mergeFetchedRepoCatalog(
   }
 }
 
-function reconcileSupersededSshRepos(
-  repos: readonly Repo[],
-  state: Pick<AppState, 'pendingSshRepoReadoptions'>
-): SshRepoReconciliation {
-  return reconcileReadoptedSshRepoRows(repos, state.pendingSshRepoReadoptions)
-}
-
 function filterSetupsForPrunedRepoRows(
   setups: readonly ProjectHostSetup[],
   mergedRepos: readonly Repo[],
@@ -1148,34 +1121,6 @@ function filterSetupsForPrunedRepoRows(
   return setups.filter(
     (setup) => !setup.repoId || !prunedOwners.has(`${setup.hostId}:${setup.repoId}`)
   )
-}
-
-function reconcileReadoptedSshWorktreeState(
-  state: Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'sortEpoch'>,
-  readoptions: readonly SshRepoReadoption[]
-): Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'sortEpoch'> {
-  const worktreesByRepo = reconcileReadoptedSshWorktreesByRepo(state.worktreesByRepo, readoptions)
-  const detectedRows = Object.fromEntries(
-    Object.entries(state.detectedWorktreesByRepo).map(([repoId, result]) => [
-      repoId,
-      result.worktrees
-    ])
-  )
-  const reconciledDetectedRows = reconcileReadoptedSshWorktreesByRepo(detectedRows, readoptions)
-  const detectedWorktreesByRepo =
-    reconciledDetectedRows === detectedRows
-      ? state.detectedWorktreesByRepo
-      : Object.fromEntries(
-          Object.entries(state.detectedWorktreesByRepo).map(([repoId, result]) => [
-            repoId,
-            { ...result, worktrees: reconciledDetectedRows[repoId] }
-          ])
-        )
-  return {
-    worktreesByRepo,
-    detectedWorktreesByRepo,
-    sortEpoch: worktreesByRepo === state.worktreesByRepo ? state.sortEpoch : state.sortEpoch + 1
-  }
 }
 
 function projectCompatibilityForReconciledRepos(
@@ -1380,10 +1325,7 @@ function settingsForRepoOwner(
       ? { ...state.settings, activeRuntimeEnvironmentId: parsed.environmentId }
       : ({ activeRuntimeEnvironmentId: parsed.environmentId } as AppState['settings'])
   }
-  if (
-    (parsed?.kind === 'local' || parsed?.kind === 'ssh') &&
-    state.settings?.activeRuntimeEnvironmentId
-  ) {
+  if (parsed?.kind === 'local' && state.settings?.activeRuntimeEnvironmentId) {
     return { ...state.settings, activeRuntimeEnvironmentId: null }
   }
   return state.settings
@@ -1492,38 +1434,20 @@ async function fetchRuntimeAddProjectPathStatus(args: {
 }
 
 function getFolderWorkspaceStatusRequestSnapshot(
-  state: Pick<AppState, 'projectGroups' | 'folderWorkspaces' | 'repos' | 'sshConnectionStates'>,
+  state: Pick<AppState, 'projectGroups' | 'folderWorkspaces' | 'repos'>,
   request: FolderWorkspacePathStatusRequest
 ): string | null {
   if (request.scope === 'path') {
     const candidateRepos = state.repos.filter((repo) =>
       isPathInsideOrEqual(request.path, repo.path)
     )
-    const relevantConnectionIds = new Set<string>()
-    if (request.connectionId) {
-      relevantConnectionIds.add(request.connectionId)
-    }
-    for (const repo of candidateRepos) {
-      if (repo.connectionId) {
-        relevantConnectionIds.add(repo.connectionId)
-      }
-    }
-    const sshFingerprint = [...relevantConnectionIds]
-      .map(
-        (connectionId) =>
-          `${connectionId}:${state.sshConnectionStates.get(connectionId)?.status ?? 'missing'}`
-      )
-      .sort()
-      .join('|')
     const repoFingerprint = candidateRepos
       .map(
         (repo) => `${repo.id}:${repo.path}:${repo.projectGroupId ?? ''}:${repo.connectionId ?? ''}`
       )
       .sort()
       .join('|')
-    return [request.path, '', request.connectionId ?? '', sshFingerprint, repoFingerprint].join(
-      '\0'
-    )
+    return [request.path, '', request.connectionId ?? '', repoFingerprint].join('\0')
   }
 
   const scope =
@@ -1573,18 +1497,6 @@ function getFolderWorkspaceStatusRequestSnapshot(
   if (scopeConnectionId) {
     relevantConnectionIds.add(scopeConnectionId)
   }
-  for (const repo of candidateRepos) {
-    if (repo.connectionId) {
-      relevantConnectionIds.add(repo.connectionId)
-    }
-  }
-  const sshFingerprint = [...relevantConnectionIds]
-    .map(
-      (connectionId) =>
-        `${connectionId}:${state.sshConnectionStates.get(connectionId)?.status ?? 'missing'}`
-    )
-    .sort()
-    .join('|')
   const repoFingerprint = candidateRepos
     .map(
       (repo) => `${repo.id}:${repo.path}:${repo.projectGroupId ?? ''}:${repo.connectionId ?? ''}`
@@ -1595,7 +1507,6 @@ function getFolderWorkspaceStatusRequestSnapshot(
     folderPath,
     projectGroupId,
     scopeConnectionId ?? '',
-    sshFingerprint,
     repoFingerprint
   ].join('\0')
 }
@@ -1628,8 +1539,6 @@ export type RepoSlice = {
   activeRepoId: string | null
   // Monotonic sequence so overlapping catalog fetches can drop stale same-host results (#7020).
   reposFetchGeneration: number
-  pendingSshRepoReadoptions: SshRepoReadoption[]
-  recordSshRepoReadoptions: (readoptions: SshRepoReadoption[]) => void
   fetchRepos: (options?: RuntimeCatalogFetchOptions) => Promise<void>
   fetchReposForAllHosts: (options?: AllHostCatalogFetchOptions) => Promise<void>
   awaitLocalRepoCatalogSettlement: () => Promise<void>
@@ -1765,8 +1674,6 @@ function claimHostCatalogFence(
     key,
     generation,
     target,
-    sshStateGeneration:
-      target.kind === 'environment' ? getEnvironmentSshStateGeneration(target.environmentId) : null,
     runtimeConnectionGeneration:
       target.kind === 'environment'
         ? getRuntimeEnvironmentConnectionGeneration(target.environmentId)
@@ -1786,7 +1693,6 @@ function isHostCatalogFenceCurrent(get: () => AppState, fence: HostCatalogFence)
       getRuntimeTargetHostId(fence.target),
       get().removedRuntimeEnvironmentIds
     ) &&
-    getEnvironmentSshStateGeneration(fence.target.environmentId) === fence.sshStateGeneration &&
     getRuntimeEnvironmentConnectionGeneration(fence.target.environmentId) ===
       fence.runtimeConnectionGeneration
   )
@@ -1847,32 +1753,6 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   folderWorkspacePathStatuses: {},
   activeRepoId: null,
   reposFetchGeneration: 0,
-  pendingSshRepoReadoptions: [],
-
-  recordSshRepoReadoptions: (readoptions) =>
-    set((s) => {
-      const pendingSshRepoReadoptions = mergeSshRepoReadoptions(
-        s.pendingSshRepoReadoptions,
-        readoptions
-      )
-      const reconciliation = reconcileReadoptedSshRepoRows(s.repos, pendingSshRepoReadoptions)
-      const repos = reconciliation.repos
-      const worktreeState = reconcileReadoptedSshWorktreeState(s, pendingSshRepoReadoptions)
-      const projectHostSetups = filterSetupsForPrunedRepoRows(s.projectHostSetups, s.repos, repos)
-      const compatibility = mergeProjectHostSetupCompatibility(
-        projectCompatibilityFromRepos(repos),
-        {
-          projects: s.projects,
-          setups: projectHostSetups
-        }
-      )
-      return {
-        repos,
-        pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
-        ...worktreeState,
-        ...compatibility
-      }
-    }),
 
   fetchRepos: async (options) => {
     const target = getActiveRuntimeTarget(
@@ -1901,10 +1781,8 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         if (isRemovedRuntimeHostId(catalog.hostId, s.removedRuntimeEnvironmentIds)) {
           return s
         }
-        // Why: re-adoption leaves a stale row on the old SSH target id (a ghost that fails "SSH target not found"); drop rows a live-host sibling supersedes.
         const result = mergeFetchedRepoCatalog(catalog, s.repos)
-        const reconciliation = reconcileSupersededSshRepos(result.repos, s)
-        const prunedRepos = applyManualRepoOrder(reconciliation.repos, s.manualRepoOrder)
+        const prunedRepos = applyManualRepoOrder(result.repos, s.manualRepoOrder)
         const validRepoIds = new Set(prunedRepos.map((repo) => repo.id))
         const validRepoHostIdentities = new Set(prunedRepos.map(getRepoHostIdentity))
         const projectCompatibility = projectCompatibilityForReconciledRepos(
@@ -1929,8 +1807,6 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         )
         return {
           repos: prunedRepos,
-          pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
-          ...reconcileReadoptedSshWorktreeState(s, s.pendingSshRepoReadoptions),
           ...mergedProjectCompatibility,
           folderWorkspacePathStatuses: {},
           activeRepoId: s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
@@ -1953,7 +1829,6 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   fetchRuntimeEnvironmentRepos: async (environmentId) => {
     const requestGeneration = (runtimeRepoFetchGenerationByEnvironment.get(environmentId) ?? 0) + 1
     runtimeRepoFetchGenerationByEnvironment.set(environmentId, requestGeneration)
-    const connectionGeneration = getEnvironmentSshStateGeneration(environmentId)
     const runtimeConnectionGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
     let catalogGeneration = 0
     set((s) => {
@@ -1968,7 +1843,6 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       if (
         runtimeRepoFetchGenerationByEnvironment.get(environmentId) !== requestGeneration ||
         !isLatestRepoCatalogGeneration(get, targetHostId, catalogGeneration) ||
-        getEnvironmentSshStateGeneration(environmentId) !== connectionGeneration ||
         getRuntimeEnvironmentConnectionGeneration(environmentId) !== runtimeConnectionGeneration
       ) {
         return []
@@ -1978,7 +1852,6 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         if (
           runtimeRepoFetchGenerationByEnvironment.get(environmentId) !== requestGeneration ||
           !isLatestRepoCatalogGeneration(get, targetHostId, catalogGeneration) ||
-          getEnvironmentSshStateGeneration(environmentId) !== connectionGeneration ||
           getRuntimeEnvironmentConnectionGeneration(environmentId) !== runtimeConnectionGeneration
         ) {
           return s
@@ -1988,8 +1861,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           return s
         }
         const result = mergeFetchedRepoCatalog(catalog, s.repos)
-        const reconciliation = reconcileSupersededSshRepos(result.repos, s)
-        const finalizedRepos = applyManualRepoOrder(reconciliation.repos, s.manualRepoOrder)
+        const finalizedRepos = applyManualRepoOrder(result.repos, s.manualRepoOrder)
         const validRepoIds = new Set(finalizedRepos.map((repo) => repo.id))
         const validRepoHostIdentities = new Set(finalizedRepos.map(getRepoHostIdentity))
         const projectCompatibility = projectCompatibilityForReconciledRepos(
@@ -2014,8 +1886,6 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         )
         return {
           repos: finalizedRepos,
-          pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
-          ...reconcileReadoptedSshWorktreeState(s, s.pendingSshRepoReadoptions),
           ...mergedProjectCompatibility,
           activeRepoId: s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
           filterRepoIds: s.filterRepoIds.filter((projectId) => validRepoIds.has(projectId)),
@@ -2044,7 +1914,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     claimRepoCatalogGeneration(get, LOCAL_EXECUTION_HOST_ID, generation)
     // Why: fetching only the active host hides every other host's repos ("my projects vanished"); load local + all runtime envs, each failing soft.
     const applyCatalog = (catalog: FetchedRepoCatalog): void => {
-      // Why: a concurrent all-host refresh must not let the older catalog resurrect a migrated SSH owner.
+      // Why: a concurrent all-host refresh must not let the older catalog resurrect a migrated owner.
       if (
         latestAllHostRepoCatalogGenerationByStore.get(get) !== generation ||
         !isLatestRepoCatalogGeneration(get, catalog.hostId, generation)
@@ -2058,8 +1928,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           return s
         }
         const result = mergeFetchedRepoCatalog(catalog, s.repos)
-        const reconciliation = reconcileSupersededSshRepos(result.repos, s)
-        const finalizedRepos = applyManualRepoOrder(reconciliation.repos, s.manualRepoOrder)
+        const finalizedRepos = applyManualRepoOrder(result.repos, s.manualRepoOrder)
         const projectCompatibility = projectCompatibilityForReconciledRepos(
           finalizedRepos,
           catalog.projectHostSetupCompatibility
@@ -2080,8 +1949,6 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         hostRepos = finalizedRepos.filter((repo) => getRepoExecutionHostId(repo) === result.hostId)
         return {
           repos: finalizedRepos,
-          pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
-          ...reconcileReadoptedSshWorktreeState(s, s.pendingSshRepoReadoptions),
           ...mergedProjectCompatibility,
           folderWorkspacePathStatuses: {},
           activeRepoId: s.activeRepoId,
@@ -2522,16 +2389,6 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       const target = getActiveRuntimeTarget(
         getFolderWorkspacePathStatusRouteSettings(options, get().settings)
       )
-      if (
-        target.kind === 'environment' &&
-        (args.linkedTask?.provider === 'jira' || args.linkedTaskSourceContext?.provider === 'jira')
-      ) {
-        await assertRuntimeEnvironmentCapability(
-          target.environmentId,
-          WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
-          'Update the remote runtime to link Jira'
-        )
-      }
       const workspace =
         target.kind === 'local'
           ? await window.api.folderWorkspaces.create(args)
@@ -2576,18 +2433,6 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     const target = getActiveRuntimeTarget({ activeRuntimeEnvironmentId: runtimeEnvironmentId })
     const ownerHostId = executionHostId ?? getRuntimeTargetHostId(target)
     const updateIdentity = getFolderWorkspaceUpdateIdentity(ownerHostId, folderWorkspaceId)
-    // Why: same gate as folderWorkspace.create — an older paired runtime would drop the Jira link silently.
-    if (
-      target.kind === 'environment' &&
-      (updates.linkedTask?.provider === 'jira' ||
-        updates.linkedTaskSourceContext?.provider === 'jira')
-    ) {
-      await assertRuntimeEnvironmentCapability(
-        target.environmentId,
-        WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
-        'Update the remote runtime to link Jira'
-      )
-    }
     const updateTicket = folderWorkspaceUpdates.begin(
       updateIdentity,
       Object.keys(updates) as FolderWorkspaceUpdateField[]
@@ -2963,7 +2808,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
             description: repo.displayName
           }
         )
-        // Why: the cross-profile advisory applies to SSH-added projects too; the presence lookup already keys on connection/host.
+        // Why: the cross-profile advisory applies to every added project; the presence lookup already keys on connection/host.
         await warnIfProjectKnownInAnotherProfile(repo, get().activeOrcaProfileId)
       }
       return repo
@@ -3176,19 +3021,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   setupProjectClone: async (args) => {
     try {
-      const parsedHost = parseExecutionHostId(args.hostId)
       const target = getProjectSetupRuntimeTarget(args.hostId)
-      if (parsedHost?.kind !== 'ssh') {
-        await assertProjectHostSetupMutationRuntimeCapabilities(target)
-      }
+      await assertProjectHostSetupMutationRuntimeCapabilities(target)
       const repo =
-        parsedHost?.kind === 'ssh'
-          ? await window.api.repos.cloneRemote({
-              connectionId: parsedHost.targetId,
-              url: args.url,
-              destination: args.destination
-            })
-          : target.kind === 'local'
+        target.kind === 'local'
             ? await window.api.repos.clone({
                 url: args.url,
                 destination: args.destination
@@ -3299,14 +3135,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         return
       }
       const ownerHostId = getRepoExecutionHostId(ownerRepo)
-      // Why: an SSH per-workspace-env's workspace is the repo's main worktree, so removal routes here; tear down its ephemeral runtime first so it doesn't leak.
-      if (isRuntimeOwnedSshTargetId(ownerRepo.connectionId)) {
-        await cleanupEphemeralVmRuntimesForDeleted({
-          workspaceIds: getKnownRepoWorktreeIds(get(), projectId, ownerHostId),
-          runtimeOwnedSshTargetIds: [ownerRepo.connectionId as string]
-        })
-      }
-      // Why: derive the target from the owner's settings (via options.hostId) so an SSH host removal never routes repo.rm to the focused runtime.
+      // Why: derive the target from the owner's settings (via options.hostId) so a host removal never routes repo.rm to the focused runtime.
       const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId, options?.hostId))
       // Why: repos:remove is id-only and would delete every host's row; scope local removal to the owning host so cross-host duplicates keep other rows.
       const idExistsOnOtherHost = get().repos.some(
@@ -3410,7 +3239,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           ? s.openFiles.some((f) => f.id === s.activeFileId && worktreeIdSet.has(f.worktreeId))
           : false
         const nextRepos = s.repos.filter((r) => !repoMatchesHostIdentity(r, projectId, ownerHostId))
-        // Why: when no sibling host owns this id, drop every worktree timestamp (unhydrated SSH ones would otherwise never prune); else stay host-scoped.
+        // Why: when no sibling host owns this id, drop every worktree timestamp (unhydrated remote ones would otherwise never prune); else stay host-scoped.
         const repoIdFullyRemoved = !nextRepos.some((r) => r.id === projectId)
         let nextLastVisitedAtByWorktreeId = s.lastVisitedAtByWorktreeId
         for (const id of Object.keys(s.lastVisitedAtByWorktreeId)) {

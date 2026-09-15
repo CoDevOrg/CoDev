@@ -91,6 +91,5 @@ export function resolveSourceControlAiLinkedIssue(
     args,
     resolvedWorktreePath
   )?.linkedIssue
-  // Why: GitHub only in v1 — no `linkedGitLabIssue` dual-read.
   return isLinkedIssueNumber(linkedIssue) ? linkedIssue : null
 }

@@ -1,13 +1,8 @@
 import { parseGitHubIssueOrPRLink } from './github-links'
-import { parseLinearIssueInput } from './linear-links'
 import type { WorkspaceSourceProvider } from './new-workspace/workspace-source'
 
-// Why: narrows the canonical provider union instead of minting a parallel one,
-// so adding Jira here is a one-entry change rather than a new axis.
-export const ISSUE_LINK_PROVIDERS = [
-  'github',
-  'linear'
-] as const satisfies readonly WorkspaceSourceProvider[]
+// Why: narrows the canonical provider union instead of minting a parallel one.
+export const ISSUE_LINK_PROVIDERS = ['github'] as const satisfies readonly WorkspaceSourceProvider[]
 
 export type IssueLinkProvider = (typeof ISSUE_LINK_PROVIDERS)[number]
 
@@ -15,8 +10,7 @@ export function isIssueLinkProvider(value: unknown): value is IssueLinkProvider 
   return ISSUE_LINK_PROVIDERS.includes(value as IssueLinkProvider)
 }
 
-/** URL input only. Linear and Jira issue keys are byte-identical in shape, so a
- *  bare `STA-335` can never decide a provider — it would override the chip. */
+/** URL input only. A bare issue number can never decide a provider. */
 export function getIssueLinkProviderFromUrl(input: string): IssueLinkProvider | null {
   const trimmed = input.trim()
   if (!/^https?:\/\//i.test(trimmed)) {
@@ -29,15 +23,10 @@ export function getIssueLinkProviderFromUrl(input: string): IssueLinkProvider | 
   if (parseGitHubIssueOrPRLink(trimmed)?.type === 'issue') {
     return 'github'
   }
-  if (parseLinearIssueInput(trimmed)) {
-    return 'linear'
-  }
   return null
 }
 
-export type ParsedIssueLinkInput =
-  | { provider: 'github'; number: number }
-  | { provider: 'linear'; identifier: string; organizationUrlKey?: string }
+export type ParsedIssueLinkInput = { provider: 'github'; number: number }
 
 /**
  * Single parse shared by the dialog's save gate and its payload builder, so a
@@ -45,16 +34,11 @@ export type ParsedIssueLinkInput =
  */
 export function parseIssueLinkInput(
   input: string,
-  provider: IssueLinkProvider
+  _provider: IssueLinkProvider
 ): ParsedIssueLinkInput | null {
   const trimmed = input.trim()
   if (!trimmed) {
     return null
-  }
-
-  if (provider === 'linear') {
-    const parsed = parseLinearIssueInput(trimmed)
-    return parsed ? { provider: 'linear', ...parsed } : null
   }
 
   const link = parseGitHubIssueOrPRLink(trimmed)

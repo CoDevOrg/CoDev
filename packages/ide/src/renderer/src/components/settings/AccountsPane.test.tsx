@@ -90,17 +90,6 @@ describe('AccountsPane', () => {
     expect(markup).not.toContain('forThis device')
   })
 
-  it('localizes the runtime label before interpolating account copy', async () => {
-    await i18n.changeLanguage('es')
-
-    const markup = renderPane(getDefaultSettings('/tmp'))
-
-    expect(markup).toMatch(
-      /Mostrando cuentas para [Ee]ste dispositivo\. Las nuevas cuentas se agregan allí\./
-    )
-    expect(markup).not.toContain('This device')
-  })
-
   it('scopes account copy to the active remote server and disables local sign-in actions', () => {
     // Note: static SSR markup reads the store's initial state (zustand v5), so
     // this exercises the pre-hydration path where no server name is known yet.

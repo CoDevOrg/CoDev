@@ -3,10 +3,6 @@
   "plugins": ["typescript", "react", "react-hooks", "react-perf", "unicorn"],
   "jsPlugins": [
     {
-      "name": "mobile-pairing",
-      "specifier": "./config/oxlint-plugins/mobile-pairing-qrcode-import.mjs"
-    },
-    {
       "name": "app-store-performance",
       "specifier": "./config/oxlint-plugins/app-store-performance.mjs"
     },
@@ -74,19 +70,6 @@
     ],
     "curly": "error",
     "no-unneeded-ternary": "error",
-    "no-restricted-imports": [
-      "error",
-      {
-        "paths": [
-          {
-            "name": "@linear/sdk",
-            "allowTypeImports": true,
-            "message": "Value-importing @linear/sdk hoists its ~2.6MB CJS bundle into the eager top-level require block and defeats the lazy loader. Use `import type` plus loadLinearSdk() from src/main/linear/linear-sdk.ts."
-          }
-        ]
-      }
-    ],
-    "mobile-pairing/no-eager-qrcode-import": "error",
     "no-useless-return": "error",
     "prefer-template": "error",
     "unicorn/consistent-empty-array-spread": "error",
@@ -153,7 +136,6 @@
   "ignorePatterns": [
     "**/node_modules",
     "**/dist",
-    "**/out",
-    "tests/e2e/.cross-version-checkouts"
+    "**/out"
   ]
 }

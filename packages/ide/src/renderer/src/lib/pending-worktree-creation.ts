@@ -15,9 +15,8 @@ import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/tas
 /** Two-phase status reported by the main process while a worktree is created.
  *  `preparing` covers renderer-side preflight before `createWorktree` starts;
  *  `fetching` covers the base-ref git fetch; `creating` covers `git worktree
- *  add`. Remote/runtime creates may skip git phases; VM recipes add a
- *  provider-provisioning phase before the runtime worktree exists. */
-export type WorktreeCreationPhase = 'preparing' | 'provisioning-vm' | 'fetching' | 'creating'
+ *  add`. Remote/runtime creates may skip git phases. */
+export type WorktreeCreationPhase = 'preparing' | 'fetching' | 'creating'
 
 export type WorktreeCreationProgressMode = 'stepped' | 'indeterminate'
 
@@ -39,19 +38,6 @@ export type WorktreeCreationRequest = {
    *  repoId keeps old create APIs working, while this records the project-first
    *  host intent for retry, diagnostics, and future metadata writes. */
   workspaceRunContext?: WorkspaceRunContext | null
-  /** Ephemeral VM runtime provisioned for this create. Used for best-effort
-   *  cleanup if Orca fails before the workspace owns the runtime. */
-  ephemeralVmRuntimeId?: string
-  /** Runtime environment created from the VM's pairing code. Used to refresh
-   *  live status immediately after the workspace takes ownership. */
-  ephemeralVmRuntimeEnvironmentId?: string
-  /** Recipe to provision before creating the worktree. Kept serializable so
-   *  retry can rerun the recipe after a failed create. */
-  ephemeralVmRecipe?: {
-    sourceRepoId: string
-    recipeId: string
-    projectId: string
-  }
   /** Captured from the repo/run owner at submit time so Retry keeps the same
    *  local-vs-runtime progress behavior even if the focused runtime changes. */
   worktreeCreateProgressMode?: WorktreeCreationProgressMode
@@ -66,19 +52,11 @@ export type WorktreeCreationRequest = {
   linkedPR?: number
   pushTarget?: GitPushTarget
   agent: TuiAgent | null
-  linkedLinearIssue?: string
-  linkedLinearIssueWorkspaceId?: string | null
-  linkedLinearIssueOrganizationUrlKey?: string | null
   branchNameOverride?: string
   /** Keep the branch when this worktree is removed, instead of letting Orca
    *  delete the branch it minted. */
   preserveBranchOnDelete?: boolean
   workspaceStatus?: WorkspaceStatus
-  linkedGitLabMR?: number
-  linkedGitLabIssue?: number
-  linkedBitbucketPR?: number | null
-  linkedAzureDevOpsPR?: number | null
-  linkedGiteaPR?: number | null
   /** Backend-spawn startup payload (`createWorktree` arg). Present only when the
    *  agent launch is self-contained; otherwise the renderer drives startup via
    *  `startupPlan`. */
@@ -122,7 +100,6 @@ export type PendingWorktreeCreation = {
    *  from create start through terminal handoff. */
   loaderVisible: boolean
   error?: string
-  provisioningLog?: string
   request: WorktreeCreationRequest
 }
 
@@ -155,9 +132,6 @@ export function findPendingLinkedWorkItemCreationId(
 export function getCreationProgressLabel(
   entry: Pick<PendingWorktreeCreation, 'phase' | 'indeterminate'>
 ): string {
-  if (entry.phase === 'provisioning-vm') {
-    return 'Provisioning VM…'
-  }
   if (entry.indeterminate) {
     return 'Setting up your workspace…'
   }

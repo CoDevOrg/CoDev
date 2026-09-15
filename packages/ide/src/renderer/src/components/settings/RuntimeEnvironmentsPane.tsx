@@ -46,8 +46,6 @@ import {
   DialogTitle
 } from '../ui/dialog'
 import { RuntimePairingUrlGenerator } from './RuntimePairingUrlGenerator'
-import { EphemeralVmRuntimesSection } from './EphemeralVmRuntimesSection'
-import { CloudVmSetupGuide } from './CloudVmSetupGuide'
 import {
   getRuntimeEnvironmentsSearchEntry,
   getWebRuntimeEnvironmentsSearchEntry
@@ -56,11 +54,6 @@ import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
-import {
-  getRemoteServerManualUpdateHelp,
-  RemoteServerUpdateStatus
-} from './RemoteServerUpdateStatus'
 import { RuntimeHostAccessForm, type RuntimeHostAccessFailure } from './RuntimeHostAccessForm'
 
 const LOCAL_RUNTIME_VALUE = '__local__'
@@ -286,16 +279,8 @@ export function RuntimeEnvironmentsPane({
   const [name, setName] = useState('')
   const [pairingCode, setPairingCode] = useState('')
   const [addServerFailure, setAddServerFailure] = useState<RuntimeHostAccessFailure | null>(null)
-  const remoteServerUpdates = useAppStore((state) => state.remoteServerUpdates)
-  const remoteServerUpdatesChecking = useAppStore((state) => state.remoteServerUpdatesChecking)
-  const remoteServerUpdatesRunning = useAppStore((state) => state.remoteServerUpdatesRunning)
-  const refreshRemoteServerUpdates = useAppStore((state) => state.refreshRemoteServerUpdates)
-  const setRemoteServerUpdateDialogOpen = useAppStore(
-    (state) => state.setRemoteServerUpdateDialogOpen
-  )
   const consumedAddServerIntentSignalRef = useRef(0)
   const mountedRef = useMountedRef()
-  const updateCheckHint = getUpdateCheckHint()
   const activeValue =
     settings.activeRuntimeEnvironmentId ??
     (allowLocalRuntime ? LOCAL_RUNTIME_VALUE : NO_RUNTIME_VALUE)
@@ -426,10 +411,6 @@ export function RuntimeEnvironmentsPane({
     void loadEnvironments()
   }, [loadEnvironments])
 
-  const environmentIdsKey = environments.map((environment) => environment.id).join('\n')
-  useEffect(() => {
-    void refreshRemoteServerUpdates()
-  }, [environmentIdsKey, refreshRemoteServerUpdates])
   useEffect(() => {
     if (
       !addServerIntentSignal ||
@@ -868,35 +849,6 @@ export function RuntimeEnvironmentsPane({
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {environments.length > 0 ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                title={updateCheckHint}
-                onClick={(event) => {
-                  setRemoteServerUpdateDialogOpen(true)
-                  void refreshRemoteServerUpdates(getUpdateCheckClickOptions(event))
-                }}
-                disabled={remoteServerUpdatesChecking && remoteServerUpdates.size === 0}
-              >
-                {remoteServerUpdatesChecking || remoteServerUpdatesRunning ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  <RefreshCw />
-                )}
-                {remoteServerUpdatesRunning
-                  ? translate(
-                      'auto.components.settings.RuntimeEnvironmentsPane.updatingServers',
-                      'Updating servers…'
-                    )
-                  : translate(
-                      'auto.components.settings.RuntimeEnvironmentsPane.reviewServerUpdates',
-                      'Check for Server Updates'
-                    )}
-              </Button>
-            ) : null}
             {addServerFormOpen ? null : (
               <Button
                 type="button"
@@ -953,7 +905,6 @@ export function RuntimeEnvironmentsPane({
                     const detailsDescription = getHostDetailsDescription(details)
                     const isActive = settings.activeRuntimeEnvironmentId === environment.id
                     const connectionState = getRuntimeServerConnectionState(details)
-                    const remoteUpdate = remoteServerUpdates.get(environment.id)
                     // A connected host exposes Disconnect; otherwise Connect.
                     const isReachable = connectionState === 'connected'
                     const actionBusy =
@@ -983,12 +934,7 @@ export function RuntimeEnvironmentsPane({
                             ) : null}
                           </div>
                           <p className="truncate text-xs text-muted-foreground">
-                            {environment.connectionDependency === 'ssh-tunnel'
-                              ? translate(
-                                  'auto.components.settings.RuntimeEnvironmentsPane.sshTunnelRequired',
-                                  'SSH tunnel required'
-                                )
-                              : isActive
+                            {isActive
                                 ? translate(
                                     'auto.components.settings.RuntimeEnvironmentsPane.activeServerRowHelp',
                                     'Active server for server-routed projects, terminals, and provider checks.'
@@ -1007,48 +953,8 @@ export function RuntimeEnvironmentsPane({
                               {detailsDescription}
                             </p>
                           ) : null}
-                          {remoteUpdate ? (
-                            <div className="mt-1 flex flex-wrap items-center gap-2">
-                              <span className="text-[11px] text-muted-foreground">
-                                {remoteUpdate.currentVersion
-                                  ? translate(
-                                      'auto.components.settings.RuntimeEnvironmentsPane.orcaVersion',
-                                      'Orca v{{value0}}',
-                                      { value0: remoteUpdate.currentVersion }
-                                    )
-                                  : translate(
-                                      'auto.components.settings.RuntimeEnvironmentsPane.versionUnavailable',
-                                      'Orca version unavailable'
-                                    )}
-                              </span>
-                              <RemoteServerUpdateStatus entry={remoteUpdate} compact />
-                            </div>
-                          ) : null}
-                          {remoteUpdate?.phase === 'manual' ? (
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {getRemoteServerManualUpdateHelp(remoteUpdate)}
-                            </p>
-                          ) : null}
-                          {remoteUpdate?.phase === 'failed' && remoteUpdate.error ? (
-                            <p className="mt-1 text-xs text-destructive">{remoteUpdate.error}</p>
-                          ) : null}
                         </div>
                         <div className="flex shrink-0 items-center gap-1">
-                          {remoteUpdate?.phase === 'available' ||
-                          remoteUpdate?.phase === 'failed' ? (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="xs"
-                              onClick={() => setRemoteServerUpdateDialogOpen(true)}
-                              disabled={remoteServerUpdatesRunning}
-                            >
-                              {translate(
-                                'auto.components.settings.RuntimeEnvironmentsPane.updateServer',
-                                'Update'
-                              )}
-                            </Button>
-                          ) : null}
                           {isReachable ? (
                             <Button
                               type="button"
@@ -1122,8 +1028,6 @@ export function RuntimeEnvironmentsPane({
       </div>
 
       <div className={cn('space-y-5 pt-2', visibleWorkflow !== 'cloud-vm' && 'hidden')}>
-        <CloudVmSetupGuide />
-        <EphemeralVmRuntimesSection />
       </div>
 
       <div

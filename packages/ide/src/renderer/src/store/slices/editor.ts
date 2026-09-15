@@ -16,7 +16,6 @@ import { resolveMarkdownLinkTarget } from '@/components/editor/markdown-internal
 import {
   buildCheckRunDetailsTabId,
   getCheckRunDetailsTabLabel,
-  isSameGitLabProjectRef,
   type CheckRunDetailsTabPatch,
   type OpenCheckRunDetailsState
 } from '@/components/editor/check-run-details-tab'
@@ -54,7 +53,7 @@ import {
   COMBINED_DIFF_FILE_TREE_DEFAULT_WIDTH
 } from '../../../../shared/combined-diff-file-tree-width'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoteOpKind } from '@/components/right-sidebar/source-control-primary-action'
 import { invalidateAutomaticPushTargetUpstreamStatusCache } from '@/components/right-sidebar/push-target-upstream-refresh-cache'
 import {
@@ -85,9 +84,7 @@ import {
 } from './worktree-helpers'
 import {
   getExplicitRuntimeEnvironmentIdForWorktree,
-  getSettingsForWorktreeRuntimeOwner
 } from '@/lib/worktree-runtime-owner'
-import { loadGitLabJobLogDetails } from '@/runtime/gitlab-job-trace-client'
 import {
   addAdditionalValidWorkspaceKeys,
   type WorkspaceSessionHydrationOptions
@@ -241,8 +238,6 @@ export type OpenFile = {
   isDirty: boolean
   // Why: remote untitled cleanup must target the creating environment even if the user later switches runtime.
   runtimeEnvironmentId?: string | null
-  /** SSH target that owns an absolute path outside the worktree. */
-  externalSshTargetId?: string
   /** Host provenance captured when the tab opened; mutations reject replacement owners. */
   operationProvenance?: EditorFileOperationProvenance
   /** Why: preview tabs mirror a source file's live draft; storing its ID lets the preview follow unsaved edits without becoming editable. */
@@ -270,7 +265,7 @@ export type OpenFile = {
   externalMutation?: 'deleted' | 'renamed' | 'changed'
   /** Signature of the disk content this tab's edits are based on; persisted so a restore detects a changed-on-disk conflict before autosave clobbers an agent write. */
   lastKnownDiskSignature?: string
-  /** Why: gates autosave for restored dirty tabs until the conflict scan compares disk vs baseline, else a slow SSH read loses the race. Not persisted. */
+  /** Why: gates autosave for restored dirty tabs until the conflict scan compares disk vs baseline, else a slow remote read loses the race. Not persisted. */
   pendingDiskBaselineVerification?: boolean
   /** Why: gates autosave during a live self-move echo's disk verification; separate flag from the restored scan's so the two can't clear each other's gate. Not persisted. */
   pendingLiveDiskVerification?: boolean
@@ -352,7 +347,7 @@ export type PendingEditorFocusRequest = {
   token: number
 }
 
-// Why: allow slow SSH mounts without leaving an unrelated future remount armed indefinitely.
+// Why: allow slow remote mounts without leaving an unrelated future remount armed indefinitely.
 const EDITOR_FOCUS_REQUEST_TTL_MS = 30_000
 let nextEditorFocusRequestToken = 0
 
@@ -514,7 +509,6 @@ export type EditorSlice = {
       | 'worktreeId'
       | 'language'
       | 'runtimeEnvironmentId'
-      | 'externalSshTargetId'
     >,
     options?: { anchor?: string | null; targetGroupId?: string; sourceFileId?: string }
   ) => void
@@ -1771,8 +1765,6 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       if (existing) {
         // If opening as non-preview, also pin the existing tab
         const updatedPreview = isPreview ? existing.isPreview : false
-        const nextExternalSshTargetId = file.externalSshTargetId ?? existing.externalSshTargetId
-        const refreshExternalSshProvenance = file.externalSshTargetId !== undefined
         const fileContentReloadNonce = shouldRequestExistingFileContentReload(
           existing,
           file.mode,
@@ -1794,8 +1786,6 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           existing.relativePath !== file.relativePath ||
           existing.worktreeId !== file.worktreeId ||
           existing.runtimeEnvironmentId !== runtimeEnvironmentId ||
-          existing.externalSshTargetId !== nextExternalSshTargetId ||
-          refreshExternalSshProvenance ||
           existing.fileContentReloadNonce !== fileContentReloadNonce
         if (!needsExistingUpdate) {
           return activeResult
@@ -1810,10 +1800,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   worktreeId: file.worktreeId,
                   language: file.language,
                   runtimeEnvironmentId,
-                  externalSshTargetId: nextExternalSshTargetId,
-                  operationProvenance: refreshExternalSshProvenance
-                    ? operationProvenance
-                    : f.operationProvenance,
+                  operationProvenance: f.operationProvenance,
                   mode: file.mode,
                   diffSource: file.diffSource,
                   branchCompare: file.branchCompare,
@@ -2007,9 +1994,6 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         operationContext.connectionId,
         operationContext.settings,
         operationProvenance,
-        operationContext.expectedSshConnectionGeneration,
-        operationContext.expectedSshTargetId,
-        operationContext.expectedExecutionHostId,
         () => assertEditorFileOperationCurrent(get(), worktreeId, operationProvenance)
       )
       if (!fileInfo) {
@@ -2040,9 +2024,6 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         ['edit']
       )
     const id = `markdown-preview::${sourceFileId}`
-    const externalSshTargetId =
-      file.externalSshTargetId ??
-      initialState.openFiles.find((openFile) => openFile.id === sourceFileId)?.externalSshTargetId
     const anchor = options?.anchor || undefined
     set((s) => {
       const existing = s.openFiles.find((openFile) => openFile.id === id)
@@ -2055,7 +2036,6 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           existing.relativePath !== file.relativePath ||
           existing.filePath !== file.filePath ||
           existing.language !== file.language ||
-          existing.externalSshTargetId !== externalSshTargetId ||
           existing.markdownPreviewSourceFileId !== sourceFileId ||
           existing.markdownPreviewAnchor !== anchor ||
           existing.mode !== 'markdown-preview'
@@ -2070,7 +2050,6 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                       worktreeId: file.worktreeId,
                       language: file.language,
                       runtimeEnvironmentId,
-                      externalSshTargetId,
                       markdownPreviewSourceFileId: sourceFileId,
                       markdownPreviewAnchor: anchor,
                       mode: 'markdown-preview' as const
@@ -2090,7 +2069,6 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         language: file.language,
         isDirty: false,
         runtimeEnvironmentId,
-        externalSshTargetId,
         markdownPreviewSourceFileId: sourceFileId,
         markdownPreviewAnchor: anchor,
         mode: 'markdown-preview'
@@ -2800,11 +2778,6 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         }
       }
 
-      const parsedHost = parseExecutionHostId(args.targetExecutionHostId)
-      const externalSshTargetId =
-        parsedHost?.kind === 'ssh' && args.targetRuntimeEnvironmentId === null
-          ? parsedHost.targetId
-          : undefined
       const migrations = new Map([[source.id, newFileId], ...previewIdMigrations])
       const movedFileIds = new Set(migrations.keys())
       const sourceWorktreeId = source.worktreeId
@@ -2942,7 +2915,6 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   worktreeId: targetWorktreeId,
                   relativePath: args.targetRelativePath,
                   runtimeEnvironmentId: args.targetRuntimeEnvironmentId,
-                  externalSshTargetId,
                   operationProvenance,
                   pendingOwnerMigration: undefined,
                   mirroredFromRuntimeSession: undefined
@@ -2954,7 +2926,6 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                     worktreeId: targetWorktreeId,
                     relativePath: args.targetRelativePath,
                     runtimeEnvironmentId: args.targetRuntimeEnvironmentId,
-                    externalSshTargetId,
                     operationProvenance,
                     markdownPreviewSourceFileId: newFileId,
                     pendingOwnerMigration: undefined,
@@ -3805,8 +3776,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       check,
       details: state.details,
       loading: state.loading,
-      error: state.error,
-      gitlabProjectRef: state.gitlabProjectRef ?? null
+      error: state.error
     }
     set((s) => {
       const existing = s.openFiles.find((f) => f.id === id)
@@ -3861,16 +3831,12 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         return s
       }
       const current = existing.checkRunDetails
-      // Why: the sidebar resolves the MR's project asynchronously, so an early patch
-      // must not blank a ref we already know.
-      const gitlabProjectRef = state.gitlabProjectRef ?? current.gitlabProjectRef ?? null
       const nextCheckRunDetails: OpenCheckRunDetailsState = {
         contextKey,
         check,
         details: state.details,
         loading: state.loading,
-        error: state.error,
-        gitlabProjectRef
+        error: state.error
       }
       if (
         current.contextKey === nextCheckRunDetails.contextKey &&
@@ -3878,8 +3844,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         current.check.conclusion === nextCheckRunDetails.check.conclusion &&
         current.loading === nextCheckRunDetails.loading &&
         current.error === nextCheckRunDetails.error &&
-        current.details === nextCheckRunDetails.details &&
-        isSameGitLabProjectRef(current.gitlabProjectRef ?? null, gitlabProjectRef)
+        current.details === nextCheckRunDetails.details
       ) {
         return s
       }
@@ -3910,28 +3875,17 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     }
     patch({ details: checkRunDetails.details, loading: true, error: null })
     try {
-      // Why: refreshing a GitLab job tab through the GitHub check-runs API returns
-      // null and would blank the tab the user just asked to reload.
-      const details = check.gitlabJobId
-        ? await loadGitLabJobLogDetails({
-            repoPath: repo.path,
-            repoId: repo.id,
-            settings: getSettingsForWorktreeRuntimeOwner(state, file.worktreeId),
-            check,
-            // Why: a fork MR's job lives in the source project, not the repo's own.
-            projectRef: checkRunDetails.gitlabProjectRef ?? null
-          })
-        : await get().fetchPRCheckDetails(
-            repo.path,
-            {
-              checkRunId: check.checkRunId,
-              workflowRunId: check.workflowRunId,
-              checkName: check.name,
-              url: check.url,
-              prRepo: null
-            },
-            { repoId: repo.id }
-          )
+      const details = await get().fetchPRCheckDetails(
+        repo.path,
+        {
+          checkRunId: check.checkRunId,
+          workflowRunId: check.workflowRunId,
+          checkName: check.name,
+          url: check.url,
+          prRepo: null
+        },
+        { repoId: repo.id }
+      )
       patch({
         details,
         loading: false,
@@ -4827,13 +4781,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         ? { kind: 'runtime', runtimeEnvironmentId: runtimeOwnerId }
         : resolvedConnectionId === undefined
           ? { kind: 'unknown' }
-          : resolvedConnectionId === null
-            ? { kind: 'local' }
-            : { kind: 'ssh', connectionId: resolvedConnectionId })
+          : { kind: 'local' })
     if (sourceOwner.kind === 'unknown') {
       return
     }
-    const sourceConnectionId = sourceOwner.kind === 'ssh' ? sourceOwner.connectionId : undefined
+    const sourceConnectionId = undefined
     const fileContext = {
       settings: sourceSettings,
       worktreeId: ctx.worktreeId,
@@ -4855,7 +4807,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const { line, column } = target
       if (target.relativePath === undefined) {
         if (isLocalPathOpenBlocked(sourceSettings, { connectionId: sourceConnectionId })) {
-          // Why: a file:// link outside the worktree is client-local; remote runtime/SSH editors must not treat server paths as client paths.
+          // Why: a file:// link outside the worktree is client-local; remote runtime editors must not treat server paths as client paths.
           showLocalPathOpenBlockedToast()
           return
         }
@@ -5015,7 +4967,6 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             isDirty: !isReadOnly && pf.dirtyDraftContent !== undefined,
             isPreview: pf.isPreview,
             runtimeEnvironmentId: pf.runtimeEnvironmentId,
-            externalSshTargetId: pf.externalSshTargetId,
             ...(isReadOnly ? { readOnly: true } : {}),
             ...(isReadOnly && pf.liveTail === true ? { liveTail: true } : {}),
             lastKnownDiskSignature: isReadOnly ? undefined : pf.lastKnownDiskSignature,

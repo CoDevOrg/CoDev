@@ -6,34 +6,7 @@ export type GitHubTaskProviderIdentity = ProjectProviderIdentity & {
   provider: 'github'
 }
 
-export type GitLabTaskProviderIdentity = {
-  provider: 'gitlab'
-  projectId?: string | null
-  namespace?: string | null
-  project?: string | null
-  webUrl?: string | null
-}
-
-export type LinearTaskProviderIdentity = {
-  provider: 'linear'
-  workspaceId?: string | null
-  workspaceName?: string | null
-  teamId?: string | null
-  teamKey?: string | null
-}
-
-export type JiraTaskProviderIdentity = {
-  provider: 'jira'
-  siteId?: string | null
-  siteUrl?: string | null
-  projectKey?: string | null
-}
-
-export type TaskProviderIdentity =
-  | GitHubTaskProviderIdentity
-  | GitLabTaskProviderIdentity
-  | LinearTaskProviderIdentity
-  | JiraTaskProviderIdentity
+export type TaskProviderIdentity = GitHubTaskProviderIdentity
 
 export function normalizeTaskProviderIdentity(
   provider: TaskProvider,
@@ -46,40 +19,13 @@ export function normalizeTaskProviderIdentity(
   if (raw.provider !== provider) {
     return null
   }
-  switch (provider) {
-    case 'github': {
-      const owner = normalizeNonEmptyString(raw.owner)
-      const repo = normalizeNonEmptyString(raw.repo)
-      if (!owner || !repo) {
-        return null
-      }
-      const host = normalizeNonEmptyString(raw.host)
-      return { provider, owner, repo, ...(host ? { host } : {}) }
-    }
-    case 'gitlab':
-      return {
-        provider,
-        projectId: normalizeNonEmptyString(raw.projectId),
-        namespace: normalizeNonEmptyString(raw.namespace),
-        project: normalizeNonEmptyString(raw.project),
-        webUrl: normalizeNonEmptyString(raw.webUrl)
-      }
-    case 'linear':
-      return {
-        provider,
-        workspaceId: normalizeNonEmptyString(raw.workspaceId),
-        workspaceName: normalizeNonEmptyString(raw.workspaceName),
-        teamId: normalizeNonEmptyString(raw.teamId),
-        teamKey: normalizeNonEmptyString(raw.teamKey)
-      }
-    case 'jira':
-      return {
-        provider,
-        siteId: normalizeNonEmptyString(raw.siteId),
-        siteUrl: normalizeNonEmptyString(raw.siteUrl),
-        projectKey: normalizeNonEmptyString(raw.projectKey)
-      }
+  const owner = normalizeNonEmptyString(raw.owner)
+  const repo = normalizeNonEmptyString(raw.repo)
+  if (!owner || !repo) {
+    return null
   }
+  const host = normalizeNonEmptyString(raw.host)
+  return { provider, owner, repo, ...(host ? { host } : {}) }
 }
 
 export function isStoredTaskProviderIdentity(provider: TaskProvider, identity: unknown): boolean {
@@ -93,33 +39,17 @@ export function isStoredTaskProviderIdentity(provider: TaskProvider, identity: u
   if (raw.provider !== provider) {
     return false
   }
-  switch (provider) {
-    case 'github':
-      return (
-        typeof raw.owner === 'string' &&
-        raw.owner.trim().length > 0 &&
-        typeof raw.repo === 'string' &&
-        raw.repo.trim().length > 0 &&
-        isNullableOptionalString(raw.host)
-      )
-    case 'gitlab':
-      return ['projectId', 'namespace', 'project', 'webUrl'].every((key) =>
-        isNullableOptionalString(raw[key])
-      )
-    case 'linear':
-      return ['workspaceId', 'workspaceName', 'teamId', 'teamKey'].every((key) =>
-        isNullableOptionalString(raw[key])
-      )
-    case 'jira':
-      return ['siteId', 'siteUrl', 'projectKey'].every((key) => isNullableOptionalString(raw[key]))
-  }
+  return (
+    typeof raw.owner === 'string' &&
+    raw.owner.trim().length > 0 &&
+    typeof raw.repo === 'string' &&
+    raw.repo.trim().length > 0 &&
+    isNullableOptionalString(raw.host)
+  )
 }
 
 const TASK_PROVIDER_IDENTITY_FIELDS: Record<TaskProvider, readonly string[]> = {
-  github: ['owner', 'repo', 'host'],
-  gitlab: ['projectId', 'namespace', 'project', 'webUrl'],
-  linear: ['workspaceId', 'workspaceName', 'teamId', 'teamKey'],
-  jira: ['siteId', 'siteUrl', 'projectKey']
+  github: ['owner', 'repo', 'host']
 }
 
 export function areTaskProviderIdentitiesEqual(
@@ -148,16 +78,7 @@ export function taskProviderIdentityCachePart(
   if (!identity) {
     return ''
   }
-  switch (identity.provider) {
-    case 'github':
-      return githubRepoIdentityKey(identity)
-    case 'gitlab':
-      return identity.projectId ?? [identity.namespace, identity.project].filter(Boolean).join('/')
-    case 'linear':
-      return [identity.workspaceId, identity.teamId ?? identity.teamKey].filter(Boolean).join('/')
-    case 'jira':
-      return [identity.siteId ?? identity.siteUrl, identity.projectKey].filter(Boolean).join('/')
-  }
+  return githubRepoIdentityKey(identity)
 }
 
 function normalizeNonEmptyString(value: unknown): string | null {

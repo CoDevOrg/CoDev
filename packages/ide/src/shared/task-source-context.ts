@@ -16,13 +16,7 @@ import {
 import type { TaskProvider } from './task-providers'
 import type { GlobalSettings, Repo } from './types'
 
-export type {
-  GitHubTaskProviderIdentity,
-  GitLabTaskProviderIdentity,
-  JiraTaskProviderIdentity,
-  LinearTaskProviderIdentity,
-  TaskProviderIdentity
-} from './task-provider-identity'
+export type { GitHubTaskProviderIdentity, TaskProviderIdentity } from './task-provider-identity'
 export type { TaskProvider } from './task-providers'
 
 export type TaskSourceContext = {
@@ -202,15 +196,7 @@ function getRepoHostId(repo: Pick<Repo, 'connectionId' | 'executionHostId'>): Ex
 }
 
 function normalizeTaskProvider(value: unknown): TaskProvider | null {
-  switch (value) {
-    case 'github':
-    case 'gitlab':
-    case 'linear':
-    case 'jira':
-      return value
-    default:
-      return null
-  }
+  return value === 'github' ? value : null
 }
 
 function normalizeNonEmptyString(value: unknown): string | null {

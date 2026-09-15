@@ -28,8 +28,7 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
       'orca project setup-existing-folder --project <id> --host <host-id> --path <path> [--kind git|folder] [--display-name <name>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'project', 'host', 'path', 'kind', 'display-name'],
     notes: [
-      'For remote runtimes, --path must be an absolute path on the remote server.',
-      'SSH targets are set up through the desktop UI because the desktop client owns SSH connections.'
+      'For remote runtimes, --path must be an absolute path on the remote server.'
     ],
     examples: [
       'orca project setup-existing-folder --project github:stablyai/orca --host local --path ~/orca',
@@ -43,8 +42,7 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
       'orca project setup-clone --project <id> --host <host-id> --url <clone-url> --destination <path> [--display-name <name>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'project', 'host', 'url', 'destination', 'display-name'],
     notes: [
-      'For remote runtimes, --destination must be an absolute parent directory on the remote server.',
-      'SSH targets are cloned through the desktop UI because the desktop client owns SSH connections.'
+      'For remote runtimes, --destination must be an absolute parent directory on the remote server.'
     ],
     examples: [
       'orca project setup-clone --project github:stablyai/orca --host local --url https://github.com/stablyai/orca.git --destination ~/src',

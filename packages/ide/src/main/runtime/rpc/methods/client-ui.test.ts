@@ -24,14 +24,11 @@ describe('client UI RPC methods', () => {
       defaultTuiAgent: 'codex',
       disabledTuiAgents: ['claude'],
       agentCmdOverrides: { codex: 'codex --profile work' },
-      defaultTaskSource: 'gitlab',
+      defaultTaskSource: 'github',
       defaultTaskViewPreset: 'my-prs',
-      visibleTaskProviders: ['github', 'gitlab'],
+      visibleTaskProviders: ['github'],
       defaultRepoSelection: ['repo-1'],
-      defaultLinearTeamSelection: ['team-1'],
       compactWorktreeCards: true,
-      minimaxGroupId: 'group-42',
-      minimaxUsageModels: 'general,abab6.5',
       githubProjects: {
         pinned: [
           {
@@ -63,11 +60,10 @@ describe('client UI RPC methods', () => {
       defaultTuiAgent: null,
       disabledTuiAgents: ['claude'],
       agentCmdOverrides: {},
-      defaultTaskSource: 'linear',
+      defaultTaskSource: 'github',
       defaultTaskViewPreset: 'issues',
-      visibleTaskProviders: ['github', 'linear'],
+      visibleTaskProviders: ['github'],
       defaultRepoSelection: ['repo-1', 'repo-2'],
-      defaultLinearTeamSelection: ['team-1', 'team-2'],
       experimentalNewWorktreeCardStyle: true,
       compactWorktreeCards: true,
       githubProjects: {
@@ -94,15 +90,12 @@ describe('client UI RPC methods', () => {
       makeRequest('settings.update', {
         defaultTuiAgent: 'codex',
         disabledTuiAgents: ['claude', 'not-real', 'claude'],
-        defaultTaskSource: 'linear',
-        visibleTaskProviders: ['github', 'linear'],
+        defaultTaskSource: 'github',
+        visibleTaskProviders: ['github'],
         defaultTaskViewPreset: 'my-prs',
         experimentalNewWorktreeCardStyle: true,
         compactWorktreeCards: true,
-        minimaxGroupId: 'group-42',
-        minimaxUsageModels: 'general,abab6.5',
         defaultRepoSelection: settings.defaultRepoSelection,
-        defaultLinearTeamSelection: ['team-1', 'team-2'],
         githubProjects: settings.githubProjects
       })
     )
@@ -110,15 +103,12 @@ describe('client UI RPC methods', () => {
     expect(runtime.updateClientSettings).toHaveBeenCalledWith({
       defaultTuiAgent: 'codex',
       disabledTuiAgents: ['claude'],
-      defaultTaskSource: 'linear',
-      visibleTaskProviders: ['github', 'linear'],
+      defaultTaskSource: 'github',
+      visibleTaskProviders: ['github'],
       defaultTaskViewPreset: 'my-prs',
       experimentalNewWorktreeCardStyle: true,
       compactWorktreeCards: true,
-      minimaxGroupId: 'group-42',
-      minimaxUsageModels: 'general,abab6.5',
       defaultRepoSelection: settings.defaultRepoSelection,
-      defaultLinearTeamSelection: ['team-1', 'team-2'],
       githubProjects: settings.githubProjects
     })
     expect(response).toMatchObject({ ok: true, result: { settings } })
@@ -126,14 +116,14 @@ describe('client UI RPC methods', () => {
     vi.mocked(runtime.updateClientSettings).mockClear()
     await dispatcher.dispatch(
       makeRequest('settings.update', {
-        defaultTaskSource: 'jira',
-        visibleTaskProviders: ['github', 'jira']
+        defaultTaskSource: 'github',
+        visibleTaskProviders: ['github']
       })
     )
 
     expect(runtime.updateClientSettings).toHaveBeenCalledWith({
-      defaultTaskSource: 'jira',
-      visibleTaskProviders: ['github', 'jira']
+      defaultTaskSource: 'github',
+      visibleTaskProviders: ['github']
     })
   })
 
@@ -427,27 +417,14 @@ describe('client UI RPC methods', () => {
       ...getDefaultUIState(),
       worktreeCardProperties: ['status', 'branch', 'automation', 'inline-agents'],
       _worktreeCardModeDefaulted: true,
-      statusBarItems: ['codex', 'kimi', 'minimax', 'grok', 'antigravity', 'ports'],
+      statusBarItems: ['codex', 'ports'],
       _portsStatusBarDefaultAdded: true,
-      _kimiStatusBarDefaultAdded: true,
-      _minimaxStatusBarDefaultAdded: true,
-      _grokStatusBarDefaultAdded: true,
-      _antigravityStatusBarDefaultAdded: true,
       taskResumeState: {
         githubMode: 'items',
         githubItemsQuery: 'is:open',
         githubProjectHiddenFieldIdsByView: {
           'project-1:view-1': ['field-1']
-        },
-        linearMode: 'projects',
-        linearContext: {
-          kind: 'project',
-          id: 'project-9',
-          workspaceId: 'workspace-1',
-          model: 'project'
-        },
-        jiraPreset: 'assigned',
-        jiraQuery: 'ENG'
+        }
       },
       workspaceCleanup: {
         dismissals: {
@@ -478,27 +455,14 @@ describe('client UI RPC methods', () => {
     const payload = {
       worktreeCardProperties: ['status', 'branch', 'automation', 'inline-agents'],
       _worktreeCardModeDefaulted: true,
-      statusBarItems: ['codex', 'kimi', 'minimax', 'grok', 'antigravity', 'ports'],
+      statusBarItems: ['codex', 'ports'],
       _portsStatusBarDefaultAdded: true,
-      _kimiStatusBarDefaultAdded: true,
-      _minimaxStatusBarDefaultAdded: true,
-      _grokStatusBarDefaultAdded: true,
-      _antigravityStatusBarDefaultAdded: true,
       taskResumeState: {
         githubMode: 'items',
         githubItemsQuery: 'is:open',
         githubProjectHiddenFieldIdsByView: {
           'project-1:view-1': ['field-1']
-        },
-        linearMode: 'projects',
-        linearContext: {
-          kind: 'project',
-          id: 'project-9',
-          workspaceId: 'workspace-1',
-          model: 'project'
-        },
-        jiraPreset: 'assigned',
-        jiraQuery: 'ENG'
+        }
       },
       workspaceCleanup: {
         dismissals: {
@@ -534,17 +498,8 @@ describe('client UI RPC methods', () => {
   // of stripping it. A combined payload would pass as soon as any one field were
   // restored, hiding the rest of the drift.
   it.each([
-    ['taskResumeState.linearMode', { taskResumeState: { linearMode: 'projects' } }],
-    [
-      'taskResumeState.linearContext',
-      {
-        taskResumeState: {
-          linearContext: { kind: 'project', id: 'project-9', workspaceId: 'workspace-1' }
-        }
-      }
-    ],
-    ['taskResumeState.jiraPreset', { taskResumeState: { jiraPreset: 'assigned' } }],
-    ['taskResumeState.jiraQuery', { taskResumeState: { jiraQuery: 'ENG' } }],
+    ['taskResumeState.githubMode', { taskResumeState: { githubMode: 'items' } }],
+    ['taskResumeState.githubItemsQuery', { taskResumeState: { githubItemsQuery: 'is:open' } }],
     ['activeView', { activeView: 'tasks' }],
     ['showDotfilesByWorktree', { showDotfilesByWorktree: { 'repo::/worktree': true } }],
     ['setupGuideSidebarDismissed', { setupGuideSidebarDismissed: true }],
@@ -663,27 +618,6 @@ describe('client UI RPC methods', () => {
       sidebarWidth: 280,
       filterRepoIds: ['repo-1']
     })
-  })
-
-  it('accepts the Jira issue card property across the runtime UI boundary', async () => {
-    const updated: PersistedUIState = {
-      ...getDefaultUIState(),
-      worktreeCardProperties: ['status', 'unread', 'jira-issue']
-    }
-    const runtime = {
-      getRuntimeId: () => 'test-runtime',
-      updateUIState: vi.fn(() => updated)
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
-
-    const response = await dispatcher.dispatch(
-      makeRequest('ui.set', { worktreeCardProperties: ['status', 'jira-issue'] })
-    )
-
-    expect(runtime.updateUIState).toHaveBeenCalledWith({
-      worktreeCardProperties: ['status', 'unread', 'jira-issue']
-    })
-    expect(response).toMatchObject({ ok: true, result: { ui: updated } })
   })
 
   it('accepts every worktree card property the shared union defines', async () => {

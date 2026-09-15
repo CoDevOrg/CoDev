@@ -14,7 +14,6 @@ type CloneStepProps = {
   isCloning: boolean
   disableDestinationPicker?: boolean
   runtimeEnvironmentId?: string | null
-  sshTargetId?: string | null
   cloneTargetLabel?: string | null
   onUrlChange: (value: string) => void
   onDestChange: (value: string) => void
@@ -30,7 +29,6 @@ export function CloneStep({
   isCloning,
   disableDestinationPicker = false,
   runtimeEnvironmentId,
-  sshTargetId,
   cloneTargetLabel,
   onUrlChange,
   onDestChange,
@@ -38,7 +36,7 @@ export function CloneStep({
   onClone
 }: CloneStepProps): React.JSX.Element {
   const [browsingDestination, setBrowsingDestination] = useState(false)
-  const isRemoteClone = Boolean(runtimeEnvironmentId || sshTargetId)
+  const isRemoteClone = Boolean(runtimeEnvironmentId)
   const canBrowseRemoteDestination = isRemoteClone
   const canClone = !!cloneUrl.trim() && !!cloneDestination.trim() && !isCloning
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
@@ -50,7 +48,7 @@ export function CloneStep({
     }
   }
 
-  if (browsingDestination && (runtimeEnvironmentId || sshTargetId)) {
+  if (browsingDestination && runtimeEnvironmentId) {
     return (
       <>
         <DialogHeader>
@@ -64,18 +62,7 @@ export function CloneStep({
             )}
           </DialogDescription>
         </DialogHeader>
-        {sshTargetId ? (
-          <RemoteFileBrowser
-            targetId={sshTargetId}
-            initialPath={cloneDestination || '~'}
-            onSelect={(path) => {
-              onDestChange(path)
-              setBrowsingDestination(false)
-            }}
-            onCancel={() => setBrowsingDestination(false)}
-          />
-        ) : (
-          <RemoteFileBrowser
+        <RemoteFileBrowser
             runtimeEnvironmentId={runtimeEnvironmentId as string}
             initialPath={cloneDestination || '~'}
             onSelect={(path) => {
@@ -83,8 +70,7 @@ export function CloneStep({
               setBrowsingDestination(false)
             }}
             onCancel={() => setBrowsingDestination(false)}
-          />
-        )}
+        />
       </>
     )
   }

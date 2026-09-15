@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getDefaultSettings } from '../../../shared/constants'
-import { UI_LANGUAGE_ENGLISH, UI_LANGUAGE_SPANISH } from '../../../shared/ui-language'
+import { UI_LANGUAGE_ENGLISH, UI_LANGUAGE_SYSTEM } from '../../../shared/ui-language'
 import { useAppStore } from '@/store'
 import { i18n } from './i18n'
 import { I18nProvider } from './I18nProvider'
@@ -67,11 +67,11 @@ describe('I18nProvider startup language', () => {
     await renderProvider()
     await act(async () => {
       useAppStore.setState({
-        settings: { ...getDefaultSettings('/tmp'), uiLanguage: UI_LANGUAGE_SPANISH }
+        settings: { ...getDefaultSettings('/tmp'), uiLanguage: UI_LANGUAGE_SYSTEM }
       })
     })
 
-    expect(changeLanguage).toHaveBeenCalledWith('es')
+    expect(changeLanguage).toHaveBeenCalledWith('en')
   })
 
   it('applies persisted English even if i18n reports it as already active', async () => {
@@ -112,21 +112,20 @@ describe('I18nProvider startup language', () => {
     expect(changeLanguage).not.toHaveBeenCalledWith('es')
   })
 
-  it('switches language when the setting changes after startup', async () => {
+  it('resolves the system setting to English on a non-English OS', async () => {
+    // Why: English is the only bundled catalog, so a Spanish OS locale must
+    // still land on 'en' rather than requesting a catalog that does not exist.
+    stubSystemLocale('es-ES')
     const changeLanguage = vi.spyOn(i18n, 'changeLanguage')
 
     await renderProvider()
     await act(async () => {
       useAppStore.setState({
-        settings: { ...getDefaultSettings('/tmp'), uiLanguage: UI_LANGUAGE_ENGLISH }
-      })
-    })
-    await act(async () => {
-      useAppStore.setState({
-        settings: { ...getDefaultSettings('/tmp'), uiLanguage: UI_LANGUAGE_SPANISH }
+        settings: { ...getDefaultSettings('/tmp'), uiLanguage: UI_LANGUAGE_SYSTEM }
       })
     })
 
-    expect(changeLanguage).toHaveBeenLastCalledWith('es')
+    expect(changeLanguage).toHaveBeenLastCalledWith('en')
+    expect(changeLanguage).not.toHaveBeenCalledWith('es')
   })
 })

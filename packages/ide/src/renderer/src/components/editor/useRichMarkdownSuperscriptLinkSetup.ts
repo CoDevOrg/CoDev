@@ -41,7 +41,7 @@ export function useRichMarkdownSuperscriptLinkSetup({
     if (connectionId === undefined) {
       return { kind: 'unknown' }
     }
-    return connectionId === null ? { kind: 'local' } : { kind: 'ssh', connectionId }
+    return { kind: 'local' }
   }, [connectionId, runtimeId])
   const [codec] = useState(createRichMarkdownEditorCodec)
   const [context] = useState(() =>

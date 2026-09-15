@@ -3,15 +3,9 @@ import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
 } from '../../../../shared/protocol-version'
-import type { PortForwardEntry } from '../../../../shared/ssh-types'
 import type { WorkspacePort, WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
-import {
-  addressForPort,
-  addressForPortForwardEntry,
-  browserUrlForPort,
-  browserUrlForPortForwardEntry
-} from '@/lib/workspace-port-urls'
+import { addressForPort, browserUrlForPort } from '@/lib/workspace-port-urls'
 
 const { activateAndRevealWorktreeMock } = vi.hoisted(() => ({
   activateAndRevealWorktreeMock: vi.fn()
@@ -600,30 +594,4 @@ describe('PortsPanel runtime routing', () => {
     expect(addressForPort(advertised)).toBe('local.getmontecarlo.com:63468')
   })
 
-  it('formats SSH forwarded advertised URLs with a single protocol fallback order', () => {
-    const forward: PortForwardEntry = {
-      id: 'forward-1',
-      connectionId: 'connection-1',
-      localPort: 63468,
-      remoteHost: 'localhost',
-      remotePort: 3001,
-      advertisedUrl: 'https://local.getmontecarlo.com:3001'
-    }
-
-    expect(browserUrlForPortForwardEntry(forward)).toBe('https://local.getmontecarlo.com:63468')
-    expect(addressForPortForwardEntry(forward)).toBe('local.getmontecarlo.com:63468')
-    expect(browserUrlForPortForwardEntry({ ...forward, advertisedProtocol: 'http' })).toBe(
-      'http://local.getmontecarlo.com:63468'
-    )
-    expect(
-      browserUrlForPortForwardEntry({
-        ...forward,
-        advertisedUrl: undefined,
-        remotePort: 8443
-      })
-    ).toBe('https://127.0.0.1:63468')
-    expect(addressForPortForwardEntry({ ...forward, advertisedUrl: undefined })).toBe(
-      '127.0.0.1:63468'
-    )
-  })
 })

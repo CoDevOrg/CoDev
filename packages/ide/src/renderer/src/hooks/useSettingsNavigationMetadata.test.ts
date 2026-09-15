@@ -18,7 +18,6 @@ function ids(
     isWindows?: boolean
     isWebClient?: boolean
     isDev?: boolean
-    isLinearConnected?: boolean
   } = {}
 ): string[] {
   return buildSettingsNavigationMetadata({
@@ -26,65 +25,28 @@ function ids(
     isWindows: args.isWindows ?? false,
     isWebClient: args.isWebClient ?? false,
     isDev: args.isDev ?? false,
-    isLinearConnected: args.isLinearConnected ?? false,
     repos: [repo]
   }).map((section) => section.id)
 }
 
 describe('settings navigation metadata', () => {
   it('puts AI capability panes at the top on desktop', () => {
-    expect(ids().slice(0, 10)).toEqual([
+    expect(ids().slice(0, 7)).toEqual([
       'agents',
       'accounts',
       'orchestration',
       'computer-use',
-      'voice',
-      'setup-guide',
       'general',
       'integrations',
-      'mobile',
       'git'
     ])
   })
 
-  it('adds the Linear capability section right after Orchestration only when connected', () => {
-    expect(ids()).not.toContain('linear')
-
-    const connectedIds = ids({ isLinearConnected: true })
-    expect(connectedIds).toContain('linear')
-    expect(connectedIds.indexOf('linear')).toBe(connectedIds.indexOf('orchestration') + 1)
-
-    const linearSection = buildSettingsNavigationMetadata({
-      isMac: false,
-      isWindows: false,
-      isWebClient: false,
-      isLinearConnected: true,
-      repos: [repo]
-    }).find((section) => section.id === 'linear')
-    expect(linearSection?.group).toBe('capabilities')
-  })
-
-  it('keeps the Linear capability section available on web clients when connected', () => {
-    expect(ids({ isWebClient: true, isLinearConnected: true })).toContain('linear')
-  })
-
-  it('places Mobile under Set Up instead of its own sidebar group', () => {
-    const sections = buildSettingsNavigationMetadata({
-      isMac: false,
-      isWindows: false,
-      isWebClient: false,
-      repos: [repo]
-    })
-
-    expect(sections.find((section) => section.id === 'mobile')?.group).toBe('setup')
-  })
-
   it('puts web-safe AI capability panes at the top while hiding desktop-only panes', () => {
-    expect(ids({ isWebClient: true }).slice(0, 7)).toEqual([
+    expect(ids({ isWebClient: true }).slice(0, 6)).toEqual([
       'agents',
       'accounts',
       'orchestration',
-      'setup-guide',
       'general',
       'integrations',
       'git'
@@ -96,9 +58,7 @@ describe('settings navigation metadata', () => {
 
     expect(webIds).not.toContain('browser')
     expect(webIds).not.toContain('ssh')
-    expect(webIds).not.toContain('mobile')
     expect(webIds).not.toContain('computer-use')
-    expect(webIds).not.toContain('voice')
     expect(webIds).not.toContain('floating-workspace')
     expect(webIds).not.toContain('advanced')
     expect(webIds).toContain('servers')
@@ -114,7 +74,6 @@ describe('settings navigation metadata', () => {
     })
 
     expect(sections.find((section) => section.id === 'computer-use')?.badge).toBeUndefined()
-    expect(sections.find((section) => section.id === 'voice')?.badge).toBeUndefined()
   })
 
   it('places Cloud VM under Experimental instead of as a beta sidebar item', () => {

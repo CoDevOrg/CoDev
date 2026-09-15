@@ -97,7 +97,6 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
     comment: '',
     linkedIssue: null,
     linkedPR: null,
-    linkedLinearIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,
@@ -145,10 +144,6 @@ describe('WorktreeCard hosted review refresh', () => {
       repoId: 'repo-1',
       linkedGitHubPR: null,
       currentHeadOid: 'abc123',
-      linkedGitLabMR: null,
-      linkedBitbucketPR: null,
-      linkedAzureDevOpsPR: null,
-      linkedGiteaPR: null,
       staleWhileRevalidate: true
     })
   })

@@ -78,7 +78,6 @@ import { useTabStripOverflowNavigation } from './tab-strip-overflow-navigation'
 import { useTabStripDragScrollHandlers } from './tab-strip-drag-scroll'
 import { shouldShowWindowsShellMenu } from './windows-shell-menu-visibility'
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { selectTabBarAgentProjections } from './tab-agent-types-by-tab-id'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import { CodevPresenceSegment } from './CodevPresenceSegment'
@@ -317,12 +316,6 @@ function TabBarInner({
   const worktreeConnectionId = useAppStore(
     (s) => getConnectionIdFromState(s, worktreeId)?.trim() || null
   )
-  const worktreeRemotePlatform = useAppStore((s) => {
-    if (!worktreeConnectionId) {
-      return null
-    }
-    return s.sshConnectionStates.get(worktreeConnectionId)?.remotePlatform ?? null
-  })
   const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
   const agentCmdOverrides = useAppStore(
     (s) => s.settings?.agentCmdOverrides ?? EMPTY_AGENT_CMD_OVERRIDES
@@ -338,10 +331,8 @@ function TabBarInner({
     [agentCmdOverrides, defaultAgent, detectedIds]
   )
   const isWebClient = (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ === true
-  const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
-    activeRuntimeEnvironmentId,
-    worktreeConnectionId
-  )
+  const windowsTerminalCapabilityOwnerKey =
+    getWindowsTerminalCapabilityOwnerKey(activeRuntimeEnvironmentId)
   const runtimeTarget = useMemo(
     () => getActiveRuntimeTarget({ activeRuntimeEnvironmentId }),
     [activeRuntimeEnvironmentId]
@@ -355,12 +346,9 @@ function TabBarInner({
     shouldProbeWindowsShellCapabilities,
     false,
     windowsTerminalCapabilityOwnerKey,
-    runtimeTarget,
-    worktreeConnectionId
+    runtimeTarget
   )
-  const shellMenuHostPlatform = worktreeConnectionId
-    ? (worktreeRemotePlatform ?? windowsTerminalCapabilities.hostPlatform)
-    : windowsTerminalCapabilities.hostPlatform
+  const shellMenuHostPlatform = windowsTerminalCapabilities.hostPlatform
   const showWindowsShellMenu = shouldShowWindowsShellMenu({
     activeRuntimeEnvironmentId,
     hostPlatform: shellMenuHostPlatform,
@@ -424,9 +412,6 @@ function TabBarInner({
   // Why: every retained TabBar observes the same hot maps; one feature-gated selector shares their projections.
   const { nativeChatEnabled, tabAgentTypesByTabId, nativeChatTabWideFallbackUnsafeTabsById } =
     useAppStore(useShallow(selectTabBarAgentProjections))
-  const nativeChatTranscriptIsLocalReadable = useAppStore((s) =>
-    isNativeChatTranscriptLocalReadable(getConnectionIdFromState(s, worktreeId))
-  )
 
   // Why: <webview> clicks are out-of-process, so Radix's document-pointerdown outside-click check misses them; use window blur.
   const [newTabMenuOpen, setNewTabMenuOpen] = useState(false)
@@ -1108,7 +1093,6 @@ function TabBarInner({
                     launchAgent: tabWideFallbackSafe ? terminalTab.launchAgent : null,
                     detectedAgent,
                     resolvedAgent: tabWideFallbackSafe ? resolvedAgent : null,
-                    nativeChatTranscriptIsLocalReadable,
                     isChatViewMode: unifiedTabForItem.viewMode === 'chat'
                   })
                 return (

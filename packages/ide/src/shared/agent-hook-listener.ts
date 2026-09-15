@@ -2,8 +2,7 @@
 
 // Why: extracted from src/main/agent-hooks/server.ts so the relay can host the pipeline without Electron (Node builtins only). See docs/design/agent-status-over-ssh.md §3.
 import type { IncomingMessage } from 'node:http'
-import { createHash, randomUUID } from 'node:crypto'
-import { homedir } from 'node:os'
+import { randomUUID } from 'node:crypto'
 import {
   chmodSync,
   closeSync,
@@ -15,7 +14,7 @@ import {
   unlinkSync,
   writeFileSync
 } from 'node:fs'
-import { isAbsolute, join } from 'node:path'
+import { join } from 'node:path'
 
 import {
   AGENT_MODEL_MAX_LENGTH,
@@ -64,15 +63,6 @@ import {
   isCompactContinuationUserTurnText,
   isKnownHarnessInjectedUserTurnText
 } from './harness-injected-user-turns'
-import {
-  buildGrokChatHistoryPathCandidates,
-  findGrokChatHistoryBySessionId,
-  getCachedGrokChatHistoryBySessionId,
-  GROK_SESSION_ID_MAX_LENGTH,
-  isSafeGrokSessionId,
-  resolveGrokChatHistoryPathSync,
-  resolveGrokSessionsDir
-} from './grok-session-paths'
 import { sweepStaleAgentHookEndpointTemps } from './agent-hook-endpoint-temp-cleanup'
 import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
 
@@ -95,14 +85,6 @@ const MAX_WARNED_KEYS = 32
 /** Slowloris cap: drop requests that have not finished sending after 5 s. */
 export const HOOK_REQUEST_SLOWLORIS_MS = 5_000
 
-/** Why: old OpenCode plugin builds re-post the full accumulated reply on every streamed part (O(n²) bytes/turn); cap at ingest to bound per-event cost. */
-export const OPENCODE_HOOK_TEXT_MAX_CHARS = 8_000
-
-function capOpenCodeHookText(text: string): string {
-  return text.length > OPENCODE_HOOK_TEXT_MAX_CHARS
-    ? text.slice(0, OPENCODE_HOOK_TEXT_MAX_CHARS)
-    : text
-}
 
 /** Bound paneKey size (real keys are well under 200); caps per-pane caches against pathological input. Exported so non-HTTP ingest (`ingestRemote`) applies the same cap as defense-in-depth. */
 export const MAX_PANE_KEY_LEN = 200
@@ -123,8 +105,6 @@ export type HookListenerState = {
   lastPromptByPaneKey: Map<string, string>
   lastToolByPaneKey: Map<string, ToolSnapshot>
   lastStatusByPaneKey: Map<string, AgentHookEventPayload>
-  antigravityCompletedTranscriptByPaneKey: Map<string, string>
-  ampCompletedCacheKeys: Set<string>
   /** Live subagents/teammates per Claude pane; survives turn boundaries since background children outlive the lead turn. */
   claudeSubagentRosterByPaneKey: Map<string, ClaudeSubagentRoster>
   /** Last state from the LEAD session's own events (subagent events carry agent_id, excluded), so a SubagentStop can re-emit pane status; `interrupted` persists so the eventual done still carries it. */
@@ -162,8 +142,6 @@ export function createHookListenerState(): HookListenerState {
     lastPromptByPaneKey: new Map(),
     lastToolByPaneKey: new Map(),
     lastStatusByPaneKey: new Map(),
-    antigravityCompletedTranscriptByPaneKey: new Map(),
-    ampCompletedCacheKeys: new Set(),
     claudeSubagentRosterByPaneKey: new Map(),
     claudeLeadStateByPaneKey: new Map(),
     claudeRunningNonAgentTaskPaneKeys: new Set(),
@@ -178,8 +156,6 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   deletePaneScopedCacheEntry(state.lastPromptByPaneKey, paneKey)
   deletePaneScopedCacheEntry(state.lastToolByPaneKey, paneKey)
   deletePaneScopedCacheEntry(state.lastStatusByPaneKey, paneKey)
-  deletePaneScopedCacheEntry(state.antigravityCompletedTranscriptByPaneKey, paneKey)
-  deletePaneScopedSetEntry(state.ampCompletedCacheKeys, paneKey)
   state.claudeSubagentRosterByPaneKey.delete(paneKey)
   state.claudeLeadStateByPaneKey.delete(paneKey)
   state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
@@ -224,8 +200,6 @@ export function movePaneCacheState(
   movePaneScopedMapEntries(state.lastPromptByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.lastToolByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.lastStatusByPaneKey, fromPaneKey, toPaneKey)
-  movePaneScopedMapEntries(state.antigravityCompletedTranscriptByPaneKey, fromPaneKey, toPaneKey)
-  movePaneScopedSetEntries(state.ampCompletedCacheKeys, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeLeadStateByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.claudeRunningNonAgentTaskPaneKeys, fromPaneKey, toPaneKey)
@@ -233,13 +207,6 @@ export function movePaneCacheState(
   movePaneScopedMapEntries(state.codexSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexSubagentTranscriptByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexLeadStateByPaneKey, fromPaneKey, toPaneKey)
-}
-
-function clearPaneTurnCacheState(state: HookListenerState, paneKey: string): void {
-  state.lastPromptByPaneKey.delete(paneKey)
-  state.lastToolByPaneKey.delete(paneKey)
-  state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)
-  state.ampCompletedCacheKeys.delete(paneKey)
 }
 
 function deletePaneScopedCacheEntry(map: Map<string, unknown>, paneKey: string): void {
@@ -252,22 +219,10 @@ function deletePaneScopedCacheEntry(map: Map<string, unknown>, paneKey: string):
   }
 }
 
-function deletePaneScopedSetEntry(set: Set<string>, paneKey: string): void {
-  set.delete(paneKey)
-  const scopedPrefix = `${paneKey}\0`
-  for (const key of set) {
-    if (key.startsWith(scopedPrefix)) {
-      set.delete(key)
-    }
-  }
-}
-
 export function clearAllListenerCaches(state: HookListenerState): void {
   state.lastPromptByPaneKey.clear()
   state.lastToolByPaneKey.clear()
   state.lastStatusByPaneKey.clear()
-  state.antigravityCompletedTranscriptByPaneKey.clear()
-  state.ampCompletedCacheKeys.clear()
   state.warnedVersions.clear()
   state.warnedEnvs.clear()
   state.claudeSubagentRosterByPaneKey.clear()
@@ -541,7 +496,6 @@ type ExtractedPromptText = {
     | 'initialPrompt'
     | 'user_message'
     | 'message'
-    | 'role_user_text'
     | null
 }
 
@@ -579,7 +533,7 @@ function extractPromptText(hookPayload: Record<string, unknown>): ExtractedPromp
       // Why: trim so prompts match readStringField output — whitespace would otherwise leak into UI and caches.
       return { text: value.trim(), source: key as Exclude<ExtractedPromptText['source'], null> }
     }
-    // Why: Kimi sends `prompt` as a content-block array, not a string; extract it for real prompt keys but skip `message` (ambiguous status field).
+    // Why: some CLIs send `prompt` as a content-block array, not a string; extract it for real prompt keys but skip `message` (ambiguous status field).
     if (key !== 'message' && Array.isArray(value)) {
       const text = contentBlockArrayText(value)
       if (text.length > 0) {
@@ -587,26 +541,7 @@ function extractPromptText(hookPayload: Record<string, unknown>): ExtractedPromp
       }
     }
   }
-  // Why: OpenCode sends MessagePart { role, text } with no UserPromptSubmit; when role === 'user' the text is the prompt.
-  if (hookPayload.role === 'user' && typeof hookPayload.text === 'string') {
-    const trimmed = capOpenCodeHookText(hookPayload.text.trim())
-    if (trimmed.length > 0) {
-      return { text: trimmed, source: 'role_user_text' }
-    }
-  }
   return { text: '', source: null }
-}
-
-function stripGrokUserQueryWrapper(promptText: string): string {
-  const opener = '<user_query>'
-  if (!promptText.startsWith(opener)) {
-    return promptText
-  }
-  const closer = '</user_query>'
-  const wrappedText = promptText.slice(opener.length)
-  const text = wrappedText.endsWith(closer) ? wrappedText.slice(0, -closer.length) : wrappedText
-  // Why: Grok wraps the submitted prompt in a `<user_query>` envelope; the status cache should hold the plain user text.
-  return text.trim()
 }
 
 // Why: the post-compact continuation prompt has no matching Stop and would resurrect working.
@@ -714,7 +649,6 @@ const TOOL_INPUT_KEYS_BY_TOOL: Record<string, readonly string[]> = {
   exec_command: ['cmd', 'command'],
   shell_command: ['cmd', 'command'],
   run_terminal_cmd: ['command'],
-  // Why: Grok maps Bash/Edit/Write to snake_case tool names; without these keys the status row shows blank toolInput for most Grok turns.
   run_terminal_command: ['command'],
   search_replace: ['file_path', 'path', 'filePath'],
   write_to_file: ['TargetFile', 'path', 'file_path'],
@@ -760,32 +694,6 @@ const TOOL_INPUT_KEYS_BY_TOOL: Record<string, readonly string[]> = {
   open_page: ['url']
 }
 
-const FALLBACK_TOOL_INPUT_KEYS = [
-  'command',
-  'cmd',
-  'code',
-  'query',
-  'pattern',
-  'url',
-  'path',
-  'file_path',
-  'filePath',
-  'target',
-  'selector',
-  'text',
-  'action',
-  'name',
-  'description',
-  'CommandLine',
-  'AbsolutePath',
-  'TargetFile',
-  'DirectoryPath',
-  'SearchPath',
-  'Query',
-  'Url',
-  'Prompt'
-] as const
-
 function deriveToolInputPreview(
   toolName: string | undefined,
   toolInput: unknown
@@ -805,23 +713,6 @@ function deriveToolInputPreview(
   }
   const record = toolInput as Record<string, unknown>
   for (const key of keys) {
-    const value = record[key]
-    if (typeof value === 'string' && value.trim().length > 0) {
-      return value
-    }
-  }
-  return undefined
-}
-
-function deriveFallbackToolInputPreview(toolInput: unknown): string | undefined {
-  if (typeof toolInput === 'string') {
-    return toolInput
-  }
-  if (typeof toolInput !== 'object' || toolInput === null) {
-    return undefined
-  }
-  const record = toolInput as Record<string, unknown>
-  for (const key of FALLBACK_TOOL_INPUT_KEYS) {
     const value = record[key]
     if (typeof value === 'string' && value.trim().length > 0) {
       return value
@@ -860,12 +751,6 @@ function clearActiveToolFieldsUpdate(): ToolSnapshot {
     { toolName: undefined, toolInput: undefined, interactivePrompt: undefined },
     { hasToolInputField: true }
   )
-}
-
-/** Drop the hook envelope keys a plugin merges into event properties so the serialized prompt holds only the question structure. */
-function stripHookEnvelopeKeys(record: Record<string, unknown>): Record<string, unknown> {
-  const { hook_event_name: _h, hookEventName: _he, ...rest } = record
-  return rest
 }
 
 /** One-line description of a tool call for an approval card (Bash command, file path, else clipped JSON). */
@@ -933,20 +818,6 @@ function readFirstString(
   return undefined
 }
 
-function parseJsonObjectString(value: unknown): Record<string, unknown> | undefined {
-  if (typeof value !== 'string' || value.trim().length === 0) {
-    return undefined
-  }
-  try {
-    const parsed = parseAgentHookJson(value)
-    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : undefined
-  } catch {
-    return undefined
-  }
-}
-
 function extractToolResponseText(toolResponse: unknown): string | undefined {
   if (typeof toolResponse === 'string' && toolResponse.length > 0) {
     return toolResponse
@@ -976,10 +847,6 @@ function extractToolResponseText(toolResponse: unknown): string | undefined {
 const TRANSCRIPT_CHUNK_BYTES = 64 * 1024
 const TRANSCRIPT_MAX_SCAN_BYTES = 4 * 1024 * 1024
 const EMPTY_TRANSCRIPT_REGION = Buffer.alloc(0)
-const AMP_THREAD_ID_MAX_LENGTH = 256
-const AMP_MAX_SCOPED_THREAD_CACHE_KEYS = 32
-const GROK_SESSION_CWD_MAX_LENGTH = 4096
-const GROK_HOME_ENVELOPE_MAX_LENGTH = 4096
 
 function extractAssistantTextFromLine(line: string): string | undefined {
   let entry: unknown
@@ -1036,429 +903,11 @@ function extractAssistantContentText(content: unknown): string | undefined {
   return undefined
 }
 
-function extractAntigravityUserRequest(content: string): string | undefined {
-  const opener = '<USER_REQUEST>'
-  const startIndex = content.indexOf(opener)
-  const bodyStartIndex = startIndex === -1 ? -1 : startIndex + opener.length
-  const endIndex = bodyStartIndex === -1 ? -1 : content.indexOf('</USER_REQUEST>', bodyStartIndex)
-  const text =
-    bodyStartIndex === -1 || endIndex === -1 ? content : content.slice(bodyStartIndex, endIndex)
-  const trimmed = text.trim()
-  return trimmed.length > 0 ? trimmed : undefined
-}
-
-function extractUserPromptTextFromLine(line: string): string | undefined {
-  let entry: unknown
-  try {
-    entry = parseAgentHookJson(line)
-  } catch {
-    return undefined
-  }
-  if (typeof entry !== 'object' || entry === null) {
-    return undefined
-  }
-  const record = entry as Record<string, unknown>
-  if (
-    (record.source === 'USER_EXPLICIT' || record.source === 'USER') &&
-    (record.type === 'USER_INPUT' || record.type === 'REQUEST') &&
-    typeof record.content === 'string'
-  ) {
-    return extractAntigravityUserRequest(record.content)
-  }
-  return undefined
-}
-
 function readLastAssistantFromTranscript(transcriptPath: unknown): string | undefined {
   if (typeof transcriptPath !== 'string' || transcriptPath.length === 0) {
     return undefined
   }
   return readLastAssistantFromTranscriptOnce(transcriptPath)
-}
-
-function readLastUserPromptFromTranscript(transcriptPath: unknown): string | undefined {
-  if (typeof transcriptPath !== 'string' || transcriptPath.length === 0) {
-    return undefined
-  }
-  return readLastTextFromTranscriptOnce(transcriptPath, extractUserPromptTextFromLine)
-}
-
-function extractCommandCodeUserPromptFromLine(line: string): string | undefined {
-  let entry: unknown
-  try {
-    entry = parseAgentHookJson(line)
-  } catch {
-    return undefined
-  }
-  if (typeof entry !== 'object' || entry === null) {
-    return undefined
-  }
-  const record = entry as Record<string, unknown>
-  return record.role === 'user' ? extractAssistantContentText(record.content) : undefined
-}
-
-function hashInteractionKeyPart(value: string): string {
-  return createHash('sha256').update(value).digest('hex').slice(0, 12)
-}
-
-// Why byte offsets: the caller's interactionKey embeds the prompt's absolute
-// position, so the backward scan has to report the same offset the old
-// read-everything-then-take-the-last-match pass produced.
-function findLastCommandCodePromptInRegion(
-  region: Buffer
-): { prompt: string; byteOffset: number } | undefined {
-  let lineEnd = region.length
-  for (let index = region.length - 1; index >= -1; index--) {
-    if (index >= 0 && region[index] !== 0x0a) {
-      continue
-    }
-    const lineStart = index + 1
-    if (lineEnd > lineStart) {
-      const prompt = extractCommandCodeUserPromptFromLine(
-        region.subarray(lineStart, lineEnd).toString('utf8').trim()
-      )
-      if (prompt !== undefined) {
-        return { prompt, byteOffset: lineStart }
-      }
-    }
-    lineEnd = index
-  }
-  return undefined
-}
-
-export function readLastCommandCodeUserPromptEntryFromTranscript(
-  transcriptPath: unknown
-): { text: string; interactionKey: string } | undefined {
-  if (typeof transcriptPath !== 'string' || transcriptPath.length === 0) {
-    return undefined
-  }
-  try {
-    const stats = statSync(transcriptPath)
-    const size = stats.size
-    if (size <= 0) {
-      return undefined
-    }
-    const fd = openSync(transcriptPath, 'r')
-    try {
-      // Why scan backward: the answer is the LAST user line, so walking up from
-      // EOF returns on the first hit instead of parsing every line of a
-      // multi-megabyte transcript on every hook event.
-      // Why a chunk list: carry holds a partial line, and re-concatenating it per
-      // block made one oversized line (a big tool result) cost O(line^2).
-      let carryChunks: Buffer[] = []
-      let bytesRead = 0
-      let scanEnd = size
-      while (scanEnd > 0 && bytesRead < TRANSCRIPT_MAX_SCAN_BYTES) {
-        const chunkSize = Math.min(
-          scanEnd,
-          TRANSCRIPT_CHUNK_BYTES,
-          TRANSCRIPT_MAX_SCAN_BYTES - bytesRead
-        )
-        const position = scanEnd - chunkSize
-        const buffer = Buffer.alloc(chunkSize)
-        let filled = 0
-        while (filled < chunkSize) {
-          const n = readSync(fd, buffer, filled, chunkSize - filled, position + filled)
-          if (n === 0) {
-            break
-          }
-          filled += n
-        }
-        // Why bail on a short read: the file shrank under us, so the bytes above
-        // this block no longer line up and any stitched offset would be wrong.
-        if (filled < chunkSize) {
-          break
-        }
-        bytesRead += filled
-        scanEnd = position
-        // Why search only the new block: carry is always the run before a newline,
-        // so it holds none of its own.
-        const firstNewline = buffer.indexOf(0x0a)
-        // Why only at a true file start: a scan that stops on the size cap must
-        // discard its leading partial line, exactly as the capped read did.
-        const atStart = position === 0
-        let completeRegion: Buffer
-        let regionPosition: number
-        if (atStart) {
-          completeRegion =
-            carryChunks.length === 0 ? buffer : Buffer.concat([buffer, ...carryChunks])
-          regionPosition = position
-          carryChunks = []
-        } else if (firstNewline === -1) {
-          completeRegion = EMPTY_TRANSCRIPT_REGION
-          regionPosition = position
-          carryChunks.unshift(buffer)
-        } else {
-          const afterNewline = buffer.subarray(firstNewline + 1)
-          completeRegion =
-            carryChunks.length === 0 ? afterNewline : Buffer.concat([afterNewline, ...carryChunks])
-          regionPosition = position + firstNewline + 1
-          carryChunks = [buffer.subarray(0, firstNewline)]
-        }
-        if (completeRegion.length > 0) {
-          const found = findLastCommandCodePromptInRegion(completeRegion)
-          if (found) {
-            return {
-              text: found.prompt,
-              interactionKey: [
-                'command-code-transcript',
-                hashInteractionKeyPart(transcriptPath),
-                String(regionPosition + found.byteOffset),
-                hashInteractionKeyPart(found.prompt)
-              ].join('-')
-            }
-          }
-        }
-      }
-      return undefined
-    } finally {
-      closeSync(fd)
-    }
-  } catch {
-    return undefined
-  }
-}
-
-function extractCommandCodeAssistantTextFromLine(line: string): string | undefined {
-  let entry: unknown
-  try {
-    entry = parseAgentHookJson(line)
-  } catch {
-    return undefined
-  }
-  if (typeof entry !== 'object' || entry === null) {
-    return undefined
-  }
-  const record = entry as Record<string, unknown>
-  if (record.role !== 'assistant') {
-    return undefined
-  }
-  const content = record.content
-  if (typeof content === 'string' && content.trim().length > 0) {
-    return content
-  }
-  if (Array.isArray(content)) {
-    const textPart = content.find(
-      (part) =>
-        typeof part === 'object' &&
-        part !== null &&
-        (part as Record<string, unknown>).type === 'text' &&
-        typeof (part as Record<string, unknown>).text === 'string' &&
-        ((part as Record<string, unknown>).text as string).trim().length > 0
-    ) as Record<string, unknown> | undefined
-    if (typeof textPart?.text === 'string') {
-      return textPart.text
-    }
-  }
-  return extractAssistantContentText(content)
-}
-
-function readLastCommandCodeAssistantFromTranscript(transcriptPath: unknown): string | undefined {
-  if (typeof transcriptPath !== 'string' || transcriptPath.length === 0) {
-    return undefined
-  }
-  return readLastTextFromTranscriptOnce(transcriptPath, extractCommandCodeAssistantTextFromLine)
-}
-
-function parseHookBodyPayloadRecord(body: unknown): Record<string, unknown> | null {
-  if (typeof body !== 'object' || body === null) {
-    return null
-  }
-  const rawPayload = (body as Record<string, unknown>).payload
-  const payload =
-    typeof rawPayload === 'string'
-      ? (() => {
-          try {
-            return parseAgentHookJson(rawPayload)
-          } catch {
-            return null
-          }
-        })()
-      : rawPayload
-  return typeof payload === 'object' && payload !== null
-    ? (payload as Record<string, unknown>)
-    : null
-}
-
-function readBoundedString(
-  record: Record<string, unknown>,
-  keys: readonly string[],
-  maxLength: number
-): string | undefined {
-  const value = readFirstString(record, keys)
-  return value && value.length <= maxLength ? value : undefined
-}
-
-function readGrokHomeEnvelope(record: Record<string, unknown>): string | undefined {
-  const value = readBoundedString(record, ['grokHome'], GROK_HOME_ENVELOPE_MAX_LENGTH)
-  if (!value || value !== value.trim() || !isAbsolute(value) || hasControlCharacter(value)) {
-    return undefined
-  }
-  return value
-}
-
-function hasControlCharacter(value: string): boolean {
-  return Array.from(value).some((character) => {
-    const code = character.charCodeAt(0)
-    return code <= 0x1f || code === 0x7f
-  })
-}
-
-type GrokSessionMetadata = {
-  sessionId: string
-  cwd?: string
-  sessionsDir: string
-}
-
-function readGrokSessionMetadata(
-  hookPayload: Record<string, unknown>,
-  grokHome?: string
-): GrokSessionMetadata | undefined {
-  const sessionId = readBoundedString(
-    hookPayload,
-    ['sessionId', 'session_id'],
-    GROK_SESSION_ID_MAX_LENGTH
-  )
-  if (!sessionId || !isSafeGrokSessionId(sessionId)) {
-    return undefined
-  }
-  const cwd = readBoundedString(
-    hookPayload,
-    ['cwd', 'workspaceRoot', 'workspace_root'],
-    GROK_SESSION_CWD_MAX_LENGTH
-  )
-  // Why: hook scripts report the effective per-PTY/remote Grok home; old scripts fall back to the runtime's for compatibility.
-  const sessionsDir = grokHome
-    ? join(grokHome, 'sessions')
-    : resolveGrokSessionsDir(process.env, homedir())
-  return { sessionId, cwd, sessionsDir }
-}
-
-function getGrokChatHistoryPath(
-  hookPayload: Record<string, unknown>,
-  grokHome?: string
-): string | undefined {
-  const metadata = readGrokSessionMetadata(hookPayload, grokHome)
-  if (!metadata) {
-    return undefined
-  }
-  const resolved = resolveGrokChatHistoryPathSync({
-    sessionId: metadata.sessionId,
-    cwd: metadata.cwd ?? null,
-    sessionsDir: metadata.sessionsDir
-  })
-  if (resolved) {
-    return resolved
-  }
-  const cached = getCachedGrokChatHistoryBySessionId(metadata.sessionsDir, metadata.sessionId)
-  if (cached) {
-    return cached
-  }
-  // Why: SessionEnd can race the last write; return a plausible on-disk candidate (short-cwd preferred) even if the file doesn't exist yet.
-  if (!metadata.cwd) {
-    return undefined
-  }
-  return (
-    buildGrokChatHistoryPathCandidates({
-      sessionId: metadata.sessionId,
-      cwd: metadata.cwd,
-      sessionsDir: metadata.sessionsDir
-    })[0] ?? undefined
-  )
-}
-
-function readLastAssistantFromGrokChatHistory(
-  hookPayload: Record<string, unknown>,
-  grokHome?: string
-): string | undefined {
-  const chatHistoryPath = getGrokChatHistoryPath(hookPayload, grokHome)
-  if (!chatHistoryPath) {
-    return undefined
-  }
-  return readLastAssistantFromTranscriptOnce(chatHistoryPath)
-}
-
-export function hasPendingAgentResultText(source: AgentHookSource, body: unknown): boolean {
-  const envelope =
-    typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : null
-  const record = parseHookBodyPayloadRecord(body)
-  if (!record) {
-    return false
-  }
-  if (hasExplicitLastAssistantResult(record)) {
-    return false
-  }
-  if (source === 'copilot') {
-    // Why: Copilot Stop uses generic `message` as final assistant text; Grok/Antigravity use that field for status instead.
-    if (hasNonEmptyString(record.message)) {
-      return false
-    }
-    const transcriptPath = record.transcript_path ?? record.transcriptPath
-    return typeof transcriptPath === 'string' && transcriptPath.trim().length > 0
-  }
-  const eventName =
-    envelope?.hook_event_name ??
-    envelope?.hookEventName ??
-    record.hook_event_name ??
-    record.hookEventName
-  if (source === 'antigravity' && eventName === 'Stop') {
-    if (isAntigravityStopStillBusy(record)) {
-      return false
-    }
-    const transcriptPath = record.transcriptPath ?? record.transcript_path
-    return typeof transcriptPath === 'string' && transcriptPath.trim().length > 0
-  }
-  const pendingGrokDiscovery = preparePendingGrokResultDiscovery(source, body)
-  if (pendingGrokDiscovery) {
-    void pendingGrokDiscovery
-    return true
-  }
-  return false
-}
-
-function hasNonEmptyString(value: unknown): boolean {
-  return typeof value === 'string' && value.trim().length > 0
-}
-
-function hasExplicitLastAssistantResult(record: Record<string, unknown>): boolean {
-  return (
-    hasNonEmptyString(record.last_assistant_message) ||
-    hasNonEmptyString(record.lastAssistantMessage)
-  )
-}
-
-/** Start bounded discovery only for a Grok completion that still needs result text. */
-export function preparePendingGrokResultDiscovery(
-  source: AgentHookSource,
-  body: unknown
-): Promise<void> | null {
-  if (source !== 'grok') {
-    return null
-  }
-  const envelope =
-    typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : null
-  const record = parseHookBodyPayloadRecord(body)
-  if (!record || hasExplicitLastAssistantResult(record)) {
-    return null
-  }
-  const eventName =
-    envelope?.hook_event_name ??
-    envelope?.hookEventName ??
-    record.hook_event_name ??
-    record.hookEventName
-  if (!isGrokEvent(eventName, 'stop', 'session_end')) {
-    return null
-  }
-  const metadata = readGrokSessionMetadata(
-    record,
-    envelope ? readGrokHomeEnvelope(envelope) : undefined
-  )
-  if (!metadata) {
-    return null
-  }
-  // Why: lets the server await discovery without moving filesystem I/O back into synchronous hook normalization.
-  return findGrokChatHistoryBySessionId(metadata.sessionsDir, metadata.sessionId).then(
-    () => undefined
-  )
 }
 
 function readLastAssistantFromTranscriptOnce(transcriptPath: string): string | undefined {
@@ -1649,555 +1098,6 @@ function extractCodexToolFields(
   return {}
 }
 
-function extractGeminiToolFields(
-  eventName: unknown,
-  hookPayload: Record<string, unknown>
-): ToolSnapshot {
-  if (
-    eventName === 'BeforeTool' ||
-    eventName === 'AfterTool' ||
-    eventName === 'PreToolUse' ||
-    eventName === 'PostToolUse'
-  ) {
-    const toolName = readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name')
-    const toolInput =
-      deriveToolInputPreview(toolName, hookPayload.tool_input) ??
-      deriveToolInputPreview(toolName, hookPayload.args) ??
-      deriveToolInputPreview(toolName, hookPayload.input)
-    return toolUpdate(
-      { toolName, toolInput },
-      { hasToolInputField: hasAnyOwnField(hookPayload, ['tool_input', 'args', 'input']) }
-    )
-  }
-  if (eventName === 'AfterAgent') {
-    const message = readString(hookPayload, 'prompt_response')
-    if (message) {
-      return { lastAssistantMessage: message }
-    }
-  }
-  return {}
-}
-
-function readAntigravityToolCall(hookPayload: Record<string, unknown>): {
-  toolName?: string
-  toolInputSource?: unknown
-} {
-  const toolCall = hookPayload.toolCall
-  if (typeof toolCall !== 'object' || toolCall === null) {
-    return {}
-  }
-  const record = toolCall as Record<string, unknown>
-  return {
-    toolName: readFirstString(record, ['name', 'toolName', 'tool_name']),
-    toolInputSource: record.args
-  }
-}
-
-function extractAntigravityToolFields(
-  eventName: unknown,
-  hookPayload: Record<string, unknown>
-): ToolSnapshot {
-  if (eventName === 'PreToolUse' || eventName === 'PostToolUse') {
-    const toolCall = readAntigravityToolCall(hookPayload)
-    const toolName = toolCall.toolName
-    const toolInput =
-      deriveToolInputPreview(toolName, toolCall.toolInputSource) ??
-      deriveFallbackToolInputPreview(toolCall.toolInputSource)
-    return toolUpdate(
-      { toolName, toolInput },
-      { hasToolInputField: toolCall.toolInputSource !== undefined }
-    )
-  }
-  if (eventName === 'Stop') {
-    if (isAntigravityStopStillBusy(hookPayload)) {
-      return {}
-    }
-    const message =
-      readString(hookPayload, 'last_assistant_message') ??
-      readLastAssistantFromTranscript(hookPayload.transcriptPath ?? hookPayload.transcript_path)
-    if (message) {
-      return { lastAssistantMessage: message }
-    }
-  }
-  return {}
-}
-
-function extractAmpToolFields(
-  eventName: unknown,
-  hookPayload: Record<string, unknown>
-): ToolSnapshot {
-  if (eventName === 'tool.call' || eventName === 'tool.result') {
-    const toolName =
-      readString(hookPayload, 'tool') ??
-      readString(hookPayload, 'toolName') ??
-      readString(hookPayload, 'name')
-    const toolInput =
-      deriveToolInputPreview(toolName, hookPayload.input) ??
-      deriveToolInputPreview(toolName, hookPayload.tool_input) ??
-      deriveToolInputPreview(toolName, hookPayload.arguments) ??
-      // Why: Amp plugin tools can have arbitrary names; fall back to obvious arg fields instead of an empty tool preview.
-      deriveFallbackToolInputPreview(hookPayload.input) ??
-      deriveFallbackToolInputPreview(hookPayload.tool_input) ??
-      deriveFallbackToolInputPreview(hookPayload.arguments)
-    const update: ToolSnapshot = toolUpdate(
-      { toolName, toolInput },
-      { hasToolInputField: hasAnyOwnField(hookPayload, ['input', 'tool_input', 'arguments']) }
-    )
-    if (eventName === 'tool.result') {
-      const responseText =
-        readFirstString(hookPayload, ['error', 'output', 'result', 'message']) ??
-        extractToolResponseText(hookPayload.output) ??
-        extractToolResponseText(hookPayload.result)
-      if (responseText) {
-        update.lastAssistantMessage = responseText
-      }
-    }
-    return update
-  }
-  return {}
-}
-
-function extractOpenCodeToolFields(
-  eventName: unknown,
-  hookPayload: Record<string, unknown>
-): ToolSnapshot {
-  if (eventName === 'MessagePart' && hookPayload.role === 'assistant') {
-    const text = readString(hookPayload, 'text')
-    if (text) {
-      return { lastAssistantMessage: capOpenCodeHookText(text) }
-    }
-  }
-  if (eventName === 'AskUserQuestion') {
-    // Why: OpenCode's payload is question.asked's event.properties (hook_event_name merged in); strip envelope or use tool_input, capture JSON for the card.
-    const toolInputSource = hasOwnField(hookPayload, 'tool_input')
-      ? hookPayload.tool_input
-      : stripHookEnvelopeKeys(hookPayload)
-    return {
-      hasToolUpdate: true,
-      interactivePrompt: deriveInteractivePrompt('AskUserQuestion', toolInputSource)
-    }
-  }
-  return {}
-}
-
-function extractCursorToolFields(
-  eventName: unknown,
-  hookPayload: Record<string, unknown>
-): ToolSnapshot {
-  if (
-    eventName === 'preToolUse' ||
-    eventName === 'postToolUse' ||
-    eventName === 'postToolUseFailure'
-  ) {
-    const update: ToolSnapshot = {}
-    if (eventName === 'postToolUseFailure') {
-      Object.assign(update, clearActiveToolFieldsUpdate())
-    } else {
-      const toolName = readString(hookPayload, 'tool_name')
-      const toolInput = deriveToolInputPreview(toolName, hookPayload.tool_input)
-      Object.assign(
-        update,
-        toolUpdate(
-          { toolName, toolInput },
-          { hasToolInputField: hasOwnField(hookPayload, 'tool_input') }
-        )
-      )
-    }
-    if (eventName === 'postToolUse') {
-      const responseText = extractToolResponseText(hookPayload.tool_output)
-      if (responseText) {
-        update.lastAssistantMessage = responseText
-      }
-    }
-    if (eventName === 'postToolUseFailure') {
-      const errorText =
-        extractToolResponseText(hookPayload.tool_output) ??
-        readString(hookPayload, 'error_message') ??
-        readString(hookPayload, 'error')
-      if (errorText) {
-        update.lastAssistantMessage = errorText
-      }
-    }
-    return update
-  }
-  if (eventName === 'beforeShellExecution') {
-    const command = readString(hookPayload, 'command')
-    return toolUpdate(
-      { toolName: 'Shell', toolInput: command },
-      { hasToolInputField: hasOwnField(hookPayload, 'command') }
-    )
-  }
-  if (eventName === 'beforeMCPExecution') {
-    const toolName = readString(hookPayload, 'tool_name') ?? 'MCP'
-    const toolInput =
-      deriveToolInputPreview(toolName, hookPayload.tool_input) ??
-      readString(hookPayload, 'command') ??
-      readString(hookPayload, 'url')
-    return toolUpdate(
-      { toolName, toolInput },
-      { hasToolInputField: hasAnyOwnField(hookPayload, ['tool_input', 'command', 'url']) }
-    )
-  }
-  if (eventName === 'afterAgentResponse') {
-    const text = readString(hookPayload, 'text')
-    if (text) {
-      return { lastAssistantMessage: text }
-    }
-  }
-  return {}
-}
-
-function normalizeCopilotEventName(eventName: unknown): unknown {
-  if (typeof eventName !== 'string') {
-    return eventName
-  }
-  const eventMap: Record<string, string> = {
-    sessionStart: 'SessionStart',
-    sessionEnd: 'SessionEnd',
-    userPromptSubmitted: 'UserPromptSubmit',
-    userPromptSubmit: 'UserPromptSubmit',
-    preToolUse: 'PreToolUse',
-    postToolUse: 'PostToolUse',
-    postToolUseFailure: 'PostToolUseFailure',
-    subagentStart: 'SubagentStart',
-    subagentStop: 'SubagentStop',
-    preCompact: 'PreCompact',
-    agentStop: 'Stop',
-    stop: 'Stop',
-    errorOccurred: 'ErrorOccurred',
-    permissionRequest: 'PermissionRequest',
-    notification: 'Notification'
-  }
-  return eventMap[eventName] ?? eventName
-}
-
-function resolveCopilotEventName(
-  eventName: unknown,
-  hookPayload: Record<string, unknown>
-): unknown {
-  const explicit =
-    eventName ??
-    readFirstString(hookPayload, ['hook_event_name', 'hookEventName', 'hook_type', 'hookType'])
-  if (explicit) {
-    return explicit
-  }
-  if (readFirstString(hookPayload, ['initial_prompt', 'initialPrompt'])) {
-    return 'SessionStart'
-  }
-  if (readString(hookPayload, 'prompt')) {
-    return 'UserPromptSubmit'
-  }
-  if (readFirstString(hookPayload, ['notification_type', 'notificationType'])) {
-    return 'Notification'
-  }
-  if (
-    readFirstString(hookPayload, ['transcript_path', 'transcriptPath', 'stop_reason', 'stopReason'])
-  ) {
-    return 'Stop'
-  }
-  if (hookPayload.error || readFirstString(hookPayload, ['error_context', 'errorContext'])) {
-    return 'ErrorOccurred'
-  }
-  if (
-    Array.isArray(hookPayload.toolCalls) ||
-    readFirstString(hookPayload, ['tool_name', 'toolName', 'name'])
-  ) {
-    if (
-      hookPayload.tool_result ||
-      hookPayload.toolResult ||
-      hookPayload.tool_response ||
-      hookPayload.toolResponse
-    ) {
-      return 'PostToolUse'
-    }
-    return 'PreToolUse'
-  }
-  return eventName
-}
-
-function readCopilotToolCall(hookPayload: Record<string, unknown>): {
-  toolName?: string
-  toolInputSource?: unknown
-} {
-  const toolCalls = hookPayload.toolCalls
-  if (!Array.isArray(toolCalls) || toolCalls.length === 0) {
-    return {}
-  }
-  const first = toolCalls[0]
-  if (typeof first !== 'object' || first === null) {
-    return {}
-  }
-  const record = first as Record<string, unknown>
-  return {
-    toolName: readFirstString(record, ['name', 'toolName', 'tool_name']),
-    toolInputSource:
-      parseJsonObjectString(record.args) ??
-      record.args ??
-      parseJsonObjectString(record.arguments) ??
-      record.arguments
-  }
-}
-
-function isAskUserTool(toolName: string | undefined): boolean {
-  return toolName?.replaceAll(/[^a-z0-9]/gi, '').toLowerCase() === 'askuser'
-}
-
-function extractCopilotToolFields(
-  eventName: unknown,
-  hookPayload: Record<string, unknown>
-): ToolSnapshot {
-  const update: ToolSnapshot = {}
-  if (eventName === 'PostToolUseFailure' || eventName === 'ErrorOccurred') {
-    Object.assign(update, clearActiveToolFieldsUpdate())
-  } else if (
-    eventName === 'PreToolUse' ||
-    eventName === 'PostToolUse' ||
-    eventName === 'PermissionRequest'
-  ) {
-    const copilotToolCall = readCopilotToolCall(hookPayload)
-    const toolName =
-      readFirstString(hookPayload, ['tool_name', 'toolName', 'name']) ?? copilotToolCall.toolName
-    const toolInput =
-      deriveToolInputPreview(toolName, hookPayload.tool_input) ??
-      deriveToolInputPreview(toolName, hookPayload.toolInput) ??
-      deriveToolInputPreview(toolName, hookPayload.toolArgs) ??
-      deriveToolInputPreview(toolName, hookPayload.input) ??
-      deriveToolInputPreview(toolName, hookPayload.arguments) ??
-      deriveToolInputPreview(toolName, copilotToolCall.toolInputSource)
-    Object.assign(
-      update,
-      toolUpdate(
-        { toolName, toolInput },
-        {
-          hasToolInputField:
-            hasAnyOwnField(hookPayload, [
-              'tool_input',
-              'toolInput',
-              'toolArgs',
-              'input',
-              'arguments'
-            ]) || copilotToolCall.toolInputSource !== undefined
-        }
-      )
-    )
-    if (isAskUserTool(toolName) && toolInput) {
-      update.lastAssistantMessage = toolInput
-    }
-  }
-  if (eventName === 'PostToolUse') {
-    const responseText =
-      extractToolResponseText(hookPayload.tool_result) ??
-      extractToolResponseText(hookPayload.toolResult) ??
-      extractToolResponseText(hookPayload.tool_response) ??
-      extractToolResponseText(hookPayload.toolResponse)
-    if (responseText) {
-      update.lastAssistantMessage = responseText
-    }
-  }
-  if (eventName === 'PostToolUseFailure' || eventName === 'ErrorOccurred') {
-    const errorText =
-      extractToolResponseText(hookPayload.tool_result) ??
-      extractToolResponseText(hookPayload.toolResult) ??
-      extractToolResponseText(hookPayload.tool_response) ??
-      extractToolResponseText(hookPayload.toolResponse) ??
-      readFirstString(hookPayload, ['error_message', 'errorMessage', 'error', 'message'])
-    if (errorText) {
-      update.lastAssistantMessage = errorText
-    }
-  }
-  if (eventName === 'Notification') {
-    const notificationType = readFirstString(hookPayload, ['notification_type', 'notificationType'])
-    if (notificationType === 'permission_prompt' || notificationType === 'elicitation_dialog') {
-      const message = readFirstString(hookPayload, ['message', 'body', 'text', 'title'])
-      if (message) {
-        update.lastAssistantMessage = message
-      }
-    }
-  }
-  if (eventName === 'Stop') {
-    const direct = readFirstString(hookPayload, [
-      'last_assistant_message',
-      'lastAssistantMessage',
-      'message'
-    ])
-    if (direct) {
-      update.lastAssistantMessage = direct
-    } else {
-      const lastFromTranscript = readLastAssistantFromTranscript(
-        hookPayload.transcript_path ?? hookPayload.transcriptPath
-      )
-      if (lastFromTranscript) {
-        update.lastAssistantMessage = lastFromTranscript
-      } else {
-        update.clearLastAssistantMessage = true
-      }
-    }
-  }
-  return update
-}
-
-function extractPiToolFields(
-  eventName: unknown,
-  hookPayload: Record<string, unknown>,
-  agentKind: 'pi' | 'omp'
-): ToolSnapshot {
-  if (
-    eventName === 'tool_call' ||
-    eventName === 'tool_execution_start' ||
-    eventName === 'tool_execution_end'
-  ) {
-    const toolName = readString(hookPayload, 'tool_name')
-    const rawToolInput = hookPayload.tool_input
-    const toolInput = deriveToolInputPreview(toolName, rawToolInput)
-    // Why: OMP shares this extractor; only derive interactivePrompt for Pi so OMP ask_user_question metadata stays unchanged.
-    const interactivePrompt =
-      agentKind === 'pi' && (eventName === 'tool_call' || eventName === 'tool_execution_start')
-        ? deriveInteractivePrompt(toolName, rawToolInput, eventName)
-        : undefined
-    return toolUpdate(
-      { toolName, toolInput, interactivePrompt },
-      { hasToolInputField: hasOwnField(hookPayload, 'tool_input') }
-    )
-  }
-  if (eventName === 'message_end' && hookPayload.role === 'assistant') {
-    const text = readString(hookPayload, 'text')
-    if (text) {
-      return { lastAssistantMessage: text }
-    }
-  }
-  return {}
-}
-
-function isDroidPermissionNotification(message: string | undefined): boolean {
-  if (!message) {
-    return false
-  }
-  const lower = message.toLowerCase()
-  // Why: 'confirm' is excluded — it false-positives on benign messages like "task confirmed" that aren't permission prompts.
-  return lower.includes('permission') || lower.includes('approve') || lower.includes('approval')
-}
-
-function isDroidIdleNotification(message: string | undefined): boolean {
-  if (!message) {
-    return false
-  }
-  const lower = message.toLowerCase()
-  return lower.includes('waiting for your input') || lower.includes('waiting for input')
-}
-
-function isDroidAskUserTool(toolName: string | undefined): boolean {
-  if (!toolName) {
-    return false
-  }
-  return toolName.replaceAll(/[^a-z0-9]/gi, '').toLowerCase() === 'askuser'
-}
-
-function readDroidToolRiskLevel(hookPayload: Record<string, unknown>): string | undefined {
-  const directRisk = readString(hookPayload, 'riskLevel') ?? readString(hookPayload, 'risk_level')
-  if (directRisk) {
-    return directRisk
-  }
-
-  for (const key of ['tool_input', 'input', 'arguments'] as const) {
-    const value = hookPayload[key]
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-      continue
-    }
-    const record = value as Record<string, unknown>
-    const nestedRisk = readString(record, 'riskLevel') ?? readString(record, 'risk_level')
-    if (nestedRisk) {
-      return nestedRisk
-    }
-  }
-  return undefined
-}
-
-function isDroidHighRiskToolUse(hookPayload: Record<string, unknown>): boolean {
-  return readDroidToolRiskLevel(hookPayload)?.trim().toLowerCase() === 'high'
-}
-
-function extractDroidToolFields(
-  eventName: unknown,
-  hookPayload: Record<string, unknown>
-): ToolSnapshot {
-  if (
-    eventName === 'PreToolUse' ||
-    eventName === 'PostToolUse' ||
-    eventName === 'PermissionRequest'
-  ) {
-    const toolName = readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name')
-    const toolInput =
-      deriveToolInputPreview(toolName, hookPayload.tool_input) ??
-      deriveToolInputPreview(toolName, hookPayload.input) ??
-      deriveToolInputPreview(toolName, hookPayload.arguments)
-    const update: ToolSnapshot = toolUpdate(
-      { toolName, toolInput },
-      { hasToolInputField: hasAnyOwnField(hookPayload, ['tool_input', 'input', 'arguments']) }
-    )
-    if (eventName === 'PostToolUse') {
-      const responseText =
-        extractToolResponseText(hookPayload.tool_response) ??
-        extractToolResponseText(hookPayload.tool_output)
-      if (responseText) {
-        update.lastAssistantMessage = responseText
-      }
-    }
-    return update
-  }
-  if (eventName === 'Stop') {
-    const direct = readString(hookPayload, 'last_assistant_message')
-    if (direct) {
-      return { lastAssistantMessage: direct }
-    }
-    const fromTranscript = readLastAssistantFromTranscript(hookPayload.transcript_path)
-    if (fromTranscript) {
-      return { lastAssistantMessage: fromTranscript }
-    }
-  }
-  return {}
-}
-
-function extractCommandCodeToolFields(
-  eventName: unknown,
-  hookPayload: Record<string, unknown>
-): ToolSnapshot {
-  if (eventName === 'PreToolUse' || eventName === 'PostToolUse') {
-    const toolName =
-      readString(hookPayload, 'tool_name') ??
-      readString(hookPayload, 'toolName') ??
-      readString(hookPayload, 'tool_display_name')
-    const toolInput =
-      deriveToolInputPreview(toolName, hookPayload.tool_input) ??
-      deriveFallbackToolInputPreview(hookPayload.tool_input)
-    const update: ToolSnapshot = toolUpdate(
-      { toolName, toolInput },
-      { hasToolInputField: hasOwnField(hookPayload, 'tool_input') }
-    )
-    if (eventName === 'PostToolUse') {
-      const responseText =
-        extractToolResponseText(hookPayload.tool_response) ??
-        extractToolResponseText(hookPayload.tool_output)
-      if (responseText) {
-        update.lastAssistantMessage = responseText
-      }
-    }
-    return update
-  }
-  if (eventName === 'Stop') {
-    const direct = readString(hookPayload, 'last_assistant_message')
-    if (direct) {
-      return { lastAssistantMessage: direct }
-    }
-    const fromTranscript = readLastCommandCodeAssistantFromTranscript(
-      hookPayload.transcript_path ?? hookPayload.transcriptPath
-    )
-    if (fromTranscript) {
-      return { lastAssistantMessage: fromTranscript }
-    }
-  }
-  return {}
-}
-
 function normalizeHookEventName(value: unknown): string {
   if (typeof value !== 'string') {
     return ''
@@ -2209,198 +1109,6 @@ function normalizeHookEventName(value: unknown): string {
     .toLowerCase()
 }
 
-function isGrokEvent(eventName: unknown, ...expected: readonly string[]): boolean {
-  const normalized = normalizeHookEventName(eventName)
-  return expected.includes(normalized)
-}
-
-function extractGrokToolFields(
-  eventName: unknown,
-  hookPayload: Record<string, unknown>,
-  grokHome?: string
-): ToolSnapshot {
-  if (isGrokEvent(eventName, 'pre_tool_use', 'post_tool_use', 'post_tool_use_failure')) {
-    const update: ToolSnapshot = {}
-    if (isGrokEvent(eventName, 'post_tool_use_failure')) {
-      Object.assign(update, clearActiveToolFieldsUpdate())
-    } else {
-      const toolName =
-        readString(hookPayload, 'toolName') ??
-        readString(hookPayload, 'tool_name') ??
-        readString(hookPayload, 'name')
-      const rawInput =
-        hookPayload.toolInput ??
-        hookPayload.tool_input ??
-        hookPayload.input ??
-        hookPayload.arguments
-      const toolInput =
-        deriveToolInputPreview(toolName, rawInput) ?? deriveFallbackToolInputPreview(rawInput)
-      // Why: Grok's ask_user_question is auto-allowed via PreToolUse, not PermissionRequest; capture full payload for the live card.
-      const interactivePrompt = deriveInteractivePrompt(toolName, rawInput, eventName)
-      Object.assign(
-        update,
-        toolUpdate(
-          { toolName, toolInput, interactivePrompt },
-          {
-            hasToolInputField: hasAnyOwnField(hookPayload, [
-              'toolInput',
-              'tool_input',
-              'input',
-              'arguments'
-            ])
-          }
-        )
-      )
-    }
-    if (isGrokEvent(eventName, 'post_tool_use', 'post_tool_use_failure')) {
-      const responseText =
-        extractToolResponseText(hookPayload.toolResponse) ??
-        extractToolResponseText(hookPayload.tool_response) ??
-        extractToolResponseText(hookPayload.toolOutput) ??
-        extractToolResponseText(hookPayload.tool_output) ??
-        readString(hookPayload, 'error') ??
-        readString(hookPayload, 'message')
-      if (responseText) {
-        update.lastAssistantMessage = responseText
-      }
-    }
-    return update
-  }
-  if (isGrokEvent(eventName, 'stop', 'session_end', 'stop_failure')) {
-    const direct =
-      readString(hookPayload, 'lastAssistantMessage') ??
-      readString(hookPayload, 'last_assistant_message')
-    if (direct) {
-      return { lastAssistantMessage: direct }
-    }
-    const fromTranscript = readLastAssistantFromTranscript(
-      hookPayload.transcriptPath ?? hookPayload.transcript_path
-    )
-    if (fromTranscript) {
-      return { lastAssistantMessage: fromTranscript }
-    }
-    const fromChatHistory = readLastAssistantFromGrokChatHistory(hookPayload, grokHome)
-    if (fromChatHistory) {
-      return { lastAssistantMessage: fromChatHistory }
-    }
-  }
-  return {}
-}
-
-function extractHermesToolFields(
-  eventName: unknown,
-  hookPayload: Record<string, unknown>
-): ToolSnapshot {
-  if (
-    eventName === 'pre_tool_call' ||
-    eventName === 'post_tool_call' ||
-    eventName === 'pre_approval_request' ||
-    eventName === 'post_approval_response'
-  ) {
-    const toolName =
-      readString(hookPayload, 'tool_name') ??
-      readString(hookPayload, 'name') ??
-      (eventName === 'pre_approval_request' || eventName === 'post_approval_response'
-        ? 'approval'
-        : undefined)
-    const toolInput =
-      deriveToolInputPreview(toolName, hookPayload.tool_input) ??
-      deriveToolInputPreview(toolName, hookPayload.args) ??
-      deriveToolInputPreview(toolName, hookPayload.input) ??
-      // Why: Hermes has many tool names; fall back to obvious arg fields so a new name still shows a value, not a blank row.
-      deriveFallbackToolInputPreview(hookPayload.tool_input) ??
-      deriveFallbackToolInputPreview(hookPayload.args) ??
-      deriveFallbackToolInputPreview(hookPayload.input) ??
-      readString(hookPayload, 'command') ??
-      readString(hookPayload, 'description')
-    const update: ToolSnapshot = toolUpdate(
-      { toolName, toolInput },
-      {
-        hasToolInputField: hasAnyOwnField(hookPayload, [
-          'tool_input',
-          'args',
-          'input',
-          'command',
-          'description'
-        ])
-      }
-    )
-    if (eventName === 'post_tool_call') {
-      const responseText =
-        extractToolResponseText(hookPayload.result) ??
-        extractToolResponseText(hookPayload.tool_response) ??
-        extractToolResponseText(hookPayload.output)
-      if (responseText) {
-        update.lastAssistantMessage = responseText
-      }
-    }
-    return update
-  }
-  if (eventName === 'post_llm_call') {
-    const message =
-      readString(hookPayload, 'last_assistant_message') ??
-      readString(hookPayload, 'assistant_response') ??
-      readString(hookPayload, 'response_text')
-    if (message) {
-      return { lastAssistantMessage: message }
-    }
-  }
-  return {}
-}
-
-function isGrokPermissionNotification(message: string | undefined): boolean {
-  if (!message) {
-    return false
-  }
-  const lower = message.toLowerCase()
-  return (
-    lower.includes('permission') ||
-    lower.includes('approval') ||
-    lower.includes('approve') ||
-    lower.includes('allow') ||
-    lower.includes('confirm') ||
-    lower.includes('needs your') ||
-    lower.includes('requires your') ||
-    lower.includes('feedback') ||
-    lower.includes('clarify') ||
-    lower.includes('question')
-  )
-}
-
-function getGrokNotificationType(hookPayload: Record<string, unknown>): string | undefined {
-  return (
-    readString(hookPayload, 'notificationType') ??
-    readString(hookPayload, 'notification_type') ??
-    readString(hookPayload, 'type')
-  )
-}
-
-function isGrokRoutinePermissionPromptNotification(
-  notificationType: string | undefined,
-  message: string | undefined,
-  level: string | undefined
-): boolean {
-  // Why: Grok emits this before each tool even under bypassPermissions; PreToolUse already covers progress.
-  return (
-    isGrokEvent(notificationType, 'permission_prompt') &&
-    message?.trim().toLowerCase() === 'tool permission requested' &&
-    (!level || level.trim().toLowerCase() === 'info')
-  )
-}
-
-function isGrokIdleNotification(message: string | undefined): boolean {
-  if (!message) {
-    return false
-  }
-  const lower = message.toLowerCase()
-  return (
-    lower.includes('type your message') ||
-    lower.includes('enter send') ||
-    lower.includes('shift-tab normal') ||
-    lower.includes('ask a side question')
-  )
-}
-
 function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
   // Why: exhaustive switch so a new AgentHookSource fails typecheck here instead of falling through to false.
   switch (source) {
@@ -2408,69 +1116,16 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
       // Why: SessionStart lands an idle row (STA-3386) and must also drop stale
       // tool/prompt caches left by the pane's previous session.
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
-    case 'kimi':
-      // Why: Kimi Code emits Claude-compatible hook events, so UserPromptSubmit is its new-turn boundary too.
-      return eventName === 'UserPromptSubmit'
     case 'codex':
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
-    case 'gemini':
-      return eventName === 'BeforeAgent'
-    case 'antigravity':
-      return eventName === 'PreInvocation'
-    case 'amp':
-      return eventName === 'agent.start'
-    case 'opencode':
-    case 'mimo-code':
-      return false
-    case 'cursor':
-      return eventName === 'beforeSubmitPrompt' || eventName === 'sessionStart'
-    case 'pi':
-    case 'omp':
-      return eventName === 'before_agent_start'
-    case 'droid':
-      return eventName === 'UserPromptSubmit'
-    case 'command-code':
-      return false
-    case 'grok':
-      return isGrokEvent(eventName, 'user_prompt_submit')
-    case 'copilot': {
-      const normalizedEventName = normalizeCopilotEventName(eventName)
-      return normalizedEventName === 'SessionStart' || normalizedEventName === 'UserPromptSubmit'
-    }
-    case 'hermes':
-      return eventName === 'pre_llm_call' || eventName === 'on_session_start'
-    case 'devin':
-      // Why: SessionStart is handled by an early return in normalizeDevinEvent, so UserPromptSubmit is Devin's real new-turn boundary here.
-      return eventName === 'UserPromptSubmit'
   }
 }
 
 function hasExplicitUserPrompt(
   source: AgentHookSource,
   eventName: unknown,
-  extractedPrompt: ExtractedPromptText,
-  resolvedPromptText: string,
-  hasTranscriptPromptEvidence = false
+  extractedPrompt: ExtractedPromptText
 ): boolean {
-  if (
-    source === 'command-code' &&
-    (eventName === 'PreToolUse' || eventName === 'Stop') &&
-    (extractedPrompt.source !== 'message' || hasTranscriptPromptEvidence) &&
-    resolvedPromptText.trim().length > 0
-  ) {
-    // Why: Command Code exposes the submitted prompt via its transcript, not direct hook fields; treat the transcript-backed prompt as explicit so telemetry covers real turns.
-    return true
-  }
-  if (
-    source === 'antigravity' &&
-    isNewTurnEvent(source, eventName) &&
-    resolvedPromptText.trim().length > 0
-  ) {
-    return true
-  }
-  if (extractedPrompt.source === 'role_user_text') {
-    return (source === 'opencode' || source === 'mimo-code') && eventName === 'MessagePart'
-  }
   if (extractedPrompt.text.length === 0) {
     return false
   }
@@ -2495,44 +1150,14 @@ function hasExplicitUserPrompt(
 function extractToolFields(
   source: AgentHookSource,
   eventName: unknown,
-  hookPayload: Record<string, unknown>,
-  options?: { grokHome?: string }
+  hookPayload: Record<string, unknown>
 ): ToolSnapshot {
-  // Why: exhaustive switch so a new AgentHookSource fails typecheck here instead of silently routing through OpenCode's extractor.
+  // Why: exhaustive switch so a new AgentHookSource fails typecheck here instead of silently routing through another extractor.
   switch (source) {
     case 'claude':
-    // Why: Kimi Code uses Claude's tool_name/tool_input payload fields verbatim.
-    // falls through
-    case 'kimi':
       return extractClaudeToolFields(eventName, hookPayload)
     case 'codex':
       return extractCodexToolFields(eventName, hookPayload)
-    case 'gemini':
-      return extractGeminiToolFields(eventName, hookPayload)
-    case 'antigravity':
-      return extractAntigravityToolFields(eventName, hookPayload)
-    case 'amp':
-      return extractAmpToolFields(eventName, hookPayload)
-    case 'opencode':
-    case 'mimo-code':
-      return extractOpenCodeToolFields(eventName, hookPayload)
-    case 'cursor':
-      return extractCursorToolFields(eventName, hookPayload)
-    case 'pi':
-    case 'omp':
-      return extractPiToolFields(eventName, hookPayload, source)
-    case 'droid':
-      return extractDroidToolFields(eventName, hookPayload)
-    case 'command-code':
-      return extractCommandCodeToolFields(eventName, hookPayload)
-    case 'grok':
-      return extractGrokToolFields(eventName, hookPayload, options?.grokHome)
-    case 'copilot':
-      return extractCopilotToolFields(normalizeCopilotEventName(eventName), hookPayload)
-    case 'hermes':
-      return extractHermesToolFields(eventName, hookPayload)
-    case 'devin':
-      return extractClaudeToolFields(eventName, hookPayload)
   }
 }
 
@@ -2789,7 +1414,7 @@ function normalizeClaudeEvent(
   }
 
   // Why: Claude's auto-allowed AskUserQuestion emits PreToolUse (not PermissionRequest; its Notification hook isn't registered) while blocked on a human answer.
-  // Treat that PreToolUse as waiting so the sidebar shows amber attention, not a spinner that decays to grey. Mirrors normalizeKimiEvent.
+  // Treat that PreToolUse as waiting so the sidebar shows amber attention, not a spinner that decays to grey. 
   const isAskUserQuestion =
     eventName === 'PreToolUse' && isAskUserQuestionTool(readString(hookPayload, 'tool_name'))
   // Why: /compact can take minutes and does not emit Stop. PreCompact marks the pane busy;
@@ -2952,403 +1577,6 @@ function buildClaudeStatusPayload(
     sessionBoundary: options.sessionBoundary,
     subagents: claudeRosterToSnapshots(state.claudeSubagentRosterByPaneKey.get(paneKey))
   })
-}
-
-// Why: Devin uses Claude-compatible payloads but its own lifecycle event set; normalize those event names while keeping Devin attribution.
-function normalizeDevinEvent(
-  state: HookListenerState,
-  eventName: unknown,
-  promptText: string,
-  paneKey: string,
-  hookPayload: Record<string, unknown>
-): ParsedAgentStatusPayload | null {
-  if (eventName === 'SessionStart') {
-    // Why: Devin emits SessionStart on idle TUI open/resume; mapping it to 'working' showed a spinner before the user typed, so only UserPromptSubmit/tool activity may create a row.
-    clearPaneTurnCacheState(state, paneKey)
-    return null
-  }
-
-  const stateName =
-    eventName === 'UserPromptSubmit' ||
-    eventName === 'PreToolUse' ||
-    eventName === 'PostToolUse' ||
-    eventName === 'PostCompaction'
-      ? 'working'
-      : eventName === 'PermissionRequest'
-        ? 'waiting'
-        : eventName === 'Stop' || eventName === 'SessionEnd'
-          ? 'done'
-          : null
-
-  if (!stateName) {
-    return null
-  }
-
-  const snapshot = resolveToolState(
-    state,
-    paneKey,
-    extractToolFields('devin', eventName, hookPayload),
-    { resetOnNewTurn: isNewTurnEvent('devin', eventName) }
-  )
-
-  const interrupted =
-    eventName === 'Stop' && hookPayload['is_interrupt'] === true ? true : undefined
-
-  return normalizeAgentStatusPayload({
-    state: stateName,
-    prompt: resolvePrompt(state, paneKey, promptText, {
-      resetOnNewTurn: isNewTurnEvent('devin', eventName)
-    }),
-    agentType: 'devin',
-    toolName: snapshot.toolName,
-    toolInput: snapshot.toolInput,
-    interactivePrompt: snapshot.interactivePrompt,
-    lastAssistantMessage: snapshot.lastAssistantMessage,
-    interrupted
-  })
-}
-
-// Why: Kimi's auto-allowed AskUserQuestion emits PreToolUse (not PermissionRequest) while awaiting an answer; treat as waiting so the UI shows the attention icon, not a spinner.
-function isKimiUserInputTool(toolName: string | undefined): boolean {
-  return toolName?.replaceAll(/[^a-z0-9]/gi, '').toLowerCase() === 'askuserquestion'
-}
-
-// Why: Kimi Code emits Claude-compatible payloads/event names; normalize but attribute to Kimi so the sidebar shows Kimi's icon/label, not Claude's.
-function normalizeKimiEvent(
-  state: HookListenerState,
-  eventName: unknown,
-  promptText: string,
-  paneKey: string,
-  hookPayload: Record<string, unknown>
-): ParsedAgentStatusPayload | null {
-  if (shouldIgnoreCompactContinuationUserPromptSubmit(eventName, promptText)) {
-    return null
-  }
-
-  const toolName = readString(hookPayload, 'tool_name')
-  const isUserInputTool = isKimiUserInputTool(toolName)
-
-  let stateName: 'working' | 'waiting' | 'done' | null = null
-  if (
-    eventName === 'UserPromptSubmit' ||
-    eventName === 'PostToolUse' ||
-    eventName === 'PostToolUseFailure' ||
-    (eventName === 'PreToolUse' && !isUserInputTool)
-  ) {
-    stateName = 'working'
-  } else if (eventName === 'PermissionRequest' || (eventName === 'PreToolUse' && isUserInputTool)) {
-    stateName = 'waiting'
-  } else if (eventName === 'Stop' || eventName === 'StopFailure') {
-    stateName = 'done'
-  }
-
-  if (!stateName) {
-    return null
-  }
-
-  const snapshot = resolveToolState(
-    state,
-    paneKey,
-    extractToolFields('kimi', eventName, hookPayload),
-    { resetOnNewTurn: isNewTurnEvent('kimi', eventName) }
-  )
-
-  const interrupted =
-    eventName === 'Stop' && hookPayload['is_interrupt'] === true ? true : undefined
-
-  return normalizeAgentStatusPayload({
-    state: stateName,
-    prompt: resolvePrompt(state, paneKey, promptText, {
-      resetOnNewTurn: isNewTurnEvent('kimi', eventName)
-    }),
-    agentType: 'kimi',
-    toolName: snapshot.toolName,
-    toolInput: snapshot.toolInput,
-    lastAssistantMessage: snapshot.lastAssistantMessage,
-    interrupted
-  })
-}
-
-function normalizeGeminiEvent(
-  state: HookListenerState,
-  eventName: unknown,
-  promptText: string,
-  paneKey: string,
-  hookPayload: Record<string, unknown>
-): ParsedAgentStatusPayload | null {
-  // Why: Gemini CLI's native pre-tool event is BeforeTool; PreToolUse/PostToolUse still accepted for legacy Antigravity-compatible payloads.
-  const stateName =
-    eventName === 'BeforeAgent' ||
-    eventName === 'BeforeTool' ||
-    eventName === 'AfterTool' ||
-    eventName === 'PreToolUse' ||
-    eventName === 'PostToolUse'
-      ? 'working'
-      : eventName === 'AfterAgent'
-        ? 'done'
-        : null
-
-  if (!stateName) {
-    return null
-  }
-
-  const snapshot = resolveToolState(
-    state,
-    paneKey,
-    extractToolFields('gemini', eventName, hookPayload),
-    { resetOnNewTurn: isNewTurnEvent('gemini', eventName) }
-  )
-
-  return normalizeAgentStatusPayload({
-    state: stateName,
-    prompt: resolvePrompt(state, paneKey, promptText, {
-      resetOnNewTurn: isNewTurnEvent('gemini', eventName)
-    }),
-    agentType: 'gemini',
-    toolName: snapshot.toolName,
-    toolInput: snapshot.toolInput,
-    interactivePrompt: snapshot.interactivePrompt,
-    lastAssistantMessage: snapshot.lastAssistantMessage
-  })
-}
-
-function isAntigravityFeedbackTool(toolName: string | undefined): boolean {
-  return toolName === 'ask_question' || toolName === 'ask_permission'
-}
-
-function isAntigravityStopStillBusy(hookPayload: Record<string, unknown>): boolean {
-  return hookPayload.fullyIdle === false || hookPayload.fully_idle === false
-}
-
-function normalizeAntigravityEvent(
-  state: HookListenerState,
-  eventName: unknown,
-  promptText: string,
-  paneKey: string,
-  hookPayload: Record<string, unknown>
-): ParsedAgentStatusPayload | null {
-  const transcriptPath = readFirstString(hookPayload, ['transcriptPath', 'transcript_path'])
-  if (eventName === 'PreInvocation') {
-    state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)
-  } else if (
-    transcriptPath &&
-    eventName !== 'Stop' &&
-    state.antigravityCompletedTranscriptByPaneKey.get(paneKey) === transcriptPath
-  ) {
-    // Why: agy can emit a bookkeeping PostToolUse after Stop; ignore it so a finished row doesn't turn back into a yellow spinner.
-    return null
-  }
-
-  const toolName = readAntigravityToolCall(hookPayload).toolName
-  const stopStillBusy = eventName === 'Stop' && isAntigravityStopStillBusy(hookPayload)
-  const stateName =
-    eventName === 'PreToolUse' && isAntigravityFeedbackTool(toolName)
-      ? 'waiting'
-      : eventName === 'Stop'
-        ? stopStillBusy
-          ? 'working'
-          : 'done'
-        : eventName === 'PreInvocation' ||
-            eventName === 'PostInvocation' ||
-            eventName === 'PreToolUse' ||
-            eventName === 'PostToolUse'
-          ? 'working'
-          : null
-
-  if (!stateName) {
-    return null
-  }
-
-  const resetsTurn = isNewTurnEvent('antigravity', eventName)
-  // Why: once the prompt is cached for this pane, avoid rescanning the (potentially large) Antigravity transcript per hook.
-  const cachedPrompt = resetsTurn ? undefined : state.lastPromptByPaneKey.get(paneKey)
-  const effectivePrompt =
-    promptText || cachedPrompt || readLastUserPromptFromTranscript(transcriptPath) || ''
-  const snapshot = resolveToolState(
-    state,
-    paneKey,
-    extractToolFields('antigravity', eventName, hookPayload),
-    { resetOnNewTurn: resetsTurn }
-  )
-
-  const payload = normalizeAgentStatusPayload({
-    state: stateName,
-    prompt: resolvePrompt(state, paneKey, effectivePrompt, {
-      resetOnNewTurn: resetsTurn
-    }),
-    agentType: 'antigravity',
-    toolName: snapshot.toolName,
-    toolInput: snapshot.toolInput,
-    interactivePrompt: snapshot.interactivePrompt,
-    lastAssistantMessage: snapshot.lastAssistantMessage
-  })
-  // Why: Antigravity can emit Stop with fullyIdle=false between tool steps; only a fully idle Stop is terminal, else the sidebar bounces done -> working and ignores later tool updates.
-  if (eventName === 'Stop' && !stopStillBusy && transcriptPath) {
-    state.antigravityCompletedTranscriptByPaneKey.set(paneKey, transcriptPath)
-  }
-  return payload
-}
-
-function normalizeAmpEvent(
-  state: HookListenerState,
-  eventName: unknown,
-  promptText: string,
-  paneKey: string,
-  hookPayload: Record<string, unknown>
-): ParsedAgentStatusPayload | null {
-  const ampCacheKey = getAmpCacheKey(paneKey, hookPayload)
-  if (eventName === 'session.start') {
-    clearPaneTurnCacheState(state, ampCacheKey)
-    if (ampCacheKey !== paneKey) {
-      clearPaneTurnCacheState(state, paneKey)
-    }
-    return null
-  }
-
-  const stateName =
-    eventName === 'agent.start' || eventName === 'tool.call' || eventName === 'tool.result'
-      ? 'working'
-      : eventName === 'agent.end'
-        ? 'done'
-        : null
-
-  if (!stateName) {
-    return null
-  }
-  if (eventName === 'agent.start') {
-    state.ampCompletedCacheKeys.delete(ampCacheKey)
-  } else if (
-    (eventName === 'tool.call' || eventName === 'tool.result') &&
-    state.ampCompletedCacheKeys.has(ampCacheKey)
-  ) {
-    // Why: Amp status posts are fire-and-forget, so drop stale tool events that arrive after the thread ended.
-    return null
-  }
-
-  const snapshot = resolveToolState(
-    state,
-    ampCacheKey,
-    extractToolFields('amp', eventName, hookPayload),
-    { resetOnNewTurn: isNewTurnEvent('amp', eventName) }
-  )
-
-  const interrupted =
-    eventName === 'agent.end' && hookPayload.status === 'cancelled' ? true : undefined
-  const explicitPrompt = readFirstString(hookPayload, [
-    'prompt',
-    'user_prompt',
-    'userPrompt',
-    'initial_prompt',
-    'initialPrompt',
-    'user_message'
-  ])
-  const canUseMessageAsPrompt =
-    eventName === 'agent.start' ||
-    (eventName === 'agent.end' && !state.lastPromptByPaneKey.has(ampCacheKey))
-  const ampPromptText = explicitPrompt ?? (canUseMessageAsPrompt ? promptText : '')
-
-  const normalized = normalizeAgentStatusPayload({
-    state: stateName,
-    // Why: Amp tool/result events may use `message` for tool output; only lifecycle events may treat it as the turn prompt.
-    prompt: resolvePrompt(state, ampCacheKey, ampPromptText, {
-      resetOnNewTurn: isNewTurnEvent('amp', eventName)
-    }),
-    agentType: 'amp',
-    toolName: snapshot.toolName,
-    toolInput: snapshot.toolInput,
-    interactivePrompt: snapshot.interactivePrompt,
-    lastAssistantMessage: snapshot.lastAssistantMessage,
-    interrupted
-  })
-  if (normalized && eventName === 'agent.end') {
-    state.ampCompletedCacheKeys.add(ampCacheKey)
-  }
-  if (normalized) {
-    pruneAmpThreadCacheKeys(state, paneKey, ampCacheKey)
-  }
-  return normalized
-}
-
-function getAmpCacheKey(paneKey: string, hookPayload: Record<string, unknown>): string {
-  const threadId = readBoundedString(
-    hookPayload,
-    ['threadId', 'threadID', 'thread_id'],
-    AMP_THREAD_ID_MAX_LENGTH
-  )
-  // Why: Amp emits events for multiple threads per pane; cache by thread internally while keeping the visible paneKey stable.
-  return threadId ? `${paneKey}\0amp:${threadId}` : paneKey
-}
-
-function pruneAmpThreadCacheKeys(
-  state: HookListenerState,
-  paneKey: string,
-  currentCacheKey: string
-): void {
-  const scopedPrefix = `${paneKey}\0amp:`
-  if (!currentCacheKey.startsWith(scopedPrefix)) {
-    return
-  }
-
-  const scopedKeys = new Set<string>()
-  for (const key of state.lastPromptByPaneKey.keys()) {
-    if (key.startsWith(scopedPrefix)) {
-      scopedKeys.add(key)
-    }
-  }
-  for (const key of state.lastToolByPaneKey.keys()) {
-    if (key.startsWith(scopedPrefix)) {
-      scopedKeys.add(key)
-    }
-  }
-  for (const key of state.ampCompletedCacheKeys) {
-    if (key.startsWith(scopedPrefix)) {
-      scopedKeys.add(key)
-    }
-  }
-
-  let overflow = scopedKeys.size - AMP_MAX_SCOPED_THREAD_CACHE_KEYS
-  if (overflow <= 0) {
-    return
-  }
-
-  // Why: Amp multiplexes many thread IDs through one pane; keep the current thread plus the most recent entries instead of retaining every completed thread until teardown.
-  for (const key of scopedKeys) {
-    if (overflow <= 0) {
-      break
-    }
-    if (key === currentCacheKey) {
-      continue
-    }
-    state.lastPromptByPaneKey.delete(key)
-    state.lastToolByPaneKey.delete(key)
-    state.ampCompletedCacheKeys.delete(key)
-    overflow--
-  }
-}
-
-function hasExplicitPromptForSource(
-  source: AgentHookSource,
-  eventName: unknown,
-  promptText: string,
-  hookPayload: Record<string, unknown>
-): boolean {
-  if (source !== 'amp') {
-    return promptText.length > 0
-  }
-  if (
-    readFirstString(hookPayload, [
-      'prompt',
-      'user_prompt',
-      'userPrompt',
-      'initial_prompt',
-      'initialPrompt',
-      'user_message'
-    ])
-  ) {
-    return true
-  }
-  // Why: Amp tool/result `message` is output text, not a user prompt.
-  return eventName === 'agent.start' && promptText.length > 0
 }
 
 function getOrCreateCodexSubagentRoster(
@@ -3637,456 +1865,6 @@ function normalizeCodexEvent(
   })
 }
 
-function normalizeOpenCodeFamilyEvent(
-  source: 'opencode' | 'mimo-code',
-  state: HookListenerState,
-  eventName: unknown,
-  promptText: string,
-  paneKey: string,
-  hookPayload: Record<string, unknown>
-): ParsedAgentStatusPayload | null {
-  const stateName =
-    eventName === 'SessionBusy' || eventName === 'MessagePart'
-      ? 'working'
-      : eventName === 'SessionIdle'
-        ? 'done'
-        : eventName === 'PermissionRequest' || eventName === 'AskUserQuestion'
-          ? 'waiting'
-          : null
-
-  if (!stateName) {
-    return null
-  }
-
-  const snapshot = resolveToolState(
-    state,
-    paneKey,
-    extractToolFields(source, eventName, hookPayload),
-    { resetOnNewTurn: isNewTurnEvent(source, eventName) }
-  )
-
-  return normalizeAgentStatusPayload({
-    state: stateName,
-    prompt: resolvePrompt(state, paneKey, promptText, {
-      resetOnNewTurn: isNewTurnEvent(source, eventName)
-    }),
-    agentType: source,
-    toolName: snapshot.toolName,
-    toolInput: snapshot.toolInput,
-    interactivePrompt: snapshot.interactivePrompt,
-    lastAssistantMessage: snapshot.lastAssistantMessage
-  })
-}
-
-function normalizeCursorEvent(
-  state: HookListenerState,
-  eventName: unknown,
-  promptText: string,
-  paneKey: string,
-  hookPayload: Record<string, unknown>
-): ParsedAgentStatusPayload | null {
-  // Why: Cursor can emit final response text after `stop`; enrich the completed row, don't resurrect the agent as working.
-  const previousStatus = state.lastStatusByPaneKey.get(paneKey)?.payload
-  const stateName =
-    eventName === 'beforeSubmitPrompt' ||
-    eventName === 'sessionStart' ||
-    eventName === 'preToolUse' ||
-    eventName === 'postToolUse' ||
-    eventName === 'postToolUseFailure' ||
-    // Why: these fire on every shell/MCP invocation (pre-execution gates, not just approval); treat as working to avoid waiting-notification spam.
-    eventName === 'beforeShellExecution' ||
-    eventName === 'beforeMCPExecution'
-      ? 'working'
-      : eventName === 'afterAgentResponse'
-        ? previousStatus?.state === 'done' && previousStatus.agentType === 'cursor'
-          ? 'done'
-          : 'working'
-        : eventName === 'stop' || eventName === 'sessionEnd'
-          ? 'done'
-          : null
-
-  if (!stateName) {
-    return null
-  }
-
-  const snapshot = resolveToolState(
-    state,
-    paneKey,
-    extractToolFields('cursor', eventName, hookPayload),
-    { resetOnNewTurn: isNewTurnEvent('cursor', eventName) }
-  )
-
-  const interrupted =
-    eventName === 'stop' &&
-    typeof hookPayload.status === 'string' &&
-    hookPayload.status !== 'completed'
-      ? true
-      : undefined
-
-  return normalizeAgentStatusPayload({
-    state: stateName,
-    prompt: resolvePrompt(state, paneKey, promptText, {
-      resetOnNewTurn: isNewTurnEvent('cursor', eventName)
-    }),
-    agentType: 'cursor',
-    toolName: snapshot.toolName,
-    toolInput: snapshot.toolInput,
-    interactivePrompt: snapshot.interactivePrompt,
-    lastAssistantMessage: snapshot.lastAssistantMessage,
-    interrupted
-  })
-}
-
-// Why: Copilot PermissionRequest fires before allow/ask/deny (stays working); ask_user and notification prompts are the real blocked signals.
-function normalizeCopilotEvent(
-  state: HookListenerState,
-  eventName: unknown,
-  promptText: string,
-  paneKey: string,
-  hookPayload: Record<string, unknown>
-): ParsedAgentStatusPayload | null {
-  const normalizedEventName = normalizeCopilotEventName(
-    resolveCopilotEventName(eventName, hookPayload)
-  )
-  const notificationType = readFirstString(hookPayload, ['notification_type', 'notificationType'])
-  const isBlockingNotification =
-    normalizedEventName === 'Notification' &&
-    (notificationType === 'permission_prompt' || notificationType === 'elicitation_dialog')
-  const toolSnapshot = extractToolFields('copilot', normalizedEventName, hookPayload)
-  const isAskUserPrompt =
-    (normalizedEventName === 'PreToolUse' || normalizedEventName === 'PermissionRequest') &&
-    isAskUserTool(toolSnapshot.toolName)
-  const stateName =
-    normalizedEventName === 'SessionStart' ||
-    normalizedEventName === 'UserPromptSubmit' ||
-    normalizedEventName === 'PostToolUse' ||
-    normalizedEventName === 'PostToolUseFailure'
-      ? 'working'
-      : isBlockingNotification || isAskUserPrompt
-        ? 'blocked'
-        : normalizedEventName === 'PreToolUse' || normalizedEventName === 'PermissionRequest'
-          ? 'working'
-          : normalizedEventName === 'Stop' || normalizedEventName === 'SessionEnd'
-            ? 'done'
-            : normalizedEventName === 'ErrorOccurred'
-              ? hookPayload.recoverable === true
-                ? 'working'
-                : 'done'
-              : null
-
-  if (!stateName) {
-    return null
-  }
-
-  const snapshot = resolveToolState(state, paneKey, toolSnapshot, {
-    resetOnNewTurn: isNewTurnEvent('copilot', normalizedEventName)
-  })
-
-  const effectivePrompt = normalizedEventName === 'Notification' ? '' : promptText
-
-  return normalizeAgentStatusPayload({
-    state: stateName,
-    prompt: resolvePrompt(state, paneKey, effectivePrompt, {
-      resetOnNewTurn: isNewTurnEvent('copilot', normalizedEventName)
-    }),
-    agentType: 'copilot',
-    toolName: snapshot.toolName,
-    toolInput: snapshot.toolInput,
-    interactivePrompt: snapshot.interactivePrompt,
-    lastAssistantMessage: snapshot.lastAssistantMessage
-  })
-}
-
-function normalizePiCompatibleEvent(
-  state: HookListenerState,
-  agentType: 'pi' | 'omp',
-  eventName: unknown,
-  promptText: string,
-  paneKey: string,
-  hookPayload: Record<string, unknown>
-): ParsedAgentStatusPayload | null {
-  if (agentType === 'pi' && eventName === 'session_start') {
-    // Why: Pi's session_start fires on TUI open/resume; discard stale turn details, no working row before user activity.
-    clearPaneTurnCacheState(state, paneKey)
-    return null
-  }
-
-  // Why: gate on the event's own tool_name (not a merged snapshot) so a stale cached ask_user_question can't re-enter blocked.
-  const isPiAskUserQuestion =
-    agentType === 'pi' &&
-    isAskUserQuestionTool(readString(hookPayload, 'tool_name')) &&
-    (eventName === 'tool_call' || eventName === 'tool_execution_start')
-
-  const stateName = isPiAskUserQuestion
-    ? 'blocked'
-    : eventName === 'before_agent_start' ||
-        eventName === 'agent_start' ||
-        eventName === 'tool_call' ||
-        eventName === 'tool_execution_start' ||
-        eventName === 'tool_execution_end' ||
-        eventName === 'message_end'
-      ? 'working'
-      : eventName === 'agent_end'
-        ? 'done'
-        : null
-
-  if (!stateName) {
-    return null
-  }
-
-  const snapshot = resolveToolState(
-    state,
-    paneKey,
-    extractToolFields(agentType, eventName, hookPayload),
-    { resetOnNewTurn: isNewTurnEvent(agentType, eventName) }
-  )
-
-  return normalizeAgentStatusPayload({
-    state: stateName,
-    prompt: resolvePrompt(state, paneKey, promptText, {
-      resetOnNewTurn: isNewTurnEvent(agentType, eventName)
-    }),
-    agentType,
-    toolName: snapshot.toolName,
-    toolInput: snapshot.toolInput,
-    interactivePrompt: snapshot.interactivePrompt,
-    lastAssistantMessage: snapshot.lastAssistantMessage
-  })
-}
-
-function normalizeDroidEvent(
-  state: HookListenerState,
-  eventName: unknown,
-  promptText: string,
-  paneKey: string,
-  hookPayload: Record<string, unknown>
-): ParsedAgentStatusPayload | null {
-  if (eventName === 'SessionStart') {
-    // Why: Droid's SessionStart fires while idle (TUI open/resume); wait for real activity before a working row.
-    clearPaneTurnCacheState(state, paneKey)
-    return null
-  }
-
-  const notificationMessage = readString(hookPayload, 'message')
-  const droidToolName = readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name')
-  let stateName: 'working' | 'waiting' | 'done' | null = null
-  if (
-    eventName === 'PreToolUse' &&
-    (isDroidAskUserTool(droidToolName) || isDroidHighRiskToolUse(hookPayload))
-  ) {
-    // Why: Droid surfaces AskUser and high-risk approvals as PreToolUse; the approval path emits no Notification hook.
-    stateName = 'waiting'
-  } else if (
-    eventName === 'UserPromptSubmit' ||
-    eventName === 'PreToolUse' ||
-    eventName === 'PostToolUse'
-  ) {
-    stateName = 'working'
-  } else if (eventName === 'Stop') {
-    stateName = 'done'
-  } else if (eventName === 'PermissionRequest') {
-    stateName = 'waiting'
-  } else if (eventName === 'Notification' && isDroidPermissionNotification(notificationMessage)) {
-    stateName = 'waiting'
-  } else if (eventName === 'Notification' && isDroidIdleNotification(notificationMessage)) {
-    // Why: Droid emits no Stop on user-interrupt, only an idle notification when ready again.
-    stateName = 'done'
-  }
-  if (!stateName) {
-    return null
-  }
-
-  const snapshot = resolveToolState(
-    state,
-    paneKey,
-    extractToolFields('droid', eventName, hookPayload),
-    { resetOnNewTurn: isNewTurnEvent('droid', eventName) }
-  )
-
-  // Why: Droid Notification.message is status text, not the prompt; '' keeps resolvePrompt's cached UserPromptSubmit value.
-  const effectivePrompt = eventName === 'Notification' ? '' : promptText
-
-  return normalizeAgentStatusPayload({
-    state: stateName,
-    prompt: resolvePrompt(state, paneKey, effectivePrompt, {
-      resetOnNewTurn: isNewTurnEvent('droid', eventName)
-    }),
-    agentType: 'droid',
-    toolName: snapshot.toolName,
-    toolInput: snapshot.toolInput,
-    interactivePrompt: snapshot.interactivePrompt,
-    lastAssistantMessage: snapshot.lastAssistantMessage
-  })
-}
-
-function normalizeCommandCodeEvent(
-  state: HookListenerState,
-  eventName: unknown,
-  promptText: string,
-  paneKey: string,
-  hookPayload: Record<string, unknown>
-): ParsedAgentStatusPayload | null {
-  const stateName =
-    eventName === 'PreToolUse' || eventName === 'PostToolUse'
-      ? 'working'
-      : eventName === 'Stop'
-        ? 'done'
-        : null
-  if (!stateName) {
-    return null
-  }
-
-  const snapshot = resolveToolState(
-    state,
-    paneKey,
-    extractToolFields('command-code', eventName, hookPayload),
-    { resetOnNewTurn: isNewTurnEvent('command-code', eventName) }
-  )
-
-  return normalizeAgentStatusPayload({
-    state: stateName,
-    prompt: resolvePrompt(state, paneKey, promptText, {
-      resetOnNewTurn: isNewTurnEvent('command-code', eventName)
-    }),
-    agentType: 'command-code',
-    toolName: snapshot.toolName,
-    toolInput: snapshot.toolInput,
-    interactivePrompt: snapshot.interactivePrompt,
-    lastAssistantMessage: snapshot.lastAssistantMessage
-  })
-}
-
-function normalizeGrokEvent(
-  state: HookListenerState,
-  eventName: unknown,
-  promptText: string,
-  paneKey: string,
-  hookPayload: Record<string, unknown>,
-  grokHome?: string
-): ParsedAgentStatusPayload | null {
-  if (isGrokEvent(eventName, 'session_start')) {
-    // Why: SessionStart resets stale per-turn state but must not create a working row before any prompt/tool event.
-    clearPaneTurnCacheState(state, paneKey)
-    return null
-  }
-
-  const notificationMessage = readString(hookPayload, 'message')
-  const notificationType = getGrokNotificationType(hookPayload)
-  const notificationLevel = readString(hookPayload, 'level')
-  const preToolName =
-    readString(hookPayload, 'toolName') ??
-    readString(hookPayload, 'tool_name') ??
-    readString(hookPayload, 'name')
-  // Why: Grok's ask_user_question is auto-allowed, so it fires PreToolUse while blocked on a human answer; map to waiting.
-  const isUserInputPreTool =
-    isGrokEvent(eventName, 'pre_tool_use') && isAskUserQuestionTool(preToolName)
-
-  let stateName: 'working' | 'waiting' | 'done' | null = null
-  if (
-    isGrokEvent(eventName, 'user_prompt_submit', 'post_tool_use', 'post_tool_use_failure') ||
-    (isGrokEvent(eventName, 'pre_tool_use') && !isUserInputPreTool)
-  ) {
-    stateName = 'working'
-  } else if (isUserInputPreTool) {
-    stateName = 'waiting'
-  } else if (isGrokEvent(eventName, 'stop', 'session_end', 'stop_failure')) {
-    stateName = 'done'
-  } else if (
-    isGrokEvent(eventName, 'notification') &&
-    isGrokRoutinePermissionPromptNotification(
-      notificationType,
-      notificationMessage,
-      notificationLevel
-    )
-  ) {
-    return null
-  } else if (
-    isGrokEvent(eventName, 'notification') &&
-    isGrokPermissionNotification(notificationMessage)
-  ) {
-    stateName = 'waiting'
-  } else if (
-    isGrokEvent(eventName, 'notification') &&
-    isGrokIdleNotification(notificationMessage)
-  ) {
-    stateName = 'done'
-  }
-  if (!stateName) {
-    return null
-  }
-
-  const snapshot = resolveToolState(
-    state,
-    paneKey,
-    extractToolFields('grok', eventName, hookPayload, { grokHome }),
-    { resetOnNewTurn: isNewTurnEvent('grok', eventName) }
-  )
-
-  // Why: Grok Notification.message is status UI text, not the prompt; '' preserves the cached UserPromptSubmit.
-  const effectivePrompt = isGrokEvent(eventName, 'notification')
-    ? ''
-    : stripGrokUserQueryWrapper(promptText)
-
-  return normalizeAgentStatusPayload({
-    state: stateName,
-    prompt: resolvePrompt(state, paneKey, effectivePrompt, {
-      resetOnNewTurn: isNewTurnEvent('grok', eventName)
-    }),
-    agentType: 'grok',
-    toolName: snapshot.toolName,
-    toolInput: snapshot.toolInput,
-    interactivePrompt: snapshot.interactivePrompt,
-    lastAssistantMessage: snapshot.lastAssistantMessage
-  })
-}
-
-function normalizeHermesEvent(
-  state: HookListenerState,
-  eventName: unknown,
-  promptText: string,
-  paneKey: string,
-  hookPayload: Record<string, unknown>
-): ParsedAgentStatusPayload | null {
-  const stateName =
-    eventName === 'pre_approval_request'
-      ? 'waiting'
-      : eventName === 'post_llm_call' ||
-          eventName === 'on_session_end' ||
-          eventName === 'on_session_finalize' ||
-          eventName === 'on_session_reset'
-        ? 'done'
-        : eventName === 'on_session_start' ||
-            eventName === 'pre_llm_call' ||
-            eventName === 'pre_tool_call' ||
-            eventName === 'post_tool_call' ||
-            eventName === 'post_approval_response'
-          ? 'working'
-          : null
-
-  if (!stateName) {
-    return null
-  }
-
-  const snapshot = resolveToolState(
-    state,
-    paneKey,
-    extractToolFields('hermes', eventName, hookPayload),
-    { resetOnNewTurn: isNewTurnEvent('hermes', eventName) }
-  )
-
-  return normalizeAgentStatusPayload({
-    state: stateName,
-    prompt: resolvePrompt(state, paneKey, promptText, {
-      resetOnNewTurn: isNewTurnEvent('hermes', eventName)
-    }),
-    agentType: 'hermes',
-    toolName: snapshot.toolName,
-    toolInput: snapshot.toolInput,
-    interactivePrompt: snapshot.interactivePrompt,
-    lastAssistantMessage: snapshot.lastAssistantMessage
-  })
-}
-
 function readStringField(record: Record<string, unknown>, key: string): string | undefined {
   const value = record[key]
   if (typeof value !== 'string') {
@@ -4145,7 +1923,6 @@ export function normalizeHookPayload(
   const launchToken = readStringField(record, 'launchToken')
 
   const hookPayloadRecord = hookPayload as Record<string, unknown>
-  let promptInteractionKey: string | undefined
   const eventName =
     readFirstString(record, ['hook_event_name', 'hookEventName', 'hook_type', 'hookType']) ??
     hookPayloadRecord.hook_event_name ??
@@ -4198,8 +1975,6 @@ export function normalizeHookPayload(
   }
   const extractedPrompt = extractPromptText(hookPayload as Record<string, unknown>)
   const promptText = extractedPrompt.text
-  let resolvedPromptText = promptText
-  let hasTranscriptPromptEvidence = false
   // Why: exhaustive switch so a new AgentHookSource fails typecheck here instead of silently misrouting.
   let payload: ParsedAgentStatusPayload | null
   switch (source) {
@@ -4209,123 +1984,10 @@ export function normalizeHookPayload(
     case 'codex':
       payload = normalizeCodexEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
-    case 'gemini':
-      payload = normalizeGeminiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
-      break
-    case 'antigravity':
-      if (isNewTurnEvent('antigravity', eventName)) {
-        resolvedPromptText =
-          promptText ||
-          readLastUserPromptFromTranscript(
-            readFirstString(hookPayloadRecord, ['transcriptPath', 'transcript_path'])
-          ) ||
-          ''
-      }
-      payload = normalizeAntigravityEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
-      break
-    case 'amp':
-      payload = normalizeAmpEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
-      break
-    case 'opencode':
-    case 'mimo-code':
-      if (extractedPrompt.source === 'role_user_text') {
-        const messageId = readFirstString(hookPayloadRecord, [
-          'messageID',
-          'messageId',
-          'message_id'
-        ])
-        const prefix = source === 'mimo-code' ? 'mimo-code-message' : 'opencode-message'
-        promptInteractionKey = messageId ? `${prefix}-${messageId}` : undefined
-      }
-      payload = normalizeOpenCodeFamilyEvent(
-        source,
-        state,
-        eventName,
-        promptText,
-        paneKey,
-        hookPayloadRecord
-      )
-      break
-    case 'cursor':
-      payload = normalizeCursorEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
-      break
-    case 'pi':
-      payload = normalizePiCompatibleEvent(
-        state,
-        'pi',
-        eventName,
-        promptText,
-        paneKey,
-        hookPayloadRecord
-      )
-      break
-    case 'omp':
-      payload = normalizePiCompatibleEvent(
-        state,
-        'omp',
-        eventName,
-        promptText,
-        paneKey,
-        hookPayloadRecord
-      )
-      break
-    case 'droid':
-      payload = normalizeDroidEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
-      break
-    case 'command-code':
-      {
-        const transcriptPrompt = readLastCommandCodeUserPromptEntryFromTranscript(
-          hookPayloadRecord.transcript_path ?? hookPayloadRecord.transcriptPath
-        )
-        hasTranscriptPromptEvidence = transcriptPrompt !== undefined
-        promptInteractionKey = transcriptPrompt?.interactionKey
-        resolvedPromptText = transcriptPrompt?.text ?? ''
-        if (promptText && extractedPrompt.source !== 'message') {
-          resolvedPromptText = promptText
-        }
-      }
-      payload = normalizeCommandCodeEvent(
-        state,
-        eventName,
-        resolvedPromptText,
-        paneKey,
-        hookPayloadRecord
-      )
-      break
-    case 'grok':
-      payload = normalizeGrokEvent(
-        state,
-        eventName,
-        promptText,
-        paneKey,
-        hookPayloadRecord,
-        readGrokHomeEnvelope(record)
-      )
-      break
-    case 'copilot':
-      payload = normalizeCopilotEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
-      break
-    case 'hermes':
-      payload = normalizeHermesEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
-      break
-    case 'devin':
-      payload = normalizeDevinEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
-      break
-    case 'kimi':
-      payload = normalizeKimiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
-      break
   }
 
   // Why: connectionId is null here; ingestRemote stamps it from mux identity on receive. See docs/design/agent-status-over-ssh.md §5.
-  const providerSessionOnly =
-    source === 'pi' && eventName === 'session_start' && providerSession !== null
-  // Why: Pi session_start carries resume identity while idle; providerSessionOnly makes receivers discard the placeholder row.
-  const transportPayload =
-    payload ??
-    (providerSessionOnly
-      ? normalizeAgentStatusPayload({ state: 'done', prompt: '', agentType: 'pi' })
-      : null)
-  return transportPayload
+  return payload
     ? {
         paneKey,
         source,
@@ -4333,19 +1995,7 @@ export function normalizeHookPayload(
         tabId,
         worktreeId,
         connectionId: null,
-        hasExplicitPrompt:
-          source === 'amp'
-            ? hasExplicitPromptForSource(source, eventName, promptText, hookPayloadRecord)
-              ? true
-              : undefined
-            : hasExplicitUserPrompt(
-                source,
-                eventName,
-                extractedPrompt,
-                resolvedPromptText,
-                hasTranscriptPromptEvidence
-              ),
-        promptInteractionKey,
+        hasExplicitPrompt: hasExplicitUserPrompt(source, eventName, extractedPrompt),
         hookEventName: typeof eventName === 'string' ? eventName : undefined,
         providerPromptId,
         compactTrigger,
@@ -4360,8 +2010,7 @@ export function normalizeHookPayload(
             }
           : {}),
         ...(providerSession ? { providerSession } : {}),
-        ...(providerSessionOnly ? { providerSessionOnly: true } : {}),
-        payload: transportPayload
+        payload
       }
     : null
 }
@@ -4370,22 +2019,7 @@ export function normalizeHookPayload(
 
 export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> = Object.freeze({
   '/hook/claude': 'claude',
-  '/hook/codex': 'codex',
-  '/hook/gemini': 'gemini',
-  '/hook/antigravity': 'antigravity',
-  '/hook/amp': 'amp',
-  '/hook/opencode': 'opencode',
-  '/hook/mimo-code': 'mimo-code',
-  '/hook/cursor': 'cursor',
-  '/hook/pi': 'pi',
-  '/hook/omp': 'omp',
-  '/hook/droid': 'droid',
-  '/hook/command-code': 'command-code',
-  '/hook/grok': 'grok',
-  '/hook/copilot': 'copilot',
-  '/hook/hermes': 'hermes',
-  '/hook/devin': 'devin',
-  '/hook/kimi': 'kimi'
+  '/hook/codex': 'codex'
 })
 
 export function resolveHookSource(pathname: string): AgentHookSource | null {
@@ -4395,7 +2029,7 @@ export function resolveHookSource(pathname: string): AgentHookSource | null {
 // ─── Endpoint-file writing ──────────────────────────────────────────
 
 export function getEndpointFileName(): string {
-  // Why: per-platform extension lets hook scripts source the file natively (POSIX `. "$file"` / Windows `call "%file%"`); the OpenCode plugin regex accepts both shapes.
+  // Why: per-platform extension lets hook scripts source the file natively (POSIX `. "$file"` / Windows `call "%file%"`).
   return process.platform === 'win32' ? 'endpoint.cmd' : 'endpoint.env'
 }
 

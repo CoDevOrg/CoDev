@@ -15,7 +15,7 @@ export function getCommitMessageModelDiscoveryHostKey(
   if (connectionId === undefined) {
     return UNKNOWN_COMMIT_MESSAGE_HOST_KEY
   }
-  return connectionId ? `ssh:${connectionId}` : LOCAL_COMMIT_MESSAGE_HOST_KEY
+  return connectionId ? `remote:${connectionId}` : LOCAL_COMMIT_MESSAGE_HOST_KEY
 }
 
 export function getCommitMessageModelDiscoveryHostKeyForScope(

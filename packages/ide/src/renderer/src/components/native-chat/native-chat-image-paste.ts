@@ -12,19 +12,7 @@ import { isImageDropPath } from '../terminal-pane/terminal-drop-image-path'
  *  no confirmed mechanism. */
 export type AgentImageHandling = 'attachment' | 'unsupported'
 
-const IMAGE_ATTACHMENT_AGENTS: ReadonlySet<AgentType> = new Set<AgentType>([
-  'claude',
-  'openclaude',
-  'codex',
-  'gemini',
-  'cursor',
-  'copilot',
-  'droid',
-  // Why: Grok CLI pastes images via bracketed path / image chips (see xAI
-  // terminal docs + pager paste.rs). Keep it on the same attachment path as
-  // Claude/Codex rather than treating path paste as unsupported text.
-  'grok'
-])
+const IMAGE_ATTACHMENT_AGENTS: ReadonlySet<AgentType> = new Set<AgentType>(['claude', 'codex'])
 
 export function getAgentImageHandling(agent: AgentType): AgentImageHandling {
   return IMAGE_ATTACHMENT_AGENTS.has(agent) ? 'attachment' : 'unsupported'

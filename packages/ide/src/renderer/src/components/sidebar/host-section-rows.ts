@@ -10,7 +10,6 @@ import {
 } from '../../../../shared/execution-host'
 import type { ExecutionHostHealth } from '../../../../shared/execution-host-registry'
 import type { RuntimeCompatVerdict } from '../../../../shared/protocol-compat'
-import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import type { FolderWorkspace, ProjectGroup, Repo } from '../../../../shared/types'
 import type { Row } from './worktree-list-groups'
 
@@ -25,7 +24,6 @@ export type HostHeaderRow = {
   // Why: blocked-host guidance in the header menu needs the verdict reason so
   // it can deep-link an "Update server/client required" row per skew direction.
   compatibility?: RuntimeCompatVerdict
-  connectionStatus?: SshConnectionStatus
   collapsed: boolean
   count: number
 }
@@ -39,7 +37,6 @@ export type HostSectionOption = {
   detail: string
   health: ExecutionHostHealth
   compatibility?: RuntimeCompatVerdict
-  connectionStatus?: SshConnectionStatus
 }
 
 function getRepoHostId(
@@ -54,17 +51,12 @@ function getRepoHostId(
   return defaultHostId
 }
 
-function getSshHostId(connectionId: string): ExecutionHostId {
-  return `ssh:${encodeURIComponent(connectionId)}` as ExecutionHostId
-}
-
 function getFolderWorkspaceHostId(
-  folderWorkspace: Pick<FolderWorkspace, 'connectionId'>,
-  projectGroup: Pick<ProjectGroup, 'connectionId'>,
+  _folderWorkspace: Pick<FolderWorkspace, 'connectionId'>,
+  _projectGroup: Pick<ProjectGroup, 'connectionId'>,
   defaultHostId: ExecutionHostId
 ): ExecutionHostId {
-  const connectionId = folderWorkspace.connectionId ?? projectGroup.connectionId
-  return connectionId ? getSshHostId(connectionId) : defaultHostId
+  return defaultHostId
 }
 
 function getRowHostId(row: Row, defaultHostId: ExecutionHostId): ExecutionHostId | null {
@@ -86,7 +78,7 @@ function getFallbackHost(hostId: ExecutionHostId): HostSectionOption {
   const isLocal = hostId === LOCAL_EXECUTION_HOST_ID
   return {
     id: hostId,
-    kind: isLocal ? 'local' : hostId.startsWith('ssh:') ? 'ssh' : 'runtime',
+    kind: isLocal ? 'local' : 'runtime',
     label: isLocal ? getLocalExecutionHostLabel() : hostId,
     detail: isLocal ? 'This computer' : 'Host',
     health: isLocal ? 'local' : 'available'
@@ -299,7 +291,6 @@ export function addHostSectionRows(args: {
       detail: host.detail,
       health: host.health,
       compatibility: host.compatibility,
-      connectionStatus: host.connectionStatus,
       collapsed,
       count: countWorktreeRows(hostRows)
     })

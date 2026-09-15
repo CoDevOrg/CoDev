@@ -59,19 +59,7 @@ const RightSidebarTabParam = z.custom<StaticRightSidebarTab | `plugin:${string}`
   { message: 'Unknown right sidebar tab' }
 )
 const AgentActivityDisplayMode = z.enum(['compact', 'full'])
-const StatusBarItem = z.enum([
-  'claude',
-  'codex',
-  'gemini',
-  'antigravity',
-  'opencode-go',
-  'kimi',
-  'minimax',
-  'grok',
-  'ssh',
-  'resource-usage',
-  'ports'
-])
+const StatusBarItem = z.enum(['claude', 'codex', 'ssh', 'resource-usage', 'ports'])
 const WorkspaceStatusDefinition = z.object({
   id: z.string(),
   label: z.string(),
@@ -167,8 +155,6 @@ export const SettingsUpdate = z
     defaultRepoSelection: z.array(z.string()).nullable().optional(),
     defaultLinearTeamSelection: z.array(z.string()).nullable().optional(),
     compactWorktreeCards: z.boolean().optional(),
-    minimaxGroupId: z.string().optional(),
-    minimaxUsageModels: z.string().optional(),
     githubProjects: GitHubProjectSettings.optional(),
     prBotAuthorOverrides: z
       .unknown()
@@ -243,10 +229,6 @@ const UiUpdateFields = z
     _workspaceStatusesDefaultVisualsMigrated: z.boolean().optional(),
     statusBarItems: z.array(StatusBarItem).optional(),
     _portsStatusBarDefaultAdded: z.boolean().optional(),
-    _kimiStatusBarDefaultAdded: z.boolean().optional(),
-    _minimaxStatusBarDefaultAdded: z.boolean().optional(),
-    _antigravityStatusBarDefaultAdded: z.boolean().optional(),
-    _grokStatusBarDefaultAdded: z.boolean().optional(),
     statusBarVisible: z.boolean().optional(),
     usagePercentageDisplay: z.enum(['used', 'remaining']).optional(),
     statusBarUsageMode: z.enum(['verbose', 'compact']).optional(),

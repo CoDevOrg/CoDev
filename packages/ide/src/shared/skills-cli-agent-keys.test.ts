@@ -106,15 +106,6 @@ describe('skills CLI agent keys', () => {
     )
   })
 
-  it("follows Orca's own evidence for the two non-obvious mappings", () => {
-    // Why: src/shared/native-chat-agent-profiles.ts states OpenClaude reads
-    // Claude-owned roots, so it is not unmappable.
-    expect(SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT.openclaude).toBe('claude-code')
-    // Why: Orca detects trae via `traecli`, which tui-agent-config calls an alias
-    // only TRAE CN ships, so the CN directory is the right target.
-    expect(SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT.trae).toBe('trae-cn')
-  })
-
   it('rejects values the skills CLI would drop, and allows the explicit wildcard', () => {
     for (const bad of ['-y', '--copy', '', ' ', 'a b', 'a,b']) {
       expect(isSkillsCliAgentKeyShaped(bad), bad).toBe(false)
@@ -125,13 +116,16 @@ describe('skills CLI agent keys', () => {
   })
 
   it('always includes the shared directory and drops unmappable agents', () => {
-    expect(toSkillsCliAgentKeys(['claude', 'rovo'])).toEqual([
+    expect(toSkillsCliAgentKeys(['claude', 'codex'])).toEqual([
       'claude-code',
-      'rovodev',
+      'codex',
       'universal'
     ])
-    // Why: `omp` has no skills-CLI equivalent, so it must not reach the argv.
-    expect(toSkillsCliAgentKeys(['omp'])).toEqual(['universal'])
+    // Why: Agent Teams is Claude under the hood, so it collapses onto the same key.
+    expect(toSkillsCliAgentKeys(['claude', 'claude-agent-teams'])).toEqual([
+      'claude-code',
+      'universal'
+    ])
     expect(toSkillsCliAgentKeys([])).toEqual(['universal'])
   })
 })

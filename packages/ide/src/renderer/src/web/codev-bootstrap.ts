@@ -27,13 +27,6 @@ export type CodevBootstrap = {
    * settings and the workspace chrome are hidden.
    */
   settingsOnly?: boolean
-  /**
-   * Whether this member has linked a Cursor credential. Unlike Claude/Codex,
-   * Cursor has no host-injected fallback — offering it as a switch target
-   * without this would strand an unlinked member on cursor-agent's own
-   * sign-in wall.
-   */
-  cursorAvailable?: boolean
 }
 
 function readDefaultAgent(value: string | null): CodevDefaultChatAgent | null {
@@ -66,7 +59,6 @@ export function readCodevBootstrap(location: Pick<Location, 'hash'>): CodevBoots
   const memberIdParam = params.get('codevMemberId')
   const memberId = memberIdParam && CODEV_MEMBER_ID.test(memberIdParam) ? memberIdParam : null
   const settingsOnly = params.get('codevSettingsOnly') === '1'
-  const cursorAvailable = params.get('codevCursorAvailable') === '1'
   if (!projectPath || (projectKind !== 'git' && projectKind !== 'folder')) {
     return null
   }
@@ -83,7 +75,6 @@ export function readCodevBootstrap(location: Pick<Location, 'hash'>): CodevBoots
     ...(projectName ? { projectName } : {}),
     ...(defaultAgent ? { defaultAgent } : {}),
     ...(memberId ? { memberId } : {}),
-    ...(settingsOnly ? { settingsOnly: true } : {}),
-    ...(cursorAvailable ? { cursorAvailable: true } : {})
+    ...(settingsOnly ? { settingsOnly: true } : {})
   }
 }

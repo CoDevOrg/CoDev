@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../shared/project-host-setup-projection'
-import type { SshTarget } from '../../shared/ssh-types'
 import type { PersistedState, Repo, SparsePreset, WorkspaceKey } from '../../shared/types'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import type { TransferProfileState } from './profile-project-state-file'
@@ -25,7 +24,6 @@ export type TransferPayload = {
   workspaceLineageByChildKey: PersistedState['workspaceLineageByChildKey']
   workspaceSession?: PersistedState['workspaceSession']
   workspaceSessionsByHostId?: Partial<Record<ExecutionHostId, PersistedState['workspaceSession']>>
-  sshTargets: SshTarget[]
   targetProjectId: string | null
 }
 
@@ -251,9 +249,6 @@ export function createTransferPayload(args: {
           )
         }
       : {}),
-    sshTargets: sourceRepo.connectionId
-      ? sourceState.sshTargets.filter((target) => target.id === sourceRepo.connectionId)
-      : [],
     targetProjectId
   }
 }
@@ -274,8 +269,7 @@ export function applyPayloadToTarget(
     workspaceLineageByChildKey: {
       ...targetState.workspaceLineageByChildKey,
       ...payload.workspaceLineageByChildKey
-    },
-    sshTargets: mergeSshTargets(targetState.sshTargets, payload.sshTargets)
+    }
   }
   if (payload.workspaceSession) {
     next.workspaceSession = mergeWorkspaceSessions(
@@ -290,9 +284,4 @@ export function applyPayloadToTarget(
     )
   }
   return rebuildRepoBackedProjectState(next)
-}
-
-function mergeSshTargets(existing: SshTarget[], incoming: SshTarget[]): SshTarget[] {
-  const existingIds = new Set(existing.map((target) => target.id))
-  return [...existing, ...incoming.filter((target) => !existingIds.has(target.id))]
 }

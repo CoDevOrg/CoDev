@@ -1,7 +1,6 @@
 /// <reference types="vite/client" />
 
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { OnboardingFeatureSetupDeps } from '@/components/onboarding/onboarding-feature-setup'
 import type { languages } from 'monaco-editor'
 import type { MonacoE2EProbe } from './components/editor/monaco-e2e-probe'
 import type { TerminalWorktreeParkingDebugVerdict } from './components/terminal-pane/terminal-parking-e2e-overrides'
@@ -76,13 +75,7 @@ declare global {
     __CODEV_DEFAULT_AGENT__?: 'claude' | 'codex'
     __CODEV_MEMBER_ID__?: string
     __CODEV_SETTINGS_ONLY__?: boolean
-    /** Whether this member has linked a Cursor credential — gates offering
-     *  Cursor as a switch target in the in-chat provider picker, since unlike
-     *  Claude/Codex it has no host-injected fallback and would otherwise
-     *  strand on cursor-agent's own sign-in wall. */
-    __CODEV_CURSOR_AVAILABLE__?: boolean
     __paneManagers?: Map<string, PaneManager>
-    __onboardingFeatureSetupDeps?: OnboardingFeatureSetupDeps
     __terminalParkingDebug?: {
       parkDelayMs: number
       parkedTabIds: () => string[]

@@ -1,5 +1,4 @@
 import React, { useCallback, useRef, useState } from 'react'
-import { toast } from 'sonner'
 import { FolderPlus, Loader2 } from 'lucide-react'
 import {
   Dialog,
@@ -16,7 +15,6 @@ import type { Repo } from '../../../../shared/types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { finishProjectAddWithDefaultCheckout } from './project-added-default-checkout'
 import { translate } from '@/i18n/i18n'
-import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
 
 const NON_GIT_REPO_ERROR = 'Not a valid git repository'
@@ -72,35 +70,7 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
     setIsAdding(true)
     setError(null)
     try {
-      let repo: Repo | null
-      if (connectionId) {
-        const result = await window.api.repos.addRemote({
-          connectionId,
-          remotePath: folderPath
-        })
-        if ('error' in result) {
-          throw new Error(result.error)
-        }
-        const upserted = upsertAddedRepoWithProjectHostSetup(result.repo, {
-          sshConnectionId: connectionId
-        })
-        repo = upserted.repo
-        if (upserted.alreadyPresent) {
-          useAppStore.getState().clearOrcaHookTrustForRepo(repo.id)
-        }
-        if (!mountedRef.current || gen !== addGenRef.current) {
-          return
-        }
-        toast.success(
-          translate(
-            'auto.components.sidebar.AddProjectFromFolderDialog.e643b30398',
-            'Project added on SSH host'
-          ),
-          { description: repo.displayName }
-        )
-      } else {
-        repo = await addRepoPath(folderPath, 'git', { runtimeEnvironmentId })
-      }
+      const repo: Repo | null = await addRepoPath(folderPath, 'git', { runtimeEnvironmentId })
 
       if (!mountedRef.current || gen !== addGenRef.current) {
         return
@@ -114,18 +84,14 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
       }
       // Why: after the repo is already added, a non-authoritative refresh
       // should still close onto the project row instead of trapping the user.
-      const ownerOptions = worktreeRefreshOptions(runtimeEnvironmentId, connectionId)
+      const ownerOptions = worktreeRefreshOptions(runtimeEnvironmentId)
       await fetchWorktrees(repo.id, ownerOptions)
       if (!mountedRef.current || gen !== addGenRef.current) {
         return
       }
       await finishProjectAddWithDefaultCheckout({
         repoId: repo.id,
-        source: connectionId
-          ? 'ssh_remote_path'
-          : runtimeEnvironmentId
-            ? 'runtime_server_path'
-            : 'local_folder_picker',
+        source: runtimeEnvironmentId ? 'runtime_server_path' : 'local_folder_picker',
         selectedPath: folderPath,
         executionHostId: ownerOptions.executionHostId,
         closeModal,

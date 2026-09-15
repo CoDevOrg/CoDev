@@ -3,7 +3,7 @@
 // or the script body that lands on the remote box. Local install behavior
 // is exercised through `installer-utils.test.ts` and the per-CLI status
 // audit; this file covers ONLY the SFTP-backed path added in commit #8.
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { vi, describe, expect, it } from 'vitest'
@@ -17,17 +17,13 @@ vi.mock('electron', () => ({
 import type { SFTPWrapper } from 'ssh2'
 import { createManagedCommandMatcher } from '../agent-hooks/installer-utils'
 import { ClaudeHookService } from './hook-service'
-import { OPENCLAUDE_HOOK_SETTINGS } from './hook-settings'
 
 const CLAUDE_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'claude-hook.cmd' : 'claude-hook.sh'
 const STATUSLINE_SCRIPT_FILE_NAME =
   process.platform === 'win32' ? 'claude-statusline.cmd' : 'claude-statusline.sh'
-const OPENCLAUDE_SCRIPT_FILE_NAME =
-  process.platform === 'win32' ? 'openclaude-hook.cmd' : 'openclaude-hook.sh'
 const WINDOWS_POWERSHELL_LAUNCHER =
   /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
 const isClaudeManagedCommand = createManagedCommandMatcher(CLAUDE_SCRIPT_FILE_NAME)
-const isOpenClaudeManagedCommand = createManagedCommandMatcher(OPENCLAUDE_SCRIPT_FILE_NAME)
 
 type FakeFs = {
   files: Map<string, string>
@@ -456,69 +452,5 @@ describe('ClaudeHookService.installRemote', () => {
     const userCmds = stopDefs.flatMap((d) => d.hooks.map((h) => h.command))
     expect(userCmds).toContain('/usr/local/bin/my-user-hook')
     expect(userCmds.filter((c) => c.includes('claude-hook.sh'))).toHaveLength(1)
-  })
-})
-
-describe('OpenClaudeHookService-compatible install', () => {
-  const makeOpenClaudeService = (): ClaudeHookService =>
-    new ClaudeHookService({
-      agent: 'openclaude',
-      displayName: 'OpenClaude',
-      settings: OPENCLAUDE_HOOK_SETTINGS
-    })
-
-  it('installs managed hooks into OpenClaude settings without touching Claude settings', () => {
-    const tmpHome = mkdtempSync(join(tmpdir(), 'orca-openclaude-hooks-'))
-    vi.stubEnv('HOME', tmpHome)
-    vi.stubEnv('USERPROFILE', tmpHome)
-    try {
-      const openClaudeSettings = join(tmpHome, '.openclaude', 'settings.json')
-      mkdirSync(join(tmpHome, '.openclaude'), { recursive: true })
-      writeFileSync(openClaudeSettings, JSON.stringify({ hooks: {} }))
-
-      const status = makeOpenClaudeService().install()
-
-      expect(status).toMatchObject({
-        agent: 'openclaude',
-        state: 'installed',
-        configPath: openClaudeSettings
-      })
-      const parsed = JSON.parse(readFileSync(openClaudeSettings, 'utf-8'))
-      for (const event of ['UserPromptSubmit', 'Stop', 'StopFailure']) {
-        const command = parsed.hooks[event][0].hooks[0].command as string
-        expect(isOpenClaudeManagedCommand(command)).toBe(true)
-        if (process.platform !== 'win32') {
-          expect(command).toMatch(/^if \[ -f /)
-        }
-      }
-      expect(
-        readFileSync(join(tmpHome, '.codev', 'agent-hooks', OPENCLAUDE_SCRIPT_FILE_NAME), 'utf-8')
-      ).toContain('/hook/claude')
-      expect(
-        readFileSync(join(tmpHome, '.codev', 'agent-hooks', OPENCLAUDE_SCRIPT_FILE_NAME), 'utf-8')
-      ).not.toContain('DEVIN_PROJECT_DIR')
-      // Why: the statusline usage feed is Claude-only; OpenClaude installs must not set statusLine.
-      expect(parsed.statusLine).toBeUndefined()
-      expect(existsSync(join(tmpHome, '.claude', 'settings.json'))).toBe(false)
-    } finally {
-      vi.unstubAllEnvs()
-      rmSync(tmpHome, { recursive: true, force: true })
-    }
-  })
-
-  it('writes remote OpenClaude settings under .openclaude', async () => {
-    const { sftp, fs } = createFakeSftp()
-
-    const status = await makeOpenClaudeService().installRemote(sftp, '/home/dev')
-
-    expect(status).toMatchObject({
-      agent: 'openclaude',
-      state: 'installed',
-      configPath: '/home/dev/.openclaude/settings.json'
-    })
-    const parsed = JSON.parse(fs.files.get('/home/dev/.openclaude/settings.json')!)
-    const command = parsed.hooks.StopFailure[0].hooks[0].command as string
-    expect(command).toContain('/home/dev/.codev/agent-hooks/openclaude-hook.sh')
-    expect(fs.files.get('/home/dev/.codev/agent-hooks/openclaude-hook.sh')).toContain('/hook/claude')
   })
 })

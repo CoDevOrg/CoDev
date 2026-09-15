@@ -12,7 +12,6 @@ import {
   resolveLocalWindowsTerminalRuntimeOptions,
   type LocalWindowsTerminalRuntimeOptions
 } from '../../../shared/local-windows-terminal-runtime'
-import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { resolveTerminalStartupCwd } from '../../../shared/terminal-startup-cwd'
 import type { GlobalSettings, TerminalTab } from '../../../shared/types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
@@ -42,13 +41,12 @@ type CodexPaneLaneState = Pick<
  * Lane keys for panes whose Codex credentials come from another machine.
  *
  * Why they need keys at all: a managed Codex account is scoped to one machine
- * AND one runtime (`host` or `wsl:<distro>`). A relay environment keeps its own
- * account roster, and an SSH connection has no Orca-managed selection whatsoever
- * — the remote Codex reads that machine's own credentials. Neither can be
- * stranded by a local selection change, so they must not share the local keys.
+ * AND one runtime (`host` or `wsl:<distro>`). A paired runtime environment keeps
+ * its own account roster — the remote Codex reads that machine's own credentials
+ * — so it cannot be stranded by a local selection change and must not share the
+ * local keys.
  */
 const RUNTIME_ENVIRONMENT_LANE_PREFIX = 'env:'
-const SSH_CONNECTION_LANE_KEY = 'ssh-connection'
 const UNATTRIBUTED_REMOTE_LANE_KEY = 'remote-runtime'
 const HOST_LANE_KEY = 'host'
 const WSL_LANE_PREFIX = 'wsl:'
@@ -61,12 +59,12 @@ export function isLocalCodexSelectionLaneKey(laneKey: string): boolean {
 /**
  * True when the pane's shell runs on a machine other than this one.
  *
- * Why it takes only the id: a `remote:`/`ssh:` prefix is assigned at spawn and
+ * Why it takes only the id: a `remote:` prefix is assigned at spawn and
  * is decisive on its own, so callers with no store access (the bind-driven
  * sweep) can skip these panes before spending a 15s RPC on them.
  */
 export function isForeignMachineCodexPtyId(ptyId: string): boolean {
-  return parseRemoteRuntimePtyId(ptyId) !== null || parseAppSshPtyId(ptyId) !== null
+  return parseRemoteRuntimePtyId(ptyId) !== null
 }
 
 /** Matches the panes a Codex account mutation could have re-pointed. */
@@ -184,9 +182,6 @@ export function resolveCodexPaneSelectionLaneKey(args: {
     return environmentId
       ? `${RUNTIME_ENVIRONMENT_LANE_PREFIX}${environmentId}`
       : UNATTRIBUTED_REMOTE_LANE_KEY
-  }
-  if (parseAppSshPtyId(args.ptyId) !== null) {
-    return SSH_CONNECTION_LANE_KEY
   }
   return getCodexSelectionLaneKey(resolveLocalPaneSelectionTarget(args))
 }

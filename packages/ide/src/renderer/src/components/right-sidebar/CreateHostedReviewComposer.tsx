@@ -1,6 +1,5 @@
 import {
   ChevronDown,
-  GitMerge,
   GitPullRequestArrow,
   RefreshCw,
   Sparkles,
@@ -104,7 +103,7 @@ export function CreateHostedReviewComposer({
   onDropdownAction
 }: CreateHostedReviewComposerProps): React.JSX.Element {
   const copy = localizedHostedReviewCopy(resolveSupportedHostedReviewCopyProvider(provider))
-  const ReviewIcon = provider === 'gitlab' ? GitMerge : GitPullRequestArrow
+  const ReviewIcon = GitPullRequestArrow
   const normalizedBase = stripBaseRef(base)
   const strippedBranch = stripBaseRef(branch)
   const baseSameAsBranch = normalizedBase.toLowerCase() === strippedBranch.toLowerCase()

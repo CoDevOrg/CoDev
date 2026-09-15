@@ -13,7 +13,6 @@ import type {
   ExternalAutomationJob,
   ExternalAutomationManager
 } from '../../../../shared/automations-types'
-import type { SshConnectionState } from '../../../../shared/ssh-types'
 import type { ExternalAutomationListEntry } from './external-automation-list-entries'
 import {
   formatExternalDate,
@@ -40,7 +39,7 @@ export function AutomationListExternalRows({
   entries: readonly ExternalAutomationListEntry[]
   selectedExternalKey: string | null | undefined
   relativeNow: number
-  sshConnectionStates: ReadonlyMap<string, Pick<SshConnectionState, 'status'>>
+  sshConnectionStates: ReadonlyMap<string, { status: string }>
   externalActionKey: string | null
   onSelect: (entryKey: string) => void
   onRequestAction: (

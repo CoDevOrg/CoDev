@@ -2,10 +2,9 @@ import { isTuiAgent } from './tui-agent-config'
 import { YOLO_TUI_AGENT_ARGS, YOLO_TUI_AGENT_ENV } from './tui-agent-permissions'
 import type { TuiAgent } from './types'
 
-const UNSUPPORTED_TUI_AGENT_ARGS: Partial<Record<TuiAgent, readonly string[]>> = {
-  opencode: ['--dangerously-skip-permissions'],
-  kilo: ['--dangerously-skip-permissions']
-}
+// Why: kept as a table so an agent whose interactive TUI rejects a Claude-style
+// skip-permission flag can be listed here; no shipped agent needs it today.
+const UNSUPPORTED_TUI_AGENT_ARGS: Partial<Record<TuiAgent, readonly string[]>> = {}
 
 export const DEFAULT_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = YOLO_TUI_AGENT_ARGS
 

@@ -13,7 +13,6 @@ vi.mock('node:child_process', async (importOriginal) => ({
 }))
 
 import { WslCliInstaller, _internals } from './wsl-cli-installer'
-import { reconcileManagedWslCliRegistrations } from './wsl-cli-registration-reconciliation'
 
 function makeHostStatus(
   launcherPath = 'C:\\Users\\me\\AppData\\Local\\Programs\\Orca\\resources\\bin\\orca.exe'
@@ -417,53 +416,6 @@ describe('WslCliInstaller', () => {
       state: 'installed',
       currentTarget: 'C:\\Users\\me\\AppData\\Local\\Programs\\Orca\\resources\\bin\\orca.exe'
     })
-  })
-
-  it('repairs the frozen pre-rc4 registration so orchestration send/reply reach native rc4', async () => {
-    const nativeLauncher = 'C:\\Program Files\\Orca\\resources\\bin\\orca.exe'
-    const wsl = createWslRunner(PRE_RC4_MANAGED_WSL_LAUNCHER)
-    const installer = new WslCliInstaller({
-      platform: 'win32',
-      distro: 'Ubuntu',
-      hostInstaller: { getStatus: async () => makeHostStatus(nativeLauncher) },
-      wslRunner: wsl.runner
-    })
-    const orchestrationCalls = [
-      ['orchestration', 'send', '--type', 'heartbeat'],
-      ['orchestration', 'send', '--type', 'worker_done'],
-      ['orchestration', 'reply', '--message', 'line one\nline two']
-    ]
-    const simulateRc4Launch = (args: string[]): number => {
-      const target = _internals.parseManagedLauncherTarget(wsl.getFile() ?? '')
-      return target?.toLowerCase().endsWith('orca.cmd') &&
-        args[0] === 'orchestration' &&
-        (args[1] === 'send' || args[1] === 'reply')
-        ? 2
-        : 0
-    }
-
-    expect(orchestrationCalls.map(simulateRc4Launch)).toEqual([2, 2, 2])
-
-    await expect(
-      reconcileManagedWslCliRegistrations({
-        platform: 'win32',
-        isPackaged: true,
-        userDataPath: '/user-data',
-        listDistros: async () => ['Ubuntu'],
-        registry: {
-          getCandidates: async () => ['Ubuntu'],
-          recordObservations: async () => undefined
-        },
-        createInstaller: () => installer
-      })
-    ).resolves.toEqual([
-      { distro: 'Ubuntu', outcome: 'repaired', state: 'installed', managed: true }
-    ])
-    await expect(installer.getStatus()).resolves.toMatchObject({
-      state: 'installed',
-      currentTarget: nativeLauncher
-    })
-    expect(orchestrationCalls.map(simulateRc4Launch)).toEqual([0, 0, 0])
   })
 
   it('leaves unmanaged WSL commands and conflicting bridges untouched during automatic repair', async () => {

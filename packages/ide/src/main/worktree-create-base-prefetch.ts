@@ -3,8 +3,6 @@ import type { Repo } from '../shared/types'
 import { hasLocalCommitObject, isFullGitObjectId } from './git/commit-object-ref'
 import { hasWorktreeBaseCommitRef } from './git/worktree-base-ref-probe'
 import { getBaseRefDefault } from './git/repo'
-import { getSshGitProvider } from './providers/ssh-git-dispatch'
-import { prefetchRemoteWorktreeCreateBase } from './ipc/worktree-remote'
 import { resolveWorktreeCreateBase } from './worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../shared/worktree-base-ref'
 
@@ -98,14 +96,6 @@ export async function prefetchWorktreeCreateBase(args: {
   runtime: WorktreeCreateBasePrefetchRuntime
 }): Promise<void> {
   if (isFolderRepo(args.repo)) {
-    return
-  }
-  if (args.repo.connectionId) {
-    const provider = getSshGitProvider(args.repo.connectionId)
-    if (!provider) {
-      return
-    }
-    await prefetchRemoteWorktreeCreateBase(provider, args.repo, { baseBranch: args.baseBranch })
     return
   }
   await prefetchLocalWorktreeCreateBase(args.repo, args.baseBranch, args.runtime)

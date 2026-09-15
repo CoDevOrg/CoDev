@@ -393,13 +393,13 @@ export type RuntimeFileReadResult = {
 export type RuntimeTerminalPathOpenTarget =
   | {
       kind: 'worktree-file'
-      provider: 'local' | 'ssh'
+      provider: 'local'
       relativePath: string
       absolutePath: string
     }
   | {
       kind: 'absolute-file'
-      provider: 'local' | 'ssh'
+      provider: 'local'
       absolutePath: string
       grantId: string
     }
@@ -659,7 +659,7 @@ export type RuntimeTerminalCreate = {
   ptyId?: string | null
   worktreeId: string
   title: string | null
-  /** Spawn-time execution identity; paired clients must not infer nested SSH from their own graph. */
+  /** Spawn-time execution identity; paired clients must not infer the host from their own graph. */
   executionHostId?: ExecutionHostId
   hostPlatform?: NodeJS.Platform
   surface?: 'background' | 'visible'
@@ -776,9 +776,6 @@ export type RuntimeWorktreePsSummary = {
   createdAt?: number
   linkedIssue: number | null
   linkedPR: { number: number; state: string } | null
-  linkedLinearIssue: string | null
-  linkedGitLabMR: number | null
-  linkedGitLabIssue: number | null
   comment: string
   isPinned: boolean
   /** True for the worktree currently focused on the desktop/host

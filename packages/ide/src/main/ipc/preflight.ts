@@ -1,12 +1,7 @@
 import { ipcMain } from 'electron'
 import type { PathSource, ShellHydrationFailureReason } from '../../shared/types'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
-import { getAzureDevOpsAuthStatus } from '../azure-devops/client'
-import { getBitbucketAuthStatus } from '../bitbucket/client'
-import { getGiteaAuthStatus } from '../gitea/client'
-import { _resetKnownHostsCache } from '../gitlab/gl-utils'
 import { mergePersistedWindowsPathAsync } from '../pty/windows-environment-path'
-import { getActiveMultiplexer } from './ssh'
 import { detectWslCommandsOnPath, type WslPreflightTarget } from './preflight-wsl-agent-detection'
 import { detectCommandsInInstallDirs } from './local-agent-install-dir-detection'
 import { getPreflightWslTarget, type PreflightRuntimeContext } from './preflight-runtime-target'
@@ -19,10 +14,6 @@ import {
   shellQuote
 } from './preflight-command-exec'
 import {
-  detectRemoteWindowsTerminalCapabilities,
-  type RemoteWindowsTerminalCapabilities
-} from './preflight-remote-windows-terminal-capabilities'
-import {
   getTuiAgentDetectionProbeCommands,
   KNOWN_TUI_AGENT_DETECTION_COMMANDS,
   resolveDetectedTuiAgentIds
@@ -31,30 +22,7 @@ import {
 export type PreflightStatus = {
   git: { installed: boolean }
   gh: { installed: boolean; authenticated: boolean }
-  // Why: optional so existing renderer call sites that only render git/gh
-  // status keep typechecking. Consumers that surface GitLab-specific
-  // affordances (the GitLab tab in the source picker, MR list, etc.)
-  // gate on `glab?.authenticated`.
-  glab?: { installed: boolean; authenticated: boolean }
-  bitbucket?: { configured: boolean; authenticated: boolean; account: string | null }
-  azureDevOps?: {
-    configured: boolean
-    authenticated: boolean
-    account: string | null
-    baseUrl: string | null
-    tokenConfigured: boolean
-  }
-  gitea?: {
-    configured: boolean
-    authenticated: boolean
-    account: string | null
-    baseUrl: string | null
-    tokenConfigured: boolean
-  }
 }
-
-export { detectRemoteWindowsTerminalCapabilities }
-export type { RemoteWindowsTerminalCapabilities }
 
 // Why: cache the result so repeated Landing mounts don't re-spawn processes.
 // The check only runs once per app session — relaunch to re-check.
@@ -63,10 +31,6 @@ let cached: PreflightStatus | null = null
 /** @internal - tests need a clean preflight cache between cases. */
 export function _resetPreflightCache(): void {
   cached = null
-}
-
-function uniqueAgentIds(ids: Iterable<string>): string[] {
-  return [...new Set(ids)]
 }
 
 async function detectCommandRuntime(
@@ -177,19 +141,6 @@ export async function refreshShellPathAndDetectAgents(
   }
 }
 
-export async function detectRemoteAgents(args: { connectionId: string }): Promise<string[]> {
-  const mux = getActiveMultiplexer(args.connectionId)
-  if (!mux || mux.isDisposed()) {
-    // Why: remote agent detection is passive UI polling. A disconnected host has
-    // no detectable agents until reconnect, but should not spam IPC errors.
-    return []
-  }
-  const result = (await mux.request('preflight.detectAgents', {
-    commands: KNOWN_TUI_AGENT_DETECTION_COMMANDS
-  })) as { agents: string[] }
-  return uniqueAgentIds(result.agents)
-}
-
 async function isGhAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolean> {
   try {
     await (wslTarget
@@ -209,22 +160,6 @@ async function isGhAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolea
   }
 }
 
-// Why: parallel to isGhAuthenticated for the glab CLI. glab writes auth
-// status to stderr in some versions and stdout in others; check both.
-async function isGlabAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolean> {
-  try {
-    await (wslTarget
-      ? execCommandInWsl(wslTarget, `${shellQuote('glab')} auth status`)
-      : execLocalPreflightCommand('glab', ['auth', 'status']))
-    return true
-  } catch (error) {
-    const stdout = (error as { stdout?: string }).stdout ?? ''
-    const stderr = (error as { stderr?: string }).stderr ?? ''
-    const output = `${stdout}\n${stderr}`
-    return output.includes('Logged in')
-  }
-}
-
 export async function runPreflightCheck(
   force = false,
   context?: PreflightRuntimeContext
@@ -239,37 +174,18 @@ export async function runPreflightCheck(
     await mergePersistedWindowsPathAsync(process.env, { forceRefresh: force })
   }
 
-  if (force) {
-    // Why: the GitLab known-hosts cache (gl-utils) is populated lazily on the
-    // first GitLab request and never invalidated within a session. A user who
-    // runs `glab auth login` for a self-hosted host after Orca starts would
-    // otherwise see "No GitLab project found" until app relaunch. The Re-check
-    // path in IntegrationsPane forces preflight, so piggyback on that signal
-    // to refresh the host list too.
-    _resetKnownHostsCache()
-  }
-
-  const [gitProbe, ghProbe, glabProbe] = await Promise.all([
+  const [gitProbe, ghProbe] = await Promise.all([
     detectCommandRuntime('git', context),
-    detectCommandRuntime('gh', context),
-    detectCommandRuntime('glab', context)
+    detectCommandRuntime('gh', context)
   ])
 
-  const [ghAuthenticated, glabAuthenticated, bitbucket, azureDevOps, gitea] = await Promise.all([
-    ghProbe.installed ? isGhAuthenticated(ghProbe.wslTarget) : Promise.resolve(false),
-    glabProbe.installed ? isGlabAuthenticated(glabProbe.wslTarget) : Promise.resolve(false),
-    getBitbucketAuthStatus(),
-    getAzureDevOpsAuthStatus(),
-    getGiteaAuthStatus()
-  ])
+  const ghAuthenticated = ghProbe.installed
+    ? await isGhAuthenticated(ghProbe.wslTarget)
+    : false
 
   const result = {
     git: { installed: gitProbe.installed },
-    gh: { installed: ghProbe.installed, authenticated: ghAuthenticated },
-    glab: { installed: glabProbe.installed, authenticated: glabAuthenticated },
-    bitbucket,
-    azureDevOps,
-    gitea
+    gh: { installed: ghProbe.installed, authenticated: ghAuthenticated }
   }
 
   if (cacheable) {
@@ -297,22 +213,4 @@ export function registerPreflightHandlers(): void {
   ipcMain.handle('preflight:refreshAgents', async (_event, args?: PreflightRuntimeContext) => {
     return refreshShellPathAndDetectAgents(args)
   })
-
-  // Why: remote worktrees need agent detection on the SSH host, not the local
-  // machine. This handler forwards the same KNOWN_AGENT_COMMANDS list to the
-  // relay's preflight.detectAgents RPC, whose lookup command is selected on
-  // the remote host so native Windows OpenSSH does not require a POSIX shell.
-  ipcMain.handle(
-    'preflight:detectRemoteAgents',
-    async (_event, args: { connectionId: string }): Promise<string[]> => {
-      return detectRemoteAgents(args)
-    }
-  )
-
-  ipcMain.handle(
-    'preflight:detectRemoteWindowsTerminalCapabilities',
-    async (_event, args: { connectionId: string }): Promise<RemoteWindowsTerminalCapabilities> => {
-      return detectRemoteWindowsTerminalCapabilities(args)
-    }
-  )
 }

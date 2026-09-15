@@ -6,7 +6,6 @@ const {
   appQuitMock,
   appRelaunchMock,
   relaunchAppMock,
-  destroySystemTrayMock,
   createLocalOrcaProfileMock,
   getOrcaProfileListStateMock,
   seedNewOrcaProfileTelemetryConsentMock,
@@ -18,7 +17,6 @@ const {
   appQuitMock: vi.fn(),
   appRelaunchMock: vi.fn(),
   relaunchAppMock: vi.fn(),
-  destroySystemTrayMock: vi.fn(),
   createLocalOrcaProfileMock: vi.fn(),
   getOrcaProfileListStateMock: vi.fn(),
   seedNewOrcaProfileTelemetryConsentMock: vi.fn(),
@@ -38,10 +36,6 @@ vi.mock('electron', () => ({
       handlers.set(channel, handler)
     })
   }
-}))
-
-vi.mock('../tray/system-tray', () => ({
-  destroySystemTray: destroySystemTrayMock
 }))
 
 vi.mock('../app-relaunch', () => ({
@@ -78,7 +72,6 @@ describe('registerOrcaProfileHandlers', () => {
     appRelaunchMock.mockReset()
     relaunchAppMock.mockReset()
     relaunchAppMock.mockImplementation(() => appRelaunchMock())
-    destroySystemTrayMock.mockReset()
     createLocalOrcaProfileMock.mockReset()
     getOrcaProfileListStateMock.mockReset()
     seedNewOrcaProfileTelemetryConsentMock.mockReset()

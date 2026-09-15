@@ -33,7 +33,6 @@ const worktree = (): AppState['worktreesByRepo'][string][number] => ({
   isMainWorktree: false,
   linkedIssue: null,
   linkedPR: null,
-  linkedLinearIssue: null,
   isArchived: false,
   isUnread: false,
   isPinned: false,

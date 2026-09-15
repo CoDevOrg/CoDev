@@ -59,7 +59,6 @@ export function dashboardSnapshotInputsChanged(
     state.settings !== previousState.settings ||
     state.workspaceStatuses !== previousState.workspaceStatuses ||
     state.detectedAgentIds !== previousState.detectedAgentIds ||
-    state.remoteDetectedAgentIds !== previousState.remoteDetectedAgentIds ||
     state.runtimeDetectedAgentIds !== previousState.runtimeDetectedAgentIds ||
     // Live hook status is relayed straight from main to the pop-out. Rebuilding
     // every card here would put map refresh work on the main renderer's hot path.
@@ -69,8 +68,6 @@ export function dashboardSnapshotInputsChanged(
     // the host the pty used to run on — a quiet board has no later publish to
     // heal from. All are low-frequency except the foreground agent, whose churn
     // the publish throttle already absorbs.
-    state.sshConnectionStates !== previousState.sshConnectionStates ||
-    state.sshStateByEnvironment !== previousState.sshStateByEnvironment ||
     state.runtimeStatusByEnvironmentId !== previousState.runtimeStatusByEnvironmentId ||
     state.paneForegroundAgentByPaneKey !== previousState.paneForegroundAgentByPaneKey ||
     state.detectedWorktreesByRepo !== previousState.detectedWorktreesByRepo ||

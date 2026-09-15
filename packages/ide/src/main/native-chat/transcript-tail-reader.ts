@@ -6,12 +6,7 @@ import type {
 } from '../../shared/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
-import {
-  decodeClaudeTranscriptLine,
-  decodeCodexTranscriptLine,
-  decodeCursorTranscriptLine,
-  decodeGrokTranscriptLine
-} from './transcript-line-decoders'
+import { decodeClaudeTranscriptLine, decodeCodexTranscriptLine } from './transcript-line-decoders'
 import { transcriptFallbackId } from './transcript-fallback-id'
 import {
   nativeChatTurnLifecycleDecoderForAgent,
@@ -30,12 +25,6 @@ export function nativeChatLineDecoderForAgent(agent: AgentType): NativeChatLineD
   }
   if (transcriptAgent === 'codex') {
     return decodeCodexTranscriptLine
-  }
-  if (transcriptAgent === 'grok') {
-    return decodeGrokTranscriptLine
-  }
-  if (transcriptAgent === 'cursor') {
-    return decodeCursorTranscriptLine
   }
   return null
 }

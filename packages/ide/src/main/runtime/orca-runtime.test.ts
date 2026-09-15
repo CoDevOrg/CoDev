@@ -21,10 +21,7 @@ import type {
   WorkspaceSessionState
 } from '../../shared/types'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status-types'
-import {
-  reviewHeadRemoteRefComponent,
-  REVIEW_HEAD_FETCH_TIMEOUT_MS
-} from '../../shared/review-head-tracking-ref'
+import { reviewHeadRemoteRefComponent } from '../../shared/review-head-tracking-ref'
 
 // Why: durable review-head refs are scoped by remote identity (name + URL hash).
 const ORIGIN_REMOTE_URL = 'git@example.com:group/repo.git'
@@ -117,10 +114,6 @@ import {
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
 } from '../../shared/setup-agent-sequencing'
-import type {
-  AgentSessionExecutionClaim,
-  AgentSessionSurfaceBinding
-} from '../../shared/agent-session-host-authority'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree-id'
 import { RpcDispatcher } from './rpc/dispatcher'
 import type { RpcRequest } from './rpc/core'
@@ -269,30 +262,6 @@ const {
   detectInstalledAgentsWithShellPathHydrationMock,
   detectRemoteAgentsMock,
   markCodexProjectTrustedMock,
-  markCopilotFolderTrustedMock,
-  markCursorWorkspaceTrustedMock,
-  listGitLabMergeRequestsMock,
-  listGitLabWorkItemsMock,
-  listGitLabIssuesMock,
-  listGitLabLabelsMock,
-  listGitLabTodosMock,
-  getGitLabProjectRefForRemoteMock,
-  getGitLabWorkItemByProjectRefMock,
-  createGitLabIssueMock,
-  updateGitLabIssueMock,
-  addGitLabIssueCommentMock,
-  addGitLabMRCommentMock,
-  addGitLabMRInlineCommentMock,
-  resolveGitLabMRDiscussionMock,
-  getGitLabJobTraceMock,
-  retryGitLabJobMock,
-  mergeGitLabMRMock,
-  closeGitLabMRMock,
-  reopenGitLabMRMock,
-  updateGitLabMRMock,
-  getGlabKnownHostsMock,
-  getGitLabWorkItemDetailsMock,
-  updateGitLabMRReviewersMock,
   getIssueMock,
   deleteWorktreeHistoryDirMock
 } = vi.hoisted(() => {
@@ -376,30 +345,6 @@ const {
     detectInstalledAgentsWithShellPathHydrationMock: vi.fn(),
     detectRemoteAgentsMock: vi.fn(),
     markCodexProjectTrustedMock: vi.fn(),
-    markCopilotFolderTrustedMock: vi.fn(),
-    markCursorWorkspaceTrustedMock: vi.fn(),
-    listGitLabMergeRequestsMock: vi.fn(),
-    listGitLabWorkItemsMock: vi.fn(),
-    listGitLabIssuesMock: vi.fn(),
-    listGitLabLabelsMock: vi.fn(),
-    listGitLabTodosMock: vi.fn(),
-    getGitLabProjectRefForRemoteMock: vi.fn(),
-    getGitLabWorkItemByProjectRefMock: vi.fn(),
-    createGitLabIssueMock: vi.fn(),
-    updateGitLabIssueMock: vi.fn(),
-    addGitLabIssueCommentMock: vi.fn(),
-    addGitLabMRCommentMock: vi.fn(),
-    addGitLabMRInlineCommentMock: vi.fn(),
-    resolveGitLabMRDiscussionMock: vi.fn(),
-    getGitLabJobTraceMock: vi.fn(),
-    retryGitLabJobMock: vi.fn(),
-    mergeGitLabMRMock: vi.fn(),
-    closeGitLabMRMock: vi.fn(),
-    reopenGitLabMRMock: vi.fn(),
-    updateGitLabMRMock: vi.fn(),
-    getGlabKnownHostsMock: vi.fn(),
-    getGitLabWorkItemDetailsMock: vi.fn(),
-    updateGitLabMRReviewersMock: vi.fn(),
     getIssueMock: vi.fn(),
     deleteWorktreeHistoryDirMock: vi.fn()
   }
@@ -451,9 +396,7 @@ vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
 }))
 
 vi.mock('../agent-trust-presets', () => ({
-  markCodexProjectTrusted: markCodexProjectTrustedMock,
-  markCopilotFolderTrusted: markCopilotFolderTrustedMock,
-  markCursorWorkspaceTrusted: markCursorWorkspaceTrustedMock
+  markCodexProjectTrusted: markCodexProjectTrustedMock
 }))
 
 vi.mock('../hooks', () => ({
@@ -545,49 +488,6 @@ vi.mock('../github/client', async (importOriginal) => {
     addIssueComment: addGitHubIssueCommentMock,
     listLabels: listGitHubLabelsMock,
     listAssignableUsers: listGitHubAssignableUsersMock
-  }
-})
-
-vi.mock('../gitlab/client', async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>
-  return {
-    ...actual,
-    listMergeRequests: listGitLabMergeRequestsMock,
-    listWorkItems: listGitLabWorkItemsMock,
-    listIssues: listGitLabIssuesMock,
-    listLabels: listGitLabLabelsMock,
-    listTodos: listGitLabTodosMock,
-    getProjectRefForRemote: getGitLabProjectRefForRemoteMock,
-    getWorkItemByProjectRef: getGitLabWorkItemByProjectRefMock,
-    createIssue: createGitLabIssueMock,
-    updateIssue: updateGitLabIssueMock,
-    addIssueComment: addGitLabIssueCommentMock,
-    addMRComment: addGitLabMRCommentMock,
-    addMRInlineComment: addGitLabMRInlineCommentMock,
-    resolveMRDiscussion: resolveGitLabMRDiscussionMock,
-    getJobTrace: getGitLabJobTraceMock,
-    retryJob: retryGitLabJobMock,
-    mergeMR: mergeGitLabMRMock,
-    closeMR: closeGitLabMRMock,
-    reopenMR: reopenGitLabMRMock,
-    updateMR: updateGitLabMRMock,
-    updateMRReviewers: updateGitLabMRReviewersMock
-  }
-})
-
-vi.mock('../gitlab/gl-utils', async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>
-  return {
-    ...actual,
-    getGlabKnownHosts: getGlabKnownHostsMock
-  }
-})
-
-vi.mock('../gitlab/work-item-details', async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>
-  return {
-    ...actual,
-    getWorkItemDetails: getGitLabWorkItemDetailsMock
   }
 })
 
@@ -796,56 +696,6 @@ function resetRuntimeTestMocks(): void {
   detectRemoteAgentsMock.mockReset()
   detectRemoteAgentsMock.mockResolvedValue([])
   markCodexProjectTrustedMock.mockReset()
-  markCopilotFolderTrustedMock.mockReset()
-  markCursorWorkspaceTrustedMock.mockReset()
-  listGitLabMergeRequestsMock.mockReset()
-  listGitLabMergeRequestsMock.mockResolvedValue({ items: [] })
-  listGitLabWorkItemsMock.mockReset()
-  listGitLabWorkItemsMock.mockResolvedValue({ items: [] })
-  listGitLabIssuesMock.mockReset()
-  listGitLabIssuesMock.mockResolvedValue({ items: [] })
-  listGitLabLabelsMock.mockReset()
-  listGitLabLabelsMock.mockResolvedValue(['bug'])
-  listGitLabTodosMock.mockReset()
-  listGitLabTodosMock.mockResolvedValue([])
-  getGitLabProjectRefForRemoteMock.mockReset()
-  getGitLabProjectRefForRemoteMock.mockResolvedValue({ host: 'gitlab.example', path: 'group/repo' })
-  getGlabKnownHostsMock.mockReset()
-  getGlabKnownHostsMock.mockResolvedValue(['gitlab.com'])
-  getGitLabWorkItemByProjectRefMock.mockReset()
-  getGitLabWorkItemByProjectRefMock.mockResolvedValue(null)
-  createGitLabIssueMock.mockReset()
-  createGitLabIssueMock.mockResolvedValue({
-    ok: true,
-    number: 1,
-    url: 'https://gitlab.example/i/1'
-  })
-  updateGitLabIssueMock.mockReset()
-  updateGitLabIssueMock.mockResolvedValue({ ok: true })
-  addGitLabIssueCommentMock.mockReset()
-  addGitLabIssueCommentMock.mockResolvedValue({ ok: true })
-  addGitLabMRCommentMock.mockReset()
-  addGitLabMRCommentMock.mockResolvedValue({ ok: true })
-  addGitLabMRInlineCommentMock.mockReset()
-  addGitLabMRInlineCommentMock.mockResolvedValue({ ok: true })
-  resolveGitLabMRDiscussionMock.mockReset()
-  resolveGitLabMRDiscussionMock.mockResolvedValue({ ok: true })
-  getGitLabJobTraceMock.mockReset()
-  getGitLabJobTraceMock.mockResolvedValue({ ok: true, trace: 'log' })
-  retryGitLabJobMock.mockReset()
-  retryGitLabJobMock.mockResolvedValue({ ok: true })
-  mergeGitLabMRMock.mockReset()
-  mergeGitLabMRMock.mockResolvedValue({ ok: true })
-  closeGitLabMRMock.mockReset()
-  closeGitLabMRMock.mockResolvedValue({ ok: true })
-  reopenGitLabMRMock.mockReset()
-  reopenGitLabMRMock.mockResolvedValue({ ok: true })
-  updateGitLabMRMock.mockReset()
-  updateGitLabMRMock.mockResolvedValue({ ok: true })
-  getGitLabWorkItemDetailsMock.mockReset()
-  getGitLabWorkItemDetailsMock.mockResolvedValue({ body: 'Details' })
-  updateGitLabMRReviewersMock.mockReset()
-  updateGitLabMRReviewersMock.mockResolvedValue({ ok: true, reviewers: [] })
   getIssueMock.mockReset()
   getIssueMock.mockResolvedValue(null)
 }
@@ -1186,9 +1036,6 @@ function makeWorktreeMeta(overrides: Partial<WorktreeMeta> = {}): WorktreeMeta {
     comment: '',
     linkedIssue: null,
     linkedPR: null,
-    linkedLinearIssue: null,
-    linkedGitLabMR: null,
-    linkedGitLabIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,
@@ -1271,9 +1118,6 @@ const store = {
       comment: '',
       linkedIssue: 123,
       linkedPR: null,
-      linkedLinearIssue: null,
-      linkedGitLabMR: null,
-      linkedGitLabIssue: null,
       isArchived: false,
       isUnread: false,
       isPinned: false,
@@ -1610,17 +1454,13 @@ describe('OrcaRuntimeService', () => {
         ...store.getSettings(),
         experimentalNewWorktreeCardStyle: true,
         compactWorktreeCards: true,
-        minimaxGroupId: 'group-42',
-        minimaxUsageModels: 'general,abab6.5',
         terminalQuickCommands
       })
     } as never)
 
     expect(runtime.getClientSettings()).toMatchObject({
       experimentalNewWorktreeCardStyle: true,
-      compactWorktreeCards: true,
-      minimaxGroupId: 'group-42',
-      minimaxUsageModels: 'general,abab6.5'
+      compactWorktreeCards: true
     })
     expect(runtime.getClientSettings()).not.toHaveProperty('terminalQuickCommands')
     expect(runtime.getClientTerminalQuickCommands()).toEqual(terminalQuickCommands)
@@ -1698,9 +1538,7 @@ describe('OrcaRuntimeService', () => {
     let settings = {
       ...store.getSettings(),
       experimentalNewWorktreeCardStyle: false,
-      compactWorktreeCards: false,
-      minimaxGroupId: '',
-      minimaxUsageModels: 'general'
+      compactWorktreeCards: false
     }
     const updateSettings = vi.fn((updates: Partial<typeof settings>) => {
       settings = { ...settings, ...updates }
@@ -1715,30 +1553,22 @@ describe('OrcaRuntimeService', () => {
     expect(
       await runtime.updateClientSettings({
         experimentalNewWorktreeCardStyle: true,
-        compactWorktreeCards: true,
-        minimaxGroupId: 'group-42',
-        minimaxUsageModels: 'general,abab6.5'
+        compactWorktreeCards: true
       })
     ).toMatchObject({
       experimentalNewWorktreeCardStyle: true,
-      compactWorktreeCards: true,
-      minimaxGroupId: 'group-42',
-      minimaxUsageModels: 'general,abab6.5'
+      compactWorktreeCards: true
     })
     expect(updateSettings).toHaveBeenCalledWith(
       {
         experimentalNewWorktreeCardStyle: true,
-        compactWorktreeCards: true,
-        minimaxGroupId: 'group-42',
-        minimaxUsageModels: 'general,abab6.5'
+        compactWorktreeCards: true
       },
       { notifyListeners: true }
     )
     expect(runtime.getClientSettings()).toMatchObject({
       experimentalNewWorktreeCardStyle: true,
-      compactWorktreeCards: true,
-      minimaxGroupId: 'group-42',
-      minimaxUsageModels: 'general,abab6.5'
+      compactWorktreeCards: true
     })
   })
 
@@ -1860,7 +1690,6 @@ describe('OrcaRuntimeService', () => {
     expect(status.capabilities).toContain('worktree.create-idempotency.v1')
     expect(status.capabilities).toContain('files.mutation-ownership.v1')
     expect(status.capabilities).toContain('project-host-setup.v1')
-    expect(status.capabilities).toContain('linear.issue-attribute-filter.v1')
     expect(status.capabilities).not.toContain('browser.screencast.v1')
     expect(typeof status.protocolVersion).toBe('number')
     expect(typeof status.minCompatibleMobileVersion).toBe('number')
@@ -4651,74 +4480,6 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('creates a selected Bitbucket PR branch override from a matching remote branch', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    const createdWorktree = {
-      path: '/tmp/workspaces/bitbucket-title',
-      head: 'abc123',
-      branch: 'refs/heads/feature/bitbucket',
-      isBare: false,
-      isMainWorktree: false
-    }
-    computeWorktreePathMock.mockReturnValue(createdWorktree.path)
-    ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
-    vi.mocked(getBranchConflictKind).mockResolvedValueOnce('remote')
-    vi.mocked(listWorktrees).mockResolvedValueOnce([createdWorktree])
-    getHostedReviewForBranchMock.mockResolvedValueOnce({
-      provider: 'bitbucket',
-      number: 11,
-      title: 'Bitbucket PR',
-      state: 'open',
-      url: 'https://bitbucket.org/team/repo/pull-requests/11',
-      status: 'success',
-      updatedAt: '2026-05-21T00:00:00Z',
-      mergeable: 'UNKNOWN'
-    })
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({
-      stdout: '',
-      stderr: ''
-    })
-
-    try {
-      const result = await runtime.createManagedWorktree({
-        repoSelector: 'id:repo-1',
-        name: 'bitbucket-title',
-        baseBranch: 'abc123',
-        branchNameOverride: 'feature/bitbucket',
-        linkedBitbucketPR: 11,
-        pushTarget: { remoteName: 'origin', branchName: 'feature/bitbucket' }
-      })
-
-      expect(getBranchConflictKind).toHaveBeenCalledWith(
-        TEST_REPO_PATH,
-        'feature/bitbucket',
-        'abc123'
-      )
-      expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          repoPath: TEST_REPO_PATH,
-          branch: 'feature/bitbucket',
-          linkedBitbucketPR: 11
-        })
-      )
-      expect(getPRForBranchMock).not.toHaveBeenCalled()
-      expect(addWorktree).toHaveBeenCalledWith(
-        TEST_REPO_PATH,
-        createdWorktree.path,
-        'feature/bitbucket',
-        'abc123',
-        false
-      )
-      expect(result.worktree).toMatchObject({
-        path: createdWorktree.path,
-        branch: 'refs/heads/feature/bitbucket',
-        linkedBitbucketPR: 11
-      })
-    } finally {
-      gitSpy.mockRestore()
-    }
-  })
-
   it('suffixes an existing PR when a matching push target lacks selected PR metadata', async () => {
     const runtime = new OrcaRuntimeService(store)
     const createdWorktree = {
@@ -5140,8 +4901,6 @@ describe('OrcaRuntimeService', () => {
     const result = await runtime.createManagedWorktree({
       repoSelector: TEST_REPO_ID,
       name: 'mobile-feature',
-      linkedGitLabIssue: 321,
-      linkedGitLabMR: 654,
       startup: { command: 'claude' }
     })
 
@@ -5154,12 +4913,8 @@ describe('OrcaRuntimeService', () => {
     expect(result.worktree).toMatchObject({
       id: `${TEST_REPO_ID}::${created.path}`,
       path: created.path,
-      linkedGitLabIssue: 321,
-      linkedGitLabMR: 654
     })
     expect(metaById[result.worktree.id]).toMatchObject({
-      linkedGitLabIssue: 321,
-      linkedGitLabMR: 654
     })
     expect(addWorktree).not.toHaveBeenCalled()
     expect(listWorktrees).not.toHaveBeenCalled()
@@ -9992,56 +9747,6 @@ describe('OrcaRuntimeService', () => {
       }
     })
 
-    it('emits command-code-working facts only after the banner arms the scrape', () => {
-      const { runtime, batches } = createSideEffectRuntime()
-      syncSinglePty(runtime)
-
-      // Generic status words without the Command Code banner must not arm.
-      runtime.onPtyData('pty-1', '❯ Fix the spinner\r\nThinking...', 100)
-      expect(batches.flatMap((batch) => batch.facts)).toEqual([])
-
-      runtime.onPtyData('pty-1', '# Command Code v0.27.3\r\n', 101)
-      runtime.onPtyData('pty-1', '❯ Fix the spinner\r\n\x1b[35m✻ Thinking...\x1b[0m', 102)
-
-      expect(batches.at(-1)).toMatchObject({
-        ptyId: 'pty-1',
-        worktreeId: TEST_WORKTREE_ID,
-        tabId: 'tab-1'
-      })
-      expect(batches.at(-1)?.facts).toEqual([
-        { kind: 'command-code-working', prompt: 'Fix the spinner' }
-      ])
-    })
-
-    it('emits a command-code-done fact when the idle composer returns', () => {
-      const { runtime, batches } = createSideEffectRuntime()
-      syncSinglePty(runtime)
-
-      runtime.onPtyData('pty-1', '# Command Code v0.27.3\r\n', 100)
-      runtime.onPtyData('pty-1', '❯ say hi\r\n✻ Thinking...', 101)
-      runtime.onPtyData(
-        'pty-1',
-        '\r\n✻ Thought for 1 second\r\n:: Hi!\r\n❯ Ask your question...',
-        102
-      )
-
-      expect(batches.at(-1)?.facts).toEqual([{ kind: 'command-code-done', prompt: 'say hi' }])
-    })
-
-    it('arms the Command Code scrape from the noted spawn command', () => {
-      const { runtime, batches } = createSideEffectRuntime()
-      syncSinglePty(runtime)
-
-      // Mirrors the renderer detector's startupCommand fast-arm: no banner needed when main saw the launch command at spawn.
-      runtime.noteTerminalSpawnCommand('pty-1', 'command-code --trust')
-      runtime.onPtyData('pty-1', '❯ Fix the spinner\r\n✻ Thinking...', 100)
-
-      expect(batches.flatMap((batch) => batch.facts)).toContainEqual({
-        kind: 'command-code-working',
-        prompt: 'Fix the spinner'
-      })
-    })
-
     it('prefers the tracked title over a stale renderer lastTitle in the hydration seed', async () => {
       const { runtime } = createSideEffectRuntime()
       const serializeBuffer = vi.fn().mockResolvedValue({
@@ -12857,70 +12562,6 @@ describe('OrcaRuntimeService', () => {
     expect(internals.ptysById.has('pty-exited-during-start')).toBe(false)
   })
 
-  it('adopts repeated structured OMP resumes while preserving the exact file locator', async () => {
-    let canonicalOwner:
-      | {
-          claim: AgentSessionExecutionClaim
-          generation: string
-          phase: 'live'
-          ptyId: string
-          surface: AgentSessionSurfaceBinding
-        }
-      | undefined
-    const spawn = vi.fn(async (options) => {
-      const ensure = options.agentSessionEnsure
-      expect(ensure).toBeDefined()
-      canonicalOwner ??= {
-        claim: ensure!.claim,
-        generation: 'generation-1',
-        phase: 'live',
-        ptyId: 'pty-claimed',
-        surface: ensure!.surface
-      }
-      return {
-        id: 'pty-claimed',
-        agentSessionEnsure: {
-          disposition: spawn.mock.calls.length === 1 ? ('created' as const) : ('adopted' as const),
-          owner: canonicalOwner
-        }
-      }
-    })
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn,
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-
-    const request = {
-      kind: 'explicit' as const,
-      worktree: `id:${TEST_WORKTREE_ID}`,
-      agent: 'omp' as const,
-      providerSession: { key: 'session_id' as const, id: 'provider-session-1' },
-      ompResumeFilePath: '/custom/omp/project/session.jsonl'
-    }
-    const first = await runtime.ensureAgentSession(request)
-    const second = await runtime.ensureAgentSession(request)
-
-    expect(first.disposition).toBe('created')
-    expect(second.disposition).toBe('adopted')
-    expect(second.terminal).toMatchObject({
-      handle: first.terminal.handle,
-      tabId: first.terminal.tabId,
-      paneKey: first.terminal.paneKey
-    })
-    expect(spawn).toHaveBeenCalledTimes(2)
-    expect(spawn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        command: expect.stringContaining("'--resume' '/custom/omp/project/session.jsonl'"),
-        agentSessionEnsure: expect.objectContaining({
-          claim: expect.objectContaining({ agent: 'omp' })
-        })
-      })
-    )
-  })
-
   it('builds structured fresh drafts with supported launch preferences on the host', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-agent-draft' })
     const runtime = new OrcaRuntimeService({
@@ -13014,8 +12655,8 @@ describe('OrcaRuntimeService', () => {
         ...store.getSettings(),
         disabledTuiAgents: [],
         agentCmdOverrides: {},
-        agentDefaultArgs: { cursor: '--force' },
-        agentDefaultEnv: { cursor: { CURSOR_PROFILE: 'captured' } }
+        agentDefaultArgs: { codex: '--force' },
+        agentDefaultEnv: { codex: { CODEX_PROFILE: 'captured' } }
       })
     }
     const runtime = new OrcaRuntimeService(runtimeStore)
@@ -13027,49 +12668,17 @@ describe('OrcaRuntimeService', () => {
     })
 
     await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      startupAgent: 'cursor',
+      startupAgent: 'codex',
       title: 'worker'
     })
 
     const spawnCall = spawn.mock.calls[0]?.[0] as
       | { command?: string; launchAgent?: string; env?: Record<string, string> }
       | undefined
-    expect(spawnCall?.command).toBe("cursor-agent '--force'")
-    expect(spawnCall?.launchAgent).toBe('cursor')
-    expect(spawnCall?.env).toMatchObject({ CURSOR_PROFILE: 'captured' })
-    expect(markCursorWorkspaceTrustedMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH)
-  })
-
-  it('resolves a startupAgent to the CLI binary on Windows, where `cursor` is the IDE', async () => {
-    setPlatform('win32')
-    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
-    const runtimeStore = {
-      ...store,
-      getSettings: () => ({
-        ...store.getSettings(),
-        disabledTuiAgents: [],
-        terminalWindowsShell: 'cmd.exe',
-        agentCmdOverrides: {},
-        // Why: pin the arg here rather than inherit the shared yolo default, so
-        // this test tracks Windows quoting and not an unrelated default's value.
-        agentDefaultArgs: { cursor: '--force' },
-        agentDefaultEnv: {}
-      })
-    }
-    const runtime = new OrcaRuntimeService(runtimeStore)
-    runtime.setPtyController({
-      spawn,
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-
-    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, { startupAgent: 'cursor' })
-
-    const spawnCall = spawn.mock.calls[0]?.[0] as { command?: string } | undefined
-    // Why: assert the cmd.exe double quoting too — a platform-insensitive prefix
-    // match would pass on any OS and prove nothing about the reported platform.
-    expect(spawnCall?.command).toBe('cursor-agent "--force"')
+    expect(spawnCall?.command).toBe("codex '--force'")
+    expect(spawnCall?.launchAgent).toBe('codex')
+    expect(spawnCall?.env).toMatchObject({ CODEX_PROFILE: 'captured' })
+    expect(markCodexProjectTrustedMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH)
   })
 
   // Why: claude-agent-teams is the only agent whose launcher name varies by
@@ -13119,8 +12728,8 @@ describe('OrcaRuntimeService', () => {
       getSettings: () => ({
         ...store.getSettings(),
         disabledTuiAgents: [],
-        agentCmdOverrides: { cursor: 'cursor-agent --beta' },
-        agentDefaultArgs: { cursor: '--force' },
+        agentCmdOverrides: { codex: 'codex --beta' },
+        agentDefaultArgs: { codex: '--force' },
         agentDefaultEnv: {}
       })
     })
@@ -13131,10 +12740,10 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
 
-    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, { startupAgent: 'cursor' })
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, { startupAgent: 'codex' })
 
     const spawnCall = spawn.mock.calls[0]?.[0] as { command?: string } | undefined
-    expect(spawnCall?.command).toBe("cursor-agent --beta '--force'")
+    expect(spawnCall?.command).toBe("codex --beta '--force'")
   })
 
   // Why: with no selector the launch is never resolved, so a dropped startupAgent
@@ -13150,7 +12759,7 @@ describe('OrcaRuntimeService', () => {
     })
 
     await expect(
-      runtime.createTerminal(undefined, { startupAgent: 'cursor', rendererBacked: true })
+      runtime.createTerminal(undefined, { startupAgent: 'codex', rendererBacked: true })
     ).rejects.toThrow(/requires a workspace selector/)
   })
 
@@ -13167,7 +12776,7 @@ describe('OrcaRuntimeService', () => {
         ...store.getSettings(),
         disabledTuiAgents: [],
         agentCmdOverrides: {},
-        agentDefaultArgs: { cursor: '--force' },
+        agentDefaultArgs: { codex: '--force' },
         agentDefaultEnv: {}
       })
     } as never)
@@ -13178,13 +12787,13 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
 
-    await runtime.createTerminal(`id:${TEST_FOLDER_WORKSPACE_KEY}`, { startupAgent: 'cursor' })
+    await runtime.createTerminal(`id:${TEST_FOLDER_WORKSPACE_KEY}`, { startupAgent: 'codex' })
 
     const spawnCall = spawn.mock.calls[0]?.[0] as
       | { command?: string; launchAgent?: string }
       | undefined
-    expect(spawnCall?.command).toBe("cursor-agent '--force'")
-    expect(spawnCall?.launchAgent).toBe('cursor')
+    expect(spawnCall?.command).toBe("codex '--force'")
+    expect(spawnCall?.launchAgent).toBe('codex')
   })
 
   // Why: silently returning the caller's opts would spawn a bare shell that can
@@ -13209,17 +12818,17 @@ describe('OrcaRuntimeService', () => {
     for (const conflicting of [
       { env: { SOME_VAR: 'set' } },
       // Why: a raw command would be silently overwritten by the built launch.
-      { command: 'cursor-agent --resume' },
+      { command: 'codex --resume' },
       // Why: resume identity paired with a freshly built launch is incoherent.
       { resumeProviderSession: { key: 'session_id', id: 'prior-session' } as never },
-      { launchAgent: 'cursor' as const },
+      { launchAgent: 'codex' as const },
       { launchConfig: { agentArgs: '', agentEnv: {} } as never },
       { startupCommandDelivery: 'provider' as never },
       { claudeAgentTeamsSourceCommand: 'claude' }
     ]) {
       await expect(
         runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-          startupAgent: 'cursor',
+          startupAgent: 'codex',
           ...conflicting
         })
       ).rejects.toThrow(/cannot combine/)
@@ -13233,7 +12842,7 @@ describe('OrcaRuntimeService', () => {
       ...store,
       getSettings: () => ({
         ...store.getSettings(),
-        disabledTuiAgents: ['cursor' as const],
+        disabledTuiAgents: ['codex' as const],
         agentCmdOverrides: {}
       })
     }
@@ -13246,7 +12855,7 @@ describe('OrcaRuntimeService', () => {
     })
 
     await expect(
-      runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, { startupAgent: 'cursor' })
+      runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, { startupAgent: 'codex' })
     ).rejects.toThrow(/disabled/)
     expect(spawn).not.toHaveBeenCalled()
   })
@@ -23644,164 +23253,26 @@ describe('OrcaRuntimeService', () => {
     }
   )
 
-  it('preserves authoritative OMP identity for Pi-compatible remote terminal snapshots', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    const leafId = '11111111-1111-4111-8111-111111111111'
-    const hostPaneKey = `tab-1:${leafId}`
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
-      tabs: [],
-      leaves: [],
-      mobileSessionTabs: [
-        {
-          worktree: TEST_WORKTREE_ID,
-          publicationEpoch: 'epoch-1',
-          snapshotVersion: 1,
-          activeGroupId: 'group-1',
-          activeTabId: `tab-1::${leafId}`,
-          activeTabType: 'terminal',
-          tabs: [
-            {
-              type: 'terminal',
-              id: `tab-1::${leafId}`,
-              parentTabId: 'tab-1',
-              leafId,
-              title: '\u280b Pi',
-              launchAgent: 'omp',
-              agentStatus: {
-                state: 'working',
-                prompt: 'fix parity',
-                updatedAt: 1_700_000_000_000,
-                stateStartedAt: 1_699_999_999_000,
-                agentType: 'pi',
-                paneKey: hostPaneKey,
-                terminalTitle: '\u280b Pi',
-                stateHistory: []
-              },
-              isActive: true
-            }
-          ]
-        }
-      ]
-    })
-
-    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
-
-    expect(result.tabs[0]).toEqual(
-      expect.objectContaining({
-        type: 'terminal',
-        title: '\u280b OMP',
-        launchAgent: 'omp',
-        agentStatus: expect.objectContaining({
-          state: 'working',
-          agentType: 'omp',
-          paneKey: hostPaneKey,
-          terminalTitle: '\u280b OMP'
-        })
-      })
-    )
-  })
-
-  it('derives remote OMP owner from live PTY metadata when the tab snapshot omits it', async () => {
-    const spawn = vi.fn().mockResolvedValue({ id: 'pty-omp' })
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn,
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.attachWindow(1)
-
-    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      command: 'omp',
-      launchAgent: 'omp',
-      title: 'OMP',
-      activate: true
-    })
-    const spawnCall = spawn.mock.calls[0]?.[0]
-    expect(spawnCall).toEqual(
-      expect.objectContaining({
-        tabId: expect.any(String),
-        leafId: expect.any(String)
-      })
-    )
-    const { tabId, leafId } = spawnCall as { tabId: string; leafId: string }
-
-    runtime.syncWindowGraph(1, {
-      tabs: [
-        {
-          tabId,
-          worktreeId: TEST_WORKTREE_ID,
-          title: '\u280b π - tmp',
-          activeLeafId: leafId,
-          layout: null
-        }
-      ],
-      leaves: [
-        {
-          tabId,
-          worktreeId: TEST_WORKTREE_ID,
-          leafId,
-          paneRuntimeId: 1,
-          ptyId: 'pty-omp',
-          paneTitle: '\u280b π - tmp'
-        }
-      ],
-      mobileSessionTabs: [
-        {
-          worktree: TEST_WORKTREE_ID,
-          publicationEpoch: 'epoch-1',
-          snapshotVersion: 1,
-          activeGroupId: null,
-          activeTabId: `${tabId}::${leafId}`,
-          activeTabType: 'terminal',
-          tabs: [
-            {
-              type: 'terminal',
-              id: `${tabId}::${leafId}`,
-              parentTabId: tabId,
-              leafId,
-              ptyId: 'pty-omp',
-              title: '\u280b π - tmp',
-              isActive: true
-            }
-          ]
-        }
-      ]
-    })
-
-    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
-
-    expect(result.tabs[0]).toEqual(
-      expect.objectContaining({
-        type: 'terminal',
-        title: '\u280b OMP',
-        launchAgent: 'omp'
-      })
-    )
-  })
-
   it('skips the foreground-process probe when the PTY launch agent is already known', async () => {
     // Why: foregroundAgent is only a fallback when launchAgent is unknown, so probing a launched agent burns a relay round-trip without changing the resolved owner.
-    const getForegroundProcess = vi.fn(async () => 'omp')
+    const getForegroundProcess = vi.fn(async () => 'codex')
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-omp' }),
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-codex' }),
       write: () => true,
       kill: () => true,
       getForegroundProcess
     })
     runtime.attachWindow(1)
     await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      command: 'omp',
-      launchAgent: 'omp',
-      title: 'OMP',
+      command: 'codex',
+      launchAgent: 'codex',
+      title: 'Codex',
       activate: true
     })
 
-    runtime.onPtyData('pty-omp', '\x1b]0;⠋ OMP\x07working\n', 100)
-    runtime.onPtyData('pty-omp', '\x1b]0;OMP ready\x07idle\n', 200)
+    runtime.onPtyData('pty-codex', '\x1b]0;⠋ Codex\x07working\n', 100)
+    runtime.onPtyData('pty-codex', '\x1b]0;Codex ready\x07idle\n', 200)
 
     expect(getForegroundProcess).not.toHaveBeenCalled()
   })
@@ -31445,8 +30916,8 @@ describe('OrcaRuntimeService', () => {
       getSettings: () => ({
         ...store.getSettings(),
         disabledTuiAgents: [],
-        agentCmdOverrides: { 'command-code': 'command-code --profile mobile' },
-        agentDefaultEnv: { 'command-code': { COMMAND_CODE_PROFILE: 'mobile-env' } }
+        agentCmdOverrides: { codex: 'codex --profile mobile' },
+        agentDefaultEnv: { codex: { CODEX_PROFILE: 'mobile-env' } }
       })
     } as never)
     runtime.setPtyController({
@@ -31458,15 +30929,15 @@ describe('OrcaRuntimeService', () => {
     runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
 
     await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
-      agent: 'command-code'
+      agent: 'codex'
     })
 
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
-        command: "command-code --profile mobile '--yolo'",
+        command: "codex --profile mobile '--dangerously-bypass-approvals-and-sandbox'",
         cwd: TEST_WORKTREE_PATH,
         env: expect.objectContaining({
-          COMMAND_CODE_PROFILE: 'mobile-env'
+          CODEX_PROFILE: 'mobile-env'
         }),
         worktreeId: TEST_WORKTREE_ID
       })
@@ -31526,7 +30997,7 @@ describe('OrcaRuntimeService', () => {
 
     await expect(
       runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
-        agent: 'aider',
+        agent: 'claude-agent-teams',
         agentPrompt: 'Review this diff'
       })
     ).rejects.toThrow('does not support startup prompt quick commands')
@@ -31552,8 +31023,8 @@ describe('OrcaRuntimeService', () => {
         getSettings: () => ({
           ...store.getSettings(),
           disabledTuiAgents: [],
-          agentCmdOverrides: { 'command-code': 'command-code --profile mobile' },
-          agentDefaultArgs: { 'command-code': '--note "can\'t"' },
+          agentCmdOverrides: { codex: 'codex --profile mobile' },
+          agentDefaultArgs: { codex: '--note "can\'t"' },
           localWindowsRuntimeDefault: { kind: 'windows-host' }
         })
       } as never)
@@ -31566,12 +31037,12 @@ describe('OrcaRuntimeService', () => {
       runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
 
       await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
-        agent: 'command-code'
+        agent: 'codex'
       })
 
       expect(spawn).toHaveBeenCalledWith(
         expect.objectContaining({
-          command: "command-code --profile mobile '--note' 'can'\\''t'",
+          command: "codex --profile mobile '--note' 'can'\\''t'",
           cwd: TEST_WORKTREE_PATH,
           worktreeId: TEST_WORKTREE_ID
         })
@@ -31598,8 +31069,8 @@ describe('OrcaRuntimeService', () => {
         getSettings: () => ({
           ...store.getSettings(),
           disabledTuiAgents: [],
-          agentCmdOverrides: { 'command-code': 'command-code --profile mobile' },
-          agentDefaultArgs: { 'command-code': '--note "can\'t"' },
+          agentCmdOverrides: { codex: 'codex --profile mobile' },
+          agentDefaultArgs: { codex: '--note "can\'t"' },
           localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
         })
       } as never)
@@ -31612,12 +31083,12 @@ describe('OrcaRuntimeService', () => {
       runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
 
       await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
-        agent: 'command-code'
+        agent: 'codex'
       })
 
       expect(spawn).toHaveBeenCalledWith(
         expect.objectContaining({
-          command: "command-code --profile mobile '--note' 'can''t'",
+          command: "codex --profile mobile '--note' 'can''t'",
           cwd: TEST_WORKTREE_PATH,
           worktreeId: TEST_WORKTREE_ID
         })
@@ -31644,8 +31115,8 @@ describe('OrcaRuntimeService', () => {
         getSettings: () => ({
           ...store.getSettings(),
           disabledTuiAgents: [],
-          agentCmdOverrides: { 'command-code': 'command-code --profile mobile' },
-          agentDefaultArgs: { 'command-code': '--note "can\'t"' },
+          agentCmdOverrides: { codex: 'codex --profile mobile' },
+          agentDefaultArgs: { codex: '--note "can\'t"' },
           localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' },
           terminalWindowsShell: 'cmd.exe'
         })
@@ -31659,12 +31130,12 @@ describe('OrcaRuntimeService', () => {
       runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
 
       await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
-        agent: 'command-code'
+        agent: 'codex'
       })
 
       expect(spawn).toHaveBeenCalledWith(
         expect.objectContaining({
-          command: 'command-code --profile mobile "--note" "can\'t"',
+          command: 'codex --profile mobile "--note" "can\'t"',
           cwd: TEST_WORKTREE_PATH,
           worktreeId: TEST_WORKTREE_ID
         })
@@ -33563,9 +33034,6 @@ describe('OrcaRuntimeService', () => {
           sortOrder: 0,
           linkedIssue: 123,
           linkedPR: null,
-          linkedLinearIssue: null,
-          linkedGitLabMR: null,
-          linkedGitLabIssue: null,
           comment: '',
           isPinned: false,
           isActive: false,
@@ -41765,14 +41233,14 @@ describe('OrcaRuntimeService', () => {
     const result = await runtime.createManagedWorktree({
       repoSelector: TEST_REPO_ID,
       name: 'runtime-cli-aider-startup',
-      startupAgent: 'aider',
+      startupAgent: 'claude-agent-teams',
       startupPrompt: 'fix it'
     })
 
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: '/tmp/workspaces/runtime-cli-aider-startup',
-        command: "aider '--yes-always'",
+        command: expect.stringContaining("claude-teams '--dangerously-skip-permissions'"),
         worktreeId: result.worktree.id
       })
     )
@@ -41838,7 +41306,7 @@ describe('OrcaRuntimeService', () => {
       await runtime.createManagedWorktree({
         repoSelector: TEST_REPO_ID,
         name: 'runtime-cli-aider-shell',
-        startupAgent: 'aider',
+        startupAgent: 'claude-agent-teams',
         startupPrompt: 'fix it'
       })
 
@@ -42624,601 +42092,6 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('passes SSH connection ids through GitLab task operations', async () => {
-    listGitLabMergeRequestsMock.mockResolvedValue({ items: [] })
-    listGitLabWorkItemsMock.mockResolvedValue({ items: [] })
-    listGitLabIssuesMock.mockResolvedValue({
-      items: [
-        {
-          number: 7,
-          title: 'Issue title',
-          state: 'opened',
-          url: 'https://gitlab.example/issues/7',
-          labels: ['bug'],
-          updatedAt: '2026-05-22T00:00:00Z',
-          author: 'alex'
-        }
-      ]
-    })
-    listGitLabTodosMock.mockResolvedValue([])
-    listGitLabLabelsMock.mockResolvedValue(['bug', 'frontend'])
-    getGitLabWorkItemByProjectRefMock.mockResolvedValue({
-      id: 'gitlab-issue-7',
-      type: 'issue',
-      number: 7
-    })
-    createGitLabIssueMock.mockResolvedValue({
-      ok: true,
-      number: 1,
-      url: 'https://gitlab.example/issues/1'
-    })
-    updateGitLabIssueMock.mockResolvedValue({ ok: true })
-    addGitLabIssueCommentMock.mockResolvedValue({ ok: true })
-    addGitLabMRCommentMock.mockResolvedValue({ ok: true })
-    addGitLabMRInlineCommentMock.mockResolvedValue({ ok: true })
-    resolveGitLabMRDiscussionMock.mockResolvedValue({ ok: true })
-    getGitLabJobTraceMock.mockResolvedValue({ ok: true, trace: 'log' })
-    retryGitLabJobMock.mockResolvedValue({ ok: true })
-    mergeGitLabMRMock.mockResolvedValue({ ok: true })
-    closeGitLabMRMock.mockResolvedValue({ ok: true })
-    reopenGitLabMRMock.mockResolvedValue({ ok: true })
-    getGitLabWorkItemDetailsMock.mockResolvedValue({ body: 'Details' })
-    updateGitLabMRReviewersMock.mockResolvedValue({ ok: true, reviewers: [] })
-
-    const remoteRepo = {
-      id: TEST_REPO_ID,
-      path: '/remote/repo',
-      displayName: 'repo',
-      badgeColor: 'blue',
-      addedAt: 1,
-      connectionId: 'ssh-1',
-      issueSourcePreference: 'origin' as const
-    }
-    const runtimeStore = {
-      ...store,
-      getRepos: () => [remoteRepo],
-      getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined)
-    }
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-
-    await runtime.listGitLabRepoMRs(TEST_REPO_ID, 'closed', 2, 25, 'ambiguous selector')
-    await runtime.listGitLabRepoWorkItems(TEST_REPO_ID, 'closed', 2, 25, 'ambiguous selector')
-    const issues = await runtime.listGitLabRepoIssues(TEST_REPO_ID, 'opened', '@me', 50)
-    await runtime.listGitLabRepoTodos(TEST_REPO_ID)
-    await runtime.listGitLabRepoLabels(TEST_REPO_ID)
-    await runtime.createGitLabRepoIssue(TEST_REPO_ID, 'New issue', 'Body')
-    await runtime.updateGitLabRepoIssue(TEST_REPO_ID, 7, { state: 'closed' })
-    await runtime.addGitLabRepoIssueComment(TEST_REPO_ID, 7, 'Looks good')
-    await runtime.addGitLabRepoMRComment(TEST_REPO_ID, 8, 'Ship it')
-    const inlineCommentInput = {
-      body: 'please fix',
-      path: 'src/app.ts',
-      line: 12,
-      baseSha: 'base',
-      startSha: 'start',
-      headSha: 'head'
-    }
-    await runtime.addGitLabRepoMRInlineComment(TEST_REPO_ID, 8, inlineCommentInput)
-    await runtime.resolveGitLabRepoMRDiscussion(TEST_REPO_ID, 8, 'discussion-1', true)
-    await runtime.getGitLabRepoJobTrace(TEST_REPO_ID, 99)
-    await runtime.retryGitLabRepoJob(TEST_REPO_ID, 99)
-    await runtime.mergeGitLabRepoMR(TEST_REPO_ID, 8, 'squash')
-    await runtime.updateGitLabRepoMRState(TEST_REPO_ID, 8, 'closed')
-    await runtime.updateGitLabRepoMRState(TEST_REPO_ID, 8, 'opened')
-    await runtime.getGitLabRepoWorkItemDetails(TEST_REPO_ID, 8, 'mr')
-    await runtime.updateGitLabRepoMRReviewers(TEST_REPO_ID, 8, [1, 2])
-    await runtime.getGitLabRepoWorkItemByPath(
-      TEST_REPO_ID,
-      { host: 'gitlab.example.com', path: 'group/project' },
-      7,
-      'issue'
-    )
-
-    expect(listGitLabMergeRequestsMock).toHaveBeenCalledWith(
-      '/remote/repo',
-      'closed',
-      2,
-      25,
-      'origin',
-      'ambiguous selector',
-      'ssh-1'
-    )
-    expect(listGitLabWorkItemsMock).toHaveBeenCalledWith(
-      '/remote/repo',
-      'closed',
-      2,
-      25,
-      'origin',
-      'ambiguous selector',
-      'ssh-1'
-    )
-    expect(listGitLabIssuesMock).toHaveBeenCalledWith(
-      '/remote/repo',
-      50,
-      'origin',
-      'opened',
-      '@me',
-      'ssh-1'
-    )
-    expect(issues.items).toEqual([
-      {
-        id: `gitlab-issue-${TEST_REPO_ID}-7`,
-        type: 'issue',
-        number: 7,
-        title: 'Issue title',
-        state: 'opened',
-        url: 'https://gitlab.example/issues/7',
-        labels: ['bug'],
-        updatedAt: '2026-05-22T00:00:00Z',
-        author: 'alex',
-        repoId: TEST_REPO_ID
-      }
-    ])
-    expect(listGitLabTodosMock).toHaveBeenCalledWith('/remote/repo', 'ssh-1')
-    expect(listGitLabLabelsMock).toHaveBeenCalledWith('/remote/repo', 'origin', 'ssh-1')
-    expect(createGitLabIssueMock).toHaveBeenCalledWith(
-      '/remote/repo',
-      'New issue',
-      'Body',
-      'origin',
-      'ssh-1'
-    )
-    expect(updateGitLabIssueMock).toHaveBeenCalledWith(
-      '/remote/repo',
-      7,
-      { state: 'closed' },
-      'origin',
-      'ssh-1',
-      undefined
-    )
-    expect(addGitLabIssueCommentMock).toHaveBeenCalledWith(
-      '/remote/repo',
-      7,
-      'Looks good',
-      'origin',
-      'ssh-1',
-      undefined
-    )
-    expect(addGitLabMRCommentMock).toHaveBeenCalledWith(
-      '/remote/repo',
-      8,
-      'Ship it',
-      'origin',
-      'ssh-1',
-      undefined
-    )
-    expect(addGitLabMRInlineCommentMock).toHaveBeenCalledWith(
-      '/remote/repo',
-      8,
-      inlineCommentInput,
-      'origin',
-      'ssh-1',
-      undefined
-    )
-    expect(resolveGitLabMRDiscussionMock).toHaveBeenCalledWith(
-      '/remote/repo',
-      8,
-      'discussion-1',
-      true,
-      'origin',
-      'ssh-1',
-      undefined
-    )
-    expect(getGitLabJobTraceMock).toHaveBeenCalledWith(
-      '/remote/repo',
-      99,
-      'origin',
-      'ssh-1',
-      undefined
-    )
-    expect(retryGitLabJobMock).toHaveBeenCalledWith(
-      '/remote/repo',
-      99,
-      'origin',
-      'ssh-1',
-      undefined
-    )
-    expect(mergeGitLabMRMock).toHaveBeenCalledWith(
-      '/remote/repo',
-      8,
-      'squash',
-      'origin',
-      'ssh-1',
-      undefined
-    )
-    expect(closeGitLabMRMock).toHaveBeenCalledWith('/remote/repo', 8, 'origin', 'ssh-1', undefined)
-    expect(reopenGitLabMRMock).toHaveBeenCalledWith('/remote/repo', 8, 'origin', 'ssh-1', undefined)
-    expect(getGitLabWorkItemDetailsMock).toHaveBeenCalledWith(
-      '/remote/repo',
-      8,
-      'mr',
-      'origin',
-      'ssh-1',
-      undefined
-    )
-    expect(updateGitLabMRReviewersMock).toHaveBeenCalledWith(
-      '/remote/repo',
-      8,
-      [1, 2],
-      'origin',
-      'ssh-1',
-      undefined
-    )
-    expect(getGitLabWorkItemByProjectRefMock).toHaveBeenCalledWith(
-      '/remote/repo',
-      { host: 'gitlab.example.com', path: 'group/project' },
-      7,
-      'issue',
-      'ssh-1'
-    )
-  })
-
-  it('routes runtime GitLab issue, MR, work-item, and todo actions through the selected WSL project runtime', async () => {
-    setPlatform('win32')
-    const runtimeStore = {
-      ...store,
-      getProjects: () => [
-        {
-          id: 'project-1',
-          displayName: 'repo',
-          badgeColor: 'blue',
-          sourceRepoIds: [TEST_REPO_ID],
-          localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
-          createdAt: 0,
-          updatedAt: 0
-        }
-      ],
-      getSettings: () => ({
-        ...store.getSettings(),
-        localWindowsRuntimeDefault: { kind: 'windows-host' }
-      })
-    }
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const localGitOptions = { wslDistro: 'Ubuntu' }
-    listGitLabMergeRequestsMock.mockResolvedValue({ items: [] })
-    listGitLabWorkItemsMock.mockResolvedValue({ items: [] })
-    listGitLabIssuesMock.mockResolvedValue({ items: [] })
-    listGitLabTodosMock.mockResolvedValue([])
-    listGitLabLabelsMock.mockResolvedValue([])
-    createGitLabIssueMock.mockResolvedValue({
-      ok: true,
-      number: 7,
-      url: 'https://gitlab.example/issues/7'
-    })
-    updateGitLabIssueMock.mockResolvedValue({ ok: true })
-    addGitLabIssueCommentMock.mockResolvedValue({ ok: true })
-
-    await runtime.listGitLabRepoMRs(TEST_REPO_ID, 'opened', 1, 20)
-    await runtime.listGitLabRepoWorkItems(TEST_REPO_ID, 'opened', 1, 20)
-    await runtime.listGitLabRepoIssues(TEST_REPO_ID, 'opened', undefined, 20)
-    await runtime.listGitLabRepoTodos(TEST_REPO_ID)
-    await runtime.listGitLabRepoLabels(TEST_REPO_ID)
-    await runtime.createGitLabRepoIssue(TEST_REPO_ID, 'Title', 'Body')
-    await runtime.updateGitLabRepoIssue(TEST_REPO_ID, 7, { body: 'Updated' })
-    await runtime.addGitLabRepoIssueComment(TEST_REPO_ID, 7, 'Comment')
-
-    expect(listGitLabMergeRequestsMock).toHaveBeenCalledWith(
-      TEST_REPO_PATH,
-      'opened',
-      1,
-      20,
-      undefined,
-      undefined,
-      null,
-      localGitOptions
-    )
-    expect(listGitLabWorkItemsMock).toHaveBeenCalledWith(
-      TEST_REPO_PATH,
-      'opened',
-      1,
-      20,
-      undefined,
-      undefined,
-      null,
-      localGitOptions
-    )
-    expect(listGitLabIssuesMock).toHaveBeenCalledWith(
-      TEST_REPO_PATH,
-      20,
-      undefined,
-      'opened',
-      undefined,
-      null,
-      localGitOptions
-    )
-    expect(listGitLabTodosMock).toHaveBeenCalledWith(TEST_REPO_PATH, null, localGitOptions)
-    expect(listGitLabLabelsMock).toHaveBeenCalledWith(
-      TEST_REPO_PATH,
-      undefined,
-      null,
-      localGitOptions
-    )
-    expect(createGitLabIssueMock).toHaveBeenCalledWith(
-      TEST_REPO_PATH,
-      'Title',
-      'Body',
-      undefined,
-      null,
-      localGitOptions
-    )
-    expect(updateGitLabIssueMock).toHaveBeenCalledWith(
-      TEST_REPO_PATH,
-      7,
-      { body: 'Updated' },
-      undefined,
-      null,
-      undefined,
-      localGitOptions
-    )
-    expect(addGitLabIssueCommentMock).toHaveBeenCalledWith(
-      TEST_REPO_PATH,
-      7,
-      'Comment',
-      undefined,
-      null,
-      undefined,
-      localGitOptions
-    )
-  })
-
-  it('routes runtime GitLab MR details, review-management, job, and pasted URL actions through the selected WSL project runtime', async () => {
-    setPlatform('win32')
-    const runtimeStore = {
-      ...store,
-      getProjects: () => [
-        {
-          id: 'project-1',
-          displayName: 'repo',
-          badgeColor: 'blue',
-          sourceRepoIds: [TEST_REPO_ID],
-          localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
-          createdAt: 0,
-          updatedAt: 0
-        }
-      ],
-      getSettings: () => ({
-        ...store.getSettings(),
-        localWindowsRuntimeDefault: { kind: 'windows-host' }
-      })
-    }
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const localGitOptions = { wslDistro: 'Ubuntu' }
-    const inlineInput = {
-      body: 'Inline',
-      path: 'src/app.ts',
-      line: 12,
-      baseSha: 'base',
-      startSha: 'start',
-      headSha: 'head'
-    }
-    getGitLabWorkItemDetailsMock.mockResolvedValue({ body: 'Details' })
-    updateGitLabMRMock.mockResolvedValue({ ok: true })
-    updateGitLabMRReviewersMock.mockResolvedValue({ ok: true, reviewers: [] })
-    addGitLabMRCommentMock.mockResolvedValue({ ok: true })
-    addGitLabMRInlineCommentMock.mockResolvedValue({ ok: true })
-    resolveGitLabMRDiscussionMock.mockResolvedValue({ ok: true })
-    getGitLabJobTraceMock.mockResolvedValue({ ok: true, trace: 'trace' })
-    retryGitLabJobMock.mockResolvedValue({ ok: true })
-    mergeGitLabMRMock.mockResolvedValue({ ok: true })
-    closeGitLabMRMock.mockResolvedValue({ ok: true })
-    reopenGitLabMRMock.mockResolvedValue({ ok: true })
-    getGitLabWorkItemByProjectRefMock.mockResolvedValue({ type: 'mr', number: 8 })
-
-    await runtime.getGitLabRepoWorkItemDetails(TEST_REPO_ID, 8, 'mr')
-    await runtime.updateGitLabRepoMR(TEST_REPO_ID, 8, { title: 'Renamed' })
-    await runtime.updateGitLabRepoMRReviewers(TEST_REPO_ID, 8, [1])
-    await runtime.addGitLabRepoMRComment(TEST_REPO_ID, 8, 'Comment')
-    await runtime.addGitLabRepoMRInlineComment(TEST_REPO_ID, 8, inlineInput)
-    await runtime.resolveGitLabRepoMRDiscussion(TEST_REPO_ID, 8, 'discussion-1', true)
-    await runtime.getGitLabRepoJobTrace(TEST_REPO_ID, 99)
-    await runtime.retryGitLabRepoJob(TEST_REPO_ID, 99)
-    await runtime.mergeGitLabRepoMR(TEST_REPO_ID, 8, 'squash')
-    await runtime.updateGitLabRepoMRState(TEST_REPO_ID, 8, 'closed')
-    await runtime.updateGitLabRepoMRState(TEST_REPO_ID, 8, 'opened')
-    await runtime.getGitLabRepoWorkItemByPath(
-      TEST_REPO_ID,
-      { host: 'gitlab.com', path: 'g/p' },
-      8,
-      'mr'
-    )
-
-    expect(getGitLabWorkItemDetailsMock).toHaveBeenCalledWith(
-      TEST_REPO_PATH,
-      8,
-      'mr',
-      undefined,
-      null,
-      undefined,
-      localGitOptions
-    )
-    expect(updateGitLabMRMock).toHaveBeenCalledWith(
-      TEST_REPO_PATH,
-      8,
-      { title: 'Renamed' },
-      undefined,
-      null,
-      undefined,
-      localGitOptions
-    )
-    expect(updateGitLabMRReviewersMock).toHaveBeenCalledWith(
-      TEST_REPO_PATH,
-      8,
-      [1],
-      undefined,
-      null,
-      undefined,
-      localGitOptions
-    )
-    expect(addGitLabMRCommentMock).toHaveBeenCalledWith(
-      TEST_REPO_PATH,
-      8,
-      'Comment',
-      undefined,
-      null,
-      undefined,
-      localGitOptions
-    )
-    expect(addGitLabMRInlineCommentMock).toHaveBeenCalledWith(
-      TEST_REPO_PATH,
-      8,
-      inlineInput,
-      undefined,
-      null,
-      undefined,
-      localGitOptions
-    )
-    expect(resolveGitLabMRDiscussionMock).toHaveBeenCalledWith(
-      TEST_REPO_PATH,
-      8,
-      'discussion-1',
-      true,
-      undefined,
-      null,
-      undefined,
-      localGitOptions
-    )
-    expect(getGitLabJobTraceMock).toHaveBeenCalledWith(
-      TEST_REPO_PATH,
-      99,
-      undefined,
-      null,
-      undefined,
-      localGitOptions
-    )
-    expect(retryGitLabJobMock).toHaveBeenCalledWith(
-      TEST_REPO_PATH,
-      99,
-      undefined,
-      null,
-      undefined,
-      localGitOptions
-    )
-    expect(mergeGitLabMRMock).toHaveBeenCalledWith(
-      TEST_REPO_PATH,
-      8,
-      'squash',
-      undefined,
-      null,
-      undefined,
-      localGitOptions
-    )
-    expect(closeGitLabMRMock).toHaveBeenCalledWith(
-      TEST_REPO_PATH,
-      8,
-      undefined,
-      null,
-      undefined,
-      localGitOptions
-    )
-    expect(reopenGitLabMRMock).toHaveBeenCalledWith(
-      TEST_REPO_PATH,
-      8,
-      undefined,
-      null,
-      undefined,
-      localGitOptions
-    )
-    expect(getGitLabWorkItemByProjectRefMock).toHaveBeenCalledWith(
-      TEST_REPO_PATH,
-      { host: 'gitlab.com', path: 'g/p' },
-      8,
-      'mr',
-      null,
-      localGitOptions
-    )
-  })
-
-  it('normalizes runtime GitLab issue list arguments like the desktop IPC path', async () => {
-    const runtime = new OrcaRuntimeService(store as never)
-
-    await runtime.listGitLabRepoIssues(TEST_REPO_ID, 'closed', 'someone-else' as never, 250.8)
-    await runtime.listGitLabRepoIssues(TEST_REPO_ID, 'all', '@me', 0.7)
-    await runtime.listGitLabRepoIssues(TEST_REPO_ID, 'unexpected' as never, '@me', Number.NaN)
-
-    expect(listGitLabIssuesMock).toHaveBeenNthCalledWith(
-      1,
-      TEST_REPO_PATH,
-      100,
-      undefined,
-      'closed',
-      undefined,
-      null
-    )
-    expect(listGitLabIssuesMock).toHaveBeenNthCalledWith(
-      2,
-      TEST_REPO_PATH,
-      1,
-      undefined,
-      'all',
-      '@me',
-      null
-    )
-    expect(listGitLabIssuesMock).toHaveBeenNthCalledWith(
-      3,
-      TEST_REPO_PATH,
-      20,
-      undefined,
-      'opened',
-      '@me',
-      null
-    )
-  })
-
-  it('records GitLab pasted-project recents only after successful runtime lookup', async () => {
-    let settings = {
-      ...store.getSettings(),
-      gitlabProjects: {
-        pinned: [{ host: 'gitlab.example.com', path: 'group/pinned' }],
-        recent: []
-      }
-    }
-    const updateSettings = vi.fn((updates: Record<string, unknown>) => {
-      settings = { ...settings, ...updates } as typeof settings
-    })
-    const runtimeStore = {
-      ...store,
-      getSettings: () => settings,
-      updateSettings
-    }
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-
-    getGitLabWorkItemByProjectRefMock.mockResolvedValueOnce({
-      id: 'gitlab-issue-7',
-      type: 'issue',
-      number: 7
-    })
-    await runtime.getGitLabRepoWorkItemByPath(
-      TEST_REPO_ID,
-      { host: 'gitlab.example.com', path: 'group/project' },
-      7,
-      'issue'
-    )
-
-    expect(updateSettings).toHaveBeenCalledWith({
-      gitlabProjects: {
-        pinned: [{ host: 'gitlab.example.com', path: 'group/pinned' }],
-        recent: [
-          expect.objectContaining({
-            host: 'gitlab.example.com',
-            path: 'group/project',
-            lastOpenedAt: expect.any(String)
-          })
-        ]
-      }
-    })
-
-    updateSettings.mockClear()
-    getGitLabWorkItemByProjectRefMock.mockResolvedValueOnce(null)
-    await runtime.getGitLabRepoWorkItemByPath(
-      TEST_REPO_ID,
-      { host: 'gitlab.example.com', path: 'group/missing' },
-      404,
-      'issue'
-    )
-
-    expect(updateSettings).not.toHaveBeenCalled()
-  })
-
   it('threads explicit origin preference through runtime WSL PR base resolution', async () => {
     setPlatform('win32')
     const localRepo = {
@@ -43385,669 +42258,6 @@ describe('OrcaRuntimeService', () => {
       expect.arrayContaining(['fetch']),
       '/remote/repo'
     )
-  })
-
-  it('resolves local GitLab fork MR bases from the target project MR head ref', async () => {
-    const localRepo = {
-      id: TEST_REPO_ID,
-      path: TEST_REPO_PATH,
-      displayName: 'repo',
-      badgeColor: 'blue',
-      addedAt: 1,
-      issueSourcePreference: 'origin' as const
-    }
-    const runtimeStore = {
-      ...store,
-      getRepos: () => [localRepo],
-      getRepo: (id: string) => (id === localRepo.id ? localRepo : undefined)
-    }
-    getGitLabProjectRefForRemoteMock.mockResolvedValue({
-      host: 'gitlab.example',
-      path: 'group/repo'
-    })
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
-      if (args[0] === 'remote' && args[1] === 'get-url') {
-        return { stdout: `${ORIGIN_REMOTE_URL}\n`, stderr: '' }
-      }
-      if (args[0] === 'fetch') {
-        return { stdout: '', stderr: '' }
-      }
-      if (
-        args[0] === 'rev-parse' &&
-        args[1] === '--verify' &&
-        args[2] === `refs/orca/merge-requests/${ORIGIN_HEAD_COMPONENT}/42^{commit}`
-      ) {
-        return { stdout: 'fork-mr-sha\n', stderr: '' }
-      }
-      throw new Error(`unexpected git call: ${args.join(' ')}`)
-    })
-    gitSpy.mockClear()
-    try {
-      const result = await runtime.resolveManagedMrBase({
-        repoSelector: 'id:repo-1',
-        mrIid: 42,
-        sourceBranch: 'contrib/fix',
-        targetBranch: 'main',
-        isCrossRepository: true
-      })
-
-      expect(result).toEqual({
-        baseBranch: 'fork-mr-sha',
-        compareBaseRef: 'refs/remotes/origin/main'
-      })
-      expect(gitSpy).toHaveBeenCalledWith(
-        [
-          'fetch',
-          '--no-tags',
-          'origin',
-          `+refs/merge-requests/42/head:refs/orca/merge-requests/${ORIGIN_HEAD_COMPONENT}/42`
-        ],
-        { cwd: TEST_REPO_PATH, timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
-      )
-      expect(gitSpy).toHaveBeenCalledWith(
-        ['fetch', 'origin', '+refs/heads/main:refs/remotes/origin/main'],
-        { cwd: TEST_REPO_PATH }
-      )
-      expect(gitSpy).toHaveBeenCalledWith(
-        ['rev-parse', '--verify', `refs/orca/merge-requests/${ORIGIN_HEAD_COMPONENT}/42^{commit}`],
-        { cwd: TEST_REPO_PATH }
-      )
-    } finally {
-      gitSpy.mockRestore()
-    }
-  })
-
-  it('captures the fork MR head from a dedicated ref, not the shared FETCH_HEAD', async () => {
-    const localRepo = {
-      id: TEST_REPO_ID,
-      path: TEST_REPO_PATH,
-      displayName: 'repo',
-      badgeColor: 'blue',
-      addedAt: 1,
-      issueSourcePreference: 'origin' as const
-    }
-    const runtimeStore = {
-      ...store,
-      getRepos: () => [localRepo],
-      getRepo: (id: string) => (id === localRepo.id ? localRepo : undefined)
-    }
-    getGitLabProjectRefForRemoteMock.mockResolvedValue({
-      host: 'gitlab.example',
-      path: 'group/repo'
-    })
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-    // Why: simulate a concurrent `git fetch origin` clobbering FETCH_HEAD with the
-    // default-branch tip. The resolved base must come from the durable Orca MR ref.
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
-      if (args[0] === 'remote' && args[1] === 'get-url') {
-        return { stdout: `${ORIGIN_REMOTE_URL}\n`, stderr: '' }
-      }
-      if (args[0] === 'fetch') {
-        return { stdout: '', stderr: '' }
-      }
-      if (args[0] === 'rev-parse') {
-        const ref = args.at(-1)
-        if (ref === 'FETCH_HEAD') {
-          return { stdout: 'mainbranchtip000\n', stderr: '' }
-        }
-        if (ref === `refs/orca/merge-requests/${ORIGIN_HEAD_COMPONENT}/42^{commit}`) {
-          return { stdout: 'mrheadsha111\n', stderr: '' }
-        }
-        throw new Error(`unexpected rev-parse ref: ${ref}`)
-      }
-      throw new Error(`unexpected git call: ${args.join(' ')}`)
-    })
-    gitSpy.mockClear()
-    try {
-      const result = await runtime.resolveManagedMrBase({
-        repoSelector: 'id:repo-1',
-        mrIid: 42,
-        sourceBranch: 'contrib/fix',
-        targetBranch: 'main',
-        isCrossRepository: true
-      })
-
-      expect(result).toEqual({
-        baseBranch: 'mrheadsha111',
-        compareBaseRef: 'refs/remotes/origin/main'
-      })
-      expect(gitSpy).not.toHaveBeenCalledWith(
-        ['rev-parse', '--verify', 'FETCH_HEAD'],
-        expect.anything()
-      )
-    } finally {
-      gitSpy.mockRestore()
-    }
-  })
-
-  it('keeps the durable MR head when the head fetch fails but the local ref resolves', async () => {
-    // Why: mirror compare-base soft-keep — a transient fetch failure must not
-    // fail the resolve when a prior fetch already pinned refs/orca/merge-requests/<iid>.
-    const localRepo = {
-      id: TEST_REPO_ID,
-      path: TEST_REPO_PATH,
-      displayName: 'repo',
-      badgeColor: 'blue',
-      addedAt: 1,
-      issueSourcePreference: 'origin' as const
-    }
-    const runtimeStore = {
-      ...store,
-      getRepos: () => [localRepo],
-      getRepo: (id: string) => (id === localRepo.id ? localRepo : undefined)
-    }
-    getGitLabProjectRefForRemoteMock.mockResolvedValue({
-      host: 'gitlab.example',
-      path: 'group/repo'
-    })
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
-      if (args[0] === 'remote' && args[1] === 'get-url') {
-        return { stdout: `${ORIGIN_REMOTE_URL}\n`, stderr: '' }
-      }
-      if (args[0] === 'fetch' && args[1] === '--no-tags') {
-        throw new Error('fatal: unable to access repo: Could not resolve host: gitlab.example')
-      }
-      if (args[0] === 'fetch') {
-        return { stdout: '', stderr: '' }
-      }
-      if (
-        args[0] === 'rev-parse' &&
-        args[2] === `refs/orca/merge-requests/${ORIGIN_HEAD_COMPONENT}/42^{commit}`
-      ) {
-        return { stdout: 'pinned-mr-sha\n', stderr: '' }
-      }
-      throw new Error(`unexpected git call: ${args.join(' ')}`)
-    })
-    gitSpy.mockClear()
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    try {
-      const result = await runtime.resolveManagedMrBase({
-        repoSelector: 'id:repo-1',
-        mrIid: 42,
-        sourceBranch: 'contrib/fix',
-        targetBranch: 'main',
-        isCrossRepository: true
-      })
-
-      expect(result).toEqual({
-        baseBranch: 'pinned-mr-sha',
-        compareBaseRef: 'refs/remotes/origin/main'
-      })
-    } finally {
-      warnSpy.mockRestore()
-      gitSpy.mockRestore()
-    }
-  })
-
-  it.each([
-    ["fatal: couldn't find remote ref refs/merge-requests/42/head", 'deleted MR / cleaned fork'],
-    ['Authentication failed. Check your remote credentials.', 'auth failure'],
-    [
-      'This SSH host is running an older Orca relay that cannot fetch merge request heads. Reconnect to deploy the latest relay, then try again.',
-      'stale relay'
-    ]
-  ])('fails hard instead of soft-keeping the durable MR head on: %s', async (message) => {
-    // Why: soft-keep on a non-transient failure would check out a dead or
-    // unauthorized tip (or mask the reconnect prompt) with a success UX.
-    const localRepo = {
-      id: TEST_REPO_ID,
-      path: TEST_REPO_PATH,
-      displayName: 'repo',
-      badgeColor: 'blue',
-      addedAt: 1,
-      issueSourcePreference: 'origin' as const
-    }
-    const runtimeStore = {
-      ...store,
-      getRepos: () => [localRepo],
-      getRepo: (id: string) => (id === localRepo.id ? localRepo : undefined)
-    }
-    getGitLabProjectRefForRemoteMock.mockResolvedValue({
-      host: 'gitlab.example',
-      path: 'group/repo'
-    })
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
-      if (args[0] === 'remote' && args[1] === 'get-url') {
-        return { stdout: `${ORIGIN_REMOTE_URL}\n`, stderr: '' }
-      }
-      if (args[0] === 'fetch' && args[1] === '--no-tags') {
-        throw new Error(message)
-      }
-      if (args[0] === 'fetch') {
-        return { stdout: '', stderr: '' }
-      }
-      if (
-        args[0] === 'rev-parse' &&
-        args[2] === `refs/orca/merge-requests/${ORIGIN_HEAD_COMPONENT}/42^{commit}`
-      ) {
-        return { stdout: 'pinned-mr-sha\n', stderr: '' }
-      }
-      throw new Error(`unexpected git call: ${args.join(' ')}`)
-    })
-    gitSpy.mockClear()
-    try {
-      const result = await runtime.resolveManagedMrBase({
-        repoSelector: 'id:repo-1',
-        mrIid: 42,
-        sourceBranch: 'contrib/fix',
-        targetBranch: 'main',
-        isCrossRepository: true
-      })
-
-      expect(result).toEqual({
-        error: `Failed to fetch refs/merge-requests/42/head: ${message}`
-      })
-      expect(gitSpy).not.toHaveBeenCalledWith(
-        ['rev-parse', '--verify', `refs/orca/merge-requests/${ORIGIN_HEAD_COMPONENT}/42^{commit}`],
-        expect.anything()
-      )
-    } finally {
-      gitSpy.mockRestore()
-    }
-  })
-
-  it('routes runtime GitLab fork MR base git calls through the selected WSL project runtime', async () => {
-    setPlatform('win32')
-    const localRepo = {
-      id: TEST_REPO_ID,
-      path: TEST_REPO_PATH,
-      displayName: 'repo',
-      badgeColor: 'blue',
-      addedAt: 1,
-      issueSourcePreference: 'origin' as const
-    }
-    const runtimeStore = {
-      ...store,
-      getRepos: () => [localRepo],
-      getRepo: (id: string) => (id === localRepo.id ? localRepo : undefined),
-      getProjects: () => [
-        {
-          id: 'project-1',
-          displayName: 'repo',
-          badgeColor: 'blue',
-          sourceRepoIds: [TEST_REPO_ID],
-          localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
-          createdAt: 0,
-          updatedAt: 0
-        }
-      ],
-      getSettings: () => ({
-        ...store.getSettings(),
-        localWindowsRuntimeDefault: { kind: 'windows-host' }
-      })
-    }
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
-      if (args[0] === 'remote' && args[1] === 'get-url') {
-        return { stdout: `${ORIGIN_REMOTE_URL}\n`, stderr: '' }
-      }
-      if (args[0] === 'fetch') {
-        return { stdout: '', stderr: '' }
-      }
-      if (
-        args[0] === 'rev-parse' &&
-        args[1] === '--verify' &&
-        args[2] === `refs/orca/merge-requests/${ORIGIN_HEAD_COMPONENT}/42^{commit}`
-      ) {
-        return { stdout: 'fork-mr-sha\n', stderr: '' }
-      }
-      throw new Error(`unexpected git call: ${args.join(' ')}`)
-    })
-    gitSpy.mockClear()
-    getGlabKnownHostsMock.mockResolvedValue(['gitlab.com', 'git.internal'])
-    try {
-      const result = await runtime.resolveManagedMrBase({
-        repoSelector: 'id:repo-1',
-        mrIid: 42,
-        sourceBranch: 'contrib/fix',
-        isCrossRepository: true
-      })
-
-      expect(result).toEqual({ baseBranch: 'fork-mr-sha' })
-      expect(getGitLabProjectRefForRemoteMock).toHaveBeenCalledWith(
-        TEST_REPO_PATH,
-        'origin',
-        ['gitlab.com', 'git.internal'],
-        null,
-        { wslDistro: 'Ubuntu' }
-      )
-      expect(gitSpy).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
-        cwd: TEST_REPO_PATH,
-        wslDistro: 'Ubuntu'
-      })
-      expect(gitSpy).toHaveBeenCalledWith(
-        [
-          'fetch',
-          '--no-tags',
-          'origin',
-          `+refs/merge-requests/42/head:refs/orca/merge-requests/${ORIGIN_HEAD_COMPONENT}/42`
-        ],
-        { cwd: TEST_REPO_PATH, wslDistro: 'Ubuntu', timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
-      )
-      expect(gitSpy).toHaveBeenCalledWith(
-        ['rev-parse', '--verify', `refs/orca/merge-requests/${ORIGIN_HEAD_COMPONENT}/42^{commit}`],
-        { cwd: TEST_REPO_PATH, wslDistro: 'Ubuntu' }
-      )
-    } finally {
-      gitSpy.mockRestore()
-    }
-  })
-
-  it('resolves SSH GitLab fork MR bases from the target project MR head ref', async () => {
-    const remoteRepo = {
-      id: TEST_REPO_ID,
-      path: '/remote/repo',
-      displayName: 'repo',
-      badgeColor: 'blue',
-      addedAt: 1,
-      connectionId: 'ssh-1',
-      issueSourcePreference: 'origin' as const
-    }
-    const runtimeStore = {
-      ...store,
-      getRepos: () => [remoteRepo],
-      getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined)
-    }
-    const provider = {
-      exec: vi.fn(async (args: string[]) => {
-        if (args[0] === 'remote' && args[1] === 'get-url') {
-          return { stdout: `${ORIGIN_REMOTE_URL}\n`, stderr: '' }
-        }
-        if (
-          args[0] === 'rev-parse' &&
-          args[1] === '--verify' &&
-          args[2] === `refs/orca/merge-requests/${ORIGIN_HEAD_COMPONENT}/77^{commit}`
-        ) {
-          return { stdout: 'remote-fork-mr-sha\n', stderr: '' }
-        }
-        throw new Error(`unexpected git call: ${args.join(' ')}`)
-      }),
-      fetchGitLabMergeRequestHead: vi
-        .fn()
-        .mockResolvedValue(`refs/orca/merge-requests/${ORIGIN_HEAD_COMPONENT}/77`),
-      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined)
-    }
-    registerSshGitProvider('ssh-1', provider as never)
-    getGlabKnownHostsMock.mockResolvedValue(['gitlab.com', 'git.internal'])
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-
-    const result = await runtime.resolveManagedMrBase({
-      repoSelector: 'id:repo-1',
-      mrIid: 77,
-      sourceBranch: 'contrib/remote-fix',
-      targetBranch: 'main',
-      isCrossRepository: true
-    })
-
-    expect(result).toEqual({
-      baseBranch: 'remote-fork-mr-sha',
-      compareBaseRef: 'refs/remotes/origin/main'
-    })
-    expect(provider.fetchGitLabMergeRequestHead).toHaveBeenCalledWith('/remote/repo', 'origin', 77)
-    expect(provider.fetchRemoteTrackingRef).toHaveBeenCalledWith(
-      '/remote/repo',
-      'origin',
-      'main',
-      'refs/remotes/origin/main'
-    )
-    expect(provider.exec).toHaveBeenCalledWith(
-      ['rev-parse', '--verify', `refs/orca/merge-requests/${ORIGIN_HEAD_COMPONENT}/77^{commit}`],
-      '/remote/repo'
-    )
-    expect(getGitLabProjectRefForRemoteMock).toHaveBeenCalledWith(
-      '/remote/repo',
-      'origin',
-      ['gitlab.com', 'git.internal'],
-      'ssh-1'
-    )
-  })
-
-  it('resolves SSH GitLab same-repo MR bases through remote-tracking fetches', async () => {
-    const remoteRepo = {
-      id: TEST_REPO_ID,
-      path: '/remote/repo',
-      displayName: 'repo',
-      badgeColor: 'blue',
-      addedAt: 1,
-      connectionId: 'ssh-1',
-      issueSourcePreference: 'origin' as const
-    }
-    const runtimeStore = {
-      ...store,
-      getRepos: () => [remoteRepo],
-      getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined)
-    }
-    const provider = {
-      exec: vi.fn(async (args: string[]) => {
-        if (args[0] === 'rev-parse' && args[1] === '--verify' && args[2] === 'origin/feature/fix') {
-          return { stdout: 'same-repo-mr-sha\n', stderr: '' }
-        }
-        throw new Error(`unexpected git call: ${args.join(' ')}`)
-      }),
-      fetchGitLabMergeRequestHead: vi.fn().mockResolvedValue(undefined),
-      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined)
-    }
-    registerSshGitProvider('ssh-1', provider as never)
-    getGlabKnownHostsMock.mockResolvedValue(['gitlab.com', 'git.internal'])
-    getGitLabProjectRefForRemoteMock.mockResolvedValue({
-      host: 'gitlab.example',
-      path: 'group/repo'
-    })
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-
-    const result = await runtime.resolveManagedMrBase({
-      repoSelector: 'id:repo-1',
-      mrIid: 78,
-      sourceBranch: 'feature/fix',
-      targetBranch: 'main'
-    })
-
-    expect(result).toEqual({
-      baseBranch: 'origin/feature/fix',
-      compareBaseRef: 'refs/remotes/origin/main',
-      pushTarget: { remoteName: 'origin', branchName: 'feature/fix' }
-    })
-    expect(provider.fetchRemoteTrackingRef).toHaveBeenCalledWith(
-      '/remote/repo',
-      'origin',
-      'feature/fix',
-      'refs/remotes/origin/feature/fix'
-    )
-    expect(provider.fetchRemoteTrackingRef).toHaveBeenCalledWith(
-      '/remote/repo',
-      'origin',
-      'main',
-      'refs/remotes/origin/main'
-    )
-    expect(provider.fetchGitLabMergeRequestHead).not.toHaveBeenCalled()
-    expect(provider.exec).toHaveBeenCalledWith(
-      ['rev-parse', '--verify', 'origin/feature/fix'],
-      '/remote/repo'
-    )
-  })
-
-  it('keeps the MR source base when the optional compare-base fetch fails', async () => {
-    // Why (#6263): a merged MR's target ref may be deleted; a failed compare-base fetch must not drop the worktree onto the default branch.
-    const localRepo = {
-      id: TEST_REPO_ID,
-      path: TEST_REPO_PATH,
-      displayName: 'repo',
-      badgeColor: 'blue',
-      addedAt: 1,
-      issueSourcePreference: 'origin' as const
-    }
-    const runtimeStore = {
-      ...store,
-      getRepos: () => [localRepo],
-      getRepo: (id: string) => (id === localRepo.id ? localRepo : undefined)
-    }
-    getGitLabProjectRefForRemoteMock.mockResolvedValue({
-      host: 'gitlab.example',
-      path: 'group/repo'
-    })
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
-      if (
-        args[0] === 'fetch' &&
-        args[2] === '+refs/heads/feature/fix:refs/remotes/origin/feature/fix'
-      ) {
-        return { stdout: '', stderr: '' }
-      }
-      if (args[0] === 'fetch' && args[2] === '+refs/heads/main:refs/remotes/origin/main') {
-        // Target branch was deleted on the remote (merged MR).
-        throw new Error("couldn't find remote ref refs/heads/main")
-      }
-      if (args[0] === 'rev-parse' && args[1] === '--verify' && args[2] === 'origin/feature/fix') {
-        return { stdout: 'same-repo-mr-sha\n', stderr: '' }
-      }
-      throw new Error(`unexpected git call: ${args.join(' ')}`)
-    })
-    gitSpy.mockClear()
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    try {
-      const result = await runtime.resolveManagedMrBase({
-        repoSelector: 'id:repo-1',
-        mrIid: 79,
-        sourceBranch: 'feature/fix',
-        targetBranch: 'main'
-      })
-
-      expect(result).toEqual({
-        baseBranch: 'origin/feature/fix',
-        pushTarget: { remoteName: 'origin', branchName: 'feature/fix' }
-      })
-      expect(result).not.toHaveProperty('compareBaseRef')
-      expect(result).not.toHaveProperty('error')
-    } finally {
-      warnSpy.mockRestore()
-      gitSpy.mockRestore()
-    }
-  })
-
-  it('keeps the MR compare base when the fetch fails but the local ref resolves', async () => {
-    // Why: a transient fetch failure must not drop a compare base we already have on disk.
-    const localRepo = {
-      id: TEST_REPO_ID,
-      path: TEST_REPO_PATH,
-      displayName: 'repo',
-      badgeColor: 'blue',
-      addedAt: 1,
-      issueSourcePreference: 'origin' as const
-    }
-    const runtimeStore = {
-      ...store,
-      getRepos: () => [localRepo],
-      getRepo: (id: string) => (id === localRepo.id ? localRepo : undefined)
-    }
-    getGitLabProjectRefForRemoteMock.mockResolvedValue({
-      host: 'gitlab.example',
-      path: 'group/repo'
-    })
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
-      if (
-        args[0] === 'fetch' &&
-        args[2] === '+refs/heads/feature/fix:refs/remotes/origin/feature/fix'
-      ) {
-        return { stdout: '', stderr: '' }
-      }
-      if (args[0] === 'fetch' && args[2] === '+refs/heads/main:refs/remotes/origin/main') {
-        throw new Error('fatal: unable to access repo: Could not resolve host: gitlab.example')
-      }
-      if (args[0] === 'rev-parse' && args[2] === 'origin/feature/fix') {
-        return { stdout: 'same-repo-mr-sha\n', stderr: '' }
-      }
-      if (args[0] === 'rev-parse' && args[2] === 'refs/remotes/origin/main^{commit}') {
-        return { stdout: 'base-commit-sha\n', stderr: '' }
-      }
-      throw new Error(`unexpected git call: ${args.join(' ')}`)
-    })
-    gitSpy.mockClear()
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    try {
-      const result = await runtime.resolveManagedMrBase({
-        repoSelector: 'id:repo-1',
-        mrIid: 80,
-        sourceBranch: 'feature/fix',
-        targetBranch: 'main'
-      })
-
-      expect(result).toEqual({
-        baseBranch: 'origin/feature/fix',
-        compareBaseRef: 'refs/remotes/origin/main',
-        pushTarget: { remoteName: 'origin', branchName: 'feature/fix' }
-      })
-    } finally {
-      warnSpy.mockRestore()
-      gitSpy.mockRestore()
-    }
-  })
-
-  it('keeps a cross-repo fork MR compare base when the fetch fails but the local ref resolves', async () => {
-    // Why: mirror the GitHub fork soft-fail-keep — a transient compare-base fetch
-    // failure must not drop a base we already have on disk onto the fork MR head SHA.
-    const remoteRepo = {
-      id: TEST_REPO_ID,
-      path: '/remote/repo',
-      displayName: 'repo',
-      badgeColor: 'blue',
-      addedAt: 1,
-      connectionId: 'ssh-1',
-      issueSourcePreference: 'origin' as const
-    }
-    const runtimeStore = {
-      ...store,
-      getRepos: () => [remoteRepo],
-      getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined)
-    }
-    const durableLocalRef = `refs/orca/merge-requests/${ORIGIN_HEAD_COMPONENT}/77`
-    const provider = {
-      exec: vi.fn(async (args: string[]) => {
-        if (args[0] === 'rev-parse' && args[2] === `${durableLocalRef}^{commit}`) {
-          return { stdout: 'remote-fork-mr-sha\n', stderr: '' }
-        }
-        if (args[0] === 'rev-parse' && args[2] === 'refs/remotes/origin/main^{commit}') {
-          return { stdout: 'base-commit-sha\n', stderr: '' }
-        }
-        throw new Error(`unexpected git call: ${args.join(' ')}`)
-      }),
-      fetchGitLabMergeRequestHead: vi.fn().mockResolvedValue(durableLocalRef),
-      fetchRemoteTrackingRef: vi.fn(async () => {
-        throw new Error('fatal: unable to access repo: Could not resolve host: gitlab.example')
-      })
-    }
-    registerSshGitProvider('ssh-1', provider as never)
-    getGlabKnownHostsMock.mockResolvedValue(['gitlab.com', 'git.internal'])
-    getGitLabProjectRefForRemoteMock.mockResolvedValue({
-      host: 'gitlab.example',
-      path: 'group/repo'
-    })
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-
-    try {
-      const result = await runtime.resolveManagedMrBase({
-        repoSelector: 'id:repo-1',
-        mrIid: 77,
-        sourceBranch: 'contrib/remote-fix',
-        targetBranch: 'main',
-        isCrossRepository: true
-      })
-
-      expect(result).toEqual({
-        baseBranch: 'remote-fork-mr-sha',
-        compareBaseRef: 'refs/remotes/origin/main'
-      })
-      expect(provider.exec).toHaveBeenCalledWith(
-        ['rev-parse', '--verify', 'refs/remotes/origin/main^{commit}'],
-        '/remote/repo'
-      )
-    } finally {
-      warnSpy.mockRestore()
-    }
   })
 
   it('creates the first terminal by id when duplicate repo entries expose the same path', async () => {
@@ -46223,9 +44433,6 @@ describe('OrcaRuntimeService', () => {
           comment: meta.comment ?? existingMeta?.comment ?? '',
           linkedIssue: meta.linkedIssue ?? existingMeta?.linkedIssue ?? null,
           linkedPR: meta.linkedPR ?? existingMeta?.linkedPR ?? null,
-          linkedLinearIssue: meta.linkedLinearIssue ?? existingMeta?.linkedLinearIssue ?? null,
-          linkedGitLabMR: meta.linkedGitLabMR ?? existingMeta?.linkedGitLabMR ?? null,
-          linkedGitLabIssue: meta.linkedGitLabIssue ?? existingMeta?.linkedGitLabIssue ?? null,
           isArchived: meta.isArchived ?? existingMeta?.isArchived ?? false,
           isUnread: meta.isUnread ?? existingMeta?.isUnread ?? false,
           isPinned: meta.isPinned ?? existingMeta?.isPinned ?? false,

@@ -7,11 +7,7 @@ import type {
 
 const FIXED_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = ['status', 'unread']
 
-export const TASK_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = [
-  'issue',
-  'linear-issue',
-  'jira-issue'
-]
+export const TASK_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = ['issue']
 
 export const DEFAULT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = [
   ...FIXED_WORKTREE_CARD_PROPERTIES,
@@ -51,8 +47,6 @@ export const WORKTREE_CARD_PROPERTIES = [
   'ci',
   'branch',
   'issue',
-  'linear-issue',
-  'jira-issue',
   'pr',
   'automation',
   'cli',

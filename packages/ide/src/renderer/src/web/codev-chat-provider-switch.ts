@@ -15,34 +15,18 @@ function worktreeIdForTerminalTab(tabId: string): string | null {
   return null
 }
 
-/**
- * An agent the in-chat provider switcher can offer as a destination. Broader
- * than `CodevDefaultChatAgent` (which is host-injected for every member) —
- * Cursor is member-linked (BYOK), so it's only ever offered once that link is
- * confirmed present (`__CODEV_CURSOR_AVAILABLE__`).
- */
-export type CodevChatSwitchableAgent = CodevDefaultChatAgent | 'cursor'
+/** An agent the in-chat provider switcher can offer as a destination. */
+export type CodevChatSwitchableAgent = CodevDefaultChatAgent
 
-/**
- * Providers CoDev lets a member switch a chat tab between, in menu order.
- * Callable from anywhere, including node test environments and any
- * server-side render: no window means no Cursor credential signal, never a
- * throw.
- */
-export function codevChatProviders(
-  win?: { __CODEV_CURSOR_AVAILABLE__?: boolean }
-): readonly CodevChatSwitchableAgent[] {
-  const target = win ?? (typeof window === 'undefined' ? undefined : window)
-  return target?.__CODEV_CURSOR_AVAILABLE__ === true
-    ? ['claude', 'codex', 'cursor']
-    : ['claude', 'codex']
+/** Providers CoDev lets a member switch a chat tab between, in menu order. */
+export function codevChatProviders(): readonly CodevChatSwitchableAgent[] {
+  return ['claude', 'codex']
 }
 
 export function isCodevChatProvider(
-  agent: AgentType | null | undefined,
-  win?: { __CODEV_CURSOR_AVAILABLE__?: boolean }
+  agent: AgentType | null | undefined
 ): agent is CodevChatSwitchableAgent {
-  return agent != null && codevChatProviders(win).includes(agent as CodevChatSwitchableAgent)
+  return agent != null && codevChatProviders().includes(agent as CodevChatSwitchableAgent)
 }
 
 /** True in CoDev-embedded mode, where the in-chat provider switcher is offered. */

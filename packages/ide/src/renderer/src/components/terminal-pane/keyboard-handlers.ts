@@ -953,8 +953,6 @@ export function useTerminalKeyboardShortcuts({
   ])
 }
 
-function getKeyboardSplitTelemetrySource(): 'contextual_tour' | 'keyboard' {
-  return useAppStore.getState().activeContextualTourId === 'workspace-agent-sessions'
-    ? 'contextual_tour'
-    : 'keyboard'
+function getKeyboardSplitTelemetrySource(): 'keyboard' {
+  return 'keyboard'
 }

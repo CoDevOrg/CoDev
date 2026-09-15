@@ -182,7 +182,6 @@ import {
   type BrowserDriverState
 } from '@/lib/pane-manager/browser-mobile-driver-state'
 import { shouldPollChromiumErrorPage } from './chromium-error-page-polling'
-import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { translate } from '@/i18n/i18n'
 import { isBrowserPagePanePaintable } from './browser-page-paintability'
 import { useMarkupMode, type MarkupCaptureContext } from './markup/useMarkupMode'
@@ -846,12 +845,6 @@ export default function BrowserPane({
       }
     })
   }, [activeBrowserPageId, runtimeEnvironmentActive])
-
-  useContextualTour(
-    'browser',
-    isActive && activeBrowserPage !== null && !runtimeEnvironmentActive,
-    'browser_visible'
-  )
 
   const reclaimActiveBrowserForDesktop = useCallback(async (): Promise<void> => {
     if (!activeBrowserPageId) {
@@ -5446,7 +5439,6 @@ function BrowserPagePane({
             browserPageId={browserTab.id}
             viewportPresetId={browserTab.viewportPresetId ?? null}
             onDestroyWebview={() => destroyPersistentWebview(browserTab.id)}
-            isActive={isActive}
           />
         </div>
         {visibleDownloads.length > 0 ? (

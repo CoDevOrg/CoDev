@@ -64,9 +64,7 @@ export async function renameFileOnDisk(args: RenameFileArgs): Promise<void> {
     worktreeId,
     worktreePath,
     connectionId: operationRoute.connectionId,
-    expectedExecutionHostId: operationRoute.expectedExecutionHostId,
-    expectedSshTargetId: operationRoute.expectedSshTargetId,
-    expectedSshConnectionGeneration: operationRoute.expectedSshConnectionGeneration
+    expectedExecutionHostId: operationRoute.expectedExecutionHostId
   }
 
   try {

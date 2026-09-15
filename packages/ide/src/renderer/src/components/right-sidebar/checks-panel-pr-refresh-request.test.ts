@@ -8,10 +8,6 @@ import {
 describe('resolveChecksPanelReviewEvidenceProvider', () => {
   const noLinkedReviews = {
     linkedGitHubPR: null,
-    linkedGitLabMR: null,
-    linkedBitbucketPR: null,
-    linkedAzureDevOpsPR: null,
-    linkedGiteaPR: null
   }
 
   it.each([

@@ -18,7 +18,6 @@ export type OpenHttpLinkOptions = {
 export type HttpLinkSourceOwner =
   | { kind: 'local' }
   | { kind: 'runtime'; runtimeEnvironmentId: string }
-  | { kind: 'ssh'; connectionId: string }
   | { kind: 'unknown' }
 
 type StoreAccessor = () => {

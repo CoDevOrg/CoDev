@@ -41,8 +41,6 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
   // these two instead of worktreesByRepo.
   const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
   const projectGroups = useAppStore((s) => s.projectGroups)
-  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
-  const sshStateByEnvironment = useAppStore((s) => s.sshStateByEnvironment)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const restoredRuntimeHostIdByWorkspaceSessionKey = useAppStore(
     (s) => s.restoredRuntimeHostIdByWorkspaceSessionKey
@@ -52,7 +50,6 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
   const removedRuntimeEnvironmentIds = useAppStore((s) => s.removedRuntimeEnvironmentIds)
   const paneForegroundAgentByPaneKey = useAppStore((s) => s.paneForegroundAgentByPaneKey)
   const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
-  const remoteDetectedAgentIds = useAppStore((s) => s.remoteDetectedAgentIds)
   const runtimeDetectedAgentIds = useAppStore((s) => s.runtimeDetectedAgentIds)
   // Why: freshness can flip a bucket without any backing map changing; the epoch
   // ticks on the freshness boundary so the memo re-derives stale-decayed cards.
@@ -82,8 +79,6 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
           detectedWorktreesByRepo,
           folderWorkspaces,
           projectGroups,
-          sshConnectionStates,
-          sshStateByEnvironment,
           runtimeStatusByEnvironmentId,
           restoredRuntimeHostIdByWorkspaceSessionKey,
           runtimeEnvironments,
@@ -91,7 +86,6 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
           removedRuntimeEnvironmentIds,
           paneForegroundAgentByPaneKey,
           detectedAgentIds,
-          remoteDetectedAgentIds,
           runtimeDetectedAgentIds,
           // Why: read non-reactively — resolveWindowsShiftEnterEncoding takes
           // launch identity but never routes on it, so subscribing would only
@@ -120,8 +114,6 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
       detectedWorktreesByRepo,
       folderWorkspaces,
       projectGroups,
-      sshConnectionStates,
-      sshStateByEnvironment,
       runtimeStatusByEnvironmentId,
       restoredRuntimeHostIdByWorkspaceSessionKey,
       runtimeEnvironments,
@@ -129,7 +121,6 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
       removedRuntimeEnvironmentIds,
       paneForegroundAgentByPaneKey,
       detectedAgentIds,
-      remoteDetectedAgentIds,
       runtimeDetectedAgentIds,
       agentStatusEpoch
     ]

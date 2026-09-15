@@ -1,7 +1,6 @@
 import { execFile } from 'node:child_process'
 import dgram from 'node:dgram'
 import { ipcMain, shell, systemPreferences } from 'electron'
-import { getMacosFullDiskAccessStatus } from '../macos-full-disk-access-status'
 import { testLocalNetworkConnection } from './local-network-connection-test'
 import type {
   DeveloperPermissionId,
@@ -151,7 +150,6 @@ async function getPermissionState(id: DeveloperPermissionId): Promise<DeveloperP
     case 'accessibility':
       return { id, status: getAccessibilityStatus() }
     case 'full-disk-access':
-      return { id, status: await getMacosFullDiskAccessStatus() }
     case 'automation':
     case 'local-network':
       return { id, status: unsupportedOffMac() ?? 'unknown' }

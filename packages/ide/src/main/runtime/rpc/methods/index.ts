@@ -21,12 +21,7 @@ import { NATIVE_CHAT_METHODS } from './native-chat'
 import { FILE_METHODS } from './files'
 import { GIT_METHODS } from './git'
 import { GITHUB_METHODS } from './github'
-import { GITLAB_METHODS } from './gitlab'
 import { HOSTED_REVIEW_METHODS } from './hosted-review'
-import { LINEAR_METHODS } from './linear'
-import { LINEAR_AGENT_ACCESS_METHODS } from './linear-agent-access'
-import { JIRA_METHODS } from './jira'
-import { SSH_METHODS } from './ssh'
 import { SPEECH_METHODS } from './speech'
 import { CLIENT_UI_METHODS } from './client-ui'
 import { CLIENT_EVENT_METHODS } from './client-events'
@@ -37,7 +32,6 @@ import { CLIPBOARD_METHODS } from './clipboard'
 import { HOST_CAPABILITY_METHODS } from './host-capabilities'
 import { EMULATOR_METHODS } from './emulator'
 import { PAIRING_METHODS } from './pairing'
-import { UPDATER_METHODS } from './updater'
 import { AGENT_SESSION_METHODS } from './agent-session'
 
 // Why: a flat manifest keeps registration order explicit and provides one
@@ -67,12 +61,7 @@ export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...FILE_METHODS,
   ...GIT_METHODS,
   ...GITHUB_METHODS,
-  ...GITLAB_METHODS,
   ...HOSTED_REVIEW_METHODS,
-  ...LINEAR_METHODS,
-  ...LINEAR_AGENT_ACCESS_METHODS,
-  ...JIRA_METHODS,
-  ...SSH_METHODS,
   ...SPEECH_METHODS,
   ...WORKSPACE_PORT_METHODS,
   ...PLUGIN_METHODS,
@@ -82,6 +71,5 @@ export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...CLIENT_EVENT_METHODS,
   ...CLIENT_UI_METHODS,
   ...EMULATOR_METHODS,
-  ...PAIRING_METHODS,
-  ...UPDATER_METHODS
+  ...PAIRING_METHODS
 ]

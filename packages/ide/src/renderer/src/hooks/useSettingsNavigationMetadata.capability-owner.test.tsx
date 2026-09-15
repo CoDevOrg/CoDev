@@ -24,10 +24,6 @@ vi.mock('@/store', () => ({
     })
 }))
 
-vi.mock('@/hooks/useLinearProviderConnected', () => ({
-  useLinearProviderConnected: () => false
-}))
-
 vi.mock('@/lib/web-client-location', () => ({
   isWebClientLocation: () => true
 }))

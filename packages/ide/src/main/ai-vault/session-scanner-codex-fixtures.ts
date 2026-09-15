@@ -1,7 +1,16 @@
-import type { IncrementalAgentFixture } from './session-scanner-incremental-fixtures'
+import type { AiVaultAgent } from '../../shared/ai-vault-types'
 
-// Codex fixture lines for the incremental-parse differential tests, split out
-// of session-scanner-incremental-fixtures.ts to respect the max-lines budget.
+// Codex fixture lines for the incremental-parse differential tests: a seed
+// transcript, an appended continuation, and a truncated rewrite, all in Codex's
+// real on-disk JSONL record shapes.
+
+export type IncrementalAgentFixture = {
+  agent: AiVaultAgent
+  fileName: string
+  seedLines: string[]
+  appendLines: string[]
+  truncatedLines: string[]
+}
 
 const CODEX_SESSION_ID = '019f0000-1111-7222-8333-444444444444'
 

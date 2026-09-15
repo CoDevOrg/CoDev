@@ -1,22 +1,10 @@
 /* eslint-disable max-lines -- Why: this file is the central main-window IPC wiring point; splitting it during the mobile release compatibility rebase would increase release risk. */
 import { randomUUID } from 'node:crypto'
 
-import { app, ipcMain } from 'electron'
-import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
+import { ipcMain } from 'electron'
+import type { BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
-import type {
-  CreateWorktreeResult,
-  ReleaseBuildListResult,
-  UpdateCheckOptions,
-  WorktreeStartupLaunch
-} from '../../shared/types'
-import { RELEASE_CHANNELS, type ReleaseChannel } from '../../shared/release-channel'
-import {
-  acknowledgePendingTccPromptNotice,
-  consumePendingTccPromptNotice,
-  dismissTccPromptNotice,
-  releasePendingTccPromptNotice
-} from '../macos-tcc-prompt-notice'
+import type { CreateWorktreeResult, WorktreeStartupLaunch } from '../../shared/types'
 import { registerRepoHandlers, setRepoRemoteClientNotifier } from '../ipc/repos'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
@@ -27,25 +15,9 @@ import {
   type PrepareCodexSessionResume
 } from '../ipc/pty'
 import { registerDaemonManagementHandlers } from '../ipc/pty-management'
-import { registerSshHandlers } from '../ipc/ssh'
-import { registerRemoteWorkspaceHandlers } from '../ipc/remote-workspace'
 import { browserManager } from '../browser/browser-manager'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from '../browser/browser-media-access'
 import type { OrcaRuntimeService, RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime'
-import {
-  checkForUpdatesFromMenu,
-  downloadUpdate,
-  getLinuxPackageInstallInstructions,
-  getUpdateStatus,
-  quitAndInstall,
-  setupAutoUpdater,
-  showLinuxPackage,
-  dismissAvailableUpdate,
-  dismissNudge,
-  listAvailableReleaseBuilds,
-  type UpdateInstallMode
-} from '../updater'
-import { isTrustedUIRenderer } from '../ipc/ui'
 import { scheduleHistoryGc } from '../terminal-history-gc'
 import { hydrateLocalPtyRegistryAtBoot } from '../memory/hydrate-local-pty-registry'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
@@ -65,21 +37,9 @@ import {
   scheduleWorktreeBaseDirectoryWatcherSync,
   setWorktreeBaseDirectoryWatcherSyncContext
 } from '../ipc/worktree-base-directory-watcher'
-import { logStartupMilestone } from '../startup/startup-diagnostics'
-
-const UPDATER_SETUP_FALLBACK_MS = 15_000
-
-// Why: a manual check can arrive before deferred setup runs, so entry points force this pending setup to configure the updater first.
-let pendingAutoUpdaterSetup: (() => void) | null = null
-
-export function ensureAutoUpdaterConfigured(): void {
-  pendingAutoUpdaterSetup?.()
-}
 
 let appReloadHandlerTokenCounter = 0
 let activeAppReloadHandlerToken: number | null = null
-let tccPromptHandlerTokenCounter = 0
-let activeTccPromptHandlerToken: number | null = null
 let runtimeNotifierTokenCounter = 0
 let activeRuntimeNotifierToken: number | null = null
 
@@ -98,8 +58,6 @@ export function attachMainWindowServices(
     onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
     // Why: lets the PTY orphan sweep skip the one crash-recovery reload (#5787).
     isRecoveryReloadInFlight?: (webContentsId: number) => boolean
-    onBeforeUpdateQuit?: () => void | Promise<void>
-    updateInstallMode?: UpdateInstallMode
     onWorktreeLifecycle?: (event: RuntimeWorktreeLifecycleEvent) => void
   }
 ): void {
@@ -147,51 +105,7 @@ export function attachMainWindowServices(
         )
       })
   }
-  registerSshHandlers(store, () => mainWindow, runtime)
-  registerRemoteWorkspaceHandlers(store, () => mainWindow)
   registerFileDropRelay(mainWindow)
-  registerTccPromptNoticeHandlers(mainWindow)
-  // Why: setupAutoUpdater sync-require()s electron-updater (slow on cold Windows w/ Defender, #7225), so defer past first paint; timer fallback covers crash-looping renderers.
-  let updaterSetupDone = false
-  const setupAutoUpdaterDeferred = (): void => {
-    if (updaterSetupDone || mainWindow.isDestroyed()) {
-      return
-    }
-    updaterSetupDone = true
-    setupAutoUpdater(mainWindow, {
-      getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
-      onBeforeQuit: async () => {
-        try {
-          await options?.onBeforeUpdateQuit?.()
-        } finally {
-          await store.flushPendingAsync()
-        }
-      },
-      setLastUpdateCheckAt: (timestamp) => {
-        store.updateUI({ lastUpdateCheckAt: timestamp })
-      },
-      getPendingUpdateNudgeId: () => store.getUI().pendingUpdateNudgeId ?? null,
-      getDismissedUpdateNudgeId: () => store.getUI().dismissedUpdateNudgeId ?? null,
-      setPendingUpdateNudgeId: (id) => {
-        // Why: only the apply branch also nulls dismissedUpdateVersion so relaunch can't resurrect the old hidden card; clearing must not, or it un-dismisses.
-        if (id) {
-          store.updateUI({ pendingUpdateNudgeId: id, dismissedUpdateVersion: null })
-        } else {
-          store.updateUI({ pendingUpdateNudgeId: null })
-        }
-      },
-      setDismissedUpdateNudgeId: (id) => {
-        store.updateUI({ dismissedUpdateNudgeId: id })
-      },
-      getReleaseChannelOverride: () => store.getUI().releaseChannelOverride ?? null,
-      installMode: options?.updateInstallMode
-    })
-    logStartupMilestone('updater-setup-done')
-  }
-  pendingAutoUpdaterSetup = setupAutoUpdaterDeferred
-  mainWindow.once('ready-to-show', () => setImmediate(setupAutoUpdaterDeferred))
-  const updaterSetupFallback = setTimeout(setupAutoUpdaterDeferred, UPDATER_SETUP_FALLBACK_MS)
-  updaterSetupFallback.unref?.()
   registerRuntimeWindowLifecycle(mainWindow, runtime)
 
   const allowedPermissions = new Set(['media', 'fullscreen', 'pointerLock'])
@@ -219,63 +133,6 @@ export function attachMainWindowServices(
   mainWindow.on('closed', () => {
     // Why: clear main-owned guest registrations on close so stale tab→webContents ids don't leak across relaunch/hot-reload.
     browserManager.unregisterAll()
-  })
-}
-
-function registerTccPromptNoticeHandlers(mainWindow: BrowserWindow): void {
-  const handlerToken = ++tccPromptHandlerTokenCounter
-  if (activeTccPromptHandlerToken !== null) {
-    releasePendingTccPromptNotice(activeTccPromptHandlerToken)
-  }
-  activeTccPromptHandlerToken = handlerToken
-  const consumeChannel = 'macosTccPrompts:consumePending'
-  const acknowledgeChannel = 'macosTccPrompts:acknowledgePending'
-  const releaseChannel = 'macosTccPrompts:releasePending'
-  const dismissChannel = 'macosTccPrompts:dismiss'
-  ipcMain.removeHandler(consumeChannel)
-  ipcMain.removeHandler(acknowledgeChannel)
-  ipcMain.removeHandler(releaseChannel)
-  ipcMain.removeHandler(dismissChannel)
-  const mainWebContents = mainWindow.webContents
-  const releaseOwnerClaim = (): void => releasePendingTccPromptNotice(handlerToken)
-  // Why: a renderer reload/crash destroys its claim callbacks without closing the BrowserWindow.
-  mainWebContents.on('did-start-loading', () => {
-    if (mainWebContents.isLoadingMainFrame()) {
-      releaseOwnerClaim()
-    }
-  })
-  mainWebContents.on('render-process-gone', releaseOwnerClaim)
-  const ownsNotice = (event: IpcMainInvokeEvent): boolean =>
-    !mainWindow.isDestroyed() && !mainWebContents.isDestroyed() && event.sender === mainWebContents
-  ipcMain.handle(consumeChannel, (event) =>
-    ownsNotice(event) ? consumePendingTccPromptNotice(handlerToken) : null
-  )
-  ipcMain.handle(acknowledgeChannel, (event, claimId: number) => {
-    if (ownsNotice(event) && Number.isSafeInteger(claimId)) {
-      acknowledgePendingTccPromptNotice(handlerToken, claimId)
-    }
-  })
-  ipcMain.handle(releaseChannel, (event, claimId: number) => {
-    if (ownsNotice(event) && Number.isSafeInteger(claimId)) {
-      releasePendingTccPromptNotice(handlerToken, claimId)
-    }
-  })
-  ipcMain.handle(dismissChannel, (event) => {
-    if (ownsNotice(event)) {
-      dismissTccPromptNotice()
-    }
-  })
-  // Why: macOS can stay windowless; drop stale closures without letting an old close clear newer handlers.
-  mainWindow.on('closed', () => {
-    if (activeTccPromptHandlerToken !== handlerToken) {
-      return
-    }
-    releaseOwnerClaim()
-    ipcMain.removeHandler(consumeChannel)
-    ipcMain.removeHandler(acknowledgeChannel)
-    ipcMain.removeHandler(releaseChannel)
-    ipcMain.removeHandler(dismissChannel)
-    activeTccPromptHandlerToken = null
   })
 }
 
@@ -525,59 +382,4 @@ function registerFileDropRelay(mainWindow: BrowserWindow): void {
     // Why: macOS keeps the process alive after window close; drop the closure so the destroyed window isn't retained.
     ipcMain.removeListener(channel, relayFileDrop)
   })
-}
-
-export function registerUpdaterHandlers(_store: Store): void {
-  ipcMain.removeHandler('updater:getStatus')
-  ipcMain.removeHandler('updater:getVersion')
-  ipcMain.removeHandler('updater:check')
-  ipcMain.removeHandler('updater:download')
-  ipcMain.removeHandler('updater:quitAndInstall')
-  ipcMain.removeHandler('updater:dismissNudge')
-  ipcMain.removeHandler('updater:dismissAvailableUpdate')
-  ipcMain.removeHandler('updater:getLinuxPackageInstallInstructions')
-  ipcMain.removeHandler('updater:showLinuxPackage')
-  ipcMain.removeHandler('updater:listBuilds')
-
-  ipcMain.handle('updater:getStatus', () => getUpdateStatus())
-  ipcMain.handle('updater:getVersion', () => app.getVersion())
-  ipcMain.handle('updater:check', (_event, options?: UpdateCheckOptions) => {
-    ensureAutoUpdaterConfigured()
-    return checkForUpdatesFromMenu(options)
-  })
-  ipcMain.handle('updater:download', () => downloadUpdate())
-  ipcMain.handle('updater:quitAndInstall', () => quitAndInstall())
-  ipcMain.handle('updater:dismissNudge', () => dismissNudge())
-  ipcMain.handle('updater:dismissAvailableUpdate', () => dismissAvailableUpdate())
-  // Why: the response carries a local package path and the reveal touches the native desktop, so
-  // neither may be reached from a guest, dashboard popout, stale window, or utility renderer.
-  ipcMain.handle('updater:getLinuxPackageInstallInstructions', (event) => {
-    assertTrustedUpdaterRecoverySender(event)
-    return getLinuxPackageInstallInstructions()
-  })
-  ipcMain.handle('updater:showLinuxPackage', (event) => {
-    assertTrustedUpdaterRecoverySender(event)
-    return showLinuxPackage()
-  })
-  ipcMain.handle(
-    'updater:listBuilds',
-    async (_event, channel: ReleaseChannel): Promise<ReleaseBuildListResult> => {
-      if (!RELEASE_CHANNELS.includes(channel)) {
-        return { ok: false, channel, message: `Unknown release channel "${channel}".` }
-      }
-      try {
-        return { ok: true, channel, builds: await listAvailableReleaseBuilds(channel) }
-      } catch (error) {
-        // Why: a network/rate-limit failure is expected here; return it as data so
-        // the picker can render the reason instead of rejecting the invoke.
-        return { ok: false, channel, message: String((error as Error)?.message ?? error) }
-      }
-    }
-  )
-}
-
-function assertTrustedUpdaterRecoverySender(event: IpcMainInvokeEvent): void {
-  if (!isTrustedUIRenderer(event.sender)) {
-    throw new Error('Unauthorized updater package recovery sender')
-  }
 }

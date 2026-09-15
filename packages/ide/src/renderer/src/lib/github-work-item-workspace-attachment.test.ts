@@ -22,7 +22,6 @@ function worktree(overrides: Partial<Worktree> = {}): Worktree {
     comment: '',
     linkedIssue: null,
     linkedPR: null,
-    linkedLinearIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,
@@ -82,18 +81,6 @@ describe('GitHub work-item workspace attachment', () => {
 
     expect(findGithubIssueWorkspaceAttachment([prOnly], 'repo-1', 42)).toBeNull()
     expect(findGithubPrWorkspaceAttachment([issueOnly], 'repo-1', 42)).toBeNull()
-  })
-
-  it('does not treat GitLab metadata as a GitHub work-item attachment', () => {
-    const gitlabOnly = worktree({
-      linkedIssue: null,
-      linkedPR: null,
-      linkedGitLabIssue: 42,
-      linkedGitLabMR: 42
-    })
-
-    expect(findGithubPrWorkspaceAttachment([gitlabOnly], 'repo-1', 42)).toBeNull()
-    expect(findGithubIssueWorkspaceAttachment([gitlabOnly], 'repo-1', 42)).toBeNull()
   })
 
   it('labels attachments without exposing a full path when display or branch is available', () => {

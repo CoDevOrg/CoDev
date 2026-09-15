@@ -21,7 +21,7 @@ export type TerminalWorktreeRoute = {
  * half of that same asymmetry.
  */
 export type TerminalHostOwnership =
-  | { kind: 'local-or-ssh'; runtimeEnvironmentId: null }
+  | { kind: 'local'; runtimeEnvironmentId: null }
   | { kind: 'runtime'; runtimeEnvironmentId: string }
   | { kind: 'unresolved'; runtimeEnvironmentId: null }
 
@@ -36,8 +36,8 @@ const UNRESOLVED_TERMINAL_HOST: TerminalHostOwnership = {
   kind: 'unresolved',
   runtimeEnvironmentId: null
 }
-const LOCAL_OR_SSH_TERMINAL_HOST: TerminalHostOwnership = {
-  kind: 'local-or-ssh',
+const LOCAL_TERMINAL_HOST: TerminalHostOwnership = {
+  kind: 'local',
   runtimeEnvironmentId: null
 }
 
@@ -46,7 +46,7 @@ function ownershipForRuntimeEnvironmentId(
 ): TerminalHostOwnership {
   return runtimeEnvironmentId
     ? { kind: 'runtime', runtimeEnvironmentId }
-    : LOCAL_OR_SSH_TERMINAL_HOST
+    : LOCAL_TERMINAL_HOST
 }
 
 export function resolveTerminalHostOwnership(
@@ -56,7 +56,7 @@ export function resolveTerminalHostOwnership(
 ): TerminalHostOwnership {
   if (!worktreeId) {
     // Why: a tab with no owning row proves nothing about its host, so teardown cannot claim its PTY.
-    return purpose === 'teardown' ? UNRESOLVED_TERMINAL_HOST : LOCAL_OR_SSH_TERMINAL_HOST
+    return purpose === 'teardown' ? UNRESOLVED_TERMINAL_HOST : LOCAL_TERMINAL_HOST
   }
   if (
     worktreeId === FLOATING_TERMINAL_WORKTREE_ID ||
@@ -85,14 +85,12 @@ export function resolveTerminalHostOwnership(
   if (resolution.kind === 'resolved') {
     if (resolution.route.runtimeEnvironmentId) {
       // Why: a real worktree row keeps its runtime owner on teardown. Unlike the host-agnostic
-      // surfaces above, its HUB-native wake hints are `ssh:`-shaped rather than `remote:`-prefixed,
-      // so downgrading to local here would kill a paired-client PTY that lives on the HUB (#9994).
+      // surfaces above, its HUB-native wake hints are not `remote:`-prefixed, so downgrading to
+      // local here would kill a paired-client PTY that lives on the HUB (#9994).
       return { kind: 'runtime', runtimeEnvironmentId: resolution.route.runtimeEnvironmentId }
     }
     const parsed = parseExecutionHostId(resolution.route.executionHostId)
-    return parsed?.kind === 'local' || parsed?.kind === 'ssh'
-      ? LOCAL_OR_SSH_TERMINAL_HOST
-      : UNRESOLVED_TERMINAL_HOST
+    return parsed?.kind === 'local' ? LOCAL_TERMINAL_HOST : UNRESOLVED_TERMINAL_HOST
   }
   if (
     purpose === 'spawn' &&
@@ -109,7 +107,7 @@ export function resolveTerminalHostOwnership(
 
 /**
  * Host ownership for the host-agnostic surfaces — floating, folder workspace, ephemeral setup.
- * Safe to downgrade on teardown because these never hold an `ssh:`-shaped HUB wake hint: a
+ * Safe to downgrade on teardown because these never hold a HUB-native wake hint: a
  * runtime-hosted one carries a `remote:` id, which is routed before ownership is consulted.
  */
 function resolveFloatingScopeOwnership(
@@ -127,7 +125,7 @@ function resolveFloatingScopeOwnership(
   }
   // Why: this surface publishes no runtime owner and only looks runtime-owned because exactly one
   // runtime is focused — a guess that flips as catalogs hydrate, stranding the local PTY (STA-2639).
-  return LOCAL_OR_SSH_TERMINAL_HOST
+  return LOCAL_TERMINAL_HOST
 }
 
 export function resolveTerminalWorktreeRoute(

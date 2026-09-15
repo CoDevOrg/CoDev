@@ -98,17 +98,14 @@ import {
   canUseIssueCommandForLinkedItemProvider,
   ensureAgentStartupInTerminal,
   getSetupConfig,
-  getWorkspaceSeedName,
-  isGitLabIssueUrl
+  getWorkspaceSeedName
 } from './new-workspace'
 import { resetAgentStartupDelayedDeliveryForTests } from './agent-startup-delayed-delivery'
 
 describe('linked-item issue commands', () => {
-  it('keeps Jira and Linear sentinel numbers out of repository issue templates', () => {
+  it('allows repository issue templates for GitHub linked items', () => {
     expect(canUseIssueCommandForLinkedItemProvider('github')).toBe(true)
-    expect(canUseIssueCommandForLinkedItemProvider('gitlab')).toBe(true)
-    expect(canUseIssueCommandForLinkedItemProvider('jira')).toBe(false)
-    expect(canUseIssueCommandForLinkedItemProvider('linear')).toBe(false)
+    expect(canUseIssueCommandForLinkedItemProvider(null)).toBe(false)
   })
 })
 
@@ -222,24 +219,6 @@ describe('getWorkspaceSeedName', () => {
         fallbackName: 'Nautilus'
       })
     ).toBe('my-workspace')
-  })
-})
-
-describe('isGitLabIssueUrl', () => {
-  it('detects canonical and self-hosted GitLab issue URLs', () => {
-    expect(isGitLabIssueUrl('https://gitlab.com/group/project/-/issues/123')).toBe(true)
-    expect(isGitLabIssueUrl('https://gitlab.example.com/group/project/-/issues/123')).toBe(true)
-  })
-
-  it('detects modern /-/work_items/<iid> issue URLs (incl. non-default port)', () => {
-    expect(isGitLabIssueUrl('https://gitlab.com/group/project/-/work_items/123')).toBe(true)
-    expect(isGitLabIssueUrl('https://gitlab.example.com:8443/group/project/-/work_items/7')).toBe(
-      true
-    )
-  })
-
-  it('does not classify GitHub issue URLs as GitLab issues', () => {
-    expect(isGitLabIssueUrl('https://github.com/group/project/issues/123')).toBe(false)
   })
 })
 

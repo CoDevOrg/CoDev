@@ -43,7 +43,6 @@ function worktree(overrides: Partial<RuntimeWorktreeRecord> = {}): RuntimeWorktr
     lineage: null,
     linkedIssue: null,
     linkedPR: null,
-    linkedLinearIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,

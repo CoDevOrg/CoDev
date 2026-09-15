@@ -43,12 +43,10 @@ export function getLinkedWorkItemSuggestedName(item: { title: string }): string 
 }
 
 export type WorkspaceIntentWorkItem = {
-  type: 'issue' | 'pr' | 'mr'
+  type: 'issue' | 'pr'
   number: number
   title: string
-  provider?: 'github' | 'gitlab' | 'linear' | 'jira'
-  linearIdentifier?: string
-  jiraIdentifier?: string
+  provider?: 'github'
 }
 
 export type WorkspaceIntentName = {
@@ -135,12 +133,7 @@ function compactWords(input: string, maxWords = 4): string {
   return words.map(titleCaseWord).join(' ')
 }
 
-function escapeRegExp(input: string): string {
-  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
 function compactWorkItemTitle(title: string, item: WorkspaceIntentWorkItem): string {
-  const identifier = item.linearIdentifier ?? item.jiraIdentifier
   let withoutPrefix = title
     .trim()
     .replace(/^(?:issue|pr|pull request|mr|merge request)\s*[#!]?\d+\s*[:-]\s*/i, '')
@@ -150,26 +143,12 @@ function compactWorkItemTitle(title: string, item: WorkspaceIntentWorkItem): str
   if (item.number > 0) {
     withoutPrefix = withoutPrefix.replace(new RegExp(`\\b[#!]?${item.number}\\b`, 'g'), '').trim()
   }
-  if (identifier) {
-    withoutPrefix = withoutPrefix
-      .replace(new RegExp(`^${escapeRegExp(identifier)}\\s*[:-]?\\s*`, 'i'), '')
-      .trim()
-  }
   return compactWords(withoutPrefix || title, 3)
 }
 
 function workItemIdentity(item: WorkspaceIntentWorkItem): string {
-  if (item.linearIdentifier) {
-    return item.linearIdentifier.toUpperCase()
-  }
-  if (item.jiraIdentifier) {
-    return item.jiraIdentifier.toUpperCase()
-  }
   if (item.type === 'pr') {
     return `PR ${item.number}`
-  }
-  if (item.type === 'mr') {
-    return `MR ${item.number}`
   }
   return `Issue ${item.number}`
 }
@@ -177,14 +156,8 @@ function workItemIdentity(item: WorkspaceIntentWorkItem): string {
 export function getLinkedWorkItemWorkspaceName(
   item: WorkspaceIntentWorkItem
 ): WorkspaceIntentName | null {
-  const identifier = item.linearIdentifier ?? item.jiraIdentifier
-  let subject = getLinkedWorkItemTitleSubject(item) || item.title.trim()
-  if (identifier) {
-    subject = subject
-      .replace(new RegExp(`^${escapeRegExp(identifier)}\\s*[:-]?\\s*`, 'i'), '')
-      .trim()
-  }
-  const displayName = [identifier, subject].filter(Boolean).join(' ') || workItemIdentity(item)
+  const subject = getLinkedWorkItemTitleSubject(item) || item.title.trim()
+  const displayName = subject || workItemIdentity(item)
   const seedName = slugifyForWorkspaceName(displayName)
   if (!seedName) {
     return null
@@ -193,7 +166,7 @@ export function getLinkedWorkItemWorkspaceName(
 }
 
 function defaultActionForWorkItem(item: WorkspaceIntentWorkItem): string | null {
-  return item.type === 'pr' || item.type === 'mr' ? 'Review' : null
+  return item.type === 'pr' ? 'Review' : null
 }
 
 /**
@@ -236,21 +209,6 @@ export function getWorkspaceIntentName(args: {
     return null
   }
   return { displayName, seedName }
-}
-
-export function getLinearIssueWorkspaceName(issue: { identifier: string; title: string }): string {
-  const key = slugifyForWorkspaceName(issue.identifier)
-  const titleSlug = getLinkedWorkItemSuggestedName(issue)
-  if (!key) {
-    return titleSlug
-  }
-  let dedupedTitleSlug = titleSlug
-  if (titleSlug === key) {
-    dedupedTitleSlug = ''
-  } else if (titleSlug.startsWith(`${key}-`)) {
-    dedupedTitleSlug = titleSlug.slice(key.length + 1)
-  }
-  return slugifyForWorkspaceName([key, dedupedTitleSlug].filter(Boolean).join('-'))
 }
 
 export function resolveWorkspaceCreateName(args: {

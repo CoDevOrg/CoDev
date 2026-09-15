@@ -5,7 +5,6 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store'
 import { i18n } from '@/i18n/i18n'
-import ko from '@/i18n/locales/ko.json'
 import SidebarToolbar from './SidebarToolbar'
 
 const mocks = vi.hoisted(() => ({
@@ -36,14 +35,6 @@ vi.mock('./ScrollToCurrentWorkspaceToolbarButton', () => ({
 
 vi.mock('./SidebarSettingsHelpMenu', () => ({
   SidebarSettingsHelpMenu: () => <button type="button">Settings</button>
-}))
-
-vi.mock('../orca-profiles/OrcaProfileSwitcher', () => ({
-  OrcaProfileSwitcher: ({ placement }: { placement?: string }) => (
-    <button type="button" data-placement={placement}>
-      Profile
-    </button>
-  )
 }))
 
 const roots: Root[] = []
@@ -144,23 +135,28 @@ describe('SidebarToolbar moved workspace board hint', () => {
     const { container } = await renderToolbar()
     expect(container.querySelector('button[aria-label="Workspace board"]')).not.toBeNull()
 
-    await act(async () => {
-      await i18n.changeLanguage('ko')
-    })
+    // Why: English is the only bundled catalog, so register a synthetic
+    // language whose label differs from the English copy; the toolbar must pick
+    // it up without a remount.
+    const localized = 'Synthetic workspace board'
+    i18n.addResourceBundle(
+      'xx',
+      'translation',
+      { auto: { components: { sidebar: { SidebarToolbar: { '49f62c5665': localized } } } } },
+      true,
+      true
+    )
+    try {
+      await act(async () => {
+        await i18n.changeLanguage('xx')
+      })
 
-    // Why: read the expected copy from the catalog instead of hardcoding it, so
-    // editing the Korean wording cannot fail this test as a bogus stale-render
-    // report.
-    const localized = ko.auto.components.sidebar.SidebarToolbar['49f62c5665']
-    expect(localized).not.toBe('Workspace board')
-    expect(container.querySelector(`button[aria-label="${localized}"]`)).not.toBeNull()
-  })
-
-  it('renders the profile switcher before settings in the footer controls', async () => {
-    const { container } = await renderToolbar()
-    const html = container.innerHTML
-
-    expect(html).toContain('data-placement="sidebar"')
-    expect(html.indexOf('Profile')).toBeLessThan(html.indexOf('Settings'))
+      expect(container.querySelector(`button[aria-label="${localized}"]`)).not.toBeNull()
+    } finally {
+      await act(async () => {
+        await i18n.changeLanguage('en')
+      })
+      i18n.removeResourceBundle('xx', 'translation')
+    }
   })
 })

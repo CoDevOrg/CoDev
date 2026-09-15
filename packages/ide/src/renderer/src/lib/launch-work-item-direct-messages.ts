@@ -1,17 +1,4 @@
-import { isGitLabIssueUrl } from '@/lib/new-workspace'
 import { translate } from '@/i18n/i18n'
-
-export type DirectLaunchIssueLike = {
-  type: string
-  number?: number | null
-  url?: string
-}
-
-export function gitLabIssueNumber(item: DirectLaunchIssueLike): number | undefined {
-  return item.type === 'issue' && item.number != null && item.url && isGitLabIssueUrl(item.url)
-    ? item.number
-    : undefined
-}
 
 export const resolvePrHeadErrorMessage = (): string =>
   translate('auto.lib.launch.work.item.direct.8bc45efdbc', 'Failed to resolve PR head.')

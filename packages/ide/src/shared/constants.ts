@@ -65,9 +65,6 @@ export const ORCA_BROWSER_PARTITION = 'persist:orca-browser'
 // Why: inert blank-tab URL shared by main/renderer so the attach policy can allow just this one data URL and reject others.
 export const ORCA_BROWSER_BLANK_URL = 'data:text/html,'
 
-// Why: Electron's invoke error path preserves only message text, so signal reconnect via this stable token.
-export const SSH_TERMINATE_RECONNECT_REQUIRED = 'SSH_TERMINATE_RECONNECT_REQUIRED'
-
 export const BROWSER_FAMILY_LABELS: Record<string, string> = {
   chrome: 'Google Chrome',
   chromium: 'Chromium',
@@ -304,7 +301,6 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalHiddenViewParking: true,
     // C1 kill switches — runtime reads stay `!== false` so older persisted
     // settings objects (which omit them) keep the default-on behavior.
-    terminalSshViewParking: true,
     terminalHiddenWorktreeRetentionBudget: true,
     browserGuestWorktreeRetentionBudget: true,
     terminalMainSideEffectAuthority: true,
@@ -324,14 +320,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     defaultTaskViewPreset: 'all',
     defaultTaskSource: 'github',
     visibleTaskProviders: [...TASK_PROVIDERS],
-    visibleTaskProvidersDefaultedForJira: true,
     defaultRepoSelection: null,
-    defaultLinearTeamSelection: null,
-    opencodeSessionCookie: '',
-    opencodeWorkspaceId: '',
-    minimaxGroupId: '',
-    minimaxUsageModels: 'general',
-    geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
     agentDefaultArgs: { ...DEFAULT_TUI_AGENT_ARGS },
     agentDefaultEnv: { ...DEFAULT_TUI_AGENT_ENV },
@@ -362,7 +351,6 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     experimentalAgentHibernation: false,
     agentHibernationIdleMs: 30 * 60 * 1000,
     experimentalNewWorktreeCardStyle: false,
-    experimentalEphemeralVms: false,
     compactWorktreeCards: false,
     // Why: local desktop stays the default until the user picks a saved runtime environment.
     activeRuntimeEnvironmentId: null,
@@ -434,10 +422,6 @@ export function getDefaultPersistedState(homedir: string): PersistedState {
     githubCache: { pr: {}, issue: {} },
     workspaceSession: getDefaultWorkspaceSession(),
     workspaceSessionsByHostId: {},
-    sshTargets: [],
-    deletedSshConfigAliases: [],
-    sshRemotePtyLeases: [],
-    sshPtyConsumerRecoveries: [],
     claudeLivePtySessionIds: [],
     migrationUnsupportedPtyEntries: [],
     legacyPaneKeyAliasEntries: [],

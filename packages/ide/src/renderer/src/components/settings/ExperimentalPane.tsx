@@ -9,7 +9,6 @@ import { NumberField, SettingsSwitch } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import { NativeChatExperimentalSetting } from './NativeChatExperimentalSetting'
 import { AgentDashboardExperimentalSetting } from './AgentDashboardExperimentalSetting'
-import { EphemeralVmsExperimentalSetting } from './EphemeralVmsExperimentalSetting'
 import {
   MAX_AGENT_HIBERNATION_IDLE_MS,
   MIN_AGENT_HIBERNATION_IDLE_MS,
@@ -34,7 +33,6 @@ export function ExperimentalPane({
   hiddenExperimentalUnlocked = false
 }: ExperimentalPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
-  const showPet = matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().pet])
   const showAgentsView = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().agentsView
   ])
@@ -63,50 +61,6 @@ export function ExperimentalPane({
 
   return (
     <div className="space-y-4">
-      {showPet ? (
-        <SearchableSetting
-          title={translate('auto.components.settings.ExperimentalPane.dd6f0a1d45', 'Pet')}
-          description={translate(
-            'auto.components.settings.ExperimentalPane.0e89a574ae',
-            'Floating animated pet in the bottom-right corner.'
-          )}
-          keywords={getExperimentalSearchEntry().pet.keywords}
-          className="space-y-3 py-2"
-          id="experimental-pet"
-        >
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 shrink space-y-1.5">
-              <Label>
-                {translate('auto.components.settings.ExperimentalPane.dd6f0a1d45', 'Pet')}
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.settings.ExperimentalPane.ca2219fe5e',
-                  'Shows a small animated pet pinned to the bottom-right corner. Pick a character (Claudino, OpenCode, Gremlin) or upload your own PNG, APNG, GIF, WebP, JPG, or SVG from the status-bar pet menu. Hide it any time from the same menu without disabling this setting.'
-                )}
-              </p>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={settings.experimentalPet}
-              onClick={() => {
-                updateSettings({ experimentalPet: !settings.experimentalPet })
-              }}
-              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-                settings.experimentalPet ? 'bg-foreground' : 'bg-muted-foreground/30'
-              }`}
-            >
-              <span
-                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-background shadow-sm transition-transform ${
-                  settings.experimentalPet ? 'translate-x-4' : 'translate-x-0.5'
-                }`}
-              />
-            </button>
-          </div>
-        </SearchableSetting>
-      ) : null}
-
       {showAgentsView ? (
         <SearchableSetting
           title={translate('auto.components.settings.ExperimentalPane.a05bcdaf57', 'Agents View')}
@@ -326,8 +280,6 @@ export function ExperimentalPane({
           </div>
         </SearchableSetting>
       ) : null}
-
-      <EphemeralVmsExperimentalSetting settings={settings} updateSettings={updateSettings} />
 
       {hiddenExperimentalUnlocked ? <HiddenExperimentalGroup /> : null}
     </div>

@@ -22,10 +22,8 @@ import { browseRuntimeServerDirectory } from '@/runtime/runtime-server-directory
 import { translate } from '@/i18n/i18n'
 import type { FilesystemPathFlavor } from '../../../../shared/types'
 
-type RemoteFileBrowserProps = (
-  | { targetId: string; runtimeEnvironmentId?: never }
-  | { runtimeEnvironmentId: string; targetId?: never }
-) & {
+type RemoteFileBrowserProps = {
+  runtimeEnvironmentId: string
   initialPath?: string
   onSelect: (path: string) => void
   onCancel: () => void
@@ -50,7 +48,6 @@ type PreviewState = {
 }
 
 export function RemoteFileBrowser({
-  targetId,
   runtimeEnvironmentId,
   initialPath = '~',
   onSelect,
@@ -121,20 +118,18 @@ export function RemoteFileBrowser({
       if (cached) {
         return cached
       }
-      const result = targetId
-        ? await window.api.ssh.browseDir({ targetId, dirPath })
-        : await browseRuntimeServerDirectory(
-            requireRuntimeEnvironmentId(runtimeEnvironmentId),
-            dirPath
-          )
+      const result = await browseRuntimeServerDirectory(
+        requireRuntimeEnvironmentId(runtimeEnvironmentId),
+        dirPath
+      )
       listingCacheRef.current.set(result.resolvedPath, result)
-      // Also key by the requested dirPath (e.g. `~`, relative) so an identical request doesn't re-hit the SSH backend.
+      // Also key by the requested dirPath (e.g. `~`, relative) so an identical request doesn't re-hit the host.
       if (dirPath !== result.resolvedPath) {
         listingCacheRef.current.set(dirPath, result)
       }
       return result
     },
-    [runtimeEnvironmentId, targetId]
+    [runtimeEnvironmentId]
   )
 
   const loadDir = useCallback(

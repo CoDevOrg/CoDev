@@ -1,4 +1,4 @@
-import { remoteSessionContentLines } from './remote-session-content-lines'
+import { sessionContentLines } from './session-content-lines'
 import { createReadStream } from 'node:fs'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
@@ -225,7 +225,7 @@ export async function parseClaudeSessionContent(
 ): Promise<AiVaultSession | null> {
   return parseClaudeSessionLines({
     file,
-    lines: remoteSessionContentLines(content, signal),
+    lines: sessionContentLines(content, signal),
     platform,
     options
   })

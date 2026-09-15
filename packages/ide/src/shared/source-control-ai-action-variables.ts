@@ -88,7 +88,7 @@ export const SOURCE_CONTROL_ACTION_VARIABLE_INFO = {
   },
   linkedIssue: {
     description:
-      'The GitHub issue number linked to this workspace. Empty when no GitHub issue is linked (including GitLab-linked workspaces). Prefer instructional templates: a bare "Fixes #{linkedIssue}" becomes "Fixes #" when unlinked.',
+      'The GitHub issue number linked to this workspace. Empty when no GitHub issue is linked. Prefer instructional templates: a bare "Fixes #{linkedIssue}" becomes "Fixes #" when unlinked.',
     example: '123'
   }
 } satisfies Record<string, SourceControlActionVariableInfo>

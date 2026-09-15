@@ -18,7 +18,7 @@ type AgentDetectionOwnerState = Parameters<typeof getConnectionIdFromState>[0] &
 
 /**
  * Resolve which host's agent detection a worktree's launch surfaces must use:
- * the owning SSH host, the owning paired-runtime host, or the local machine.
+ * the owning paired-runtime host or the local machine.
  * Returns undefined while the store has not hydrated the owning repo yet.
  *
  * Why a string key: selectors must return a stable primitive; building the
@@ -40,7 +40,7 @@ export function getAgentDetectionTargetKeyForWorktree(
     if (explicitRuntimeEnvironmentId) {
       return `runtime:${explicitRuntimeEnvironmentId}`
     }
-    // Why: a hostless folder can span local and SSH children, so keep the
+    // Why: a hostless folder can span children on different hosts, so keep the
     // ambiguity gate before applying its focused-runtime fallback.
     if (getConnectionIdFromState(state, worktreeId) === undefined) {
       return undefined
@@ -51,9 +51,6 @@ export function getAgentDetectionTargetKeyForWorktree(
     return undefined
   }
   const executionHost = parseExecutionHostId(getExecutionHostIdForWorktree(state, worktreeId))
-  if (executionHost?.kind === 'ssh') {
-    return `ssh:${executionHost.targetId}`
-  }
   if (executionHost?.kind === 'runtime') {
     return `runtime:${executionHost.environmentId}`
   }
@@ -68,9 +65,6 @@ export function parseAgentDetectionTargetKey(
   }
   if (key === AGENT_DETECTION_LOCAL_TARGET_KEY) {
     return { kind: 'local' }
-  }
-  if (key.startsWith('ssh:')) {
-    return { kind: 'ssh', connectionId: key.slice('ssh:'.length) }
   }
   if (key.startsWith('runtime:')) {
     return { kind: 'runtime', environmentId: key.slice('runtime:'.length) }

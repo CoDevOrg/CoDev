@@ -61,7 +61,7 @@ describe('activateAndRevealWorktree', () => {
   it('records a visit when activating the same worktree changes the current view', () => {
     const worktree = makeWorktree()
     const { markWorktreeVisited, recordWorktreeVisit } = seedAlreadyActiveWorktree(worktree, {
-      activeView: 'tasks'
+      activeView: 'automations'
     })
 
     const result = activateAndRevealWorktree(worktree.id)

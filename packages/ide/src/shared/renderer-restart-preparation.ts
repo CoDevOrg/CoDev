@@ -2,7 +2,6 @@ import {
   ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
   type EditorPrepareHotExitDetail
 } from './editor-save-events'
-import type { UpdateStatus } from './types'
 
 export type AppRestartPrepOptions = {
   startedEventName: string
@@ -56,39 +55,5 @@ export async function prepareRendererForAppRestart(
   } catch (error) {
     eventTarget.dispatchEvent(new Event(abortedEventName))
     throw error
-  }
-}
-
-export type UpdaterQuitAbortRelay = {
-  markPrepared: () => void
-  abort: () => void
-  handleStatus: (status: UpdateStatus) => void
-}
-
-export function createUpdaterQuitAbortRelay(
-  eventTarget: EventTarget,
-  abortedEventName: string
-): UpdaterQuitAbortRelay {
-  let prepared = false
-  const abort = (): void => {
-    if (!prepared) {
-      return
-    }
-    prepared = false
-    eventTarget.dispatchEvent(new Event(abortedEventName))
-  }
-
-  return {
-    markPrepared(): void {
-      prepared = true
-    },
-    abort,
-    handleStatus(status): void {
-      // Why: quitAndInstall IPC resolves after scheduling; a later updater
-      // error is the authoritative signal that the app will remain open.
-      if (status.state === 'error') {
-        abort()
-      }
-    }
   }
 }

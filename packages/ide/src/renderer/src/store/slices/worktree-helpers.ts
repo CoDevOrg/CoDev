@@ -26,11 +26,6 @@ import type { WorktreeForceDeleteReason } from '../../../../shared/worktree-remo
 import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type {
-  HostQualifiedDetectedWorktreeResult,
-  SshExecutionHostId
-} from '../../../../shared/detected-worktree-provider-contract'
-import type { DirectSshAuthority } from '../../../../shared/ssh-types'
-import type {
   PendingWorktreeCreation,
   WorktreeCreationPhase
 } from '@/lib/pending-worktree-creation'
@@ -51,11 +46,6 @@ export type WorktreeFetchOptions = {
   requireAuthoritative?: boolean
   executionHostId?: ExecutionHostId
   forceLocalOwner?: boolean
-}
-
-export type DirectSshWorktreeFetchOptions = WorktreeFetchOptions & {
-  executionHostId: SshExecutionHostId
-  directSshAuthority: DirectSshAuthority
 }
 
 export type WorktreeMetaUpdateGuard = (worktree: Worktree | DetectedWorktree | undefined) => boolean
@@ -146,13 +136,7 @@ export type WorktreeSlice = {
   /** Startup owns the initial all-host refresh; sidebar repo-change refreshes stay gated until it finishes. */
   startupWorktreeRefreshCompleted: boolean
   fetchDetectedWorktrees: (repoId: string) => Promise<DetectedWorktreeListResult | null>
-  fetchWorktrees: {
-    (
-      repoId: string,
-      options: DirectSshWorktreeFetchOptions
-    ): Promise<HostQualifiedDetectedWorktreeResult>
-    (repoId: string, options?: WorktreeFetchOptions): Promise<boolean>
-  }
+  fetchWorktrees: (repoId: string, options?: WorktreeFetchOptions) => Promise<boolean>
   fetchAllWorktrees: (options?: { hydrationPurge?: 'allow' | 'defer' }) => Promise<void>
   fetchWorktreeLineage: (options?: {
     forceLocalOwner?: boolean
@@ -178,21 +162,13 @@ export type WorktreeSlice = {
     linkedPR?: number,
     pushTarget?: GitPushTarget,
     createdWithAgent?: TuiAgent,
-    linkedLinearIssue?: string,
     branchNameOverride?: string,
     workspaceStatus?: WorkspaceStatus,
-    linkedGitLabMR?: number,
-    linkedGitLabIssue?: number,
     startup?: WorktreeStartupLaunch,
     pendingFirstAgentMessageRename?: boolean,
     /** When set, correlates the backend's `createWorktree:progress` events to a
      *  renderer pending creation. Synchronous callers omit it. */
     creationId?: string,
-    linkedLinearIssueWorkspaceId?: string | null,
-    linkedLinearIssueOrganizationUrlKey?: string | null,
-    linkedBitbucketPR?: number | null,
-    linkedAzureDevOpsPR?: number | null,
-    linkedGiteaPR?: number | null,
     compareBaseRef?: string,
     options?: {
       automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
@@ -219,7 +195,7 @@ export type WorktreeSlice = {
   ) => void
   /** Drop a pending entry, clearing the active surface if it pointed at this
    *  creation. VM cleanup is for cancellation/dismissal, not successful handoff. */
-  removePendingWorktreeCreation: (creationId: string, options?: { cleanupVm?: boolean }) => void
+  removePendingWorktreeCreation: (creationId: string) => void
   /** Point the content panel at a pending creation (or clear it with null). */
   setActivePendingWorktreeCreation: (creationId: string | null) => void
   prefetchWorktreeCreateBase: (repoId: string, baseBranch?: string) => Promise<void>
@@ -367,7 +343,6 @@ const ERASURE_PROTECTED_KEYS: Record<Extract<RequiredKey<Worktree>, keyof Worktr
   comment: true,
   linkedIssue: true,
   linkedPR: true,
-  linkedLinearIssue: true,
   isArchived: true,
   isUnread: true,
   isPinned: true,

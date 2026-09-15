@@ -81,10 +81,6 @@ export type TerminalSideEffectFactConsumerCallbacks = {
    *  (stale agent-status row drop + interrupt-inference coordination). */
   onCommandFinished?: (bestEffortExitCode: number | null) => void
   onPrLink?: (link: TerminalGitHubPRLink) => void
-  /** Command Code output scrape (no hooks): working seeds the status row;
-   *  done is settle-checked by the pane policy before completing the turn. */
-  onCommandCodeWorking?: (prompt: string) => void
-  onCommandCodeDone?: (prompt: string) => void
   /** DECSET 2031 subscribe observed by main's tracker. Registered only by
    *  hidden-delivery-gated consumers (their bytes never arrive); the theme
    *  reply is sent renderer-side — query authority stays with the view. */
@@ -137,12 +133,6 @@ function applyLiveFact(entry: ConsumerEntry, fact: TerminalSideEffectFact, seq: 
       return
     case 'pr-link':
       entry.callbacks.onPrLink?.(fact.link)
-      return
-    case 'command-code-working':
-      entry.callbacks.onCommandCodeWorking?.(fact.prompt)
-      return
-    case 'command-code-done':
-      entry.callbacks.onCommandCodeDone?.(fact.prompt)
       return
     case '2031-subscribe':
       entry.callbacks.onMode2031Subscribe?.()

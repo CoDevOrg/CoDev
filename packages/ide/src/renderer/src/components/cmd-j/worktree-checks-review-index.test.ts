@@ -27,7 +27,6 @@ const worktree: Worktree = {
   comment: '',
   linkedIssue: null,
   linkedPR: 42,
-  linkedLinearIssue: null,
   hostId: 'ssh:staging',
   isArchived: false,
   isUnread: false,

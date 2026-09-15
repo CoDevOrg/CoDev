@@ -1,8 +1,6 @@
 import { tuiAgentToAgentKind } from '../../../shared/agent-kind'
 import { isNativeChatSupportedAgent } from '@/lib/native-chat-supported-agent'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
-import { getConnectionIdFromState } from '@/lib/connection-context'
 import { runQuickCommandInNewTab } from '@/lib/run-quick-command-in-new-tab'
 import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../shared/types'
@@ -53,10 +51,7 @@ function runAgentTaggedBridgeCommand(
 ): void {
   const store = useAppStore.getState()
   const viewModeProps = initialAgentTabViewModeProps(store.settings, {
-    agent,
-    nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
-      getConnectionIdFromState(store, worktreeId)
-    )
+    agent
   })
   const tab = store.createTab(worktreeId, undefined, undefined, {
     launchAgent: agent,

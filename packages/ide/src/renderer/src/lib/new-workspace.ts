@@ -21,12 +21,7 @@ export { getLinkedWorkItemSuggestedName } from '../../../shared/workspace-name'
 export { getLinkedWorkItemWorkspaceName } from '../../../shared/workspace-name'
 export { getWorkspaceIntentName } from '../../../shared/workspace-name'
 
-/**
- * Why: the TaskPage's preset buttons and the openTaskPage prefetcher both need
- * to compute the same GitHub query string for a given preset id. Keep the
- * mapping here so the prefetch warms exactly the cache key the page will look
- * up on mount.
- */
+// Why: re-exported so renderer callers share one per-repo fetch budget with the store's GitHub cache keys.
 export { PER_REPO_FETCH_LIMIT, CROSS_REPO_DISPLAY_LIMIT } from '../../../shared/work-items'
 
 export function getTaskPresetQuery(presetId: TaskViewPresetId | null): string {
@@ -53,20 +48,17 @@ export const CLIENT_PLATFORM: NodeJS.Platform = navigator.userAgent.includes('Wi
     ? 'darwin'
     : 'linux'
 
-export { getLinkedWorkItemProvider, isGitLabIssueUrl } from './linked-work-item-provider'
+export { getLinkedWorkItemProvider } from './linked-work-item-provider'
 
 export type LinkedWorkItemSummary = Omit<FolderWorkspaceLinkedTask, 'provider'> & {
   provider?: FolderWorkspaceLinkedTask['provider']
-  linearWorkspaceId?: string
-  linearOrganizationUrlKey?: string
-  linearBranchName?: string
   linkedContext?: LinkedWorkItemContext
 }
 
 export function canUseIssueCommandForLinkedItemProvider(
   provider: FolderWorkspaceLinkedTask['provider'] | null
 ): boolean {
-  return provider === 'github' || provider === 'gitlab'
+  return provider === 'github'
 }
 
 // Why: when a repo has no `codev.yaml` issueCommand and no per-user override,

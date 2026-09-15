@@ -403,55 +403,6 @@ describe('startParkedTerminalByteWatcher', () => {
     expect(commandStatusPolicy.dispose).toHaveBeenCalledTimes(1)
   })
 
-  it('feeds Command Code output through the parked byte detector', async () => {
-    const { dispose } = await startWatcher()
-
-    emit('# Command Code v0.27.2\r\n')
-    emit('⌘ Parsing...')
-
-    expect(commandStatusPolicy.onCommandCodeWorking).toHaveBeenCalledTimes(1)
-    dispose()
-  })
-
-  it('feeds a Command Code return to the idle composer through as done', async () => {
-    const { dispose } = await startWatcher()
-
-    emit('# Command Code v0.27.2\r\n')
-    emit('❯ Fix the spinner\r\n')
-    emit('\r\n❯ Ask your question...\r\n')
-
-    expect(commandStatusPolicy.onCommandCodeDone).toHaveBeenCalledWith('Fix the spinner')
-    dispose()
-  })
-
-  it('arms the Command Code scrape from a turn already in flight at park time', async () => {
-    // Why: the banner scrolled away long before the park, so only the live
-    // status row can tell the fresh detector this is a Command Code TUI.
-    mockStoreState.agentStatusByPaneKey = {
-      [PANE_KEY]: { state: 'working', prompt: 'Fix the spinner', agentType: 'command-code' }
-    }
-    const { dispose } = await startWatcher()
-
-    emit('\r\n❯ Ask your question...\r\n')
-
-    expect(commandStatusPolicy.onCommandCodeDone).toHaveBeenCalledWith('Fix the spinner')
-    dispose()
-  })
-
-  it('leaves the scrape unarmed when the parked pane has no in-flight Command Code turn', async () => {
-    mockStoreState.agentStatusByPaneKey = {
-      [PANE_KEY]: { state: 'done', prompt: 'Fix the spinner', agentType: 'command-code' }
-    }
-    const { dispose } = await startWatcher()
-
-    emit('\r\n❯ Ask your question...\r\n')
-    emit('⌘ Parsing...')
-
-    expect(commandStatusPolicy.onCommandCodeDone).not.toHaveBeenCalled()
-    expect(commandStatusPolicy.onCommandCodeWorking).not.toHaveBeenCalled()
-    dispose()
-  })
-
   it('fires completion when seeded with a working title and the agent goes idle while parked', async () => {
     // Why: the pane was working at park time; the watcher's fresh tracker
     // must be seeded or this working→idle transition can never fire.

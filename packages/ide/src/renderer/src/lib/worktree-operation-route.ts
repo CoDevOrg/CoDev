@@ -49,34 +49,9 @@ const repoOperationRouteIndexCache = new WeakMap<
   ReadonlyMap<string, WorktreeOperationRouteResolution>
 >()
 
-function ownerRecordsOnHost(
-  state: WorktreeOperationRouteState,
-  worktreeId: string,
-  executionHostId: ExecutionHostId
-): WorktreeOperationOwnerRecord[] {
-  const owners: WorktreeOperationOwnerRecord[] = []
-  for (const worktrees of Object.values(state.worktreesByRepo ?? {})) {
-    for (const worktree of worktrees) {
-      if (
-        worktree.id === worktreeId &&
-        parseExecutionHostId(worktree.hostId)?.id === executionHostId
-      ) {
-        owners.push(worktree)
-      }
-    }
-  }
-  for (const worktree of findIndexedDetectedWorktrees(state.detectedWorktreesByRepo, worktreeId)) {
-    if (parseExecutionHostId(worktree.hostId)?.id === executionHostId) {
-      owners.push(worktree)
-    }
-  }
-  return owners
-}
-
 /**
- * The active workspace's host selection is authoritative identity, but it carries no transport:
- * an `ssh:` host reached through a paired HUB names the target, not the HUB that proxies it. Keep
- * the selected host and recover the runtime owner from the matching owner rows (#11346).
+ * The active workspace's host selection is authoritative identity, but it carries no transport.
+ * Keep the selected host and recover the runtime owner from the matching owner rows (#11346).
  */
 export function resolveActiveWorkspaceRoute(
   state: WorktreeOperationRouteState,
@@ -92,23 +67,7 @@ export function resolveActiveWorkspaceRoute(
   if (activeHost.kind === 'runtime') {
     return { executionHostId: activeHost.id, runtimeEnvironmentId: activeHost.environmentId }
   }
-  // Why: only an `ssh:` selection can hide a paired HUB owner, so local stays an O(1) hot path.
-  if (activeHost.kind !== 'ssh') {
-    return { executionHostId: activeHost.id, runtimeEnvironmentId: null }
-  }
-  const environmentIds = new Set<string>()
-  for (const owner of ownerRecordsOnHost(state, worktreeId, activeHost.id)) {
-    const resolution = resolveExactWorktreeRoute(state, owner)
-    if (resolution.kind === 'resolved' && resolution.route.runtimeEnvironmentId) {
-      environmentIds.add(resolution.route.runtimeEnvironmentId)
-    }
-  }
-  const environmentId = environmentIds.values().next().value
-  return {
-    executionHostId: activeHost.id,
-    // Why: rival HUBs projecting the same host cannot be disambiguated by the host selection alone.
-    runtimeEnvironmentId: environmentIds.size === 1 && environmentId ? environmentId : null
-  }
+  return { executionHostId: activeHost.id, runtimeEnvironmentId: null }
 }
 
 export function resolveWorktreeOperationRoute(

@@ -38,27 +38,28 @@ type CapturedInterruptBaseline = {
   inputCount?: number
 }
 
+// Why: kept as agent-keyed policy hooks so a CLI whose first Escape is a TUI
+// cancel (double-Escape interrupt), whose Ctrl+C exits instead of interrupting,
+// or whose interrupt must flush without settle can be listed here. Claude and
+// Codex need none of these.
 function requiresDoubleEscapeForAgent(
-  agentType: AgentStatusEntry['agentType'],
-  intent: AgentInterruptInputIntent
+  _agentType: AgentStatusEntry['agentType'],
+  _intent: AgentInterruptInputIntent
 ): boolean {
-  return (agentType === 'opencode' || agentType === 'copilot') && intent === 'plain-escape'
+  return false
 }
 
 function shouldFlushInterruptImmediately(
-  baseline: Pick<CapturedInterruptBaseline, 'agentType' | 'intent'>
+  _baseline: Pick<CapturedInterruptBaseline, 'agentType' | 'intent'>
 ): boolean {
-  return (
-    requiresDoubleEscapeForAgent(baseline.agentType, baseline.intent) ||
-    baseline.agentType === 'gemini'
-  )
+  return false
 }
 
 function shouldIgnoreInterruptIntent(
-  agentType: AgentStatusEntry['agentType'],
-  intent: AgentInterruptInputIntent
+  _agentType: AgentStatusEntry['agentType'],
+  _intent: AgentInterruptInputIntent
 ): boolean {
-  return agentType === 'droid' && intent === 'ctrl-c'
+  return false
 }
 
 function canInferInterrupt(entry: AgentStatusEntry, intent: AgentInterruptInputIntent): boolean {

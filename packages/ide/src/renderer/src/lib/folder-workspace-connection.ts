@@ -69,7 +69,7 @@ export function getFolderWorkspaceConnectionId(
   }
   const explicitHost = parseExecutionHostId(workspace.executionHostId)
   if (explicitHost) {
-    return explicitHost.kind === 'ssh' ? explicitHost.targetId : null
+    return null
   }
   const scopeConnectionId =
     workspace.connectionId ??
@@ -86,10 +86,10 @@ export function getFolderWorkspaceConnectionId(
     }
   }
   if (scopeConnectionId) {
-    const hasDifferentSshConnection = [...connectionIds].some(
+    const hasDifferentConnection = [...connectionIds].some(
       (connectionId) => connectionId !== scopeConnectionId
     )
-    if (hasLocalRepo || hasDifferentSshConnection) {
+    if (hasLocalRepo || hasDifferentConnection) {
       return undefined
     }
     return scopeConnectionId

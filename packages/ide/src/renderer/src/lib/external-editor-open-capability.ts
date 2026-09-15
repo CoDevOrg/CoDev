@@ -1,5 +1,4 @@
 import type { GlobalSettings } from '../../../shared/types'
-import { isVsCodeRemoteSshCommand } from '../../../shared/vscode-remote-ssh-launcher'
 
 export type ExternalEditorOpenCapability =
   | { allowed: true; remote: boolean }
@@ -15,7 +14,5 @@ export function getExternalEditorOpenCapability(
   if (!context.connectionId?.trim()) {
     return { allowed: true, remote: false }
   }
-  return isVsCodeRemoteSshCommand(context.command)
-    ? { allowed: true, remote: true }
-    : { allowed: false, reason: 'local-only-editor' }
+  return { allowed: false, reason: 'local-only-editor' }
 }

@@ -17,10 +17,6 @@ export function githubPullRequestHeadLocalRef(remoteComponent: string, prNumber:
   return `refs/orca/pull/${remoteComponent}/${prNumber}`
 }
 
-export function gitlabMergeRequestHeadLocalRef(remoteComponent: string, mrIid: number): string {
-  return `refs/orca/merge-requests/${remoteComponent}/${mrIid}`
-}
-
 // Why: remote names may hold chars invalid in a ref component; the URL hash
 // carries uniqueness, so lossy sanitization here is safe.
 function sanitizeRemoteRefComponent(remote: string): string {

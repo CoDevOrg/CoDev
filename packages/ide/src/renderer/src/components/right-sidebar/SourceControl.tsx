@@ -1513,10 +1513,6 @@ function SourceControlInner(): React.JSX.Element {
 
   const linkedGitHubPR = activeWorktree?.linkedPR ?? null
   const fallbackGitHubPRNumber = linkedGitHubPR == null ? (activePrFromQueue?.number ?? null) : null
-  const linkedGitLabMR = activeWorktree?.linkedGitLabMR ?? null
-  const linkedBitbucketPR = activeWorktree?.linkedBitbucketPR ?? null
-  const linkedAzureDevOpsPR = activeWorktree?.linkedAzureDevOpsPR ?? null
-  const linkedGiteaPR = activeWorktree?.linkedGiteaPR ?? null
   const manualReviewUrl = useMemo(
     () =>
       buildSourceControlManualReviewUrlFromContext({
@@ -1524,10 +1520,6 @@ function SourceControlInner(): React.JSX.Element {
         hostedReviewCreationProvider: hostedReviewCreation?.provider ?? null,
         linkedGitHubPR,
         fallbackGitHubPRNumber,
-        linkedGitLabMR,
-        linkedBitbucketPR,
-        linkedAzureDevOpsPR,
-        linkedGiteaPR,
         baseRef: compareBaseRef,
         branchName,
         repoRemoteName: activeRepo?.gitRemoteIdentity?.remoteName ?? null,
@@ -1544,11 +1536,7 @@ function SourceControlInner(): React.JSX.Element {
       fallbackGitHubPRNumber,
       hostedReview?.provider,
       hostedReviewCreation?.provider,
-      linkedAzureDevOpsPR,
-      linkedBitbucketPR,
       linkedGitHubPR,
-      linkedGitLabMR,
-      linkedGiteaPR,
       remoteStatus?.upstreamName
     ]
   )
@@ -1587,10 +1575,6 @@ function SourceControlInner(): React.JSX.Element {
         activeRepoId: activeRepo?.id ?? null,
         linkedGitHubPR,
         fallbackGitHubPR: fallbackGitHubPRNumber,
-        linkedGitLabMR,
-        linkedBitbucketPR,
-        linkedAzureDevOpsPR,
-        linkedGiteaPR,
         remoteInferredProvider: remoteInferredHostedReviewProvider
       }),
     [
@@ -1598,11 +1582,7 @@ function SourceControlInner(): React.JSX.Element {
       fallbackGitHubPRNumber,
       hostedReview,
       hostedReviewCreation,
-      linkedAzureDevOpsPR,
-      linkedBitbucketPR,
       linkedGitHubPR,
-      linkedGitLabMR,
-      linkedGiteaPR,
       remoteInferredHostedReviewProvider
     ]
   )
@@ -1619,10 +1599,7 @@ function SourceControlInner(): React.JSX.Element {
       hostedReview !== null ||
       hostedReviewCreation !== null ||
       linkedGitHubPR !== null ||
-      fallbackGitHubPRNumber !== null ||
-      linkedGitLabMR !== null ||
-      linkedAzureDevOpsPR !== null ||
-      linkedGiteaPR !== null
+      fallbackGitHubPRNumber !== null
 
     if (!hasConcreteProviderHint) {
       return
@@ -1641,10 +1618,7 @@ function SourceControlInner(): React.JSX.Element {
     fallbackGitHubPRNumber,
     hostedReview,
     hostedReviewCreation,
-    linkedAzureDevOpsPR,
-    linkedGiteaPR,
     linkedGitHubPR,
-    linkedGitLabMR,
     provisionalHostedReviewProvider
   ])
   const hostedReviewCreationForHeader = useMemo(() => {
@@ -1669,18 +1643,13 @@ function SourceControlInner(): React.JSX.Element {
   const hasHostedReviewLink = hasPositiveHostedReviewNumberLink({
     linkedGitHubPR,
     fallbackGitHubPR: fallbackGitHubPRNumber,
-    linkedGitLabMR,
-    linkedBitbucketPR,
-    linkedAzureDevOpsPR,
-    linkedGiteaPR
   })
   // Why: SSH-backed (connectionId) repos never fetch hostedReview, so skip the loading state or it would permanently block Publish Branch.
   const isHostedReviewStateLoading =
     !activeRepo?.connectionId && hasHostedReviewLink && hostedReviewEntry === undefined
   const hasResolvableReviewPushTargetLink = hasResolvableHostedReviewPushTargetLink({
     linkedGitHubPR,
-    fallbackGitHubPR: fallbackGitHubPRNumber,
-    linkedGitLabMR
+    fallbackGitHubPR: fallbackGitHubPRNumber
   })
   useEffect(() => {
     // Why: resolving review heads can hit provider/SSH APIs; gate on the visible branch view like the adjacent PR polling.
@@ -1744,10 +1713,6 @@ function SourceControlInner(): React.JSX.Element {
       repoId: activeRepo.id,
       linkedGitHubPR,
       fallbackGitHubPR: fallbackGitHubPRNumber,
-      linkedGitLabMR,
-      linkedBitbucketPR,
-      linkedAzureDevOpsPR,
-      linkedGiteaPR,
       staleWhileRevalidate: true,
       // Why: scoped to the active worktree, so it earns the host's fast
       // re-check tier instead of the O(N) card pacing (#11532).
@@ -1765,10 +1730,6 @@ function SourceControlInner(): React.JSX.Element {
     isFolder,
     linkedGitHubPR,
     fallbackGitHubPRNumber,
-    linkedGitLabMR,
-    linkedBitbucketPR,
-    linkedAzureDevOpsPR,
-    linkedGiteaPR
   ])
 
   // Why: eligibility is recomputed later to pause refetches during an in-flight PR flow, since AI gen's fetch+rebase would flip canCreate off and cancel generation.
@@ -2756,31 +2717,9 @@ function SourceControlInner(): React.JSX.Element {
         if (worktreeId && result.provider === 'github') {
           await updateWorktreeMeta(worktreeId, { linkedPR: result.number })
         }
-        if (worktreeId && result.provider === 'gitlab') {
-          await updateWorktreeMeta(worktreeId, { linkedGitLabMR: result.number })
-        }
-        if (worktreeId && result.provider === 'azure-devops') {
-          await updateWorktreeMeta(worktreeId, { linkedAzureDevOpsPR: result.number })
-        }
-        if (worktreeId && result.provider === 'gitea') {
-          await updateWorktreeMeta(worktreeId, { linkedGiteaPR: result.number })
-        }
         const linkedReviewNumbers = {
           linkedGitHubPR: result.provider === 'github' ? result.number : linkedGitHubPR,
-          fallbackGitHubPR: fallbackGitHubPRNumber,
-          linkedGitLabMR: result.provider === 'gitlab' ? result.number : linkedGitLabMR,
-          linkedBitbucketPR,
-          linkedAzureDevOpsPR:
-            result.provider === 'azure-devops' ? result.number : linkedAzureDevOpsPR,
-          linkedGiteaPR: result.provider === 'gitea' ? result.number : linkedGiteaPR
-        }
-        if (result.provider === 'gitlab') {
-          await fetchHostedReviewForBranch(repoPath, branch, {
-            force: true,
-            repoId,
-            ...linkedReviewNumbers
-          })
-          return
+          fallbackGitHubPR: fallbackGitHubPRNumber
         }
         if (result.provider !== 'github') {
           await fetchHostedReviewForBranch(repoPath, branch, {
@@ -2830,11 +2769,7 @@ function SourceControlInner(): React.JSX.Element {
       fallbackGitHubPRNumber,
       fetchHostedReviewForBranch,
       fetchPRForBranch,
-      linkedAzureDevOpsPR,
-      linkedBitbucketPR,
-      linkedGiteaPR,
       linkedGitHubPR,
-      linkedGitLabMR,
       setRightSidebarOpen,
       setRightSidebarTab,
       updateWorktreeMeta
@@ -3196,11 +3131,7 @@ function SourceControlInner(): React.JSX.Element {
       ahead: remoteStatus?.ahead,
       behind: remoteStatus?.behind,
       linkedGitHubPR,
-      fallbackGitHubPR: fallbackGitHubPRNumber,
-      linkedGitLabMR,
-      linkedBitbucketPR,
-      linkedAzureDevOpsPR,
-      linkedGiteaPR
+      fallbackGitHubPR: fallbackGitHubPRNumber
     })
       .then((result) => {
         if (!stale) {
@@ -3268,10 +3199,6 @@ function SourceControlInner(): React.JSX.Element {
     isFolder,
     linkedGitHubPR,
     fallbackGitHubPRNumber,
-    linkedGitLabMR,
-    linkedBitbucketPR,
-    linkedAzureDevOpsPR,
-    linkedGiteaPR,
     prGenerating,
     remoteStatus?.ahead,
     remoteStatus?.behind,
@@ -3715,11 +3642,7 @@ function SourceControlInner(): React.JSX.Element {
           ahead: upstreamStatus?.ahead,
           behind: upstreamStatus?.behind,
           linkedGitHubPR,
-          fallbackGitHubPR: fallbackGitHubPRNumber,
-          linkedGitLabMR,
-          linkedBitbucketPR,
-          linkedAzureDevOpsPR,
-          linkedGiteaPR
+          fallbackGitHubPR: fallbackGitHubPRNumber
         })
       } catch (error) {
         console.warn('[SourceControl] Create PR intent eligibility failed', error)
@@ -3751,11 +3674,7 @@ function SourceControlInner(): React.JSX.Element {
       activeRepo,
       fallbackGitHubPRNumber,
       getHostedReviewCreationEligibility,
-      linkedAzureDevOpsPR,
-      linkedBitbucketPR,
-      linkedGiteaPR,
       linkedGitHubPR,
-      linkedGitLabMR
     ]
   )
 

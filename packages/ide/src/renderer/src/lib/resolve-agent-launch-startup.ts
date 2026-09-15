@@ -9,7 +9,6 @@ import {
 } from '../../../shared/tui-agent-launch-defaults'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
-import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { resolveNativeChatSessionOptionDefaults } from '../../../shared/native-chat-session-option-defaults'
 import type { TuiAgent } from '../../../shared/types'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
@@ -63,7 +62,7 @@ export function resolveAgentLaunchStartup(args: {
           repo.connectionId ? undefined : getLocalProjectExecutionRuntimeContext(store, worktreeId)
         )
       : CLIENT_PLATFORM)
-  const isRemote = repo ? repoIsRemote(repo) : false
+  const isRemote = false
   const queuedShell = resolveLocalWindowsAgentStartupShell({
     platform: resolvedLaunchPlatform,
     isRemote,

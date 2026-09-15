@@ -25,7 +25,6 @@ import {
   resolveAgentStatusIdentity,
   shouldSuppressInheritedTerminalStatus
 } from '../../../../shared/agent-status-identity'
-import { isCommandCodeNewTurnWhileWorking } from '../../../../shared/command-code-turn-boundary'
 import type { TerminalPaneLayoutNode, TerminalTab } from '../../../../shared/types'
 import {
   getRepoExecutionHostId,
@@ -38,7 +37,6 @@ import {
   isOrcaDispatchPrompt,
   orchestrationLabelsMatchLiveDispatch
 } from '@/lib/agent-row-primary-text'
-import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from '@/lib/pi-compatible-live-recovery-record'
 import {
   resolveAgentPaneAuthorityKey,
   retireAgentPaneAuthorityAliases,
@@ -115,7 +113,7 @@ export type AgentStatusSlice = {
   migrationUnsupportedByPtyId: Record<string, MigrationUnsupportedPtyEntry>
   /** Monotonic tick that advances when agent-status freshness boundaries pass. */
   agentStatusEpoch: number
-  /** SSH connections whose transient rows were cleared and must reject renderer callbacks
+  /** Connections whose transient rows were cleared and must reject renderer callbacks
    *  until a later reconnect establishes a new connection lifecycle. */
   transientClearedAgentStatusConnectionIds: Record<string, true>
   /** Arm the shared freshness timer after an external mirror writes live rows. */
@@ -674,8 +672,7 @@ export function collectSleepingAgentSessionRecordsForWorktree(
       if (
         existing.worktreeId !== worktreeId ||
         existing.origin !== 'live' ||
-        (liveEntry !== undefined &&
-          !isCompletedPiCompatibleAgentWithLiveRecoveryRecord(liveEntry, existing)) ||
+        liveEntry !== undefined ||
         (allowedPaneKeys && !allowedPaneKeys.has(existing.paneKey)) ||
         !getAgentResumeArgv(existing.agent, existing.providerSession)
       ) {
@@ -1179,7 +1176,7 @@ function mergeCurrentOrchestrationContext(
 }
 
 // Why: relay/daemon teardown drops main's rows, but renderer entries whose connectionId stamp never
-// matched (unstamped over SSH) survive and stay "fresh" 30 min (#9030). Resolve each worktree's host
+// matched (unstamped) survive and stay "fresh" 30 min (#9030). Resolve each worktree's host
 // via the canonical hostId-first precedence and keep only ids UNAMBIGUOUSLY on this connection — a
 // worktree id is `${repoId}::${path}` (no host component), so the same project mirrored at the same
 // path on two hosts yields one shared id that must not clear another host's live rows.
@@ -1783,18 +1780,6 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           incoming: payload.agentType,
           now: updatedAt
         })
-        // Why: Command Code has no UserPromptSubmit; a fresh transcript prompt while still `working` is the smart-sort turn boundary.
-        const commandCodeNewTurn =
-          existing !== undefined &&
-          isCommandCodeNewTurnWhileWorking({
-            agentType: identity.agentType,
-            previousState: existing.state,
-            incomingState: payload.state,
-            previousPrompt: existing.prompt,
-            incomingPrompt: payload.prompt,
-            previousPromptInteractionKey: existing.promptInteractionKey,
-            incomingPromptInteractionKey: payload.promptInteractionKey
-          })
         const promptInteractionKey =
           payload.promptInteractionKey ??
           (payload.prompt === existing?.prompt ? existing?.promptInteractionKey : undefined)
@@ -1802,11 +1787,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         // same-state pings and restart); fall back to existing only when main sent no timing, updatedAt for a new pane.
         const stateStartedAt =
           timing?.stateStartedAt ??
-          (commandCodeNewTurn
-            ? updatedAt
-            : existing && existing.state === payload.state
-              ? existing.stateStartedAt
-              : updatedAt)
+          (existing && existing.state === payload.state ? existing.stateStartedAt : updatedAt)
         if (
           existing &&
           shouldSuppressInheritedTerminalStatus({
@@ -1987,7 +1968,6 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           existing.state !== payload.state ||
           !wasFresh ||
           attributionChanged ||
-          commandCodeNewTurn ||
           sameStateStateStartedAtChanged
         const doneRetentionFieldsChanged =
           existing?.state === 'done' &&
@@ -2849,18 +2829,6 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         let changed = false
         for (const entry of Object.values(s.agentStatusByPaneKey)) {
           if (entry.state === 'done') {
-            const existing = next[entry.paneKey]
-            if (!isCompletedPiCompatibleAgentWithLiveRecoveryRecord(entry, existing)) {
-              continue
-            }
-            if (mode === 'periodic') {
-              continue
-            }
-            const record = { ...existing, capturedAt, origin }
-            if (!sleepingRecordsEquivalentIgnoringCaptureTime(existing, record)) {
-              next[entry.paneKey] = record
-              changed = true
-            }
             continue
           }
           const worktreeId = entry.worktreeId ?? findAgentPaneWorktreeId(s, entry.paneKey)

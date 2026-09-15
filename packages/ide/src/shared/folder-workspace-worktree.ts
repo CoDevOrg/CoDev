@@ -1,6 +1,5 @@
 import type { FolderWorkspace, Worktree } from './types'
 import { folderWorkspaceKey } from './workspace-scope'
-import { toSshExecutionHostId } from './execution-host'
 
 export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Worktree {
   const linkedTask = folderWorkspace.linkedTask
@@ -12,14 +11,6 @@ export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Wor
     linkedIssue:
       linkedTask?.provider === 'github' && linkedTask.type === 'issue' ? linkedTask.number : null,
     linkedPR: null,
-    linkedLinearIssue:
-      linkedTask?.provider === 'linear' ? (linkedTask.linearIdentifier ?? null) : null,
-    linkedGitLabMR: null,
-    linkedGitLabIssue:
-      linkedTask?.provider === 'gitlab' && linkedTask.type === 'issue' ? linkedTask.number : null,
-    linkedBitbucketPR: null,
-    linkedAzureDevOpsPR: null,
-    linkedGiteaPR: null,
     linkedWorkItem: linkedTask,
     linkedTaskSourceContext: folderWorkspace.linkedTaskSourceContext ?? null,
     isArchived: folderWorkspace.isArchived,
@@ -39,8 +30,6 @@ export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Wor
     isBare: false,
     isSparse: false,
     isMainWorktree: false,
-    hostId:
-      folderWorkspace.executionHostId ??
-      (folderWorkspace.connectionId ? toSshExecutionHostId(folderWorkspace.connectionId) : 'local')
+    hostId: folderWorkspace.executionHostId ?? 'local'
   }
 }

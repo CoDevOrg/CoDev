@@ -18,29 +18,20 @@ vi.mock('./settings-search-keywords', () => ({
 import { getStatusBarToggles } from './appearance-status-bar-search'
 
 describe('getStatusBarToggles', () => {
-  it('includes Antigravity usage so Appearance can toggle the default-on status item', () => {
-    const antigravityToggle = getStatusBarToggles().find((entry) => entry.id === 'antigravity')
-
-    expect(antigravityToggle).toMatchObject({
-      title: 'Antigravity Usage',
-      description: 'Show Antigravity subscription usage in the status bar.',
-      toggleDescription: 'Show Antigravity subscription usage for the active workspace.'
-    })
-    expect(antigravityToggle?.keywords).toEqual(
-      expect.arrayContaining(['status bar', 'antigravity', 'usage', 'subscription', 'google'])
-    )
+  it('exposes only the Claude and Codex usage toggles alongside the shell items', () => {
+    const ids = getStatusBarToggles().map((entry) => entry.id)
+    expect(ids).toEqual(expect.arrayContaining(['claude', 'codex']))
+    for (const id of ids) {
+      expect(id).not.toMatch(/minimax|opencode|gemini|grok|kimi|antigravity/i)
+    }
   })
 
-  it('includes MiniMax usage so Appearance can toggle the default-on status item', () => {
-    const miniMaxToggle = getStatusBarToggles().find((entry) => entry.id === 'minimax')
+  it('includes Codex usage so Appearance can toggle the default-on status item', () => {
+    const codexToggle = getStatusBarToggles().find((entry) => entry.id === 'codex')
 
-    expect(miniMaxToggle).toMatchObject({
-      title: 'MiniMax Usage',
-      description: 'Show MiniMax subscription usage in the status bar.',
-      toggleDescription: 'Show MiniMax subscription usage for the active workspace.'
+    expect(codexToggle).toMatchObject({
+      toggleDescription: 'Show Codex token and cost usage for the active workspace.'
     })
-    expect(miniMaxToggle?.keywords).toEqual(
-      expect.arrayContaining(['status bar', 'minimax', 'usage', 'subscription', 'cookie'])
-    )
+    expect(codexToggle?.keywords).toEqual(expect.arrayContaining(['status bar', 'codex', 'usage']))
   })
 })

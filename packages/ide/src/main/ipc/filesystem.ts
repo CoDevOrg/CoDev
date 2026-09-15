@@ -7,7 +7,6 @@ import { dirname, extname, join, resolve } from 'node:path'
 import type { ChildProcess } from 'node:child_process'
 import { gitExecFileAsync, wslAwareSpawn } from '../git/runner'
 import { parseWslPath, toWindowsWslPath } from '../wsl'
-import { tryDeleteWslUncPath } from '../wsl-unc-delete'
 import type { Store } from '../persistence'
 import type {
   DirEntry,
@@ -29,9 +28,7 @@ import type {
   TuiAgent
 } from '../../shared/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
-import type { SshMutationExpectation } from '../../shared/ssh-types'
 import { sortDirEntries } from '../../shared/file-name-sort'
-import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
 import {
   buildRgArgs,
   createAccumulator,
@@ -65,7 +62,6 @@ import {
   cancelGenerateCommitMessageLocal,
   cancelGeneratePullRequestFieldsLocal,
   discoverCommitMessageModelsLocal,
-  discoverCommitMessageModelsRemote,
   generateCommitMessageFromContext,
   generatePullRequestFieldsFromContext,
   resolveCommitMessageSettings,
@@ -84,7 +80,6 @@ import {
   appendFolderToGitignore,
   findKnownHugeFolderPathsToIgnore
 } from '../git/huge-folder-ignore'
-import { assertGitPushTargetShape } from '../../shared/git-push-target-validation'
 import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
 import type { HostedReviewProvider } from '../../shared/hosted-review'
 import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
@@ -110,16 +105,8 @@ import {
   resolveSourceControlAiLinkedIssue,
   resolveSourceControlAiLinkedIssueMeta
 } from './source-control-ai-linked-issue'
-import { listMarkdownDocuments, markdownDocumentsFromRelativePaths } from './markdown-documents'
+import { listMarkdownDocuments } from './markdown-documents'
 import { checkRgAvailable } from './rg-availability'
-import {
-  getSshFilesystemProvider,
-  requireSshFilesystemProvider
-} from '../providers/ssh-filesystem-dispatch'
-import {
-  getSshGitProvider,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
-} from '../providers/ssh-git-dispatch'
 import { resolveHostedReviewBodyForGeneration } from '../source-control/pull-request-template'
 import { loadPullRequestLinkedIssue } from '../source-control/pull-request-linked-issue'
 import {
@@ -131,12 +118,10 @@ import { listRepoWorktrees } from '../repo-worktrees'
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { buildReadDirErrorBreadcrumb, type ReadDirThrowSite } from './readdir-error-diagnostics'
 import { splitWorktreeId } from '../../shared/worktree-id'
-import { getRuntimePathBasename } from '../../shared/cross-platform-path'
 import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import { registerLocalLogTailHandlers } from './local-log-tail'
 import { localLogFileIdentity } from '../ai-vault/local-log-tail-reader'
 import { sanitizeLocalDownloadFilename } from '../local-download-filename'
-import { registerFilesystemDownloadFolderHandlers } from './filesystem-download-folder'
 import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
 import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
 import {
@@ -311,28 +296,6 @@ function hasRegisteredWorktreeMetaForRepo(
   return false
 }
 
-function comparableRemotePath(value: string): string {
-  return value.replace(/[/\\]+$/g, '')
-}
-
-function hasRegisteredRemoteWorktreeMetaForRepo(
-  store: Store,
-  repoId: string,
-  worktreePath: string
-): boolean {
-  const comparableWorktreePath = comparableRemotePath(worktreePath)
-  for (const worktreeId of Object.keys(store.getAllWorktreeMeta())) {
-    const parsed = splitWorktreeId(worktreeId)
-    if (
-      parsed?.repoId === repoId &&
-      comparableRemotePath(parsed.worktreePath) === comparableWorktreePath
-    ) {
-      return true
-    }
-  }
-  return false
-}
-
 async function localRepoOwnsWorktree(
   store: Store,
   repo: Repo,
@@ -359,30 +322,6 @@ async function localRepoOwnsWorktree(
   }
 }
 
-async function remoteRepoOwnsWorktree(
-  store: Store,
-  repo: Repo,
-  worktreePath: string,
-  connectionId: string
-): Promise<boolean> {
-  const comparableWorktreePath = comparableRemotePath(worktreePath)
-  if (comparableRemotePath(repo.path) === comparableWorktreePath) {
-    return true
-  }
-  const provider = getSshGitProvider(connectionId)
-  if (!provider) {
-    return hasRegisteredRemoteWorktreeMetaForRepo(store, repo.id, worktreePath)
-  }
-  try {
-    const worktrees = await provider.listWorktrees(repo.path)
-    return worktrees.some(
-      (worktree) => comparableRemotePath(worktree.path) === comparableWorktreePath
-    )
-  } catch {
-    return false
-  }
-}
-
 async function getRepoForSourceControlAi(
   store: Store,
   args: { repoId?: string; worktreePath: string; connectionId?: string }
@@ -392,18 +331,6 @@ async function getRepoForSourceControlAi(
   }
   const repo = store.getRepo(args.repoId)
   if (!repo) {
-    return null
-  }
-  if (args.connectionId) {
-    if (repo.connectionId !== args.connectionId) {
-      return null
-    }
-    // Why: one SSH connection can host several repos; repo-scoped AI overrides apply only when the worktree belongs to that repo.
-    return (await remoteRepoOwnsWorktree(store, repo, args.worktreePath, args.connectionId))
-      ? repo
-      : null
-  }
-  if (repo.connectionId) {
     return null
   }
   // Why: renderer-supplied repoId is advisory; apply repo overrides only when the local worktree belongs to that repo.
@@ -538,13 +465,6 @@ export function registerFilesystemHandlers(
       // Why: fs:readDir throws surface as opaque IPC errors; record the throw site + redacted path shape to keep them diagnosable.
       let throwSite: ReadDirThrowSite = 'authorize'
       try {
-        if (args.connectionId) {
-          throwSite = 'ssh-provider'
-          const provider = requireSshFilesystemProvider(args.connectionId)
-          // Why: re-sort locally — the remote relay may be an older build with
-          // lexicographic ordering.
-          return sortDirEntries(await provider.readDir(args.dirPath))
-        }
         throwSite = 'authorize'
         const dirPath = await resolveAuthorizedPath(args.dirPath, store)
         throwSite = 'readdir'
@@ -564,7 +484,6 @@ export function registerFilesystemHandlers(
           'fs_readdir_error',
           buildReadDirErrorBreadcrumb({
             dirPath: args.dirPath,
-            connectionId: args.connectionId,
             throwSite,
             error
           })
@@ -586,10 +505,6 @@ export function registerFilesystemHandlers(
       mimeType?: string
       fileIdentity?: string
     }> => {
-      if (args.connectionId) {
-        const provider = requireSshFilesystemProvider(args.connectionId)
-        return provider.readFile(args.filePath)
-      }
       const filePath = await resolveAuthorizedPath(args.filePath, store)
       if (args.includeLocalLogMetadata === true) {
         return readLocalLogSnapshot(filePath)
@@ -628,51 +543,7 @@ export function registerFilesystemHandlers(
     }
   )
 
-  ipcMain.handle(
-    'fs:downloadFile',
-    async (
-      event,
-      args: { filePath?: string; connectionId?: string }
-    ): Promise<DownloadFileResult> => {
-      const filePath = validateRequiredString(args?.filePath, 'filePath')
-      const connectionId = validateRequiredString(args?.connectionId, 'connectionId')
-      const provider = requireSshFilesystemProvider(connectionId)
-      const remoteStat = await provider.stat(filePath)
-      if (remoteStat.type === 'directory') {
-        throw new Error('Cannot download a directory')
-      }
-      if (!provider.downloadFile) {
-        throw new Error('Remote file download is unavailable. Reconnect the SSH target and retry.')
-      }
 
-      const remoteBasename = getRuntimePathBasename(filePath)
-      const defaultPath = sanitizeLocalDownloadFilename(remoteBasename)
-      const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined
-      const dialogResult = parentWindow
-        ? await dialog.showSaveDialog(parentWindow, { defaultPath })
-        : await dialog.showSaveDialog({ defaultPath })
-      if (dialogResult.canceled || !dialogResult.filePath) {
-        return { canceled: true }
-      }
-
-      const destinationPath = dialogResult.filePath
-      const { existed } = await inspectDownloadDestination(destinationPath)
-      const tempPath = createSiblingTransferPath(destinationPath, 'download')
-      let promoted = false
-      try {
-        await provider.downloadFile(filePath, tempPath)
-        await promoteDownloadedFile(tempPath, destinationPath, existed)
-        promoted = true
-        return { canceled: false, destinationPath }
-      } finally {
-        if (!promoted) {
-          await cleanupLocalTransferPath(tempPath)
-        }
-      }
-    }
-  )
-
-  registerFilesystemDownloadFolderHandlers()
 
   ipcMain.handle(
     'fs:saveDownloadedFile',
@@ -827,11 +698,6 @@ export function registerFilesystemHandlers(
       _event,
       args: { rootPath: string; connectionId?: string }
     ): Promise<MarkdownDocument[]> => {
-      if (args.connectionId) {
-        const provider = requireSshFilesystemProvider(args.connectionId)
-        const relativePaths = await provider.listFiles(args.rootPath)
-        return markdownDocumentsFromRelativePaths(args.rootPath, relativePaths)
-      }
 
       const rootPath = await resolveRegisteredWorktreePath(args.rootPath, store)
       return listMarkdownDocuments(rootPath)
@@ -842,18 +708,8 @@ export function registerFilesystemHandlers(
     'fs:writeFile',
     async (
       _event,
-      args: { filePath: string; content: string; connectionId?: string } & SshMutationExpectation
+      args: { filePath: string; content: string; connectionId?: string }
     ): Promise<void> => {
-      assertSshMutationExpectation(
-        args.connectionId,
-        args.expectedSshTargetId,
-        args.expectedSshConnectionGeneration,
-        args.expectedExecutionHostId
-      )
-      if (args.connectionId) {
-        const provider = requireSshFilesystemProvider(args.connectionId)
-        return provider.writeFile(args.filePath, args.content)
-      }
       const filePath = await resolveAuthorizedPath(args.filePath, store)
 
       try {
@@ -879,27 +735,12 @@ export function registerFilesystemHandlers(
         targetPath: string
         connectionId?: string
         recursive?: boolean
-      } & SshMutationExpectation
-    ): Promise<void> => {
-      assertSshMutationExpectation(
-        args.connectionId,
-        args.expectedSshTargetId,
-        args.expectedSshConnectionGeneration,
-        args.expectedExecutionHostId
-      )
-      if (args.connectionId) {
-        const provider = requireSshFilesystemProvider(args.connectionId)
-        return provider.deletePath(args.targetPath, args.recursive)
       }
+    ): Promise<void> => {
       // Why: preserve the symlink so we delete the link, not its target (realpath would trash the real file, possibly outside all roots).
       const targetPath = await resolveAuthorizedPath(args.targetPath, store, {
         preserveSymlink: true
       })
-
-      // Why: WSL UNC targets have no Recycle Bin (shell.trashItem throws), so hard-delete via `rm` inside the distro (issue #6415).
-      if (await tryDeleteWslUncPath(targetPath, { recursive: args.recursive })) {
-        return
-      }
 
       // Why: swallow ENOENT so an external delete racing this UI delete stays idempotent (design §7.1).
       try {
@@ -925,11 +766,6 @@ export function registerFilesystemHandlers(
       _event,
       args: { filePath: string; connectionId?: string }
     ): Promise<{ size: number; isDirectory: boolean; mtime: number }> => {
-      if (args.connectionId) {
-        const provider = requireSshFilesystemProvider(args.connectionId)
-        const s = await provider.stat(args.filePath)
-        return { size: s.size, isDirectory: s.type === 'directory', mtime: s.mtime }
-      }
       const filePath = await resolveAuthorizedPath(args.filePath, store)
       const stats = await stat(filePath)
       return {
@@ -944,11 +780,6 @@ export function registerFilesystemHandlers(
     'fs:pathExists',
     async (_event, args: { filePath: string; connectionId?: string }): Promise<boolean> => {
       try {
-        if (args.connectionId) {
-          const provider = requireSshFilesystemProvider(args.connectionId)
-          await provider.stat(args.filePath)
-          return true
-        }
         const filePath = await resolveAuthorizedPath(args.filePath, store)
         await stat(filePath)
         return true
@@ -965,10 +796,6 @@ export function registerFilesystemHandlers(
   ipcMain.handle(
     'fs:search',
     async (event, args: SearchOptions & { connectionId?: string }): Promise<SearchResult> => {
-      if (args.connectionId) {
-        const provider = requireSshFilesystemProvider(args.connectionId)
-        return provider.search(args)
-      }
       const rootPath = await resolveAuthorizedPath(args.rootPath, store)
       const localGitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
@@ -1075,7 +902,7 @@ export function registerFilesystemHandlers(
   )
 
   // ─── List all files (for quick-open) ─────────────────────
-  // Why #7721: token-keyed so a workspace switch aborts the prior full-tree scan (SSH otherwise stacks scans past the 30s timeout).
+  // Why #7721: token-keyed so a workspace switch aborts the prior full-tree scan (otherwise scans stack past the 30s timeout).
   const listFilesCancellations = createSenderScopedRequestCancellations()
   ipcMain.handle(
     'fs:listFiles',
@@ -1090,18 +917,6 @@ export function registerFilesystemHandlers(
     ): Promise<string[]> => {
       const controller = listFilesCancellations.begin(event, args.requestToken)
       try {
-        if (args.connectionId) {
-          const provider = getSshFilesystemProvider(args.connectionId)
-          // Why: no provider (cold start / disconnected) → return [] so quick-open shows "No matching files" instead of an error.
-          if (!provider) {
-            return []
-          }
-          // Why: forward excludePaths or nested linked worktrees get double-scanned over SSH, causing timeout-induced partial results.
-          return await provider.listFiles(args.rootPath, {
-            excludePaths: args.excludePaths,
-            signal: controller?.signal
-          })
-        }
         return await listQuickOpenFiles(args.rootPath, store, args.excludePaths, controller?.signal)
       } finally {
         listFilesCancellations.finish(event, args.requestToken, controller)
@@ -1142,14 +957,6 @@ export function registerFilesystemHandlers(
         ...(controller ? { signal: controller.signal } : {})
       }
       try {
-        if (args.connectionId) {
-          const provider = getSshGitProvider(args.connectionId)
-          if (!provider) {
-            throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-          }
-          // Why: await keeps the cancellation token registered until the remote request settles (an early finally would free it).
-          return await provider.getStatus(args.worktreePath, options)
-        }
         const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
         // Why: one registered-worktree lookup feeds both — status polls this
         // handler, and the scan walks every repo's worktree meta.
@@ -1189,13 +996,6 @@ export function registerFilesystemHandlers(
         area?: GitStagingArea
       }
     ): Promise<GitStatusResult> => {
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.getSubmoduleStatus(args.worktreePath, args.submodulePath, args.area)
-      }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
@@ -1215,14 +1015,6 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; paths: string[]; connectionId?: string }
     ): Promise<string[]> => {
-      if (args.connectionId) {
-        const paths = args.paths.map((p) => validateGitRelativeFilePath(args.worktreePath, p))
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.checkIgnoredPaths(args.worktreePath, paths)
-      }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const paths = args.paths.map((p) => validateGitRelativeFilePath(worktreePath, p))
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -1263,13 +1055,6 @@ export function registerFilesystemHandlers(
       args: { worktreePath: string; connectionId?: string } & GitHistoryOptions
     ): Promise<GitHistoryResult> => {
       const options: GitHistoryOptions = { limit: args.limit, baseRef: args.baseRef }
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.getHistory(args.worktreePath, options)
-      }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
@@ -1287,13 +1072,6 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; connectionId?: string }
     ): Promise<GitConflictOperation> => {
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.detectConflictOperation(args.worktreePath)
-      }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       return detectConflictOperation(worktreePath)
     }
@@ -1302,13 +1080,6 @@ export function registerFilesystemHandlers(
   ipcMain.handle(
     'git:abortMerge',
     async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(`No git provider for connection "${args.connectionId}"`)
-        }
-        return provider.abortMerge(args.worktreePath)
-      }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
@@ -1322,13 +1093,6 @@ export function registerFilesystemHandlers(
   ipcMain.handle(
     'git:abortRebase',
     async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(`No git provider for connection "${args.connectionId}"`)
-        }
-        return provider.abortRebase(args.worktreePath)
-      }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
@@ -1351,18 +1115,6 @@ export function registerFilesystemHandlers(
         connectionId?: string
       }
     ): Promise<GitDiffResult> => {
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.getDiff(
-          args.worktreePath,
-          args.filePath,
-          args.staged,
-          args.compareAgainstHead
-        )
-      }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -1383,13 +1135,6 @@ export function registerFilesystemHandlers(
       // Why: validate at the IPC boundary so the renderer gets a clear error instead of an opaque execFile failure.
       if (typeof args.message !== 'string' || args.message.trim().length === 0) {
         throw new Error('Commit message is required')
-      }
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.commit(args.worktreePath, args.message)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -1416,7 +1161,7 @@ export function registerFilesystemHandlers(
         agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
       }
     ): Promise<GenerateCommitMessageResult> => {
-      const discoveryHostKey = getCommitMessageModelDiscoveryHostKey(args.connectionId ?? null)
+      const discoveryHostKey = getCommitMessageModelDiscoveryHostKey(null)
       const baseSettings = store.getSettings()
       const requestSettings = {
         ...baseSettings,
@@ -1435,39 +1180,6 @@ export function registerFilesystemHandlers(
           )
       if (!resolvedSettings.ok) {
         return { success: false, error: resolvedSettings.error }
-      }
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          return {
-            success: false,
-            error: SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
-          }
-        }
-        let context
-        try {
-          context = await provider.getStagedCommitContext(args.worktreePath)
-        } catch (error) {
-          console.error('[filesystem] Failed to read remote staged commit context:', error)
-          return {
-            success: false,
-            error: 'Failed to read staged changes.'
-          }
-        }
-        if (!context) {
-          return { success: false, error: 'No staged changes to summarize.' }
-        }
-        context = withLinkedIssueDraftContext(
-          context,
-          resolveSourceControlAiLinkedIssue(store, args)
-        )
-        return generateCommitMessageFromContext(context, resolvedSettings.params, {
-          kind: 'remote',
-          cwd: args.worktreePath,
-          execute: (plan, cwd, timeoutMs, operation) =>
-            provider.executeCommitMessagePlan(plan, cwd, timeoutMs, operation),
-          missingBinaryLocation: 'remote PATH'
-        })
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -1511,14 +1223,6 @@ export function registerFilesystemHandlers(
   ipcMain.handle(
     'git:cancelGenerateCommitMessage',
     async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          return
-        }
-        await provider.cancelGenerateCommitMessage(args.worktreePath, 'commit-message')
-        return
-      }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       cancelGenerateCommitMessageLocal(worktreePath)
     }
@@ -1532,24 +1236,6 @@ export function registerFilesystemHandlers(
     ): Promise<DiscoverCommitMessageModelsResult> => {
       const agentId = args.agentId
       const agentCommandOverride = store.getSettings().agentCmdOverrides?.[agentId as TuiAgent]
-      if (args.connectionId) {
-        if (!args.worktreePath) {
-          return { success: false, error: 'Missing worktree path for remote model discovery.' }
-        }
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          return {
-            success: false,
-            error: `No git provider for connection "${args.connectionId}"`
-          }
-        }
-        return discoverCommitMessageModelsRemote(
-          agentId as TuiAgent,
-          args.worktreePath,
-          (plan, cwd, timeoutMs) => provider.executeCommitMessagePlan(plan, cwd, timeoutMs),
-          agentCommandOverride
-        )
-      }
       let localRuntimeTarget: CommitMessageAgentRuntimeTarget = { runtime: 'host' }
       let localDiscoveryOptions: Parameters<typeof discoverCommitMessageModelsLocal>[3]
       if (args.worktreePath) {
@@ -1605,7 +1291,7 @@ export function registerFilesystemHandlers(
         agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
       }
     ): Promise<GeneratePullRequestFieldsResult> => {
-      const discoveryHostKey = getCommitMessageModelDiscoveryHostKey(args.connectionId ?? null)
+      const discoveryHostKey = getCommitMessageModelDiscoveryHostKey(null)
       const baseSettings = store.getSettings()
       const requestSettings = {
         ...baseSettings,
@@ -1624,63 +1310,6 @@ export function registerFilesystemHandlers(
           )
       if (!resolvedSettings.ok) {
         return { success: false, error: resolvedSettings.error }
-      }
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          return {
-            success: false,
-            error: SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
-          }
-        }
-        const issueMeta = resolveSourceControlAiLinkedIssueMeta(store, args)
-        const linkedIssueDetailsPromise = loadPullRequestLinkedIssue({
-          meta: issueMeta,
-          provider: args.provider,
-          repoPath: args.worktreePath,
-          connectionId: args.connectionId
-        })
-        let context: Awaited<ReturnType<typeof getPullRequestDraftContext>>
-        try {
-          const currentBody = await resolveHostedReviewBodyForGeneration({
-            body: args.body,
-            repoPath: args.worktreePath,
-            connectionId: args.connectionId,
-            provider: args.provider,
-            useTemplate: args.useTemplate
-          })
-          context = await getPullRequestDraftContext(
-            (argv) => provider.exec(argv, args.worktreePath),
-            {
-              base: args.base,
-              currentTitle: args.title,
-              currentBody,
-              currentDraft: args.draft
-            }
-          )
-        } catch (error) {
-          return {
-            success: false,
-            error:
-              error instanceof Error ? error.message : 'Failed to prepare branch for PR details.'
-          }
-        }
-        if (!context) {
-          return { success: false, error: 'No branch changes to summarize.' }
-        }
-        const linkedIssueDetails = await linkedIssueDetailsPromise
-        context = {
-          ...withLinkedIssueDraftContext(context, issueMeta?.linkedIssue),
-          ...(args.provider ? { provider: args.provider } : {}),
-          ...(linkedIssueDetails ? { linkedIssueDetails } : {})
-        }
-        return generatePullRequestFieldsFromContext(context, resolvedSettings.params, {
-          kind: 'remote',
-          cwd: args.worktreePath,
-          execute: (plan, cwd, timeoutMs, operation) =>
-            provider.executeCommitMessagePlan(plan, cwd, timeoutMs, operation),
-          missingBinaryLocation: 'remote PATH'
-        })
       }
 
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
@@ -1750,14 +1379,6 @@ export function registerFilesystemHandlers(
   ipcMain.handle(
     'git:cancelGeneratePullRequestFields',
     async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          return
-        }
-        await provider.cancelGenerateCommitMessage(args.worktreePath, 'pull-request-fields')
-        return
-      }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       cancelGeneratePullRequestFieldsLocal(worktreePath)
     }
@@ -1769,13 +1390,6 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; baseRef: string; connectionId?: string }
     ): Promise<GitBranchCompareResult> => {
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.getBranchCompare(args.worktreePath, args.baseRef)
-      }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
@@ -1793,13 +1407,6 @@ export function registerFilesystemHandlers(
       args: { worktreePath: string; commitId: string; connectionId?: string }
     ): Promise<GitCommitCompareResult> => {
       const commitId = validateFullGitObjectId(args.commitId, 'commitId')
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.getCommitCompare(args.worktreePath, commitId)
-      }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
@@ -1816,16 +1423,6 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; connectionId?: string; pushTarget?: GitPushTarget }
     ): Promise<GitUpstreamStatus> => {
-      if (args.connectionId) {
-        if (args.pushTarget) {
-          assertGitPushTargetShape(args.pushTarget)
-        }
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.getUpstreamStatus(args.worktreePath, args.pushTarget)
-      }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
@@ -1842,16 +1439,6 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; connectionId?: string; pushTarget?: GitPushTarget }
     ): Promise<void> => {
-      if (args.connectionId) {
-        if (args.pushTarget) {
-          assertGitPushTargetShape(args.pushTarget)
-        }
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.fetchRemote(args.worktreePath, args.pushTarget)
-      }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
@@ -1878,13 +1465,6 @@ export function registerFilesystemHandlers(
       const expectedUpstream = validateGitForkSyncExpectedUpstream(args.expectedUpstream, {
         required: true
       })
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.syncForkDefaultBranch(args.worktreePath, expectedUpstream)
-      }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
@@ -1909,18 +1489,6 @@ export function registerFilesystemHandlers(
     ): Promise<void> => {
       // Why: coerce to strict boolean so a malformed payload (e.g. string 'false') can't enable --set-upstream; mirror in src/relay/git-handler.ts.
       const publish = args.publish === true
-      if (args.connectionId) {
-        if (args.pushTarget) {
-          assertGitPushTargetShape(args.pushTarget)
-        }
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.pushBranch(args.worktreePath, publish, args.pushTarget, {
-          forceWithLease: args.forceWithLease === true
-        })
-      }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
@@ -1943,16 +1511,6 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; connectionId?: string; pushTarget?: GitPushTarget }
     ): Promise<void> => {
-      if (args.connectionId) {
-        if (args.pushTarget) {
-          assertGitPushTargetShape(args.pushTarget)
-        }
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.pullBranch(args.worktreePath, args.pushTarget)
-      }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
@@ -1972,16 +1530,6 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; connectionId?: string; pushTarget?: GitPushTarget }
     ): Promise<void> => {
-      if (args.connectionId) {
-        if (args.pushTarget) {
-          assertGitPushTargetShape(args.pushTarget)
-        }
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.fastForwardBranch(args.worktreePath, args.pushTarget)
-      }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
@@ -2001,13 +1549,6 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; baseRef: string; connectionId?: string }
     ): Promise<void> => {
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.rebaseFromBase(args.worktreePath, args.baseRef)
-      }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
@@ -2035,26 +1576,6 @@ export function registerFilesystemHandlers(
         connectionId?: string
       }
     ): Promise<GitDiffResult> => {
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        const results = await provider.getBranchDiff(args.worktreePath, args.compare.mergeBase, {
-          includePatch: true,
-          filePath: args.filePath,
-          oldPath: args.oldPath
-        })
-        return (
-          results[0] ?? {
-            kind: 'text',
-            originalContent: '',
-            modifiedContent: '',
-            originalIsBinary: false,
-            modifiedIsBinary: false
-          }
-        )
-      }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
       const oldPath = args.oldPath
@@ -2093,18 +1614,6 @@ export function registerFilesystemHandlers(
     ): Promise<GitDiffResult> => {
       const commitOid = validateFullGitObjectId(args.commitOid, 'commitOid')
       const parentOid = args.parentOid ? validateFullGitObjectId(args.parentOid, 'parentOid') : null
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.getCommitDiff(args.worktreePath, {
-          commitOid,
-          parentOid,
-          filePath: args.filePath,
-          oldPath: args.oldPath
-        })
-      }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
       const oldPath = args.oldPath
@@ -2134,13 +1643,6 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; filePath: string; connectionId?: string }
     ): Promise<void> => {
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.stageFile(args.worktreePath, args.filePath)
-      }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -2158,13 +1660,6 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; filePath: string; connectionId?: string }
     ): Promise<void> => {
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.unstageFile(args.worktreePath, args.filePath)
-      }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -2182,13 +1677,6 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; filePath: string; connectionId?: string }
     ): Promise<void> => {
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.discardChanges(args.worktreePath, args.filePath)
-      }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -2206,13 +1694,6 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; filePaths: string[]; connectionId?: string }
     ): Promise<void> => {
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.bulkDiscardChanges(args.worktreePath, args.filePaths)
-      }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePaths = args.filePaths.map((p) => validateGitRelativeFilePath(worktreePath, p))
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -2230,13 +1711,6 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; filePaths: string[]; connectionId?: string }
     ): Promise<void> => {
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.bulkStageFiles(args.worktreePath, args.filePaths)
-      }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePaths = args.filePaths.map((p) => validateGitRelativeFilePath(worktreePath, p))
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -2254,13 +1728,6 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; filePaths: string[]; connectionId?: string }
     ): Promise<void> => {
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.bulkUnstageFiles(args.worktreePath, args.filePaths)
-      }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePaths = args.filePaths.map((p) => validateGitRelativeFilePath(worktreePath, p))
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -2278,14 +1745,6 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; relativePath: string; line: number; connectionId?: string }
     ): Promise<string | null> => {
-      // Why: remote repos can't read relay-side .git/config locally; delegate URL construction to the SSH provider.
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.getRemoteFileUrl(args.worktreePath, args.relativePath, args.line)
-      }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       return getRemoteFileUrl(worktreePath, args.relativePath, args.line)
     }
@@ -2298,14 +1757,6 @@ export function registerFilesystemHandlers(
       args: { worktreePath: string; sha: string; connectionId?: string }
     ): Promise<string | null> => {
       const sha = validateFullGitObjectId(args.sha, 'sha')
-      // Why: remote repos can't read relay-side .git/config locally; delegate URL construction to the SSH provider.
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.getRemoteCommitUrl(args.worktreePath, sha)
-      }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       return getRemoteCommitUrl(worktreePath, sha)
     }

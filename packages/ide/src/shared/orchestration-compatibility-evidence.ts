@@ -8,18 +8,11 @@ export const ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV =
 export const ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV =
   'ORCA_ORCHESTRATION_COMPATIBILITY_ATTACHMENT'
 
-export type OrchestrationCompatibilityHostStamp =
-  | {
-      kind: 'wsl'
-      hostId: string
-      distro: string
-    }
-  | {
-      kind: 'ssh'
-      targetId: string
-      connectionIncarnation: string
-      attachmentId: string
-    }
+export type OrchestrationCompatibilityHostStamp = {
+  kind: 'wsl'
+  hostId: string
+  distro: string
+}
 
 export type OrchestrationCompatibilityEvidence = {
   terminalHandle?: string
@@ -68,17 +61,8 @@ function readHostStamp(
   const kind = boundedValue(env[ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV])
   const hostId = boundedValue(env[ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV])
   const incarnation = boundedValue(env[ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV])
-  const attachment = boundedValue(env[ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV])
   if (kind === 'wsl' && hostId && incarnation) {
     return { kind, hostId, distro: incarnation }
-  }
-  if (kind === 'ssh' && hostId && incarnation && attachment) {
-    return {
-      kind,
-      targetId: hostId,
-      connectionIncarnation: incarnation,
-      attachmentId: attachment
-    }
   }
   return undefined
 }

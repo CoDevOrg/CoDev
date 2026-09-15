@@ -7,7 +7,6 @@ export type ComposerCreateGateInput = {
   sourceIntentBlocksCreate?: boolean
   requiresExplicitSetupChoice: boolean
   hasSetupDecision: boolean
-  selectedRepoRequiresConnection: boolean
   sparseError: string | null
 }
 
@@ -16,7 +15,6 @@ function hasBlockingCreateState(input: ComposerCreateGateInput): boolean {
     !input.workspaceSeedName ||
     input.sourceIntentBlocksCreate === true ||
     input.creating ||
-    input.selectedRepoRequiresConnection ||
     (input.requiresExplicitSetupChoice && !input.hasSetupDecision) ||
     input.sparseError !== null
   )

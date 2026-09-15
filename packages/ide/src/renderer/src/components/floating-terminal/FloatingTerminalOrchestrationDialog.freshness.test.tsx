@@ -42,7 +42,7 @@ vi.mock('@/components/settings/CliSkillRuntimeSetup', () => ({
   getWslCliDistroRequest: () => undefined
 }))
 
-vi.mock('@/components/onboarding/OnboardingInlineCommandTerminal', () => ({
+vi.mock('@/components/settings/OnboardingInlineCommandTerminal', () => ({
   OnboardingInlineCommandTerminal: () => null
 }))
 

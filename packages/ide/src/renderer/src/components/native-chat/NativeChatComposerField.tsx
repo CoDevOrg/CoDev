@@ -36,9 +36,6 @@ export type NativeChatComposerFieldProps = {
   sendButtonDisabled: boolean
   isWorking: boolean
   attachDisabled: boolean
-  dictationDisabled: boolean
-  isDictating: boolean
-  isDictationHoldMode: boolean
   onDraftChange: (value: string, element: HTMLTextAreaElement) => void
   onTextareaSelect: (element: HTMLTextAreaElement) => void
   onKeyDown: KeyboardEventHandler<HTMLTextAreaElement>
@@ -51,9 +48,6 @@ export type NativeChatComposerFieldProps = {
   onAcceptMention: () => void
   onRemoveImageAttachment: (id: string) => void
   onAttach: () => void
-  onDictationToggle: () => void
-  onDictationHoldStart: () => void
-  onDictationHoldEnd: () => void
   onSend: () => void
   onStop?: () => void
   sessionOptionsSurface: SessionOptionsSurface | null
@@ -78,9 +72,6 @@ export function NativeChatComposerField({
   sendButtonDisabled,
   isWorking,
   attachDisabled,
-  dictationDisabled,
-  isDictating,
-  isDictationHoldMode,
   onDraftChange,
   onTextareaSelect,
   onKeyDown,
@@ -93,9 +84,6 @@ export function NativeChatComposerField({
   onAcceptMention,
   onRemoveImageAttachment,
   onAttach,
-  onDictationToggle,
-  onDictationHoldStart,
-  onDictationHoldEnd,
   onSend,
   onStop,
   sessionOptionsSurface,
@@ -212,15 +200,9 @@ export function NativeChatComposerField({
                 agent={agent}
                 terminalTabId={terminalTabId}
                 attachDisabled={attachDisabled}
-                dictationDisabled={dictationDisabled}
                 sendDisabled={sendButtonDisabled}
                 isWorking={isWorking}
-                isDictating={isDictating}
-                isDictationHoldMode={isDictationHoldMode}
                 onAttach={onAttach}
-                onDictationToggle={onDictationToggle}
-                onDictationHoldStart={onDictationHoldStart}
-                onDictationHoldEnd={onDictationHoldEnd}
                 onSend={onSend}
                 onStop={onStop}
                 sessionOptionsSurface={sessionOptionsSurface}

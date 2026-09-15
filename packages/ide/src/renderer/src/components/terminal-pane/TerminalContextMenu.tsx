@@ -13,7 +13,6 @@ import {
   PanelRightClose,
   Pencil,
   Play,
-  Plus,
   SquareTerminal,
   X
 } from 'lucide-react'
@@ -67,7 +66,6 @@ type TerminalContextMenuProps = {
   globalQuickCommands: TerminalQuickCommand[]
   quickCommandRepoLabel: string | null
   onQuickCommand: (command: TerminalQuickCommand) => void
-  onAddQuickCommand: () => void
   onToggleExpand: () => void
   onSetTitle: () => void
   onClearPaneTitle: () => void
@@ -104,7 +102,6 @@ export default function TerminalContextMenu({
   globalQuickCommands,
   quickCommandRepoLabel,
   onQuickCommand,
-  onAddQuickCommand,
   onToggleExpand,
   onSetTitle,
   onClearPaneTitle,
@@ -251,21 +248,6 @@ export default function TerminalContextMenu({
                 )}
               </DropdownMenuItem>
             )}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onSelect={() => {
-                // Why: the dropdown sits above dialogs; force-close before
-                // opening the add modal even during the open-gesture guard.
-                onOpenChange(false)
-                onAddQuickCommand()
-              }}
-            >
-              <Plus />
-              {translate(
-                'auto.components.terminal.pane.TerminalContextMenu.0a82b0608c',
-                'Add Quick Command…'
-              )}
-            </DropdownMenuItem>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
         {canContinueAgentSessionInNewSession ? (

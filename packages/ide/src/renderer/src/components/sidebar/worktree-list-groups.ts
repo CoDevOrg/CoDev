@@ -39,7 +39,6 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
   getWorktreeExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
@@ -197,10 +196,6 @@ function getProjectSetupSurfaceKey(setup: ProjectHostSetup): string {
 }
 
 function getExecutionSurface(setup: ProjectHostSetup): string {
-  const connectionId = setup.connectionId?.trim()
-  if (connectionId) {
-    return toSshExecutionHostId(connectionId)
-  }
   return setup.executionHostId?.trim() || setup.hostId
 }
 

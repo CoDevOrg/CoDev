@@ -70,13 +70,6 @@ export function createHarnessStoreState(
     updateBrowserPageState: vi.fn(),
     setEditorFontZoomLevel: vi.fn(),
     setRateLimitsFromPush: vi.fn(),
-    setSshConnectionState: vi.fn(),
-    setSshTargetLabels: vi.fn(),
-    setPortForwards: vi.fn(),
-    clearPortForwards: vi.fn(),
-    setDetectedPorts: vi.fn(),
-    enqueueSshCredentialRequest: vi.fn(),
-    removeSshCredentialRequest: vi.fn(),
     ptyIdsByTabId: {},
     terminalLayoutsByTabId: {},
     folderWorkspaces: [],
@@ -202,18 +195,6 @@ export async function loadIpcEventsHarness(
           onTerminalDriverChanged: () => () => {},
           onBrowserDriverChanged: () => () => {}
         },
-        ssh: {
-          listTargets: () => Promise.resolve([]),
-          listPortForwards: () => Promise.resolve([]),
-          listDetectedPorts: () => Promise.resolve([]),
-          listRemovedTargetLabels: () => Promise.resolve([]),
-          getState: () => Promise.resolve(null),
-          onStateChanged: () => () => {},
-          onCredentialRequest: () => () => {},
-          onCredentialResolved: () => () => {},
-          onPortForwardsChanged: () => () => {},
-          onDetectedPortsChanged: () => () => {}
-        },
         updater: {
           getStatus: () => Promise.resolve({ state: 'idle' }),
           onStatus: () => () => {},
@@ -222,7 +203,6 @@ export async function loadIpcEventsHarness(
         mobile: createApiNamespaceStub({
           consumePendingUnpairedDeviceAuthFailure: () => Promise.resolve(false)
         }),
-        remoteWorkspace: createApiNamespaceStub({ clientId: () => Promise.resolve(null) })
       } as Record<string, unknown>,
       { get: (target, prop: string) => target[prop] ?? createApiNamespaceStub() }
     )

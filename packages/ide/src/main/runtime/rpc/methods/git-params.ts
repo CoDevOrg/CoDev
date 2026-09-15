@@ -194,7 +194,7 @@ export const GitGeneratePullRequestFields = GitGenerateCommitMessage.extend({
   body: z.string(),
   draft: z.boolean(),
   provider: z
-    .enum(['github', 'gitlab', 'bitbucket', 'azure-devops', 'gitea', 'unsupported'])
+    .enum(['github', 'unsupported'])
     .optional(),
   useTemplate: z.boolean().optional()
 })

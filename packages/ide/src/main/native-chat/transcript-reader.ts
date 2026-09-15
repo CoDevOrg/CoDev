@@ -7,12 +7,7 @@ import type {
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import { errorMessage } from '../ai-vault/session-scanner-values'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
-import {
-  decodeClaudeTranscriptLine,
-  decodeCodexTranscriptLine,
-  decodeCursorTranscriptLine,
-  decodeGrokTranscriptLine
-} from './transcript-line-decoders'
+import { decodeClaudeTranscriptLine, decodeCodexTranscriptLine } from './transcript-line-decoders'
 import { decodeTranscriptStream } from './transcript-stream-lines'
 
 export type ReadTranscriptResult =
@@ -52,12 +47,6 @@ export async function readNativeChatTranscript(
     }
     if (transcriptAgent === 'codex') {
       return { messages: await readTranscript(filePath, decodeCodexTranscriptLine) }
-    }
-    if (transcriptAgent === 'grok') {
-      return { messages: await readTranscript(filePath, decodeGrokTranscriptLine) }
-    }
-    if (transcriptAgent === 'cursor') {
-      return { messages: await readTranscript(filePath, decodeCursorTranscriptLine) }
     }
     return { error: `Unsupported agent for Chat UI transcript: ${agent}` }
   } catch (err) {

@@ -39,7 +39,6 @@ import type {
 } from '../../../shared/types'
 import type { SkillDiscoveryResult } from '../../../shared/skills'
 import type { SkillFreshnessInventory } from '../../../shared/skill-freshness'
-import type { SshConnectionState, SshTarget } from '../../../shared/ssh-types'
 import {
   getDefaultOnboardingState,
   getDefaultSettings,
@@ -372,53 +371,6 @@ type WebGitHubRuntimeMethod =
   | 'github.project.listAssignableUsersBySlug'
   | 'github.project.listIssueTypesBySlug'
   | 'github.project.updateIssueTypeBySlug'
-type WebGitLabApi = NonNullable<PreloadApi['gl']>
-type WebGitLabResult<K extends keyof WebGitLabApi> = Awaited<ReturnType<WebGitLabApi[K]>>
-type WebGitLabRouteKey =
-  | 'diagnoseAuth'
-  | 'rateLimit'
-  | 'listMRs'
-  | 'listWorkItems'
-  | 'listIssues'
-  | 'createIssue'
-  | 'updateIssue'
-  | 'addIssueComment'
-  | 'listLabels'
-  | 'todos'
-  | 'workItemDetails'
-  | 'closeMR'
-  | 'reopenMR'
-  | 'mergeMR'
-  | 'updateMR'
-  | 'updateMRReviewers'
-  | 'addMRComment'
-  | 'addMRInlineComment'
-  | 'resolveMRDiscussion'
-  | 'jobTrace'
-  | 'retryJob'
-  | 'workItemByPath'
-type WebGitLabRuntimeMethod =
-  | 'gitlab.diagnoseAuth'
-  | 'gitlab.rateLimit'
-  | 'gitlab.listMRs'
-  | 'gitlab.listWorkItems'
-  | 'gitlab.listIssues'
-  | 'gitlab.createIssue'
-  | 'gitlab.updateIssue'
-  | 'gitlab.addIssueComment'
-  | 'gitlab.listLabels'
-  | 'gitlab.todos'
-  | 'gitlab.workItemDetails'
-  | 'gitlab.updateMRState'
-  | 'gitlab.mergeMR'
-  | 'gitlab.updateMR'
-  | 'gitlab.updateMRReviewers'
-  | 'gitlab.addMRComment'
-  | 'gitlab.addMRInlineComment'
-  | 'gitlab.resolveMRDiscussion'
-  | 'gitlab.jobTrace'
-  | 'gitlab.retryJob'
-  | 'gitlab.workItemByPath'
 type WebKeybindingDocument = {
   version: 1
   keybindings: KeybindingOverrides
@@ -474,31 +426,6 @@ export const GITHUB_WEB_RPC_METHODS = {
   listIssueTypesBySlug: 'github.project.listIssueTypesBySlug',
   updateIssueTypeBySlug: 'github.project.updateIssueTypeBySlug'
 } as const satisfies Record<WebGitHubRouteKey, WebGitHubRuntimeMethod>
-
-export const GITLAB_WEB_RPC_METHODS = {
-  diagnoseAuth: 'gitlab.diagnoseAuth',
-  rateLimit: 'gitlab.rateLimit',
-  listMRs: 'gitlab.listMRs',
-  listWorkItems: 'gitlab.listWorkItems',
-  listIssues: 'gitlab.listIssues',
-  createIssue: 'gitlab.createIssue',
-  updateIssue: 'gitlab.updateIssue',
-  addIssueComment: 'gitlab.addIssueComment',
-  listLabels: 'gitlab.listLabels',
-  todos: 'gitlab.todos',
-  workItemDetails: 'gitlab.workItemDetails',
-  closeMR: 'gitlab.updateMRState',
-  reopenMR: 'gitlab.updateMRState',
-  mergeMR: 'gitlab.mergeMR',
-  updateMR: 'gitlab.updateMR',
-  updateMRReviewers: 'gitlab.updateMRReviewers',
-  addMRComment: 'gitlab.addMRComment',
-  addMRInlineComment: 'gitlab.addMRInlineComment',
-  resolveMRDiscussion: 'gitlab.resolveMRDiscussion',
-  jobTrace: 'gitlab.jobTrace',
-  retryJob: 'gitlab.retryJob',
-  workItemByPath: 'gitlab.workItemByPath'
-} as const satisfies Record<WebGitLabRouteKey, WebGitLabRuntimeMethod>
 
 const WEB_KEYBINDING_PLATFORMS: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
 const webKeybindingListeners = new Set<(snapshot: KeybindingFileSnapshot) => void>()
@@ -812,9 +739,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     browser: createBrowserApi(),
     emulator: createEmulatorApi(),
     gh: createGitHubApi(),
-    gl: createGitLabApi(),
     hostedReview: createRuntimeNamespaceApi('hostedReview'),
-    linear: createRuntimeNamespaceApi('linear'),
     hooks: createHooksApi(),
     stats: {
       getSummary: async () =>
@@ -832,13 +757,10 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     preflight: createPreflightApi(),
     notifications: createNotificationsApi(),
     rateLimits: createRateLimitsApi(),
-    minimaxCredentials: createMiniMaxCredentialsApi(),
-    grokAccounts: createGrokAccountsApi(),
     codexAccounts: createAccountsApi(),
     claudeAccounts: createAccountsApi(),
     cli: createCliApi(),
     agentHooks: createAgentHooksApi(),
-    macosTccPrompts: createMacosTccPromptsApi(),
     // Why: the desktop derives this from the host filesystem, which the web
     // client has no view of; reporting synced keeps the warning banner silent.
     codexConfigSync: {
@@ -851,7 +773,6 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     shell: createShellApi(),
     skills: createSkillsApi(),
     pty: createPtyApi(),
-    ssh: createSshApi(),
     wsl: {
       isAvailable: () => callRuntimeResult<boolean>('host.wsl.isAvailable').catch(() => false),
       listDistros: () => callRuntimeResult<string[]>('host.wsl.listDistros').catch(() => [])
@@ -1470,12 +1391,10 @@ function createRuntimeEnvironmentsApi(): NonNullable<Partial<PreloadApi>['runtim
       } finally {
         client?.close()
       }
-      const usesSshTunnel = parsed.value.endpointKind === 'loopback' && allowLoopback === true
       const nextEnvironment = createStoredWebRuntimeEnvironment({
         name,
         offer: parsed.value.pairing,
-        previousEnvironment: activeEnvironment,
-        ...(usesSshTunnel ? { connectionDependency: 'ssh-tunnel' as const } : {})
+        previousEnvironment: activeEnvironment
       })
       // Why: a browser storage failure must leave the currently active host usable.
       try {
@@ -1736,14 +1655,6 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         branchNameOverride: args.branchNameOverride,
         linkedIssue: args.linkedIssue,
         linkedPR: args.linkedPR,
-        linkedLinearIssue: args.linkedLinearIssue,
-        linkedLinearIssueWorkspaceId: args.linkedLinearIssueWorkspaceId,
-        linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey,
-        linkedGitLabIssue: args.linkedGitLabIssue,
-        linkedGitLabMR: args.linkedGitLabMR,
-        linkedBitbucketPR: args.linkedBitbucketPR,
-        linkedAzureDevOpsPR: args.linkedAzureDevOpsPR,
-        linkedGiteaPR: args.linkedGiteaPR,
         displayName: args.displayName,
         sparseCheckout: args.sparseCheckout,
         pushTarget: args.pushTarget,
@@ -1787,14 +1698,6 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         prNumber,
         headRefName,
         baseRefName,
-        isCrossRepository
-      }),
-    resolveMrBase: async ({ repoId, mrIid, sourceBranch, targetBranch, isCrossRepository }) =>
-      callRuntimeResult('worktree.resolveMrBase', {
-        repo: repoId,
-        mrIid,
-        sourceBranch,
-        targetBranch,
         isCrossRepository
       }),
     remove: async ({ worktreeId, force, allowUnverifiedPtyStop, skipArchive }) => {
@@ -2508,68 +2411,6 @@ function createGitHubApi(): WebGitHubApi {
   return githubApi
 }
 
-function createGitLabApi(): WebGitLabApi {
-  const route = <Result>(method: WebGitLabRuntimeMethod, args?: unknown): Promise<Result> =>
-    callRuntimeResult<Result>(method, mapRepoPathArg(args))
-
-  const gitLabApi = {
-    viewer: () => Promise.resolve(null),
-    diagnoseAuth: () => route<WebGitLabResult<'diagnoseAuth'>>(GITLAB_WEB_RPC_METHODS.diagnoseAuth),
-    rateLimit: (args) =>
-      route<WebGitLabResult<'rateLimit'>>(GITLAB_WEB_RPC_METHODS.rateLimit, args),
-    projectSlug: () => Promise.resolve(null),
-    mrForBranch: () => Promise.resolve(null),
-    mr: () => Promise.resolve(null),
-    listMRs: (args) => route<WebGitLabResult<'listMRs'>>(GITLAB_WEB_RPC_METHODS.listMRs, args),
-    listWorkItems: (args) =>
-      route<WebGitLabResult<'listWorkItems'>>(GITLAB_WEB_RPC_METHODS.listWorkItems, args),
-    issue: () => Promise.resolve(null),
-    listIssues: (args) =>
-      route<WebGitLabResult<'listIssues'>>(GITLAB_WEB_RPC_METHODS.listIssues, args),
-    createIssue: (args) =>
-      route<WebGitLabResult<'createIssue'>>(GITLAB_WEB_RPC_METHODS.createIssue, args),
-    updateIssue: (args) =>
-      route<WebGitLabResult<'updateIssue'>>(GITLAB_WEB_RPC_METHODS.updateIssue, args),
-    addIssueComment: (args) =>
-      route<WebGitLabResult<'addIssueComment'>>(GITLAB_WEB_RPC_METHODS.addIssueComment, args),
-    listLabels: (args) =>
-      route<WebGitLabResult<'listLabels'>>(GITLAB_WEB_RPC_METHODS.listLabels, args),
-    listAssignableUsers: () => Promise.resolve([]),
-    todos: (args) => route<WebGitLabResult<'todos'>>(GITLAB_WEB_RPC_METHODS.todos, args),
-    workItemDetails: (args) =>
-      route<WebGitLabResult<'workItemDetails'>>(GITLAB_WEB_RPC_METHODS.workItemDetails, args),
-    closeMR: (args) =>
-      route<WebGitLabResult<'closeMR'>>(GITLAB_WEB_RPC_METHODS.closeMR, {
-        ...args,
-        state: 'closed'
-      }),
-    reopenMR: (args) =>
-      route<WebGitLabResult<'reopenMR'>>(GITLAB_WEB_RPC_METHODS.reopenMR, {
-        ...args,
-        state: 'opened'
-      }),
-    mergeMR: (args) => route<WebGitLabResult<'mergeMR'>>(GITLAB_WEB_RPC_METHODS.mergeMR, args),
-    updateMR: (args) => route<WebGitLabResult<'updateMR'>>(GITLAB_WEB_RPC_METHODS.updateMR, args),
-    updateMRReviewers: (args) =>
-      route<WebGitLabResult<'updateMRReviewers'>>(GITLAB_WEB_RPC_METHODS.updateMRReviewers, args),
-    addMRComment: (args) =>
-      route<WebGitLabResult<'addMRComment'>>(GITLAB_WEB_RPC_METHODS.addMRComment, args),
-    addMRInlineComment: (args) =>
-      route<WebGitLabResult<'addMRInlineComment'>>(GITLAB_WEB_RPC_METHODS.addMRInlineComment, args),
-    resolveMRDiscussion: (args) =>
-      route<WebGitLabResult<'resolveMRDiscussion'>>(
-        GITLAB_WEB_RPC_METHODS.resolveMRDiscussion,
-        args
-      ),
-    jobTrace: (args) => route<WebGitLabResult<'jobTrace'>>(GITLAB_WEB_RPC_METHODS.jobTrace, args),
-    retryJob: (args) => route<WebGitLabResult<'retryJob'>>(GITLAB_WEB_RPC_METHODS.retryJob, args),
-    workItemByPath: (args) =>
-      route<WebGitLabResult<'workItemByPath'>>(GITLAB_WEB_RPC_METHODS.workItemByPath, args)
-  } satisfies WebGitLabApi
-
-  return gitLabApi
-}
-
 function createRuntimeNamespaceApi(prefix: string): never {
   return createFallbackProxy([prefix], (path, args) => {
     const method = `${prefix}.${path.at(-1) ?? ''}`
@@ -2804,23 +2645,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
 function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight']> {
   const fallbackStatus: PreflightStatus = {
     git: { installed: false },
-    gh: { installed: false, authenticated: false },
-    glab: { installed: false, authenticated: false },
-    bitbucket: { configured: false, authenticated: false, account: null },
-    azureDevOps: {
-      configured: false,
-      authenticated: false,
-      account: null,
-      baseUrl: null,
-      tokenConfigured: false
-    },
-    gitea: {
-      configured: false,
-      authenticated: false,
-      account: null,
-      baseUrl: null,
-      tokenConfigured: false
-    }
+    gh: { installed: false, authenticated: false }
   }
   const fallbackRefreshAgents: RefreshAgentsResult = {
     agents: [],
@@ -2902,22 +2727,7 @@ function createCliApi(): NonNullable<Partial<PreloadApi>['cli']> {
 }
 
 function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
-  const status = (
-    agent:
-      | 'claude'
-      | 'openclaude'
-      | 'codex'
-      | 'gemini'
-      | 'antigravity'
-      | 'amp'
-      | 'cursor'
-      | 'droid'
-      | 'command-code'
-      | 'grok'
-      | 'copilot'
-      | 'hermes'
-      | 'devin'
-  ) =>
+  const status = (agent: 'claude' | 'codex') =>
     Promise.resolve({
       agent,
       state: 'not_installed',
@@ -2927,29 +2737,7 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
     } as const)
   return {
     claudeStatus: () => status('claude'),
-    openClaudeStatus: () => status('openclaude'),
-    codexStatus: () => status('codex'),
-    geminiStatus: () => status('gemini'),
-    antigravityStatus: () => status('antigravity'),
-    ampStatus: () => status('amp'),
-    cursorStatus: () => status('cursor'),
-    droidStatus: () => status('droid'),
-    commandCodeStatus: () => status('command-code'),
-    grokStatus: () => status('grok'),
-    copilotStatus: () => status('copilot'),
-    hermesStatus: () => status('hermes'),
-    devinStatus: () => status('devin')
-  }
-}
-
-function createMacosTccPromptsApi(): NonNullable<Partial<PreloadApi>['macosTccPrompts']> {
-  // Why: TCC is a macOS-desktop concept; the web client has no log stream to watch.
-  return {
-    onThreshold: () => noopUnsubscribe,
-    consumePending: () => Promise.resolve(null),
-    acknowledgePending: () => Promise.resolve(),
-    releasePending: () => Promise.resolve(),
-    dismiss: () => Promise.resolve()
+    codexStatus: () => status('codex')
   }
 }
 
@@ -3042,14 +2830,6 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
   const empty: RateLimitState = {
     claude: null,
     codex: null,
-    gemini: null,
-    opencodeGo: null,
-    kimi: null,
-    antigravity: null,
-    minimax: null,
-    grok: null,
-    minimaxCookieConfigured: false,
-    grokAuthConfigured: false,
     claudeTarget: { runtime: 'host', wslDistro: null },
     codexTarget: { runtime: 'host', wslDistro: null },
     inactiveClaudeAccounts: [],
@@ -3065,32 +2845,7 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
     setPollingInterval: () => Promise.resolve(),
     fetchInactiveClaudeAccounts: () => Promise.resolve(),
     fetchInactiveCodexAccounts: () => Promise.resolve(),
-    refreshMiniMax: () => Promise.resolve(empty),
-    refreshGrok: () => Promise.resolve(empty),
     onUpdate: () => noopUnsubscribe
-  }
-}
-
-function createMiniMaxCredentialsApi(): NonNullable<Partial<PreloadApi>['minimaxCredentials']> {
-  const notConfigured = { configured: false }
-  const unsupportedError = new Error('MiniMax cookie storage is only available in the desktop app.')
-  return {
-    getStatus: () => Promise.resolve(notConfigured),
-    saveCookie: () => Promise.reject(unsupportedError),
-    clearCookie: () => Promise.resolve(notConfigured)
-  }
-}
-
-function createGrokAccountsApi(): NonNullable<Partial<PreloadApi>['grokAccounts']> {
-  const unsigned = {
-    signedIn: false,
-    email: null,
-    teamId: null,
-    tokenFresh: false,
-    error: null
-  }
-  return {
-    getStatus: () => Promise.resolve(unsigned)
   }
 }
 
@@ -3118,33 +2873,9 @@ function createAccountsApi(): never {
 }
 
 function createUpdaterApi(): NonNullable<Partial<PreloadApi>['updater']> {
-  // Why: the linux-package-install recovery status can only originate in the native main process, so
-  // the web renderer never reaches these branches — reject loudly rather than resolve a fake result.
-  // A fresh Error per rejection: one shared instance would carry this function's stack, not the caller's.
-  const desktopOnlyMessage = 'Linux package install recovery is only available in the desktop app.'
   return {
-    getVersion: () => Promise.resolve('web'),
-    getStatus: () => Promise.resolve({ state: 'idle' } as never),
-    check: () => Promise.resolve(),
-    download: () => Promise.resolve(),
-    quitAndInstall: () => Promise.resolve(),
     dismissNudge: () => Promise.resolve(),
-    dismissAvailableUpdate: () => Promise.resolve(),
-    getLinuxPackageInstallInstructions: () => Promise.reject(new Error(desktopOnlyMessage)),
-    showLinuxPackage: () => Promise.reject(new Error(desktopOnlyMessage)),
-    // Why: the web client cannot install a desktop build, so channel switching
-    // reports unavailable rather than an empty list that looks like a fetch miss.
-    listBuilds: (channel) =>
-      Promise.resolve({
-        ok: false,
-        channel,
-        message: translate(
-          'auto.components.settings.ReleaseChannelSection.webUnavailable',
-          'Switching builds is only available in the desktop app.'
-        )
-      }),
-    onStatus: () => noopUnsubscribe,
-    onClearDismissal: () => noopUnsubscribe
+    dismissAvailableUpdate: () => Promise.resolve()
   }
 }
 
@@ -3270,85 +3001,6 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
   }
 }
 
-function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
-  return {
-    // Why: SSH is owned by the paired host; route read/connect to runtime RPC for state/reconnect (STA-1468). Target mgmt is desktop-only.
-    listTargets: async () => {
-      if (!requireActiveEnvironmentOrNull()) {
-        return []
-      }
-      const { targets } = await callRuntimeResult<{ targets: SshTarget[] }>(
-        'ssh.listTargetSummaries'
-      )
-      return targets
-    },
-    listRemovedTargetLabels: async () => {
-      if (!requireActiveEnvironmentOrNull()) {
-        return {}
-      }
-      const { labels } = await callRuntimeResult<{ labels: Record<string, string> }>(
-        'ssh.listRemovedTargetLabels'
-      )
-      return labels
-    },
-    addTarget: () =>
-      Promise.reject(new Error('SSH target management is unavailable in the web client.')),
-    updateTarget: () =>
-      Promise.reject(new Error('SSH target management is unavailable in the web client.')),
-    removeTarget: () => Promise.resolve(),
-    importConfig: () => Promise.resolve({ targets: [], repoReadoptions: [] }),
-    listConfigHosts: () =>
-      Promise.resolve({
-        hosts: [],
-        totalHostCount: 0,
-        newHostCount: 0,
-        matchCount: 0,
-        hasMore: false
-      }),
-    resolveConfigHost: () => Promise.resolve(null),
-    connect: async (args) => {
-      const { state } = await callRuntimeResult<{ state: SshConnectionState | null }>(
-        'ssh.connect',
-        { targetId: args.targetId }
-      )
-      return state
-    },
-    disconnect: () => Promise.resolve(),
-    terminateSessions: () => Promise.resolve(),
-    resetRelay: () => Promise.resolve(),
-    getState: async (args) => {
-      if (!requireActiveEnvironmentOrNull()) {
-        return null
-      }
-      const { state } = await callRuntimeResult<{ state: SshConnectionState | null }>(
-        'ssh.getState',
-        { targetId: args.targetId }
-      )
-      return state
-    },
-    needsPassphrasePrompt: () => Promise.resolve(false),
-    testConnection: () =>
-      Promise.resolve({
-        success: false,
-        error: translate('auto.web.web.preload.api.31bfe8ae1a', 'Unavailable in the web client.')
-      }),
-    onStateChanged: () => noopUnsubscribe,
-    addPortForward: () =>
-      Promise.reject(new Error('SSH port forwarding is unavailable in the web client.')),
-    updatePortForward: () =>
-      Promise.reject(new Error('SSH port forwarding is unavailable in the web client.')),
-    removePortForward: () => Promise.resolve(null),
-    listPortForwards: () => Promise.resolve([]),
-    listDetectedPorts: () => Promise.resolve([]),
-    onPortForwardsChanged: () => noopUnsubscribe,
-    onDetectedPortsChanged: () => noopUnsubscribe,
-    browseDir: () => Promise.resolve({ entries: [], resolvedPath: '', pathFlavor: 'posix' }),
-    onCredentialRequest: () => noopUnsubscribe,
-    onCredentialResolved: () => noopUnsubscribe,
-    submitCredential: () => Promise.resolve()
-  }
-}
-
 async function callRuntimeEnvelope<TResult = unknown>(
   method: string,
   params?: unknown,
@@ -3439,7 +3091,6 @@ function captureWebFileMutationSession(): {
   resolveFilePath: (filePath: string) => Promise<Awaited<ReturnType<typeof resolveRuntimeFilePath>>>
   assertMutationSupported: () => Promise<void>
   callRuntimeResult: WebRuntimeResultCaller
-  getSshState: (targetId: string) => Promise<SshConnectionState | null>
 } {
   const environment = requireActiveEnvironment()
   const client = getClientForEnvironment(environment)
@@ -3488,13 +3139,7 @@ function captureWebFileMutationSession(): {
         await callBoundRuntimeResult<RuntimeStatus>('status.get', undefined, 15_000)
       )
     },
-    callRuntimeResult: callBoundRuntimeResult,
-    getSshState: async (targetId) =>
-      (
-        await callBoundRuntimeResult<{ state: SshConnectionState | null }>('ssh.getState', {
-          targetId
-        })
-      ).state
+    callRuntimeResult: callBoundRuntimeResult
   }
 }
 
@@ -3777,12 +3422,6 @@ async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> {
     if (typeof result.settings.compactWorktreeCards === 'boolean') {
       runtimeSettings.compactWorktreeCards = result.settings.compactWorktreeCards
     }
-    if (typeof result.settings.minimaxGroupId === 'string') {
-      runtimeSettings.minimaxGroupId = result.settings.minimaxGroupId
-    }
-    if (typeof result.settings.minimaxUsageModels === 'string') {
-      runtimeSettings.minimaxUsageModels = result.settings.minimaxUsageModels
-    }
     if (Array.isArray(result.settings.prBotAuthorOverrides)) {
       runtimeSettings.prBotAuthorOverrides = normalizePRBotAuthorOverrides(
         result.settings.prBotAuthorOverrides
@@ -3810,12 +3449,6 @@ async function syncRuntimeBackedSettings(
   }
   if (typeof updates.compactWorktreeCards === 'boolean') {
     runtimeUpdates.compactWorktreeCards = updates.compactWorktreeCards
-  }
-  if (typeof updates.minimaxGroupId === 'string') {
-    runtimeUpdates.minimaxGroupId = updates.minimaxGroupId
-  }
-  if (typeof updates.minimaxUsageModels === 'string') {
-    runtimeUpdates.minimaxUsageModels = updates.minimaxUsageModels
   }
   if (Array.isArray(updates.prBotAuthorOverrides)) {
     runtimeUpdates.prBotAuthorOverrides = normalizePRBotAuthorOverrides(

@@ -9,7 +9,6 @@ import {
   type AgentProviderSessionMetadata,
   type SleepingAgentLaunchConfig
 } from '../../../shared/agent-session-resume'
-import { normalizeAiVaultResumeFilePath } from '../../../shared/ai-vault-resume-path'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -126,7 +125,6 @@ function buildAiVaultResumeForWorktree(args: AiVaultResumeWorktreeArgs): AiVault
     args.session.executionHostId &&
     args.session.executionHostId !== LOCAL_EXECUTION_HOST_ID &&
     args.session.resumeCommand &&
-    args.session.agent !== 'omp' &&
     !(args.session.agent === 'codex' && args.session.codexHome === null) &&
     !args.commandOverride?.trim()
   ) {
@@ -145,7 +143,6 @@ function buildAiVaultResumeForWorktree(args: AiVaultResumeWorktreeArgs): AiVault
   const codexHome = getAiVaultResumeCodexHome(args.session.codexHome, platform)
   const isLocalSession =
     !args.session.executionHostId || args.session.executionHostId === LOCAL_EXECUTION_HOST_ID
-  const resumeFilePath = normalizeAiVaultResumeFilePath(args.session.filePath, platform)
   // Why: local shell settings do not describe a remote Windows host, whose
   // queued resume command uses the remote default PowerShell syntax.
   const liveShell: AgentStartupShell | undefined =
@@ -168,32 +165,17 @@ function buildAiVaultResumeForWorktree(args: AiVaultResumeWorktreeArgs): AiVault
         args.session.agent,
         args.state.settings?.agentDefaultArgs
       ),
-      agentEnv: resolveTuiAgentLaunchEnv(args.session.agent, args.state.settings?.agentDefaultEnv),
-      ...(args.session.agent === 'omp' && resumeFilePath
-        ? { ompResumeFilePath: resumeFilePath }
-        : {})
+      agentEnv: resolveTuiAgentLaunchEnv(args.session.agent, args.state.settings?.agentDefaultEnv)
     })
     if (startupPlan) {
       return {
-        command:
-          args.session.agent === 'omp'
-            ? buildAiVaultResumeCommand({
-                agent: args.session.agent,
-                sessionId: args.session.sessionId,
-                resumeFilePath,
-                cwd: args.session.cwd,
-                platform,
-                commandOverride: startupPlan.launchConfig.agentCommand,
-                codexHome,
-                shell: liveShell
-              })
-            : buildAiVaultResumeShellCommand({
-                resumeCommand: startupPlan.launchCommand,
-                cwd: args.session.cwd,
-                platform,
-                codexHome,
-                shell: liveShell
-              }),
+        command: buildAiVaultResumeShellCommand({
+          resumeCommand: startupPlan.launchCommand,
+          cwd: args.session.cwd,
+          platform,
+          codexHome,
+          shell: liveShell
+        }),
         ...(startupPlan.env ? { env: startupPlan.env } : {}),
         ...realHomeCodexResumeEnvDeletion(args.session),
         launchConfig: startupPlan.launchConfig,
@@ -206,10 +188,6 @@ function buildAiVaultResumeForWorktree(args: AiVaultResumeWorktreeArgs): AiVault
     command: buildAiVaultResumeCommand({
       agent: args.session.agent,
       sessionId: args.session.sessionId,
-      // Why: OMP resumes by absolute transcript path, so local rebuilds must
-      // forward it too — otherwise a custom OMP_CODING_AGENT_DIR / WSL-store
-      // session would resume by id against the default store and miss.
-      resumeFilePath,
       cwd: args.session.cwd,
       platform,
       commandOverride: args.commandOverride,
@@ -244,14 +222,6 @@ export function getAiVaultAgentProviderSession(
   if (!isResumableTuiAgent(session.agent)) {
     return null
   }
-  if (session.agent === 'antigravity') {
-    return { key: 'conversation_id', id: session.sessionId }
-  }
-  if (session.agent === 'pi') {
-    return session.filePath
-      ? { key: 'session_id', id: session.sessionId, transcriptPath: session.filePath }
-      : null
-  }
   return { key: 'session_id', id: session.sessionId }
 }
 
@@ -283,7 +253,7 @@ export function getAiVaultResumePlatform(
 ): NodeJS.Platform {
   const targetWorktreeId = worktreeId ?? state.activeWorktreeId
   const executionHost = parseExecutionHostId(getExecutionHostIdForWorktree(state, targetWorktreeId))
-  if (executionHost?.kind === 'ssh' || executionHost?.kind === 'runtime') {
+  if (executionHost?.kind === 'runtime') {
     return 'linux'
   }
 

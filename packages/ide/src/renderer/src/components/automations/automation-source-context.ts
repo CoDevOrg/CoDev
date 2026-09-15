@@ -6,14 +6,14 @@ import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { TaskSourceHostAvailability } from '../task-source-context-summary'
 
 export type RepoBackedAutomationSourceContext = TaskSourceContext & {
-  provider: 'github' | 'gitlab'
+  provider: 'github'
 }
 
 export function getRepoBackedAutomationSourceContext(
   automation: Automation
 ): RepoBackedAutomationSourceContext | null {
   const context = automation.sourceContext
-  return context?.provider === 'github' || context?.provider === 'gitlab'
+  return context?.provider === 'github'
     ? (context as RepoBackedAutomationSourceContext)
     : null
 }

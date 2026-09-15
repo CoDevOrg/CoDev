@@ -18,39 +18,27 @@ const SETTINGS_NAV_TARGETS = [
   'accounts',
   'browser',
   'git',
-  'tasks',
   'appearance',
   'input',
   'floating-workspace',
   'terminal',
-  'quick-commands',
   'notifications',
   'computer-use',
   'developer-permissions',
   'privacy',
   'advanced',
   'dev',
-  'voice',
   'shortcuts',
-  'stats',
-  'ssh',
   'experimental',
   'plugins',
   'agents',
   'orchestration',
-  'linear',
-  'setup-guide',
   'servers',
-  'mobile',
   'mobile-emulator',
   'repo'
 ] as const
 
-const SETTINGS_NAV_INTENTS = [
-  'add-quick-command',
-  'add-remote-orca-server',
-  'add-ssh-host'
-] as const
+const SETTINGS_NAV_INTENTS = ['add-remote-orca-server'] as const
 
 const SETTINGS_NAV_TARGET_SET: ReadonlySet<string> = new Set(SETTINGS_NAV_TARGETS)
 const SETTINGS_NAV_INTENT_SET: ReadonlySet<string> = new Set(SETTINGS_NAV_INTENTS)

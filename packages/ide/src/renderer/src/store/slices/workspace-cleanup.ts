@@ -122,20 +122,7 @@ const SHELL_PROCESS_NAMES = new Set([
   'zsh'
 ])
 
-const AGENT_PROCESS_NAMES = new Set([
-  'aider',
-  'amp',
-  'agy',
-  'claude',
-  'claude-code',
-  'codex',
-  'crush',
-  'droid',
-  'gemini',
-  'gemini-cli',
-  'goose',
-  'opencode'
-])
+const AGENT_PROCESS_NAMES = new Set(['claude', 'claude-code', 'codex'])
 
 export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], WorkspaceCleanupSlice> = (
   set,

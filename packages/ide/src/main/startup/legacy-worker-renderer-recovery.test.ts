@@ -4,13 +4,9 @@ import { recoverLegacyWorkerTerminalsForRendererStartup } from './legacy-worker-
 describe('legacy worker renderer recovery', () => {
   it('hydrates after bounded barriers while provider startup remains pending', async () => {
     let resolveFirstWindow!: () => void
-    let resolveWslBarrier!: () => void
     let resolveProvider!: () => void
     const firstWindowReady = new Promise<void>((resolve) => {
       resolveFirstWindow = resolve
-    })
-    const wslBarrierReady = new Promise<void>((resolve) => {
-      resolveWslBarrier = resolve
     })
     const providerReady = new Promise<void>((resolve) => {
       resolveProvider = resolve
@@ -18,17 +14,12 @@ describe('legacy worker renderer recovery', () => {
     const reconcile = vi.fn().mockResolvedValue(undefined)
     const startup = recoverLegacyWorkerTerminalsForRendererStartup({
       firstWindowStartupServicesReady: firstWindowReady,
-      managedWslCliStartupBarrierReady: wslBarrierReady,
       localPtyProviderStartupReady: providerReady,
       reconcile,
       onDeferredRecoveryError: vi.fn()
     })
 
     resolveFirstWindow()
-    await Promise.resolve()
-    expect(reconcile).not.toHaveBeenCalled()
-
-    resolveWslBarrier()
     await startup
     expect(reconcile).toHaveBeenCalledTimes(1)
 
@@ -41,7 +32,6 @@ describe('legacy worker renderer recovery', () => {
 
     await recoverLegacyWorkerTerminalsForRendererStartup({
       firstWindowStartupServicesReady: Promise.resolve(),
-      managedWslCliStartupBarrierReady: Promise.resolve(),
       localPtyProviderStartupReady: Promise.resolve(),
       reconcile,
       onDeferredRecoveryError: vi.fn()
@@ -60,7 +50,6 @@ describe('legacy worker renderer recovery', () => {
 
     await recoverLegacyWorkerTerminalsForRendererStartup({
       firstWindowStartupServicesReady: Promise.resolve(),
-      managedWslCliStartupBarrierReady: Promise.resolve(),
       localPtyProviderStartupReady: Promise.reject(providerError),
       reconcile,
       onDeferredRecoveryError: reportError
@@ -80,7 +69,6 @@ describe('legacy worker renderer recovery', () => {
 
     await recoverLegacyWorkerTerminalsForRendererStartup({
       firstWindowStartupServicesReady: Promise.resolve(),
-      managedWslCliStartupBarrierReady: Promise.resolve(),
       localPtyProviderStartupReady: Promise.resolve(),
       reconcile,
       onDeferredRecoveryError: reportError
@@ -102,8 +90,7 @@ describe('legacy worker renderer recovery', () => {
     await expect(
       recoverLegacyWorkerTerminalsForRendererStartup({
         firstWindowStartupServicesReady: Promise.resolve(),
-        managedWslCliStartupBarrierReady: Promise.resolve(),
-        localPtyProviderStartupReady: providerReady,
+          localPtyProviderStartupReady: providerReady,
         reconcile,
         onDeferredRecoveryError
       })

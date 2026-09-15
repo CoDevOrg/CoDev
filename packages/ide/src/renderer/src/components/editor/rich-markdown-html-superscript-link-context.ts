@@ -55,7 +55,7 @@ export function classifyHtmlSuperscriptLinkAction(
   return !(
     target.kind === 'file' &&
     target.relativePath === undefined &&
-    (snapshot.sourceOwner.kind === 'runtime' || snapshot.sourceOwner.kind === 'ssh')
+    snapshot.sourceOwner.kind === 'runtime'
   )
 }
 
@@ -65,9 +65,6 @@ function sameOwner(left: HttpLinkSourceOwner, right: HttpLinkSourceOwner): boole
   }
   if (left.kind === 'runtime' && right.kind === 'runtime') {
     return left.runtimeEnvironmentId === right.runtimeEnvironmentId
-  }
-  if (left.kind === 'ssh' && right.kind === 'ssh') {
-    return left.connectionId === right.connectionId
   }
   return true
 }

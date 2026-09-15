@@ -12,9 +12,6 @@ import type { OpenFile } from '../store/slices/editor'
 import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'
 import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
 import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
-import { buildActiveConnectionIdsAtShutdown } from './workspace-session-reconnect-targets'
-
-export { buildActiveConnectionIdsAtShutdown }
 
 /** Why (issue #1158): require both flags so a hydration failure can't overwrite orca-data.json with empty error-path state. */
 export function shouldPersistWorkspaceSession(
@@ -46,7 +43,6 @@ export type WorkspaceSessionSnapshot = Pick<
   | 'groupsByWorktree'
   | 'layoutByWorktree'
   | 'activeGroupIdByWorktree'
-  | 'sshConnectionStates'
   | 'repos'
   | 'worktreesByRepo'
   | 'lastKnownRelayPtyIdByTabId'
@@ -81,7 +77,6 @@ export const SESSION_RELEVANT_FIELDS = [
   'groupsByWorktree',
   'layoutByWorktree',
   'activeGroupIdByWorktree',
-  'sshConnectionStates',
   'repos',
   'worktreesByRepo',
   'lastKnownRelayPtyIdByTabId',
@@ -125,7 +120,6 @@ export function buildEditorSessionData(
       language: f.language,
       isPreview: f.isPreview || undefined,
       runtimeEnvironmentId: f.runtimeEnvironmentId,
-      externalSshTargetId: f.externalSshTargetId,
       // Why: persist readOnly only when true; absence is the writable default on restore.
       ...(f.readOnly === true ? { readOnly: true } : {}),
       ...(f.readOnly === true && f.liveTail === true ? { liveTail: true } : {}),
@@ -241,7 +235,7 @@ export function buildSanitizedTabsByWorktree(
 
 export function buildTerminalSessionData(
   snapshot: WorkspaceSessionSnapshot
-): Pick<WorkspaceSessionState, 'activeWorktreeIdsOnShutdown' | 'remoteSessionIdsByTabId'> {
+): Pick<WorkspaceSessionState, 'activeWorktreeIdsOnShutdown'> {
   const tabsByWorktree = snapshot.tabsByWorktree
 
   // Why: use ptyIdsByTabId (live PTYs), not tab.ptyId, which sleep preserves as a wake hint and would revive slept worktrees as active.
@@ -257,38 +251,7 @@ export function buildTerminalSessionData(
     .filter(([, tabs]) => tabs.some(hasReconnectableSession))
     .map(([worktreeId]) => worktreeId)
 
-  const worktreeById = new Map(
-    Object.values(snapshot.worktreesByRepo)
-      .flat()
-      .map((worktree) => [worktree.id, worktree])
-  )
-  const repoById = new Map(snapshot.repos.map((repo) => [repo.id, repo]))
-
-  // Why: derive here to avoid a fragile sync IPC round-trip during beforeunload (Chromium can drop it under shutdown pressure).
-  // Why: pre-indexed above so large workspaces don't rescan every repo/worktree per terminal tab while the renderer is quitting.
-  const remoteSessionIdsByTabId: Record<string, string> = {}
-  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-    const worktree = worktreeById.get(worktreeId)
-    const repo = worktree ? repoById.get(worktree.repoId) : null
-    if (!repo?.connectionId) {
-      continue
-    }
-    for (const tab of tabs) {
-      if (!hasReconnectableSession(tab)) {
-        continue
-      }
-      const sessionId = tab.ptyId || lastKnown[tab.id]
-      if (sessionId) {
-        remoteSessionIdsByTabId[tab.id] = sessionId
-      }
-    }
-  }
-
-  return {
-    activeWorktreeIdsOnShutdown,
-    remoteSessionIdsByTabId:
-      Object.keys(remoteSessionIdsByTabId).length > 0 ? remoteSessionIdsByTabId : undefined
-  }
+  return { activeWorktreeIdsOnShutdown }
 }
 
 export function buildWorkspaceSessionPayload(
@@ -323,11 +286,6 @@ export function buildWorkspaceSessionPayload(
     browserUrlHistory: normalizeBrowserHistoryEntries(snapshot.browserUrlHistory),
     // Why: persist only layouts backed by real tabs so a reload can't restore a blank split pane from the split-before-tab midpoint.
     ...buildPersistedUnifiedTabSessionData(snapshot),
-    activeConnectionIdsAtShutdown: buildActiveConnectionIdsAtShutdown(
-      snapshot,
-      terminalSessionData.remoteSessionIdsByTabId ?? null
-    ),
-    remoteSessionIdsByTabId: terminalSessionData.remoteSessionIdsByTabId,
     // Why: omit when empty so builds that never stamped focus-recency don't bloat the payload. See docs/cmd-j-empty-query-ordering.md.
     lastVisitedAtByWorktreeId: buildLastVisitedAtByWorktreeId(snapshot),
     defaultTerminalTabsAppliedByWorktreeId:

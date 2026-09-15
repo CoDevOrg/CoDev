@@ -18,7 +18,7 @@ import { translate } from '@/i18n/i18n'
 
 type SourceControlAiLaunchStoreSnapshot = Pick<
   AppState,
-  'settings' | 'ensureDetectedAgents' | 'ensureRemoteDetectedAgents'
+  'settings' | 'ensureDetectedAgents'
 >
 
 export type SourceControlRecoveryLaunchCopy = {
@@ -132,10 +132,7 @@ export async function launchSourceControlRecoveryAgentWithDefault({
     return false
   }
 
-  const detectedAgents =
-    typeof connectionId === 'string'
-      ? await store.ensureRemoteDetectedAgents(connectionId)
-      : await store.ensureDetectedAgents()
+  const detectedAgents = await store.ensureDetectedAgents()
   const savedAgent = readSourceControlLaunchRecipeAgentId(savedRecipe)
   if (
     savedAgent &&

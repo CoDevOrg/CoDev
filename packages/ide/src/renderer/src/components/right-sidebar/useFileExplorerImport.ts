@@ -75,8 +75,6 @@ export function useFileExplorerImport({
               worktreePath: worktreePathRef.current,
               connectionId: operationGuard.route.connectionId,
               expectedExecutionHostId: operationGuard.route.expectedExecutionHostId,
-              expectedSshTargetId: operationGuard.route.expectedSshTargetId,
-              expectedSshConnectionGeneration: operationGuard.route.expectedSshConnectionGeneration
             },
             paths,
             destinationDir,

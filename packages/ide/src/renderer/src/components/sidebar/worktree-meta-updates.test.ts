@@ -69,9 +69,6 @@ describe('buildWorktreeMetaUpdates', () => {
   it('writes a GitHub issue number and clears the Linear slots', () => {
     expect(buildUpdates({ issueInput: '12' }, {}, { linkedLinearIssue: 'STA-335' })).toEqual({
       linkedIssue: 12,
-      linkedLinearIssue: null,
-      linkedLinearIssueWorkspaceId: null,
-      linkedLinearIssueOrganizationUrlKey: null,
       linkedPR: null
     })
   })
@@ -91,8 +88,6 @@ describe('buildWorktreeMetaUpdates', () => {
     expect(buildUpdates({ issueInput: 'sta-335', issueProvider: 'linear' })).toEqual({
       linkedIssue: null,
       linkedLinearIssue: 'STA-335',
-      linkedLinearIssueWorkspaceId: null,
-      linkedLinearIssueOrganizationUrlKey: null,
       linkedPR: null
     })
   })
@@ -106,7 +101,6 @@ describe('buildWorktreeMetaUpdates', () => {
     ).toEqual({
       linkedIssue: null,
       linkedLinearIssue: 'STA-335',
-      linkedLinearIssueWorkspaceId: null,
       linkedLinearIssueOrganizationUrlKey: 'acme',
       linkedPR: null
     })
@@ -121,9 +115,6 @@ describe('buildWorktreeMetaUpdates', () => {
       )
     ).toEqual({
       linkedIssue: null,
-      linkedLinearIssue: null,
-      linkedLinearIssueWorkspaceId: null,
-      linkedLinearIssueOrganizationUrlKey: null,
       linkedPR: null
     })
   })
@@ -335,9 +326,6 @@ describe('buildWorktreeMetaUpdates', () => {
       )
     ).toEqual({
       linkedIssue: 6933,
-      linkedLinearIssue: null,
-      linkedLinearIssueWorkspaceId: null,
-      linkedLinearIssueOrganizationUrlKey: null,
       linkedPR: null
     })
   })

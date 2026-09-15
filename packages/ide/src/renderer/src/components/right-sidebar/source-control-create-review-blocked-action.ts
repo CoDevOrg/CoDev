@@ -23,16 +23,7 @@ export function canClickBlockedCreateReviewReason(
   )
 }
 
-export function resolveHostedReviewAuthInstruction(provider: HostedReviewProvider): string {
-  if (provider === 'gitlab') {
-    return 'Run glab auth login'
-  }
-  if (provider === 'azure-devops') {
-    return 'Set ORCA_AZURE_DEVOPS_TOKEN'
-  }
-  if (provider === 'gitea') {
-    return 'Set ORCA_GITEA_TOKEN'
-  }
+export function resolveHostedReviewAuthInstruction(_provider: HostedReviewProvider): string {
   return 'Run gh auth login'
 }
 

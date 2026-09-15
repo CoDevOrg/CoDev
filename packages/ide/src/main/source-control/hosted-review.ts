@@ -17,14 +17,6 @@ function reviewLinkForProvider(
         linkedReviewNumber: input.linkedGitHubPR ?? null,
         fallbackReviewNumber: input.linkedGitHubPR == null ? (input.fallbackGitHubPR ?? null) : null
       }
-    case 'gitlab':
-      return { linkedReviewNumber: input.linkedGitLabMR ?? null }
-    case 'bitbucket':
-      return { linkedReviewNumber: input.linkedBitbucketPR ?? null }
-    case 'azure-devops':
-      return { linkedReviewNumber: input.linkedAzureDevOpsPR ?? null }
-    case 'gitea':
-      return { linkedReviewNumber: input.linkedGiteaPR ?? null }
   }
 }
 
@@ -35,10 +27,6 @@ export async function getHostedReviewForBranch(
     branch: string
     linkedGitHubPR?: number | null
     fallbackGitHubPR?: number | null
-    linkedGitLabMR?: number | null
-    linkedBitbucketPR?: number | null
-    linkedAzureDevOpsPR?: number | null
-    linkedGiteaPR?: number | null
     currentHeadOid?: string | null
     /**
      * Set by surfaces that only ever render the selected worktree, which is the
@@ -50,15 +38,7 @@ export async function getHostedReviewForBranch(
   const branchName = input.branch.replace(/^refs\/heads\//, '')
   // Why: detached HEAD cannot use branch lookup, but provider-specific exact
   // ids can still resolve the review without probing an empty branch name.
-  if (
-    !branchName &&
-    input.linkedGitHubPR == null &&
-    input.fallbackGitHubPR == null &&
-    input.linkedGitLabMR == null &&
-    input.linkedBitbucketPR == null &&
-    input.linkedAzureDevOpsPR == null &&
-    input.linkedGiteaPR == null
-  ) {
+  if (!branchName && input.linkedGitHubPR == null && input.fallbackGitHubPR == null) {
     return null
   }
 

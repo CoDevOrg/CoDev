@@ -83,22 +83,6 @@ const mockApi = {
     getDaily: vi.fn().mockResolvedValue([]),
     getBreakdown: vi.fn().mockResolvedValue([]),
     getRecentSessions: vi.fn().mockResolvedValue([])
-  },
-  openCodeUsage: {
-    getScanState: vi.fn().mockResolvedValue({
-      enabled: false,
-      isScanning: false,
-      lastScanStartedAt: null,
-      lastScanCompletedAt: null,
-      lastScanError: null,
-      hasAnyOpenCodeData: false
-    }),
-    setEnabled: vi.fn().mockResolvedValue({}),
-    refresh: vi.fn().mockResolvedValue({}),
-    getSummary: vi.fn().mockResolvedValue(null),
-    getDaily: vi.fn().mockResolvedValue([]),
-    getBreakdown: vi.fn().mockResolvedValue([]),
-    getRecentSessions: vi.fn().mockResolvedValue([])
   }
 }
 
@@ -115,16 +99,12 @@ import { createSettingsSlice } from './settings'
 import { createKeybindingsSlice } from './keybindings'
 import { createGitHubSlice } from './github'
 import { createHostedReviewSlice } from './hosted-review'
-import { createLinearSlice } from './linear'
 import { createPreflightSlice } from './preflight'
-import { createJiraSlice } from './jira'
 import { createEditorSlice } from './editor'
-import { createStatsSlice } from './stats'
 import { createMemorySlice } from './memory'
 import { createWorkspaceSpaceSlice } from './workspace-space'
 import { createClaudeUsageSlice } from './claude-usage'
 import { createCodexUsageSlice } from './codex-usage'
-import { createOpenCodeUsageSlice } from './opencode-usage'
 import { createBrowserSlice } from './browser'
 import { createRateLimitSlice } from './rate-limits'
 import { createSshSlice } from './ssh'
@@ -143,9 +123,6 @@ import { createCommitMessageGenerationSlice } from './commit-message-generation'
 import { createPinnedTabCloseConfirmSlice } from './pinned-tab-close-confirm'
 import { createRecentlyClosedTabsSlice } from './recently-closed-tabs'
 import { createOrcaProfilesSlice } from './orca-profiles'
-import { createNewIssueDraftSlice } from './new-issue-draft'
-import { createTaskCreationDraftsSlice } from './task-creation-drafts'
-import { createRemoteServerUpdatesSlice } from './remote-server-updates'
 
 function createTestStore() {
   return create<AppState>()((...a) => ({
@@ -159,16 +136,12 @@ function createTestStore() {
     ...createKeybindingsSlice(...a),
     ...createGitHubSlice(...a),
     ...createHostedReviewSlice(...a),
-    ...createLinearSlice(...a),
     ...createPreflightSlice(...a),
-    ...createJiraSlice(...a),
     ...createEditorSlice(...a),
-    ...createStatsSlice(...a),
     ...createMemorySlice(...a),
     ...createWorkspaceSpaceSlice(...a),
     ...createClaudeUsageSlice(...a),
     ...createCodexUsageSlice(...a),
-    ...createOpenCodeUsageSlice(...a),
     ...createBrowserSlice(...a),
     ...createRateLimitSlice(...a),
     ...createSshSlice(...a),
@@ -186,10 +159,7 @@ function createTestStore() {
     ...createCommitMessageGenerationSlice(...a),
     ...createPinnedTabCloseConfirmSlice(...a),
     ...createRecentlyClosedTabsSlice(...a),
-    ...createOrcaProfilesSlice(...a),
-    ...createNewIssueDraftSlice(...a),
-    ...createTaskCreationDraftsSlice(...a),
-    ...createRemoteServerUpdatesSlice(...a)
+    ...createOrcaProfilesSlice(...a)
   }))
 }
 
@@ -221,7 +191,6 @@ function makeWorktree(diffComments: DiffComment[]): Worktree {
     comment: '',
     linkedIssue: null,
     linkedPR: null,
-    linkedLinearIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,

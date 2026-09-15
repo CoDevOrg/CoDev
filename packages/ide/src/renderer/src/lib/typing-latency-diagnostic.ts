@@ -105,12 +105,9 @@ function buildReport(state: ProbeState | null, running: boolean): TypingLatencyR
 }
 
 function cacheAppVersion(): void {
-  void window.api?.updater
-    ?.getVersion?.()
-    .then((version) => {
-      cachedAppVersion = version
-    })
-    .catch(() => undefined)
+  // The self-updater (and its getVersion bridge) is gone; the census reports
+  // the version as unknown.
+  cachedAppVersion = null
 }
 
 /** Modifier-only presses produce no echo and would poison the pending queue. */

@@ -150,26 +150,6 @@ const ISSUE_WORKTREE_CARD_PROPERTY_OPTIONS: WorktreeCardPropertyOption[] = [
         'GitHub issues'
       )
     }
-  },
-  {
-    id: 'linear-issue',
-    properties: ['linear-issue'],
-    get label() {
-      return translate(
-        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.44713a5d04',
-        'Linear issues'
-      )
-    }
-  },
-  {
-    id: 'jira-issue',
-    properties: ['jira-issue'],
-    get label() {
-      return translate(
-        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.jiraIssues',
-        'Jira issues'
-      )
-    }
   }
 ]
 

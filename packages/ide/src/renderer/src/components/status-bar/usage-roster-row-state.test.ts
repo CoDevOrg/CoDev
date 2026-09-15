@@ -69,19 +69,6 @@ describe('getUsageRosterRowState', () => {
     ).toEqual({ kind: 'sign-in', statusLabel: 'not signed in' })
   })
 
-  it('does not turn an expired CLI-owned Kimi token into a sign-in action', () => {
-    expect(
-      getUsageRosterRowState(
-        provider({
-          provider: 'kimi',
-          status: 'error',
-          error: 'Kimi token expired — open Kimi to refresh'
-        }),
-        false
-      )
-    ).toEqual({ kind: 'error', statusLabel: 'Refresh failed' })
-  })
-
   it('distinguishes unavailable and empty successful responses', () => {
     expect(
       getUsageRosterRowState(

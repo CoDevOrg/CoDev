@@ -16,17 +16,11 @@ export function buildAiVaultResumeCommand(args: {
   platform: NodeJS.Platform
   commandOverride?: string | null
   codexHome?: string | null
-  resumeFilePath?: string | null
   shell?: AgentStartupShell
 }): string {
-  const { agent, sessionId, cwd, platform, commandOverride, codexHome, resumeFilePath, shell } =
-    args
-  const baseCommand = commandOverride?.trim() || defaultAiVaultResumeCommandBase(agent)
-  // Why: OMP's `--resume` accepts an absolute transcript path, which resolves
-  // regardless of which session-dir root (custom OMP_CODING_AGENT_DIR / WSL
-  // home) the file was discovered under, where an id-prefix lookup scoped to
-  // the default store would miss it. Falls back to the id if no path is known.
-  const resumeTarget = agent === 'omp' && resumeFilePath?.trim() ? resumeFilePath.trim() : sessionId
+  const { agent, sessionId, cwd, platform, commandOverride, codexHome, shell } = args
+  const baseCommand = commandOverride?.trim() || TUI_AGENT_CONFIG[agent].detectCmd
+  const resumeTarget = sessionId
   const sessionArg =
     shell === 'cmd'
       ? quoteWindowsCmdArg(resumeTarget)
@@ -126,19 +120,6 @@ export function realHomeCodexResumeEnvDeletion(
   return { envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'] }
 }
 
-function defaultAiVaultResumeCommandBase(agent: AiVaultAgent): string {
-  if (agent === 'cursor') {
-    return 'cursor-agent'
-  }
-  if (agent === 'hermes') {
-    return 'hermes'
-  }
-  if (agent === 'rovo') {
-    return 'acli'
-  }
-  return TUI_AGENT_CONFIG[agent].detectCmd
-}
-
 function buildAgentResumeInvocation(
   agent: AiVaultAgent,
   baseCommand: string,
@@ -147,33 +128,8 @@ function buildAgentResumeInvocation(
   switch (agent) {
     case 'codex':
       return `${baseCommand} resume ${sessionArg}`
-    case 'rovo':
-      return `${baseCommand} rovodev run --restore ${sessionArg}`
-    case 'opencode':
-    case 'pi':
-    // Why: Kimi Code resumes with `kimi --session <id>` (alias `-S`). Sessions
-    // are work-dir-scoped, so the cwd prefix from buildAiVaultResumeCommand is
-    // required — resuming from another directory is rejected by the CLI.
-    // falls through
-    case 'kimi':
-      return `${baseCommand} --session ${sessionArg}`
-    case 'copilot':
-      return `${baseCommand} --resume=${sessionArg}`
     case 'claude':
-    case 'cursor':
-    case 'gemini':
-    case 'grok':
-    case 'hermes':
-    case 'devin':
-    case 'openclaw':
-    case 'droid':
-    // Why: OMP resumes by absolute transcript path (see buildAiVaultResumeCommand),
-    // but the `--resume <arg>` invocation form is identical to the others here.
-    // falls through
-    case 'omp':
       return `${baseCommand} --resume ${sessionArg}`
-    case 'antigravity':
-      return `${baseCommand} --conversation ${sessionArg}`
   }
 }
 

@@ -214,7 +214,7 @@ function openMarkdownLinkInClientOs({
   }
   if (
     isLocalPathOpenBlocked(settingsForRuntimeOwner(settings, runtimeEnvironmentId), {
-      connectionId: sourceOwner.kind === 'ssh' ? sourceOwner.connectionId : undefined
+      connectionId: undefined
     })
   ) {
     // Why: Shift-click opens through the client OS, which cannot safely resolve

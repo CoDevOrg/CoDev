@@ -51,9 +51,8 @@ describe('agent session RPC methods', () => {
       request('terminal.ensureAgentSession', {
         kind: 'explicit',
         worktree: 'id:worktree-1',
-        agent: 'omp',
+        agent: 'codex',
         providerSession: { key: 'session_id', id: 'provider-session-1' },
-        ompResumeFilePath: '/custom/omp/project/session.jsonl',
         agentArgs: '--profile review',
         launchPreferences: { model: 'gpt-5', effort: 'high' },
         presentation: 'focused',
@@ -66,9 +65,8 @@ describe('agent session RPC methods', () => {
       {
         kind: 'explicit',
         worktree: 'id:worktree-1',
-        agent: 'omp',
+        agent: 'codex',
         providerSession: { key: 'session_id', id: 'provider-session-1' },
-        ompResumeFilePath: '/custom/omp/project/session.jsonl',
         agentArgs: '--profile review',
         launchPreferences: { model: 'gpt-5', effort: 'high' },
         presentation: 'focused',

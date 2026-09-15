@@ -3,7 +3,6 @@ import type { Store } from '../persistence'
 import type { IPtyProvider } from '../providers/types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { listRegisteredPtys } from '../memory/pty-registry'
-import { getSshPtyProvider } from './pty'
 import {
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION,
   type WorkspaceCleanupDismissArgs,
@@ -91,10 +90,6 @@ async function hasKillableProcesses(
     }
   }
 
-  if (args.connectionId) {
-    return hasKillableSshProcesses(args.connectionId, args.worktreePath ?? '', livenessUnknown)
-  }
-
   const registryPtyIds = new Set(
     listRegisteredPtys()
       .filter((entry) => entry.worktreeId === worktreeId)
@@ -120,42 +115,3 @@ async function hasKillableProcesses(
   }
 }
 
-async function hasKillableSshProcesses(
-  connectionId: string,
-  worktreePath: string,
-  livenessUnknown: boolean
-): Promise<boolean | null> {
-  const provider = getSshPtyProvider(connectionId)
-  if (!provider) {
-    return null
-  }
-
-  try {
-    const normalizedWorktreePath = normalizeRemotePath(worktreePath)
-    const sessions = await provider.listProcesses()
-    if (
-      sessions.some((session) => {
-        if (session.id.startsWith(`${worktreePath}@@`)) {
-          return true
-        }
-        return (
-          normalizedWorktreePath.length > 0 &&
-          isPathWithin(normalizeRemotePath(session.cwd), normalizedWorktreePath)
-        )
-      })
-    ) {
-      return true
-    }
-    return livenessUnknown ? null : false
-  } catch {
-    return null
-  }
-}
-
-function normalizeRemotePath(path: string): string {
-  return path.replace(/\\/g, '/').replace(/\/+$/, '')
-}
-
-function isPathWithin(candidatePath: string, parentPath: string): boolean {
-  return candidatePath === parentPath || candidatePath.startsWith(`${parentPath}/`)
-}

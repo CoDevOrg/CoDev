@@ -48,20 +48,13 @@ function withSharedProcessSnapshot(provider: IPtyProvider): IPtyProvider {
 
 // Why: `repoId::path` ids repeat across hosts, so a sweep driven by one repo's inventory
 // must name its owner or it stops a same-id workspace's terminals on another host.
-function hostFence(
-  repo: Repo,
-  worktreeId: string
-): { resolvedWorktreeId: string; resolvedConnectionId?: string } {
-  return {
-    resolvedWorktreeId: worktreeId,
-    ...(repo.connectionId ? { resolvedConnectionId: repo.connectionId } : {})
-  }
+function hostFence(_repo: Repo, worktreeId: string): { resolvedWorktreeId: string } {
+  return { resolvedWorktreeId: worktreeId }
 }
 
 type MissingWorktreeTerminalReconciliationDeps = {
   runtime: OrcaRuntimeService
   getLocalProvider: () => IPtyProvider | null
-  getSshProvider: (connectionId: string) => IPtyProvider | undefined
   onPtyStopped?: (ptyId: string) => void
 }
 
@@ -84,9 +77,7 @@ export async function stopMissingWorktreeTerminals(
     return { stoppedWorktreeIds: [] }
   }
 
-  const ownedProvider = repo.connectionId
-    ? deps.getSshProvider(repo.connectionId)
-    : deps.getLocalProvider()
+  const ownedProvider = deps.getLocalProvider()
   const provider = ownedProvider ? withSharedProcessSnapshot(ownedProvider) : ownedProvider
   if (!provider) {
     const stoppedWorktreeIds = (
@@ -119,8 +110,7 @@ export async function stopMissingWorktreeTerminals(
             onPtyStopped: deps.onPtyStopped,
             // Why: the shared process snapshot is only valid while nothing needs a
             // post-shutdown re-list, so this sweep stays explicitly best-effort.
-            requirePhysicalStop: false,
-            ...(repo.connectionId ? { includeLocalRegistry: false } : {})
+            requirePhysicalStop: false
           })
           return worktreeId
         } catch (error) {

@@ -1,4 +1,3 @@
-import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 
@@ -9,7 +8,6 @@ type AgentStatusRoutingState = {
     | Record<string, { ptyIdsByLeafId?: Record<string, string | undefined> } | undefined>
     | undefined
   ptyIdsByTabId: Record<string, string[] | undefined> | undefined
-  sshConnectionStates: ReadonlyMap<string, { status: string }>
   transientClearedAgentStatusConnectionIds: Record<string, true>
 }
 
@@ -23,20 +21,6 @@ export function resolveAgentStatusConnectionRouting(args: {
     return undefined
   }
   const expectedConnectionId = args.expectedConnectionId?.trim() || args.expectedConnectionId
-  const sshPty = parseAppSshPtyId(ptyId)
-  if (sshPty) {
-    if (
-      typeof args.runtimeEnvironmentId === 'string' ||
-      expectedConnectionId === null ||
-      (typeof expectedConnectionId === 'string' && expectedConnectionId !== sshPty.connectionId)
-    ) {
-      return undefined
-    }
-    return { connectionId: sshPty.connectionId }
-  }
-  if (ptyId.startsWith('ssh:')) {
-    return undefined
-  }
 
   const runtimePty = parseRemoteRuntimePtyId(ptyId)
   if (runtimePty?.handle) {
@@ -55,8 +39,8 @@ export function resolveAgentStatusConnectionRouting(args: {
     return undefined
   }
 
-  // Why: app-wide SSH and remote-runtime PTY IDs are namespaced; a remaining
-  // concrete PTY is authoritative local/WSL ownership, never an SSH guess.
+  // Why: remote-runtime PTY IDs are namespaced; a remaining concrete PTY is
+  // authoritative local/WSL ownership.
   if (typeof expectedConnectionId === 'string') {
     return undefined
   }
@@ -82,12 +66,11 @@ export function resolveLiveAgentStatusConnectionRouting(args: {
   if (!routing) {
     return undefined
   }
-  // Why: transient relay reconnect clears statuses without dropping durable
-  // PTY bindings; old renderer callbacks must stay blocked until reconnect.
+  // Why: a transient clear drops statuses without dropping durable PTY
+  // bindings; old renderer callbacks must stay blocked until it lifts.
   if (
     routing.connectionId !== null &&
-    (args.state.sshConnectionStates.get(routing.connectionId)?.status !== 'connected' ||
-      routing.connectionId in args.state.transientClearedAgentStatusConnectionIds)
+    routing.connectionId in args.state.transientClearedAgentStatusConnectionIds
   ) {
     return undefined
   }

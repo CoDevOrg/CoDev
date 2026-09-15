@@ -25,7 +25,6 @@ export function useCreateRepo(
   options: {
     hostId?: string | null
     runtimeEnvironmentId?: string | null
-    sshTargetId?: string | null
   } = {}
 ) {
   const [createName, setCreateName] = useState('')
@@ -33,7 +32,7 @@ export function useCreateRepo(
   const [createError, setCreateError] = useState<string | null>(null)
   const [isCreating, setIsCreating] = useState(false)
   const mountedRef = useMountedRef()
-  const hostToken = options.hostId ?? options.sshTargetId ?? ''
+  const hostToken = options.hostId ?? ''
   const hostTokenRef = useRef(hostToken)
   hostTokenRef.current = hostToken
 
@@ -51,17 +50,6 @@ export function useCreateRepo(
   }, [])
 
   const handlePickParent = useCallback(async (): Promise<string | null> => {
-    if (options.sshTargetId) {
-      // Why: the native picker can only browse the client machine. SSH create
-      // uses a host path typed by the user until remote folder picking exists.
-      toast.error(
-        translate(
-          'auto.components.sidebar.AddRepoCreateStep.ssh_parent_manual',
-          'Enter an SSH parent path.'
-        )
-      )
-      return null
-    }
     if (options.runtimeEnvironmentId?.trim()) {
       // Why: the native folder picker returns a client-local path. Runtime
       // project creation needs an explicit host parent path.
@@ -81,7 +69,7 @@ export function useCreateRepo(
       return dir
     }
     return null
-  }, [mountedRef, options.runtimeEnvironmentId, options.sshTargetId])
+  }, [mountedRef, options.runtimeEnvironmentId])
 
   const handleCreate = useCallback(async () => {
     const name = createName.trim()
@@ -103,14 +91,8 @@ export function useCreateRepo(
       // Why: Create Project is intentionally Git-only; non-Git folders use the
       // existing add-folder flows instead of this path.
       const createKind = 'git' as const
-      const result = options.sshTargetId
-        ? await window.api.repos.createRemote({
-            connectionId: options.sshTargetId,
-            parentPath,
-            name,
-            kind: createKind
-          })
-        : target.kind === 'environment'
+      const result =
+        target.kind === 'environment'
           ? await callRuntimeRpc<{ repo: Repo } | { error: string }>(
               target,
               'repo.create',
@@ -142,8 +124,7 @@ export function useCreateRepo(
       const { alreadyPresent: wasDeduped, repo } = upsertAddedRepoWithProjectHostSetup(
         result.repo,
         {
-          runtimeEnvironmentId: options.runtimeEnvironmentId,
-          sshConnectionId: options.sshTargetId
+          runtimeEnvironmentId: options.runtimeEnvironmentId
         }
       )
       // Why: the IPC handler dedupes by path (see repos:create) and returns
@@ -172,10 +153,7 @@ export function useCreateRepo(
         // Why: Git repos use the shared default-checkout completion path.
         // Why: if refresh is temporarily non-authoritative, the shared opener
         // still reveals the project so the user is not left in a completed add flow.
-        const ownerOptions = worktreeRefreshOptions(
-          options.runtimeEnvironmentId,
-          options.sshTargetId
-        )
+        const ownerOptions = worktreeRefreshOptions(options.runtimeEnvironmentId)
         await fetchWorktrees(repo.id, ownerOptions)
         if (
           gen !== createGenRef.current ||
@@ -190,10 +168,7 @@ export function useCreateRepo(
       } else {
         // Why: folder repos skip the Git default-checkout handoff, so activate the synthetic
         // root workspace before closing. Matches addNonGitFolder's behavior.
-        const ownerOptions = worktreeRefreshOptions(
-          options.runtimeEnvironmentId,
-          options.sshTargetId
-        )
+        const ownerOptions = worktreeRefreshOptions(options.runtimeEnvironmentId)
         await (ownerOptions.executionHostId
           ? fetchWorktrees(repo.id, { executionHostId: ownerOptions.executionHostId })
           : fetchWorktrees(repo.id))
@@ -249,8 +224,7 @@ export function useCreateRepo(
     mountedRef,
     closeModal,
     onGitRepoReady,
-    options.runtimeEnvironmentId,
-    options.sshTargetId
+    options.runtimeEnvironmentId
   ])
 
   return {

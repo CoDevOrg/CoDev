@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import SidebarWorkspaceOptionsMenu from './SidebarWorkspaceOptionsMenu'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
-import { openWorkspaceCreationComposerWithTourHandoff } from '../contextual-tours/workspace-creation-tour-handoff'
 import { translate } from '@/i18n/i18n'
 
 type SidebarHeaderProps = {
@@ -74,9 +73,9 @@ const SidebarHeader = React.memo(function SidebarHeader({
                 if (!canCreateWorkspace) {
                   return
                 }
-                // Why: the parallel-work tour must click the real sidebar
-                // control so it can hand off to the workspace-creation tour.
-                openWorkspaceCreationComposerWithTourHandoff()
+                useAppStore
+                  .getState()
+                  .openModal('new-workspace-composer', { telemetrySource: 'sidebar' })
               }}
               aria-label={translate(
                 'auto.components.sidebar.SidebarHeader.92154beb7e',

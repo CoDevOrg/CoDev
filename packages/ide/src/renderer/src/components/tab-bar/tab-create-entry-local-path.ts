@@ -18,8 +18,6 @@ type TabEntryAbsolutePathOwnerState = Pick<
   | 'runtimeEnvironmentCatalogHydrated'
   | 'removedRuntimeEnvironmentIds'
   | 'restoredRuntimeHostIdByWorkspaceSessionKey'
-  | 'sshConnectionStates'
-  | 'sshStateByEnvironment'
 >
 
 export function isTabEntryAbsolutePathAllowed(
@@ -97,9 +95,7 @@ export function createTabEntryAllowAbsolutePathsSelector(
         state.runtimeEnvironmentCatalogHydrated &&
       previousSlices.removedRuntimeEnvironmentIds === state.removedRuntimeEnvironmentIds &&
       previousSlices.restoredRuntimeHostIdByWorkspaceSessionKey ===
-        state.restoredRuntimeHostIdByWorkspaceSessionKey &&
-      previousSlices.sshConnectionStates === state.sshConnectionStates &&
-      previousSlices.sshStateByEnvironment === state.sshStateByEnvironment
+        state.restoredRuntimeHostIdByWorkspaceSessionKey
     ) {
       return previousResult
     }
@@ -113,9 +109,7 @@ export function createTabEntryAllowAbsolutePathsSelector(
       runtimeEnvironments: state.runtimeEnvironments,
       runtimeEnvironmentCatalogHydrated: state.runtimeEnvironmentCatalogHydrated,
       removedRuntimeEnvironmentIds: state.removedRuntimeEnvironmentIds,
-      restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey,
-      sshConnectionStates: state.sshConnectionStates,
-      sshStateByEnvironment: state.sshStateByEnvironment
+      restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey
     }
     previousResult = getTabEntryAllowAbsolutePaths(state, worktreeId)
     return previousResult

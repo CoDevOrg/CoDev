@@ -45,9 +45,9 @@ afterEach(async () => {
 
 describe('getIntlLocale', () => {
   it('passes a supported built-in locale straight through', async () => {
-    withSupportedLocales(['es'])
-    await activate('es')
-    expect(getIntlLocale()).toBe('es')
+    withSupportedLocales(['en'])
+    await activate('en')
+    expect(getIntlLocale()).toBe('en')
   })
 
   it('resolves a plugin resource language to the locale the pack declares', async () => {
@@ -59,7 +59,7 @@ describe('getIntlLocale', () => {
 
   it('falls back to the default locale when ICU has no data for the tag', async () => {
     withSupportedLocales([])
-    await activate('es')
+    await activate('en-GB')
     // Returning the tag here would let Intl silently format with the runtime locale.
     expect(getIntlLocale()).toBe(DEFAULT_LOCALE)
   })

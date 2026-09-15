@@ -21,7 +21,6 @@ export function decideInitialAgentTabViewMode(args: {
   promptDelivery?: NativeChatLaunchPromptDelivery
   /** The unsent launch context, when `promptDelivery` is `'draft'`. */
   launchDraftText?: string
-  nativeChatTranscriptIsLocalReadable?: boolean
 }): Tab['viewMode'] {
   // CoDev always wants chat, and must not depend on when settings finish
   // loading. `launchCodevDefaultChatTab` fires right after project activation,
@@ -36,9 +35,6 @@ export function decideInitialAgentTabViewMode(args: {
     return undefined
   }
   if (!isNativeChatSupportedAgent(args.agent)) {
-    return undefined
-  }
-  if (args.agent === 'grok' && args.nativeChatTranscriptIsLocalReadable !== true) {
     return undefined
   }
   if (
@@ -59,7 +55,6 @@ export function initialAgentTabViewModeProps(
     agent?: TuiAgent | null
     promptDelivery?: NativeChatLaunchPromptDelivery
     launchDraftText?: string
-    nativeChatTranscriptIsLocalReadable?: boolean
   } = {}
 ): { viewMode?: Tab['viewMode'] } {
   const viewMode = decideInitialAgentTabViewMode({
@@ -67,8 +62,7 @@ export function initialAgentTabViewModeProps(
     openAgentTabsInChatByDefault: settings?.openAgentTabsInChatByDefault,
     agent: options.agent,
     promptDelivery: options.promptDelivery,
-    launchDraftText: options.launchDraftText,
-    nativeChatTranscriptIsLocalReadable: options.nativeChatTranscriptIsLocalReadable
+    launchDraftText: options.launchDraftText
   })
   return viewMode ? { viewMode } : {}
 }

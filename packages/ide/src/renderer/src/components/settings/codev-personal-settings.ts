@@ -14,12 +14,9 @@ const PERSONAL_SECTION_IDS = new Set([
   'agents',
   'accounts',
   'orchestration',
-  'linear',
   'computer-use',
-  'voice',
   'general',
   'integrations',
-  'mobile',
   'appearance',
   'input',
   'notifications',
@@ -51,7 +48,9 @@ export function filterPersonalSettingsSections<T extends { id: string }>(
   settingsOnly: boolean,
   extraPersonalSections: readonly T[] = []
 ): T[] {
-  if (!settingsOnly) return [...sections]
+  if (!settingsOnly) {
+    return [...sections]
+  }
   return [
     ...extraPersonalSections,
     ...sections.filter((section) => isPersonalSettingsSection(section.id))

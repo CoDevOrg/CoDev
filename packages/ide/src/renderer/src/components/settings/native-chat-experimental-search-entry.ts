@@ -31,10 +31,6 @@ export function getNativeChatExperimentalSearchEntry(): SettingsSearchEntry {
         'codex'
       ),
       ...translateSearchKeyword(
-        'auto.components.settings.experimental.search.nativeChat.grok',
-        'grok'
-      ),
-      ...translateSearchKeyword(
         'auto.components.settings.experimental.search.nativeChat.terminal',
         'terminal'
       ),

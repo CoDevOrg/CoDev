@@ -9,7 +9,6 @@ import type { RepoIcon } from '../../../../shared/repo-icon'
 import { getWorktreeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 
 export type ActiveDashboardWorkspace = {
   projectId: string
@@ -18,19 +17,16 @@ export type ActiveDashboardWorkspace = {
   repoIcon: RepoIcon | null
   worktree: AppState['worktreesByRepo'][string][number] & { parentWorktreeId?: string | null }
   workspaceKind: DashboardCardWorkspaceKind
-  remoteHostKind: Extract<DashboardCardHostKind, 'ssh' | 'remote'> | null
+  remoteHostKind: Extract<DashboardCardHostKind, 'remote'> | null
 }
 
 type DashboardWorkspaceState = Pick<AppState, 'repos' | 'worktreesByRepo'> &
   Partial<Pick<AppState, 'folderWorkspaces' | 'projectGroups'>>
 
 function remoteHostKind(
-  connectionId: string | null | undefined,
+  _connectionId: string | null | undefined,
   executionHostId: string | null | undefined
 ): ActiveDashboardWorkspace['remoteHostKind'] {
-  if (connectionId || executionHostId?.startsWith('ssh:')) {
-    return 'ssh'
-  }
   return executionHostId && executionHostId !== 'local' ? 'remote' : null
 }
 
@@ -96,9 +92,6 @@ export function dashboardCardHostKind(
 ): DashboardCardHostKind {
   if (workspace.remoteHostKind) {
     return workspace.remoteHostKind
-  }
-  if (ptyId && parseAppSshPtyId(ptyId)) {
-    return 'ssh'
   }
   if (ptyId && getRemoteRuntimePtyEnvironmentId(ptyId)) {
     return 'remote'

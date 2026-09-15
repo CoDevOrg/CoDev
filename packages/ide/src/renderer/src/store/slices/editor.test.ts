@@ -39,10 +39,6 @@ vi.mock('@/runtime/close-mirrored-editor-tab', () => ({
   notifyHostOfMirroredEditorClose: (...args: unknown[]) =>
     notifyHostOfMirroredEditorCloseMock(...args)
 }))
-const loadGitLabJobLogDetailsMock = vi.hoisted(() => vi.fn())
-vi.mock('@/runtime/gitlab-job-trace-client', () => ({
-  loadGitLabJobLogDetails: loadGitLabJobLogDetailsMock
-}))
 
 function createEditorStore(): StoreApi<AppState> {
   // Only the editor slice + activeWorktreeId are needed for these tests.
@@ -1372,7 +1368,6 @@ describe('createEditorSlice untitled cleanup routing', () => {
             comment: '',
             linkedIssue: null,
             linkedPR: null,
-            linkedLinearIssue: null,
             isArchived: false,
             isUnread: false,
             isPinned: false,
@@ -3107,148 +3102,9 @@ describe('createEditorSlice conflict status reconciliation', () => {
 
   // Regression for #7732: refreshing a GitLab job tab through the GitHub check-runs
   // API returns null and blanks the tab the user just asked to reload.
-  it('reloads an open GitLab job tab through the job trace client', async () => {
-    loadGitLabJobLogDetailsMock.mockReset()
-    loadGitLabJobLogDetailsMock.mockResolvedValue({
-      name: 'test: unit',
-      status: 'completed',
-      conclusion: 'failure',
-      url: null,
-      detailsUrl: null,
-      startedAt: null,
-      completedAt: null,
-      title: null,
-      summary: null,
-      text: null,
-      annotations: [],
-      jobs: [
-        {
-          id: 42,
-          name: 'test: unit',
-          status: 'completed',
-          conclusion: 'failure',
-          startedAt: null,
-          completedAt: null,
-          url: null,
-          logTail: 'ERROR: Job failed: exit code 1',
-          steps: []
-        }
-      ]
-    })
-    const fetchPRCheckDetails = vi.fn().mockResolvedValue(null)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const store = createStore<any>()((...args: any[]) => ({
-      activeWorktreeId: 'wt-1',
-      repos: [{ id: 'repo-1', path: '/repo' }],
-      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo' }] },
-      settings: { activeRuntimeEnvironmentId: null },
-      fetchPRCheckDetails,
-      ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
-    })) as unknown as StoreApi<AppState>
-    const check = {
-      name: 'test: unit',
-      status: 'completed' as const,
-      conclusion: 'failure' as const,
-      url: null,
-      gitlabJobId: 42
-    }
-
-    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
-      details: null,
-      loading: false,
-      error: null
-    })
-
-    await store.getState().reloadOpenCheckRunDetailsTab('wt-1::check-details::gitlab-job:42')
-
-    expect(fetchPRCheckDetails).not.toHaveBeenCalled()
-    expect(loadGitLabJobLogDetailsMock).toHaveBeenCalledWith(
-      expect.objectContaining({ repoPath: '/repo', repoId: 'repo-1', check })
-    )
-    expect(store.getState().openFiles).toContainEqual(
-      expect.objectContaining({
-        id: 'wt-1::check-details::gitlab-job:42',
-        checkRunDetails: expect.objectContaining({
-          loading: false,
-          error: null,
-          details: expect.objectContaining({
-            jobs: [expect.objectContaining({ logTail: 'ERROR: Job failed: exit code 1' })]
-          })
-        })
-      })
-    )
-  })
 
   // Regression for #7732: a fork MR's job lives in the source project, so reloading
   // without the stored project ref requests the trace from the wrong project.
-  it('reloads a fork MR job tab with the stored GitLab project ref', async () => {
-    loadGitLabJobLogDetailsMock.mockReset()
-    loadGitLabJobLogDetailsMock.mockResolvedValue(null)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const store = createStore<any>()((...args: any[]) => ({
-      activeWorktreeId: 'wt-1',
-      repos: [{ id: 'repo-1', path: '/repo' }],
-      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo' }] },
-      settings: { activeRuntimeEnvironmentId: null },
-      fetchPRCheckDetails: vi.fn().mockResolvedValue(null),
-      ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
-    })) as unknown as StoreApi<AppState>
-    const check = {
-      name: 'test: unit',
-      status: 'completed' as const,
-      conclusion: 'failure' as const,
-      url: null,
-      gitlabJobId: 77
-    }
-    const projectRef = { host: 'gitlab.com', path: 'contributor/fork' }
-
-    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
-      details: null,
-      loading: false,
-      error: null,
-      gitlabProjectRef: projectRef
-    })
-
-    await store.getState().reloadOpenCheckRunDetailsTab('wt-1::check-details::gitlab-job:77')
-
-    expect(loadGitLabJobLogDetailsMock).toHaveBeenCalledWith(
-      expect.objectContaining({ check, projectRef })
-    )
-  })
-
-  it('keeps a stored GitLab project ref when a patch omits it', () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const store = createStore<any>()((...args: any[]) => ({
-      activeWorktreeId: 'wt-1',
-      ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
-    })) as unknown as StoreApi<AppState>
-    const check = {
-      name: 'test: unit',
-      status: 'completed' as const,
-      conclusion: 'failure' as const,
-      url: null,
-      gitlabJobId: 77
-    }
-    const projectRef = { host: 'gitlab.com', path: 'contributor/fork' }
-
-    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
-      details: null,
-      loading: false,
-      error: null,
-      gitlabProjectRef: projectRef
-    })
-    store.getState().patchOpenCheckRunDetails('wt-1', 'repo:99', check, {
-      details: null,
-      loading: true,
-      error: null,
-      gitlabProjectRef: null
-    })
-
-    expect(
-      store.getState().openFiles.find((file) => file.id === 'wt-1::check-details::gitlab-job:77')
-        ?.checkRunDetails?.gitlabProjectRef
-    ).toEqual(projectRef)
-  })
 
   it('patches an open check-details tab without changing the active file', () => {
     const store = createEditorTabsStore()
@@ -4733,7 +4589,6 @@ describe('createEditorSlice activateMarkdownLink', () => {
             comment: '',
             linkedIssue: null,
             linkedPR: null,
-            linkedLinearIssue: null,
             isArchived: false,
             isUnread: false,
             isPinned: false,
@@ -5109,7 +4964,6 @@ describe('createEditorSlice activateMarkdownLink', () => {
             comment: '',
             linkedIssue: null,
             linkedPR: null,
-            linkedLinearIssue: null,
             isArchived: false,
             isUnread: false,
             isPinned: false,

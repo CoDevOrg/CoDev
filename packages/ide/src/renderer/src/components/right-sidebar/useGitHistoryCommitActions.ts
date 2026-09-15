@@ -246,13 +246,9 @@ export function useGitHistoryCommitActions({
         return
       }
       const state = useAppStore.getState()
-      const connectionId = getConnectionId(activeWorktreeId)
       const agent = resolveDefaultAgentForNewTab({
         defaultTuiAgent: state.settings?.defaultTuiAgent,
-        detectedAgentIds:
-          typeof connectionId === 'string'
-            ? state.remoteDetectedAgentIds[connectionId]
-            : state.detectedAgentIds,
+        detectedAgentIds: state.detectedAgentIds,
         disabledTuiAgents: state.settings?.disabledTuiAgents
       })
       if (!agent) {

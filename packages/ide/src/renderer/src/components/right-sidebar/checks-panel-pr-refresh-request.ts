@@ -17,10 +17,6 @@ type ChecksPanelPRRefreshRequest = {
 
 type ChecksPanelReviewEvidenceProviderInput = {
   linkedGitHubPR: number | null
-  linkedGitLabMR: number | null
-  linkedBitbucketPR: number | null
-  linkedAzureDevOpsPR: number | null
-  linkedGiteaPR: number | null
   eligibilityProvider?: HostedReviewProvider | undefined
   cachedProvider?: HostedReviewProvider | undefined
 }
@@ -38,18 +34,6 @@ export function resolveChecksPanelReviewEvidenceProvider(
 ): HostedReviewProvider | undefined {
   if (input.linkedGitHubPR !== null) {
     return 'github'
-  }
-  if (input.linkedGitLabMR !== null) {
-    return 'gitlab'
-  }
-  if (input.linkedBitbucketPR !== null) {
-    return 'bitbucket'
-  }
-  if (input.linkedAzureDevOpsPR !== null) {
-    return 'azure-devops'
-  }
-  if (input.linkedGiteaPR !== null) {
-    return 'gitea'
   }
   return input.eligibilityProvider ?? input.cachedProvider
 }

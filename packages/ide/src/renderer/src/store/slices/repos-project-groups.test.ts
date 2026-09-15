@@ -7,7 +7,6 @@ import type {
   FolderWorkspace
 } from '../../../../shared/types'
 import {
-  createCompatibleRuntimeStatusResponse,
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/runtime-compatibility-test-fixture'
@@ -279,97 +278,6 @@ describe('project group store routing', () => {
       timeoutMs: 15_000
     })
     expect(folderWorkspacesCreate).not.toHaveBeenCalled()
-  })
-
-  it('blocks Jira folder creation on runtimes without durable linked context support', async () => {
-    const oldRuntimeStatus = createCompatibleRuntimeStatusResponse('runtime-old')
-    if (oldRuntimeStatus.ok) {
-      oldRuntimeStatus.result.capabilities = oldRuntimeStatus.result.capabilities?.filter(
-        (capability) => capability !== 'worktree.linked-work-item-context.v1'
-      )
-    }
-    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) =>
-      args.method === 'status.get' ? oldRuntimeStatus : runtimeEnvironmentCall(args)
-    )
-    const store = createTestStore()
-
-    await expect(
-      store.getState().createFolderWorkspace(
-        {
-          projectGroupId: projectGroup.id,
-          name: 'Jira folder',
-          linkedTask: {
-            provider: 'jira',
-            type: 'issue',
-            number: 0,
-            title: 'ORCA-123 Link Jira',
-            url: 'https://company.atlassian.net/browse/ORCA-123',
-            jiraIdentifier: 'ORCA-123'
-          }
-        },
-        { runtimeEnvironmentId: 'env-1' }
-      )
-    ).rejects.toThrow('Update the remote runtime to link Jira')
-
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    expect(folderWorkspacesCreate).not.toHaveBeenCalled()
-  })
-
-  it('creates, updates, and deletes local folder workspaces', async () => {
-    const linkedTask: FolderWorkspace['linkedTask'] = {
-      provider: 'linear',
-      type: 'issue',
-      number: 0,
-      title: 'Refund fix',
-      url: 'https://linear.app/acme/issue/ENG-123',
-      linearIdentifier: 'ENG-123'
-    }
-    const folderWorkspace: FolderWorkspace = {
-      id: 'folder-workspace-1',
-      projectGroupId: projectGroup.id,
-      name: 'Refund fix',
-      folderPath: '/workspace/platform',
-      linkedTask,
-      comment: '',
-      isArchived: false,
-      isUnread: false,
-      isPinned: false,
-      sortOrder: 1,
-      lastActivityAt: 0,
-      createdAt: 1,
-      updatedAt: 1
-    }
-    folderWorkspacesCreate.mockResolvedValue(folderWorkspace)
-    folderWorkspacesUpdate.mockResolvedValue({ ...folderWorkspace, comment: 'Ready' })
-    folderWorkspacesDelete.mockResolvedValue(true)
-    const store = createTestStore()
-
-    await expect(
-      store.getState().createFolderWorkspace({
-        projectGroupId: projectGroup.id,
-        name: 'Refund fix',
-        linkedTask
-      })
-    ).resolves.toEqual({ ...folderWorkspace, executionHostId: 'local' })
-    await expect(
-      store.getState().updateFolderWorkspace(folderWorkspace.id, { comment: 'Ready' })
-    ).resolves.toBe(true)
-    await expect(store.getState().deleteFolderWorkspace(folderWorkspace.id)).resolves.toBe(true)
-
-    expect(folderWorkspacesCreate).toHaveBeenCalledWith({
-      projectGroupId: projectGroup.id,
-      name: 'Refund fix',
-      linkedTask
-    })
-    expect(folderWorkspacesUpdate).toHaveBeenCalledWith({
-      folderWorkspaceId: folderWorkspace.id,
-      updates: { comment: 'Ready' }
-    })
-    expect(folderWorkspacesDelete).toHaveBeenCalledWith({
-      folderWorkspaceId: folderWorkspace.id
-    })
-    expect(store.getState().folderWorkspaces).toEqual([])
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
   it('caches local folder workspace path status by scope', async () => {

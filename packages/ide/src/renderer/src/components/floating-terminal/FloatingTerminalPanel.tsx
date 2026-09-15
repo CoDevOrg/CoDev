@@ -8,7 +8,6 @@ import { FileText, Globe, Minus, TerminalSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import EmulatorPane from '@/components/emulator-pane/EmulatorPane'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
-import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import TabBar from '@/components/tab-bar/TabBar'
 import { resolveGroupTabFromVisibleId } from '@/components/tab-group/tab-group-visible-id'
 import TerminalPane, { type TerminalPaneHandle } from '@/components/terminal-pane/TerminalPane'
@@ -118,13 +117,6 @@ const EditorPanel = lazy(() => import('@/components/editor/EditorPanel'))
 type FloatingTerminalPanelProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  tourInteractionSnapshot?: FloatingWorkspaceTourInteractionSnapshot | null | undefined
-}
-
-type FloatingWorkspaceTourInteractionSnapshot = {
-  wasPreviouslyInteracted?: boolean
-  persisted?: Promise<void>
-  recordFeatureInteractionForTour: boolean
 }
 
 type FloatingPanelShortcutInput = Partial<
@@ -226,8 +218,7 @@ export function clearReportedFloatingFocusCache(): void {
 
 export function FloatingTerminalPanel({
   open,
-  onOpenChange,
-  tourInteractionSnapshot
+  onOpenChange
 }: FloatingTerminalPanelProps): React.JSX.Element | null {
   const { tabs, browserTabs, groups, unifiedTabs, floatingFiles, expandedPaneByTabId } =
     useAppStore(selectFloatingTerminalPanelInputs)
@@ -490,12 +481,6 @@ export function FloatingTerminalPanel({
         : activeTab?.contentType === 'simulator'
           ? 'simulator'
           : 'editor'
-
-  useContextualTour('floating-workspace', open, 'floating_workspace_visible', {
-    recordFeatureInteraction: tourInteractionSnapshot?.recordFeatureInteractionForTour ?? false,
-    featureInteractionPersisted: tourInteractionSnapshot?.persisted,
-    wasFeaturePreviouslyInteracted: tourInteractionSnapshot?.wasPreviouslyInteracted
-  })
 
   // Why: this panel only queues its own editor tabs, so unrelated workspace
   // file updates must not invalidate the hidden panel's close callbacks.

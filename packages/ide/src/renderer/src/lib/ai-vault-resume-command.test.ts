@@ -128,73 +128,6 @@ describe('ai vault resume command runtime', () => {
     ).toBe("cd 'C:\\Users\\alice\\repo' && claude '--resume' 'session one'")
   })
 
-  it('follows the live Windows shell for non-resumable agents in the fallback path', () => {
-    // Why: agents without a TUI startup plan (e.g. cursor) queue through the
-    // shared-builder fallback, which must quote for the live shell too (#6152).
-    const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
-
-    expect(
-      buildQueuedAiVaultResumeCommand({
-        state,
-        worktreeId: 'repo-1::worktree-1',
-        session: {
-          agent: 'cursor',
-          sessionId: 'session one',
-          cwd: 'C:\\Users\\alice\\repo',
-          codexHome: null
-        }
-      })
-    ).toBe(
-      "Set-Location -LiteralPath 'C:\\Users\\alice\\repo'; cursor-agent --resume 'session one'"
-    )
-  })
-
-  it('queues a PowerShell-valid local OMP resume by absolute transcript path', () => {
-    // Regression: local rebuilds must forward session.filePath so OMP resumes by
-    // path, and queued Windows commands must match the live tab shell.
-    const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
-
-    const command = buildQueuedAiVaultResumeCommand({
-      state,
-      worktreeId: 'repo-1::worktree-1',
-      session: {
-        agent: 'omp',
-        sessionId: '019f27cd-4268-7000-96e7-62f42a55c144',
-        filePath: 'C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl',
-        cwd: 'C:\\Users\\alice\\repo',
-        codexHome: null
-      }
-    })
-
-    expect(command).toBe(
-      "Set-Location -LiteralPath 'C:\\Users\\alice\\repo'; omp --resume 'C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl'"
-    )
-    expect(command).not.toContain('019f27cd-4268-7000-96e7-62f42a55c144')
-  })
-
-  it('queues a direct local OMP resume when cmd.exe is configured', () => {
-    const state = makeState({
-      worktreePath: 'C:\\Users\\alice\\repo',
-      terminalWindowsShell: 'cmd.exe'
-    })
-
-    expect(
-      buildQueuedAiVaultResumeCommand({
-        state,
-        worktreeId: 'repo-1::worktree-1',
-        session: {
-          agent: 'omp',
-          sessionId: '019f27cd-4268-7000-96e7-62f42a55c144',
-          filePath: 'C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl',
-          cwd: 'C:\\Users\\alice\\repo',
-          codexHome: null
-        }
-      })
-    ).toBe(
-      'cd /d "C:\\Users\\alice\\repo" && omp --resume "C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl"'
-    )
-  })
-
   it('copies syntax that matches the configured cmd shell', () => {
     const state = makeState({
       worktreePath: 'C:\\Users\\alice\\repo',
@@ -471,29 +404,6 @@ describe('ai vault resume command runtime', () => {
         }
       })
     ).toBe("cd '/home/alice/repo' && CODEX_HOME='/home/alice/.codex' codex 'resume' 'session one'")
-  })
-
-  it('converts WSL UNC OMP transcript paths before building Linux resume commands', () => {
-    const state = makeState({
-      worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo'
-    })
-
-    expect(
-      buildQueuedAiVaultResumeCommand({
-        state,
-        worktreeId: 'repo-1::worktree-1',
-        session: {
-          agent: 'omp',
-          sessionId: '019f27cd-4268-7000-96e7-62f42a55c144',
-          filePath:
-            '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl',
-          cwd: '/home/alice/repo',
-          codexHome: null
-        }
-      })
-    ).toBe(
-      "cd '/home/alice/repo' && omp --resume '/home/alice/.omp/agent/sessions/repo/sess.jsonl'"
-    )
   })
 
   it('deletes inherited Codex homes when resuming a real-home session', () => {

@@ -14,10 +14,10 @@ export function canUseLocalAiVaultSessionPathActions(
 }
 
 export function isSyntheticAiVaultSessionPath(filePath: string): boolean {
-  // Why: newer OpenCode sessions use a synthetic `<database>#<sessionId>`
-  // scanner identity backed by SQLite — not a real filesystem path. A '#'
-  // session marker never appears in a genuine local transcript path, so it is
-  // a reliable v1 signal that there is no single file to open in Orca.
+  // Why: a database-backed scanner may report a synthetic `<database>#<sessionId>`
+  // identity rather than a real filesystem path. A '#' session marker never
+  // appears in a genuine local transcript path, so it is a reliable v1 signal
+  // that there is no single file to open in Orca.
   return filePath.includes('#')
 }
 

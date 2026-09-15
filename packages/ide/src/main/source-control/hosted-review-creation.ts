@@ -16,25 +16,14 @@ import {
   supportsHostedReviewCreation,
   type HostedReviewCreationProvider
 } from '../../shared/hosted-review-creation-providers'
-import { isAzureDevOpsReviewCreationAuthenticated } from '../azure-devops/pull-request-creation'
-import { isGiteaReviewCreationAuthenticated } from '../gitea/pull-request-creation'
 import { getEnterpriseGitHubRepoSlug } from '../github/github-enterprise-repository'
 import { acquire, ghExecFileAsync, gitExecFileAsync, release } from '../github/gh-utils'
-import { isNoUpstreamError, normalizeGitErrorMessage } from '../../shared/git-remote-error'
 import type { GitUpstreamStatus } from '../../shared/types'
 import { gitOptionalLocksDisabledEnv } from '../git/runner'
 import { parsePorcelainV1Records, type PorcelainV1Record } from '../git/porcelain-v1-records'
 import { findExistingWorktreeSymlinkPaths } from '../git/worktree-symlink-detection'
 import { resolveDefaultBaseRefViaExec } from '../git/repo'
 import { getUpstreamStatus } from '../git/upstream'
-import { getProjectSlug } from '../gitlab/client'
-import {
-  acquire as acquireGlab,
-  glabExecFileAsync,
-  glabRepoExecOptions,
-  release as releaseGlab
-} from '../gitlab/gl-utils'
-import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import { detectHostedReviewProvider, getForgeProviderForRepository } from './forge-provider'
 import { invalidateHostedReviewBranchCache } from './hosted-review-branch-cache'
 import { getHostedReviewForBranch } from './hosted-review'
@@ -87,44 +76,12 @@ async function isGitHubAuthenticated(
   }
 }
 
-async function isGitLabAuthenticated(
-  repoPath: string,
-  connectionId?: string | null,
-  options: HostedReviewExecutionOptions = {}
-): Promise<boolean> {
-  const projectRef = await getProjectSlug(repoPath, connectionId, options)
-  if (!projectRef) {
-    return false
-  }
-  await acquireGlab()
-  try {
-    await glabExecFileAsync(['auth', 'status', '--hostname', projectRef.host], {
-      ...glabRepoExecOptions(repoPath, connectionId),
-      ...(connectionId ? {} : getHostedReviewLocalGitOptions(options))
-    })
-    return true
-  } catch {
-    return false
-  } finally {
-    releaseGlab()
-  }
-}
-
 async function runGitForHostedReview(
   repoPath: string,
   args: string[],
-  connectionId?: string | null,
+  _connectionId?: string | null,
   options: HostedReviewExecutionOptions = {}
 ): Promise<{ stdout: string; stderr?: string }> {
-  if (connectionId) {
-    const provider = getSshGitProvider(connectionId)
-    if (!provider) {
-      throw new Error(
-        'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
-      )
-    }
-    return provider.exec(args, repoPath)
-  }
   return gitExecFileAsync(args, { cwd: repoPath, ...getHostedReviewLocalGitOptions(options) })
 }
 
@@ -188,21 +145,9 @@ async function getCurrentBranch(
 
 async function hasUncommittedChanges(
   repoPath: string,
-  connectionId?: string | null,
+  _connectionId?: string | null,
   options: HostedReviewExecutionOptions = {}
 ): Promise<boolean> {
-  if (connectionId) {
-    const provider = getSshGitProvider(connectionId)
-    if (!provider) {
-      throw new Error(
-        'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
-      )
-    }
-    // Why: the relay restricts generic git.exec, so use the structured status RPC for SSH dirty checks.
-    // No shared-link exclusion here: remote worktree creation skips the symlink
-    // and shared-directory passes entirely, so a remote worktree never has one.
-    return (await provider.getStatus(repoPath)).entries.length > 0
-  }
   // Why: `-z` keeps paths raw so the shared-link comparison below can't be
   // defeated by Git quoting a path with spaces or non-ASCII bytes.
   const { stdout } = await gitExecFileAsync(['status', '--porcelain', '-z'], {
@@ -240,57 +185,18 @@ async function anyRecordIsUserDirt(
 
 async function getHostedReviewUpstreamStatus(
   repoPath: string,
-  connectionId?: string | null,
+  _connectionId?: string | null,
   options: HostedReviewExecutionOptions = {}
 ): Promise<GitUpstreamStatus> {
-  if (!connectionId) {
-    return getUpstreamStatus(repoPath, undefined, getHostedReviewLocalGitOptions(options))
-  }
-  const provider = getSshGitProvider(connectionId)
-  if (!provider) {
-    throw new Error('Remote connection dropped. Click Reconnect on the SSH target before retrying.')
-  }
-  try {
-    // Why: the relay blocks generic git.exec, so use its dedicated upstream RPC for SSH divergence.
-    return await provider.getUpstreamStatus(repoPath)
-  } catch (error) {
-    if (isNoUpstreamError(error)) {
-      return { hasUpstream: false, ahead: 0, behind: 0 }
-    }
-    throw new Error(normalizeGitErrorMessage(error, 'upstream'))
-  }
+  return getUpstreamStatus(repoPath, undefined, getHostedReviewLocalGitOptions(options))
 }
 
-function reviewCopy(provider: HostedReviewProvider): {
-  shortLabel: 'PR' | 'MR'
-  reviewLabel: 'pull request' | 'merge request'
+function reviewCopy(_provider: HostedReviewProvider): {
+  shortLabel: 'PR'
+  reviewLabel: 'pull request'
   providerName: string
   authInstruction: string
 } {
-  if (provider === 'gitlab') {
-    return {
-      shortLabel: 'MR',
-      reviewLabel: 'merge request',
-      providerName: 'GitLab',
-      authInstruction: 'Run glab auth login'
-    }
-  }
-  if (provider === 'azure-devops') {
-    return {
-      shortLabel: 'PR',
-      reviewLabel: 'pull request',
-      providerName: 'Azure DevOps',
-      authInstruction: 'Set ORCA_AZURE_DEVOPS_TOKEN'
-    }
-  }
-  if (provider === 'gitea') {
-    return {
-      shortLabel: 'PR',
-      reviewLabel: 'pull request',
-      providerName: 'Gitea',
-      authInstruction: 'Set ORCA_GITEA_TOKEN'
-    }
-  }
   return {
     shortLabel: 'PR',
     reviewLabel: 'pull request',
@@ -300,20 +206,11 @@ function reviewCopy(provider: HostedReviewProvider): {
 }
 
 async function isProviderAuthenticated(
-  provider: HostedReviewCreationProvider,
+  _provider: HostedReviewCreationProvider,
   repoPath: string,
   connectionId?: string | null,
   options: HostedReviewExecutionOptions = {}
 ): Promise<boolean> {
-  if (provider === 'gitlab') {
-    return isGitLabAuthenticated(repoPath, connectionId, options)
-  }
-  if (provider === 'azure-devops') {
-    return isAzureDevOpsReviewCreationAuthenticated()
-  }
-  if (provider === 'gitea') {
-    return isGiteaReviewCreationAuthenticated()
-  }
   return isGitHubAuthenticated(repoPath, connectionId, options)
 }
 
@@ -499,10 +396,6 @@ export async function getHostedReviewCreationEligibility(
       branch,
       linkedGitHubPR: args.linkedGitHubPR ?? null,
       fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
-      linkedGitLabMR: args.linkedGitLabMR ?? null,
-      linkedBitbucketPR: args.linkedBitbucketPR ?? null,
-      linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
-      linkedGiteaPR: args.linkedGiteaPR ?? null,
       connectionId: args.connectionId ?? null,
       // Why: eligibility is only ever asked for the worktree the user is acting
       // on, so it earns the fast tier. Without it a review opened outside Orca

@@ -41,10 +41,6 @@ export function AgentMapProjectContextMenu({
     const owners = repos.filter((repo) => repo.id === request.projectId)
     return owners.length === 1 ? { kind: 'repo' as const, repo: owners[0] } : null
   }, [projectGroups, repos, request.projectId])
-  const repo = target?.kind === 'repo' ? target.repo : null
-  const sshStatus = useAppStore((state) =>
-    repo?.connectionId ? (state.sshConnectionStates.get(repo.connectionId)?.status ?? null) : null
-  )
   const openModal = useAppStore((state) => state.openModal)
 
   useEffect(() => {
@@ -69,7 +65,7 @@ export function AgentMapProjectContextMenu({
   const label = target.kind === 'repo' ? target.repo.displayName : target.group.name
   const createState =
     target.kind === 'repo'
-      ? getRepoHeaderCreateState({ repo: target.repo, label, sshStatus })
+      ? getRepoHeaderCreateState({ repo: target.repo, label })
       : {
           disabled: false,
           tooltip: translate(

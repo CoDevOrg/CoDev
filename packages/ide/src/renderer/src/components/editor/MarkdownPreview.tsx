@@ -481,9 +481,6 @@ function findMarkdownPreviewTargetWorktree(
     if (sourceOwner.kind === 'local') {
       return connectionId === null
     }
-    if (sourceOwner.kind === 'ssh') {
-      return connectionId === sourceOwner.connectionId
-    }
     return false
   })
 }
@@ -592,9 +589,7 @@ export default function MarkdownPreview({
         ? { kind: 'runtime', runtimeEnvironmentId: runtimeOwnerId }
         : sourceConnectionId === undefined
           ? { kind: 'unknown' }
-          : sourceConnectionId === null
-            ? { kind: 'local' }
-            : { kind: 'ssh', connectionId: sourceConnectionId },
+          : { kind: 'local' },
     [runtimeOwnerId, sourceConnectionId]
   )
   const worktreeRoot =

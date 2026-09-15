@@ -4,9 +4,6 @@ import { defineConfig } from 'vitest/config'
 const windowsTestWorkerOptions = process.platform === 'win32' ? { maxWorkers: 4 } : {}
 
 export default defineConfig({
-  define: {
-    ORCA_FEATURE_WALL_ENABLED: 'true'
-  },
   resolve: {
     alias: {
       '@renderer': resolve('src/renderer/src'),
@@ -23,9 +20,7 @@ export default defineConfig({
       'src/**/*.test.ts',
       'src/**/*.test.tsx',
       'config/scripts/**/*.test.ts',
-      'config/scripts/**/*.test.mjs',
-      'tests/tools/**/*.test.mjs',
-      'tests/e2e/**/*.unit.test.ts'
+      'config/scripts/**/*.test.mjs'
     ],
     // Why: the full suite runs heavy TS transforms plus real git/http fixtures;
     // the Vitest 5s defaults are too tight for the slowest integration cases.

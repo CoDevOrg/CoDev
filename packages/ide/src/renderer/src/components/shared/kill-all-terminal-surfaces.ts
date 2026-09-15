@@ -252,7 +252,7 @@ export async function runKillAllTerminalSurfaces(
         break
       }
       remainingTerminalIds.delete(targetId)
-      for (const ptyId of retirementPlan.localOrSshPtyIds) {
+      for (const ptyId of retirementPlan.localPtyIds) {
         if (daemonKilledSessionIds.has(ptyId)) {
           continue
         }

@@ -5,36 +5,28 @@ import { useTranslation } from 'react-i18next'
 // Cmd+J and Settings visibility cannot drift. Keep it free of Settings pane UI
 // imports; the boundary is enforced by a focused architecture test.
 import {
-  BarChart3,
   Bell,
   Blocks,
   Bot,
   Bug,
-  Cable,
   FlaskConical,
   GitBranch,
   Globe,
   Keyboard,
-  ListChecks,
   Lock,
-  Mic,
   MousePointerClick,
   Network,
   Palette,
   PanelsTopLeft,
-  Play,
   Server,
   ShieldCheck,
   SlidersHorizontal,
-  Smartphone,
   TabletSmartphone,
   SquareTerminal,
   TextCursorInput,
   UserCog,
   Wrench
 } from 'lucide-react'
-import { OrcaLogoSettingsIcon } from '@/components/settings/orca-logo-settings-icon'
-import { LinearIcon } from '@/components/icons/LinearIcon'
 import type { Repo } from '../../../shared/types'
 import { getRepoKindLabel } from '../../../shared/repo-kind'
 import { useAppStore } from '@/store'
@@ -47,30 +39,23 @@ import { getIntegrationsPaneSearchEntries } from '@/components/settings/integrat
 import { getGitPaneSearchEntries } from '@/components/settings/git-search'
 import { getGitProviderApiBudgetSearchEntries } from '@/components/settings/git-provider-api-budget-search'
 import { getCommitMessageAiPaneSearchEntries } from '@/components/settings/commit-message-ai-search'
-import { getTasksPaneSearchEntries } from '@/components/settings/tasks-search'
 import { getFloatingWorkspaceSearchEntries } from '@/components/settings/floating-workspace-search'
 import { getAppearancePaneSearchEntries } from '@/components/settings/appearance-search'
 import { getInputPaneSearchEntries } from '@/components/settings/input-search'
 import { getTerminalPaneSearchEntries } from '@/components/settings/terminal-search'
-import { getQuickCommandsPaneSearchEntries } from '@/components/settings/quick-commands-search'
 import { getBrowserPaneCombinedSearchEntries } from '@/components/settings/browser-pane-search'
 import { getNotificationsPaneSearchEntries } from '@/components/settings/notifications-search'
 import { getOrchestrationPaneSearchEntries } from '@/components/settings/orchestration-search'
-import { getLinearAgentSkillPaneSearchEntries } from '@/components/settings/linear-agent-skill-search'
 import {
   getRuntimeEnvironmentsSearchEntry,
   getWebRuntimeEnvironmentsSearchEntry
 } from '@/components/settings/runtime-environments-search'
-import { getSshPaneSearchEntries } from '@/components/settings/ssh-search'
-import { getMobileSettingsPaneSearchEntries } from '@/components/settings/mobile-settings-search'
 import { getMobileEmulatorSearchEntries } from '@/components/settings/mobile-emulator-search'
 import { getComputerUsePaneSearchEntries } from '@/components/settings/computer-use-search'
-import { getVoicePaneSearchEntries } from '@/components/settings/voice-pane-search'
 import { getDeveloperPermissionsPaneSearchEntries } from '@/components/settings/developer-permissions-search'
 import { getPrivacyPaneSearchEntries } from '@/components/settings/privacy-search'
 import { getAdvancedPaneSearchEntries } from '@/components/settings/advanced-search'
 import { getShortcutsPaneSearchEntries } from '@/components/settings/shortcuts-search'
-import { getStatsPaneSearchEntries } from '@/components/stats/stats-search'
 import { getExperimentalPaneSearchEntries } from '@/components/settings/experimental-search'
 import { getPluginsPaneSearchEntries } from '@/components/settings/plugins-search'
 import { getRepositoryPaneSearchEntries } from '@/components/settings/repository-search'
@@ -82,7 +67,6 @@ import {
 } from '@/lib/windows-terminal-capabilities'
 import { useWindowsTerminalCapabilityOwnerKey } from './useWindowsTerminalCapabilityOwnerKey'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
-import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
 import { translate } from '@/i18n/i18n'
 
 export { isWebClientLocation } from '@/lib/web-client-location'
@@ -119,7 +103,6 @@ export function buildSettingsNavigationMetadata({
   isWindowsTerminalHost = isWindows,
   isWebClient,
   isDev = import.meta.env.DEV,
-  isLinearConnected = false,
   repos
 }: {
   isMac: boolean
@@ -128,7 +111,6 @@ export function buildSettingsNavigationMetadata({
   isWindowsTerminalHost?: boolean
   isWebClient: boolean
   isDev?: boolean
-  isLinearConnected?: boolean
   repos: readonly Repo[]
 }): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
@@ -188,23 +170,6 @@ export function buildSettingsNavigationMetadata({
       searchEntries: getOrchestrationPaneSearchEntries(),
       group: 'capabilities'
     },
-    // Why: only surfaced once Linear is connected — a capability that needs a
-    // linked provider before the agent skill has anything to act on.
-    ...(isLinearConnected
-      ? [
-          {
-            id: 'linear',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.linearTitle', 'Linear'),
-            description: translate(
-              'auto.hooks.useSettingsNavigationMetadata.linearDescription',
-              'How Linear works in Orca, setup checklist, agent skill, and example prompts.'
-            ),
-            icon: LinearIcon,
-            searchEntries: getLinearAgentSkillPaneSearchEntries(),
-            group: 'capabilities'
-          }
-        ]
-      : []),
     ...(showDesktopOnlySettings
       ? [
           {
@@ -217,53 +182,9 @@ export function buildSettingsNavigationMetadata({
             icon: MousePointerClick,
             searchEntries: getComputerUsePaneSearchEntries(),
             group: 'capabilities'
-          },
-          {
-            id: 'voice',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.6a50cdcd7c', 'Voice'),
-            description: translate(
-              'auto.hooks.useSettingsNavigationMetadata.8ac3de82f5',
-              'Local speech-to-text dictation with on-device models.'
-            ),
-            icon: Mic,
-            searchEntries: getVoicePaneSearchEntries(),
-            group: 'capabilities'
           }
         ]
       : []),
-    {
-      id: 'setup-guide',
-      title: translate(
-        'auto.hooks.useSettingsNavigationMetadata.ded9e9032f',
-        'Onboarding checklist'
-      ),
-      description: translate(
-        'auto.hooks.useSettingsNavigationMetadata.5f32ac08f3',
-        'Finish the onboarding checklist for core Orca workflows.'
-      ),
-      icon: OrcaLogoSettingsIcon,
-      searchEntries: [
-        {
-          title: translate(
-            'auto.hooks.useSettingsNavigationMetadata.ded9e9032f',
-            'Onboarding checklist'
-          ),
-          description: translate(
-            'auto.hooks.useSettingsNavigationMetadata.17005c73d4',
-            'Open the onboarding checklist for setup and milestone steps.'
-          ),
-          keywords: [
-            translate('auto.hooks.useSettingsNavigationMetadata.ea0b1bc7b8', 'setup guide'),
-            translate(
-              'auto.hooks.useSettingsNavigationMetadata.0505d0df29',
-              'get started with Orca'
-            ),
-            translate('auto.hooks.useSettingsNavigationMetadata.724c440e72', 'getting started')
-          ]
-        }
-      ],
-      group: 'setup'
-    },
     {
       id: 'general',
       title: translate('auto.hooks.useSettingsNavigationMetadata.13241992bd', 'General'),
@@ -280,27 +201,12 @@ export function buildSettingsNavigationMetadata({
       title: translate('auto.hooks.useSettingsNavigationMetadata.2b043783ef', 'Integrations'),
       description: translate(
         'auto.hooks.useSettingsNavigationMetadata.33a5e1d597',
-        'Connect GitHub, GitLab, Linear, and source-hosting services.'
+        'Connect GitHub and source-hosting services.'
       ),
       icon: Blocks,
       searchEntries: getIntegrationsPaneSearchEntries(),
       group: 'setup'
     },
-    ...(showDesktopOnlySettings
-      ? [
-          {
-            id: 'mobile',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.1cd25673df', 'Mobile'),
-            description: translate(
-              'auto.hooks.useSettingsNavigationMetadata.95a1886d94',
-              'Control terminals and agents from your phone.'
-            ),
-            icon: Smartphone,
-            searchEntries: getMobileSettingsPaneSearchEntries(),
-            group: 'setup'
-          }
-        ]
-      : []),
     {
       id: 'git',
       title: translate(
@@ -322,17 +228,6 @@ export function buildSettingsNavigationMetadata({
       group: 'workflows'
     },
     {
-      id: 'tasks',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.85f4fd7710', 'Task Sources'),
-      description: translate(
-        'auto.hooks.useSettingsNavigationMetadata.tasksDescription',
-        'Connect providers, install the Linear skill, and choose what appears in Tasks.'
-      ),
-      icon: ListChecks,
-      searchEntries: getTasksPaneSearchEntries(),
-      group: 'workflows'
-    },
-    {
       id: 'terminal',
       title: translate('auto.hooks.useSettingsNavigationMetadata.a9fb10afca', 'Terminal'),
       description: translate(
@@ -341,17 +236,6 @@ export function buildSettingsNavigationMetadata({
       ),
       icon: SquareTerminal,
       searchEntries: terminalPaneSearchEntries,
-      group: 'workflows'
-    },
-    {
-      id: 'quick-commands',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.3fc3db144f', 'Quick Commands'),
-      description: translate(
-        'auto.hooks.useSettingsNavigationMetadata.42ae40842f',
-        'Saved terminal commands, scoped globally or per project.'
-      ),
-      icon: Play,
-      searchEntries: getQuickCommandsPaneSearchEntries(),
       group: 'workflows'
     },
     ...(showDesktopOnlySettings
@@ -462,32 +346,6 @@ export function buildSettingsNavigationMetadata({
       searchEntries: getShortcutsPaneSearchEntries(),
       group: 'interface'
     },
-    {
-      id: 'stats',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.d72a58b5b9', 'Stats & Usage'),
-      description: translate(
-        'auto.hooks.useSettingsNavigationMetadata.b351014180',
-        'Orca stats plus Claude, Codex, OpenCode token analytics and Grok subscription usage.'
-      ),
-      icon: BarChart3,
-      searchEntries: getStatsPaneSearchEntries(),
-      group: 'interface'
-    },
-    ...(showDesktopOnlySettings
-      ? [
-          {
-            id: 'ssh',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.94a5afe910', 'SSH Hosts'),
-            description: translate(
-              'auto.hooks.useSettingsNavigationMetadata.31e57d1c70',
-              'Use existing machines over SSH for files, terminals, Git, and workspaces.'
-            ),
-            icon: Cable,
-            searchEntries: getSshPaneSearchEntries(),
-            group: 'remote'
-          }
-        ]
-      : []),
     {
       id: 'servers',
       title: translate(
@@ -634,7 +492,6 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   const isMac = isMacUserAgent()
   const isWindows = isWindowsUserAgent()
   const isWebClient = isWebClientLocation()
-  const isLinearConnected = useLinearProviderConnected()
   const windowsTerminalCapabilityOwnerKey = useWindowsTerminalCapabilityOwnerKey(
     settings?.activeRuntimeEnvironmentId
   )
@@ -674,7 +531,6 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
         isWindowsTerminalHost,
         isWebClient,
         isDev: import.meta.env.DEV,
-        isLinearConnected,
         repos
       }),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- activeLocale is read implicitly by the translate() calls inside buildSettingsNavigationMetadata; without it the memo keeps the previous language's sections.
@@ -684,7 +540,6 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
       isLocalWindowsHost,
       isWindowsTerminalHost,
       isWebClient,
-      isLinearConnected,
       repos,
       activeLocale
     ]

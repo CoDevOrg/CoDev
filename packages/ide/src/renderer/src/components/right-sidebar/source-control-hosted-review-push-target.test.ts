@@ -325,7 +325,6 @@ describe('resolveHostedReviewActionUpstreamStatus with a same-repo upstream', ()
     const hasResolvable = hasResolvableHostedReviewPushTargetLink({
       linkedGitHubPR: null,
       fallbackGitHubPR: 8333,
-      linkedGitLabMR: null
     })
     expect(hasResolvable).toBe(true)
     const canUseHostedReviewPushTarget = hasUsableHostedReviewPushTarget({

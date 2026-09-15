@@ -1,11 +1,6 @@
 import type { Store } from '../persistence'
 import { resolveGitStatusUpstreamRef } from '../git/status-upstream-ref'
 import { gitExecFileAsync } from '../git/runner'
-import {
-  getSshGitProvider,
-  getSshGitProviderGeneration,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
-} from '../providers/ssh-git-dispatch'
 import { resolveRegisteredWorktreePath } from './filesystem-auth'
 import {
   getLocalGitOptionsForRepo,
@@ -29,34 +24,13 @@ export function applyGitStatusUpstreamRefWatchRequest(
   store: Store,
   args: GitStatusUpstreamRefWatchRequest
 ): Promise<void> {
-  const providerGeneration = args.connectionId
-    ? getSshGitProviderGeneration(args.connectionId)
-    : undefined
   return setWorktreeGitStatusRefWatch(
-    { ...args, ...(providerGeneration !== undefined ? { providerGeneration } : {}) },
+    { ...args },
     async (bindingSignal) => {
       if (!args.branch || !args.upstreamName) {
         return undefined
       }
       const signal = boundedSignal(bindingSignal)
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return resolveGitStatusUpstreamRef(
-          (gitArgs, cwd, requestSignal) =>
-            provider.exec(gitArgs, cwd, {
-              signal: requestSignal,
-              timeoutMs: UPSTREAM_REF_RESOLUTION_TIMEOUT_MS
-            }),
-          args.worktreePath,
-          args.branch,
-          args.upstreamName,
-          signal
-        )
-      }
-
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const repo = getLocalRepoForRegisteredWorktree(store, args.worktreePath, worktreePath)
       const gitOptions = getLocalGitOptionsForRepo(store, repo)

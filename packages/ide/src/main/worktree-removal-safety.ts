@@ -15,8 +15,7 @@ type PathOps = typeof posix
 const ORCA_CREATION_SOURCES = new Set<NonNullable<WorktreeMeta['orcaCreationSource']>>([
   'desktop',
   'runtime',
-  'cli',
-  'ssh'
+  'cli'
 ])
 const ORCA_OWNED_PROVENANCE_META_KEYS = [
   'orcaCreatedAt',

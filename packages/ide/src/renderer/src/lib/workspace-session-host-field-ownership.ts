@@ -18,8 +18,6 @@ export const WORKSPACE_SESSION_FIELD_OWNERSHIP = {
   activeWorkspaceExecutionHostId: 'global',
   activeTabId: 'global',
   browserUrlHistory: 'global',
-  // Why: SSH remains local-owned, so its connection identifiers stay in the local slice.
-  activeConnectionIdsAtShutdown: 'global',
   tabsByWorktree: 'worktreeKeyed',
   openFilesByWorktree: 'worktreeKeyed',
   activeFileIdByWorktree: 'worktreeKeyed',

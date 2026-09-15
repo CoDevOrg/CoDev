@@ -83,9 +83,6 @@ export const getTerminalClipboardSearchEntries = createLocalizedCatalog(() => [
         'zellij',
         { englishOnly: true }
       ),
-      ...translateSearchKeyword('auto.components.settings.terminal.clipboard.search.grok', 'grok', {
-        englishOnly: true
-      }),
       ...translateSearchKeyword(
         'auto.components.settings.terminal.clipboard.search.5ffcd13c90',
         'tmux'

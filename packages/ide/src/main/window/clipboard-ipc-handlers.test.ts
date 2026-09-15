@@ -26,7 +26,6 @@ const {
   clipboardWriteBufferMock,
   nativeImageCreateFromBufferMock,
   randomUUIDMock,
-  getSshFilesystemProviderMock,
   callRuntimeEnvironmentMock
 } = vi.hoisted(() => ({
   removeHandlerMock: vi.fn(),
@@ -59,7 +58,6 @@ const {
   clipboardWriteBufferMock: vi.fn(),
   nativeImageCreateFromBufferMock: vi.fn(),
   randomUUIDMock: vi.fn(() => '00000000-0000-4000-8000-000000000000'),
-  getSshFilesystemProviderMock: vi.fn(),
   callRuntimeEnvironmentMock: vi.fn()
 }))
 
@@ -111,19 +109,6 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../providers/ssh-filesystem-dispatch', () => ({
-  getSshFilesystemProvider: getSshFilesystemProviderMock,
-  requireSshFilesystemProvider: (connectionId: string) => {
-    const provider = getSshFilesystemProviderMock(connectionId)
-    if (!provider) {
-      throw new Error(
-        'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
-      )
-    }
-    return provider
-  }
-}))
-
 vi.mock('../ipc/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: callRuntimeEnvironmentMock
 }))
@@ -133,7 +118,6 @@ import {
   registerClipboardHandlers,
   setTrustedClipboardRendererWebContentsId
 } from './clipboard-ipc-handlers'
-import { cleanupExpiredRemoteClipboardFiles } from './clipboard-remote-file-copy'
 
 function getRegisteredHandlers(): Map<string, (...args: unknown[]) => unknown> {
   const handlers = new Map<string, (...args: unknown[]) => unknown>()
@@ -212,7 +196,6 @@ describe('registerClipboardHandlers', () => {
     nativeImageCreateFromBufferMock.mockReset()
     randomUUIDMock.mockReset()
     randomUUIDMock.mockReturnValue('00000000-0000-4000-8000-000000000000')
-    getSshFilesystemProviderMock.mockReset()
     callRuntimeEnvironmentMock.mockReset()
     setTrustedClipboardRendererWebContentsId(null)
   })
@@ -284,7 +267,6 @@ describe('registerClipboardHandlers', () => {
     expect(nativeImageCreateFromBufferMock).not.toHaveBeenCalled()
     expect(clipboardWriteImageMock).not.toHaveBeenCalled()
     expect(clipboardWriteBufferMock).not.toHaveBeenCalled()
-    expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
   })
 
   it('writes local files through the trusted clipboard IPC handler', async () => {
@@ -305,111 +287,6 @@ describe('registerClipboardHandlers', () => {
     } else {
       expect(spawnMock).toHaveBeenCalled()
     }
-  })
-
-  it('sweeps expired remote clipboard staging directories', async () => {
-    const nowMs = 1760000000000
-    fsReaddirMock.mockResolvedValue([
-      dirent('orca-clipboard-file-expired'),
-      dirent('orca-clipboard-file-fresh'),
-      dirent('orca-clipboard-file-plain-file', false),
-      dirent('unrelated-temp')
-    ])
-    fsStatMock.mockImplementation(async (targetPath: string) => {
-      if (targetPath.endsWith('expired')) {
-        return { mtimeMs: nowMs - 60 * 60 * 1000 - 1 }
-      }
-      if (targetPath.endsWith('fresh')) {
-        return { mtimeMs: nowMs - 1000 }
-      }
-      throw new Error(`unexpected stat: ${targetPath}`)
-    })
-
-    await cleanupExpiredRemoteClipboardFiles(nowMs)
-
-    expect(fsRmMock).toHaveBeenCalledTimes(1)
-    expect(fsRmMock).toHaveBeenCalledWith(join('/tmp', 'orca-clipboard-file-expired'), {
-      recursive: true,
-      force: true
-    })
-  })
-
-  it('materializes remote files before writing them to the OS clipboard', async () => {
-    const provider = {
-      stat: vi.fn().mockResolvedValue({ size: 12, type: 'file', mtime: 123 }),
-      downloadFile: vi.fn().mockResolvedValue(undefined)
-    }
-    getSshFilesystemProviderMock.mockReturnValue(provider)
-    registerClipboardHandlers({} as never)
-
-    const handlers = getRegisteredHandlers()
-    const tempDir = join(
-      '/tmp',
-      'orca-clipboard-file-1760000000000-00000000-0000-4000-8000-000000000000'
-    )
-    const tempPath = join(tempDir, 'report.pdf')
-
-    await expect(
-      handlers.get('clipboard:writeFile')?.(makeClipboardEvent(), {
-        filePath: '/remote/report.pdf',
-        connectionId: 'ssh-1'
-      })
-    ).resolves.toEqual({ ok: true })
-
-    expect(provider.stat).toHaveBeenCalledWith('/remote/report.pdf')
-    expect(fsMkdirMock).toHaveBeenCalledWith(tempDir, { mode: 0o700 })
-    expect(provider.downloadFile).toHaveBeenCalledWith('/remote/report.pdf', tempPath)
-    expect(fsStatMock).toHaveBeenCalledWith(tempPath)
-    expect(resolveAuthorizedPathMock).not.toHaveBeenCalled()
-    expect(fsRmMock).not.toHaveBeenCalled()
-  })
-
-  it('does not materialize remote directories for OS clipboard copy', async () => {
-    const provider = {
-      stat: vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 123 }),
-      downloadFile: vi.fn()
-    }
-    getSshFilesystemProviderMock.mockReturnValue(provider)
-    registerClipboardHandlers({} as never)
-
-    const handlers = getRegisteredHandlers()
-    await expect(
-      handlers.get('clipboard:writeFile')?.(makeClipboardEvent(), {
-        filePath: '/remote/src',
-        connectionId: 'ssh-1'
-      })
-    ).resolves.toEqual({ ok: false, reason: 'is-directory' })
-
-    expect(provider.downloadFile).not.toHaveBeenCalled()
-    expect(fsMkdirMock).not.toHaveBeenCalled()
-    expect(clipboardWriteBufferMock).not.toHaveBeenCalled()
-  })
-
-  it('cleans up remote clipboard temp files when transfer fails', async () => {
-    const provider = {
-      stat: vi.fn().mockResolvedValue({ size: 12, type: 'file', mtime: 123 }),
-      downloadFile: vi.fn().mockRejectedValue(new Error('transfer failed'))
-    }
-    getSshFilesystemProviderMock.mockReturnValue(provider)
-    registerClipboardHandlers({} as never)
-
-    const handlers = getRegisteredHandlers()
-    const tempDir = join(
-      '/tmp',
-      'orca-clipboard-file-1760000000000-00000000-0000-4000-8000-000000000000'
-    )
-    const tempPath = join(tempDir, 'report.pdf')
-
-    await expect(
-      handlers.get('clipboard:writeFile')?.(makeClipboardEvent(), {
-        filePath: '/remote/report.pdf',
-        connectionId: 'ssh-1'
-      })
-    ).rejects.toThrow('transfer failed')
-
-    expect(provider.downloadFile).toHaveBeenCalledWith('/remote/report.pdf', tempPath)
-    expect(fsRmMock).toHaveBeenCalledWith(tempDir, { recursive: true, force: true })
-    expect(clipboardWriteBufferMock).not.toHaveBeenCalled()
   })
 
   it('rejects unauthorized local files before touching the OS clipboard', async () => {
@@ -571,7 +448,6 @@ describe('registerClipboardHandlers', () => {
     expect(fsWriteFileMock).toHaveBeenCalledWith(expectedPath, png)
     expect(clipboardReadBufferMock).not.toHaveBeenCalled()
     expect(fsOpenMock).not.toHaveBeenCalled()
-    expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
   })
 
   it('does not inspect FileNameW when an empty image clipboard is read outside Windows', async () => {
@@ -726,7 +602,6 @@ describe('registerClipboardHandlers', () => {
       30_000
     )
     expect(fsWriteFileMock).not.toHaveBeenCalled()
-    expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
   })
 
   it('aborts remote runtime clipboard image uploads when a chunk fails', async () => {
@@ -771,63 +646,6 @@ describe('registerClipboardHandlers', () => {
     expect(fsWriteFileMock).not.toHaveBeenCalled()
   })
 
-  it('uploads clipboard images to the SSH host when a connection is provided', async () => {
-    const png = Buffer.from([0, 1, 2, 3])
-    const writeFileBase64 = vi.fn().mockResolvedValue(undefined)
-    const getTempDir = vi.fn().mockResolvedValue('/var/tmp')
-    clipboardReadImageMock.mockReturnValue({
-      getSize: () => ({ height: 1, width: 1 }),
-      isEmpty: () => false,
-      toPNG: () => png
-    })
-    getSshFilesystemProviderMock.mockReturnValue({ getTempDir, writeFileBase64 })
-
-    registerClipboardHandlers({} as never)
-
-    const handlers = getRegisteredHandlers()
-    await expect(
-      handlers.get('clipboard:saveImageAsTempFile')?.(makeClipboardEvent(), {
-        connectionId: 'ssh-1'
-      })
-    ).resolves.toBe('/var/tmp/orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png')
-    expect(getSshFilesystemProviderMock).toHaveBeenCalledWith('ssh-1')
-    expect(getTempDir).toHaveBeenCalled()
-    expect(writeFileBase64).toHaveBeenCalledWith(
-      '/var/tmp/orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png',
-      png.toString('base64')
-    )
-    expect(fsWriteFileMock).not.toHaveBeenCalled()
-  })
-
-  it('uses Windows path joining for Windows SSH temp directories', async () => {
-    const png = Buffer.from([0, 1, 2, 3])
-    const writeFileBase64 = vi.fn().mockResolvedValue(undefined)
-    clipboardReadImageMock.mockReturnValue({
-      getSize: () => ({ height: 1, width: 1 }),
-      isEmpty: () => false,
-      toPNG: () => png
-    })
-    getSshFilesystemProviderMock.mockReturnValue({
-      getTempDir: vi.fn().mockResolvedValue('C:\\Users\\alice\\AppData\\Local\\Temp'),
-      writeFileBase64
-    })
-
-    registerClipboardHandlers({} as never)
-
-    const handlers = getRegisteredHandlers()
-    await expect(
-      handlers.get('clipboard:saveImageAsTempFile')?.(makeClipboardEvent(), {
-        connectionId: 'ssh-1'
-      })
-    ).resolves.toBe(
-      'C:\\Users\\alice\\AppData\\Local\\Temp\\orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png'
-    )
-    expect(writeFileBase64).toHaveBeenCalledWith(
-      'C:\\Users\\alice\\AppData\\Local\\Temp\\orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png',
-      png.toString('base64')
-    )
-  })
-
   it('rejects oversized clipboard image dimensions before PNG conversion', async () => {
     const toPNG = vi.fn(() => Buffer.from([0, 1, 2, 3]))
     clipboardReadImageMock.mockReturnValue({
@@ -843,26 +661,6 @@ describe('registerClipboardHandlers', () => {
       handlers.get('clipboard:saveImageAsTempFile')?.(makeClipboardEvent(), undefined)
     ).rejects.toThrow('Clipboard image is too large')
     expect(toPNG).not.toHaveBeenCalled()
-    expect(fsWriteFileMock).not.toHaveBeenCalled()
-    expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
-  })
-
-  it('rejects oversized clipboard PNG bytes before SSH provider lookup', async () => {
-    clipboardReadImageMock.mockReturnValue({
-      getSize: () => ({ height: 1, width: 1 }),
-      isEmpty: () => false,
-      toPNG: () => Buffer.alloc(CLIPBOARD_IMAGE_MAX_SOURCE_BYTES + 1)
-    })
-
-    registerClipboardHandlers({} as never)
-
-    const handlers = getRegisteredHandlers()
-    await expect(
-      handlers.get('clipboard:saveImageAsTempFile')?.(makeClipboardEvent(), {
-        connectionId: 'ssh-secret'
-      })
-    ).rejects.toThrow('Clipboard image is too large')
-    expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
     expect(fsWriteFileMock).not.toHaveBeenCalled()
   })
 

@@ -16,7 +16,6 @@ import {
 } from 'node:child_process'
 import { StringDecoder } from 'node:string_decoder'
 import { withGitSpan } from '../observability/instrumentation'
-import { recordSubprocessSpawn } from '../diagnostics/main-thread-churn-probe'
 import {
   classifyGhRateLimitBucket,
   createGhRateLimitBlockedError,
@@ -439,7 +438,6 @@ function execFileCapture(
     }
 
     try {
-      const spawnStartedAt = performance.now()
       // Why: our abort listener owns tree cleanup; Node's signal handler could kill wsl.exe before taskkill sees its children.
       child = execFile(
         command,
@@ -461,7 +459,6 @@ function execFileCapture(
           finish(error, stdout, stderr)
         }
       )
-      recordSubprocessSpawn(command, args, performance.now() - spawnStartedAt)
     } catch (error) {
       finish(error instanceof Error ? error : new Error(String(error)))
       return
@@ -516,14 +513,12 @@ async function spawnCommandCapture(
     let stderr = ''
     let stdoutBytes = 0
     let stderrBytes = 0
-    const spawnStartedAt = performance.now()
     const child = spawn(spawnCmd, spawnArgs, {
       cwd: options.cwd,
       env: options.env,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true
     })
-    recordSubprocessSpawn(spawnCmd, spawnArgs, performance.now() - spawnStartedAt)
     let timer: NodeJS.Timeout | null = null
     const onAbort = (): void => {
       void killSpawnedCommandTree(child)
@@ -1096,7 +1091,6 @@ export function gitExecFileSync(
   }
 ): string {
   const resolved = resolveCommand('git', args, options.cwd)
-  const spawnStartedAt = performance.now()
   try {
     return execFileSync(resolved.binary, resolved.args, {
       cwd: resolved.cwd,
@@ -1107,7 +1101,6 @@ export function gitExecFileSync(
     }) as string
   } finally {
     // Sync exec blocks the main thread for its whole duration — the cost issue #7576 flags.
-    recordSubprocessSpawn(resolved.binary, resolved.args, performance.now() - spawnStartedAt)
   }
 }
 
@@ -1123,13 +1116,11 @@ export function gitSpawn(
   const resolved = resolveCommand('git', args, options.cwd, wslDistro, {
     useWslLoginShell: Boolean(wslDistro)
   })
-  const spawnStartedAt = performance.now()
   const child = spawn(resolved.binary, resolved.args, {
     ...spawnOptions,
     env: untranslatedGitOutputEnv(spawnOptions.env ?? process.env),
     cwd: resolved.cwd
   })
-  recordSubprocessSpawn(resolved.binary, resolved.args, performance.now() - spawnStartedAt)
   return child
 }
 
@@ -1595,12 +1586,10 @@ export function wslAwareSpawn(
   const resolved = resolveCommand(command, args, options.cwd, wslDistro, {
     useWslLoginShell
   })
-  const spawnStartedAt = performance.now()
   const child = spawn(resolved.binary, resolved.args, {
     ...spawnOptions,
     cwd: resolved.cwd
   })
-  recordSubprocessSpawn(resolved.binary, resolved.args, performance.now() - spawnStartedAt)
   return child
 }
 

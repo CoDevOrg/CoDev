@@ -70,9 +70,6 @@ describe('selectChecksPanelReview', () => {
         hostedReview: review,
         pr: makePR({ number: 12 }),
         linkedGitLabMR: 34,
-        linkedBitbucketPR: null,
-        linkedAzureDevOpsPR: null,
-        linkedGiteaPR: null
       })
     ).toBe(review)
   })
@@ -81,10 +78,6 @@ describe('selectChecksPanelReview', () => {
     const selected = selectChecksPanelReview({
       hostedReview: null,
       pr: makePR({ number: 12, state: 'merged' }),
-      linkedGitLabMR: null,
-      linkedBitbucketPR: null,
-      linkedAzureDevOpsPR: null,
-      linkedGiteaPR: null
     })
 
     expect(selected).toMatchObject({ provider: 'github', number: 12, state: 'merged' })

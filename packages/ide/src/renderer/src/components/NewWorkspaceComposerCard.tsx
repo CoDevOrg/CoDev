@@ -9,7 +9,6 @@ import {
   CornerDownLeft,
   FolderPlus,
   LoaderCircle,
-  PlugZap,
   Settings2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -32,14 +31,9 @@ import {
   shouldHandleTextControlPaste
 } from '@/lib/text-control-paste'
 import { getScreenSubmitModifierLabel } from '@/lib/screen-submit-shortcut'
-import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import type {
   GitHubWorkItem,
-  GitLabWorkItem,
-  JiraIssue,
-  LinearIssue,
   SetupAgentStartupPolicy,
-  OrcaHooks,
   SparsePreset,
   TuiAgent
 } from '../../../shared/types'
@@ -61,22 +55,16 @@ import type {
   ProjectHostSetupOption
 } from '@/lib/project-host-setup-options'
 import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
-import type { SshConnectionStatus } from '../../../shared/ssh-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
 import { translate } from '@/i18n/i18n'
-import { withUiConnectTimeout } from '@/ssh/ssh-connect-ui-timeout'
-import { isSshConnectInFlight, trackSshConnect } from '@/ssh/ssh-connect-in-flight'
 
 type RepoOption = React.ComponentProps<typeof RepoCombobox>['repos'][number]
-type EphemeralVmRecipeOption = NonNullable<OrcaHooks['environmentRecipes']>[number]
 const EMPTY_PROJECT_OPTIONS: NewWorkspaceProjectOption[] = []
 const EMPTY_PROJECT_HOST_SETUP_OPTIONS: ProjectHostSetupOption[] = []
-const EMPTY_EPHEMERAL_VM_RECIPES: EphemeralVmRecipeOption[] = []
 
 type NewWorkspaceComposerCardProps = {
-  contextualTourSource?: string
   containerClassName?: string
   composerRef?: React.RefObject<HTMLDivElement | null>
   onComposerNodeChange?: (node: HTMLDivElement | null) => void
@@ -93,10 +81,6 @@ type NewWorkspaceComposerCardProps = {
   projectHostSetupOptions?: ProjectHostSetupOption[]
   selectedProjectHostSetupId?: string | null
   onProjectHostSetupChange?: (setupId: string) => void
-  ephemeralVmRecipes?: EphemeralVmRecipeOption[]
-  selectedEphemeralVmRecipeId?: string | null
-  onEphemeralVmRecipeChange?: (recipeId: string | null) => void
-  ephemeralVmRecipeError?: string | null
   repoBackedSearchRepos?: RepoOption[]
   repoBackedSourcesDisabled?: boolean
   allowSmartNameAddProject?: boolean
@@ -111,12 +95,8 @@ type NewWorkspaceComposerCardProps = {
   branchNameOverride: string | undefined
   onBranchNameOverrideChange: (value: string | undefined) => void
   onSmartGitHubItemSelect: (item: GitHubWorkItem) => void
-  onSmartGitLabItemSelect: (item: GitLabWorkItem) => void
   onSmartBranchSelect: (refName: string, localBranchName: string) => void
   onSmartNameModeChange?: (mode: SmartNameMode) => void
-  onSmartLinearIssueSelect: (issue: LinearIssue) => void
-  onSmartJiraIssueSelect?: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
-  onOpenJiraSettings?: () => void
   smartNameSelection: SmartWorkspaceNameSelection | null
   onClearSmartNameSelection: () => void
   /** True when an existing local branch is selected and can be reused. */
@@ -128,7 +108,6 @@ type NewWorkspaceComposerCardProps = {
   createMultiple?: boolean
   onCreateMultipleChange?: (next: boolean) => void
   smartNameGitHubSourceContext?: TaskSourceContext | null
-  smartNameJiraSourceContext?: TaskSourceContext | null
   /** Advisory shown under the name field when a fork PR can't accept maintainer pushes. */
   forkPushWarning: string | null
   detectedAgentIds: Set<TuiAgent> | null
@@ -150,11 +129,6 @@ type NewWorkspaceComposerCardProps = {
   shouldWaitForSetupCheck: boolean
   resolvedSetupDecision: 'run' | 'skip' | null
   createError: WorkspaceCreateErrorDisplay | null
-  selectedRepoConnectionId: string | null
-  selectedRepoSshStatus: SshConnectionStatus | null
-  selectedRepoRequiresConnection: boolean
-  selectedRepoConnectInProgress: boolean
-  onConnectSelectedRepo: () => Promise<void>
   branchesEnabled?: boolean
   setupControlsEnabled?: boolean
   canUseSparseCheckout: boolean
@@ -164,52 +138,6 @@ type NewWorkspaceComposerCardProps = {
   sparseControlsEnabled?: boolean
   /** When set, "Add project" opens a host-provided flow instead of swapping the store's active modal. */
   onAddProjectOverride?: () => void
-}
-
-const SSH_STATUS_LABELS: Partial<Record<SshConnectionStatus, string>> = {
-  get disconnected() {
-    return translate(
-      'auto.components.NewWorkspaceComposerCard.sshNotConnected',
-      'SSH not connected'
-    )
-  },
-  get connecting() {
-    return translate('auto.components.NewWorkspaceComposerCard.connectingSsh', 'Connecting SSH...')
-  },
-  get 'auth-failed'() {
-    return translate(
-      'auto.components.NewWorkspaceComposerCard.sshAuthenticationFailed',
-      'SSH authentication failed'
-    )
-  },
-  get 'deploying-relay'() {
-    return translate(
-      'auto.components.NewWorkspaceComposerCard.preparingSshConnection',
-      'Preparing SSH connection...'
-    )
-  },
-  get connected() {
-    return translate('auto.components.NewWorkspaceComposerCard.connected', 'Connected')
-  },
-  get reconnecting() {
-    return translate(
-      'auto.components.NewWorkspaceComposerCard.reconnectingSsh',
-      'Reconnecting SSH...'
-    )
-  },
-  get 'reconnection-failed'() {
-    return translate(
-      'auto.components.NewWorkspaceComposerCard.sshReconnectionFailed',
-      'SSH reconnection failed'
-    )
-  },
-  get error() {
-    return translate('auto.components.NewWorkspaceComposerCard.a239038146', 'SSH connection error')
-  }
-}
-
-function getSshStatusLabel(status: SshConnectionStatus): string {
-  return SSH_STATUS_LABELS[status] ?? status
 }
 
 function SetupCommandPreview({ setupConfig }: { setupConfig: SetupConfig }): React.JSX.Element {
@@ -290,7 +218,6 @@ function useComposerFileDragOver(): {
 }
 
 export default function NewWorkspaceComposerCard({
-  contextualTourSource,
   containerClassName,
   composerRef,
   onComposerNodeChange,
@@ -307,10 +234,6 @@ export default function NewWorkspaceComposerCard({
   projectHostSetupOptions = EMPTY_PROJECT_HOST_SETUP_OPTIONS,
   selectedProjectHostSetupId = null,
   onProjectHostSetupChange,
-  ephemeralVmRecipes = EMPTY_EPHEMERAL_VM_RECIPES,
-  selectedEphemeralVmRecipeId = null,
-  onEphemeralVmRecipeChange,
-  ephemeralVmRecipeError = null,
   repoBackedSearchRepos,
   repoBackedSourcesDisabled = false,
   allowSmartNameAddProject = true,
@@ -325,12 +248,8 @@ export default function NewWorkspaceComposerCard({
   branchNameOverride,
   onBranchNameOverrideChange,
   onSmartGitHubItemSelect,
-  onSmartGitLabItemSelect,
   onSmartBranchSelect,
   onSmartNameModeChange,
-  onSmartLinearIssueSelect,
-  onSmartJiraIssueSelect,
-  onOpenJiraSettings,
   smartNameSelection,
   onClearSmartNameSelection,
   canReuseSelectedBranch,
@@ -340,7 +259,6 @@ export default function NewWorkspaceComposerCard({
   createMultiple = false,
   onCreateMultipleChange,
   smartNameGitHubSourceContext,
-  smartNameJiraSourceContext,
   forkPushWarning,
   detectedAgentIds,
   onOpenAgentSettings,
@@ -361,11 +279,6 @@ export default function NewWorkspaceComposerCard({
   shouldWaitForSetupCheck,
   resolvedSetupDecision,
   createError,
-  selectedRepoConnectionId,
-  selectedRepoSshStatus,
-  selectedRepoRequiresConnection,
-  selectedRepoConnectInProgress,
-  onConnectSelectedRepo,
   branchesEnabled = true,
   setupControlsEnabled = true,
   canUseSparseCheckout,
@@ -379,7 +292,6 @@ export default function NewWorkspaceComposerCard({
   useTranslation()
   const { isFileDragOver, dragHandlers } = useComposerFileDragOver()
   const openModal = useAppStore((s) => s.openModal)
-  const activeModal = useAppStore((s) => s.activeModal)
   const defaultTuiAgent = useAppStore((s) => s.settings?.defaultTuiAgent ?? null)
   const disabledTuiAgents = useAppStore(
     (s) => s.settings?.disabledTuiAgents ?? DEFAULT_DISABLED_TUI_AGENTS
@@ -388,21 +300,6 @@ export default function NewWorkspaceComposerCard({
   const nameInputFocusFrameRef = React.useRef<number | null>(null)
   const branchNameInputId = React.useId()
   const submitShortcutModifierLabel = getScreenSubmitModifierLabel()
-  const selectedRepoName = React.useMemo(() => {
-    const repo = eligibleRepos.find((candidate) => candidate.id === repoId)
-    return repo?.displayName ?? repo?.path ?? 'This project'
-  }, [eligibleRepos, repoId])
-  const selectedProjectName = React.useMemo(() => {
-    const option = projectOptions.find((candidate) => candidate.id === selectedProjectId)
-    return option?.displayName ?? selectedRepoName
-  }, [projectOptions, selectedProjectId, selectedRepoName])
-  const sshStatusLabel = selectedRepoSshStatus
-    ? getSshStatusLabel(selectedRepoSshStatus)
-    : translate('auto.components.NewWorkspaceComposerCard.notConnected', 'Not connected')
-  const connectButtonLabel =
-    selectedRepoSshStatus === 'disconnected' || selectedRepoSshStatus === null
-      ? 'Connect'
-      : 'Reconnect'
   const setupConfigLabel =
     setupConfig?.kind === 'default-tabs'
       ? 'Default tab commands'
@@ -495,9 +392,6 @@ export default function NewWorkspaceComposerCard({
   // in-progress workspace form survives; the new host lands in the store and flows straight
   // back into the run-target picker without a navigation round-trip.
   const [addRemoteHostMode, setAddRemoteHostMode] = React.useState<AddRemoteHostMode | null>(null)
-  const handleAddSshHost = React.useCallback((): void => {
-    setAddRemoteHostMode('ssh')
-  }, [])
   const handleAddRemoteServer = React.useCallback((): void => {
     setAddRemoteHostMode('server')
   }, [])
@@ -508,22 +402,6 @@ export default function NewWorkspaceComposerCard({
         return
       }
       try {
-        if (action.kind === 'ssh') {
-          if (isSshConnectInFlight(action.targetId)) {
-            return
-          }
-          // Why: ssh.connect has no built-in timeout; a stalled connect would otherwise leave
-          // the row's spinner/disabled state stuck forever. Bound the UI wait — the backend
-          // keeps connecting and the picker updates from store SSH state if it later succeeds.
-          // The shared registry tracks that backend request (not this bounded wait), so the
-          // sidebar card control and terminal overlay for this host stay locked until it
-          // settles — a second dial on a passphrase-gated target means a second prompt.
-          await withUiConnectTimeout(
-            trackSshConnect(action.targetId, window.api.ssh.connect({ targetId: action.targetId }))
-          )
-          return
-        }
-
         const response = await window.api.runtimeEnvironments.getStatus({
           selector: action.environmentId,
           timeoutMs: 15_000
@@ -598,24 +476,13 @@ export default function NewWorkspaceComposerCard({
   // Why: the picker now also hosts the Add host handoff; even a single ready
   // host needs this affordance for users who have not registered the target yet.
   const shouldShowRunTargetPicker =
-    readyProjectHostSetupOptions.length > 0 ||
-    ephemeralVmRecipes.length > 0 ||
-    needsSetupProjectHostSetupOptions.length > 0
+    readyProjectHostSetupOptions.length > 0 || needsSetupProjectHostSetupOptions.length > 0
   const handleProjectHostSetupChange = React.useCallback(
     (setupId: string): void => {
       onProjectHostSetupChange?.(setupId)
     },
     [onProjectHostSetupChange]
   )
-  useContextualTour(
-    'workspace-creation',
-    projectOptions.length > 0 && Boolean(selectedProjectId),
-    contextualTourSource ??
-      (activeModal === 'new-workspace-composer'
-        ? 'workspace_creation_modal'
-        : 'workspace_creation_visible')
-  )
-
   return (
     <div
       ref={setComposerNode}
@@ -700,54 +567,9 @@ export default function NewWorkspaceComposerCard({
                 hostOptions={projectHostSetupOptions}
                 hostValue={selectedProjectHostSetupId ?? null}
                 onHostChange={handleProjectHostSetupChange}
-                recipes={ephemeralVmRecipes}
-                recipeValue={selectedEphemeralVmRecipeId}
-                onRecipeChange={onEphemeralVmRecipeChange}
-                onAddSshHost={handleAddSshHost}
                 onAddRemoteServer={handleAddRemoteServer}
                 onConnectHost={handleConnectRunTargetHost}
               />
-              {ephemeralVmRecipeError ? (
-                <p className="whitespace-pre-line text-[11px] text-destructive">
-                  {ephemeralVmRecipeError}
-                </p>
-              ) : null}
-            </div>
-          ) : ephemeralVmRecipeError ? (
-            <p className="whitespace-pre-line text-[11px] text-destructive">
-              {ephemeralVmRecipeError}
-            </p>
-          ) : null}
-          {selectedRepoRequiresConnection && selectedRepoConnectionId ? (
-            <div
-              role="status"
-              aria-live="polite"
-              className="flex items-center justify-between gap-3 rounded-md border border-border/70 bg-muted/35 px-3 py-2"
-            >
-              <div className="min-w-0">
-                <div className="truncate text-xs font-medium text-foreground">
-                  {translate('auto.components.NewWorkspaceComposerCard.b5a0796911', 'Connect')}{' '}
-                  {selectedProjectName}
-                </div>
-                <div className="mt-0.5 text-[11px] text-muted-foreground">{sshStatusLabel}</div>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="xs"
-                onClick={() => void onConnectSelectedRepo()}
-                disabled={selectedRepoConnectInProgress}
-                className="shrink-0"
-              >
-                {selectedRepoConnectInProgress ? (
-                  <LoaderCircle className="size-3.5 animate-spin" />
-                ) : (
-                  <PlugZap className="size-3.5" />
-                )}
-                {selectedRepoConnectInProgress
-                  ? translate('auto.components.NewWorkspaceComposerCard.f660aa1454', 'Connecting')
-                  : connectButtonLabel}
-              </Button>
             </div>
           ) : null}
         </div>
@@ -775,16 +597,10 @@ export default function NewWorkspaceComposerCard({
             value={name}
             onValueChange={onNameValueChange}
             onGitHubItemSelect={onSmartGitHubItemSelect}
-            onGitLabItemSelect={onSmartGitLabItemSelect}
             onBranchSelect={onSmartBranchSelect}
-            onLinearIssueSelect={onSmartLinearIssueSelect}
-            onJiraIssueSelect={onSmartJiraIssueSelect}
-            onOpenJiraSettings={onOpenJiraSettings}
             selectedSource={smartNameSelection}
             onClearSelectedSource={onClearSmartNameSelection}
             githubSourceContext={smartNameGitHubSourceContext}
-            jiraSourceContext={smartNameJiraSourceContext}
-            disabled={selectedRepoRequiresConnection}
             disabledPlaceholder={translate(
               'auto.components.NewWorkspaceComposerCard.connectProjectFirst',
               'Connect this project first'
@@ -964,7 +780,7 @@ export default function NewWorkspaceComposerCard({
                 </div>
               ) : null}
 
-              {/* Why: for a tracked work item (PR/issue/MR/Linear) the branch is derived from the item, so a manual override here would be silently ignored. */}
+              {/* Why: for a tracked work item (PR/issue) the branch is derived from the item, so a manual override here would be silently ignored. */}
               {selectedRepoIsGit &&
               branchesEnabled &&
               (!smartNameSelection || smartNameSelection.kind === 'branch') ? (

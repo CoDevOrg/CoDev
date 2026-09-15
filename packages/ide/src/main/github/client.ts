@@ -32,7 +32,6 @@ import { isGitHubWorkItemsQueryTooLarge } from '../../shared/github-work-items-q
 import { classifyGitHubUnavailable } from '../../shared/github-api-availability'
 import { parseTaskQuery, type ParsedTaskQuery } from '../../shared/task-query'
 import {
-  GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE,
   sortWorkItemsByNumber
 } from '../../shared/work-items'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -44,8 +43,6 @@ import {
   safePRRefreshErrorMessage
 } from './pr-refresh-error-classification'
 import { getPRConflictSummary } from './conflict-summary'
-import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
-import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
 import { splitRemoteBranchName } from '../../shared/git-effective-upstream'
 import {
   execFileAsync,
@@ -68,7 +65,6 @@ import {
   isCommitPartOfMergedPR,
   type MergedPRCommitMembership
 } from './merged-pr-commit-membership'
-import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import {
   hasHostedReviewLocalGitOptions,
   getHostedReviewLocalGitOptions,
@@ -874,12 +870,6 @@ async function fetchIssueWorkItem(
     return mapIssueWorkItem(item)
   }
 
-  if (connectionId) {
-    // Why: SSH-backed gh has no repository cwd. A bare lookup could honor the
-    // local process GH_REPO/GH_HOST and return an unrelated repository item.
-    return null
-  }
-
   const { stdout } = await ghExecFileAsync(
     ['issue', 'view', String(number), '--json', 'number,title,state,url,labels,updatedAt,author'],
     ghOptions
@@ -978,12 +968,6 @@ async function fetchPullRequestWorkItem(
       const reviewFields = await fetchPullRequestReviewFields(number, ownerRepo, ghOptions)
       return { ...mapped, ...reviewFields }
     }
-  }
-
-  if (connectionId) {
-    // Why: connection-backed gh cannot infer a repository from cwd. Refuse a
-    // bare call so process-level GH_REPO/GH_HOST cannot redirect the lookup.
-    return null
   }
 
   const { stdout } = await ghExecFileAsync(
@@ -1130,18 +1114,6 @@ type PartialWorkItemsResult = {
   prsError?: ClassifiedError
 }
 
-function assertSshRepoHasResolvedGitHubSource(args: {
-  connectionId?: string | null
-  issueOwnerRepo: OwnerRepo | null
-  prOwnerRepo: OwnerRepo | null
-}): void {
-  if (!args.connectionId || args.issueOwnerRepo || args.prOwnerRepo) {
-    return
-  }
-  // Why: SSH repo paths are remote-only, so without a resolved owner/repo gh would query local state.
-  throw new Error(GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE)
-}
-
 type ResolvedPrWorkItemSource = {
   source: OwnerRepo | null
   originCandidate: OwnerRepo | null
@@ -1176,7 +1148,6 @@ async function listRecentWorkItems(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PartialWorkItemsResult> {
   const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
-  assertSshRepoHasResolvedGitHubSource({ connectionId, issueOwnerRepo, prOwnerRepo })
   const recentQuery = parseTaskQuery('is:open')
   const issueRequest = issueOwnerRepo
     ? buildWorkItemListRequest({
@@ -1270,7 +1241,6 @@ async function listQueriedWorkItems(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PartialWorkItemsResult> {
   const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
-  assertSshRepoHasResolvedGitHubSource({ connectionId, issueOwnerRepo, prOwnerRepo })
   const hasPrOnlyFilter =
     query.state === 'merged' ||
     query.draft ||
@@ -1835,7 +1805,7 @@ async function findOpenPRByHeadBase(args: {
 
 async function readPullRequestTemplate(
   repoPath: string,
-  connectionId?: string | null
+  _connectionId?: string | null
 ): Promise<string> {
   const relativeCandidates = [
     '.github/pull_request_template.md',
@@ -1845,21 +1815,8 @@ async function readPullRequestTemplate(
     'docs/pull_request_template.md',
     'docs/PULL_REQUEST_TEMPLATE.md'
   ]
-  const remoteProvider = connectionId ? getSshFilesystemProvider(connectionId) : undefined
-  if (connectionId && !remoteProvider) {
-    return ''
-  }
   for (const relativeCandidate of relativeCandidates) {
     try {
-      if (remoteProvider) {
-        const result = await remoteProvider.readFile(
-          joinWorktreeRelativePath(repoPath, relativeCandidate)
-        )
-        if (result.isBinary) {
-          continue
-        }
-        return result.content
-      }
       return await readFile(join(repoPath, relativeCandidate), 'utf8')
     } catch {
       // Try the next conventional PR template path.
@@ -2233,17 +2190,14 @@ function isMergedImplicitPR(data: PullRequestLookupData, linkedPRNumber?: number
 
 async function getCurrentHeadOid(
   repoPath: string,
-  connectionId?: string | null,
+  _connectionId?: string | null,
   localGitOptions: { wslDistro?: string } = {}
 ): Promise<string | null> {
   try {
-    const provider = connectionId ? getSshGitProvider(connectionId) : null
-    const result = provider
-      ? await provider.exec(['rev-parse', 'HEAD'], repoPath)
-      : await gitExecFileAsync(['rev-parse', 'HEAD'], {
-          cwd: repoPath,
-          ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
-        })
+    const result = await gitExecFileAsync(['rev-parse', 'HEAD'], {
+      cwd: repoPath,
+      ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
+    })
     return result.stdout.trim() || null
   } catch {
     return null
@@ -2709,7 +2663,7 @@ function getTrackedUpstreamBranchCacheKey(
 
 async function probeTrackedUpstreamBranches(
   repoPath: string,
-  connectionId?: string | null,
+  _connectionId?: string | null,
   localGitOptions: { wslDistro?: string } = {}
 ): Promise<{
   probeFailed: boolean
@@ -2717,13 +2671,10 @@ async function probeTrackedUpstreamBranches(
 }> {
   const args = ['for-each-ref', '--format=%(refname)%00%(upstream)', 'refs/heads']
   try {
-    const provider = connectionId ? getSshGitProvider(connectionId) : null
-    const result = provider
-      ? await provider.exec(args, repoPath)
-      : await gitExecFileAsync(args, {
-          cwd: repoPath,
-          ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
-        })
+    const result = await gitExecFileAsync(args, {
+      cwd: repoPath,
+      ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
+    })
     return {
       probeFailed: false,
       upstreamsByBranchName: parseTrackedUpstreamBranches(result.stdout)
@@ -3650,9 +3601,6 @@ export async function getPRChecks(
     connectionId,
     localGitOptions
   )
-  if (connectionId && !ownerRepo) {
-    throw new Error(GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE)
-  }
   const fallbackToPRChecks = async (): Promise<PRCheckDetail[]> => {
     await assertRateLimitBudget('graphql', ownerRepo, ghOptions)
     await acquire()
@@ -4170,9 +4118,6 @@ export async function getPRComments(
     connectionId,
     localGitOptions
   )
-  if (connectionId && !ownerRepo) {
-    throw new Error(GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE)
-  }
   if (ownerRepo) {
     await assertRateLimitBudget('core', ownerRepo, ghOptions)
   }
@@ -4834,7 +4779,7 @@ async function getPRMergeBlocker(
   prNumber: number,
   ownerRepo: GitHubApiRepository | null,
   ghOptions: GhExecOptions,
-  connectionId?: string | null,
+  _connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<string | null> {
   if (!ownerRepo) {
@@ -4855,9 +4800,7 @@ async function getPRMergeBlocker(
     if (pr.mergeQueueRequired === true) {
       return 'This pull request must be merged through GitHub merge queue. Use Merge when ready instead.'
     }
-    // Why: conflict summaries shell out to local git; skip for SSH repos until that helper routes through the SSH provider.
     if (
-      connectionId ||
       pr.mergeable !== 'CONFLICTING' ||
       !pr.baseRefName ||
       !pr.baseRefOid ||

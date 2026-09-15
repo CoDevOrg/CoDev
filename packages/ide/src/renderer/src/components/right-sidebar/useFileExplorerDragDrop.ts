@@ -221,8 +221,6 @@ export function useFileExplorerDragDrop({
             worktreePath,
             connectionId: operationRoute.connectionId,
             expectedExecutionHostId: operationRoute.expectedExecutionHostId,
-            expectedSshTargetId: operationRoute.expectedSshTargetId,
-            expectedSshConnectionGeneration: operationRoute.expectedSshConnectionGeneration
           }
           operationGuard.assertCurrent()
           await executeOpenEditorPathMove({

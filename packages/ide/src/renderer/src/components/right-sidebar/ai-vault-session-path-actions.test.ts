@@ -18,7 +18,7 @@ describe('canUseLocalAiVaultSessionPathActions', () => {
 })
 
 describe('isSyntheticAiVaultSessionPath', () => {
-  it('treats OpenCode `<database>#<sessionId>` identities as synthetic', () => {
+  it('treats `<database>#<sessionId>` identities as synthetic', () => {
     expect(isSyntheticAiVaultSessionPath('/home/user/.opencode/db.sqlite#sess_123')).toBe(true)
   })
 

@@ -81,7 +81,7 @@ When adding or changing a Git command:
 
 ## Git Provider Compatibility
 
-Source-control and review changes must consider GitLab and other supported git providers, not only GitHub. Keep provider-specific behavior behind explicit checks, and avoid GitHub-only naming for generic review concepts.
+CoDev ships GitHub as the only hosted-review and issue-tracker integration; the upstream GitLab, Bitbucket, Azure DevOps, Gitea, Linear, and Jira integrations have been removed from this fork. Keep the `HostedReviewProvider` / forge-provider seam in place (it is `'github' | 'unsupported'`) so generic review code stays provider-agnostic, but do not add new providers here.
 
 ## GitHub CLI Usage
 

@@ -1,12 +1,10 @@
 import type { AppState } from '@/store/types'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import type { Worktree } from '../../../../shared/types'
-import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 
 export type CmdJUnavailableReason =
   | 'loading'
   | 'no-active-workspace'
-  | 'ssh-disconnected'
   | 'no-active-group'
 
 export type CmdJQuickActionAvailability =
@@ -23,7 +21,6 @@ export type CmdJQuickActionContext = {
   activeWorktreeId: string | null
   activeWorktree: Worktree | null
   isLoading: boolean
-  sshStatus: SshConnectionStatus | null
   runtimeMode: 'local-desktop' | 'paired-web'
   activeGroupId: string | null
   openNewBrowserTab: (groupId: string) => Promise<void>
@@ -31,7 +28,6 @@ export type CmdJQuickActionContext = {
   openNewTerminalTab: (groupId: string) => Promise<void>
   openCreateWorkspace: () => void
   deleteActiveWorkspace: () => void
-  openAddQuickCommand: () => void
 }
 
 export function resolveCmdJActiveGroupId(
@@ -74,25 +70,10 @@ export function captureCmdJActiveGroupSnapshot(
   }
 }
 
-export function getActiveWorktreeSshStatus(
-  state: Pick<AppState, 'repos' | 'sshConnectionStates' | 'worktreesByRepo'>,
-  activeWorktree: Worktree | null
-): SshConnectionStatus | null {
-  if (!activeWorktree) {
-    return null
-  }
-  const repo = state.repos.find((entry) => entry.id === activeWorktree.repoId)
-  const connectionId = repo?.connectionId ?? null
-  if (!connectionId) {
-    return null
-  }
-  return state.sshConnectionStates.get(connectionId)?.status ?? 'disconnected'
-}
-
 export function getWorkspaceScopedActionAvailability(
   ctx: Pick<
     CmdJQuickActionContext,
-    'activeGroupId' | 'activeWorktreeId' | 'isLoading' | 'sshStatus'
+    'activeGroupId' | 'activeWorktreeId' | 'isLoading'
   >
 ): CmdJQuickActionAvailability {
   if (!ctx.activeWorktreeId) {
@@ -101,9 +82,6 @@ export function getWorkspaceScopedActionAvailability(
   if (ctx.isLoading) {
     return { available: false, reason: 'loading' }
   }
-  if (ctx.sshStatus != null && ctx.sshStatus !== 'connected') {
-    return { available: false, reason: 'ssh-disconnected' }
-  }
   if (!ctx.activeGroupId) {
     return { available: false, reason: 'no-active-group' }
   }
@@ -111,16 +89,13 @@ export function getWorkspaceScopedActionAvailability(
 }
 
 export function getCurrentWorkspaceActionAvailability(
-  ctx: Pick<CmdJQuickActionContext, 'activeView' | 'activeWorktreeId' | 'isLoading' | 'sshStatus'>
+  ctx: Pick<CmdJQuickActionContext, 'activeView' | 'activeWorktreeId' | 'isLoading'>
 ): CmdJQuickActionAvailability {
   if (ctx.activeView !== 'terminal' || !ctx.activeWorktreeId) {
     return { available: false, reason: 'no-active-workspace' }
   }
   if (ctx.isLoading) {
     return { available: false, reason: 'loading' }
-  }
-  if (ctx.sshStatus != null && ctx.sshStatus !== 'connected') {
-    return { available: false, reason: 'ssh-disconnected' }
   }
   return { available: true }
 }
@@ -133,7 +108,6 @@ export function buildCmdJQuickActionContext(args: {
   openNewTerminalTab: (groupId: string) => Promise<void>
   openCreateWorkspace: () => void
   deleteActiveWorkspace: () => void
-  openAddQuickCommand: () => void
 }): CmdJQuickActionContext {
   const activeWorktreeId = args.state.activeWorktreeId
   const activeWorktree = activeWorktreeId
@@ -157,15 +131,13 @@ export function buildCmdJQuickActionContext(args: {
     activeWorktreeId,
     activeWorktree,
     isLoading,
-    sshStatus: getActiveWorktreeSshStatus(args.state, activeWorktree),
     runtimeMode,
     activeGroupId,
     openNewBrowserTab: args.openNewBrowserTab,
     openNewMarkdownFile: args.openNewMarkdownFile,
     openNewTerminalTab: args.openNewTerminalTab,
     openCreateWorkspace: args.openCreateWorkspace,
-    deleteActiveWorkspace: args.deleteActiveWorkspace,
-    openAddQuickCommand: args.openAddQuickCommand
+    deleteActiveWorkspace: args.deleteActiveWorkspace
   }
 }
 
@@ -178,8 +150,6 @@ export function getUnavailableQuickActionMessage(
       return `Can't ${actionTitle.toLowerCase()} — workspace is still loading.`
     case 'no-active-workspace':
       return `Can't ${actionTitle.toLowerCase()} — no workspace is active.`
-    case 'ssh-disconnected':
-      return `Can't ${actionTitle.toLowerCase()} — workspace is disconnected.`
     case 'no-active-group':
       return `Can't ${actionTitle.toLowerCase()} — no tab group is available.`
   }

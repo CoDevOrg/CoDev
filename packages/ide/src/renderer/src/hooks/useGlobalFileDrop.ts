@@ -19,7 +19,6 @@ import {
   NATIVE_FILE_DROP_MAX_PATHS,
   type NativeFileDropRejectedPayload
 } from '../../../shared/native-file-drop'
-import { captureWorktreeSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 
 export function getEditorFileDropSettingsForWorktree(
   store: WorktreeRuntimeOwnerState,
@@ -27,7 +26,7 @@ export function getEditorFileDropSettingsForWorktree(
 ): Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> {
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, worktreeId)
   // Why: OS drops target the selected worktree. Use that worktree's host owner
-  // so a focused runtime cannot hijack local/SSH editor drops.
+  // so a focused runtime cannot hijack local editor drops.
   return {
     ...store.settings,
     activeRuntimeEnvironmentId: runtimeEnvironmentId
@@ -78,10 +77,12 @@ export function useGlobalFileDrop(): void {
       const connectionId = getConnectionId(activeWorktreeId) ?? undefined
       let fileContext: RuntimeFileOperationArgs
       try {
-        fileContext = {
-          ...getEditorFileDropOperationContext(store, activeWorktreeId, worktreePath, connectionId),
-          ...captureWorktreeSshMutationExpectation(store, activeWorktreeId)
-        }
+        fileContext = getEditorFileDropOperationContext(
+          store,
+          activeWorktreeId,
+          worktreePath,
+          connectionId
+        )
       } catch {
         toast.error(
           translate(
@@ -106,7 +107,7 @@ export function useGlobalFileDrop(): void {
         void (async () => {
           try {
             // Why: OS file drops provide client-local paths. Remote runtime and
-            // SSH editors must upload into the server worktree before opening.
+            // Remote editors must upload into the server worktree before opening.
             const destinationDir = joinPath(worktreePath, '.orca/drops')
             const { results } = await importExternalPathsToRuntime(
               fileContext,

@@ -61,7 +61,7 @@ import { isCodevPendingShell } from './web/codev-pending-shell'
 const SESSION_RESTORE_FAILED_TOAST_ID = 'startup-session-restore-failed'
 import { WORKTREE_REFRESH_CONCURRENCY } from './store/slices/worktrees'
 import { useShallow } from 'zustand/react/shallow'
-import { isRemoteWorkspaceSnapshotApplyInProgress, useIpcEvents } from './hooks/useIpcEvents'
+import { useIpcEvents } from './hooks/useIpcEvents'
 import { useAutomationDispatchEvents } from './hooks/useAutomationDispatchEvents'
 import RetainedAgentsSyncGate from './components/dashboard/RetainedAgentsSyncGate'
 import { AgentHibernationGate } from './components/AgentHibernationGate'
@@ -75,18 +75,12 @@ import {
   useSystemPrefersDark
 } from './components/terminal-pane/use-system-prefers-dark'
 import RightSidebar from './components/right-sidebar'
-import { StarNagCard } from './components/StarNagCard'
-import { StarNagAgentValueMomentObserver } from './components/star-nag/StarNagAgentValueMomentObserver'
-import { StarNagToastHost } from './components/star-nag/StarNagToastHost'
 import { SkillFreshnessNudge } from './components/skills/SkillFreshnessNudge'
 import { SkillFreshnessUpdateDialog } from './components/skills/SkillFreshnessUpdateDialog'
 import { TelemetryFirstLaunchSurface } from './components/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from './components/ZoomOverlay'
-import { onOnboardingReopened } from './components/onboarding/show-onboarding-event'
-import { shouldShowOnboarding } from './components/onboarding/should-show-onboarding'
 import { MarkdownTemplatePicker } from './components/editor/MarkdownTemplatePicker'
 import { FloatingTerminalToggleButton } from './components/floating-terminal/FloatingTerminalToggleButton'
-import { OrcaProfileSwitcher } from './components/orca-profiles/OrcaProfileSwitcher'
 import {
   TOGGLE_FLOATING_TERMINAL_EVENT,
   requestFloatingTerminalOpenMaximized
@@ -97,11 +91,9 @@ import {
   matchFloatingWorkspacePanelChord,
   shouldMinimizeFloatingWorkspacePanelOnCloseShortcut
 } from '@/lib/floating-workspace-terminal-actions'
-import { createFloatingWorkspaceTourInteractionSnapshot } from '@/lib/floating-workspace-tour-interaction-snapshot'
 import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/scroll-to-current-workspace-status'
 import { OPEN_WORKSPACE_BOARD_EVENT } from './components/sidebar/useWorkspaceBoardPanel'
 import { WorkspacePortScanner } from './components/ports/WorkspacePortScanner'
-import { CrashReportDialog } from './components/crash-report/CrashReportDialog'
 import NewWorkspaceComposerModal from './components/NewWorkspaceComposerModal'
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
 import { ConfirmationDialogProvider } from './components/confirmation-dialog'
@@ -127,7 +119,6 @@ import {
 } from './runtime/sync-runtime-graph'
 import { useWebSessionTabsSync } from './runtime/web-session-tabs-sync'
 import { useGlobalFileDrop } from './hooks/useGlobalFileDrop'
-import { MacosTccPromptNoticeHost } from './hooks/MacosTccPromptNoticeHost'
 import { useRadixBodyPointerEventsRecovery } from './hooks/useRadixBodyPointerEventsRecovery'
 import { registerUpdaterBeforeUnloadBypass } from './lib/updater-beforeunload'
 import {
@@ -166,8 +157,6 @@ import {
   timeRendererStartupStep,
   timeRendererStartupSyncStep
 } from './startup/startup-diagnostics'
-import { reconnectSshTargetForRendererStartup } from './startup/ssh-startup-reconnect'
-import { shouldRenderPetOverlay } from './components/pet/pet-overlay-visibility'
 import { applyDocumentTheme } from './lib/document-theme'
 import { getSystemPrefersDark } from './lib/terminal-theme'
 import { publishTerminalViewAttributesAtAppStart } from './components/terminal-pane/terminal-appearance'
@@ -186,16 +175,6 @@ import {
 import { selectFloatingVisibleTabCount } from './store/selectors'
 import { selectActiveTerminalChromeState } from './store/active-terminal-chrome-selector'
 import type { VirtualizedScrollAnchor } from './hooks/useVirtualizedScrollAnchor'
-import type { RemoteWorkspacePatchResult } from '../../shared/remote-workspace-types'
-import type { OnboardingState, UpdateStatus } from '../../shared/types'
-import {
-  getFeatureTipsAppOpenDecision,
-  isCliFeatureTipCompleted
-} from './components/feature-tips/feature-tip-startup-gate'
-import {
-  trackCmdJPaletteFeatureTipShown,
-  trackOrcaCliFeatureTipShown
-} from './components/feature-tips/feature-tip-telemetry'
 import {
   keybindingMatchesAction,
   type KeybindingActionId,
@@ -210,7 +189,6 @@ import { findPluginCommandForKeybinding } from '@/lib/plugin-command-keybindings
 import { usePluginCommands } from '@/store/plugin-panels'
 import {
   getRepoExecutionHostId,
-  isRuntimeOwnedSshTargetId,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
@@ -220,7 +198,6 @@ import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
 } from '../../shared/modifier-double-tap-detector'
-import { isGitRepoKind } from '../../shared/repo-kind'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { resolveMountedLazyModalIds, type LazyModalId } from './lazy-modal-mount-state'
 import { translate } from '@/i18n/i18n'
@@ -358,14 +335,12 @@ const CodevAwaitingWorkspaceCover = lazy(() =>
 const WorktreeCreationPanel = lazy(
   () => import('./components/worktree-creation/WorktreeCreationPanel')
 )
-const TaskPage = lazy(() => import('./components/TaskPage'))
 const AutomationsPage = lazy(() => import('./components/automations/AutomationsPage'))
 const ActivityPrototypePage = lazy(() => import('./components/activity/ActivityPrototypePage'))
 const Settings = lazy(() => import('./components/settings/Settings'))
 import { isCodevSettingsOnly } from './components/settings/codev-personal-settings'
 const SkillsPage = lazy(() => import('./components/skills/SkillsPage'))
 const WorkspaceSpacePage = lazy(() => import('./components/workspace-space/WorkspaceSpacePage'))
-const MobilePage = lazy(() => import('./components/mobile/MobilePage'))
 const QuickOpen = lazy(() => import('./components/QuickOpen'))
 const WorktreeJumpPalette = lazy(() => import('./components/WorktreeJumpPalette'))
 const WorkspaceCleanupDialog = lazy(
@@ -375,9 +350,6 @@ const Terminal = lazy(() => import('./components/Terminal'))
 const StatusBar = lazy(() =>
   import('./components/status-bar/StatusBar').then((module) => ({ default: module.StatusBar }))
 )
-const SetupGuideModal = lazy(() => import('./components/setup-guide/SetupGuideModal'))
-const FeatureWallModal = lazy(() => import('./components/feature-wall/FeatureWallModal'))
-const FeatureTipsModal = lazy(() => import('./components/feature-tips/FeatureTipsModal'))
 const AddRepoDialog = lazy(() => import('./components/sidebar/AddRepoDialog'))
 const NonGitFolderDialog = lazy(() => import('./components/sidebar/NonGitFolderDialog'))
 const AddProjectFromFolderDialog = lazy(
@@ -385,96 +357,18 @@ const AddProjectFromFolderDialog = lazy(
 )
 const ProjectAddedDialog = lazy(() => import('./components/sidebar/ProjectAddedDialog'))
 const DeleteWorktreeDialog = lazy(() => import('./components/sidebar/DeleteWorktreeDialog'))
-const DictationController = lazy(() =>
-  import('./components/dictation/DictationController').then((module) => ({
-    default: module.DictationController
-  }))
-)
-const SshPassphraseDialog = lazy(() =>
-  import('./components/settings/SshPassphraseDialog').then((module) => ({
-    default: module.SshPassphraseDialog
-  }))
-)
-const UpdateCard = lazy(() =>
-  import('./components/UpdateCard').then((module) => ({ default: module.UpdateCard }))
-)
-const RemoteServerUpdateDialog = lazy(
-  () => import('./components/settings/RemoteServerUpdateDialog')
-)
-const ContextualTourOverlay = lazy(() =>
-  import('./components/contextual-tours/ContextualTourOverlay').then((module) => ({
-    default: module.ContextualTourOverlay
-  }))
-)
-const SetupGuideTelemetryObserver = lazy(() =>
-  import('./components/setup-guide/SetupGuideTelemetryObserver').then((module) => ({
-    default: module.SetupGuideTelemetryObserver
-  }))
-)
 const FloatingTerminalPanel = lazy(() =>
   import('./components/floating-terminal/FloatingTerminalPanel').then((module) => ({
     default: module.FloatingTerminalPanel
   }))
 )
-// Why: lazy so the WebP asset + overlay module aren't fetched unless the experimental flag is on.
-const PetOverlay = lazy(() => import('./components/pet/PetOverlay'))
 const DashboardPopoutBridge = lazy(() => import('./components/dashboard/DashboardPopoutBridge'))
-// Why: lazy so onboarding's step modules + assets aren't fetched for users past first-launch.
-const OnboardingFlow = lazy(() => import('./components/onboarding/OnboardingFlow'))
-
-function applyRemoteWorkspacePatchStatus(
-  targetId: string,
-  result: RemoteWorkspacePatchResult
-): void {
-  const store = useAppStore.getState()
-  if (result.ok) {
-    store.setRemoteWorkspaceSyncStatus(targetId, {
-      phase: 'synced',
-      direction: 'push',
-      revision: result.snapshot.revision,
-      updatedAt: result.snapshot.updatedAt,
-      lastSyncedAt: Date.now(),
-      message: translate('auto.App.332dbfa497', 'Workspace uploaded')
-    })
-    return
-  }
-  store.setRemoteWorkspaceSyncStatus(targetId, {
-    phase: result.reason === 'stale-revision' ? 'conflict' : 'offline',
-    direction: 'push',
-    revision: result.snapshot?.revision,
-    updatedAt: result.snapshot?.updatedAt,
-    lastSyncedAt: Date.now(),
-    message:
-      result.message ??
-      (result.reason === 'stale-revision'
-        ? translate(
-            'auto.hooks.useIpcEvents.workspaceChangedOnAnotherDevice',
-            'Workspace changed on another device'
-          )
-        : translate('auto.hooks.useIpcEvents.2fe88c2e06', 'Remote workspace sync unavailable'))
-  })
-}
-
-function shouldMountUpdateCardForStatus(status: UpdateStatus): boolean {
-  if (status.state === 'idle') {
-    return false
-  }
-  if (status.state === 'checking' || status.state === 'not-available') {
-    return status.userInitiated === true
-  }
-  return true
-}
 
 function App(): React.JSX.Element {
   const clearUnreadDockBadge = useUnreadDockBadge()
   useRadixBodyPointerEventsRecovery()
   useWebSessionTabsSync()
   const [floatingTerminalOpen, setFloatingTerminalOpen] = useState(false)
-  const floatingWorkspaceTourInteractionSnapshotRef = useRef<{
-    wasPreviouslyInteracted?: boolean
-    persisted?: Promise<void>
-    recordFeatureInteractionForTour: boolean
-  } | null>(null)
 
   // Why: consolidate action refs into one useShallow subscription so React runs one equality check per store mutation instead of one per action.
   const actions = useAppStore(
@@ -503,16 +397,10 @@ function App(): React.JSX.Element {
       hydrateBrowserSession: s.hydrateBrowserSession,
       fetchBrowserSessionProfiles: s.fetchBrowserSessionProfiles,
       reconnectPersistedTerminals: s.reconnectPersistedTerminals,
-      setDeferredSshReconnectTargets: s.setDeferredSshReconnectTargets,
-      setSshConnectionState: s.setSshConnectionState,
       hydratePersistedUI: s.hydratePersistedUI,
       setHydrationSucceeded: s.setHydrationSucceeded,
       openModal: s.openModal,
       closeModal: s.closeModal,
-      markFeatureTipsSeen: s.markFeatureTipsSeen,
-      setContextualToursAutoEligible: s.setContextualToursAutoEligible,
-      setContextualToursOnboardingVisible: s.setContextualToursOnboardingVisible,
-      cancelContextualTour: s.cancelContextualTour,
       toggleRightSidebar: s.toggleRightSidebar,
       setRightSidebarOpen: s.setRightSidebarOpen,
       setRightSidebarTab: s.setRightSidebarTab,
@@ -533,9 +421,6 @@ function App(): React.JSX.Element {
   const codevSettingsOnly = useMemo(() => isCodevSettingsOnly(), [])
   const activeView = codevSettingsOnly ? 'settings' : storeActiveView
   const activeModal = useAppStore((s) => s.activeModal)
-  const featureTipsSeenIds = useAppStore((s) => s.featureTipsSeenIds)
-  const featureInteractions = useAppStore((s) => s.featureInteractions)
-  const contextualToursAutoEligible = useAppStore((s) => s.contextualToursAutoEligible)
   const {
     activeWorktreeId,
     tabCount,
@@ -625,8 +510,6 @@ function App(): React.JSX.Element {
   )
   const keybindings = useAppStore((s) => s.keybindings)
   const pluginCommands = usePluginCommands()
-  const updateStatus = useAppStore((s) => s.updateStatus)
-  const activeContextualTourId = useAppStore((s) => s.activeContextualTourId)
   const leftSidebarShortcutLabel = useShortcutLabel('sidebar.left.toggle')
   const rightSidebarShortcutLabel = useShortcutLabel('sidebar.right.toggle')
   const historyBackShortcutLabel = useShortcutLabel('worktree.history.back')
@@ -721,9 +604,6 @@ function App(): React.JSX.Element {
         typeof nextOpen === 'function' ? nextOpen(floatingTerminalOpen) : nextOpen
       // Why: recordFeatureInteraction updates Zustand subscribers; running it inside the state updater logs a render-phase update warning.
       if (resolvedOpen && !floatingTerminalOpen) {
-        const state = useAppStore.getState()
-        floatingWorkspaceTourInteractionSnapshotRef.current =
-          createFloatingWorkspaceTourInteractionSnapshot(state)
         rememberFloatingTerminalReturnFocus()
       } else if (!resolvedOpen && floatingTerminalOpen) {
         restoreFloatingTerminalReturnFocus()
@@ -764,10 +644,7 @@ function App(): React.JSX.Element {
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const acknowledgedAgentsByPaneKey = useAppStore((s) => s.acknowledgedAgentsByPaneKey)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
-  const shouldMountContextualTourOverlay = activeContextualTourId !== null
   useOsc52ClipboardDefaultOnNotice(persistedUIReady)
-  const shouldMountSetupGuideTelemetryObserver = persistedUIReady
-  const shouldMountUpdateCard = shouldMountUpdateCardForStatus(updateStatus)
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
   const markdownTocPanelWidth = useAppStore((s) => s.markdownTocPanelWidth)
   const combinedDiffFileTreeWidth = useAppStore((s) => s.combinedDiffFileTreeWidth)
@@ -781,10 +658,6 @@ function App(): React.JSX.Element {
     () => resolveLeftSidebarStyleVariables(settings, systemPrefersDark),
     [settings, systemPrefersDark]
   ) as React.CSSProperties | undefined
-  const dictationState = useAppStore((s) => s.dictationState)
-  const hasSshCredentialRequest = useAppStore((s) => s.sshCredentialQueue.length > 0)
-  const shouldMountDictationController =
-    settings?.voice?.enabled === true || dictationState !== 'idle'
   const primarySelectionMiddleClickPaste = resolvePrimarySelectionMiddleClickPaste(
     settings?.primarySelectionMiddleClickPaste
   )
@@ -792,33 +665,13 @@ function App(): React.JSX.Element {
 
   useAppMenuPaste()
   useLargeTextControlPaste()
-  const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
-  const petVisible = useAppStore((s) => s.petVisible)
-  const renderPetOverlay = shouldRenderPetOverlay({
-    persistedUIReady,
-    petEnabled,
-    petVisible
-  })
   const canGoBackWorktree = useAppStore(canGoBackWorktreeHistory)
   const canGoForwardWorktree = useAppStore(canGoForwardWorktreeHistory)
   const titlebarLeftControlsRef = useRef<HTMLDivElement | null>(null)
   const [collapsedSidebarHeaderWidth, setCollapsedSidebarHeaderWidth] = useState(0)
   const [mountedLazyModalIds, setMountedLazyModalIds] = useState<Set<LazyModalId>>(() => new Set())
   const [shouldMountAddRepoDialog, setShouldMountAddRepoDialog] = useState(false)
-  const [onboarding, setOnboarding] = useState<OnboardingState | null>(null)
-  const [onboardingLoaded, setOnboardingLoaded] = useState(false)
-  const featureTipsPromptedThisSessionRef = useRef(false)
-  const featureTipsSuppressedByOnboardingThisSessionRef = useRef(false)
   const unmountAddRepoDialogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [featureTipCliInstalled, setFeatureTipCliInstalled] = useState<boolean | null>(null)
-  const [onboardingSettingsDetour, setOnboardingSettingsDetour] = useState(false)
-  const shouldRenderOnboarding = onboarding !== null && shouldShowOnboarding(onboarding)
-  const onboardingSettingsDetourActive =
-    onboardingSettingsDetour && activeView === 'settings' && shouldRenderOnboarding
-  if (onboardingSettingsDetour && !onboardingSettingsDetourActive) {
-    // Why: the detour is valid only while Settings is onscreen; clear it during render so onboarding resumes without an extra Effect pass.
-    setOnboardingSettingsDetour(false)
-  }
 
   useEffect(() => {
     if (activeModal === 'add-repo') {
@@ -855,97 +708,6 @@ function App(): React.JSX.Element {
   useEditorExternalWatch()
   useGlobalFileDrop()
   useAutoAckViewedAgent()
-  useEffect(() => {
-    return onOnboardingReopened(setOnboarding)
-  }, [])
-
-  useEffect(() => {
-    // Why: suppress tours until onboarding state is known (null = loading) so a first-run user can't mark a tour seen before onboarding appears.
-    const suppressTours = !onboardingLoaded || shouldShowOnboarding(onboarding)
-    actions.setContextualToursOnboardingVisible(suppressTours)
-  }, [actions, onboarding, onboardingLoaded])
-
-  useEffect(() => {
-    if (!persistedUIReady || !onboardingLoaded || contextualToursAutoEligible !== null) {
-      return
-    }
-    // Why: rollout targets first-run onboarding users; existing profiles are classified once and never auto-toured.
-    actions.setContextualToursAutoEligible(shouldShowOnboarding(onboarding))
-  }, [actions, contextualToursAutoEligible, onboarding, onboardingLoaded, persistedUIReady])
-
-  useEffect(() => {
-    if (!persistedUIReady) {
-      return
-    }
-
-    let cancelled = false
-    void window.api.cli
-      .getInstallStatus()
-      .then((status) => {
-        if (cancelled) {
-          return
-        }
-        setFeatureTipCliInstalled(isCliFeatureTipCompleted(status))
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setFeatureTipCliInstalled(true)
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [persistedUIReady])
-
-  useEffect(() => {
-    const featureTipsDecision = getFeatureTipsAppOpenDecision({
-      activeModal,
-      cliInstalled: featureTipCliInstalled,
-      codevEmbedded: isCodevEmbedded(),
-      featureTipsSeenIds,
-      featureInteractions,
-      onboarding,
-      persistedUIReady,
-      promptedThisSession: featureTipsPromptedThisSessionRef.current,
-      settings,
-      suppressedByOnboardingThisSession: featureTipsSuppressedByOnboardingThisSessionRef.current
-    })
-
-    if (featureTipsDecision.kind === 'suppress-for-onboarding') {
-      // Why: first-run users should finish onboarding without a second education modal in the same session.
-      featureTipsSuppressedByOnboardingThisSessionRef.current = true
-      return
-    }
-
-    if (featureTipsDecision.kind !== 'open') {
-      return
-    }
-
-    featureTipsPromptedThisSessionRef.current = true
-    if (featureTipsDecision.tipId === 'orca-cli') {
-      trackOrcaCliFeatureTipShown('app_open')
-    } else if (featureTipsDecision.tipId === 'cmd-j-palette') {
-      trackCmdJPaletteFeatureTipShown('app_open')
-    }
-    // Why: mark seen on show so a quit/crash before dismiss doesn't reappear it next launch.
-    actions.markFeatureTipsSeen([featureTipsDecision.tipId])
-    actions.openModal('feature-tips', { source: 'app_open', tipId: featureTipsDecision.tipId })
-  }, [
-    activeModal,
-    actions,
-    featureTipCliInstalled,
-    featureInteractions,
-    featureTipsSeenIds,
-    onboarding,
-    persistedUIReady,
-    settings
-  ])
-
-  const beginOnboardingSettingsDetour = useCallback(() => {
-    setOnboardingSettingsDetour(true)
-  }, [])
-
   // Why: useLayoutEffect fires before paint, so dispatching SYNC_FIT_PANES_EVENT reflows the terminal in the same frame as the width change — no wrongly-sized transient.
   useLayoutEffect(() => {
     window.dispatchEvent(new CustomEvent(SYNC_FIT_PANES_EVENT))
@@ -986,16 +748,12 @@ function App(): React.JSX.Element {
           useAppStore.getState().settings,
           getSystemPrefersDark()
         )
-        // Why: start keybindings + onboarding now so their IPC overlaps the local catalog scans; await them at their original spots. The .catch marks rejections handled if an earlier await throws first.
+        // Why: start keybindings now so its IPC overlaps the local catalog scans; await it at its original spot. The .catch marks rejections handled if an earlier await throws first.
         // Why: browser session profiles are NOT started early — on a remote runtime the RPC may be unconnected and a failed fetch clears the list.
         const keybindingsPromise = timeRendererStartupStep('fetch-keybindings', () =>
           actions.fetchKeybindings()
         )
         keybindingsPromise.catch(() => {})
-        const onboardingPromise = timeRendererStartupStep('onboarding-get', () =>
-          window.api.onboarding.get()
-        )
-        onboardingPromise.catch(() => {})
         // Why: await ui.get() (not overlap) so persisted view settings hydrate before the local catalog/session steps and first paint reflects them.
         const persistedUI = await timeRendererStartupStep('ui-get', () => window.api.ui.get())
         uiHydrated = timeRendererStartupSyncStep('hydrate-persisted-ui', () =>
@@ -1097,93 +855,6 @@ function App(): React.JSX.Element {
           await timeRendererStartupStep('fetch-browser-session-profiles', () =>
             actions.fetchBrowserSessionProfiles()
           )
-          const onboardingState = await onboardingPromise
-          if (!cancelled) {
-            setOnboarding(onboardingState)
-            setOnboardingLoaded(true)
-          }
-
-          // Why: re-establish SSH before terminal reconnect so SSH-backed tabs route through pty.attach; passphrase targets defer to tab focus to avoid stacked credential dialogs.
-          // Why: never dial runtime-owned (ephemeral-VM) targets from the renderer — ssh.connect would dispose the runtime layer's live relay session; filter them out here too.
-          const connectionIds = (sessionRead.session.activeConnectionIdsAtShutdown ?? []).filter(
-            (targetId) => !isRuntimeOwnedSshTargetId(targetId)
-          )
-          if (connectionIds.length > 0) {
-            try {
-              const SSH_RECONNECT_TIMEOUT_MS = 15_000
-              const allTargets = await timeRendererStartupStep('ssh-list-targets', () =>
-                window.api.ssh.listTargets()
-              )
-              const targetMap = new Map(allTargets.map((t) => [t.id, t]))
-              const targets = connectionIds.map((targetId) => ({
-                targetId,
-                needsPassphrase: targetMap.get(targetId)?.lastRequiredPassphrase ?? false
-              }))
-
-              const eagerTargets = targets.filter((t) => !t.needsPassphrase)
-              const deferredTargets = targets.filter((t) => t.needsPassphrase)
-
-              if (deferredTargets.length > 0) {
-                actions.setDeferredSshReconnectTargets(deferredTargets.map((t) => t.targetId))
-              }
-
-              // Why: treat timed-out eager targets as deferred so their PTYs reattach on tab focus (ssh.connect keeps running in main and likely finishes by then).
-              const timedOutTargets: string[] = []
-              await timeRendererStartupStep(
-                'ssh-reconnect',
-                () =>
-                  Promise.all(
-                    eagerTargets.map(async ({ targetId }) => {
-                      const result = await reconnectSshTargetForRendererStartup({
-                        targetId,
-                        timeoutMs: SSH_RECONNECT_TIMEOUT_MS,
-                        connect: (id) => window.api.ssh.connect({ targetId: id }),
-                        publishState: actions.setSshConnectionState,
-                        onFailure: (id, error) => {
-                          console.warn(`SSH auto-reconnect failed for ${id}:`, error)
-                        }
-                      })
-                      if (result.timedOut) {
-                        timedOutTargets.push(targetId)
-                      }
-                    })
-                  ),
-                {
-                  eagerTargets: eagerTargets.length,
-                  deferredTargets: deferredTargets.length
-                }
-              )
-              if (timedOutTargets.length > 0) {
-                actions.setDeferredSshReconnectTargets([
-                  ...deferredTargets.map((t) => t.targetId),
-                  ...timedOutTargets
-                ])
-              }
-
-              // Why: older/wrapped providers may return no state from connect; poll main once as a compatibility fallback before terminal restoration.
-              for (const { targetId } of eagerTargets) {
-                if (timedOutTargets.includes(targetId)) {
-                  continue
-                }
-                try {
-                  const state = await window.api.ssh.getState({ targetId })
-                  console.warn(
-                    `[ssh-restore] Polled state for ${targetId}: status=${state?.status}`
-                  )
-                  if (state?.status === 'connected') {
-                    actions.setSshConnectionState(targetId, state)
-                  }
-                } catch {
-                  /* best-effort */
-                }
-              }
-            } catch (err) {
-              console.warn('SSH startup reconnect failed:', err)
-            }
-          } else {
-            logRendererStartupDiagnostic('ssh-reconnect-skipped', { connectionIds: 0 })
-          }
-
           // Why: main overlaps daemon/hook startup with hydration, but restored terminals need those services ready before they spawn/reconnect PTYs.
           await timeRendererStartupStep('first-window-services-await', () =>
             window.api.app.awaitFirstWindowStartupServices()
@@ -1385,33 +1056,10 @@ function App(): React.JSX.Element {
   useEffect(() => {
     return createSessionWriteSubscriber({
       store: useAppStore,
-      shouldSchedulePersist: () => !isRemoteWorkspaceSnapshotApplyInProgress(),
       persist: ({ patch }) => {
         const state = useAppStore.getState()
-        // Why: route each host's worktree-scoped slice to its own partition; return the local write so the remote-workspace upload chain below keeps its ordering.
-        const localWrite = patchWorkspaceSessionByHost(window.api.session, patch, state)
-        void localWrite
-        const hydratedTargetIds = Array.from(state.remoteWorkspaceHydratedTargetIds).filter(
-          (targetId) => state.remoteWorkspaceSyncStatusByTargetId[targetId]?.phase !== 'conflict'
-        )
-        if (hydratedTargetIds.length > 0) {
-          void localWrite
-            .then(() => window.api.remoteWorkspace?.setForConnectedTargets({ hydratedTargetIds }))
-            .then((results) => {
-              for (const { targetId, result } of results ?? []) {
-                applyRemoteWorkspacePatchStatus(targetId, result)
-              }
-            })
-            .catch((err) => {
-              for (const targetId of hydratedTargetIds) {
-                useAppStore.getState().setRemoteWorkspaceSyncStatus(targetId, {
-                  phase: 'error',
-                  direction: 'push',
-                  message: err instanceof Error ? err.message : 'Workspace upload failed'
-                })
-              }
-            })
-        }
+        // Why: route each host's worktree-scoped slice to its own partition.
+        void patchWorkspaceSessionByHost(window.api.session, patch, state)
       }
     })
   }, [])
@@ -1646,8 +1294,6 @@ function App(): React.JSX.Element {
   })
   // Full-page navigation surfaces own the whole content area, so suppress right-sidebar controls.
   const showRightSidebarControls = !creationLayoutActive && canShowRightSidebarForView(activeView)
-  const showProfileSwitcherInSidebarFooter = showSidebar && sidebarOpen
-  const showProfileSwitcherInTopRight = !showProfileSwitcherInSidebarFooter
 
   const handleToggleExpand = (): void => {
     if (!effectiveActiveTabId) {
@@ -1811,16 +1457,6 @@ function App(): React.JSX.Element {
               useAppStore.getState().setSidebarOpen(true)
               window.dispatchEvent(new CustomEvent(OPEN_WORKSPACE_BOARD_EVENT))
             })
-          }
-        ],
-        [
-          'view.tasks',
-          () => {
-            const store = useAppStore.getState()
-            if (activeView === 'settings' || !store.repos.some((repo) => isGitRepoKind(repo))) {
-              return false
-            }
-            return claim('view.tasks', () => store.openTaskPage())
           }
         ],
         [
@@ -2320,33 +1956,12 @@ function App(): React.JSX.Element {
           </TooltipContent>
         </Tooltip>
       )}
-      {showProfileSwitcherInTopRight ? <OrcaProfileSwitcher /> : null}
       {/* Why: the open right sidebar's header renders its own close button, so hide this duplicate. */}
       {!rightSidebarOpen && rightSidebarToggle}
       {/* Why: reserve space so the Windows/Linux window-controls overlay doesn't obscure content. */}
       {hasCustomTitleBar && <div className="window-controls-titlebar-spacer" />}
     </>
   )
-  const workspaceProfileSwitcher =
-    showProfileSwitcherInTopRight &&
-    workspaceChromeActive &&
-    leftTitlebarChromeLayout.shouldMount &&
-    !stackedSidebarOpen ? (
-      <div
-        className="absolute top-0 z-30 flex h-[36px] items-center"
-        style={
-          {
-            right: showRightSidebarControls
-              ? 'calc(var(--window-controls-width) + 42px)'
-              : 'var(--window-controls-width)',
-            WebkitAppRegion: 'no-drag'
-          } as React.CSSProperties
-        }
-      >
-        <OrcaProfileSwitcher />
-      </div>
-    ) : null
-
   return (
     <div
       ref={setAppRootNode}
@@ -2366,7 +1981,6 @@ function App(): React.JSX.Element {
           <LinkRoutingPreferenceDialogProvider>
             <WorkspacePortScanner enabled={workspaceSessionReady} />
             {/* Why: plugin language-pack discovery must not re-render the App shell. */}
-            <MacosTccPromptNoticeHost />
             {/* Why: leaf-mounted retention sync keeps agent-status subscriptions out of the App render tree. */}
             <RetainedAgentsSyncGate />
             <AiVaultTabTitleSyncGate />
@@ -2491,7 +2105,6 @@ function App(): React.JSX.Element {
                             {rightSidebarToggle}
                           </div>
                         )}
-                        {workspaceProfileSwitcher}
                         {/* CoDev: inert while a team channel covers it, so the
                             hidden chat is not reachable by Tab or a screen reader. */}
                         <CodevCenterUnderlay className="flex flex-1 min-w-0 min-h-0 flex-col">
@@ -2535,11 +2148,9 @@ function App(): React.JSX.Element {
                             >
                               {activeView === 'settings' ? <Settings /> : null}
                               {activeView === 'skills' ? <SkillsPage /> : null}
-                              {activeView === 'tasks' ? <TaskPage /> : null}
                               {activeView === 'automations' ? <AutomationsPage /> : null}
                               {activeView === 'activity' ? <ActivityPrototypePage /> : null}
                               {activeView === 'space' ? <WorkspaceSpacePage /> : null}
-                              {activeView === 'mobile' ? <MobilePage /> : null}
                               {activeView === 'terminal' &&
                               creationLayoutActive &&
                               activePendingCreationId ? (
@@ -2611,7 +2222,6 @@ function App(): React.JSX.Element {
                   <FloatingTerminalPanel
                     open={floatingTerminalOpen}
                     onOpenChange={setFloatingTerminalOpenWithFocus}
-                    tourInteractionSnapshot={floatingWorkspaceTourInteractionSnapshotRef.current}
                   />
                 </RecoverableRenderErrorBoundary>
               </Suspense>
@@ -2725,89 +2335,7 @@ function App(): React.JSX.Element {
                   <WorktreeJumpPalette />
                 </RecoverableRenderErrorBoundary>
               ) : null}
-              {resolvedMountedLazyModalIds.has('setup-guide') ? (
-                <RecoverableRenderErrorBoundary
-                  boundaryId="modal.setup-guide"
-                  surface="modal"
-                  resetKey={activeModal === 'setup-guide'}
-                  compact
-                >
-                  <SetupGuideModal />
-                </RecoverableRenderErrorBoundary>
-              ) : null}
-              {resolvedMountedLazyModalIds.has('feature-wall') ? (
-                <RecoverableRenderErrorBoundary
-                  boundaryId="modal.feature-wall"
-                  surface="modal"
-                  resetKey={activeModal === 'feature-wall'}
-                  compact
-                >
-                  <FeatureWallModal />
-                </RecoverableRenderErrorBoundary>
-              ) : null}
-              {resolvedMountedLazyModalIds.has('feature-tips') ? (
-                <RecoverableRenderErrorBoundary
-                  boundaryId="modal.feature-tips"
-                  surface="modal"
-                  resetKey={activeModal === 'feature-tips'}
-                  compact
-                >
-                  <FeatureTipsModal />
-                </RecoverableRenderErrorBoundary>
-              ) : null}
             </Suspense>
-            {shouldMountSetupGuideTelemetryObserver ? (
-              <Suspense fallback={null}>
-                <SetupGuideTelemetryObserver />
-              </Suspense>
-            ) : null}
-            {shouldMountContextualTourOverlay ? (
-              <Suspense fallback={null}>
-                <ContextualTourOverlay />
-              </Suspense>
-            ) : null}
-            {/* Why: mount only after UI hydration, else a hidden pet flashes while the store still holds default visibility. */}
-            {renderPetOverlay ? (
-              <Suspense fallback={null}>
-                <RecoverableRenderErrorBoundary
-                  boundaryId="overlay.pet"
-                  surface="overlay"
-                  resetKey={petVisible}
-                  compact
-                >
-                  <PetOverlay />
-                </RecoverableRenderErrorBoundary>
-              </Suspense>
-            ) : null}
-            {shouldMountUpdateCard ? (
-              <Suspense fallback={null}>
-                <RecoverableRenderErrorBoundary
-                  boundaryId="overlay.update-card"
-                  surface="overlay"
-                  resetKey={activeView}
-                  compact
-                >
-                  <UpdateCard />
-                </RecoverableRenderErrorBoundary>
-              </Suspense>
-            ) : null}
-            <RecoverableRenderErrorBoundary
-              boundaryId="overlay.star-nag"
-              surface="overlay"
-              resetKey={activeView}
-              compact
-            >
-              <StarNagCard />
-            </RecoverableRenderErrorBoundary>
-            <RecoverableRenderErrorBoundary
-              boundaryId="overlay.star-nag-toast"
-              surface="overlay"
-              resetKey={activeView}
-              compact
-            >
-              <StarNagToastHost />
-            </RecoverableRenderErrorBoundary>
-            <StarNagAgentValueMomentObserver />
             {/* Why: mount at App root to render once per session; internal cohort gate limits it to pre-telemetry users — see telemetry-plan.md §First-launch experience. */}
             <RecoverableRenderErrorBoundary
               boundaryId="overlay.telemetry-first-launch"
@@ -2837,18 +2365,6 @@ function App(): React.JSX.Element {
                 </RecoverableRenderErrorBoundary>
               ) : null}
             </Suspense>
-            {hasSshCredentialRequest ? (
-              <Suspense fallback={null}>
-                <RecoverableRenderErrorBoundary
-                  boundaryId="modal.ssh-passphrase"
-                  surface="modal"
-                  resetKey={activeModal}
-                  compact
-                >
-                  <SshPassphraseDialog />
-                </RecoverableRenderErrorBoundary>
-              </Suspense>
-            ) : null}
             <RecoverableRenderErrorBoundary
               boundaryId="modal.markdown-template-picker"
               surface="modal"
@@ -2857,52 +2373,6 @@ function App(): React.JSX.Element {
             >
               <MarkdownTemplatePicker />
             </RecoverableRenderErrorBoundary>
-            <RecoverableRenderErrorBoundary
-              boundaryId="modal.crash-report"
-              surface="modal"
-              reportAsCrash={false}
-              resetKey={activeModal}
-              compact
-              title={translate('auto.App.722d03aa62', 'The crash report dialog hit an error.')}
-              description={translate(
-                'auto.App.acd66311dc',
-                'Use the Help menu after retrying if you still need diagnostics.'
-              )}
-            >
-              <CrashReportDialog />
-            </RecoverableRenderErrorBoundary>
-            {onboarding && shouldRenderOnboarding && !onboardingSettingsDetourActive ? (
-              <Suspense fallback={null}>
-                <RecoverableRenderErrorBoundary
-                  boundaryId="modal.onboarding"
-                  surface="modal"
-                  resetKey={onboardingSettingsDetourActive}
-                  title={translate('auto.App.f02d37278a', 'Onboarding hit an error.')}
-                  description={translate(
-                    'auto.App.221a95ba38',
-                    'Retry onboarding or close it and continue in the app.'
-                  )}
-                >
-                  <OnboardingFlow
-                    onboarding={onboarding}
-                    onOnboardingChange={setOnboarding}
-                    onSettingsDetourStart={beginOnboardingSettingsDetour}
-                  />
-                </RecoverableRenderErrorBoundary>
-              </Suspense>
-            ) : null}
-            {shouldMountDictationController ? (
-              <Suspense fallback={null}>
-                <RecoverableRenderErrorBoundary
-                  boundaryId="overlay.dictation"
-                  surface="overlay"
-                  resetKey={activeView}
-                  compact
-                >
-                  <DictationController />
-                </RecoverableRenderErrorBoundary>
-              </Suspense>
-            ) : null}
             <RecoverableRenderErrorBoundary
               boundaryId="overlay.recent-tab-switcher"
               surface="overlay"
@@ -2919,15 +2389,6 @@ function App(): React.JSX.Element {
             >
               <SkillFreshnessUpdateDialog />
             </RecoverableRenderErrorBoundary>
-            <Suspense fallback={null}>
-              <RecoverableRenderErrorBoundary
-                boundaryId="overlay.remote-server-update-dialog"
-                surface="overlay"
-                compact
-              >
-                <RemoteServerUpdateDialog />
-              </RecoverableRenderErrorBoundary>
-            </Suspense>
           </LinkRoutingPreferenceDialogProvider>
         </ConfirmationDialogProvider>
       </TooltipProvider>

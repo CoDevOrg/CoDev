@@ -68,8 +68,7 @@ export function ExternalFileChangeCompareDialog({
       filePath: file.filePath,
       relativePath: file.relativePath,
       worktreeId: file.worktreeId,
-      connectionId: getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined,
-      expectedExternalSshTargetId: file.externalSshTargetId
+      connectionId: getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined
     })
       .then((result) => {
         if (cancelled) {
@@ -97,7 +96,6 @@ export function ExternalFileChangeCompareDialog({
     file.relativePath,
     file.worktreeId,
     file.runtimeEnvironmentId,
-    file.externalSshTargetId,
     currentContent
   ])
 

@@ -25,9 +25,9 @@ describe('tuiAgentToAgentKind', () => {
     expect(mappedKinds).toEqual(concreteSchemaKinds)
   })
 
-  it('uses the product id for Claude and the TuiAgent id for Pi', () => {
+  it('uses the product id for Claude and the TuiAgent id for Codex', () => {
     expect(tuiAgentToAgentKind('claude')).toBe('claude-code')
-    expect(tuiAgentToAgentKind('pi')).toBe('pi')
+    expect(tuiAgentToAgentKind('codex')).toBe('codex')
   })
 })
 

@@ -12,8 +12,6 @@ import { getDevInstanceIdentity } from '../startup/dev-instance-identity'
 import { isPwshAvailable } from '../pwsh'
 import { isWslAvailable, listWslDistros } from '../wsl'
 import { isGitBashAvailable } from '../git-bash'
-import { setUnreadDockBadgeCount } from '../dock/unread-badge'
-import { destroySystemTray } from '../tray/system-tray'
 import { authorizeExternalPath } from './filesystem-auth'
 import {
   ensureDefaultFloatingWorkspacePath,
@@ -283,8 +281,6 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     // Why: brief delay lets the renderer paint "Restarting…" before the window tears down.
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
     setTimeout(() => {
-      // Why: app.exit(0) skips before-quit, so destroy the Windows tray manually to avoid a stale icon.
-      destroySystemTray()
       relaunchApp('renderer-request')
       app.exit(0)
     }, 150)
@@ -297,10 +293,6 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
       relaunchApp('admin-restart')
       app.quit()
     }, 150)
-  })
-
-  ipcMain.handle('app:setUnreadDockBadgeCount', (_event, count: number) => {
-    setUnreadDockBadgeCount(Number.isFinite(count) ? count : 0)
   })
 
   ipcMain.handle('app:getFloatingTerminalCwd', (_event, args?: FloatingTerminalCwdRequest) =>

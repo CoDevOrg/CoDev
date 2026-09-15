@@ -3,12 +3,11 @@ import { areWorkspaceLinkedItemsEqual } from './workspace-linked-item'
 import type { WorkspaceLinkedItem } from './types'
 
 const item: WorkspaceLinkedItem = {
-  provider: 'jira',
+  provider: 'github',
   type: 'issue',
-  number: 0,
-  title: 'ORCA-123 Link Jira',
-  url: 'https://company.atlassian.net/browse/ORCA-123',
-  jiraIdentifier: 'ORCA-123',
+  number: 123,
+  title: 'Link GitHub',
+  url: 'https://github.com/acme/app/issues/123',
   repoId: 'repo-1'
 }
 
@@ -17,15 +16,16 @@ describe('areWorkspaceLinkedItemsEqual', () => {
     expect(
       areWorkspaceLinkedItemsEqual(item, {
         repoId: 'repo-1',
-        jiraIdentifier: 'ORCA-123',
-        url: 'https://company.atlassian.net/browse/ORCA-123',
-        title: 'ORCA-123 Link Jira',
-        number: 0,
+        url: 'https://github.com/acme/app/issues/123',
+        title: 'Link GitHub',
+        number: 123,
         type: 'issue',
-        provider: 'jira',
-        linearIdentifier: undefined
+        provider: 'github'
       })
     ).toBe(true)
+    expect(areWorkspaceLinkedItemsEqual({ ...item, repoId: undefined }, { ...item, repoId: undefined })).toBe(
+      true
+    )
   })
 
   it('treats both nullish items as equal and a one-sided item as different', () => {
@@ -33,15 +33,13 @@ describe('areWorkspaceLinkedItemsEqual', () => {
     expect(areWorkspaceLinkedItemsEqual(item, null)).toBe(false)
   })
 
-  it('separates items that differ by identifier, title, url, provider, or repo', () => {
-    expect(areWorkspaceLinkedItemsEqual(item, { ...item, jiraIdentifier: 'ORCA-124' })).toBe(false)
+  it('separates items that differ by number, title, url, type, or repo', () => {
+    expect(areWorkspaceLinkedItemsEqual(item, { ...item, number: 124 })).toBe(false)
     expect(areWorkspaceLinkedItemsEqual(item, { ...item, title: 'Renamed' })).toBe(false)
-    expect(areWorkspaceLinkedItemsEqual(item, { ...item, url: 'https://other/browse/X-1' })).toBe(
-      false
-    )
-    expect(areWorkspaceLinkedItemsEqual(item, { ...item, provider: 'github', number: 12 })).toBe(
-      false
-    )
+    expect(
+      areWorkspaceLinkedItemsEqual(item, { ...item, url: 'https://github.com/acme/app/issues/1' })
+    ).toBe(false)
+    expect(areWorkspaceLinkedItemsEqual(item, { ...item, type: 'pr' })).toBe(false)
     expect(areWorkspaceLinkedItemsEqual(item, { ...item, repoId: 'repo-2' })).toBe(false)
   })
 })

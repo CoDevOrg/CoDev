@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { serveSignalExitError } from './serve-signal-exit-diagnostic'
-import { superviseForegroundServe } from './serve-update-supervisor'
+import { waitForForegroundServe } from './serve-foreground-wait'
 import { RuntimeClientError } from './types'
 
 class FakeChildProcess extends EventEmitter {
@@ -17,15 +17,7 @@ function setPlatform(platform: NodeJS.Platform): void {
 
 function superviseUntilExit(code: number | null, signal: NodeJS.Signals | null): Promise<number> {
   const child = new FakeChildProcess()
-  const supervised = superviseForegroundServe({
-    executable: '/Applications/Orca.app/Contents/MacOS/Orca',
-    childArgs: ['--serve'],
-    spawnOptions: {},
-    spawnChild: vi.fn() as never,
-    handoffPath: null,
-    child: child as never,
-    expectedHandoff: null
-  })
+  const supervised = waitForForegroundServe(child as never)
   child.emit('exit', code, signal)
   return supervised
 }
@@ -73,7 +65,7 @@ describe('serveSignalExitError', () => {
   })
 })
 
-describe('superviseForegroundServe signal exits', () => {
+describe('waitForForegroundServe signal exits', () => {
   it('throws the macOS diagnostic when the child aborts on darwin', async () => {
     setPlatform('darwin')
 

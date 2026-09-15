@@ -266,15 +266,7 @@ describe('launchWorkItemDirect', () => {
       6934,
       { remoteName: 'origin', branchName: 'feature/fix' },
       undefined,
-      undefined,
       'feature/fix',
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
       undefined,
       undefined,
       undefined,
@@ -314,121 +306,8 @@ describe('launchWorkItemDirect', () => {
     expect(createArgs?.[7]).toBe(6933)
     expect(createArgs?.[8]).toBeUndefined()
     expect(createArgs?.[9]).toBeUndefined()
-    expect(createArgs?.[12]).toBeUndefined()
-    expect(createArgs?.[24]).toBeUndefined()
-  })
-
-  it('uses the Linear identifier in direct-launch workspace names', async () => {
-    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
-
-    await launchWorkItemDirect({
-      repoId: 'repo-1',
-      launchSource: 'task_page',
-      telemetrySource: 'sidebar',
-      openModalFallback: vi.fn(),
-      item: {
-        type: 'issue',
-        number: null,
-        title: 'Ship Linear parity',
-        url: 'https://linear.app/acme/issue/ENG-42/ship-linear-parity',
-        linearIdentifier: 'ENG-42'
-      }
-    })
-
-    expect(mocks.createWorktree).toHaveBeenCalledWith(
-      'repo-1',
-      'eng-42-ship-linear-parity',
-      undefined,
-      'inherit',
-      undefined,
-      'sidebar',
-      'Ship Linear parity',
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      'ENG-42',
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined
-    )
-  })
-
-  it('prefills a link-only Linear reference without source context', async () => {
-    mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
-    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
-
-    await expect(
-      launchWorkItemDirect({
-        repoId: 'repo-1',
-        launchSource: 'task_page',
-        openModalFallback: vi.fn(),
-        agentOverride: 'claude',
-        item: {
-          type: 'issue',
-          number: null,
-          title: 'Ship Linear parity',
-          url: 'https://linear.app/acme/issue/ENG-42/ship-linear-parity',
-          linearIdentifier: 'ENG-42',
-          linkedContext: {
-            provider: 'linear',
-            version: 1,
-            renderedText: [
-              'Linear issue context snapshot',
-              'Identifier: ENG-42',
-              'Title: Ship Linear parity',
-              'Description:',
-              'The distinctive Linear body text is here.'
-            ].join('\n')
-          }
-        }
-      })
-    ).resolves.toBe(true)
-
-    const expectedDraft = [
-      'Linked Linear issue: ENG-42',
-      'https://linear.app/acme/issue/ENG-42/ship-linear-parity'
-    ].join('\n')
-    expect(buildAgentDraftLaunchPlan).toHaveBeenCalledWith({
-      agent: 'claude',
-      draft: `${expectedDraft}\n`,
-      cmdOverrides: {},
-      agentArgs: '--dangerously-skip-permissions',
-      agentEnv: {},
-      sessionOptions: undefined,
-      platform: 'win32',
-      isRemote: false
-    })
-    expect(buildAgentStartupPlan).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        agent: 'claude',
-        prompt: '',
-        allowEmptyPromptLaunch: true
-      })
-    )
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(
-      'repo-1::/repo/worktree',
-      expect.objectContaining({
-        startup: expect.objectContaining({
-          command: expect.stringContaining('Linked Linear issue: ENG-42')
-        })
-      })
-    )
-    const startupCommand = mocks.activateAndRevealWorktree.mock.calls[0]?.[1]?.startup?.command
-    expect(startupCommand).toContain('https://linear.app/acme/issue/ENG-42/ship-linear-parity')
-    expect(startupCommand).not.toContain('The distinctive Linear body text is here.')
-    expect(startupCommand).not.toContain('--- BEGIN LINKED WORK ITEM CONTEXT ---')
-    expect(pasteDraftWhenAgentReady).not.toHaveBeenCalled()
+    expect(createArgs?.[11]).toBeUndefined()
+    expect(createArgs?.[16]).toBeUndefined()
   })
 
   it('seeds the chat-composer launch draft for a GitHub issue draft launch', async () => {
@@ -465,83 +344,6 @@ describe('launchWorkItemDirect', () => {
     const startup = mocks.activateAndRevealWorktree.mock.calls.at(-1)?.[1]?.startup
     expect(startup?.draftPrompt).toBeUndefined()
     expect(startup?.launchDraftText).toBe('https://github.com/acme/repo/issues/12')
-  })
-
-  it('seeds the chat-composer launch draft for a multi-line Linear draft launch', async () => {
-    // A Linear draft is always `Linked Linear issue: ENG-42\n<url>\n`, so withholding
-    // multi-line drafts made every Linear launch invisible in the chat view.
-    mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
-    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
-
-    await expect(
-      launchWorkItemDirect({
-        repoId: 'repo-1',
-        launchSource: 'task_page',
-        openModalFallback: vi.fn(),
-        agentOverride: 'claude',
-        item: {
-          type: 'issue',
-          number: null,
-          title: 'Ship Linear parity',
-          url: 'https://linear.app/acme/issue/ENG-42/ship-linear-parity',
-          linearIdentifier: 'ENG-42'
-        }
-      })
-    ).resolves.toBe(true)
-
-    expect(mocks.seedNativeChatLaunchDraft).toHaveBeenCalledWith({
-      tabId: 'tab-1',
-      agent: 'claude',
-      text: 'Linked Linear issue: ENG-42\nhttps://linear.app/acme/issue/ENG-42/ship-linear-parity\n',
-      createdAt: expect.any(Number)
-    })
-  })
-
-  it('preserves explicit Linear paste content submit-after-ready behavior', async () => {
-    mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
-    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
-
-    await expect(
-      launchWorkItemDirect({
-        repoId: 'repo-1',
-        launchSource: 'task_page',
-        openModalFallback: vi.fn(),
-        agentOverride: 'claude',
-        promptDelivery: 'submit-after-ready',
-        item: {
-          type: 'issue',
-          number: null,
-          title: 'Ship Linear parity',
-          url: 'https://linear.app/acme/issue/ENG-42/ship-linear-parity',
-          linearIdentifier: 'ENG-42',
-          pasteContent: 'Use this explicit user prompt.',
-          linkedContext: {
-            provider: 'linear',
-            version: 1,
-            renderedText: 'This generated Linear source should not replace explicit paste content.'
-          }
-        }
-      })
-    ).resolves.toBe(true)
-
-    expect(buildAgentDraftLaunchPlan).not.toHaveBeenCalled()
-    expect(pasteDraftWhenAgentReady).toHaveBeenCalledWith(
-      expect.objectContaining({
-        tabId: 'tab-1',
-        content: 'Use this explicit user prompt.',
-        agent: 'claude',
-        submit: true,
-        forcePaste: true,
-        onTimeout: expect.any(Function)
-      })
-    )
-    expect(mocks.seedNativeChatLaunchPrompt).toHaveBeenCalledWith({
-      tabId: 'tab-1',
-      agent: 'claude',
-      text: 'Use this explicit user prompt.',
-      createdAt: expect.any(Number)
-    })
-    expect(mocks.seedNativeChatLaunchDraft).not.toHaveBeenCalled()
   })
 
   it('uses remote cursor-agent detection, trust preflight, and paste launch for SSH repos', async () => {

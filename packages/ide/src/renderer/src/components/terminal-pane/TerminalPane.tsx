@@ -32,17 +32,8 @@ import TerminalSearch from '@/components/TerminalSearch'
 import type { PtyTransport } from './pty-transport'
 import type { PtyTransportRecoveryState } from './pty-transport-types'
 import { fitPanes, isWindowsUserAgent } from './pane-helpers'
-import { getConnectionId, getConnectionIdFromState } from '@/lib/connection-context'
-import {
-  getExplicitRuntimeEnvironmentIdForWorktree,
-  getRuntimeEnvironmentIdForWorktree
-} from '@/lib/worktree-runtime-owner'
-import {
-  selectRuntimeAwareSshStatus,
-  selectRuntimeAwareSshTargetLabel,
-  selectRuntimeAwareSshTargetRemoved
-} from '@/store/slices/runtime-environment-ssh'
-import { hydrateRuntimeEnvironmentSshState } from '@/runtime/runtime-environment-ssh-state'
+import { getConnectionId } from '@/lib/connection-context'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import {
@@ -67,7 +58,7 @@ import { resolveLeafCloseCopyKind } from '../terminal/terminal-close-copy-kind'
 import { RUNNING_CLOSE_PROBE_TIMEOUT_MS } from '../terminal/running-terminal-close-guard'
 import CodexRestartChip from '../CodexRestartChip'
 import { MobileDriverOverlay } from './MobileDriverOverlay'
-import { stripSshReconnectOwnedErrorLines, TerminalErrorToast } from './TerminalErrorToast'
+import { TerminalErrorToast } from './TerminalErrorToast'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
 import TerminalContextMenu from './TerminalContextMenu'
 import TerminalPaneHeaderOverlay, { type PaneTitleOverlayRect } from './TerminalPaneHeaderOverlay'
@@ -119,7 +110,6 @@ import {
   resolveNativeChatLeafRoute,
   type NativeChatLeafRoute
 } from '../native-chat/native-chat-leaf-routing'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { isCodevEmbedded } from '@/web/codev-embedded'
 import { worktreeHasAgentTabInState } from '@/web/codev-default-chat-tab'
 import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
@@ -153,13 +143,11 @@ import {
   isHostAuthoritativeLayout,
   planTerminalLiveLayoutInsertions
 } from './terminal-live-layout-reconciliation'
-import type { TerminalQuickCommand, TerminalQuickCommandScope } from '../../../../shared/types'
 import {
   createRemotePaneLayoutPusher,
   type RemotePaneLayoutPusher
 } from './remote-pane-layout-push'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 import { refitAndRefreshAllTerminalPanes } from '@/lib/pane-manager/pane-manager-registry'
 import {
@@ -167,10 +155,6 @@ import {
   isTerminalQuickCommandComplete,
   terminalQuickCommandMatchesRepo
 } from '../../../../shared/terminal-quick-commands'
-import {
-  createTerminalQuickCommandDraft,
-  TerminalQuickCommandDialog
-} from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
 import {
@@ -185,7 +169,6 @@ import {
 import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
 import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './terminal-fit-restore'
 import { useVisibleTerminalTabClaim } from './use-visible-terminal-tab-claim'
-import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
 import { TerminalRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeReconnectBanner'
 import { selectTerminalTabAgentTypesByLeaf } from './terminal-tab-agent-type-index'
 import { canContinueAgentSessionInNewSession } from './terminal-agent-session-continuation'
@@ -213,7 +196,6 @@ import {
 import { appendTerminalErrorMessage } from './terminal-error-accumulation'
 import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
 import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
-import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
 import {
   isTerminalPanePasteFocusCurrent,
   isTerminalPanePasteTargetCurrent
@@ -269,31 +251,6 @@ export type TerminalPaneHandle = {
   closeActivePane: () => void
 }
 
-type TerminalQuickCommandEditorDialogProps = {
-  command: TerminalQuickCommand
-  onOpenChange: (open: boolean) => void
-  onSave: (command: TerminalQuickCommand) => void
-}
-
-function TerminalQuickCommandEditorDialog({
-  command,
-  onOpenChange,
-  onSave
-}: TerminalQuickCommandEditorDialogProps): React.JSX.Element {
-  const repos = useAppStore((store) => store.repos)
-
-  return (
-    <TerminalQuickCommandDialog
-      open
-      mode="add"
-      command={command}
-      repos={repos}
-      onOpenChange={onOpenChange}
-      onSave={onSave}
-    />
-  )
-}
-
 function formatClipboardImagePasteError(error: unknown): string {
   const detail = error instanceof Error ? error.message : String(error)
   return `Image paste failed: ${detail}`
@@ -327,7 +284,7 @@ function TerminalPane(
     new Map()
   )
   const paneTransportsRef = useRef<Map<number, PtyTransport>>(new Map())
-  // Why: per-pane live cwd via OSC 7 for split-pane cwd inheritance; split actions read it at dispatch. See docs/ssh-split-pane-inherit-cwd.md.
+  // Why: per-pane live cwd via OSC 7 for split-pane cwd inheritance; split actions read it at dispatch.
   const paneCwdRef = useRef<Map<number, { cwd: string; confirmed: boolean }>>(new Map())
   const paneMode2031Ref = useRef<Map<number, boolean>>(new Map())
   // Why: per-pane mirror of kitty keyboard flags; the keyboard policy reads it to encode Option chords as kitty CSI-u for opted-in TUIs.
@@ -341,45 +298,6 @@ function TerminalPane(
   const isRendererVisible = isVisible && isWorktreeActive
   const isVisibleRef = useRef(isRendererVisible)
   isVisibleRef.current = isRendererVisible
-  const sshReconnectTargetId = useAppStore((store) => {
-    const connectionId = getConnectionIdFromState(store, worktreeId)
-    // Why: runtime-owned SSH targets are internal plumbing users can't connect to, so a reconnect prompt would mislead.
-    if (!connectionId || isRuntimeOwnedSshTargetId(connectionId)) {
-      return null
-    }
-    return connectionId
-  })
-  const nativeChatTranscriptIsLocalReadable = useAppStore((store) =>
-    isNativeChatTranscriptLocalReadable(getConnectionIdFromState(store, worktreeId))
-  )
-  // Which machine's SSH store this target belongs to: a remote server's per-environment bucket, or null for this machine's local SSH maps.
-  const sshReconnectEnvironmentId = useAppStore((store) =>
-    sshReconnectTargetId ? getExplicitRuntimeEnvironmentIdForWorktree(store, worktreeId) : null
-  )
-  const sshReconnectStatus = useAppStore((store) =>
-    sshReconnectTargetId
-      ? selectRuntimeAwareSshStatus(store, sshReconnectEnvironmentId, sshReconnectTargetId)
-      : null
-  )
-  const sshReconnectTargetLabel = useAppStore((store) =>
-    sshReconnectTargetId
-      ? selectRuntimeAwareSshTargetLabel(store, sshReconnectEnvironmentId, sshReconnectTargetId)
-      : ''
-  )
-  // Why: a ghost target (removed from its host) can only fail reconnect, so the overlay offers Remove instead of Connect.
-  const sshReconnectTargetRemoved = useAppStore((store) =>
-    sshReconnectTargetId
-      ? selectRuntimeAwareSshTargetRemoved(store, sshReconnectEnvironmentId, sshReconnectTargetId)
-      : false
-  )
-  useEffect(() => {
-    if (!sshReconnectEnvironmentId) {
-      return
-    }
-    // Why: an SSH workspace can mirror before its environment bucket hydrated; overlay state must come from fetched evidence, not an empty default.
-    void hydrateRuntimeEnvironmentSshState(sshReconnectEnvironmentId).catch(() => {})
-  }, [sshReconnectEnvironmentId])
-
   useVisibleTerminalTabClaim({ isVisible, tabId })
 
   const [expandedPaneId, setExpandedPaneId] = useState<number | null>(null)
@@ -395,14 +313,11 @@ function TerminalPane(
     paneId: number
     copyKind: CloseTerminalDialogCopyKind
   } | null>(null)
-  const [quickCommandEditorOpen, setQuickCommandEditorOpen] = useState(false)
   const [chatLeafId, setChatLeafId] = useState<string | null>(null)
   const onAgentExitedRef = useRef<(leafId: string) => void>(() => {})
   const [tabWideAgentHintLeafId, setTabWideAgentHintLeafId] = useState<string | null | undefined>(
     undefined
   )
-  // Why: each Add action starts with a fresh draft so the terminal menu doesn't reuse cancelled quick-command text.
-  const [quickCommandDraft, setQuickCommandDraft] = useState(createTerminalQuickCommandDraft)
   const [agentSessionFork, setAgentSessionFork] = useState<PreparedAgentSessionFork | null>(null)
   const [agentSessionContinuation, setAgentSessionContinuation] =
     useState<AgentSessionContinuationRequest | null>(null)
@@ -642,15 +557,13 @@ function TerminalPane(
         contentType: 'terminal',
         launchAgent: detectedAgent ? null : launchAgent,
         detectedAgent,
-        resolvedAgent: detectedAgent ? null : resolveTitleAgentForLeaf(leafId),
-        nativeChatTranscriptIsLocalReadable
+        resolvedAgent: detectedAgent ? null : resolveTitleAgentForLeaf(leafId)
       })
     },
     [
       isChatViewMode,
       tabAgentTypeByLeaf,
       nativeChatEnabled,
-      nativeChatTranscriptIsLocalReadable,
       terminalTab?.launchAgent,
       getNativeChatLeafIds,
       getTabWideAgentHintLeafId,
@@ -865,19 +778,6 @@ function TerminalPane(
         s.activeGroupIdByWorktree[worktreeId] ??
         null
     ) ?? null
-
-  const openQuickCommandEditor = useCallback((scope: TerminalQuickCommandScope): void => {
-    setQuickCommandDraft(createTerminalQuickCommandDraft(scope))
-    setQuickCommandEditorOpen(true)
-  }, [])
-
-  const saveQuickCommand = useCallback(
-    (command: TerminalQuickCommand): void => {
-      const currentCommands = useAppStore.getState().settings?.terminalQuickCommands ?? []
-      void updateSettings({ terminalQuickCommands: [...currentCommands, command] })
-    },
-    [updateSettings]
-  )
 
   useEffect(() => {
     if (setupSplit) {
@@ -1977,7 +1877,7 @@ function TerminalPane(
             platform: shortcutPlatform,
             ptyId,
             connectionId,
-            remotePlatform: getTerminalPasteSshRemotePlatform(connectionId),
+            remotePlatform: null,
             transport,
             isWindowsConpty: forceBracketedMultilineTextPaste
           })
@@ -2703,7 +2603,7 @@ function TerminalPane(
               platform: shortcutPlatform,
               ptyId,
               connectionId,
-              remotePlatform: getTerminalPasteSshRemotePlatform(connectionId),
+              remotePlatform: null,
               transport
             })
           },
@@ -2909,25 +2809,6 @@ function TerminalPane(
     },
     [sendAgentPromptInput]
   )
-  const showSshReconnectOverlay = Boolean(
-    isActive &&
-    isVisible &&
-    sshReconnectTargetId &&
-    sshReconnectStatus &&
-    sshReconnectStatus !== 'connected'
-  )
-  // Why: while the reconnect banner owns recovery, strip only the SSH-owned lines from the
-  // (possibly aggregated) error, so a later successful connect can't flash the raw ssh:connect
-  // failure and any unrelated error still surfaces after reconnect.
-  useEffect(() => {
-    if (!showSshReconnectOverlay || terminalError == null) {
-      return
-    }
-    const kept = stripSshReconnectOwnedErrorLines(terminalError)
-    if (kept !== terminalError) {
-      setTerminalError(kept)
-    }
-  }, [showSshReconnectOverlay, terminalError])
   const menuPaneHasCustomTitle =
     contextMenu.menuPaneId !== null && Boolean(paneTitles[contextMenu.menuPaneId])
   const chatLeafStillMounted = chatLeafId
@@ -3056,9 +2937,7 @@ function TerminalPane(
           `codex-restart-${pane.id}`
         )
       })}
-      {/* Why: the reconnect banner already owns SSH recovery UX; the z-50 error
-          toast was painting over it (same bottom strip) with the raw ssh:connect failure. */}
-      {terminalError && isActive && !showSshReconnectOverlay ? (
+      {terminalError && isActive ? (
         <TerminalErrorToast
           error={terminalError}
           onDismiss={dismissTerminalError}
@@ -3081,23 +2960,6 @@ function TerminalPane(
           `agent-update-prompt-${pane.id}`
         )
       })}
-      {/* Why: portal into the pane so the banner stacks above the xterm canvas (sibling mount painted under WebGL). */}
-      {showSshReconnectOverlay && sshReconnectTargetId && sshReconnectStatus
-        ? managedPanes.map((pane) =>
-            createPortal(
-              <TerminalSshReconnectOverlay
-                targetId={sshReconnectTargetId}
-                targetLabel={sshReconnectTargetLabel}
-                status={sshReconnectStatus}
-                targetRemoved={sshReconnectTargetRemoved}
-                worktreeId={worktreeId}
-                sshOwnerEnvironmentId={sshReconnectEnvironmentId}
-              />,
-              pane.container,
-              `ssh-reconnect-${pane.id}`
-            )
-          )
-        : null}
       <DaemonActionDialog api={daemonActions} />
       {isActive && (
         <TerminalSessionStateSaveFailureDialog
@@ -3209,11 +3071,6 @@ function TerminalPane(
         globalQuickCommands={globalQuickCommands}
         quickCommandRepoLabel={quickCommandRepoLabel}
         onQuickCommand={contextMenu.onQuickCommand}
-        onAddQuickCommand={
-          quickCommandRepoId
-            ? () => openQuickCommandEditor({ type: 'repo', repoId: quickCommandRepoId })
-            : () => openQuickCommandEditor({ type: 'global' })
-        }
         onToggleExpand={contextMenu.onToggleExpand}
         onSetTitle={contextMenu.onSetTitle}
         onClearPaneTitle={contextMenu.onClearPaneTitle}
@@ -3221,14 +3078,6 @@ function TerminalPane(
         onCopyTerminalId={() => void contextMenu.onCopyTerminalId()}
         onCopyPaneId={contextMenu.onCopyPaneId}
       />
-      {/* Why: repos is a broad store slice; only subscribe while the editor is visible. */}
-      {quickCommandEditorOpen ? (
-        <TerminalQuickCommandEditorDialog
-          command={quickCommandDraft}
-          onOpenChange={setQuickCommandEditorOpen}
-          onSave={saveQuickCommand}
-        />
-      ) : null}
       <TerminalAgentSessionForkDialog
         open={agentSessionFork !== null}
         fork={agentSessionFork}
@@ -3288,8 +3137,7 @@ function TerminalPane(
         onRenameCancel={handleRenameCancel}
         onRenameBlur={handleRenameBlur}
       />
-      {!showSshReconnectOverlay
-        ? managedPanes.map((pane) => {
+      {managedPanes.map((pane) => {
             const recoveryState = ptyRecoveryStatesByPaneId[pane.id]
             if (!recoveryState) {
               return null
@@ -3305,8 +3153,7 @@ function TerminalPane(
               pane.container,
               `remote-runtime-reconnect-${pane.id}`
             )
-          })
-        : null}
+          })}
       {managedPanes.map((pane) => {
         // Why: pane IDs collide across tabs, so key overlays by the transport's actual ptyId to avoid wrong-pane banners.
         const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId()

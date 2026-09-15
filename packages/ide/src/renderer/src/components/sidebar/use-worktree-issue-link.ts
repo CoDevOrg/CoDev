@@ -4,15 +4,13 @@ import { parseGitHubIssueOrPRNumber } from '@/lib/github-links'
 import { issueCacheKey as getIssueCacheKey } from '@/store/slices/github'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { findIndexedWorktreeOwner } from '@/lib/worktree-runtime-owner-index'
-import { buildLinearIssueUrl, parseLinearIssueInput } from '../../../../shared/linear-links'
 import type { IssueLinkProvider } from '../../../../shared/issue-link-input'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import { parseExplicitGitHubIssueUrl } from './worktree-meta-updates'
 import { isWorkItemLinkQueryTooLarge } from '../../../../shared/new-workspace/work-item-link-query-bounds'
 
-// Why: both lookups cross an IPC or runtime-RPC boundary that can stop
+// Why: the lookup crosses an IPC or runtime-RPC boundary that can stop
 // answering — a hung SSH runtime leaves the await pending, and the button spins
-// for the life of the dialog. Set above the 30s Linear/GitHub client bounds, so a
+// for the life of the dialog. Set above the 30s GitHub client bound, so a
 // slow-but-live transport reports its own failure rather than being called a bad
 // identifier here.
 const OPEN_ISSUE_TIMEOUT_MS = 35_000
@@ -40,7 +38,7 @@ async function resolveIssueUrlWithinTimeout(
 
 /** Resolves the "open linked issue" affordance for the worktree meta dialog:
  *  explicit URLs open directly, GitHub numbers resolve via the issue cache or an
- *  owner-routed fetch, Linear identifiers via the stored org key or a lookup. */
+ *  owner-routed fetch. */
 export function useWorktreeIssueLink(args: {
   worktreeId: string
   /** The repo bucket the opening row belongs to, for IDs the owner index reports
@@ -48,10 +46,6 @@ export function useWorktreeIssueLink(args: {
   ownerRepoId?: string | null
   issueInput: string
   issueProvider: IssueLinkProvider
-  linearOrganizationUrlKey?: string | null
-  /** The persisted identifier the stored org key belongs to. */
-  linkedLinearIssue?: string | null
-  linearSourceContext?: TaskSourceContext | null
 }): {
   canOpenIssue: boolean
   openingIssue: boolean
@@ -60,18 +54,8 @@ export function useWorktreeIssueLink(args: {
   handleOpenIssue: () => Promise<void>
   resetOpeningIssue: () => void
 } {
-  const {
-    worktreeId,
-    ownerRepoId,
-    issueInput,
-    issueProvider,
-    linearOrganizationUrlKey,
-    linkedLinearIssue,
-    linearSourceContext
-  } = args
-  const isLinear = issueProvider === 'linear'
+  const { worktreeId, ownerRepoId, issueInput, issueProvider } = args
   const fetchIssue = useAppStore((s) => s.fetchIssue)
-  const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)
   const [openingIssue, setOpeningIssue] = useState(false)
   const [failedIssueInput, setFailedIssueInput] = useState<string | null>(null)
   const mountedRef = useMountedRef()
@@ -91,42 +75,12 @@ export function useWorktreeIssueLink(args: {
     [issueInput]
   )
 
-  const issueNumber = useMemo(
-    () => (isLinear ? null : parseGitHubIssueOrPRNumber(boundedInput)),
-    [isLinear, boundedInput]
-  )
-  const issueUrlFromInput = useMemo(
-    () => (isLinear ? null : parseExplicitGitHubIssueUrl(boundedInput)),
-    [isLinear, boundedInput]
-  )
+  const issueNumber = useMemo(() => parseGitHubIssueOrPRNumber(boundedInput), [boundedInput])
+  const issueUrlFromInput = useMemo(() => parseExplicitGitHubIssueUrl(boundedInput), [boundedInput])
   const issueInputLooksLikeUrl = useMemo(
     () => /^https?:\/\//i.test(boundedInput.trim()),
     [boundedInput]
   )
-  const parsedLinearIssue = useMemo(
-    () => (isLinear ? parseLinearIssueInput(boundedInput) : null),
-    [isLinear, boundedInput]
-  )
-  // Why: only an org key that is authoritative *for this identifier* may build a
-  // URL directly — the input's own, or the workspace's stored one while the typed
-  // identifier still is that issue. The connected viewer's key is not: a bare key
-  // for another of the user's Linear workspaces would open a not-found page, or a
-  // different issue on a team-prefix collision. Anything else falls through to the
-  // all-workspace lookup below, which answers with the issue's canonical URL.
-  const linearIssueUrl = useMemo(() => {
-    if (!parsedLinearIssue) {
-      return null
-    }
-    const storedKeyApplies =
-      typeof linkedLinearIssue === 'string' &&
-      linkedLinearIssue.toUpperCase() === parsedLinearIssue.identifier.toUpperCase()
-    return buildLinearIssueUrl({
-      identifier: parsedLinearIssue.identifier,
-      organizationUrlKey:
-        parsedLinearIssue.organizationUrlKey ?? (storedKeyApplies ? linearOrganizationUrlKey : null)
-    })
-  }, [parsedLinearIssue, linkedLinearIssue, linearOrganizationUrlKey])
-
   const issueRepo = useAppStore((s) => {
     const repoId = ownerRepoId ?? findIndexedWorktreeOwner(s.worktreesByRepo, worktreeId)?.repoId
     return repoId ? s.repos.find((repo) => repo.id === repoId) : undefined
@@ -149,11 +103,9 @@ export function useWorktreeIssueLink(args: {
       ]?.data?.url ?? null
     )
   })
-  const canOpenIssue = isLinear
-    ? Boolean(parsedLinearIssue)
-    : issueInputLooksLikeUrl
-      ? Boolean(issueUrlFromInput)
-      : Boolean(cachedIssueUrl || (issueRepo && issueNumber))
+  const canOpenIssue = issueInputLooksLikeUrl
+    ? Boolean(issueUrlFromInput)
+    : Boolean(cachedIssueUrl || (issueRepo && issueNumber))
 
   const handleOpenIssue = useCallback(async () => {
     if (openingIssue) {
@@ -168,43 +120,6 @@ export function useWorktreeIssueLink(args: {
       mountedRef.current &&
       openRequestRef.current === generation &&
       latestRequestKeyRef.current === requestKey
-
-    if (isLinear) {
-      if (!parsedLinearIssue) {
-        return
-      }
-      if (linearIssueUrl) {
-        void window.api.shell.openUrl(linearIssueUrl)
-        return
-      }
-
-      setOpeningIssue(true)
-      try {
-        // Why: 'all' — the issue may belong to a different Linear workspace than
-        // the selected one, which is the usual case for a bare or pasted identifier.
-        const url = await resolveIssueUrlWithinTimeout(
-          fetchLinearIssue(parsedLinearIssue.identifier, 'all', {
-            sourceContext: linearSourceContext ?? null
-          })
-        )
-        if (!isCurrentRequest()) {
-          return
-        }
-        if (url) {
-          void window.api.shell.openUrl(url)
-        } else {
-          // Why: the fetchers normalize every failure — no Linear connection,
-          // unknown identifier, dead runtime — to null, so without this the
-          // button just stops spinning and the click looks ignored.
-          setFailedIssueInput(issueInput)
-        }
-      } finally {
-        if (mountedRef.current) {
-          setOpeningIssue(false)
-        }
-      }
-      return
-    }
 
     if (issueUrlFromInput) {
       void window.api.shell.openUrl(issueUrlFromInput)
@@ -245,18 +160,13 @@ export function useWorktreeIssueLink(args: {
   }, [
     cachedIssueUrl,
     fetchIssue,
-    fetchLinearIssue,
-    isLinear,
     issueInput,
     issueInputLooksLikeUrl,
     issueNumber,
     issueRepo,
     issueUrlFromInput,
-    linearIssueUrl,
-    linearSourceContext,
     mountedRef,
-    openingIssue,
-    parsedLinearIssue
+    openingIssue
   ])
 
   const resetOpeningIssue = useCallback(() => {

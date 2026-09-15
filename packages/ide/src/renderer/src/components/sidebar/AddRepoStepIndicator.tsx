@@ -15,7 +15,6 @@ export function AddRepoStepIndicator({
 }: AddRepoStepIndicatorProps): React.JSX.Element | null {
   const showBack =
     step === 'clone' ||
-    step === 'remote' ||
     step === 'server-path' ||
     step === 'create' ||
     step === 'nested'

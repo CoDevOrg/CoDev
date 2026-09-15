@@ -31,10 +31,6 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../tray/system-tray', () => ({
-  destroySystemTray: vi.fn()
-}))
-
 vi.mock('../orca-profiles/profile-index-store', () => ({
   createLocalOrcaProfile: vi.fn(),
   getOrcaProfileListState: vi.fn(),

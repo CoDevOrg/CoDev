@@ -103,9 +103,6 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').compactWorktreeCards).toBe(false)
   })
 
-  it('keeps per-workspace environments disabled by default', () => {
-    expect(getDefaultSettings('/tmp').experimentalEphemeralVms).toBe(false)
-  })
 
   it('keeps the agent dashboard popout disabled by default', () => {
     expect(getDefaultSettings('/tmp').experimentalAgentDashboardPopout).toBeUndefined()
@@ -130,17 +127,10 @@ describe('getDefaultSettings', () => {
 
     expect(settings.agentDefaultArgs).toMatchObject({
       claude: '--dangerously-skip-permissions',
-      codex: '--dangerously-bypass-approvals-and-sandbox',
-      gemini: '--yolo',
-      cursor: '--yolo',
-      copilot: '--yolo',
-      grok: '--permission-mode bypassPermissions'
+      'claude-agent-teams': '--dangerously-skip-permissions',
+      codex: '--dangerously-bypass-approvals-and-sandbox'
     })
-    expect(settings.agentDefaultArgs).not.toHaveProperty('opencode')
-    expect(settings.agentDefaultArgs).not.toHaveProperty('kilo')
-    expect(settings.agentDefaultEnv).toMatchObject({
-      goose: { GOOSE_MODE: 'auto' }
-    })
+    expect(settings.agentDefaultEnv).toEqual({})
     expect(settings.agentYoloDefaultsMigrated).toBe(true)
   })
 })
@@ -164,17 +154,5 @@ describe('getDefaultTerminalRightClickToPaste', () => {
     expect(getDefaultTerminalRightClickToPaste('win32')).toBe(true)
     expect(getDefaultTerminalRightClickToPaste('darwin')).toBe(false)
     expect(getDefaultTerminalRightClickToPaste('linux')).toBe(false)
-  })
-})
-
-describe('MiniMax defaults', () => {
-  it('starts MiniMax with empty group id and the canonical default model', () => {
-    const settings = getDefaultSettings('/tmp')
-    // Why: the fetcher reads these defaults on first launch. An empty
-    // group id is the signal that the fetcher must pull the value from
-    // the cookie itself, and "general" matches the model name the
-    // MiniMax usage endpoint exposes by default.
-    expect(settings.minimaxGroupId).toBe('')
-    expect(settings.minimaxUsageModels).toBe('general')
   })
 })

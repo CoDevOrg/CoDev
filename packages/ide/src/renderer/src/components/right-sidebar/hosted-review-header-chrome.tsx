@@ -1,5 +1,4 @@
 import React from 'react'
-import { GitMerge } from 'lucide-react'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { cn } from '@/lib/utils'
 import { PullRequestIcon } from './checks-panel-content'
@@ -24,12 +23,12 @@ export function HostedReviewIcon({
   review: HostedReviewInfo
   className?: string
 }): React.JSX.Element {
-  const Icon = review.provider === 'gitlab' ? GitMerge : PullRequestIcon
+  const Icon = PullRequestIcon
   return <Icon className={cn(className, hostedReviewStateClass(review))} />
 }
 
 function hostedReviewLabel(review: HostedReviewInfo): string {
-  return `${review.provider === 'gitlab' ? 'MR' : 'PR'} #${review.number}`
+  return `PR #${review.number}`
 }
 
 export function HostedReviewHeaderLink({
@@ -43,14 +42,14 @@ export function HostedReviewHeaderLink({
   const className =
     'shrink-0 border-0 bg-transparent p-0 text-left font-medium leading-none text-foreground underline decoration-border underline-offset-2 opacity-80 hover:text-foreground hover:decoration-foreground'
 
-  if (review.provider === 'github' || review.provider === 'gitlab') {
+  if (review.provider === 'github') {
     return (
       <button
         type="button"
         className={className}
         onClick={(e) => {
           e.stopPropagation()
-          // Why: GitHub PR and GitLab MR details live in Orca's Checks tab; keep
+          // Why: GitHub PR details live in Orca's Checks tab; keep
           // the sidebar workflow in-app instead of opening the browser.
           onOpenHostedReviewInChecks()
         }}

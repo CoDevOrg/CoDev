@@ -9,7 +9,6 @@ import {
   RUNTIME_PROTOCOL_VERSION
 } from '../../../../shared/protocol-version'
 import type { AutomationHostTarget } from './automation-host-client'
-import type { SshConnectionState } from '../../../../shared/ssh-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { ProjectHostSetup, Repo, Worktree } from '../../../../shared/types'
@@ -48,7 +47,7 @@ type AutomationTargetAvailabilityArgs = {
   repo: Repo | null | undefined
   workspace: Worktree | null | undefined
   projectHostSetups: readonly ProjectHostSetup[]
-  sshConnectionStates: ReadonlyMap<string, Pick<SshConnectionState, 'status'>>
+  sshConnectionStates: ReadonlyMap<string, { status: string }>
   runtimeStatusByEnvironmentId?: ReadonlyMap<
     string,
     { status: RuntimeStatus | null; checkedAt: number }
@@ -62,7 +61,6 @@ export function getAutomationTargetAvailability({
   repo,
   workspace,
   projectHostSetups,
-  sshConnectionStates,
   runtimeStatusByEnvironmentId,
   automationHostTarget,
   sourceHostAvailability
@@ -126,26 +124,7 @@ export function getAutomationTargetAvailability({
     return sourceAvailability
   }
 
-  const sshTargetId = getAutomationSshTargetId(automation, repo)
-  if (!sshTargetId) {
-    return { canRunNow: true, reason: 'available', message: null }
-  }
-
-  const status = sshConnectionStates.get(sshTargetId)?.status ?? 'disconnected'
-  switch (status) {
-    case 'connected':
-      return { canRunNow: true, reason: 'available', message: null }
-    case 'auth-failed':
-    case 'reconnection-failed':
-      return unavailable('ssh-auth-needed', 'Connect this SSH host before running manually.')
-    case 'connecting':
-    case 'deploying-relay':
-    case 'reconnecting':
-      return unavailable('ssh-connecting', 'This SSH host is still connecting.')
-    case 'disconnected':
-    case 'error':
-      return unavailable('ssh-unavailable', 'Connect this SSH host before running manually.')
-  }
+  return { canRunNow: true, reason: 'available', message: null }
 }
 
 function getRuntimeTargetHostId(target: AutomationHostTarget | null | undefined): string | null {
@@ -224,11 +203,7 @@ function getAutomationSourceAvailability(
   if (
     availability.health === 'disconnected' ||
     availability.health === 'blocked' ||
-    availability.health === 'error' ||
-    availability.status === 'disconnected' ||
-    availability.status === 'auth-failed' ||
-    availability.status === 'reconnection-failed' ||
-    availability.status === 'error'
+    availability.health === 'error'
   ) {
     return unavailable(
       'source-host-unavailable',
@@ -236,10 +211,7 @@ function getAutomationSourceAvailability(
     )
   }
   if (
-    availability.health === 'connecting' ||
-    availability.status === 'connecting' ||
-    availability.status === 'deploying-relay' ||
-    availability.status === 'reconnecting'
+    availability.health === 'connecting'
   ) {
     return unavailable(
       'source-host-unavailable',
@@ -253,12 +225,6 @@ function getAutomationSourceProviderLabel(provider: TaskSourceContext['provider'
   switch (provider) {
     case 'github':
       return 'GitHub'
-    case 'gitlab':
-      return 'GitLab'
-    case 'linear':
-      return 'Linear'
-    case 'jira':
-      return 'Jira'
   }
 }
 
@@ -298,17 +264,6 @@ function getRuntimeAutomationAvailability(
     return unavailable('runtime-update-required', describeRuntimeCompatBlock(compat))
   }
   return { canRunNow: true, reason: 'available', message: null }
-}
-
-function getAutomationSshTargetId(automation: Automation, repo: Repo): string | null {
-  const parsedHost = parseExecutionHostId(automation.runContext?.hostId)
-  if (parsedHost?.kind === 'ssh') {
-    return parsedHost.targetId
-  }
-  if (automation.executionTargetType === 'ssh' && automation.executionTargetId.trim()) {
-    return automation.executionTargetId
-  }
-  return repo.connectionId?.trim() || null
 }
 
 function unavailable(

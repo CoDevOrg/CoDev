@@ -27,7 +27,6 @@ export type FeatureInteractionId =
   | 'agent-browser-use'
   | 'agent-orchestration-setup'
   | 'agent-orchestration'
-  | 'ephemeral-vm-setup'
   | 'mobile-emulator-agent-setup'
   | 'ai-commit-generation'
   | 'ai-pr-generation'
@@ -44,7 +43,6 @@ export type FeatureInteractionId =
   | 'quick-commands'
   | 'resource-manager'
   | 'review-notes'
-  | 'ssh'
   | 'terminal-pane-split'
   | 'terminal-panes'
   | 'terminal-tabs'
@@ -97,7 +95,6 @@ export const FEATURE_INTERACTIONS = [
   { id: 'workspace-creation', interaction: 'workspace creation flow opened' },
   { id: 'agent-browser-setup', interaction: 'Agent Browser Use setup enabled or opened' },
   { id: 'agent-browser-use', interaction: 'agent browser runtime method used' },
-  { id: 'ephemeral-vm-setup', interaction: 'Ephemeral VMs setup opened or scaffold prompt copied' },
   {
     id: 'agent-orchestration-setup',
     interaction: 'Agent Orchestration setup enabled or opened'
@@ -137,10 +134,6 @@ export const FEATURE_INTERACTIONS = [
   { id: 'quick-commands', interaction: 'terminal quick command created or edited' },
   { id: 'resource-manager', interaction: 'Resource Manager opened or configured' },
   { id: 'review-notes', interaction: 'review note added or sent to an agent' },
-  {
-    id: 'ssh',
-    interaction: 'SSH target added, imported, tested, connected, disconnected, or configured'
-  },
   {
     id: 'terminal-pane-split',
     interaction: 'terminal pane split from the split-pane command'

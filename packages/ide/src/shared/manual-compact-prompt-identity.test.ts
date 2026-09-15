@@ -138,7 +138,7 @@ describe('manual compact prompt identity', () => {
     expect(state.lastStatusByPaneKey.get(PANE_KEY)?.hookEventName).toBe('PreCompact')
   })
 
-  it('keeps automatic compact working and ignores unproven Kimi events', () => {
+  it('keeps automatic compact working', () => {
     const state = createHookListenerState()
     const current = accept(state, 'claude', {
       hook_event_name: 'UserPromptSubmit',
@@ -158,18 +158,6 @@ describe('manual compact prompt identity', () => {
       prompt_id: PROMPT_ID_1,
       session_id: 'session-a'
     })
-    const kimiPre = accept(state, 'kimi', {
-      hook_event_name: 'PreCompact',
-      trigger: 'manual',
-      prompt_id: PROMPT_ID_1,
-      session_id: 'session-a'
-    })
-    const kimiPost = accept(state, 'kimi', {
-      hook_event_name: 'PostCompact',
-      trigger: 'manual',
-      prompt_id: PROMPT_ID_1,
-      session_id: 'session-a'
-    })
 
     expect(automaticPre).toMatchObject({
       compactTrigger: 'auto',
@@ -181,8 +169,6 @@ describe('manual compact prompt identity', () => {
       hookEventName: 'PostCompact',
       payload: { state: 'working' }
     })
-    expect(kimiPre).toBeNull()
-    expect(kimiPost).toBeNull()
     expect(state.lastStatusByPaneKey.get(PANE_KEY)).toMatchObject({
       hookEventName: 'PostCompact',
       compactTrigger: undefined,

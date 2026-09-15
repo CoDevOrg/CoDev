@@ -24,14 +24,6 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
     comment: '',
     linkedIssue: null,
     linkedPR: null,
-    linkedLinearIssue: null,
-    linkedLinearIssueWorkspaceId: null,
-    linkedLinearIssueOrganizationUrlKey: null,
-    linkedGitLabMR: null,
-    linkedGitLabIssue: null,
-    linkedBitbucketPR: null,
-    linkedAzureDevOpsPR: null,
-    linkedGiteaPR: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,
@@ -218,16 +210,4 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
     expect(worktree.lastActivityAt).toBe(30_000)
   })
 
-  it('does not stat remote worktree paths', async () => {
-    const statPath = vi.fn(async () => ({ mtimeMs: 20_000 }))
-
-    const worktree = await resolveWorkspaceCleanupActivityWorktree(
-      { ...REPO, connectionId: 'ssh-1' },
-      makeWorktree({ createdAt: 10_000 }),
-      statPath
-    )
-
-    expect(statPath).not.toHaveBeenCalled()
-    expect(worktree.lastActivityAt).toBe(10_000)
-  })
 })

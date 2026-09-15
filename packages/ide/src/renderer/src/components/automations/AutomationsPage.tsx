@@ -32,7 +32,7 @@ import {
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import type { PreflightStatus } from '../../../../preload/api-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import type { OrcaHooks, Repo } from '../../../../shared/types'
+import type { OrcaHooks, Repo, TuiAgent } from '../../../../shared/types'
 import { getWorktreePathBasenameFromId } from '../../../../shared/worktree-id'
 import {
   buildAutomationRrule,
@@ -118,7 +118,6 @@ import { useAutomationListSearch } from './use-automation-list-search'
 import { AutomationDeleteDialog, ExternalAutomationDeleteDialog } from './AutomationDeleteDialogs'
 import { AutomationsListPanel } from './AutomationsListPanel'
 import { AutomationsDetailPane } from './AutomationsDetailPane'
-import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { translate } from '@/i18n/i18n'
 
 const AGENTS = getAgentCatalog().map((agent) => agent.id)
@@ -140,8 +139,8 @@ export default function AutomationsPage(): React.JSX.Element {
   const closeAutomationsPage = useAppStore((s) => s.closeAutomationsPage)
   const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
   const retainedAgentsByPaneKey = useAppStore((s) => s.retainedAgentsByPaneKey)
-  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
-  const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
+  const [sshConnectionStates] = useState<ReadonlyMap<string, { status: string }>>(() => new Map())
+  const [sshTargetLabels] = useState<ReadonlyMap<string, string>>(() => new Map())
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const settings = useAppStore((s) => s.settings)
@@ -217,11 +216,6 @@ export default function AutomationsPage(): React.JSX.Element {
     manager: ExternalAutomationManager
     job: ExternalAutomationJob
   } | null>(null)
-  useContextualTour(
-    'automations',
-    !createOpen && !deleteTarget && !externalDeleteTarget,
-    'automations_open'
-  )
   const [editingExternalTarget, setEditingExternalTarget] = useState<{
     manager: ExternalAutomationManager
     job: ExternalAutomationJob
@@ -1029,7 +1023,9 @@ export default function AutomationsPage(): React.JSX.Element {
     if (target === 'hermes') {
       setDraft((current) => ({
         ...current,
-        agentId: 'hermes',
+        // Why: the external Hermes automation manager is not a launchable TuiAgent
+        // any more; its draft rows keep the legacy id until automations are pruned.
+        agentId: 'hermes' as TuiAgent,
         workspaceMode: 'existing',
         setupDecision: undefined,
         reuseSession: false
@@ -1152,7 +1148,7 @@ export default function AutomationsPage(): React.JSX.Element {
     const nextDraft: AutomationDraft = {
       name: job.name,
       prompt: job.prompt ?? job.promptPreview,
-      agentId: 'hermes',
+      agentId: 'hermes' as TuiAgent,
       projectId,
       workspaceMode: 'existing',
       workspaceId,
@@ -1767,22 +1763,11 @@ export default function AutomationsPage(): React.JSX.Element {
         )
         return
       }
-      const state = await window.api.ssh.connect({
-        targetId: manager.target.connectionId
-      })
-      if (!state || state.status !== 'connected') {
-        toast.error(
-          state?.error ??
-            translate(
-              'auto.components.automations.AutomationsPage.7b2e285552',
-              'SSH connections are unavailable in this client.'
-            )
+      toast.error(
+        translate(
+          'auto.components.automations.AutomationsPage.7b2e285552',
+          'SSH connections are unavailable in this client.'
         )
-        return
-      }
-      await refresh()
-      toast.success(
-        translate('auto.components.automations.AutomationsPage.9f2855677c', 'SSH connected.')
       )
     } catch (error) {
       toast.error(

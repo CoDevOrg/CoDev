@@ -8,7 +8,6 @@ import type {
   ExternalAutomationJob,
   ExternalAutomationManager
 } from '../../../../shared/automations-types'
-import type { SshConnectionState } from '../../../../shared/ssh-types'
 import type { ProjectHostSetup, Repo, Worktree } from '../../../../shared/types'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { TaskSourceHostAvailability } from '../task-source-context-summary'
@@ -38,7 +37,7 @@ type AutomationsListPanelProps = {
   repoMap: ReadonlyMap<string, Repo>
   worktreeMap: ReadonlyMap<string, Worktree>
   projectHostSetups: readonly ProjectHostSetup[]
-  sshConnectionStates: ReadonlyMap<string, Pick<SshConnectionState, 'status'>>
+  sshConnectionStates: ReadonlyMap<string, { status: string }>
   runtimeStatusByEnvironmentId: ReadonlyMap<
     string,
     { status: RuntimeStatus | null; checkedAt: number }

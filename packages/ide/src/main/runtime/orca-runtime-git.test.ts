@@ -569,7 +569,7 @@ describe('RuntimeGitCommands', () => {
         title: '',
         body: '',
         draft: false,
-        provider: 'gitlab',
+        provider: 'github',
         useTemplate: true
       },
       { sourceControlAiResolvedParams }
@@ -579,7 +579,7 @@ describe('RuntimeGitCommands', () => {
       body: '',
       repoPath: worktreePath,
       connectionId: undefined,
-      provider: 'gitlab',
+      provider: 'github',
       useTemplate: true
     })
     expect(mocks.getPullRequestDraftContext).toHaveBeenCalledWith(

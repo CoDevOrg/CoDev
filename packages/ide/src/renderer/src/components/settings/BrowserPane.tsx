@@ -57,8 +57,6 @@ export function BrowserPane({
   const setBrowserDefaultZoomLevel = useAppStore((s) => s.setBrowserDefaultZoomLevel)
   const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
   const repos = useAppStore((s) => s.repos)
-  const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
-  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const browserSessionHostIdOverride = useAppStore((s) => s.browserSessionHostIdOverride)
@@ -117,8 +115,6 @@ export function BrowserPane({
     () =>
       buildSidebarHostOptions({
         repos,
-        sshTargetLabels,
-        sshConnectionStates,
         settings,
         runtimeEnvironments,
         runtimeStatusByEnvironmentId,
@@ -138,8 +134,6 @@ export function BrowserPane({
         })),
     [
       repos,
-      sshTargetLabels,
-      sshConnectionStates,
       settings,
       runtimeEnvironments,
       runtimeStatusByEnvironmentId,

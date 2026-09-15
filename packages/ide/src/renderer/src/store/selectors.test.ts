@@ -23,7 +23,6 @@ function makeWorktree(args: { id: string; repoId: string; displayName: string })
     comment: '',
     linkedIssue: null,
     linkedPR: null,
-    linkedLinearIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,

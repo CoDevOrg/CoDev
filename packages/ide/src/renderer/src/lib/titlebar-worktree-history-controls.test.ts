@@ -4,7 +4,7 @@ import { shouldShowWorktreeHistoryControls } from './titlebar-worktree-history-c
 describe('shouldShowWorktreeHistoryControls', () => {
   it('shows controls wherever worktree history navigation is supported', () => {
     expect(shouldShowWorktreeHistoryControls('terminal')).toBe(true)
-    expect(shouldShowWorktreeHistoryControls('tasks')).toBe(true)
+    expect(shouldShowWorktreeHistoryControls('automations')).toBe(true)
     expect(shouldShowWorktreeHistoryControls('automations')).toBe(true)
   })
 

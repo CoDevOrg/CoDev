@@ -45,12 +45,9 @@ type SavedAgentOverrideResult =
   | { kind: 'blocked' }
 
 async function detectAgentsForConnection(
-  connectionId: string | null | undefined
+  _connectionId: string | null | undefined
 ): Promise<TuiAgent[]> {
-  const store = useAppStore.getState()
-  return typeof connectionId === 'string'
-    ? await store.ensureRemoteDetectedAgents(connectionId)
-    : await store.ensureDetectedAgents()
+  return await useAppStore.getState().ensureDetectedAgents()
 }
 
 function isAgentAvailable(agent: TuiAgent, detectedAgents: TuiAgent[]): boolean {

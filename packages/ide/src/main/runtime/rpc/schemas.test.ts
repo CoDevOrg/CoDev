@@ -79,9 +79,7 @@ describe('RPC optional pipe schemas', () => {
     expectParses(methodParams(WORKTREE_METHODS, 'worktree.create'), { repo: 'repo-1' })
     expectParses(methodParams(WORKTREE_METHODS, 'worktree.set'), {
       worktree: 'id:wt-1',
-      linkedLinearIssue: 'STA-335',
-      linkedLinearIssueWorkspaceId: null,
-      linkedLinearIssueOrganizationUrlKey: 'stably'
+      linkedIssue: 335
     })
     expectParses(methodParams(WORKTREE_METHODS, 'worktree.prefetchCreateBase'), { repo: 'repo-1' })
   })
@@ -206,18 +204,11 @@ describe('RPC optional pipe schemas', () => {
     // Omitting it is legal and leaves the host on its existing behavior.
     expectParses(create, { repo: 'id:repo-1', name: 'plain' })
     expectParses(create, {
-      repo: 'id:repo-gitlab',
-      name: 'mr-7',
-      linkedGitLabMR: 7,
+      repo: 'id:repo-1',
+      name: 'pr-7',
+      linkedPR: 7,
       sparseCheckout: { directories: ['mobile'], presetId: 'mobile' },
       comment: 'keep mobile parity'
-    })
-    expectParses(create, {
-      repo: 'id:repo-linear',
-      name: 'eng-42',
-      linkedLinearIssue: 'ENG-42',
-      linkedLinearIssueWorkspaceId: 'workspace-1',
-      linkedLinearIssueOrganizationUrlKey: 'acme'
     })
   })
 })

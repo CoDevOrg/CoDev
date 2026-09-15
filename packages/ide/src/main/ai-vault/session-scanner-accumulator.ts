@@ -59,9 +59,9 @@ export function cloneSessionAccumulator(accumulator: SessionAccumulator): Sessio
   return { ...accumulator, previewMessages: [...accumulator.previewMessages] }
 }
 
-// Resumable fold for parsers whose only parse state is the accumulator itself
-// (cursor, copilot, droid, openclaw/pi, gemini-jsonl). Parsers with extra
-// closure state (claude, codex) build their own ResumableSessionParseState.
+// Resumable fold for parsers whose only parse state is the accumulator itself.
+// Parsers with extra closure state (claude, codex) build their own
+// ResumableSessionParseState.
 export function accumulatorFoldResumeState(
   accumulator: SessionAccumulator,
   consumeRecordLine: (accumulator: SessionAccumulator, line: string) => void
@@ -128,7 +128,6 @@ export function finalizeSession(
     resumeCommand: buildAiVaultResumeCommand({
       agent: accumulator.agent,
       sessionId,
-      resumeFilePath: accumulator.filePath,
       cwd: accumulator.cwd,
       platform,
       codexHome: options.codexHome

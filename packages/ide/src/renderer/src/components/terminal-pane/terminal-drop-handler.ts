@@ -9,7 +9,6 @@ import { captureTerminalDropTarget } from './terminal-drop-target'
 import { resolveTerminalDropTargetShell } from './terminal-drop-shell'
 import { writeTerminalDropPathsToCapturedTarget } from './terminal-drop-path-writer'
 import { resolveInternalTerminalDropPane } from './terminal-drop-pane-resolution'
-import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
 import { showTerminalDropWriteFailure } from './terminal-drop-write-failure'
 import type { TerminalDropWriteFailureReason } from './terminal-drop-write-failure'
 import { getTerminalInternalFileDropRejectionMessage } from './terminal-drop-internal-rejection-message'
@@ -90,7 +89,7 @@ export async function handleInternalTerminalFileDrop({
     // Why: internal Explorer drags paste worktree-owned paths directly, so SSH
     // shell semantics must come from the remote session, not the client OS.
     connectionId,
-    remotePlatform: getTerminalPasteSshRemotePlatform(connectionId)
+    remotePlatform: null
   })
 
   const writeResult = await writeTerminalDropPathsToCapturedTarget({

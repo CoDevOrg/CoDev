@@ -26,13 +26,7 @@ export type DashboardCardContext = {
 }
 
 function hasLinkedReview(worktree: Worktree): boolean {
-  return [
-    worktree.linkedPR,
-    worktree.linkedGitLabMR,
-    worktree.linkedBitbucketPR,
-    worktree.linkedAzureDevOpsPR,
-    worktree.linkedGiteaPR
-  ].some(isPositiveHostedReviewNumber)
+  return isPositiveHostedReviewNumber(worktree.linkedPR)
 }
 
 function resolveReview(

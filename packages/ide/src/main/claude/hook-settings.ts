@@ -13,18 +13,13 @@ import {
 } from '../agent-hooks/installer-utils'
 
 export type ClaudeCompatibleHookSettings = {
-  configDirName: '.claude' | '.openclaude'
-  scriptBaseName: 'claude-hook' | 'openclaude-hook'
+  configDirName: '.claude'
+  scriptBaseName: 'claude-hook'
 }
 
 export const CLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
   configDirName: '.claude',
   scriptBaseName: 'claude-hook'
-}
-
-export const OPENCLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
-  configDirName: '.openclaude',
-  scriptBaseName: 'openclaude-hook'
 }
 
 export const CLAUDE_EVENTS = [

@@ -4,7 +4,6 @@ import type {
 } from '../../../shared/runtime-client-events'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { isRuntimeSubscriptionReplayResponse } from '../../../shared/runtime-subscription-replay'
-import { admitSshConnectionState } from '../../../shared/ssh-retained-payload-admission'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 
 export type RuntimeClientEventSubscription = {
@@ -17,8 +16,8 @@ export async function subscribeRuntimeClientEvents(
   onError: (error: unknown) => void = console.warn,
   // Why: client events emitted while the shared-control transport was down are
   // lost, not queued. The replay tag on the first post-reconnect response is
-  // the renderer's only signal that mirrored event-derived state (e.g. the
-  // per-environment SSH bucket) may have missed transitions and must resync.
+  // the renderer's only signal that mirrored event-derived state may have
+  // missed transitions and must resync.
   onReplayedAfterReconnect?: () => void
 ): Promise<RuntimeClientEventSubscription> {
   const handle = await window.api.runtimeEnvironments.subscribe(
@@ -52,27 +51,7 @@ function handleRuntimeClientEventResponse(
     onReplayedAfterReconnect?.()
   }
   const message = response.result as RuntimeClientEventStreamMessage
-  if (message.type === 'ready') {
-    for (const sshState of message.snapshot?.sshStates ?? []) {
-      const state = admitSshConnectionState(sshState.state, sshState.targetId)
-      if (state) {
-        onEvent({ type: 'sshStateChanged', targetId: sshState.targetId, state })
-      } else {
-        onError(new Error('Invalid retained SSH connection state'))
-      }
-    }
-    return
-  }
-  if (message.type === 'end') {
-    return
-  }
-  if (message.type === 'sshStateChanged') {
-    const state = admitSshConnectionState(message.state, message.targetId)
-    if (state) {
-      onEvent({ type: 'sshStateChanged', targetId: message.targetId, state })
-    } else {
-      onError(new Error('Invalid retained SSH connection state'))
-    }
+  if (message.type === 'ready' || message.type === 'end') {
     return
   }
   if (isRuntimeClientEvent(message)) {
@@ -88,8 +67,6 @@ function isRuntimeClientEvent(
     message.type === 'worktreesChanged' ||
     message.type === 'nativeChatLaunchDraftResolved' ||
     message.type === 'terminalSideEffects' ||
-    message.type === 'sshStateChanged' ||
-    message.type === 'linearLinkedIssueUpdated' ||
     message.type === 'activateWorktree' ||
     message.type === 'worktreeTerminalSleepState'
   )

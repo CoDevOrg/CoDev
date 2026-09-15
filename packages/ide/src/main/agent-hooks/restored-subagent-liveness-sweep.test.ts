@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSubagentSnapshot } from '../../shared/agent-status-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
-import { toAppSshPtyId } from '../../shared/ssh-pty-id'
 import { AgentHookServer } from './server'
 import {
   indexPersistedPaneKeyPtyIds,
@@ -223,34 +222,6 @@ describe('restored subagent liveness sweep', () => {
       ).toBe(0)
 
       expect(probeLiveLocalPty).not.toHaveBeenCalled()
-    } finally {
-      server.stop()
-    }
-  })
-
-  it('never reaps an SSH-launched pane, whose agent cannot appear in a local scan', async () => {
-    const sshPtyId = toAppSshPtyId('conn-1', PTY)
-    const server = await restartWithInFlightSubagent()
-    try {
-      expect(
-        await sweepWith(server, {
-          executionHostId: 'ssh:conn-1',
-          persistedPtyIdByPaneKey: { [PANE]: sshPtyId }
-        })
-      ).toBe(0)
-
-      expect(paneStatus(server)).toEqual({ state: 'working', subagents: [WORKING_CHILD] })
-    } finally {
-      server.stop()
-    }
-  })
-
-  it('never reaps a relay-owned pane even with no local PTY at all', async () => {
-    const server = await restartWithInFlightSubagent({ connectionId: 'conn-1' })
-    try {
-      expect(await sweepWith(server)).toBe(0)
-
-      expect(paneStatus(server).state).toBe('working')
     } finally {
       server.stop()
     }

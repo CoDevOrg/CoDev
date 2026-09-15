@@ -1,5 +1,5 @@
 import React from 'react'
-import { ChevronDown, Cloud } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import { PopoverAnchor } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -19,7 +19,6 @@ export default function RunTargetField({
   onOpenRequest,
   onToggle,
   committed,
-  isRecipe,
   hostId,
   label,
   detail,
@@ -34,7 +33,6 @@ export default function RunTargetField({
   onOpenRequest: () => void
   onToggle: () => void
   committed: boolean
-  isRecipe: boolean
   hostId: ExecutionHostId | null
   label: string
   detail: string
@@ -54,13 +52,7 @@ export default function RunTargetField({
         className={COMBOBOX_FIELD_SHELL}
       >
         <span className="flex w-4 shrink-0 items-center justify-center">
-          {committed ? (
-            isRecipe ? (
-              <Cloud className="size-3.5 shrink-0 text-muted-foreground" />
-            ) : hostId ? (
-              <HostRowIcon hostId={hostId} />
-            ) : null
-          ) : null}
+          {committed && hostId ? <HostRowIcon hostId={hostId} /> : null}
         </span>
         <div className="relative min-w-0 flex-1 overflow-hidden">
           <input

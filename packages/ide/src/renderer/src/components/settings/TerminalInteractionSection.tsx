@@ -145,7 +145,6 @@ export function TerminalInteractionSection({
             'mouse',
             'trackpad',
             'tui',
-            'opencode',
             'fast scroll'
           ]}
         >
@@ -351,7 +350,6 @@ export function TerminalInteractionSection({
             'neovim',
             'nvim',
             'fzf',
-            'grok',
             'ssh',
             'remote',
             'copy',

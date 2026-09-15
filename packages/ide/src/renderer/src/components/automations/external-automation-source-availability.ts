@@ -2,8 +2,8 @@ import type {
   ExternalAutomationManager,
   ExternalAutomationProvider
 } from '../../../../shared/automations-types'
-import type { SshConnectionStatus } from '../../../../shared/ssh-types'
-import { isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
+// Why: SSH automation sources are gone; the status stays a plain string so stale rows still render.
+type SshConnectionStatus = string
 
 export type ExternalAutomationSourceAvailability = {
   statusLabel: string
@@ -76,7 +76,7 @@ export function getExternalAutomationSourceAvailability({
 }
 
 export function isSshConnectionBusy(status: SshConnectionStatus | undefined): boolean {
-  return isConnectingSshStatus(status)
+  return status === 'connecting' || status === 'deploying-relay' || status === 'reconnecting'
 }
 
 export function getExternalAutomationActionDisabledMessage(args: {

@@ -32,9 +32,6 @@ type CreateUntitledMarkdownOptions = {
   template?: MarkdownDocumentTemplate
   now?: Date
   operationProvenance?: EditorFileOperationProvenance
-  expectedSshTargetId?: string
-  expectedSshConnectionGeneration?: number
-  expectedExecutionHostId?: 'local' | `ssh:${string}`
   assertOperationCurrent?: () => void
 }
 
@@ -59,10 +56,7 @@ export async function createUntitledMarkdownFile(
     settings,
     worktreeId,
     worktreePath,
-    connectionId,
-    expectedExecutionHostId: options.expectedExecutionHostId,
-    expectedSshTargetId: options.expectedSshTargetId,
-    expectedSshConnectionGeneration: options.expectedSshConnectionGeneration
+    connectionId
   }
   const assertCurrent = (): void => {
     if (options.operationProvenance) {
@@ -79,7 +73,7 @@ export async function createUntitledMarkdownFile(
   // nearly the same time. Retrying EEXIST keeps "New Markdown" advancing to
   // the next untitled-N name instead of surfacing a spurious error toast.
   //
-  // Why: existence probing must go through the same runtime/SSH-aware file
+  // Why: existence probing must go through the same runtime-aware file
   // surface as creation; the shell probe only sees the client filesystem.
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     const fileName = attempt === 1 ? `${baseName}${ext}` : `${baseName}-${attempt}${ext}`
@@ -141,9 +135,6 @@ export async function createUntitledMarkdownFileWithTemplateSelection(
   connectionId?: string,
   settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
   operationProvenance?: EditorFileOperationProvenance,
-  expectedSshConnectionGeneration?: number,
-  expectedSshTargetId?: string,
-  expectedExecutionHostId?: 'local' | `ssh:${string}`,
   assertOperationCurrent?: () => void
 ): Promise<UntitledMarkdownFileInfo | null> {
   if (operationProvenance) {
@@ -153,10 +144,7 @@ export async function createUntitledMarkdownFileWithTemplateSelection(
     settings,
     worktreeId,
     worktreePath,
-    connectionId,
-    expectedExecutionHostId,
-    expectedSshTargetId,
-    expectedSshConnectionGeneration
+    connectionId
   }
   const templates = await listMarkdownDocumentTemplates(context, worktreePath)
   const selection = await requestMarkdownTemplateSelection(templates)
@@ -168,9 +156,6 @@ export async function createUntitledMarkdownFileWithTemplateSelection(
   return createUntitledMarkdownFile(worktreePath, worktreeId, connectionId, settings, {
     template: selection.type === 'template' ? selection.template : undefined,
     operationProvenance,
-    expectedSshTargetId,
-    expectedSshConnectionGeneration,
-    expectedExecutionHostId,
     assertOperationCurrent
   })
 }

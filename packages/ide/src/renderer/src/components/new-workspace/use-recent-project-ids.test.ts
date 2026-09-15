@@ -10,7 +10,6 @@ function worktree(partial: Partial<Worktree>): Worktree {
     comment: '',
     linkedIssue: null,
     linkedPR: null,
-    linkedLinearIssue: null,
     path: '/tmp/wt',
     branch: 'main',
     ...partial

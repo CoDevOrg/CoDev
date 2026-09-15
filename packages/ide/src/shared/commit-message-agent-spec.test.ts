@@ -27,52 +27,12 @@ afterEach(() => {
 describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
   it('exposes the installed local agents as commit-message agents', () => {
     const ids = listCommitMessageAgentIds().sort()
-    expect(ids).toEqual([
-      'amp',
-      'antigravity',
-      'claude',
-      'codex',
-      'copilot',
-      'cursor',
-      'kimi',
-      'opencode',
-      'pi'
-    ])
+    expect(ids).toEqual(['claude', 'codex'])
   })
 
   it('uses the strongest available defaults for core agents', () => {
     expect(COMMIT_MESSAGE_AGENT_SPECS.claude?.defaultModelId).toBe('sonnet')
     expect(COMMIT_MESSAGE_AGENT_SPECS.codex?.defaultModelId).toBe('gpt-5.5')
-    expect(COMMIT_MESSAGE_AGENT_SPECS.pi?.defaultModelId).toBe('github-copilot/gpt-5.4-mini')
-  })
-
-  it('uses the provider-qualified Kimi model id accepted by the CLI', () => {
-    expect(COMMIT_MESSAGE_AGENT_SPECS.kimi?.models.map((m) => m.id)).toEqual([
-      'default',
-      'kimi-code/kimi-for-coding'
-    ])
-  })
-
-  it('lists Copilot hosted CLI models even when account policy filters the picker', () => {
-    expect(COMMIT_MESSAGE_AGENT_SPECS.copilot?.defaultModelId).toBe('gpt-5.4')
-    expect(COMMIT_MESSAGE_AGENT_SPECS.copilot?.models.map((m) => m.id)).toEqual([
-      'auto',
-      'claude-haiku-4.5',
-      'claude-sonnet-4.5',
-      'claude-sonnet-4.6',
-      'claude-opus-4.5',
-      'claude-opus-4.6',
-      'claude-opus-4.6-fast',
-      'claude-opus-4.7',
-      'gpt-4.1',
-      'gpt-5-mini',
-      'gpt-5.2',
-      'gpt-5.2-codex',
-      'gpt-5.3-codex',
-      'gpt-5.4',
-      'gpt-5.4-mini',
-      'gpt-5.5'
-    ])
   })
 
   it('defaults the agent picker to Claude', () => {
@@ -139,7 +99,7 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
 
   it('exposes UI capabilities without spawn details', () => {
     const capabilities = listCommitMessageAgentCapabilities()
-    expect(capabilities.map((capability) => capability.id)).toContain('opencode')
+    expect(capabilities.map((capability) => capability.id)).toContain('codex')
     const codex = getCommitMessageAgentCapability('codex')
     expect(codex).toMatchObject({
       id: 'codex',
@@ -315,74 +275,6 @@ describe('model discovery parsers', () => {
     ])
   })
 
-  it('parses Pi model table output with provider-qualified ids', () => {
-    const output = [
-      'provider        model                   context  max-out  thinking  images',
-      'github-copilot  gpt-5.4-mini            400K     128K     yes       yes',
-      'github-copilot  gpt-4o                  128K     4.1K     no        yes'
-    ].join('\n')
-
-    expect(parsePiModels(output)).toEqual([
-      {
-        id: 'github-copilot/gpt-5.4-mini',
-        label: 'Github Copilot GPT 5.4 Mini',
-        thinkingLevels: [
-          { id: 'off', label: 'Off' },
-          { id: 'low', label: 'Low' },
-          { id: 'medium', label: 'Medium' },
-          { id: 'high', label: 'High' },
-          { id: 'xhigh', label: 'Extra High' }
-        ],
-        defaultThinkingLevel: 'low'
-      },
-      {
-        id: 'github-copilot/gpt-4o',
-        label: 'Github Copilot GPT 4O'
-      }
-    ])
-  })
-
-  it('parses Cursor model output', () => {
-    expect(parseCursorModels('auto - Auto\ngpt-5.2 - GPT-5.2\n')).toEqual([
-      { id: 'auto', label: 'Auto' },
-      {
-        id: 'gpt-5.2',
-        label: 'GPT-5.2',
-        thinkingLevels: [
-          { id: 'low', label: 'Low' },
-          { id: 'medium', label: 'Medium' },
-          { id: 'high', label: 'High' },
-          { id: 'xhigh', label: 'Extra High' }
-        ],
-        defaultThinkingLevel: 'low'
-      }
-    ])
-  })
-
-  it('parses Antigravity model output', () => {
-    const output = [
-      'Gemini 3.5 Flash (Medium)',
-      'Gemini 3.5 Flash (High)',
-      'Gemini 3.5 Flash (Low)',
-      'Gemini 3.1 Pro (Low)',
-      'Gemini 3.1 Pro (High)',
-      'Claude Sonnet 4.6 (Thinking)',
-      'Claude Opus 4.6 (Thinking)',
-      'GPT-OSS 120B (Medium)'
-    ].join('\n')
-
-    expect(parseAntigravityModels(output)).toEqual([
-      { id: 'Gemini 3.5 Flash (Medium)', label: 'Gemini 3.5 Flash (Medium)' },
-      { id: 'Gemini 3.5 Flash (High)', label: 'Gemini 3.5 Flash (High)' },
-      { id: 'Gemini 3.5 Flash (Low)', label: 'Gemini 3.5 Flash (Low)' },
-      { id: 'Gemini 3.1 Pro (Low)', label: 'Gemini 3.1 Pro (Low)' },
-      { id: 'Gemini 3.1 Pro (High)', label: 'Gemini 3.1 Pro (High)' },
-      { id: 'Claude Sonnet 4.6 (Thinking)', label: 'Claude Sonnet 4.6 (Thinking)' },
-      { id: 'Claude Opus 4.6 (Thinking)', label: 'Claude Opus 4.6 (Thinking)' },
-      { id: 'GPT-OSS 120B (Medium)', label: 'GPT-OSS 120B (Medium)' }
-    ])
-  })
-
   it('parses CRLF-heavy dynamic model outputs without full line-array splitting', () => {
     const splitSpy = vi.spyOn(String.prototype, 'split')
     const noise = 'ignored model with spaces\r\n'.repeat(10_000)
@@ -471,79 +363,5 @@ describe('buildArgs (Codex)', () => {
   it('omits the -c flag when no thinking level is supplied', () => {
     const args = spec.buildArgs({ prompt: 'PROMPT', model: 'gpt-5.4-mini' })
     expect(args).not.toContain('-c')
-  })
-})
-
-describe('buildArgs (OpenCode)', () => {
-  const spec = getCommitMessageAgentSpec('opencode')!
-
-  it('runs `opencode run` without passing the prompt via argv', () => {
-    const prompt = `PROMPT ${'x'.repeat(1024)}`
-    const args = spec.buildArgs({
-      prompt,
-      model: 'opencode/deepseek-v4-flash-free'
-    })
-
-    expect(args).toEqual([
-      'run',
-      '--model',
-      'opencode/deepseek-v4-flash-free',
-      '--agent',
-      'build',
-      '--format',
-      'default'
-    ])
-    expect(args).not.toContain(prompt)
-    expect(args).not.toContain('')
-    expect(spec.promptDelivery).toBe('stdin')
-  })
-
-  it('emits --variant <level> when thinking level is supplied', () => {
-    const args = spec.buildArgs({
-      prompt: 'PROMPT',
-      model: 'opencode/gpt-5.4-mini',
-      thinkingLevel: 'high'
-    })
-
-    expect(args).toEqual([
-      'run',
-      '--model',
-      'opencode/gpt-5.4-mini',
-      '--agent',
-      'build',
-      '--format',
-      'default',
-      '--variant',
-      'high'
-    ])
-  })
-
-  it('omits --variant when no thinking level is supplied', () => {
-    const args = spec.buildArgs({
-      prompt: 'PROMPT',
-      model: 'opencode/gpt-5.4-mini'
-    })
-
-    expect(args).not.toContain('--variant')
-  })
-})
-
-describe('buildArgs (Antigravity)', () => {
-  const spec = getCommitMessageAgentSpec('antigravity')!
-
-  it('runs agy with --print, --sandbox, and --model flags', () => {
-    const args = spec.buildArgs({ prompt: '', model: 'Gemini 3.5 Flash (Medium)' })
-    expect(args).toEqual(['--print', '--sandbox', '--model', 'Gemini 3.5 Flash (Medium)'])
-    expect(spec.promptDelivery).toBe('stdin')
-  })
-
-  it('uses dynamic model discovery via agy models', () => {
-    expect(spec.modelSource).toBe('dynamic')
-    expect(spec.modelDiscovery?.binary).toBe('agy')
-    expect(spec.modelDiscovery?.args).toEqual(['models'])
-  })
-
-  it('uses Gemini 3.5 Flash (Medium) as default model', () => {
-    expect(COMMIT_MESSAGE_AGENT_SPECS.antigravity?.defaultModelId).toBe('Gemini 3.5 Flash (Medium)')
   })
 })

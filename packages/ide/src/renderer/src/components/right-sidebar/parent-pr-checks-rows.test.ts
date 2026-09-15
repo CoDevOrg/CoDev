@@ -40,9 +40,6 @@ function makeWorktree(overrides: Partial<Worktree> & { id: string }): Worktree {
     comment: '',
     linkedIssue: null,
     linkedPR: null,
-    linkedLinearIssue: null,
-    linkedGitLabMR: null,
-    linkedGitLabIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,
@@ -427,7 +424,6 @@ describe('buildParentPrChecksProjection', () => {
     const repo = makeRepo()
     const worktree = makeWorktree({
       id: 'repo-1::/feature',
-      linkedBitbucketPR: null,
       head: 'new-head'
     })
     const hostedKey = getHostedReviewCacheKey(repo.path, 'feature', settings, repo.id)
@@ -494,7 +490,6 @@ describe('buildParentPrChecksProjection', () => {
     const repo = makeRepo()
     const worktree = makeWorktree({
       id: 'repo-1::/feature',
-      linkedBitbucketPR: null
     })
     const hostedKey = getHostedReviewCacheKey(repo.path, 'feature', settings, repo.id)
 

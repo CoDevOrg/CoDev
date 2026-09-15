@@ -120,8 +120,6 @@ describe('worktree RPC methods', () => {
         manualOrder: 123_456,
         linkedIssue: 123,
         linkedPR: 456,
-        linkedGitLabIssue: 789,
-        linkedGitLabMR: 321,
         sparseCheckout: { directories: ['src'], presetId: 'preset-1' },
         pushTarget: { remoteName: 'fork', branchName: 'feature' },
         parentWorktree: 'id:parent'
@@ -135,14 +133,6 @@ describe('worktree RPC methods', () => {
       baseBranch: 'origin/main',
       linkedIssue: 123,
       linkedPR: 456,
-      linkedLinearIssue: undefined,
-      linkedLinearIssueWorkspaceId: undefined,
-      linkedLinearIssueOrganizationUrlKey: undefined,
-      linkedGitLabIssue: 789,
-      linkedGitLabMR: 321,
-      linkedBitbucketPR: undefined,
-      linkedAzureDevOpsPR: undefined,
-      linkedGiteaPR: undefined,
       comment: undefined,
       displayName: 'Feature title',
       telemetrySource: 'sidebar',
@@ -715,33 +705,7 @@ describe('worktree RPC methods', () => {
     })
   })
 
-  it('passes explicit repo selectors to MR base resolution', async () => {
-    const runtime = {
-      getRuntimeId: () => 'test-runtime',
-      dedupeWorktreeCreate: passthroughDedupe,
-      resolveManagedMrBase: vi.fn().mockResolvedValue({ baseBranch: 'origin/mr-head' })
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
-
-    const response = await dispatcher.dispatch(
-      makeRequest('worktree.resolveMrBase', {
-        repo: 'id:repo-1',
-        mrIid: 42,
-        sourceBranch: 'feature/mr-head',
-        isCrossRepository: false
-      })
-    )
-
-    expect(response).toMatchObject({ ok: true })
-    expect(runtime.resolveManagedMrBase).toHaveBeenCalledWith({
-      repoSelector: 'id:repo-1',
-      mrIid: 42,
-      sourceBranch: 'feature/mr-head',
-      isCrossRepository: false
-    })
-  })
-
-  it('forwards Linear metadata through worktree.set', async () => {
+  it('forwards linked issue metadata through worktree.set', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       dedupeWorktreeCreate: passthroughDedupe,
@@ -752,9 +716,7 @@ describe('worktree RPC methods', () => {
     const response = await dispatcher.dispatch(
       makeRequest('worktree.set', {
         worktree: 'id:wt-1',
-        linkedLinearIssue: 'STA-335',
-        linkedLinearIssueWorkspaceId: null,
-        linkedLinearIssueOrganizationUrlKey: 'stably'
+        linkedIssue: 335
       })
     )
 
@@ -762,9 +724,7 @@ describe('worktree RPC methods', () => {
     expect(runtime.updateManagedWorktreeMeta).toHaveBeenCalledWith(
       'id:wt-1',
       expect.objectContaining({
-        linkedLinearIssue: 'STA-335',
-        linkedLinearIssueWorkspaceId: null,
-        linkedLinearIssueOrganizationUrlKey: 'stably'
+        linkedIssue: 335
       })
     )
   })

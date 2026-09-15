@@ -65,18 +65,8 @@ vi.mock('os', async (importOriginal) => {
   }
 })
 
-import { AntigravityHookService } from '../antigravity/hook-service'
 import { ClaudeHookService } from '../claude/hook-service'
 import { CodexHookService } from '../codex/hook-service'
-import { CommandCodeHookService } from '../command-code/hook-service'
-import { CopilotHookService } from '../copilot/hook-service'
-import { CursorHookService } from '../cursor/hook-service'
-import { DevinHookService } from '../devin/hook-service'
-import { DroidHookService } from '../droid/hook-service'
-import { GeminiHookService } from '../gemini/hook-service'
-import { GrokHookService } from '../grok/hook-service'
-import { KimiHookService } from '../kimi/hook-service'
-import { openClaudeHookService } from '../openclaude/hook-service'
 import {
   wrapPosixHookCommand,
   wrapWindowsGitBashHookCommand,
@@ -89,68 +79,18 @@ const REMOTE_HOME = '/home/dev'
 const LARGE_PAYLOAD = Buffer.alloc(1_000_000, 'x')
 const REMOTE_INSTALLERS = [
   {
-    agent: 'antigravity',
-    install: (sftp: SFTPWrapper) => new AntigravityHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
     agent: 'claude',
     install: (sftp: SFTPWrapper) => new ClaudeHookService().installRemote(sftp, REMOTE_HOME)
   },
   {
-    agent: 'openclaude',
-    install: (sftp: SFTPWrapper) => openClaudeHookService.installRemote(sftp, REMOTE_HOME)
-  },
-  {
     agent: 'codex',
     install: (sftp: SFTPWrapper) => new CodexHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'command-code',
-    install: (sftp: SFTPWrapper) => new CommandCodeHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'copilot',
-    install: (sftp: SFTPWrapper) => new CopilotHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'cursor',
-    install: (sftp: SFTPWrapper) => new CursorHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'devin',
-    install: (sftp: SFTPWrapper) => new DevinHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'droid',
-    install: (sftp: SFTPWrapper) => new DroidHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'gemini',
-    install: (sftp: SFTPWrapper) => new GeminiHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'grok',
-    install: (sftp: SFTPWrapper) => new GrokHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'kimi',
-    install: (sftp: SFTPWrapper) => new KimiHookService().installRemote(sftp, REMOTE_HOME)
   }
 ] as const
 
 const LOCAL_INSTALLERS = [
-  { agent: 'antigravity', install: () => new AntigravityHookService().install() },
   { agent: 'claude', install: () => new ClaudeHookService().install() },
-  { agent: 'openclaude', install: () => openClaudeHookService.install() },
-  { agent: 'codex', install: () => new CodexHookService().install() },
-  { agent: 'command-code', install: () => new CommandCodeHookService().install() },
-  { agent: 'copilot', install: () => new CopilotHookService().install() },
-  { agent: 'cursor', install: () => new CursorHookService().install() },
-  { agent: 'devin', install: () => new DevinHookService().install() },
-  { agent: 'droid', install: () => new DroidHookService().install() },
-  { agent: 'gemini', install: () => new GeminiHookService().install() },
-  { agent: 'grok', install: () => new GrokHookService().install() },
-  { agent: 'kimi', install: () => new KimiHookService().install() }
+  { agent: 'codex', install: () => new CodexHookService().install() }
 ] as const
 
 type HookRun = {
@@ -388,14 +328,7 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
   it('accepts a large payload without Orca environment or a broken writer', async () => {
     const scripts = await generatePosixScripts()
     for (const [agent, script] of scripts) {
-      const extraEnv = agent.startsWith('command-code')
-        ? {
-            ORCA_AGENT_HOOK_PORT: '1',
-            ORCA_AGENT_HOOK_TOKEN: 'test-token',
-            ORCA_PANE_KEY: 'test-pane'
-          }
-        : {}
-      const result = await runPosixHook(script, extraEnv)
+      const result = await runPosixHook(script, {})
       expect(result.exitCode, `${agent} exit code`).toBe(0)
       expect(result.stdinErrors, `${agent} stdin errors`).toHaveLength(0)
     }

@@ -66,10 +66,6 @@ const updateCapableCallers = new Map<string, readonly string[]>([
     ['installedCommand={installedCommand}']
   ],
   [
-    'src/renderer/src/components/feature-wall/BrowserUseSkillSetupCard.tsx',
-    ['ORCA_CLI_SKILL_UPDATE_COMMAND', 'installedCommand={updateCommand}']
-  ],
-  [
     // Why: the single-skill update command selection moved into
     // getLinearAgentSkillUpdateCommand so the settings install CTA shares it.
     'src/renderer/src/components/sidebar/LinearAgentSkillSetupPrompt.tsx',
@@ -162,26 +158,6 @@ describe('AgentSkillSetupPanel installed-command call sites', () => {
     expect(source).toContain('installedCommand={orchestrationUpdateCommand}')
     expect(source).not.toContain('Copy update command')
     expect(source).not.toContain('copyUpdateCommand')
-  })
-
-  it('routes the combined feature-tip install through runtime command setup', () => {
-    const source = readRepoFile(
-      'src/renderer/src/components/feature-tips/CliSkillSetupTerminal.tsx'
-    )
-
-    expect(source).toContain('buildSkillCommandForRuntime(')
-    // The copied string stays bare for POSIX-family shells; the forced-PowerShell
-    // setup terminal keeps the npx preflight.
-    expect(source).toContain('writeClipboardText(skillCommand)')
-    expect(source).toContain('buildSkillSetupTerminalCommand(')
-    expect(source).toContain('command={setupTerminalCommand}')
-    expect(source).toContain('shellOverride={activeSkillRuntime.terminalShellOverride}')
-    expect(source).not.toContain('command={ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND}')
-    // This terminal auto-pastes with no install gate, so a repair-required runtime
-    // must fall back to the host rather than skip the Windows npx preflight.
-    expect(source).toContain(
-      'activeSkillRuntime.installDisabledReason ? undefined : activeSkillRuntime.agentRuntime'
-    )
   })
 
   it('keeps client freshness behind resolved local runtime authority', () => {

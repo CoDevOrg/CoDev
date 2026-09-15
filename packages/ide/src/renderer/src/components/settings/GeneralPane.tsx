@@ -5,7 +5,6 @@ import { Separator } from '../ui/separator'
 import { CliSection } from './CliSection'
 import { GeneralEditorSettingsSection } from './GeneralEditorSettingsSection'
 import { GeneralSupportSection } from './GeneralSupportSection'
-import { GeneralUpdateSettingsSection } from './GeneralUpdateSettingsSection'
 import { GeneralWorkspaceSettingsSection } from './GeneralWorkspaceSettingsSection'
 import {
   getGeneralCliSearchEntries,
@@ -13,7 +12,6 @@ import {
   getGeneralNavigationSearchEntries,
   getGeneralPaneSearchEntries,
   getGeneralSupportSearchEntries,
-  getGeneralUpdateSearchEntries,
   getGeneralWorkspaceSearchEntries
 } from './general-search'
 import { getGeneralProjectRuntimeSearchEntries } from './general-project-runtime-search'
@@ -194,9 +192,6 @@ export function GeneralPane({
         wslAvailable={wslAvailable}
         wslCapabilitiesLoading={wslCapabilitiesLoading}
       />
-    ) : null,
-    matchesSettingsSearch(searchQuery, getGeneralUpdateSearchEntries()) ? (
-      <GeneralUpdateSettingsSection key="updates" />
     ) : null
     // Note: the Support section is rendered outside this array so it can own
     // its own loading placeholder and its own collapsing Separator. Without

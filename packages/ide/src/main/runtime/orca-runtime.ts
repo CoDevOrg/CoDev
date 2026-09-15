@@ -9,11 +9,6 @@ import {
   isShellProcess,
   normalizeTerminalTitle
 } from '../../shared/agent-detection'
-import {
-  CONFIG_DIR_NAME,
-  LEGACY_CONFIG_DIR_NAME,
-  PROJECT_CONFIG_FILENAMES
-} from '../../shared/codev-identifiers'
 import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
 import { sortDirEntries } from '../../shared/file-name-sort'
 import { isServerDriveListRequest, listWindowsDrives } from './windows-drive-listing'
@@ -34,7 +29,6 @@ import {
   stripBrailleSpinnerGlyphs,
   type TerminalTitleTracker
 } from '../../shared/terminal-output-side-effects'
-import { createCommandCodeOutputStatusDetector } from '../../shared/command-code-output-status'
 import type {
   TerminalSideEffectBatch,
   TerminalSideEffectFact
@@ -151,7 +145,6 @@ import type {
 import type {
   AutomationWorkspaceProvenance,
   CliWorkspaceProvenance,
-  BaseRefSearchResult,
   CreateWorktreeResult,
   DetectedWorktree,
   DetectedWorktreeListResult,
@@ -188,15 +181,6 @@ import type {
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent,
   WorktreeStartupLaunch,
-  LinearCustomViewModel,
-  JiraConnectArgs,
-  JiraCreateIssueArgs,
-  JiraIssueFilter,
-  JiraIssueUpdate,
-  JiraSiteSelection,
-  LinearIssueUpdate,
-  LinearProjectSummary,
-  LinearWorkspaceSelection,
   NestedRepoScanResult,
   ProjectGroup,
   FolderWorkspace,
@@ -219,12 +203,7 @@ import type {
   GitHubPullRequestStateUpdate,
   GitHubPRFile,
   GitHubPRReviewCommentInput,
-  GitLabIssueUpdate,
-  GitLabMRInlineCommentInput,
-  GitLabProjectRef,
-  GitLabWorkItem,
   ListWorkItemsResult,
-  MRListState,
   PRRefreshOutcome,
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
@@ -235,10 +214,8 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
   parseExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
-import { getRegisteredSshState } from '../ipc/ssh'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -255,34 +232,7 @@ import {
   isAutomaticTabActivation,
   type TabActivationIntent
 } from '../../shared/tab-activation-intent'
-import type { SshConnectionState } from '../../shared/ssh-types'
-import { getPublicSshState } from './public-ssh-state'
 import { closeTerminalTabInWorkspaceSession } from '../../shared/workspace-session-terminal-tab-close'
-import type {
-  LinearCurrentIssueContextHints,
-  LinearAttachResult,
-  LinearCommentAddResult,
-  LinearCreateResult,
-  LinearErrorCode,
-  LinearIssueListFilter,
-  LinearIssueListResult,
-  LinearProjectListResult,
-  LinearIssueSummary,
-  LinearIssueRequest,
-  LinearIssueTaskUpdateRequest,
-  LinearIssueTaskUpdateResult,
-  LinearMcpIssueListRequest,
-  LinearMcpIssueListResult,
-  LinearIssueRelationWriteRequest,
-  LinearIssueRelationWriteResult,
-  LinearSaveIssueRequest,
-  LinearSaveIssueResult,
-  LinearTeamLabelsResult,
-  LinearTeamListResult,
-  LinearTeamMembersResult,
-  LinearTeamStatesResult,
-  LinearStatusSetResult
-} from '../../shared/linear-agent-access'
 import {
   HEADLESS_RUNTIME_WINDOW_ID,
   type RuntimeDesktopWindowStatus,
@@ -346,12 +296,6 @@ import {
   type BrowserTabInfo,
   type BrowserScreencastResult
 } from '../../shared/runtime-types'
-import {
-  LINEAR_SEARCH_MAX_LIMIT,
-  LINEAR_WRITE_BODY_CAP,
-  clampLinearSearchLimit
-} from '../../shared/linear-agent-access'
-import { isLinearUuid } from '../../shared/linear-uuid'
 import type { FeatureInteractionId } from '../../shared/feature-interactions'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import {
@@ -367,7 +311,6 @@ import {
   getProjectHostSetupWorktreeMeta
 } from '../../shared/project-host-setup-projection'
 import { parsePtySessionId } from '../../shared/pty-session-id-format'
-import { clampLinearIssueListLimit } from '../../shared/linear-issue-read-limits'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
 import {
@@ -386,9 +329,7 @@ import {
   parseLegacyNumericPaneKey,
   parsePaneKey
 } from '../../shared/stable-pane-id'
-import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../shared/terminal-tab-id'
-import { isWslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
 import {
   applyTerminalQuickCommandMutation,
   MAX_QUICK_COMMANDS,
@@ -400,7 +341,6 @@ import {
   buildAgentResumeStartupPlan,
   buildAgentStartupPlan
 } from '../../shared/tui-agent-startup'
-import { repoIsRemote } from '../../shared/agent-launch-remote'
 import {
   isAgentForegroundWrapperProcess,
   isExpectedAgentProcess,
@@ -423,14 +363,8 @@ import {
   TUI_AGENT_CONFIG
 } from '../../shared/tui-agent-config'
 import { createDraftPasteReadyScanner } from '../../shared/draft-paste-ready-scanner'
-import { detectInstalledAgentsWithShellPathHydration, detectRemoteAgents } from '../ipc/preflight'
-import {
-  markClaudeProjectTrusted,
-  markCodexProjectTrusted,
-  markCopilotFolderTrusted,
-  markCursorWorkspaceTrusted
-} from '../agent-trust-presets'
-import { markRemoteAgentWorkspaceTrusted } from '../remote-agent-trust-presets'
+import { detectInstalledAgentsWithShellPathHydration } from '../ipc/preflight'
+import { markClaudeProjectTrusted, markCodexProjectTrusted } from '../agent-trust-presets'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import {
@@ -539,7 +473,6 @@ import {
 } from './client-session-tab-selection'
 import type {
   PtyProviderBufferSnapshot,
-  IFilesystemProvider,
   IPtyProvider,
   PtyProcessInfo,
   PtySpawnResult,
@@ -606,50 +539,9 @@ import {
   fetchGitHubPullRequestHeadRef,
   fetchPrHeadTrackingRef
 } from '../github/pr-head-tracking-ref'
-import {
-  gitlabMergeRequestHeadLocalRef,
-  reviewHeadRemoteRefComponent
-} from '../../shared/review-head-tracking-ref'
-import { fetchGitLabMergeRequestHeadRef } from '../gitlab/mr-head-tracking-ref'
-import { isTransientReviewHeadFetchError } from '../git/fetch-error-classification'
 import { resolveGitHubReviewHeadRemote } from '../github/review-head-remote'
-import { fetchCompareBaseRefWithLocalFallback } from '../git/compare-base-ref-fetch'
-import { pickPreferredGitRemote } from '../../shared/preferred-git-remote'
 import { getWorkItemDetails, getPRFileContents } from '../github/work-item-details'
 import { getRateLimit } from '../github/rate-limit'
-import {
-  closeMR as closeGitLabMR,
-  createIssue as createGitLabIssue,
-  diagnoseAuth as diagnoseGitLabAuthClient,
-  getJobTrace as getGitLabJobTrace,
-  getProjectRefForRemote as getGitLabProjectRefForRemote,
-  getRateLimit as getGitLabRateLimit,
-  getWorkItemByProjectRef as getGitLabWorkItemByProjectRef,
-  addIssueComment as addGitLabIssueComment,
-  addMRInlineComment as addGitLabMRInlineComment,
-  addMRComment as addGitLabMRComment,
-  listTodos as listGitLabTodos,
-  listIssues as listGitLabIssues,
-  listLabels as listGitLabLabels,
-  listMergeRequests as listGitLabMergeRequests,
-  listWorkItems as listGitLabWorkItems,
-  mergeMR as mergeGitLabMR,
-  reopenMR as reopenGitLabMR,
-  resolveMRDiscussion as resolveGitLabMRDiscussion,
-  retryJob as retryGitLabJob,
-  updateMR as updateGitLabMR,
-  updateMRReviewers as updateGitLabMRReviewers,
-  updateIssue as updateGitLabIssue
-} from '../gitlab/client'
-import { getGlabKnownHosts } from '../gitlab/gl-utils'
-import { getWorkItemDetails as getGitLabWorkItemDetails } from '../gitlab/work-item-details'
-import {
-  normalizeGitLabIssueListArgs,
-  normalizeGitLabMRListState,
-  normalizeGitLabPositiveInteger,
-  type GitLabIssueListState
-} from '../gitlab/gitlab-preload-args'
-import { recordGitLabProjectRecent } from '../gitlab/gitlab-project-recents'
 import { inspectSetupScriptImportCandidates } from '../../shared/setup-script-imports'
 import type {
   CreateHostedReviewInput,
@@ -683,98 +575,6 @@ import {
   removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval,
   recoverLocalWindowsWorktreeRemoval
 } from '../local-worktree-removal-recovery'
-import {
-  connect as connectLinear,
-  disconnect as disconnectLinear,
-  getStatus as getLinearStatus,
-  isAuthError as isLinearAuthError,
-  selectWorkspace as selectLinearWorkspace,
-  testConnection as testLinearConnection
-} from '../linear/client'
-import {
-  addIssueComment as addLinearIssueComment,
-  addIssueCommentForAgent as addLinearIssueCommentForAgent,
-  createIssueAttachment as createLinearIssueAttachment,
-  createIssueForAgent as createLinearIssueForAgent,
-  createIssue as createLinearIssue,
-  getAttachmentByUuidForAgent as getLinearAttachmentByUuidForAgent,
-  getCommentByUuidForAgent as getLinearCommentByUuidForAgent,
-  getIssue as getLinearIssue,
-  getIssueByUuidForAgent as getLinearIssueByUuidForAgent,
-  getIssueCommentThreadRoot as getLinearIssueCommentThreadRoot,
-  getIssueComments as getLinearIssueComments,
-  listIssues as listLinearIssues,
-  searchIssues as searchLinearIssues,
-  updateIssueForAgent as updateLinearIssueForAgent,
-  updateIssue as updateLinearIssue,
-  LinearWriteFailure,
-  type LinearListFilter,
-  type LinearIssueListOptions
-} from '../linear/issues'
-import {
-  LinearAgentAccessError,
-  getLinearCurrentIssueFromWorktree,
-  readLinearIssueContext,
-  resolveLegacyLinearLinkWorkspace,
-  searchLinearIssuesForAgents
-} from '../linear/issue-context'
-import {
-  classifyLinearError,
-  linearError,
-  linearMessage,
-  sanitizeLinearErrorMessage
-} from '../linear/issue-context-errors'
-import { listMcpIssues } from '../linear/mcp-issue-list'
-import { writeIssueRelation } from '../linear/issue-relation-write'
-import {
-  createProject as createLinearProject,
-  getCustomView as getLinearCustomView,
-  getProject as getLinearProject,
-  listCustomViewIssues as listLinearCustomViewIssues,
-  listCustomViewProjects as listLinearCustomViewProjects,
-  listCustomViews as listLinearCustomViews,
-  listProjectsByExactName as listLinearProjectsByExactName,
-  listProjectIssues as listLinearProjectIssues,
-  listProjectTeams as listLinearProjectTeams,
-  listProjects as listLinearProjects,
-  type LinearProjectCreateInput
-} from '../linear/projects'
-import {
-  getTeamLabels as getLinearTeamLabels,
-  getTeamLabelsOrThrow as getLinearTeamLabelsOrThrow,
-  getTeamMembers as getLinearTeamMembers,
-  getTeamMembersOrThrow as getLinearTeamMembersOrThrow,
-  getTeamStates as getLinearTeamStates,
-  getTeamStatesOrThrow as getLinearTeamStatesOrThrow,
-  getViewerForWorkspaceOrThrow as getLinearViewerForWorkspaceOrThrow,
-  listTeamsForAgent as listLinearTeamsForAgent,
-  listTeams as listLinearTeams,
-  listTeamsOrThrow as listLinearTeamsOrThrow
-} from '../linear/teams'
-import {
-  connect as connectJira,
-  disconnect as disconnectJira,
-  getStatus as getJiraStatus,
-  selectSite as selectJiraSite,
-  testConnection as testJiraConnection
-} from '../jira/client'
-import {
-  addIssueComment as addJiraIssueComment,
-  createIssue as createJiraIssue,
-  getIssue as getJiraIssue,
-  getIssueSummary as getJiraIssueSummary,
-  getIssueComments as getJiraIssueComments,
-  getProjectStatusOrder as getJiraProjectStatusOrder,
-  listAssignableUsers as listJiraAssignableUsers,
-  listCreateFields as listJiraCreateFields,
-  listIssueTypes as listJiraIssueTypes,
-  listIssues as listJiraIssues,
-  listPriorities as listJiraPriorities,
-  listProjects as listJiraProjects,
-  listTransitions as listJiraTransitions,
-  searchIssues as searchJiraIssues,
-  updateIssue as updateJiraIssue
-} from '../jira/issues'
 import {
   clearProjectItemFieldValue,
   getProjectViewTable,
@@ -813,27 +613,18 @@ import type {
 } from '../../shared/github-project-types'
 import {
   getBaseRefDefault,
-  getDefaultRemote,
   getBranchConflictKind,
   isGitRepo,
   getRepoName,
   searchBaseRefDetails,
   getRemoteCount,
-  normalizeRefSearchQuery,
-  parseAndFilterSearchRefDetails,
-  parseRemoteCount,
-  resolveDefaultBaseRefViaExec,
   resolveDefaultBaseRefWithLocalGit,
-  buildSearchBaseRefsArgv,
-  isForEachRefExcludeUnsupportedError,
-  mergeBaseRefSearchResultGroups,
   getRemoteDrift,
   getRecentDriftSubjects
 } from '../git/repo'
 import { hasCommitObjectViaGitExec } from '../git/commit-object-ref'
 import { hasWorktreeBaseCommitRef } from '../git/worktree-base-ref-probe'
 import { resolveLocalGitUsername } from '../git/git-username'
-import { getSshGitCapabilityCache } from '../git/git-capability-state'
 import {
   listWorktrees,
   listWorktreesStrict,
@@ -854,7 +645,6 @@ import {
   hasUnrecognizedOrcaYamlKeys,
   hasHooksFile,
   loadHooks,
-  parseOrcaYaml,
   readIssueCommand,
   resolveSetupRunnerShell,
   runHook,
@@ -883,8 +673,6 @@ import {
 import { deleteWorktreeHistoryDir } from '../terminal-history-deletion'
 import {
   cleanupUnusedWorktreePushTargetRemote,
-  cleanupUnusedWorktreePushTargetRemoteSsh,
-  createRemoteWorktree,
   configureCreatedWorktreePushTarget,
   prepareWorktreePushTarget
 } from '../ipc/worktree-remote'
@@ -930,11 +718,8 @@ import { prefetchWorktreeCreateBase } from '../worktree-create-base-prefetch'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import {
   closeLocalWatcherForWorktreePath,
-  closeRemoteWatcherForWorktreePath,
   forgetLocalWatcherRemovalSnapshot,
-  forgetRemoteWatcherRemovalSnapshot,
-  restoreLocalWatcherAfterFailedRemoval,
-  restoreRemoteWatcherAfterFailedRemoval
+  restoreLocalWatcherAfterFailedRemoval
 } from '../ipc/filesystem-watcher'
 import { acquireWatcherRemovalGate } from '../ipc/watcher-removal-gate'
 import {
@@ -966,18 +751,12 @@ import {
   type MobileSessionTabsNotifyCoalescer
 } from './mobile-session-tabs-notify-coalescer'
 import { TerminalFocusNavigationCoalescer } from './terminal-focus-navigation-coalescer'
-import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
   assertFolderWorkspacePathUsable,
   getFolderWorkspacePathStatus,
   getFolderWorkspacePathStatusForPath,
   inferFolderWorkspacePathConnection
 } from '../project-groups/folder-workspace-path-status'
-import {
-  getSshGitProvider,
-  getSshGitProviderGeneration,
-  requireSshGitProvider
-} from '../providers/ssh-git-dispatch'
 import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
 import { enrichMissingRepoGitRemoteIdentities } from '../repo-git-remote-identity-enrichment'
 import { githubAvatarIcon } from '../../shared/repo-icon'
@@ -1084,7 +863,6 @@ type RuntimeStore = {
   setWorkspaceSession?: Store['setWorkspaceSession']
   flushOrThrow?: Store['flushOrThrow']
   persistPtyBinding?: Store['persistPtyBinding']
-  getSshRemotePtyLeases?: Store['getSshRemotePtyLeases']
   getUI?: Store['getUI']
   updateUI?: Store['updateUI']
   recordFeatureInteraction?: Store['recordFeatureInteraction']
@@ -1116,15 +894,11 @@ type RuntimeStore = {
     defaultTaskViewPreset?: GlobalSettings['defaultTaskViewPreset']
     visibleTaskProviders?: GlobalSettings['visibleTaskProviders']
     defaultRepoSelection?: GlobalSettings['defaultRepoSelection']
-    defaultLinearTeamSelection?: GlobalSettings['defaultLinearTeamSelection']
     githubProjects?: GlobalSettings['githubProjects']
     experimentalNewWorktreeCardStyle?: GlobalSettings['experimentalNewWorktreeCardStyle']
     compactWorktreeCards?: GlobalSettings['compactWorktreeCards']
-    minimaxGroupId?: GlobalSettings['minimaxGroupId']
-    minimaxUsageModels?: GlobalSettings['minimaxUsageModels']
     prBotAuthorOverrides?: GlobalSettings['prBotAuthorOverrides']
     terminalQuickCommands?: GlobalSettings['terminalQuickCommands']
-    gitlabProjects?: GlobalSettings['gitlabProjects']
     mobileAutoRestoreFitMs?: number | null
     mobileEmulatorEnabled?: boolean
     mobileEmulatorDefaultDeviceUdid?: string | null
@@ -1484,7 +1258,6 @@ type RuntimePtyTitleTrackerEntry = {
   // Why: Command Code lacks hooks, so its working/done state is scraped from
   // TUI output. Null when no side-effect consumer exists (headless serve) —
   // the scrape produces facts only.
-  commandCodeDetector: { observe: (data: string) => boolean } | null
 }
 
 // Why: the full OSC 9999 payload flows through emitTerminalAgentStatusEvents and
@@ -1721,15 +1494,13 @@ function getAgentLaunchPlatformForRepo(
   repo: Pick<Repo, 'connectionId' | 'path'>,
   projectRuntime?: ProjectExecutionRuntimeResolution
 ): NodeJS.Platform {
-  if (!repo.connectionId) {
-    if (projectRuntime?.status === 'repair-required') {
-      return projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : process.platform
-    }
-    if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
-      return 'linux'
-    }
-    return process.platform
+  if (projectRuntime?.status === 'repair-required') {
+    return projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : process.platform
   }
+  if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
+    return 'linux'
+  }
+  return process.platform
   return isWindowsAbsolutePathLike(repo.path) ? 'win32' : 'linux'
 }
 
@@ -1751,7 +1522,6 @@ const MOBILE_TERMINAL_READY_FALLBACK_MS = 1000
 const RECENT_PTY_PATH_CANDIDATE_LIMIT = 1024
 const RECENT_PTY_PATH_CANDIDATE_MAX_BYTES = 4 * 1024
 const RECENT_PTY_PATH_CANDIDATE_TOTAL_BYTES = 64 * 1024
-const SSH_PANE_RECOVERY_GRACE_MS = 30_000
 // Why: long enough that a keystroke burst to a proven-dead leaf probes once,
 // short enough that a recreated session id regains writability quickly even if
 // its runtime record (which also invalidates the verdict) is late.
@@ -1928,10 +1698,7 @@ export type OrchestrationCompatibilityTerminalAuthority = {
   processIncarnation: string | null
   paneKey: string | null
   launchTokenHash: string | null
-  hostScope:
-    | { kind: 'local'; hostId: 'local' }
-    | { kind: 'wsl'; hostId: 'local'; distro: string }
-    | { kind: 'ssh'; targetId: string }
+  hostScope: { kind: 'local'; hostId: 'local' } | { kind: 'wsl'; hostId: 'local'; distro: string }
 }
 
 export type LegacyWorkerTerminalRecoveryResult = {
@@ -1957,11 +1724,6 @@ type RestoredOrchestrationAuthorityReceipt = Readonly<{
   processIncarnation: string
   hostScope: OrchestrationCompatibilityTerminalAuthority['hostScope']
 }>
-
-type OrchestrationCompatibilitySshAttachmentAuthority = Extract<
-  OrchestrationCompatibilityHostStamp,
-  { kind: 'ssh' }
->
 
 type TerminalWaiter = {
   handle: string
@@ -1989,24 +1751,24 @@ function omitUndefinedProperties<T extends Record<string, unknown>>(value: T): P
   ) as Partial<T>
 }
 
+// Why: only runtime hosts stamp repos; every other host id resolves to local (unstamped).
+function toRepoExecutionHostStamp(
+  executionHostId: ExecutionHostId | null | undefined
+): Pick<Repo, 'executionHostId'> {
+  const parsed = parseExecutionHostId(executionHostId)
+  return parsed?.kind === 'runtime' ? { executionHostId: parsed.id } : {}
+}
+
 async function isRuntimeWorktreePathMissing(
-  repo: Repo,
+  _repo: Repo,
   worktreePath: string,
   localWorktreeGitOptions: { wslDistro?: string } = {}
 ): Promise<boolean> {
-  if (!repo.connectionId) {
-    const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
-    return isWorktreePathMissing(
-      toLocalWorktreeRuntimePath(worktreePath, localWorktreeGitOptions),
-      access.statPath
-    )
-  }
-
-  const fsProvider = getSshFilesystemProvider(repo.connectionId)
-  if (!fsProvider) {
-    return false
-  }
-  return isWorktreePathMissing(worktreePath, (path) => fsProvider.stat(path))
+  const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
+  return isWorktreePathMissing(
+    toLocalWorktreeRuntimePath(worktreePath, localWorktreeGitOptions),
+    access.statPath
+  )
 }
 
 async function isLocalRuntimeGitRepository(
@@ -2089,19 +1851,6 @@ function runtimeRepoMatchesExecutionHost(
   return repo.connectionId == null
 }
 
-// Why: this runtime only has local git and local fs, so an ssh: host here would clone and
-// probe the wrong machine and then register the result as remote. SSH setup is owned by the
-// desktop IPC path (addRemoteRepoFromPath / cloneRemoteRepo), which the renderer routes to;
-// only `local` and `runtime:` legitimately reach these RPCs.
-function assertProjectHostSetupHostIsSupported(hostId: ExecutionHostId | null | undefined): void {
-  if (parseExecutionHostId(hostId)?.kind !== 'ssh') {
-    return
-  }
-  throw new Error(
-    'SSH hosts are not supported by this operation. Set the project up from the Orca desktop app, which owns the SSH connection.'
-  )
-}
-
 function getRuntimeFolderWorkspaceInstanceId(repo: Repo, instanceId: string): string {
   return `${getRuntimeFolderWorkspaceRootId(repo)}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}${instanceId}`
 }
@@ -2138,14 +1887,6 @@ function mergeRuntimeFolderWorkspace(repo: Repo, worktreeId: string, meta: Workt
     comment: meta.comment || '',
     linkedIssue: meta.linkedIssue ?? null,
     linkedPR: meta.linkedPR ?? null,
-    linkedLinearIssue: meta.linkedLinearIssue ?? null,
-    linkedLinearIssueWorkspaceId: meta.linkedLinearIssueWorkspaceId ?? null,
-    linkedLinearIssueOrganizationUrlKey: meta.linkedLinearIssueOrganizationUrlKey ?? null,
-    linkedGitLabMR: meta.linkedGitLabMR ?? null,
-    linkedGitLabIssue: meta.linkedGitLabIssue ?? null,
-    linkedBitbucketPR: meta.linkedBitbucketPR ?? null,
-    linkedAzureDevOpsPR: meta.linkedAzureDevOpsPR ?? null,
-    linkedGiteaPR: meta.linkedGiteaPR ?? null,
     linkedWorkItem: meta.linkedWorkItem ?? null,
     linkedTaskSourceContext: meta.linkedTaskSourceContext ?? null,
     isArchived: meta.isArchived ?? false,
@@ -2330,10 +2071,6 @@ function getLocalGitHubPrForBranch(
 type SelectedReviewBranchInput = {
   branchNameOverride?: string
   linkedPR?: number | null
-  linkedGitLabMR?: number | null
-  linkedBitbucketPR?: number | null
-  linkedAzureDevOpsPR?: number | null
-  linkedGiteaPR?: number | null
   pushTarget?: GitPushTarget
 }
 
@@ -2345,18 +2082,6 @@ type SelectedReviewBranch = {
 function getSelectedReviewBranch(args: SelectedReviewBranchInput): SelectedReviewBranch | null {
   if (typeof args.linkedPR === 'number') {
     return { provider: 'github', number: args.linkedPR }
-  }
-  if (typeof args.linkedGitLabMR === 'number') {
-    return { provider: 'gitlab', number: args.linkedGitLabMR }
-  }
-  if (typeof args.linkedBitbucketPR === 'number') {
-    return { provider: 'bitbucket', number: args.linkedBitbucketPR }
-  }
-  if (typeof args.linkedAzureDevOpsPR === 'number') {
-    return { provider: 'azure-devops', number: args.linkedAzureDevOpsPR }
-  }
-  if (typeof args.linkedGiteaPR === 'number') {
-    return { provider: 'gitea', number: args.linkedGiteaPR }
   }
   return null
 }
@@ -2401,17 +2126,9 @@ function isAllowedPushTargetRemoteConflict(
 
 function getSelectedReviewLookupHints(args: SelectedReviewBranchInput): {
   linkedGitHubPR?: number | null
-  linkedGitLabMR?: number | null
-  linkedBitbucketPR?: number | null
-  linkedAzureDevOpsPR?: number | null
-  linkedGiteaPR?: number | null
 } {
   return {
-    linkedGitHubPR: args.linkedPR ?? null,
-    linkedGitLabMR: args.linkedGitLabMR ?? null,
-    linkedBitbucketPR: args.linkedBitbucketPR ?? null,
-    linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
-    linkedGiteaPR: args.linkedGiteaPR ?? null
+    linkedGitHubPR: args.linkedPR ?? null
   }
 }
 
@@ -2480,21 +2197,6 @@ type ResolvedWorktree = Worktree & {
   git: GitWorktreeInfo
 }
 
-type LinearAgentWriteTarget = {
-  issue: LinearIssueSummary
-  workspaceId: string
-}
-
-type LinearCreateFieldIntent = {
-  stateId?: string
-  assigneeId?: string | null
-  priority?: number
-  estimate?: number | null
-  dueDate?: string | null
-  labelIds?: string[]
-  projectId?: string
-}
-
 const AGENT_HOOK_RUNTIME_ENV_KEYS = [
   'ORCA_AGENT_HOOK_PORT',
   'ORCA_AGENT_HOOK_TOKEN',
@@ -2502,28 +2204,6 @@ const AGENT_HOOK_RUNTIME_ENV_KEYS = [
   'ORCA_AGENT_HOOK_VERSION',
   'ORCA_AGENT_HOOK_ENDPOINT'
 ] as const
-
-function sameStringSet(left: string[], right: string[]): boolean {
-  if (left.length !== right.length) {
-    return false
-  }
-  const rightSet = new Set(right)
-  return left.every((value) => rightSet.has(value))
-}
-
-function labelsForIds(
-  ids: string[],
-  labels: { id?: string | null; name?: string | null; color?: string | null }[]
-): { id: string; name: string; color?: string | null }[] {
-  return ids.map((id) => {
-    const label = labels.find((candidate) => candidate.id === id)
-    return {
-      id,
-      name: label?.name ?? id,
-      ...(label?.color ? { color: label.color } : {})
-    }
-  })
-}
 
 type TerminalWorkspaceLaunchScope = {
   id: string
@@ -3266,7 +2946,6 @@ export class OrcaRuntimeService {
   private removeManagedWorktreeInFlight = new Map<string, RuntimeWorktreeRemovalInFlight>()
   private preservedBranchCleanupByWorktreeId = new Map<string, PreservedBranchCleanupTarget>()
   private readonly getLocalProviderFn: (() => IPtyProvider) | null
-  private readonly getSshProviderFn: ((connectionId: string) => IPtyProvider | undefined) | null
   private readonly onPtyStopped: ((ptyId: string) => void) | null
   private readonly onTerminalAgentStatus: ((event: RuntimeTerminalAgentStatusEvent) => void) | null
   private readonly onTerminalSideEffects: ((batch: TerminalSideEffectBatch) => void) | null
@@ -3294,11 +2973,6 @@ export class OrcaRuntimeService {
     | null
   private readonly agentSessionClaimSigner: AgentSessionClaimSigner
   private readonly agentSessionCreateOperations = new Map<string, AgentSessionCreateOperation>()
-  private readonly orchestrationCompatibilitySshAttachments = new Map<
-    string,
-    OrchestrationCompatibilitySshAttachmentAuthority
-  >()
-  private sshRelayRecoveryGenerationByTargetId = new Map<string, number>()
   private legacyWorkerTerminalRecoveryQueue: Promise<void> = Promise.resolve()
   private legacyWorkerTerminalRecoveryRetries = new Map<
     string,
@@ -3338,7 +3012,6 @@ export class OrcaRuntimeService {
     stats?: StatsCollector,
     deps?: {
       getLocalProvider?: () => IPtyProvider
-      getSshProvider?: (connectionId: string) => IPtyProvider | undefined
       onPtyStopped?: (ptyId: string) => void
       onTerminalAgentStatus?: (event: RuntimeTerminalAgentStatusEvent) => void
       onTerminalSideEffects?: (batch: TerminalSideEffectBatch) => void
@@ -3412,7 +3085,6 @@ export class OrcaRuntimeService {
     // lazily via thunk so teardown always sees the currently-installed
     // provider (design §4.3 wire-up).
     this.getLocalProviderFn = deps?.getLocalProvider ?? null
-    this.getSshProviderFn = deps?.getSshProvider ?? null
     this.onPtyStopped = deps?.onPtyStopped ?? null
     this.onTerminalAgentStatus = deps?.onTerminalAgentStatus ?? null
     this.buildAgentHookPtyEnv = deps?.buildAgentHookPtyEnv ?? null
@@ -3442,26 +3114,23 @@ export class OrcaRuntimeService {
 
   private async stopPtysForDestructiveWorktreeRemoval(
     worktreeId: string,
-    options: { connectionId?: string; allowUnverifiedStop?: boolean } = {}
+    options: { allowUnverifiedStop?: boolean } = {}
   ): Promise<void> {
-    const { connectionId, allowUnverifiedStop } = options
-    const provider = connectionId ? this.getSshProviderFn?.(connectionId) : this.getLocalProvider()
+    const { allowUnverifiedStop } = options
+    const provider = this.getLocalProvider()
     if (!provider) {
       throw new Error(`PTY provider unavailable for worktree deletion: ${worktreeId}`)
     }
     const teardownResult = await killAllProcessesForWorktree(worktreeId, {
       runtime: this,
-      // Why: `repoId::path` ids repeat across hosts, so an unfenced sweep stops a same-id
-      // workspace's terminals on another connection (mirrors the IPC removal path).
+      // Why: pin the sweep to this exact worktree id (mirrors the IPC removal path).
       resolvedWorktreeId: worktreeId,
-      ...(connectionId ? { resolvedConnectionId: connectionId } : {}),
       localProvider: provider,
       onPtyStopped: this.onPtyStopped ?? undefined,
       requirePhysicalStop: true,
       // Why (#11960): set only by an explicit Force Delete, never by the ordinary
       // confirmation — otherwise the gate would be off on the primary delete path.
-      ...(allowUnverifiedStop ? { allowUnverifiedStop: true } : {}),
-      ...(connectionId ? { includeLocalRegistry: false } : {})
+      ...(allowUnverifiedStop ? { allowUnverifiedStop: true } : {})
     })
     const total =
       teardownResult.runtimeStopped +
@@ -3519,12 +3188,9 @@ export class OrcaRuntimeService {
     | 'defaultTaskViewPreset'
     | 'visibleTaskProviders'
     | 'defaultRepoSelection'
-    | 'defaultLinearTeamSelection'
     | 'githubProjects'
     | 'experimentalNewWorktreeCardStyle'
     | 'compactWorktreeCards'
-    | 'minimaxGroupId'
-    | 'minimaxUsageModels'
     | 'prBotAuthorOverrides'
   > {
     if (!this.store?.getSettings) {
@@ -3542,12 +3208,9 @@ export class OrcaRuntimeService {
       defaultTaskViewPreset: settings.defaultTaskViewPreset ?? 'issues',
       visibleTaskProviders: settings.visibleTaskProviders ?? [...TASK_PROVIDERS],
       defaultRepoSelection: settings.defaultRepoSelection ?? null,
-      defaultLinearTeamSelection: settings.defaultLinearTeamSelection ?? null,
       githubProjects: settings.githubProjects,
       experimentalNewWorktreeCardStyle: settings.experimentalNewWorktreeCardStyle === true,
       compactWorktreeCards: settings.compactWorktreeCards === true,
-      minimaxGroupId: settings.minimaxGroupId ?? '',
-      minimaxUsageModels: settings.minimaxUsageModels ?? 'general',
       prBotAuthorOverrides: settings.prBotAuthorOverrides ?? []
     }
   }
@@ -3620,12 +3283,9 @@ export class OrcaRuntimeService {
       | 'defaultTaskViewPreset'
       | 'visibleTaskProviders'
       | 'defaultRepoSelection'
-      | 'defaultLinearTeamSelection'
       | 'githubProjects'
       | 'experimentalNewWorktreeCardStyle'
       | 'compactWorktreeCards'
-      | 'minimaxGroupId'
-      | 'minimaxUsageModels'
       | 'prBotAuthorOverrides'
     >
   ): Promise<
@@ -3641,12 +3301,9 @@ export class OrcaRuntimeService {
       | 'defaultTaskViewPreset'
       | 'visibleTaskProviders'
       | 'defaultRepoSelection'
-      | 'defaultLinearTeamSelection'
       | 'githubProjects'
       | 'experimentalNewWorktreeCardStyle'
       | 'compactWorktreeCards'
-      | 'minimaxGroupId'
-      | 'minimaxUsageModels'
       | 'prBotAuthorOverrides'
     >
   > {
@@ -4240,14 +3897,10 @@ export class OrcaRuntimeService {
     deferredDispatchIds: ReadonlySet<string>,
     options: { connectionId?: string; materializeRenderer?: boolean }
   ): void {
-    const scopeKey = options.connectionId ? `ssh:${options.connectionId}` : 'local'
-    const hasDeferredWorker = plan.candidates.some((candidate) => {
-      const sshPty = parseAppSshPtyId(candidate.ptyId)
-      const inScope = options.connectionId
-        ? sshPty?.connectionId === options.connectionId
-        : sshPty === null
-      return inScope && deferredDispatchIds.has(candidate.dispatchId)
-    })
+    const scopeKey = options.connectionId ? `remote:${options.connectionId}` : 'local'
+    const hasDeferredWorker = plan.candidates.some(
+      (candidate) => !options.connectionId && deferredDispatchIds.has(candidate.dispatchId)
+    )
     if (!hasDeferredWorker) {
       this.cancelLegacyWorkerTerminalRecoveryRetry(scopeKey)
       return
@@ -4328,20 +3981,10 @@ export class OrcaRuntimeService {
         const workspace = await this.resolveTerminalWorkspaceLaunchScope(
           `id:${candidate.worktreeId}`
         )
-        const sshPty = parseAppSshPtyId(candidate.ptyId)
         if (workspace.connectionId) {
-          if (
-            options.connectionId !== workspace.connectionId ||
-            sshPty?.connectionId !== workspace.connectionId
-          ) {
-            deferredDispatchIds.add(candidate.dispatchId)
-            continue
-          }
-        } else if (
-          options.connectionId !== undefined ||
-          sshPty !== null ||
-          !this.canRecoverPersistentLocalPtysFn()
-        ) {
+          deferredDispatchIds.add(candidate.dispatchId)
+          continue
+        } else if (options.connectionId !== undefined || !this.canRecoverPersistentLocalPtysFn()) {
           deferredDispatchIds.add(candidate.dispatchId)
           continue
         }
@@ -4349,7 +3992,7 @@ export class OrcaRuntimeService {
           ? this.folderWorkspaceToResolvedWorktree(workspace.folderWorkspace)
           : await this.resolveWorktreeSelector(`id:${workspace.id}`)
         const connectionId = workspace.connectionId ?? null
-        const providerKey = connectionId === null ? 'local' : `ssh:${connectionId}`
+        const providerKey = connectionId === null ? 'local' : `remote:${connectionId}`
         const provider = recoveryCandidatesByProvider.get(providerKey) ?? {
           connectionId,
           entries: []
@@ -4765,8 +4408,7 @@ export class OrcaRuntimeService {
       if (!workspace) {
         return null
       }
-      const connectionId = this.resolveFolderWorkspaceConnectionId(workspace)
-      return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+      return LOCAL_EXECUTION_HOST_ID
     }
     const resolvedWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : worktreeId
     const repo = this.store?.getRepo?.(getRepoIdFromWorktreeId(resolvedWorktreeId))
@@ -4820,13 +4462,9 @@ export class OrcaRuntimeService {
       repos.map((repo) => [repo.id, getRepoExecutionHostId(repo)] as const)
     )
     const folderHostIdByWorkspaceId = new Map(
-      (this.store?.getFolderWorkspaces?.() ?? []).map((workspace) => {
-        const connectionId = this.resolveFolderWorkspaceConnectionId(workspace)
-        return [
-          workspace.id,
-          connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
-        ] as const
-      })
+      (this.store?.getFolderWorkspaces?.() ?? []).map(
+        (workspace) => [workspace.id, LOCAL_EXECUTION_HOST_ID] as const
+      )
     )
     const hostIds = new Set<ExecutionHostId>(['local'])
     for (const repo of repos) {
@@ -5222,107 +4860,6 @@ export class OrcaRuntimeService {
     this.emitClientEvent({ type: 'reposChanged' })
   }
 
-  // Why: SSH state changes originate in main's ssh handlers, not in runtime
-  // methods, so they need a public entry point onto the client-event stream.
-  notifySshStateChanged(targetId: string, state: SshConnectionState): void {
-    this.bumpSshRelayRecoveryGeneration(targetId)
-    this.invalidateSshWorktreeScanCache(targetId)
-    if (state.status !== 'connected') {
-      this.cancelLegacyWorkerTerminalRecoveryRetry(`ssh:${targetId}`)
-    }
-    this.emitClientEvent({ type: 'sshStateChanged', targetId, state: getPublicSshState(state)! })
-  }
-
-  notifySshRelayReady(targetId: string): void {
-    const generation = this.bumpSshRelayRecoveryGeneration(targetId)
-    const publish = async (): Promise<void> => {
-      try {
-        await this.publishRecoveredSshMobileSessionTabs(targetId, generation)
-      } catch (error) {
-        if (this.sshRelayRecoveryGenerationByTargetId.get(targetId) === generation) {
-          console.warn('[runtime] failed to publish recovered SSH session tabs', {
-            targetId,
-            error
-          })
-        }
-      }
-    }
-    const initialPublication = publish()
-    void initialPublication
-    void this.refreshRestoredOrchestrationAuthority(targetId)
-      .then(() =>
-        this.reconcileLegacyWorkerTerminals({
-          connectionId: targetId,
-          materializeRenderer: this.notifier !== null
-        })
-      )
-      .then(async () => {
-        await initialPublication
-        await publish()
-      })
-      .catch((error) => {
-        if (this.sshRelayRecoveryGenerationByTargetId.get(targetId) !== generation) {
-          return
-        }
-        console.warn('[orchestration] legacy worker reconcile failed on relay ready', {
-          targetId,
-          error
-        })
-      })
-  }
-
-  private bumpSshRelayRecoveryGeneration(targetId: string): number {
-    const generation = (this.sshRelayRecoveryGenerationByTargetId.get(targetId) ?? 0) + 1
-    this.sshRelayRecoveryGenerationByTargetId.set(targetId, generation)
-    return generation
-  }
-
-  private async publishRecoveredSshMobileSessionTabs(
-    targetId: string,
-    generation: number
-  ): Promise<void> {
-    const repoIds = new Set(
-      (this.store?.getRepos() ?? [])
-        .filter((repo) => repo.connectionId === targetId)
-        .map((repo) => repo.id)
-    )
-    if (repoIds.size === 0) {
-      return
-    }
-    const worktreeIds = new Set<string>()
-    for (const worktreeId of [
-      ...this.getKnownWorkspaceSessionWorktreeIds(),
-      ...this.mobileSessionTabsByWorktree.keys()
-    ]) {
-      const parsed = splitWorktreeId(worktreeId)
-      if (parsed && repoIds.has(parsed.repoId)) {
-        worktreeIds.add(worktreeId)
-      }
-    }
-    if (worktreeIds.size === 0) {
-      return
-    }
-
-    // Why: relay readiness follows PTY reattach; rebuild the HUB-owned panes before paired clients consume the connected event.
-    for (const worktreeId of worktreeIds) {
-      this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
-        allowAttachedWindow: true,
-        onlyRuntimeOwnedTerminals: true
-      })
-    }
-    await this.refreshMobileSessionPtyRecords()
-    if (this.sshRelayRecoveryGenerationByTargetId.get(targetId) !== generation) {
-      return
-    }
-    for (const worktreeId of worktreeIds) {
-      this.notifyMobileSessionTabsChangedNow(worktreeId)
-    }
-  }
-
-  invalidateSshWorktreeScanCache(targetId: string): void {
-    this.invalidateSshWorktreeScanCacheInternal(targetId)
-  }
-
   // Why: renderer-initiated meta updates intentionally skip the renderer
   // notifier (the renderer already applied them optimistically), but remote
   // clients hold no optimistic copy and need the invalidation event.
@@ -5444,34 +4981,17 @@ export class OrcaRuntimeService {
     }
 
     for (const [hostId, { session, ptys }] of partitions) {
-      // Why: windowless SSH PTYs must be handed to the desktop through their SSH partition, never the local session.
       const activeWorktreeIdsOnShutdown = [
         ...new Set([
           ...(session.activeWorktreeIdsOnShutdown ?? []),
           ...ptys.map((pty) => pty.worktreeId)
         ])
       ]
-      const activeConnectionIdsAtShutdown = [
-        ...new Set([
-          ...(session.activeConnectionIdsAtShutdown ?? []),
-          ...ptys
-            .map((pty) => pty.connectionId)
-            .filter((connectionId): connectionId is string => connectionId !== null)
-        ])
-      ]
-      const remoteSessionIdsByTabId = { ...session.remoteSessionIdsByTabId }
-      for (const pty of ptys) {
-        if (pty.connectionId && pty.tabId) {
-          remoteSessionIdsByTabId[pty.tabId] = pty.ptyId
-        }
-      }
 
       this.store.setWorkspaceSession(
         {
           ...session,
-          activeWorktreeIdsOnShutdown,
-          ...(activeConnectionIdsAtShutdown.length > 0 ? { activeConnectionIdsAtShutdown } : {}),
-          ...(Object.keys(remoteSessionIdsByTabId).length > 0 ? { remoteSessionIdsByTabId } : {})
+          activeWorktreeIdsOnShutdown
         },
         hostId
       )
@@ -5850,10 +5370,7 @@ export class OrcaRuntimeService {
         persistedTabs,
         session
       ).filter(
-        (tab) =>
-          options.onlyRuntimeOwnedTerminals !== true ||
-          this.hasServeOrSshOwnedBinding(tab) ||
-          this.hasRecentExpiredSshLeasePane(entryWorktreeId, tab)
+        (tab) => options.onlyRuntimeOwnedTerminals !== true || this.hasServeOwnedBinding(tab)
       )
       // Why: offscreen browser panes are live-only (no persisted session entry),
       // so include them on every hydrate regardless of the onlyRuntimeOwnedTerminals
@@ -6155,10 +5672,6 @@ export class OrcaRuntimeService {
     return typeof ptyId === 'string' && ptyId.startsWith('serve-')
   }
 
-  private isSshOwnedPtyId(ptyId: string | null | undefined): boolean {
-    return typeof ptyId === 'string' && parseAppSshPtyId(ptyId) !== null
-  }
-
   private workspaceSessionHasRuntimeOwnedPtyCandidate(session: WorkspaceSessionState): boolean {
     return Object.entries(session.tabsByWorktree ?? {}).some(([worktreeId, tabs]) =>
       this.workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(session, worktreeId, tabs)
@@ -6167,69 +5680,30 @@ export class OrcaRuntimeService {
 
   private workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(
     session: WorkspaceSessionState,
-    worktreeId: string,
+    _worktreeId: string,
     tabs: WorkspaceSessionState['tabsByWorktree'][string]
   ): boolean {
     return tabs.some((tab) => {
-      if (this.isServeOrSshOwnedPtyId(tab.ptyId)) {
+      if (this.isServeOwnedPtyId(tab.ptyId)) {
         return true
       }
       const leafPtyIds = session.terminalLayoutsByTabId?.[tab.id]?.ptyIdsByLeafId
-      return (
-        (leafPtyIds &&
-          Object.values(leafPtyIds).some((ptyId) => this.isServeOrSshOwnedPtyId(ptyId))) ||
-        // Why: expiry keeps pane coordinates so paired viewers can request a fresh shell.
-        this.getRecentExpiredSshLease(worktreeId, tab.id, undefined) !== null
-      )
+      return leafPtyIds && Object.values(leafPtyIds).some((ptyId) => this.isServeOwnedPtyId(ptyId))
     })
   }
 
-  private getRecentExpiredSshLease(
-    worktreeId: string,
-    tabId: string,
-    leafId: string | undefined,
-    ptyId?: string
-  ): ReturnType<NonNullable<RuntimeStore['getSshRemotePtyLeases']>>[number] | null {
-    const now = Date.now()
-    return (
-      this.store
-        ?.getSshRemotePtyLeases?.()
-        .find(
-          (lease) =>
-            lease.state === 'expired' &&
-            lease.worktreeId === worktreeId &&
-            lease.tabId === tabId &&
-            (ptyId === undefined || lease.ptyId === ptyId) &&
-            (leafId === undefined || lease.leafId === undefined || lease.leafId === leafId) &&
-            lease.updatedAt <= now &&
-            now - lease.updatedAt <= SSH_PANE_RECOVERY_GRACE_MS
-        ) ?? null
-    )
-  }
-
-  private hasRecentExpiredSshLeasePane(
-    worktreeId: string,
-    tab: RuntimeMobileSessionTerminalTab
-  ): boolean {
-    return this.getRecentExpiredSshLease(worktreeId, tab.parentTabId, tab.leafId) !== null
-  }
-
-  // Why: serve-* (local serve) and ssh:<conn>@@<relay> (SSH relay) ids are minted
-  // ONLY for runtime-owned terminals and are preserved/re-hydrated, so tear them
-  // down even if the renderer adopted a view (else they resurrect). The daemon
-  // session form <worktreeId>@@<shortUuid> is deliberately NOT here: the daemon
-  // mints it for ordinary renderer-owned local terminals too, so id shape can't
-  // classify ownership for that form — renderer-graph membership does (below).
-  private isServeOrSshOwnedPtyId(ptyId: string | null | undefined): boolean {
-    return this.isServeOwnedPtyId(ptyId) || this.isSshOwnedPtyId(ptyId)
-  }
-
-  private hasServeOrSshOwnedBinding(tab: RuntimeMobileSessionTerminalTab): boolean {
-    if (this.isServeOrSshOwnedPtyId(tab.ptyId)) {
+  // Why: serve-* ids are minted ONLY for runtime-owned terminals and are
+  // preserved/re-hydrated, so tear them down even if the renderer adopted a view
+  // (else they resurrect). The daemon session form <worktreeId>@@<shortUuid> is
+  // deliberately NOT here: the daemon mints it for ordinary renderer-owned local
+  // terminals too, so id shape can't classify ownership for that form —
+  // renderer-graph membership does (below).
+  private hasServeOwnedBinding(tab: RuntimeMobileSessionTerminalTab): boolean {
+    if (this.isServeOwnedPtyId(tab.ptyId)) {
       return true
     }
     return Object.values(tab.parentLayout?.ptyIdsByLeafId ?? {}).some((ptyId) =>
-      this.isServeOrSshOwnedPtyId(ptyId)
+      this.isServeOwnedPtyId(ptyId)
     )
   }
 
@@ -6238,48 +5712,21 @@ export class OrcaRuntimeService {
   // against a renderer publication. Require the binding to be backed by a live
   // PTY or by the persisted workspace session (a dormant persisted serve/SSH
   // binding is still re-hydratable, so it stays preserved).
-  private hasLiveOrPersistedServeOrSshOwnedPtyBinding(
+  private hasLiveOrPersistedServeOwnedPtyBinding(
     worktreeId: string,
     tab: RuntimeMobileSessionTerminalTab
   ): boolean {
     const boundPtyIds = [
       tab.ptyId,
       ...Object.values(tab.parentLayout?.ptyIdsByLeafId ?? {})
-    ].filter((ptyId): ptyId is string => this.isServeOrSshOwnedPtyId(ptyId))
-    const boundSshPtyIds = boundPtyIds.filter((ptyId) => this.isSshOwnedPtyId(ptyId))
+    ].filter((ptyId): ptyId is string => this.isServeOwnedPtyId(ptyId))
     if (boundPtyIds.length === 0) {
-      return this.hasRecentExpiredSshLeasePane(worktreeId, tab)
+      return false
     }
     // Why: exited PTY records are archived in ptysById, so require a connected
     // record — a dead serve shell whose persisted binding is also gone must
     // stop being preserved.
     if (boundPtyIds.some((ptyId) => this.ptysById.get(ptyId)?.connected === true)) {
-      return true
-    }
-    const now = Date.now()
-    if (
-      boundPtyIds.some((ptyId) => {
-        const pty = this.ptysById.get(ptyId)
-        return (
-          pty?.connectionId != null &&
-          pty.lastExitCode != null &&
-          pty.lastExitCode < 0 &&
-          pty.disconnectedAt != null &&
-          now - pty.disconnectedAt <= SSH_PANE_RECOVERY_GRACE_MS
-        )
-      })
-    ) {
-      // Why: an abnormal SSH transport exit can beat paired-viewer recovery; retain its pane briefly so the HUB remains addressable.
-      return true
-    }
-    if (
-      now - this.startedAt <= SSH_PANE_RECOVERY_GRACE_MS &&
-      boundSshPtyIds.some((ptyId) => {
-        const pty = this.ptysById.get(ptyId)
-        return !pty || (!pty.connected && pty.lastExitCode === null)
-      })
-    ) {
-      // Why: after a HUB restart, failed SSH reattach can remove persistence before the fresh runtime records an exit; keep the pane reachable for ensure.
       return true
     }
     const session = this.getWorkspaceSessionForWorktree(worktreeId)
@@ -6342,11 +5789,11 @@ export class OrcaRuntimeService {
     worktreeId: string,
     tab: RuntimeMobileSessionTerminalTab
   ): boolean {
-    if (this.hasServeOrSshOwnedBinding(tab)) {
+    if (this.hasServeOwnedBinding(tab)) {
       return true
     }
     const pty = this.findPtyForMobileTerminalTab(worktreeId, tab)
-    if (pty && this.isServeOrSshOwnedPtyId(pty.ptyId)) {
+    if (pty && this.isServeOwnedPtyId(pty.ptyId)) {
       return true
     }
     return !this.tabs.has(tab.parentTabId)
@@ -7449,29 +6896,20 @@ export class OrcaRuntimeService {
             // untappable; fall back to the plain-shell materialize.
           }
         }
-        try {
-          await this.createRuntimeOwnedMobileSessionTerminal(worktreeId, targetsHost, undefined, {
-            identity: {
-              tabId: tab.parentTabId,
-              leafId: tab.leafId,
-              sessionId
-            },
-            cwd: tab.startupCwd,
-            command: agentStartup.command,
-            env: agentStartup.env,
-            startupCommandDelivery: agentStartup.startupCommandDelivery,
-            launchConfig: agentStartup.launchConfig,
-            launchAgent: tab.launchAgent,
-            targetGroupId
-          })
-        } catch (err) {
-          if (sessionId && parseAppSshPtyId(sessionId)) {
-            // Why: an expired SSH reattach clears durable bindings in the store,
-            // but this in-memory headless snapshot can still carry the old id.
-            this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, { force: true })
-          }
-          throw err
-        }
+        await this.createRuntimeOwnedMobileSessionTerminal(worktreeId, targetsHost, undefined, {
+          identity: {
+            tabId: tab.parentTabId,
+            leafId: tab.leafId,
+            sessionId
+          },
+          cwd: tab.startupCwd,
+          command: agentStartup.command,
+          env: agentStartup.env,
+          startupCommandDelivery: agentStartup.startupCommandDelivery,
+          launchConfig: agentStartup.launchConfig,
+          launchAgent: tab.launchAgent,
+          targetGroupId
+        })
         return this.applyMobileSessionTabNavigation(
           this.getMobileSessionTabsForWorktree(worktreeId),
           tab.id,
@@ -7604,7 +7042,7 @@ export class OrcaRuntimeService {
   ): boolean {
     return (
       this.isHeadlessMobileSessionPublication(snapshot.publicationEpoch) ||
-      this.hasServeOrSshOwnedBinding(tab)
+      this.hasServeOwnedBinding(tab)
     )
   }
 
@@ -8094,9 +7532,9 @@ export class OrcaRuntimeService {
       allowMissing: options.allowMissingPersistedTab
     })
     // Why: local provider ids can be reused after restart, so a dormant
-    // persisted id is not kill authority. SSH relay ids remain durable exact
-    // identities even before pane metadata reconnects.
-    const ptyIdsToKill = new Set(projectedPtyIds.filter((ptyId) => parseAppSshPtyId(ptyId)))
+    // persisted id is not kill authority; only live PTYs from the snapshot are.
+    void projectedPtyIds
+    const ptyIdsToKill = new Set<string>()
     for (const candidate of snapshot.tabs) {
       if (candidate.type !== 'terminal' || candidate.parentTabId !== closedParentTabId) {
         continue
@@ -8109,7 +7547,7 @@ export class OrcaRuntimeService {
           other.parentTabId !== closedParentTabId &&
           other.ptyId === ptyId
       )
-      if (ptyId && !hasOtherOwner && (livePty || parseAppSshPtyId(ptyId))) {
+      if (ptyId && !hasOtherOwner && livePty) {
         // Why: a live serve leaf can exist before its debounced binding reaches
         // persistence. Include it from the authoritative snapshot so split
         // close cannot leave a provider process behind.
@@ -8791,16 +8229,10 @@ export class OrcaRuntimeService {
     connectionId?: string,
     deadline: WatcherRemovalDeadline = createWatcherRemovalDeadline()
   ): Promise<void> => {
-    // Why drain the remote/explorer closes: they await SSH round trips and lease suspends that a dead
-    // link never answers. The local close bounds its own awaits against the same deadline internally.
+    // Why drain the explorer close: it awaits lease suspends a stuck watcher may never answer.
+    // The local close bounds its own awaits against the same deadline internally.
     const results = await Promise.allSettled([
-      connectionId
-        ? drainBeforeWatcherRemoval(
-            closeRemoteWatcherForWorktreePath(connectionId, worktreePath),
-            deadline,
-            `remote watcher close for ${worktreePath}`
-          )
-        : closeLocalWatcherForWorktreePath(worktreePath, deadline),
+      closeLocalWatcherForWorktreePath(worktreePath, deadline),
       drainBeforeWatcherRemoval(
         this.fileCommands.closeFileExplorerWatchersForPath(worktreePath, connectionId),
         deadline,
@@ -8821,18 +8253,12 @@ export class OrcaRuntimeService {
     connectionId?: string
   ): Promise<void> => {
     await Promise.all([
-      connectionId
-        ? restoreRemoteWatcherAfterFailedRemoval(connectionId, worktreePath)
-        : restoreLocalWatcherAfterFailedRemoval(worktreePath),
+      restoreLocalWatcherAfterFailedRemoval(worktreePath),
       this.fileCommands.restoreFileExplorerWatchersAfterFailedRemoval(worktreePath, connectionId)
     ])
   }
   forgetFileWatchersAfterRemoval = (worktreePath: string, connectionId?: string): void => {
-    if (connectionId) {
-      forgetRemoteWatcherRemovalSnapshot(connectionId, worktreePath)
-    } else {
-      forgetLocalWatcherRemovalSnapshot(worktreePath)
-    }
+    forgetLocalWatcherRemovalSnapshot(worktreePath)
     this.fileCommands.forgetFileExplorerWatchersAfterRemoval(worktreePath, connectionId)
   }
   acquireFileWatcherRemoval = async (
@@ -8953,7 +8379,6 @@ export class OrcaRuntimeService {
       return meta
         ? {
             linkedIssue: meta.linkedIssue,
-            linkedGitLabIssue: meta.linkedGitLabIssue,
             linkedWorkItem: meta.linkedWorkItem
           }
         : null
@@ -9740,7 +9165,6 @@ export class OrcaRuntimeService {
       // trail the tracker's). cleanData keeps OSC 9999 payloads out of the
       // detector's bounded recent-text window; the detector strips remaining
       // control sequences itself, exactly like the renderer byte path.
-      titleTrackerEntry.commandCodeDetector?.observe(agentStatusChunk.cleanData)
     } finally {
       titleTrackerEntry.applyingChunk = false
       try {
@@ -10234,14 +9658,7 @@ export class OrcaRuntimeService {
       applyingSyntheticFrame: false,
       lastMobileTitleGateKey: null,
       chunkTouchedSessionTabs: false,
-      pendingFacts: [],
-      // Why: command-code facts exist only for the pty:sideEffect channel —
-      // headless serve skips the per-chunk scrape entirely. The detector
-      // self-arms on the Command Code banner; the spawn command (when main
-      // saw one) mirrors the renderer detector's startupCommand fast-arm.
-      commandCodeDetector: this.terminalSideEffectConsumerAvailable
-        ? this.createTerminalSideEffectCommandCodeDetector(ptyId)
-        : null
+      pendingFacts: []
     }
     this.ptyTitleTrackersByPtyId.set(ptyId, entry)
     return entry
@@ -10371,26 +9788,9 @@ export class OrcaRuntimeService {
       return
     }
     this.terminalSideEffectConsumerAvailable = nextAvailable
-    for (const [ptyId, entry] of this.ptyTitleTrackersByPtyId) {
+    for (const entry of this.ptyTitleTrackersByPtyId.values()) {
       entry.tracker.setTransientSideEffectScanningEnabled(nextAvailable)
-      entry.commandCodeDetector = nextAvailable
-        ? this.createTerminalSideEffectCommandCodeDetector(ptyId)
-        : null
     }
-  }
-
-  private createTerminalSideEffectCommandCodeDetector(
-    ptyId: string
-  ): NonNullable<RuntimePtyTitleTrackerEntry['commandCodeDetector']> {
-    return createCommandCodeOutputStatusDetector({
-      startupCommand: this.terminalSpawnCommandsByPtyId.get(ptyId) ?? null,
-      onWorking: (prompt) => {
-        this.recordTerminalSideEffectFact(ptyId, { kind: 'command-code-working', prompt })
-      },
-      onDone: (prompt) => {
-        this.recordTerminalSideEffectFact(ptyId, { kind: 'command-code-done', prompt })
-      }
-    })
   }
 
   private extractLastOsc7CwdForPty(
@@ -10801,10 +10201,6 @@ export class OrcaRuntimeService {
     // attaches the provider stream; a replacement under a reused id must not
     // read as the discovered never-attached session it replaced.
     if (this.spawnPublishedPtys.has(ptyId) || this.pendingPtyRegistrationIncarnations.has(ptyId)) {
-      return false
-    }
-    // SSH panes have their own lease/reattach machinery.
-    if (parseAppSshPtyId(ptyId)) {
       return false
     }
     const pty = this.ptysById.get(ptyId)
@@ -11994,24 +11390,6 @@ export class OrcaRuntimeService {
     return 'local'
   }
 
-  registerOrchestrationCompatibilitySshAttachment(
-    targetId: string,
-    connectionIncarnation: string
-  ): OrchestrationCompatibilitySshAttachmentAuthority {
-    const authority = Object.freeze({
-      kind: 'ssh' as const,
-      targetId,
-      connectionIncarnation,
-      attachmentId: randomUUID()
-    })
-    this.orchestrationCompatibilitySshAttachments.set(authority.attachmentId, authority)
-    return authority
-  }
-
-  releaseOrchestrationCompatibilitySshAttachment(attachmentId: string): void {
-    this.orchestrationCompatibilitySshAttachments.delete(attachmentId)
-  }
-
   verifyOrchestrationCompatibilityCaller(
     evidence: OrchestrationCompatibilityEvidence | null | undefined
   ): OrchestrationCompatibilityCallerAuthority | null {
@@ -12056,7 +11434,7 @@ export class OrcaRuntimeService {
     const attestation = this.attestAgentHookCompatibilityAuthorityFn?.({
       paneKey: claimedPaneKey,
       launchTokenHash,
-      connectionId: terminal.hostScope.kind === 'ssh' ? terminal.hostScope.targetId : null,
+      connectionId: null,
       terminalProvenance
     })
     if (!attestation || attestation.paneKey !== terminal.paneKey) {
@@ -12083,14 +11461,7 @@ export class OrcaRuntimeService {
         host?.kind === 'wsl' && host.hostId === hostScope.hostId && host.distro === hostScope.distro
       )
     }
-    if (host?.kind !== 'ssh' || host.targetId !== hostScope.targetId) {
-      return false
-    }
-    const authority = this.orchestrationCompatibilitySshAttachments.get(host.attachmentId)
-    return (
-      authority?.targetId === host.targetId &&
-      authority.connectionIncarnation === host.connectionIncarnation
-    )
+    return false
   }
 
   private orchestrationCompatibilityHostScopesEqual(
@@ -12106,15 +11477,12 @@ export class OrcaRuntimeService {
     if (left.kind === 'wsl' && right.kind === 'wsl') {
       return left.hostId === right.hostId && left.distro === right.distro
     }
-    return left.kind === 'ssh' && right.kind === 'ssh' && left.targetId === right.targetId
+    return false
   }
 
   private getOrchestrationCompatibilityHostScope(
     pty: RuntimePtyWorktreeRecord
   ): OrchestrationCompatibilityTerminalAuthority['hostScope'] | null {
-    if (pty.connectionId) {
-      return { kind: 'ssh', targetId: pty.connectionId }
-    }
     if (pty.isWsl || pty.wslDistro) {
       return pty.wslDistro ? { kind: 'wsl', hostId: 'local', distro: pty.wslDistro } : null
     }
@@ -13368,13 +12736,7 @@ export class OrcaRuntimeService {
     if (exitIncarnationId && pty?.incarnationId && exitIncarnationId !== pty.incarnationId) {
       return
     }
-    const preservesAbnormalSshSurface =
-      this.isSshOwnedPtyId(ptyId) && pty?.connectionId != null && exitCode < 0
-    if (preservesAbnormalSshSurface) {
-      this.restoredOrchestrationAuthorityByPtyId.delete(ptyId)
-    } else {
-      this.retirePtyAgentLaunchAuthority(ptyId)
-    }
+    this.retirePtyAgentLaunchAuthority(ptyId)
     const incarnationId =
       exitIncarnationId ??
       pty?.incarnationId ??
@@ -13506,7 +12868,7 @@ export class OrcaRuntimeService {
       this.resolvePtyExitWaiters(pty, ptyId)
       this.pruneDisconnectedPtyTranscript(pty)
     }
-    if (preservesIntentionalHandlelessSurface || preservesAbnormalSshSurface) {
+    if (preservesIntentionalHandlelessSurface) {
       // Why: relay loss is recoverable; keep the HUB-owned pane addressable through the bounded reconnect grace.
       this.touchMobileSessionSnapshotsForPty(ptyId, { immediate: true })
     } else {
@@ -13521,9 +12883,7 @@ export class OrcaRuntimeService {
       leaf.writable = false
       leaf.lastExitCode = exitCode
       this.resolveExitWaiters(leaf)
-      if (!preservesAbnormalSshSurface) {
-        this.failActiveDispatchOnExit(leaf, exitCode)
-      }
+      this.failActiveDispatchOnExit(leaf, exitCode)
     }
     this.pruneDisconnectedPtyRecords()
   }
@@ -16261,34 +15621,8 @@ export class OrcaRuntimeService {
       }
       throw new Error('terminal_not_recoverable')
     }
-    if (
-      !this.getRecentExpiredSshLease(expectedWorktreeId, parsed.tabId, parsed.leafId, pty.ptyId)
-    ) {
-      // Why: an explicit close leaves a terminated lease; only relay expiry authorizes shell recreation.
-      throw new Error('terminal_not_recoverable')
-    }
-    // Why: disconnected PTYs can reissue handles during graph cleanup; only a connected replacement satisfies the pane CAS.
-    const recovery = this.createTerminal(`id:${expectedWorktreeId}`, {
-      tabId: parsed.tabId,
-      leafId: parsed.leafId,
-      focus: false,
-      // Why: the HUB renderer may publish its exited layout while recovery is in flight; persist the replacement before that stale graph can orphan it.
-      persistHostSessionBinding: true
-    }).then((terminal) => ({
-      handle: terminal.handle,
-      tabId: parsed.tabId,
-      leafId: parsed.leafId,
-      ptyId: terminal.ptyId ?? null,
-      worktreeId: expectedWorktreeId
-    }))
-    this.terminalPaneRecoveryByIdentity.set(recoveryKey, recovery)
-    const clearRecovery = (): void => {
-      if (this.terminalPaneRecoveryByIdentity.get(recoveryKey) === recovery) {
-        this.terminalPaneRecoveryByIdentity.delete(recoveryKey)
-      }
-    }
-    void recovery.then(clearRecovery, clearRecovery)
-    return recovery
+    // Why: only an expired remote lease ever authorized recreating a disconnected pane's shell; without remote hosts a disconnected pane is final.
+    throw new Error('terminal_not_recoverable')
   }
 
   async showTerminal(handle: string): Promise<RuntimeTerminalShow> {
@@ -17430,9 +16764,6 @@ export class OrcaRuntimeService {
         ...(worktree.createdAt !== undefined ? { createdAt: worktree.createdAt } : {}),
         linkedIssue: worktree.linkedIssue,
         linkedPR,
-        linkedLinearIssue: meta?.linkedLinearIssue ?? null,
-        linkedGitLabMR: meta?.linkedGitLabMR ?? null,
-        linkedGitLabIssue: meta?.linkedGitLabIssue ?? null,
         comment: meta?.comment ?? '',
         isPinned: meta?.isPinned ?? false,
         isActive: false,
@@ -17478,9 +16809,6 @@ export class OrcaRuntimeService {
         ...(worktree.createdAt !== undefined ? { createdAt: worktree.createdAt } : {}),
         linkedIssue: worktree.linkedIssue ?? null,
         linkedPR: null,
-        linkedLinearIssue: worktree.linkedLinearIssue ?? null,
-        linkedGitLabMR: worktree.linkedGitLabMR ?? null,
-        linkedGitLabIssue: worktree.linkedGitLabIssue ?? null,
         comment: worktree.comment,
         isPinned: worktree.isPinned,
         isActive: false,
@@ -17831,7 +17159,7 @@ export class OrcaRuntimeService {
       if (
         tabId !== undefined &&
         mirroredWorktreeId === undefined &&
-        (src.connectionId === null || isWslHookRelayConnectionId(src.connectionId)) &&
+        src.connectionId === null &&
         !connectedPtyEvidence.tabIds.has(tabId) &&
         !connectedPtyEvidence.paneKeys.has(src.paneKey) &&
         (src.ptyId === undefined || !connectedPtyEvidence.ptyIds.has(src.ptyId))
@@ -17961,7 +17289,6 @@ export class OrcaRuntimeService {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
-    assertProjectHostSetupHostIsSupported(args.hostId)
     const knownRepoIds = new Set(this.listRepos().map((repo) => repo.id))
     const repo = await this.addRepo(
       args.path,
@@ -17973,7 +17300,6 @@ export class OrcaRuntimeService {
 
   async setupProjectClone(args: ProjectHostSetupCloneArgs): Promise<ProjectHostSetupResult> {
     // Why: guard before cloneRepo, which would otherwise clone to the local disk.
-    assertProjectHostSetupHostIsSupported(args.hostId)
     const knownRepoIds = new Set(this.listRepos().map((repo) => repo.id))
     const repo = await this.cloneRepo(args.url, args.destination, args.hostId)
     return this.completeProjectHostSetup(
@@ -18167,16 +17493,13 @@ export class OrcaRuntimeService {
     if (!group || !folderPath) {
       throw new Error('folder_workspace_project_group_not_found')
     }
-    const status = await getFolderWorkspacePathStatusForPath(
-      {
-        folderPath,
-        projectGroupId: group.id,
-        connectionId: input.connectionId ?? group.connectionId ?? null,
-        projectGroups,
-        repos: this.store.getRepos()
-      },
-      { getSshFilesystemProvider }
-    )
+    const status = await getFolderWorkspacePathStatusForPath({
+      folderPath,
+      projectGroupId: group.id,
+      connectionId: input.connectionId ?? group.connectionId ?? null,
+      projectGroups,
+      repos: this.store.getRepos()
+    })
     assertFolderWorkspacePathUsable(status)
     const workspace = this.store.createFolderWorkspace(input)
     this.notifyReposChanged()
@@ -18189,7 +17512,7 @@ export class OrcaRuntimeService {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
-    return getFolderWorkspacePathStatus(this.store, request, { getSshFilesystemProvider })
+    return getFolderWorkspacePathStatus(this.store, request)
   }
 
   async updateFolderWorkspace(
@@ -18226,19 +17549,16 @@ export class OrcaRuntimeService {
         return null
       }
       const projectGroups = this.store.getProjectGroups?.() ?? []
-      const status = await getFolderWorkspacePathStatusForPath(
-        {
-          folderPath: updates.folderPath,
-          projectGroupId: workspace.projectGroupId,
-          connectionId:
-            workspace.connectionId ??
-            projectGroups.find((entry) => entry.id === workspace.projectGroupId)?.connectionId ??
-            null,
-          projectGroups,
-          repos: this.store.getRepos()
-        },
-        { getSshFilesystemProvider }
-      )
+      const status = await getFolderWorkspacePathStatusForPath({
+        folderPath: updates.folderPath,
+        projectGroupId: workspace.projectGroupId,
+        connectionId:
+          workspace.connectionId ??
+          projectGroups.find((entry) => entry.id === workspace.projectGroupId)?.connectionId ??
+          null,
+        projectGroups,
+        repos: this.store.getRepos()
+      })
       assertFolderWorkspacePathUsable(status)
     }
     const updated = this.store.updateFolderWorkspace(folderWorkspaceId, updates)
@@ -18481,13 +17801,12 @@ export class OrcaRuntimeService {
       // connectionId), so we never stamp local/ssh onto it — that would re-attribute a
       // real local project to the wrong host. Runtime is the only host that lost its
       // identity to the pre-#7018 path-only import and needs the backfill.
-      if (
-        existing.executionHostId == null &&
-        parseExecutionHostId(executionHostId)?.kind === 'runtime'
-      ) {
+      const parsedExecutionHost = parseExecutionHostId(executionHostId)
+      if (existing.executionHostId == null && parsedExecutionHost?.kind === 'runtime') {
+        const runtimeExecutionHostId = parsedExecutionHost.id
         const adopted =
-          this.store.updateRepo(existing.id, { executionHostId }) ??
-          ({ ...existing, executionHostId } as Repo)
+          this.store.updateRepo(existing.id, { executionHostId: runtimeExecutionHostId }) ??
+          ({ ...existing, executionHostId: runtimeExecutionHostId } as Repo)
         this.invalidateResolvedWorktreeCache()
         this.invalidateWorktreeScanCacheForRepo(existing.id)
         this.notifyReposChanged()
@@ -18502,7 +17821,7 @@ export class OrcaRuntimeService {
       path,
       displayName: getRepoName(path),
       badgeColor: DEFAULT_REPO_BADGE_COLOR,
-      ...(executionHostId != null ? { executionHostId } : {}),
+      ...toRepoExecutionHostStamp(executionHostId),
       ...detected,
       addedAt: Date.now(),
       kind,
@@ -18796,7 +18115,7 @@ export class OrcaRuntimeService {
       path: clonePath,
       displayName: getRepoName(clonePath),
       badgeColor: DEFAULT_REPO_BADGE_COLOR,
-      ...(executionHostId != null ? { executionHostId } : {}),
+      ...toRepoExecutionHostStamp(executionHostId),
       ...detected,
       addedAt: Date.now(),
       kind: 'git',
@@ -18966,9 +18285,7 @@ export class OrcaRuntimeService {
         truncated: false
       }
     }
-    const refDetails = repo.connectionId
-      ? await this.searchRemoteRepoRefs(repo, query, limit + 1)
-      : await searchBaseRefDetails(repo.path, query, limit + 1)
+    const refDetails = await searchBaseRefDetails(repo.path, query, limit + 1)
     return {
       refs: refDetails.slice(0, limit).map((entry) => entry.refName),
       refDetails: refDetails.slice(0, limit),
@@ -18983,111 +18300,11 @@ export class OrcaRuntimeService {
     if (isFolderRepo(repo)) {
       return { defaultBaseRef: null, remoteCount: 0 }
     }
-    if (repo.connectionId) {
-      return this.getRemoteRepoBaseRefDefault(repo)
-    }
     const [defaultBaseRef, remoteCount] = await Promise.all([
       getBaseRefDefault(repo.path),
       getRemoteCount(repo.path)
     ])
     return { defaultBaseRef, remoteCount }
-  }
-
-  private async getRemoteRepoBaseRefDefault(
-    repo: Repo
-  ): Promise<{ defaultBaseRef: string | null; remoteCount: number }> {
-    const provider = repo.connectionId ? getSshGitProvider(repo.connectionId) : null
-    if (!provider) {
-      return { defaultBaseRef: null, remoteCount: 0 }
-    }
-    const [defaultBaseRef, remoteCount] = await Promise.all([
-      resolveDefaultBaseRefViaExec(async (argv) => {
-        try {
-          return await provider.exec(argv, repo.path)
-        } catch (err) {
-          if (argv[0] === 'symbolic-ref') {
-            console.warn('[runtime:repo.baseRefDefault] SSH symbolic-ref failed', {
-              path: repo.path,
-              err
-            })
-          }
-          throw err
-        }
-      }),
-      provider
-        .exec(['remote'], repo.path)
-        .then((result) => parseRemoteCount(result.stdout))
-        .catch((err) => {
-          console.warn('[runtime:repo.baseRefDefault] SSH git remote count failed', {
-            path: repo.path,
-            err
-          })
-          return 0
-        })
-    ])
-    return { defaultBaseRef, remoteCount }
-  }
-
-  private async searchRemoteRepoRefs(
-    repo: Repo,
-    query: string,
-    limit: number
-  ): Promise<BaseRefSearchResult[]> {
-    const provider = repo.connectionId ? getSshGitProvider(repo.connectionId) : null
-    if (!provider) {
-      return []
-    }
-    const normalizedQuery = normalizeRefSearchQuery(query)
-    try {
-      const remotesResult = await provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
-      const remotes = remotesResult.stdout
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean)
-      const capabilities = getSshGitCapabilityCache(provider)
-      const runSearch = async (patternGroup?: 'segmented' | 'branchRoot'): Promise<string> => {
-        return capabilities.runWithFallback(
-          'for-each-ref-exclude',
-          async () =>
-            (
-              await provider.exec(
-                buildSearchBaseRefsArgv(normalizedQuery, limit, {
-                  remoteNames: remotes,
-                  patternGroup
-                }),
-                repo.path
-              )
-            ).stdout,
-          async () =>
-            (
-              await provider.exec(
-                buildSearchBaseRefsArgv(normalizedQuery, limit, {
-                  excludeRemoteHead: false,
-                  remoteNames: remotes,
-                  patternGroup
-                }),
-                repo.path
-              )
-            ).stdout,
-          isForEachRefExcludeUnsupportedError
-        )
-      }
-      const searchTokens = normalizedQuery.split('/').filter((token) => token.length > 0)
-      if (searchTokens.length > 1) {
-        const results = await Promise.all([runSearch('segmented'), runSearch('branchRoot')])
-        return mergeBaseRefSearchResultGroups(
-          results.map((stdout) => parseAndFilterSearchRefDetails(stdout, limit, remotes)),
-          limit
-        )
-      }
-      return parseAndFilterSearchRefDetails(await runSearch(), limit, remotes)
-    } catch (err) {
-      console.warn('[runtime:repo.searchRefs] SSH for-each-ref failed', {
-        path: repo.path,
-        err
-      })
-      return []
-    }
   }
 
   private async resolveHostedReviewTarget(args: {
@@ -19353,10 +18570,6 @@ export class OrcaRuntimeService {
     active?: boolean
     linkedGitHubPR?: number | null
     fallbackGitHubPR?: number | null
-    linkedGitLabMR?: number | null
-    linkedBitbucketPR?: number | null
-    linkedAzureDevOpsPR?: number | null
-    linkedGiteaPR?: number | null
   }): Promise<HostedReviewInfo | null> {
     const repo = await this.resolveRepoSelector(args.repoSelector)
     const executionOptions = this.getHostedReviewExecutionOptions(repo)
@@ -19368,10 +18581,6 @@ export class OrcaRuntimeService {
       ...(args.active === true ? { active: true } : {}),
       linkedGitHubPR: args.linkedGitHubPR ?? null,
       fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
-      linkedGitLabMR: args.linkedGitLabMR ?? null,
-      linkedBitbucketPR: args.linkedBitbucketPR ?? null,
-      linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
-      linkedGiteaPR: args.linkedGiteaPR ?? null,
       ...executionOptions
     })
     if (review?.provider === 'github' && this.stats && !this.stats.hasCountedPR(review.url)) {
@@ -19404,10 +18613,6 @@ export class OrcaRuntimeService {
       behind: args.behind,
       linkedGitHubPR: args.linkedGitHubPR ?? null,
       fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
-      linkedGitLabMR: args.linkedGitLabMR ?? null,
-      linkedBitbucketPR: args.linkedBitbucketPR ?? null,
-      linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
-      linkedGiteaPR: args.linkedGiteaPR ?? null,
       ...executionOptions
     })
   }
@@ -19441,386 +18646,6 @@ export class OrcaRuntimeService {
         repoId: repo.id,
         meta: { prNumber: result.number, prUrl: result.url }
       })
-    }
-    return result
-  }
-
-  async listGitLabRepoWorkItems(
-    repoSelector: string,
-    state?: MRListState,
-    page?: number,
-    perPage?: number,
-    query?: string
-  ): Promise<Awaited<ReturnType<typeof listGitLabWorkItems>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return listGitLabWorkItems(
-      repo.path,
-      state ?? 'opened',
-      page ?? 1,
-      perPage ?? 20,
-      repo.issueSourcePreference,
-      query,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async listGitLabRepoMRs(
-    repoSelector: string,
-    state?: MRListState,
-    page?: number,
-    perPage?: number,
-    query?: string
-  ): Promise<Awaited<ReturnType<typeof listGitLabMergeRequests>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return listGitLabMergeRequests(
-      repo.path,
-      normalizeGitLabMRListState(state),
-      normalizeGitLabPositiveInteger(page, 1, 10_000),
-      normalizeGitLabPositiveInteger(perPage, 20, 100),
-      repo.issueSourcePreference,
-      query,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async listGitLabRepoIssues(
-    repoSelector: string,
-    state?: GitLabIssueListState,
-    assignee?: string,
-    limit?: number
-  ): Promise<{
-    items: GitLabWorkItem[]
-    error?: Awaited<ReturnType<typeof listGitLabIssues>>['error']
-  }> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    const normalized = normalizeGitLabIssueListArgs({ state, assignee, limit })
-    const result = await listGitLabIssues(
-      repo.path,
-      normalized.limit,
-      repo.issueSourcePreference,
-      normalized.state,
-      normalized.assignee,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-    // Why: web runtime mirrors the desktop preload contract, where GitLab
-    // issue rows share the GitLabWorkItem shape with MRs on TaskPage.
-    const items: GitLabWorkItem[] = result.items.map((issue) => ({
-      id: `gitlab-issue-${repo.id}-${issue.number}`,
-      type: 'issue' as const,
-      number: issue.number,
-      title: issue.title,
-      state: issue.state,
-      url: issue.url,
-      labels: issue.labels,
-      updatedAt: issue.updatedAt ?? '',
-      author: issue.author ?? null,
-      repoId: repo.id
-    }))
-    return { items, ...(result.error ? { error: result.error } : {}) }
-  }
-
-  async listGitLabRepoTodos(
-    repoSelector: string
-  ): Promise<Awaited<ReturnType<typeof listGitLabTodos>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return listGitLabTodos(
-      repo.path,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async diagnoseGitLabAuth(): Promise<Awaited<ReturnType<typeof diagnoseGitLabAuthClient>>> {
-    return diagnoseGitLabAuthClient()
-  }
-
-  async getGitLabRateLimit(options?: {
-    force?: boolean
-    host?: string | null
-  }): Promise<Awaited<ReturnType<typeof getGitLabRateLimit>>> {
-    return getGitLabRateLimit(options)
-  }
-
-  async listGitLabRepoLabels(
-    repoSelector: string
-  ): Promise<Awaited<ReturnType<typeof listGitLabLabels>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return listGitLabLabels(
-      repo.path,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async createGitLabRepoIssue(
-    repoSelector: string,
-    title: string,
-    body: string
-  ): Promise<Awaited<ReturnType<typeof createGitLabIssue>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return createGitLabIssue(
-      repo.path,
-      title,
-      body,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async updateGitLabRepoIssue(
-    repoSelector: string,
-    number: number,
-    updates: GitLabIssueUpdate,
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof updateGitLabIssue>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return updateGitLabIssue(
-      repo.path,
-      number,
-      updates,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async addGitLabRepoIssueComment(
-    repoSelector: string,
-    number: number,
-    body: string,
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof addGitLabIssueComment>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return addGitLabIssueComment(
-      repo.path,
-      number,
-      body,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async addGitLabRepoMRComment(
-    repoSelector: string,
-    iid: number,
-    body: string,
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof addGitLabMRComment>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return addGitLabMRComment(
-      repo.path,
-      iid,
-      body,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async addGitLabRepoMRInlineComment(
-    repoSelector: string,
-    iid: number,
-    input: GitLabMRInlineCommentInput,
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof addGitLabMRInlineComment>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return addGitLabMRInlineComment(
-      repo.path,
-      iid,
-      input,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async resolveGitLabRepoMRDiscussion(
-    repoSelector: string,
-    iid: number,
-    discussionId: string,
-    resolved: boolean,
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof resolveGitLabMRDiscussion>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return resolveGitLabMRDiscussion(
-      repo.path,
-      iid,
-      discussionId,
-      resolved,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async getGitLabRepoJobTrace(
-    repoSelector: string,
-    jobId: number,
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof getGitLabJobTrace>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return getGitLabJobTrace(
-      repo.path,
-      jobId,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async retryGitLabRepoJob(
-    repoSelector: string,
-    jobId: number,
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof retryGitLabJob>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return retryGitLabJob(
-      repo.path,
-      jobId,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async mergeGitLabRepoMR(
-    repoSelector: string,
-    iid: number,
-    method?: 'merge' | 'squash' | 'rebase',
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof mergeGitLabMR>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return mergeGitLabMR(
-      repo.path,
-      iid,
-      method ?? 'merge',
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async updateGitLabRepoMRState(
-    repoSelector: string,
-    iid: number,
-    state: 'opened' | 'closed',
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof closeGitLabMR>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return state === 'closed'
-      ? closeGitLabMR(
-          repo.path,
-          iid,
-          repo.issueSourcePreference,
-          repo.connectionId ?? null,
-          projectRef,
-          ...this.getLocalGitExecutionOptionArgs(repo)
-        )
-      : reopenGitLabMR(
-          repo.path,
-          iid,
-          repo.issueSourcePreference,
-          repo.connectionId ?? null,
-          projectRef,
-          ...this.getLocalGitExecutionOptionArgs(repo)
-        )
-  }
-
-  async updateGitLabRepoMR(
-    repoSelector: string,
-    iid: number,
-    updates: { title?: string; body?: string; addLabels?: string[]; removeLabels?: string[] },
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof updateGitLabMR>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return updateGitLabMR(
-      repo.path,
-      iid,
-      updates,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async updateGitLabRepoMRReviewers(
-    repoSelector: string,
-    iid: number,
-    reviewerIds: number[],
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof updateGitLabMRReviewers>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return updateGitLabMRReviewers(
-      repo.path,
-      iid,
-      reviewerIds,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async getGitLabRepoWorkItemDetails(
-    repoSelector: string,
-    iid: number,
-    type: 'issue' | 'mr',
-    projectRef?: GitLabProjectRef | null
-  ): Promise<Awaited<ReturnType<typeof getGitLabWorkItemDetails>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    return getGitLabWorkItemDetails(
-      repo.path,
-      iid,
-      type,
-      repo.issueSourcePreference,
-      repo.connectionId ?? null,
-      projectRef,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-  }
-
-  async getGitLabRepoWorkItemByPath(
-    repoSelector: string,
-    projectRef: GitLabProjectRef,
-    iid: number,
-    type: 'issue' | 'mr'
-  ): Promise<Awaited<ReturnType<typeof getGitLabWorkItemByProjectRef>>> {
-    const repo = await this.resolveRepoSelector(repoSelector)
-    const result = await getGitLabWorkItemByProjectRef(
-      repo.path,
-      projectRef,
-      iid,
-      type,
-      repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
-    )
-    // Why: remote pasted-URL lookups should update GitLab recents exactly
-    // like the desktop IPC path, but only after a successful lookup.
-    if (result && this.store?.updateSettings) {
-      const store = this.store
-      recordGitLabProjectRecent(
-        {
-          getSettings: () => store.getSettings(),
-          updateSettings: (updates) => store.updateSettings?.(updates)
-        },
-        projectRef.host,
-        projectRef.path
-      )
     }
     return result
   }
@@ -20300,38 +19125,6 @@ export class OrcaRuntimeService {
 
   async getRepoHooks(repoSelector: string) {
     const repo = await this.resolveRepoSelector(repoSelector)
-    if (repo.connectionId) {
-      const fsProvider = getSshFilesystemProvider(repo.connectionId)
-      if (!fsProvider) {
-        return {
-          hasHooksFile: false,
-          hooks: null,
-          setupRunPolicy: getEffectiveSetupRunPolicy(repo),
-          source: null
-        }
-      }
-      try {
-        const result = await this.readRemoteProjectConfig(fsProvider, repo.path)
-        const hooks = result.isBinary ? null : parseOrcaYaml(result.content)
-        return {
-          hasHooksFile: Boolean(hooks),
-          hooks,
-          setupRunPolicy: getEffectiveSetupRunPolicy(repo),
-          source: hooks ? 'orca.yaml' : null,
-          setupTrust: this.getSharedSetupHookTrustPayload(
-            repo,
-            getDefaultTabCommandTrustContent(hooks)
-          )
-        }
-      } catch {
-        return {
-          hasHooksFile: false,
-          hooks: null,
-          setupRunPolicy: getEffectiveSetupRunPolicy(repo),
-          source: null
-        }
-      }
-    }
     const hasFile = hasHooksFile(repo.path)
     const hooks = getEffectiveHooks(repo)
     const sharedHooks = hasFile ? loadHooks(repo.path) : null
@@ -20354,35 +19147,6 @@ export class OrcaRuntimeService {
       return { status: 'ok' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
     }
 
-    if (repo.connectionId) {
-      const fsProvider = getSshFilesystemProvider(repo.connectionId)
-      // Why: callers cache "no hooks" as authoritative, so an unreadable repo must fail
-      // closed with an error status (mirrors the hooks:check IPC handler) instead of
-      // pinning a false "no setup script" verdict until the client remounts.
-      if (!fsProvider) {
-        return { status: 'error' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
-      }
-      try {
-        const result = await this.readRemoteProjectConfig(fsProvider, repo.path)
-        if (result.isBinary) {
-          return { status: 'ok' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
-        }
-        return {
-          status: 'ok' as const,
-          hasHooks: true,
-          hooks: parseOrcaYaml(result.content),
-          mayNeedUpdate: false
-        }
-      } catch (error) {
-        return {
-          status: isENOENT(error) ? ('ok' as const) : ('error' as const),
-          hasHooks: false,
-          hooks: null,
-          mayNeedUpdate: false
-        }
-      }
-    }
-
     const has = hasHooksFile(repo.path)
     const hooks = has ? loadHooks(repo.path) : null
     return {
@@ -20401,18 +19165,6 @@ export class OrcaRuntimeService {
 
     return inspectSetupScriptImportCandidates(async (relativePath) => {
       const filePath = joinWorktreeRelativePath(repo.path, relativePath)
-      if (repo.connectionId) {
-        const fsProvider = getSshFilesystemProvider(repo.connectionId)
-        if (!fsProvider) {
-          return null
-        }
-        try {
-          const result = await fsProvider.readFile(filePath)
-          return result.isBinary ? null : result.content
-        } catch {
-          return null
-        }
-      }
 
       try {
         return await readFile(filePath, 'utf-8')
@@ -20437,73 +19189,7 @@ export class OrcaRuntimeService {
       }
     }
 
-    if (repo.connectionId) {
-      const issueCommandPath = joinWorktreeRelativePath(
-        repo.path,
-        `${CONFIG_DIR_NAME}/issue-command`
-      )
-      const fsProvider = getSshFilesystemProvider(repo.connectionId)
-      if (!fsProvider) {
-        return {
-          localContent: null,
-          sharedContent: null,
-          effectiveContent: null,
-          localFilePath: issueCommandPath,
-          source: 'none' as const
-        }
-      }
-      const localContent =
-        (await this.readRemoteIssueCommandOverride(fsProvider, issueCommandPath)) ??
-        (await this.readRemoteIssueCommandOverride(
-          fsProvider,
-          joinWorktreeRelativePath(repo.path, `${LEGACY_CONFIG_DIR_NAME}/issue-command`)
-        ))
-      const sharedContent = await this.readRemoteSharedIssueCommand(fsProvider, repo.path)
-      const effectiveContent = localContent ?? sharedContent
-      return {
-        localContent,
-        sharedContent,
-        effectiveContent,
-        localFilePath: issueCommandPath,
-        source: localContent
-          ? ('local' as const)
-          : sharedContent
-            ? ('shared' as const)
-            : ('none' as const)
-      }
-    }
-
     return readIssueCommand(repo.path)
-  }
-
-  private async readRemoteIssueCommandOverride(
-    fsProvider: IFilesystemProvider,
-    issueCommandPath: string
-  ): Promise<string | null> {
-    try {
-      const result = await fsProvider.readFile(issueCommandPath)
-      if (result.isBinary) {
-        return null
-      }
-      return result.content.trim() || null
-    } catch {
-      return null
-    }
-  }
-
-  private async readRemoteSharedIssueCommand(
-    fsProvider: IFilesystemProvider,
-    repoPath: string
-  ): Promise<string | null> {
-    try {
-      const result = await this.readRemoteProjectConfig(fsProvider, repoPath)
-      if (result.isBinary) {
-        return null
-      }
-      return parseOrcaYaml(result.content)?.issueCommand?.trim() || null
-    } catch {
-      return null
-    }
   }
 
   async writeRepoIssueCommand(repoSelector: string, content: string): Promise<{ ok: true }> {
@@ -20512,113 +19198,8 @@ export class OrcaRuntimeService {
       return { ok: true }
     }
 
-    if (repo.connectionId) {
-      const issueCommandPath = joinWorktreeRelativePath(
-        repo.path,
-        `${CONFIG_DIR_NAME}/issue-command`
-      )
-      const fsProvider = getSshFilesystemProvider(repo.connectionId)
-      if (!fsProvider) {
-        return { ok: true }
-      }
-      const trimmed = content.trim()
-      if (!trimmed) {
-        // Clear whichever directory holds it, so a legacy override can be removed.
-        for (const dir of [CONFIG_DIR_NAME, LEGACY_CONFIG_DIR_NAME]) {
-          await fsProvider
-            .deletePath(joinWorktreeRelativePath(repo.path, `${dir}/issue-command`), false)
-            .catch((error: unknown) => {
-              if (!isENOENT(error)) {
-                throw error
-              }
-            })
-        }
-        return { ok: true }
-      }
-      await fsProvider.createDir(joinWorktreeRelativePath(repo.path, CONFIG_DIR_NAME))
-      await this.ensureRemoteOrcaDirIgnored(fsProvider, repo.path)
-      await fsProvider.writeFile(issueCommandPath, `${trimmed}\n`)
-      return { ok: true }
-    }
-
     writeIssueCommand(repo.path, content)
     return { ok: true }
-  }
-
-  // Why: a remote worktree can't be stat'd locally, so try the CoDev name and
-  // fall back to the legacy one only when it is the one actually present.
-  // Throws the last error (ENOENT when neither exists) so callers keep their
-  // existing "no config" handling.
-  private async readRemoteProjectConfig(
-    fsProvider: IFilesystemProvider,
-    repoPath: string
-  ): Promise<Awaited<ReturnType<IFilesystemProvider['readFile']>>> {
-    let lastError: unknown
-    for (const filename of PROJECT_CONFIG_FILENAMES) {
-      try {
-        return await fsProvider.readFile(joinWorktreeRelativePath(repoPath, filename))
-      } catch (error) {
-        lastError = error
-        if (!isENOENT(error)) {
-          break
-        }
-      }
-    }
-    throw lastError
-  }
-
-  private async ensureRemoteOrcaDirIgnored(
-    fsProvider: IFilesystemProvider,
-    repoPath: string,
-    options: { required?: boolean } = {}
-  ): Promise<void> {
-    const gitignorePath = joinWorktreeRelativePath(repoPath, '.gitignore')
-    const ignoreEntry = new RegExp(`^${CONFIG_DIR_NAME.replace('.', '\\.')}/?$`, 'm')
-    let result: Awaited<ReturnType<IFilesystemProvider['readFile']>>
-    try {
-      result = await fsProvider.readFile(gitignorePath)
-    } catch (error) {
-      if (!isENOENT(error)) {
-        if (options.required) {
-          throw error
-        }
-        console.warn(`[runtime] Could not inspect remote .gitignore for ${CONFIG_DIR_NAME}`, error)
-        return
-      }
-      try {
-        await fsProvider.writeFile(gitignorePath, `${CONFIG_DIR_NAME}\n`)
-      } catch (writeError) {
-        if (options.required) {
-          throw writeError
-        }
-        console.warn(
-          `[runtime] Could not update remote .gitignore to exclude ${CONFIG_DIR_NAME}`,
-          writeError
-        )
-      }
-      return
-    }
-    if (result.isBinary) {
-      if (options.required) {
-        throw new Error(`Remote .gitignore is binary; cannot verify ${CONFIG_DIR_NAME} is ignored`)
-      }
-      return
-    }
-    if (ignoreEntry.test(result.content)) {
-      return
-    }
-    const separator = result.content.endsWith('\n') ? '' : '\n'
-    try {
-      await fsProvider.writeFile(gitignorePath, `${result.content}${separator}${CONFIG_DIR_NAME}\n`)
-    } catch (writeError) {
-      if (options.required) {
-        throw writeError
-      }
-      console.warn(
-        `[runtime] Could not update remote .gitignore to exclude ${CONFIG_DIR_NAME}`,
-        writeError
-      )
-    }
   }
 
   async listManagedWorktrees(
@@ -20746,7 +19327,6 @@ export class OrcaRuntimeService {
       {
         runtime: this,
         getLocalProvider: () => this.getLocalProvider(),
-        getSshProvider: (connectionId) => this.getSshProviderFn?.(connectionId),
         onPtyStopped: this.onPtyStopped ?? undefined
       }
     )
@@ -20961,9 +19541,7 @@ export class OrcaRuntimeService {
       let detected: string[] = []
       try {
         // Why: startup-draft fallback can run from sparse runtime launch envs too.
-        detected = repo.connectionId
-          ? await detectRemoteAgents({ connectionId: repo.connectionId })
-          : await detectInstalledAgentsWithShellPathHydration()
+        detected = await detectInstalledAgentsWithShellPathHydration()
       } catch {
         detected = []
       }
@@ -20977,7 +19555,7 @@ export class OrcaRuntimeService {
     // Why: a mobile client can run on Windows while the workspace shell is
     // Linux over SSH. Startup command quoting must target the shell that runs it.
     const agentLaunchPlatform = this.getAgentLaunchPlatformForRepo(repo)
-    const isRemote = repoIsRemote(repo)
+    const isRemote = false
     const queuedShell = resolveLocalWindowsAgentStartupShell({
       platform: agentLaunchPlatform,
       isRemote,
@@ -21051,7 +19629,7 @@ export class OrcaRuntimeService {
     // Why: CLI clients may target SSH runtimes from macOS/Windows, so quote for
     // the workspace shell rather than the client shell.
     const agentLaunchPlatform = this.getAgentLaunchPlatformForRepo(repo)
-    const isRemote = repoIsRemote(repo)
+    const isRemote = false
     const queuedShell = resolveLocalWindowsAgentStartupShell({
       platform: agentLaunchPlatform,
       isRemote,
@@ -21103,31 +19681,11 @@ export class OrcaRuntimeService {
     try {
       if (preset === 'claude') {
         markClaudeProjectTrusted(workspacePath)
-      } else if (preset === 'cursor') {
-        markCursorWorkspaceTrusted(workspacePath)
-      } else if (preset === 'copilot') {
-        markCopilotFolderTrusted(workspacePath)
       } else if (preset === 'codex') {
         markCodexProjectTrusted(workspacePath)
       }
     } catch {
       // Best-effort: the user can still accept the agent trust prompt manually.
-    }
-  }
-
-  private async markRemoteWorkspaceTrustedForAgent(
-    agent: TuiAgent,
-    connectionId: string,
-    workspacePath: string
-  ): Promise<void> {
-    const preset = TUI_AGENT_CONFIG[agent].preflightTrust
-    if (!preset) {
-      return
-    }
-    try {
-      await markRemoteAgentWorkspaceTrusted({ preset, connectionId, workspacePath })
-    } catch {
-      // Best-effort: the user can still accept the remote agent trust prompt manually.
     }
   }
 
@@ -21484,14 +20042,6 @@ export class OrcaRuntimeService {
     preserveBranchOnDelete?: boolean
     linkedIssue?: number | null
     linkedPR?: number | null
-    linkedLinearIssue?: string
-    linkedLinearIssueWorkspaceId?: string | null
-    linkedLinearIssueOrganizationUrlKey?: string | null
-    linkedGitLabMR?: number | null
-    linkedGitLabIssue?: number | null
-    linkedBitbucketPR?: number | null
-    linkedAzureDevOpsPR?: number | null
-    linkedGiteaPR?: number | null
     linkedWorkItem?: WorkspaceLinkedItem | null
     linkedTaskSourceContext?: TaskSourceContext | null
     comment?: string
@@ -21581,26 +20131,6 @@ export class OrcaRuntimeService {
         ...(args.cliProvenance ? { cliProvenance: args.cliProvenance } : {}),
         ...(args.linkedIssue !== undefined ? { linkedIssue: args.linkedIssue } : {}),
         ...(args.linkedPR !== undefined ? { linkedPR: args.linkedPR } : {}),
-        ...(args.linkedLinearIssue !== undefined
-          ? { linkedLinearIssue: args.linkedLinearIssue }
-          : {}),
-        ...(args.linkedLinearIssueWorkspaceId !== undefined
-          ? { linkedLinearIssueWorkspaceId: args.linkedLinearIssueWorkspaceId }
-          : {}),
-        ...(args.linkedLinearIssueOrganizationUrlKey !== undefined
-          ? { linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey }
-          : {}),
-        ...(args.linkedGitLabIssue !== undefined
-          ? { linkedGitLabIssue: args.linkedGitLabIssue }
-          : {}),
-        ...(args.linkedGitLabMR !== undefined ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
-        ...(args.linkedBitbucketPR !== undefined
-          ? { linkedBitbucketPR: args.linkedBitbucketPR }
-          : {}),
-        ...(args.linkedAzureDevOpsPR !== undefined
-          ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
-          : {}),
-        ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
         ...(args.linkedWorkItem !== undefined ? { linkedWorkItem: args.linkedWorkItem } : {}),
         ...(args.linkedTaskSourceContext !== undefined
           ? { linkedTaskSourceContext: args.linkedTaskSourceContext }
@@ -21700,40 +20230,6 @@ export class OrcaRuntimeService {
     const lineageInput =
       args.lineage || args.comment ? { ...args.lineage, comment: args.comment } : undefined
     const lineageResolution = await this.resolveLineageForWorktreeCreate(lineageInput)
-    if (repo.connectionId) {
-      const result = await this.createManagedRemoteWorktree(repo, {
-        ...args,
-        activate: args.activate,
-        ...(effectiveStartup ? { startup: effectiveStartup } : {}),
-        ...(effectiveStartupFollowup ? { startupFollowup: effectiveStartupFollowup } : {}),
-        ...(effectiveCreatedWithAgent ? { createdWithAgent: effectiveCreatedWithAgent } : {}),
-        ...(effectiveDraftPaste ? { startupDraftPaste: effectiveDraftPaste } : {})
-      })
-      const recordedLineage = this.recordCreatedWorktreeLineage(result.worktree, lineageResolution)
-      this.emitWorktreeLifecycle({
-        kind: 'created',
-        worktreeId: result.worktree.id,
-        path: result.worktree.path,
-        branch: result.worktree.branch
-      })
-      return {
-        ...result,
-        worktree: {
-          ...result.worktree,
-          parentWorktreeId: recordedLineage.lineage?.parentWorktreeId ?? null,
-          childWorktreeIds: result.worktree.childWorktreeIds ?? [],
-          lineage: recordedLineage.lineage,
-          workspaceLineage: recordedLineage.workspaceLineage
-        },
-        ...(lineageInput
-          ? {
-              lineage: recordedLineage.lineage,
-              workspaceLineage: recordedLineage.workspaceLineage,
-              warnings: recordedLineage.warnings
-            }
-          : {})
-      }
-    }
     const settings = createSettings
     const worktreePathSettings = getWorktreePathSettings(repo, settings)
     const localGitExecOptions = getLocalProjectGitExecOptions(this.requireStore(), repo)
@@ -22179,26 +20675,6 @@ export class OrcaRuntimeService {
         : {}),
       ...(args.linkedIssue !== undefined ? { linkedIssue: args.linkedIssue } : {}),
       ...(args.linkedPR !== undefined ? { linkedPR: args.linkedPR } : {}),
-      ...(args.linkedLinearIssue !== undefined
-        ? { linkedLinearIssue: args.linkedLinearIssue }
-        : {}),
-      ...(args.linkedLinearIssueWorkspaceId !== undefined
-        ? { linkedLinearIssueWorkspaceId: args.linkedLinearIssueWorkspaceId }
-        : {}),
-      ...(args.linkedLinearIssueOrganizationUrlKey !== undefined
-        ? { linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey }
-        : {}),
-      ...(args.linkedGitLabIssue !== undefined
-        ? { linkedGitLabIssue: args.linkedGitLabIssue }
-        : {}),
-      ...(args.linkedGitLabMR !== undefined ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
-      ...(args.linkedBitbucketPR !== undefined
-        ? { linkedBitbucketPR: args.linkedBitbucketPR }
-        : {}),
-      ...(args.linkedAzureDevOpsPR !== undefined
-        ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
-        : {}),
-      ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
       ...(args.linkedWorkItem !== undefined ? { linkedWorkItem: args.linkedWorkItem } : {}),
       ...(args.linkedTaskSourceContext !== undefined
         ? { linkedTaskSourceContext: args.linkedTaskSourceContext }
@@ -22582,338 +21058,6 @@ export class OrcaRuntimeService {
           }
         : {})
     }
-  }
-
-  private async createManagedRemoteWorktree(
-    repo: Repo,
-    args: {
-      name: string
-      baseBranch?: string
-      compareBaseRef?: string
-      branchNameOverride?: string
-      linkedIssue?: number | null
-      linkedPR?: number | null
-      linkedLinearIssue?: string
-      linkedLinearIssueWorkspaceId?: string | null
-      linkedLinearIssueOrganizationUrlKey?: string | null
-      linkedGitLabMR?: number | null
-      linkedGitLabIssue?: number | null
-      linkedBitbucketPR?: number | null
-      linkedAzureDevOpsPR?: number | null
-      linkedGiteaPR?: number | null
-      linkedWorkItem?: WorkspaceLinkedItem | null
-      linkedTaskSourceContext?: TaskSourceContext | null
-      comment?: string
-      displayName?: string
-      workspaceStatus?: string
-      manualOrder?: number
-      sparseCheckout?: { directories: string[]; presetId?: string }
-      pushTarget?: GitPushTarget
-      runHooks?: boolean
-      activate?: boolean
-      setupDecision?: 'run' | 'skip' | 'inherit'
-      awaitTerminalProvisioning?: boolean
-      observeSetupCompletion?: boolean
-      createdWithAgent?: TuiAgent
-      pendingFirstAgentMessageRename?: boolean
-      automationProvenance?: AutomationWorkspaceProvenance
-      cliProvenance?: CliWorkspaceProvenance
-      startup?: WorktreeStartupLaunch
-      startupFollowup?: WorktreeStartupFollowup
-      startupDraftPaste?: WorktreeStartupDraftPaste
-    }
-  ): Promise<CreateWorktreeResult> {
-    if (!this.store) {
-      throw new Error('runtime_unavailable')
-    }
-
-    // Why: runtime/mobile callers do not own a renderer BrowserWindow, but the
-    // SSH create helper only uses it for progress and change notifications.
-    // Runtime emits those through RuntimeNotifier after the create succeeds.
-    const headlessWindow = {
-      isDestroyed: () => false,
-      webContents: { send: () => undefined }
-    } as unknown as BrowserWindow
-
-    const result = await createRemoteWorktree(
-      {
-        repoId: repo.id,
-        name: args.name,
-        ...(args.displayName ? { displayName: args.displayName } : {}),
-        ...(args.baseBranch ? { baseBranch: args.baseBranch } : {}),
-        ...(args.compareBaseRef ? { compareBaseRef: args.compareBaseRef } : {}),
-        ...(args.branchNameOverride ? { branchNameOverride: args.branchNameOverride } : {}),
-        ...(args.runHooks ? { setupDecision: 'run' as const } : {}),
-        ...(!args.runHooks && args.setupDecision ? { setupDecision: args.setupDecision } : {}),
-        ...(args.sparseCheckout ? { sparseCheckout: args.sparseCheckout } : {}),
-        ...(args.linkedIssue != null ? { linkedIssue: args.linkedIssue } : {}),
-        ...(args.linkedPR != null ? { linkedPR: args.linkedPR } : {}),
-        ...(args.linkedLinearIssue ? { linkedLinearIssue: args.linkedLinearIssue } : {}),
-        ...(args.linkedLinearIssueWorkspaceId !== undefined
-          ? { linkedLinearIssueWorkspaceId: args.linkedLinearIssueWorkspaceId }
-          : {}),
-        ...(args.linkedLinearIssueOrganizationUrlKey !== undefined
-          ? { linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey }
-          : {}),
-        ...(args.linkedGitLabMR != null ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
-        ...(args.linkedGitLabIssue != null ? { linkedGitLabIssue: args.linkedGitLabIssue } : {}),
-        ...(args.linkedBitbucketPR != null ? { linkedBitbucketPR: args.linkedBitbucketPR } : {}),
-        ...(args.linkedAzureDevOpsPR != null
-          ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
-          : {}),
-        ...(args.linkedGiteaPR != null ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
-        ...(args.linkedWorkItem !== undefined ? { linkedWorkItem: args.linkedWorkItem } : {}),
-        ...(args.linkedTaskSourceContext !== undefined
-          ? { linkedTaskSourceContext: args.linkedTaskSourceContext }
-          : {}),
-        ...(args.pushTarget ? { pushTarget: args.pushTarget } : {}),
-        ...(args.workspaceStatus ? { workspaceStatus: args.workspaceStatus as never } : {}),
-        ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
-        ...(args.createdWithAgent ? { createdWithAgent: args.createdWithAgent } : {}),
-        ...(args.pendingFirstAgentMessageRename === true
-          ? { pendingFirstAgentMessageRename: true }
-          : {}),
-        ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
-        ...(args.cliProvenance ? { cliProvenance: args.cliProvenance } : {})
-      },
-      repo,
-      this.store as unknown as Store,
-      headlessWindow
-    )
-
-    if (args.comment !== undefined) {
-      this.store.setWorktreeMeta(result.worktree.id, { comment: args.comment })
-      result.worktree.comment = args.comment
-    }
-
-    this.invalidateResolvedWorktreeCache()
-    this.invalidateWorktreeScanCacheForRepo(repo.id)
-    this.notifyWorktreesChanged(repo.id)
-
-    const shouldActivate = args.activate === true || args.runHooks === true
-    let warning = result.warning
-    let didSpawnStartup = false
-    // Why: same no-double-spawn contract as the local path — once runtime
-    // provisions setup, omit it from activation and the RPC result.
-    let didSpawnSetup = false
-    let setupTerminalHandle: string | null = null
-    let startupTerminalHandle: string | null = null
-    let startupTerminalTabId: string | null = null
-    let startupTerminalPaneKey: string | null = null
-    let startupTerminalPtyId: string | null = null
-
-    let sequencedStartup = args.startup
-    let wrappedSetupCommandStr: string | undefined
-    if (args.startup && result.setup?.waitForAgentStartup === true) {
-      const platform = getSetupRunnerCommandPlatformForLaunch(result.setup, 'posix')
-      const sequenced = createSequencedSetupAgentCommands({
-        runnerScriptPath: result.setup.runnerScriptPath,
-        startupCommand: args.startup.command,
-        platform,
-        shell: result.setup.shell
-      })
-      sequencedStartup = {
-        ...args.startup,
-        command: sequenced.startupCommand,
-        ...(sequenced.startupEnv ? { env: { ...args.startup.env, ...sequenced.startupEnv } } : {})
-      }
-      wrappedSetupCommandStr = sequenced.setupCommand
-    }
-
-    if (sequencedStartup && this.ptyController?.spawn) {
-      try {
-        const startupTrustAgent = args.startupDraftPaste?.agent ?? args.createdWithAgent
-        if (startupTrustAgent) {
-          await this.markRemoteWorkspaceTrustedForAgent(
-            startupTrustAgent,
-            repo.connectionId!,
-            result.worktree.path
-          )
-        }
-        const terminal = await this.createTerminal(`path:${result.worktree.path}`, {
-          command: sequencedStartup.command,
-          ...(result.setup && args.startup
-            ? { claudeAgentTeamsSourceCommand: args.startup.command }
-            : {}),
-          env: sequencedStartup.env,
-          ...(sequencedStartup.launchConfig ? { launchConfig: sequencedStartup.launchConfig } : {}),
-          ...(args.createdWithAgent ? { launchAgent: args.createdWithAgent } : {}),
-          ...(sequencedStartup.viewMode ? { viewMode: sequencedStartup.viewMode } : {}),
-          startupCommandDelivery: sequencedStartup.startupCommandDelivery,
-          telemetry: sequencedStartup.telemetry,
-          ...ownerSurfacing(shouldActivate)
-        })
-        if (args.startupDraftPaste) {
-          this.pasteStartupDraftWhenReady(terminal.handle, args.startupDraftPaste)
-        }
-        if (args.startupFollowup) {
-          this.sendStartupFollowupWhenReady(terminal.handle, args.startupFollowup)
-        }
-        didSpawnStartup = true
-        startupTerminalHandle = terminal.handle
-        startupTerminalTabId = terminal.tabId ?? null
-        startupTerminalPaneKey = terminal.paneKey ?? null
-        startupTerminalPtyId = terminal.ptyId ?? null
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        warning = warning
-          ? `${warning} Also failed to create the startup terminal for ${result.worktree.path}: ${message}`
-          : `Failed to create the startup terminal for ${result.worktree.path}: ${message}`
-      }
-    }
-
-    if (shouldActivate) {
-      const runtimeWillProvisionTerminals =
-        didSpawnStartup && Boolean(result.setup || result.defaultTabs)
-      if (runtimeWillProvisionTerminals) {
-        // Why: remote/mobile task creates spawn the agent terminal in runtime,
-        // so renderer activation may not materialize setup/default tabs. Await so
-        // a failed setup spawn falls back to renderer activation for retry.
-        const provisioned = await this.provisionManagedWorktreeTerminals({
-          worktreeSelector: `path:${result.worktree.path}`,
-          worktreeId: result.worktree.id,
-          worktreePath: result.worktree.path,
-          ...(result.setup ? { setup: result.setup } : {}),
-          ...(result.defaultTabs ? { defaultTabs: result.defaultTabs } : {}),
-          primaryTerminalHandle: startupTerminalHandle,
-          hasStartupTerminal: didSpawnStartup,
-          setupCommandPlatform: getSetupRunnerCommandPlatformForLaunch(result.setup, 'posix'),
-          observeSetupCompletion: args.observeSetupCompletion,
-          // Why: carry the wait-for-agent wrapped setup command (#6298) so the
-          // remote Setup tab runs the same script the sequenced agent waits on.
-          ...(wrappedSetupCommandStr ? { wrappedSetupCommand: wrappedSetupCommandStr } : {})
-        })
-        didSpawnSetup = provisioned.setupSpawned
-        setupTerminalHandle = provisioned.setupTerminalHandle
-      }
-      // Why: omit setup from activation when runtime spawned it; on spawn
-      // failure fall through with the wrapped command so renderer retries.
-      const activationSetup = didSpawnSetup
-        ? undefined
-        : result.setup
-          ? {
-              ...result.setup,
-              ...(didSpawnStartup && wrappedSetupCommandStr
-                ? { command: wrappedSetupCommandStr }
-                : {})
-            }
-          : undefined
-      const activationDefaultTabs = runtimeWillProvisionTerminals ? undefined : result.defaultTabs
-      if (args.startup && !didSpawnStartup) {
-        this.notifyActivateWorktree(
-          repo.id,
-          result.worktree.id,
-          activationSetup,
-          args.startup,
-          activationDefaultTabs
-        )
-      } else {
-        this.notifyActivateWorktree(
-          repo.id,
-          result.worktree.id,
-          activationSetup,
-          undefined,
-          activationDefaultTabs
-        )
-      }
-    }
-
-    if (
-      !shouldActivate &&
-      this.ptyController?.spawn &&
-      (result.setup || result.defaultTabs || didSpawnStartup)
-    ) {
-      // Why: inactive terminal materialization matches normal worktree creation,
-      // but setup/default tab failures must not gate automation dispatch.
-      const provisioning = this.provisionManagedWorktreeTerminals({
-        worktreeSelector: `path:${result.worktree.path}`,
-        worktreeId: result.worktree.id,
-        worktreePath: result.worktree.path,
-        ...(result.setup ? { setup: result.setup } : {}),
-        ...(result.defaultTabs ? { defaultTabs: result.defaultTabs } : {}),
-        primaryTerminalHandle: startupTerminalHandle,
-        hasStartupTerminal: didSpawnStartup,
-        setupCommandPlatform: getSetupRunnerCommandPlatformForLaunch(result.setup, 'posix'),
-        observeSetupCompletion: args.observeSetupCompletion,
-        ...(wrappedSetupCommandStr ? { wrappedSetupCommand: wrappedSetupCommandStr } : {}),
-        surfaceOwner: false
-      })
-      // Why: runtime owns setup spawning here, so omit setup from the RPC result
-      // to keep the headless/mobile caller from launching it a second time.
-      if (args.awaitTerminalProvisioning) {
-        const provisioned = await provisioning
-        didSpawnSetup = provisioned.setupSpawned
-        setupTerminalHandle = provisioned.setupTerminalHandle
-      } else {
-        void provisioning
-        if (result.setup) {
-          didSpawnSetup = true
-        }
-      }
-    } else if (!shouldActivate && this.ptyController?.spawn) {
-      try {
-        await this.createTerminal(`path:${result.worktree.path}`, { surfaceOwner: false })
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        warning = warning
-          ? `${warning} Also failed to create the initial terminal for ${result.worktree.path}: ${message}`
-          : `Failed to create the initial terminal for ${result.worktree.path}: ${message}`
-      }
-    }
-
-    const returnedSetup = didSpawnSetup
-      ? undefined
-      : result.setup
-        ? {
-            ...result.setup,
-            ...(didSpawnStartup && wrappedSetupCommandStr
-              ? { command: wrappedSetupCommandStr }
-              : {})
-          }
-        : undefined
-    const resultForRenderer = returnedSetup
-      ? { ...result, setup: returnedSetup }
-      : (() => {
-          const { setup: _setup, ...resultWithoutSetup } = result
-          return resultWithoutSetup
-        })()
-
-    const resultWithStartupTerminal =
-      didSpawnStartup && startupTerminalHandle
-        ? {
-            ...resultForRenderer,
-            startupTerminal: {
-              spawned: true,
-              handle: startupTerminalHandle,
-              ...(startupTerminalTabId ? { tabId: startupTerminalTabId } : {}),
-              ...(startupTerminalPaneKey ? { paneKey: startupTerminalPaneKey } : {}),
-              ...(startupTerminalPtyId ? { ptyId: startupTerminalPtyId } : {}),
-              surface: 'background' as const
-            }
-          }
-        : resultForRenderer
-
-    const requestedSetupDecision = args.runHooks ? 'run' : (args.setupDecision ?? 'inherit')
-    const setupReceipt = {
-      requested: requestedSetupDecision,
-      hookFound: Boolean(result.setup),
-      startupPolicy: result.setup?.waitForAgentStartup
-        ? ('wait-for-setup' as const)
-        : ('start-immediately' as const),
-      state:
-        requestedSetupDecision === 'skip'
-          ? ('skipped' as const)
-          : !result.setup
-            ? ('not_configured' as const)
-            : didSpawnSetup
-              ? ('running' as const)
-              : ('spawn_failed' as const),
-      ...(setupTerminalHandle ? { terminalHandle: setupTerminalHandle } : {})
-    }
-    const resultWithSetupReceipt = args.awaitTerminalProvisioning
-      ? { ...resultWithStartupTerminal, setupReceipt }
-      : resultWithStartupTerminal
-    return warning ? { ...resultWithSetupReceipt, warning } : resultWithSetupReceipt
   }
 
   /**
@@ -23344,12 +21488,6 @@ export class OrcaRuntimeService {
     if (!repo) {
       return null
     }
-    if (repo.connectionId) {
-      // Why: the drift probe uses local git helpers. Until the SSH provider
-      // exposes equivalent remote refs/log plumbing, fail closed to "unknown"
-      // instead of probing a server path on the desktop filesystem.
-      return null
-    }
     const localGitExecOptions = getLocalProjectGitExecOptions(this.requireStore(), repo)
     const localWorktreeGitOptions = getLocalProjectWorktreeGitOptions(this.requireStore(), repo)
     const meta = this.store.getWorktreeMeta(wt.id)
@@ -23516,18 +21654,13 @@ export class OrcaRuntimeService {
     if (isFolderRepo(repo)) {
       return { error: 'Folder mode does not support creating worktrees.' }
     }
-    const sshGitProvider = repo.connectionId ? requireSshGitProvider(repo.connectionId) : null
-    const localGitExecOptions = sshGitProvider
-      ? undefined
-      : getLocalProjectGitExecOptions(this.requireStore(), repo)
-    const localWorktreeGitOptions = sshGitProvider
-      ? {}
-      : getLocalProjectWorktreeGitOptions(this.requireStore(), repo)
-    const gitExec = sshGitProvider
-      ? (gitArgs: string[]) => sshGitProvider.exec(gitArgs, repo.path)
-      : (gitArgs: string[]) => gitExecFileAsync(gitArgs, localGitExecOptions ?? { cwd: repo.path })
+    const localGitExecOptions: ReturnType<typeof getLocalProjectGitExecOptions> | undefined =
+      getLocalProjectGitExecOptions(this.requireStore(), repo)
+    const localWorktreeGitOptions = getLocalProjectWorktreeGitOptions(this.requireStore(), repo)
+    const gitExec = (gitArgs: string[]): ReturnType<typeof gitExecFileAsync> =>
+      gitExecFileAsync(gitArgs, localGitExecOptions ?? { cwd: repo.path })
     // Why: one resolver keeps source preference and hosting identity aligned
-    // across local, WSL, and SSH worktree creation.
+    // across local and WSL worktree creation.
     const resolveRemote = (): Promise<string> =>
       resolveGitHubReviewHeadRemote({
         repoPath: repo.path,
@@ -23537,11 +21670,9 @@ export class OrcaRuntimeService {
         gitExec
       })
 
-    // Why: SSH review-head fetches require narrow write-capable RPCs.
     const fetchRemoteTrackingRef = (remote: string, branch: string): Promise<void> =>
       fetchPrHeadTrackingRef(
         repo,
-        sshGitProvider,
         remote,
         branch,
         localGitExecOptions ? { localGitExecOptions } : {}
@@ -23549,7 +21680,6 @@ export class OrcaRuntimeService {
     const fetchPullRequestHeadRef = (remote: string, prNumber: number): Promise<string> =>
       fetchGitHubPullRequestHeadRef(
         repo,
-        sshGitProvider,
         remote,
         prNumber,
         localGitExecOptions ? { localGitExecOptions } : {}
@@ -23569,285 +21699,6 @@ export class OrcaRuntimeService {
       fetchPullRequestHeadRef,
       resolveRemote
     })
-  }
-
-  async resolveManagedMrBase(args: {
-    repoSelector: string
-    mrIid: number
-    sourceBranch?: string
-    targetBranch?: string
-    isCrossRepository?: boolean
-  }): Promise<
-    { baseBranch: string; compareBaseRef?: string; pushTarget?: GitPushTarget } | { error: string }
-  > {
-    if (!this.store) {
-      throw new Error('runtime_unavailable')
-    }
-    let repo: Repo
-    try {
-      repo = await this.resolveRepoSelector(args.repoSelector)
-    } catch {
-      return { error: 'Repo not found' }
-    }
-    if (isFolderRepo(repo)) {
-      return { error: 'Folder mode does not support creating worktrees.' }
-    }
-    const sshGitProvider = repo.connectionId ? requireSshGitProvider(repo.connectionId) : null
-    const localGitExecOptions = sshGitProvider
-      ? undefined
-      : getLocalProjectGitExecOptions(this.requireStore(), repo)
-    const localWorktreeGitOptions = sshGitProvider
-      ? {}
-      : getLocalProjectWorktreeGitOptions(this.requireStore(), repo)
-    const gitExec = sshGitProvider
-      ? (gitArgs: string[]) => sshGitProvider.exec(gitArgs, repo.path)
-      : (gitArgs: string[]) => gitExecFileAsync(gitArgs, localGitExecOptions ?? { cwd: repo.path })
-
-    let sourceBranch = args.sourceBranch?.trim() ?? ''
-    let targetBranch = args.targetBranch?.trim() ?? ''
-    let isCrossRepository = args.isCrossRepository === true
-
-    if (!sourceBranch) {
-      let remote: string
-      try {
-        remote = await this.resolveGitLabIssueSourceRemote(
-          repo.path,
-          repo.issueSourcePreference,
-          repo.connectionId ?? null,
-          localWorktreeGitOptions
-        )
-      } catch (error) {
-        return { error: error instanceof Error ? error.message : 'Could not resolve git remote.' }
-      }
-      const knownHosts = await getGlabKnownHosts(repo.connectionId ?? null, localWorktreeGitOptions)
-      const projectRef = await getGitLabProjectRefForRemote(
-        repo.path,
-        remote,
-        knownHosts,
-        repo.connectionId ?? null,
-        localWorktreeGitOptions
-      )
-      if (!projectRef) {
-        return { error: 'No GitLab project found for this repository.' }
-      }
-      const item = await getGitLabWorkItemByProjectRef(
-        repo.path,
-        projectRef,
-        args.mrIid,
-        'mr',
-        repo.connectionId ?? null,
-        localWorktreeGitOptions
-      )
-      if (!item || item.type !== 'mr') {
-        return { error: `MR !${args.mrIid} not found.` }
-      }
-      sourceBranch = (item.branchName ?? '').trim()
-      targetBranch = (item.baseRefName ?? '').trim()
-      if (!sourceBranch) {
-        return { error: `MR !${args.mrIid} has no source branch.` }
-      }
-      if (item.isCrossRepository === true) {
-        isCrossRepository = true
-      }
-    }
-
-    let remote: string
-    try {
-      remote = await this.resolveGitLabIssueSourceRemote(
-        repo.path,
-        repo.issueSourcePreference,
-        repo.connectionId ?? null,
-        localWorktreeGitOptions
-      )
-    } catch (error) {
-      return { error: error instanceof Error ? error.message : 'Could not resolve git remote.' }
-    }
-    const compareBaseRef = targetBranch ? `refs/remotes/${remote}/${targetBranch}` : undefined
-    const fetchRemoteTrackingRef = async (branch: string, ref: string): Promise<void> => {
-      await (sshGitProvider
-        ? sshGitProvider.fetchRemoteTrackingRef(repo.path, remote, branch, ref)
-        : gitExec(['fetch', remote, `+refs/heads/${branch}:${ref}`]))
-    }
-    // Why: the target/compare branch is optional (it only powers the diff
-    // base). A merged MR may have had its target ref deleted, so a fetch
-    // failure must NOT abort the whole resolution — that would discard the
-    // already-verified source-branch base and silently fall back to the repo
-    // default branch. Degrade gracefully by dropping compareBaseRef instead.
-    const fetchCompareBaseRef = (): Promise<boolean> =>
-      fetchCompareBaseRefWithLocalFallback({
-        compareBaseRef,
-        fetchCompareBaseRef: (ref) => fetchRemoteTrackingRef(targetBranch, ref),
-        gitExec,
-        logLabel: '[runtime:resolveManagedMrBase]',
-        logContext: { remote, targetBranch, mrIid: args.mrIid }
-      })
-
-    if (isCrossRepository) {
-      const mrRef = `refs/merge-requests/${args.mrIid}/head`
-      // Why: soft-keep needs identity when the fetch throws before returning a path.
-      // Success uses the path returned by the fetch itself (writer-authoritative).
-      let softKeepLocalRefPromise: Promise<string | null> | undefined
-      const resolveSoftKeepLocalRef = (): Promise<string | null> => {
-        softKeepLocalRefPromise ??= (async () => {
-          try {
-            const { stdout } = await gitExec(['remote', 'get-url', remote])
-            const remoteUrl = stdout.trim()
-            if (!remoteUrl) {
-              return null
-            }
-            return gitlabMergeRequestHeadLocalRef(
-              reviewHeadRemoteRefComponent(remote, remoteUrl),
-              args.mrIid
-            )
-          } catch {
-            return null
-          }
-        })()
-        return softKeepLocalRefPromise
-      }
-      const resolveDurableHeadSha = async (localRef: string | null): Promise<string | null> => {
-        if (!localRef) {
-          return null
-        }
-        try {
-          const { stdout } = await gitExec(['rev-parse', '--verify', `${localRef}^{commit}`])
-          return stdout.trim() || null
-        } catch {
-          return null
-        }
-      }
-      try {
-        const localRef = await fetchGitLabMergeRequestHeadRef(
-          repo,
-          sshGitProvider,
-          remote,
-          args.mrIid,
-          localGitExecOptions ? { localGitExecOptions } : {}
-        )
-        const sha = await resolveDurableHeadSha(localRef)
-        if (!sha) {
-          return { error: `Could not resolve fork MR !${args.mrIid} head after fetch.` }
-        }
-        const compareBaseFetched = await fetchCompareBaseRef()
-        return { baseBranch: sha, ...(compareBaseFetched ? { compareBaseRef } : {}) }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        // Why: mirror compare-base — a transient transport failure must not fail
-        // the resolve when a prior fetch already pinned the durable head ref. A
-        // missing remote ref (deleted MR/fork), auth failure, or stale-relay
-        // error must fail hard: serving the durable ref there would check out a
-        // dead or unauthorized tip and mask the actionable error.
-        if (isTransientReviewHeadFetchError(error)) {
-          const localSha = await resolveDurableHeadSha(await resolveSoftKeepLocalRef())
-          if (localSha) {
-            console.warn(
-              '[runtime:resolveManagedMrBase] MR head fetch failed; using durable local ref',
-              {
-                remote,
-                mrIid: args.mrIid,
-                error: message.split('\n')[0]
-              }
-            )
-            const compareBaseFetched = await fetchCompareBaseRef()
-            return { baseBranch: localSha, ...(compareBaseFetched ? { compareBaseRef } : {}) }
-          }
-        }
-        return { error: `Failed to fetch ${mrRef}: ${message.split('\n')[0]}` }
-      }
-    }
-
-    try {
-      await fetchRemoteTrackingRef(sourceBranch, `refs/remotes/${remote}/${sourceBranch}`)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      return { error: `Failed to fetch ${remote}/${sourceBranch}: ${message.split('\n')[0]}` }
-    }
-
-    const remoteRef = `${remote}/${sourceBranch}`
-    try {
-      await gitExec(['rev-parse', '--verify', remoteRef])
-    } catch {
-      return { error: `Remote ref ${remoteRef} does not exist after fetch.` }
-    }
-    const compareBaseFetched = await fetchCompareBaseRef()
-    return {
-      baseBranch: remoteRef,
-      ...(compareBaseFetched ? { compareBaseRef } : {}),
-      pushTarget: { remoteName: remote, branchName: sourceBranch }
-    }
-  }
-
-  private async resolveGitLabIssueSourceRemote(
-    repoPath: string,
-    preference?: Repo['issueSourcePreference'],
-    connectionId?: string | null,
-    localGitOptions: { wslDistro?: string } = {}
-  ): Promise<string> {
-    const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
-    const localGitOptionArgs =
-      Object.keys(localGitOptions).length > 0 ? ([localGitOptions] as const) : []
-    if (preference === 'origin') {
-      const origin = await getGitLabProjectRefForRemote(
-        repoPath,
-        'origin',
-        knownHosts,
-        connectionId,
-        ...localGitOptionArgs
-      )
-      if (origin) {
-        return 'origin'
-      }
-      throw new Error('No GitLab project found for origin.')
-    }
-    if (preference === 'upstream') {
-      const upstream = await getGitLabProjectRefForRemote(
-        repoPath,
-        'upstream',
-        knownHosts,
-        connectionId,
-        ...localGitOptionArgs
-      )
-      if (upstream) {
-        return 'upstream'
-      }
-      const origin = await getGitLabProjectRefForRemote(
-        repoPath,
-        'origin',
-        knownHosts,
-        connectionId,
-        ...localGitOptionArgs
-      )
-      if (origin) {
-        return 'origin'
-      }
-      throw new Error('No GitLab project found for upstream or origin.')
-    }
-    const upstream = await getGitLabProjectRefForRemote(
-      repoPath,
-      'upstream',
-      knownHosts,
-      connectionId,
-      ...localGitOptionArgs
-    )
-    if (upstream) {
-      return 'upstream'
-    }
-    const origin = await getGitLabProjectRefForRemote(
-      repoPath,
-      'origin',
-      knownHosts,
-      connectionId,
-      ...localGitOptionArgs
-    )
-    if (origin) {
-      return 'origin'
-    }
-    if (connectionId) {
-      const provider = requireSshGitProvider(connectionId)
-      const { stdout } = await provider.exec(['remote'], repoPath)
-      return pickPreferredGitRemote(stdout.split('\n'))
-    }
-    return getDefaultRemote(repoPath, localGitOptions)
   }
 
   private async resolveWorktreeRemovalTarget(
@@ -23975,41 +21826,22 @@ export class OrcaRuntimeService {
       throw new Error('Folder workspaces do not have local Git branches.')
     }
 
-    if (repo.connectionId) {
-      const provider = requireSshGitProvider(repo.connectionId)
-      // Why: SSH must use the write-capable relay RPC; the shared exec-based
-      // helper routes through the read-only git.exec allowlist, which rejects
-      // the worktree/update-ref/config writes this delete needs.
-      await provider.forceDeletePreservedBranch(
-        repo.path,
-        cleanupTarget.branchName,
-        cleanupTarget.head
-      )
-      await cleanupUnusedWorktreePushTargetRemoteSsh(
-        provider,
-        repo.path,
-        removalTarget.id,
-        cleanupTarget.pushTarget,
-        this.store
-      )
-    } else {
-      const localWorktreeGitOptions = getLocalProjectWorktreeGitOptions(this.requireStore(), repo)
-      await (Object.keys(localWorktreeGitOptions).length > 0
-        ? forceDeleteLocalBranch(
-            repo.path,
-            cleanupTarget.branchName,
-            cleanupTarget.head,
-            (argv, cwd) => gitExecFileAsync(argv, { cwd, ...localWorktreeGitOptions })
-          )
-        : forceDeleteLocalBranch(repo.path, cleanupTarget.branchName, cleanupTarget.head))
-      await cleanupUnusedWorktreePushTargetRemote(
-        repo.path,
-        removalTarget.id,
-        cleanupTarget.pushTarget,
-        this.store,
-        localWorktreeGitOptions
-      )
-    }
+    const localWorktreeGitOptions = getLocalProjectWorktreeGitOptions(this.requireStore(), repo)
+    await (Object.keys(localWorktreeGitOptions).length > 0
+      ? forceDeleteLocalBranch(
+          repo.path,
+          cleanupTarget.branchName,
+          cleanupTarget.head,
+          (argv, cwd) => gitExecFileAsync(argv, { cwd, ...localWorktreeGitOptions })
+        )
+      : forceDeleteLocalBranch(repo.path, cleanupTarget.branchName, cleanupTarget.head))
+    await cleanupUnusedWorktreePushTargetRemote(
+      repo.path,
+      removalTarget.id,
+      cleanupTarget.pushTarget,
+      this.store,
+      localWorktreeGitOptions
+    )
 
     this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
     return { deleted: true }
@@ -24046,16 +21878,13 @@ export class OrcaRuntimeService {
         const repo = store.getRepo(removalTarget.repoId)
         if (!repo) {
           const orphanHost = parseExecutionHostId(store.getWorktreeMeta(removalTarget.id)?.hostId)
-          const sshPtyProvider =
-            orphanHost?.kind === 'ssh' ? this.getSshProviderFn?.(orphanHost.targetId) : undefined
-          const ptyProvider = sshPtyProvider ?? this.getLocalProvider()
-          const externalOrphanHost = orphanHost?.kind === 'ssh' || orphanHost?.kind === 'runtime'
+          const ptyProvider = this.getLocalProvider()
+          const externalOrphanHost = orphanHost?.kind === 'runtime'
           if (ptyProvider) {
             // External host inventories must never sweep a same-id local workspace.
             await killAllProcessesForWorktree(removalTarget.id, {
               runtime: this,
               resolvedWorktreeId: removalTarget.id,
-              ...(orphanHost?.kind === 'ssh' ? { resolvedConnectionId: orphanHost.targetId } : {}),
               ...(orphanHost?.kind === 'runtime'
                 ? { resolvedRuntimeEnvironmentId: orphanHost.environmentId }
                 : {}),
@@ -24063,7 +21892,7 @@ export class OrcaRuntimeService {
               onPtyStopped: this.onPtyStopped ?? undefined,
               ...(externalOrphanHost
                 ? {
-                    includeProviderInventory: orphanHost?.kind === 'ssh' && Boolean(sshPtyProvider),
+                    includeProviderInventory: false,
                     includeLocalRegistry: false
                   }
                 : {})
@@ -24082,10 +21911,7 @@ export class OrcaRuntimeService {
               ? orphanFullPath
               : undefined
           if (orphanWatcherPath) {
-            await this.acquireFileWatcherRemoval(
-              orphanWatcherPath,
-              orphanHost?.kind === 'ssh' ? orphanHost.targetId : undefined
-            )
+            await this.acquireFileWatcherRemoval(orphanWatcherPath)
               .then((gate) => gate.finish(false))
               .catch(() => {})
           }
@@ -24108,27 +21934,16 @@ export class OrcaRuntimeService {
             )
           }
           // This service runs inside the selected runtime, so runtime-stamped repos use its
-          // local PTY namespace; only a direct SSH connection is external from here.
-          const folderConnectionId = repo.connectionId?.trim() || null
-          const folderSshPtyProvider = folderConnectionId
-            ? this.getSshProviderFn?.(folderConnectionId)
-            : undefined
-          const folderPtyProvider = folderSshPtyProvider ?? this.getLocalProvider()
+          // local PTY namespace.
+          const folderPtyProvider = this.getLocalProvider()
           if (folderPtyProvider) {
             // Why: folder workspace deletion has no Git removal phase where PTYs
             // would otherwise be swept; tear them down before hiding the workspace.
             await killAllProcessesForWorktree(removalTarget.id, {
               runtime: this,
               resolvedWorktreeId: removalTarget.id,
-              ...(folderConnectionId ? { resolvedConnectionId: folderConnectionId } : {}),
               localProvider: folderPtyProvider,
-              onPtyStopped: this.onPtyStopped ?? undefined,
-              ...(folderConnectionId
-                ? {
-                    includeProviderInventory: Boolean(folderSshPtyProvider),
-                    includeLocalRegistry: false
-                  }
-                : {})
+              onPtyStopped: this.onPtyStopped ?? undefined
             }).catch((err) => {
               console.warn(`[worktree-teardown] failed for ${removalTarget.id}:`, err)
             })
@@ -24139,17 +21954,11 @@ export class OrcaRuntimeService {
           this.notifyWorktreesChanged(repo.id)
           return {}
         }
-        const provider = repo.connectionId ? requireSshGitProvider(repo.connectionId) : null
-        const fsProvider = repo.connectionId ? getSshFilesystemProvider(repo.connectionId) : null
-        const localWorktreeGitOptions = repo.connectionId
-          ? {}
-          : getLocalProjectWorktreeGitOptions(this.requireStore(), repo)
+        const localWorktreeGitOptions = getLocalProjectWorktreeGitOptions(this.requireStore(), repo)
         const hasLocalWorktreeGitOptions = Object.keys(localWorktreeGitOptions).length > 0
-        const registeredWorktrees = repo.connectionId
-          ? await provider!.listWorktrees(repo.path)
-          : hasLocalWorktreeGitOptions
-            ? await listWorktreesStrict(repo.path, localWorktreeGitOptions)
-            : await listWorktreesStrict(repo.path)
+        const registeredWorktrees = hasLocalWorktreeGitOptions
+          ? await listWorktreesStrict(repo.path, localWorktreeGitOptions)
+          : await listWorktreesStrict(repo.path)
         const removedMeta = store.getWorktreeMeta(removalTarget.id)
         const removedPushTarget = removedMeta?.pushTarget ?? removalTarget.pushTarget
         const registeredWorktree = findRegisteredDeletableWorktree(
@@ -24164,79 +21973,39 @@ export class OrcaRuntimeService {
               meta: removedMeta
             })
           ) {
-            if (repo.connectionId) {
-              if (!fsProvider) {
-                throw new Error('SSH filesystem provider unavailable')
-              }
-              if (!fsProvider.lstat) {
-                throw new Error('SSH filesystem provider lstat unavailable')
-              }
-              canCleanOrphanedDirectory = await canSafelyRemoveOrphanedWorktreeDirectory(
-                removalTarget.path,
-                repo.path,
-                (path) => fsProvider.lstat!(path),
-                (path) => fsProvider.readFile(path)
-              )
-            } else {
-              const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
-              canCleanOrphanedDirectory =
-                !isDangerousWorktreeRemovalPath(removalTarget.path, repo.path) &&
-                (await canSafelyRemoveOrphanedWorktreeDirectory(
-                  toLocalWorktreeRuntimePath(removalTarget.path, localWorktreeGitOptions),
-                  toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
-                  access.statPath,
-                  access.readPath
-                ))
-            }
+            const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
+            canCleanOrphanedDirectory =
+              !isDangerousWorktreeRemovalPath(removalTarget.path, repo.path) &&
+              (await canSafelyRemoveOrphanedWorktreeDirectory(
+                toLocalWorktreeRuntimePath(removalTarget.path, localWorktreeGitOptions),
+                toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
+                access.statPath,
+                access.readPath
+              ))
           }
           if (canCleanOrphanedDirectory) {
             assertWorktreeDoesNotContainRegisteredWorktree(removalTarget.path, registeredWorktrees)
             if (!force) {
               throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
             }
-            if (repo.connectionId) {
-              const removalGate = await this.acquireFileWatcherRemoval(
-                removalTarget.path,
-                repo.connectionId
-              )
-              let removalCompleted = false
-              try {
-                await this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id, {
-                  connectionId: repo.connectionId,
-                  allowUnverifiedStop: allowUnverifiedPtyStop
-                })
-                await fsProvider!.deletePath(removalTarget.path, true)
-                removalCompleted = true
-              } finally {
-                await removalGate.finish(removalCompleted)
-              }
-              await cleanupUnusedWorktreePushTargetRemoteSsh(
-                provider!,
-                repo.path,
-                removalTarget.id,
-                removedPushTarget,
-                store
-              )
-            } else {
-              const removalGate = await this.acquireFileWatcherRemoval(removalTarget.path)
-              let removalCompleted = false
-              try {
-                await this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id, {
-                  allowUnverifiedStop: allowUnverifiedPtyStop
-                })
-                await removeLocalWorktreePath(removalTarget.path, localWorktreeGitOptions)
-                removalCompleted = true
-              } finally {
-                await removalGate.finish(removalCompleted)
-              }
-              await cleanupUnusedWorktreePushTargetRemote(
-                repo.path,
-                removalTarget.id,
-                removedPushTarget,
-                store,
-                localWorktreeGitOptions
-              )
+            const removalGate = await this.acquireFileWatcherRemoval(removalTarget.path)
+            let removalCompleted = false
+            try {
+              await this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id, {
+                allowUnverifiedStop: allowUnverifiedPtyStop
+              })
+              await removeLocalWorktreePath(removalTarget.path, localWorktreeGitOptions)
+              removalCompleted = true
+            } finally {
+              await removalGate.finish(removalCompleted)
             }
+            await cleanupUnusedWorktreePushTargetRemote(
+              repo.path,
+              removalTarget.id,
+              removedPushTarget,
+              store,
+              localWorktreeGitOptions
+            )
             this.clearOptimisticReconcileToken(removalTarget.id)
             this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
             this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
@@ -24246,55 +22015,52 @@ export class OrcaRuntimeService {
             this.notifyWorktreesChanged(repo.id)
             return {}
           }
-          if (!repo.connectionId) {
-            const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
-            const runtimeWorktreePath = toLocalWorktreeRuntimePath(
-              removalTarget.path,
+          const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
+          const runtimeWorktreePath = toLocalWorktreeRuntimePath(
+            removalTarget.path,
+            localWorktreeGitOptions
+          )
+          if (
+            await canCleanupUnregisteredOrcaLeftoverDirectory({
+              meta: removedMeta,
+              worktreePath: removalTarget.path,
+              runtimeWorktreePath,
+              repo,
+              runtimeRepoPath: toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
+              registeredWorktrees,
+              statPath: access.statPath,
+              isGitRepository: (path) => isLocalRuntimeGitRepository(path, localWorktreeGitOptions)
+            })
+          ) {
+            if (!force) {
+              throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
+            }
+            const removalGate = await this.acquireFileWatcherRemoval(removalTarget.path)
+            let removalCompleted = false
+            try {
+              await this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id, {
+                allowUnverifiedStop: allowUnverifiedPtyStop
+              })
+              await removeLocalWorktreePath(removalTarget.path, localWorktreeGitOptions)
+              removalCompleted = true
+            } finally {
+              await removalGate.finish(removalCompleted)
+            }
+            await cleanupUnusedWorktreePushTargetRemote(
+              repo.path,
+              removalTarget.id,
+              removedPushTarget,
+              store,
               localWorktreeGitOptions
             )
-            if (
-              await canCleanupUnregisteredOrcaLeftoverDirectory({
-                meta: removedMeta,
-                worktreePath: removalTarget.path,
-                runtimeWorktreePath,
-                repo,
-                runtimeRepoPath: toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
-                registeredWorktrees,
-                statPath: access.statPath,
-                isGitRepository: (path) =>
-                  isLocalRuntimeGitRepository(path, localWorktreeGitOptions)
-              })
-            ) {
-              if (!force) {
-                throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
-              }
-              const removalGate = await this.acquireFileWatcherRemoval(removalTarget.path)
-              let removalCompleted = false
-              try {
-                await this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id, {
-                  allowUnverifiedStop: allowUnverifiedPtyStop
-                })
-                await removeLocalWorktreePath(removalTarget.path, localWorktreeGitOptions)
-                removalCompleted = true
-              } finally {
-                await removalGate.finish(removalCompleted)
-              }
-              await cleanupUnusedWorktreePushTargetRemote(
-                repo.path,
-                removalTarget.id,
-                removedPushTarget,
-                store,
-                localWorktreeGitOptions
-              )
-              this.clearOptimisticReconcileToken(removalTarget.id)
-              this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
-              this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
-              this.invalidateResolvedWorktreeCache()
-              this.invalidateWorktreeScanCacheForRepo(removalTarget.repoId)
-              invalidateAuthorizedRootsCache()
-              this.notifyWorktreesChanged(repo.id)
-              return {}
-            }
+            this.clearOptimisticReconcileToken(removalTarget.id)
+            this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
+            this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
+            this.invalidateResolvedWorktreeCache()
+            this.invalidateWorktreeScanCacheForRepo(removalTarget.repoId)
+            invalidateAuthorizedRootsCache()
+            this.notifyWorktreesChanged(repo.id)
+            return {}
           }
           if (
             await isRuntimeWorktreePathMissing(repo, removalTarget.path, localWorktreeGitOptions)
@@ -24307,21 +22073,13 @@ export class OrcaRuntimeService {
             // Why: a manually deleted worktree is already gone from Git and disk.
             // Finish runtime metadata cleanup without requiring force or touching
             // any unregistered path that still exists.
-            await (repo.connectionId
-              ? cleanupUnusedWorktreePushTargetRemoteSsh(
-                  provider!,
-                  repo.path,
-                  removalTarget.id,
-                  removedPushTarget,
-                  store
-                )
-              : cleanupUnusedWorktreePushTargetRemote(
-                  repo.path,
-                  removalTarget.id,
-                  removedPushTarget,
-                  store,
-                  localWorktreeGitOptions
-                ))
+            await cleanupUnusedWorktreePushTargetRemote(
+              repo.path,
+              removalTarget.id,
+              removedPushTarget,
+              store,
+              localWorktreeGitOptions
+            )
             this.clearOptimisticReconcileToken(removalTarget.id)
             this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
             this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
@@ -24347,7 +22105,6 @@ export class OrcaRuntimeService {
         // Why: a prior forced Windows recovery can delete the directory but leave
         // Git's stale registration; recover and verify it before clearing metadata.
         if (
-          !repo.connectionId &&
           force === true &&
           process.platform === 'win32' &&
           (isWindowsAbsolutePathLike(canonicalWorktreePath) ||
@@ -24383,52 +22140,6 @@ export class OrcaRuntimeService {
           this.notifyWorktreesChanged(repo.id)
           return removalResult ?? {}
         }
-        if (repo.connectionId) {
-          const remoteRemoveOptions = !deleteBranch ? { deleteBranch } : {}
-          const removalGate = await this.acquireFileWatcherRemoval(
-            canonicalWorktreePath,
-            repo.connectionId
-          )
-          let rawRemovalResult: RemoveWorktreeResult | undefined
-          let removalCompleted = false
-          try {
-            await this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id, {
-              connectionId: repo.connectionId,
-              allowUnverifiedStop: allowUnverifiedPtyStop
-            })
-            rawRemovalResult = await (Object.keys(remoteRemoveOptions).length > 0
-              ? provider!.removeWorktree(canonicalWorktreePath, force, remoteRemoveOptions)
-              : provider!.removeWorktree(canonicalWorktreePath, force))
-            removalCompleted = true
-          } finally {
-            await removalGate.finish(removalCompleted)
-          }
-          const removalResult = this.preserveBranchHeadFallback(
-            rawRemovalResult,
-            registeredWorktree.head
-          )
-          await cleanupUnusedWorktreePushTargetRemoteSsh(
-            provider!,
-            repo.path,
-            removalTarget.id,
-            removedPushTarget,
-            store
-          )
-          this.rememberPreservedBranchCleanupTarget(
-            removalTarget.id,
-            removalResult,
-            registeredWorktree.head,
-            removedPushTarget
-          )
-          this.clearOptimisticReconcileToken(removalTarget.id)
-          this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
-          this.invalidateResolvedWorktreeCache()
-          this.invalidateWorktreeScanCacheForRepo(removalTarget.repoId)
-          invalidateAuthorizedRootsCache()
-          this.notifyWorktreesChanged(repo.id)
-          return removalResult ?? {}
-        }
-
         const hooks = getEffectiveHooks(repo)
         let warning: string | undefined
         if (hooks?.scripts.archive && runHooks) {
@@ -24696,7 +22407,7 @@ export class OrcaRuntimeService {
 
     const settings = store.getSettings()
     const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
-    const isRemote = workspace.repo ? repoIsRemote(workspace.repo) : Boolean(workspace.connectionId)
+    const isRemote = false
     const queuedShell = resolveLocalWindowsAgentStartupShell({
       platform,
       isRemote,
@@ -24740,11 +22451,7 @@ export class OrcaRuntimeService {
       return opts
     }
 
-    if (workspace.connectionId) {
-      await this.markRemoteWorkspaceTrustedForAgent(agent, workspace.connectionId, workspace.path)
-    } else {
-      this.markLocalWorkspaceTrustedForAgent(agent, workspace.path)
-    }
+    this.markLocalWorkspaceTrustedForAgent(agent, workspace.path)
 
     return {
       ...opts,
@@ -24785,9 +22492,7 @@ export class OrcaRuntimeService {
     operation: 'resume' | 'create',
     signal?: AbortSignal
   ): Promise<boolean> {
-    const provider = workspace.connectionId
-      ? this.getSshProviderFn?.(workspace.connectionId)
-      : this.getLocalProvider()
+    const provider = this.getLocalProvider()
     if (!provider) {
       // An unavailable route is not proof of an old owner; preserve the structured failure.
       return true
@@ -24854,7 +22559,7 @@ export class OrcaRuntimeService {
       throw new Error('Selected agent is disabled. Choose an enabled agent before resuming.')
     }
     const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
-    const isRemote = workspace.repo ? repoIsRemote(workspace.repo) : Boolean(workspace.connectionId)
+    const isRemote = false
     const shell = resolveLocalWindowsAgentStartupShell({
       platform,
       isRemote,
@@ -24869,7 +22574,6 @@ export class OrcaRuntimeService {
           ? request.agentArgs
           : resolveTuiAgentLaunchArgs(request.agent, settings.agentDefaultArgs),
       agentEnv: resolveTuiAgentLaunchEnv(request.agent, settings.agentDefaultEnv),
-      ompResumeFilePath: request.ompResumeFilePath,
       sessionOptions: this.toAgentSessionOptions(request.launchPreferences),
       platform,
       shell,
@@ -24878,15 +22582,7 @@ export class OrcaRuntimeService {
     if (!startup) {
       throw new Error('agent_session_identity_required')
     }
-    if (workspace.connectionId) {
-      await this.markRemoteWorkspaceTrustedForAgent(
-        request.agent,
-        workspace.connectionId,
-        workspace.path
-      )
-    } else {
-      this.markLocalWorkspaceTrustedForAgent(request.agent, workspace.path)
-    }
+    this.markLocalWorkspaceTrustedForAgent(request.agent, workspace.path)
     if (_caller.signal?.aborted) {
       throw new Error('client_disconnected')
     }
@@ -25016,9 +22712,7 @@ export class OrcaRuntimeService {
         throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
       }
       const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
-      const isRemote = workspace.repo
-        ? repoIsRemote(workspace.repo)
-        : Boolean(workspace.connectionId)
+      const isRemote = false
       const shell = resolveLocalWindowsAgentStartupShell({
         platform,
         isRemote,
@@ -25048,15 +22742,7 @@ export class OrcaRuntimeService {
       if (!startup) {
         throw new Error('agent_session_identity_required')
       }
-      if (workspace.connectionId) {
-        await this.markRemoteWorkspaceTrustedForAgent(
-          request.agent,
-          workspace.connectionId,
-          workspace.path
-        )
-      } else {
-        this.markLocalWorkspaceTrustedForAgent(request.agent, workspace.path)
-      }
+      this.markLocalWorkspaceTrustedForAgent(request.agent, workspace.path)
       if (caller.signal?.aborted) {
         throw new Error('client_disconnected')
       }
@@ -25675,13 +23361,6 @@ export class OrcaRuntimeService {
     if (!pty) {
       return {}
     }
-    if (pty.connectionId) {
-      const remotePlatform = getRegisteredSshState(pty.connectionId)?.remotePlatform
-      return {
-        executionHostId: toSshExecutionHostId(pty.connectionId),
-        ...(remotePlatform ? { hostPlatform: remotePlatform } : {})
-      }
-    }
     return {
       executionHostId: LOCAL_EXECUTION_HOST_ID,
       hostPlatform: pty.isWsl || pty.wslDistro ? 'linux' : process.platform
@@ -25698,11 +23377,7 @@ export class OrcaRuntimeService {
       throw new Error('Repository for the selected workspace is no longer available.')
     }
     const startup = this.buildStartupForAgent(repo, opts.agent, opts.prompt)
-    if (repo.connectionId) {
-      await this.markRemoteWorkspaceTrustedForAgent(opts.agent, repo.connectionId, worktree.path)
-    } else {
-      this.markLocalWorkspaceTrustedForAgent(opts.agent, worktree.path)
-    }
+    this.markLocalWorkspaceTrustedForAgent(opts.agent, worktree.path)
     return await this.createTerminal(`id:${worktree.id}`, {
       command: startup.startup.command,
       env: startup.startup.env,
@@ -26065,10 +23740,9 @@ export class OrcaRuntimeService {
     if (!isTuiAgentEnabled(opts.agent, settings.disabledTuiAgents)) {
       throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
     }
-    // Why: mobile may be iOS while the shell host is Windows/macOS/Linux or SSH Linux; quote for the host shell.
+    // Why: mobile may be iOS while the shell host is Windows/macOS/Linux; quote for the host shell.
     const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
-    // Why: SSH runs the CLI through the relay shim (plain `orca`), so the Linux-only `codev` rename must not apply.
-    const isRemote = workspace.repo ? repoIsRemote(workspace.repo) : repoIsRemote(workspace)
+    const isRemote = false
     const queuedShell = resolveLocalWindowsAgentStartupShell({
       platform,
       isRemote,
@@ -26091,15 +23765,7 @@ export class OrcaRuntimeService {
     if (opts.agentPrompt && startupPlan.followupPrompt) {
       throw new Error(`Agent ${opts.agent} does not support startup prompt quick commands.`)
     }
-    if (workspace.connectionId) {
-      await this.markRemoteWorkspaceTrustedForAgent(
-        opts.agent,
-        workspace.connectionId,
-        workspace.path
-      )
-    } else {
-      this.markLocalWorkspaceTrustedForAgent(opts.agent, workspace.path)
-    }
+    this.markLocalWorkspaceTrustedForAgent(opts.agent, workspace.path)
     return {
       command: startupPlan.launchCommand,
       env: startupPlan.env,
@@ -27882,7 +25548,7 @@ export class OrcaRuntimeService {
       // Why: a PTY spawns on one runtime target; mixed child-repo connections need an explicit V2 routing decision.
       throw new Error('folder_workspace_connection_ambiguous')
     }
-    return connection.kind === 'ssh' ? connection.connectionId : null
+    return null
   }
 
   private async resolveFolderWorkspaceLaunchScope(
@@ -27902,11 +25568,10 @@ export class OrcaRuntimeService {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
-    const status = await getFolderWorkspacePathStatus(
-      this.store,
-      { scope: 'folder-workspace', folderWorkspaceId: workspace.id },
-      { getSshFilesystemProvider }
-    )
+    const status = await getFolderWorkspacePathStatus(this.store, {
+      scope: 'folder-workspace',
+      folderWorkspaceId: workspace.id
+    })
     assertFolderWorkspacePathUsable(status)
     return {
       id: folderWorkspaceKey(workspace.id),
@@ -28781,9 +26446,7 @@ export class OrcaRuntimeService {
       ? projectRuntime.status === 'resolved'
         ? projectRuntime.runtime.cacheKey
         : projectRuntime.repair.cacheKey
-      : repo.connectionId
-        ? `ssh:${repo.connectionId}:${getSshGitProviderGeneration(repo.connectionId)}`
-        : 'local:default'
+      : 'local:default'
     const cached = this.worktreeScanCache.get(repo.id)
     if (
       cached?.generation === generation &&
@@ -28824,23 +26487,12 @@ export class OrcaRuntimeService {
     repo: Repo,
     projectRuntime: ProjectExecutionRuntimeResolution | undefined
   ): Promise<RuntimeWorktreeScanResult> {
-    if (!repo.connectionId) {
-      return {
-        ok: true,
-        worktrees: await listRepoWorktrees(
-          repo,
-          getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime)
-        )
-      }
-    }
-    const provider = getSshGitProvider(repo.connectionId)
-    if (!provider) {
-      return { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
-    }
-    try {
-      return { ok: true, worktrees: await provider.listWorktrees(repo.path) }
-    } catch {
-      return { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
+    return {
+      ok: true,
+      worktrees: await listRepoWorktrees(
+        repo,
+        getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime)
+      )
     }
   }
 
@@ -28893,22 +26545,6 @@ export class OrcaRuntimeService {
     this.worktreeScanInFlight.delete(repoId)
   }
 
-  private invalidateSshWorktreeScanCacheInternal(targetId: string): void {
-    const repos = this.store?.getRepos() ?? []
-    const affectedRepoIds = new Set(
-      repos.filter((repo) => repo.connectionId === targetId).map((repo) => repo.id)
-    )
-    for (const repoId of affectedRepoIds) {
-      this.worktreeScanGenerations.set(repoId, (this.worktreeScanGenerations.get(repoId) ?? 0) + 1)
-      this.worktreeScanCache.delete(repoId)
-      this.worktreeScanInFlight.delete(repoId)
-    }
-    if (affectedRepoIds.size > 0) {
-      this.resolvedWorktreeGeneration += 1
-      this.resolvedWorktreeCache = null
-    }
-  }
-
   /** Invalidate the worktree cache and tell the renderer to re-list after an out-of-band branch change so the new name surfaces immediately. */
   notifyBranchRenamed(repoId: string): void {
     this.invalidateResolvedWorktreeCache()
@@ -28954,7 +26590,7 @@ export class OrcaRuntimeService {
     let pty = this.ptysById.get(ptyId)
     if (!pty) {
       const titleObservedAt = state.title ? this.nextTitleObservationSequence() : null
-      const connectionId = state.connectionId ?? parseAppSshPtyId(ptyId)?.connectionId ?? null
+      const connectionId = state.connectionId ?? null
       const worktreePath = splitWorktreeIdForFilesystem(worktreeId)?.worktreePath
       const fallbackWslDistro =
         process.platform === 'win32' && connectionId === null && worktreePath
@@ -29125,7 +26761,7 @@ export class OrcaRuntimeService {
     }
     const inventoryGeneration = this.ptyControllerInventorySequence + 1
     this.ptyControllerInventorySequence = inventoryGeneration
-    const providerKey = typeof connectionId === 'string' ? `ssh:${connectionId}` : 'local'
+    const providerKey = typeof connectionId === 'string' ? `remote:${connectionId}` : 'local'
     if (connectionId === undefined) {
       this.ptyControllerAggregateInventoryGeneration = inventoryGeneration
     } else {
@@ -29208,12 +26844,7 @@ export class OrcaRuntimeService {
     const allLivePtyIds = new Set(sessions.map((session) => session.id))
     const selectedLivePtyIds = new Set<string>()
     for (const session of sessions) {
-      const sessionConnectionId =
-        parseAppSshPtyId(session.id)?.connectionId ??
-        (typeof connectionId === 'string' ? connectionId : null)
-      const persistedIndexes = getPersistedIndexes(
-        sessionConnectionId ? toSshExecutionHostId(sessionConnectionId) : LOCAL_EXECUTION_HOST_ID
-      )
+      const persistedIndexes = getPersistedIndexes(LOCAL_EXECUTION_HOST_ID)
       const controllerIdentity = controllerIdentityByPtyId.get(session.id)
       const persistedWorktreeId = persistedIndexes.worktreeIdByPtyId.get(session.id)
       const providerWorktree = resolvedWorktrees.find(
@@ -29296,12 +26927,8 @@ export class OrcaRuntimeService {
       this.refreshPtyForegroundAgent(session.id)
     }
     for (const [ptyId, receipt] of this.restoredOrchestrationAuthorityByPtyId) {
-      const inScope =
-        connectionId === undefined ||
-        (connectionId === null && receipt.hostScope.kind !== 'ssh') ||
-        (typeof connectionId === 'string' &&
-          receipt.hostScope.kind === 'ssh' &&
-          receipt.hostScope.targetId === connectionId)
+      void receipt
+      const inScope = connectionId === undefined || connectionId === null
       if (inScope && !allLivePtyIds.has(ptyId)) {
         this.restoredOrchestrationAuthorityByPtyId.delete(ptyId)
       }
@@ -29564,7 +27191,6 @@ export class OrcaRuntimeService {
       leaf.ptyId !== null &&
       !provenLivePtyIds.has(leaf.ptyId) &&
       !leaf.ptyId.startsWith('remote:') &&
-      parseAppSshPtyId(leaf.ptyId) === null &&
       this.ptyController?.hasPty?.(leaf.ptyId) !== true
     return {
       handle: this.issueHandle(leaf),
@@ -29892,7 +27518,7 @@ export class OrcaRuntimeService {
     return (
       this.isHeadlessBuiltMobileSessionPublicationBase(snapshot.publicationEpoch) ||
       this.hasLiveRuntimeSessionOwnedPtyBinding(snapshot.worktree, tab) ||
-      this.hasLiveOrPersistedServeOrSshOwnedPtyBinding(snapshot.worktree, tab)
+      this.hasLiveOrPersistedServeOwnedPtyBinding(snapshot.worktree, tab)
     )
   }
 
@@ -30572,8 +28198,7 @@ export class OrcaRuntimeService {
       }
       if (
         entry.agentType &&
-        (entry.providerSessionOnly !== true ||
-          (entry.agentType === 'pi' && entry.providerSession != null)) &&
+        entry.providerSessionOnly !== true &&
         entry.receivedAt >= agentTypeFreshAfter &&
         (!agent || entry.receivedAt > agent.receivedAt)
       ) {
@@ -31988,2400 +29613,6 @@ export class OrcaRuntimeService {
 
   private getLeafKey(tabId: string, leafId: string): string {
     return `${tabId}::${leafId}`
-  }
-
-  // ── Linear integration ──
-
-  linearConnect(apiKey: string): ReturnType<typeof connectLinear> {
-    return connectLinear(apiKey)
-  }
-
-  linearDisconnect(workspaceId?: string): { ok: true } {
-    disconnectLinear(workspaceId)
-    return { ok: true }
-  }
-
-  linearSelectWorkspace(workspaceId: LinearWorkspaceSelection): ReturnType<typeof getLinearStatus> {
-    return selectLinearWorkspace(workspaceId)
-  }
-
-  linearStatus(): ReturnType<typeof getLinearStatus> {
-    return getLinearStatus()
-  }
-
-  linearTestConnection(workspaceId?: string): ReturnType<typeof testLinearConnection> {
-    return testLinearConnection(workspaceId)
-  }
-
-  linearSearchIssues(
-    query: string,
-    limit = 20,
-    workspaceId?: LinearWorkspaceSelection
-  ): ReturnType<typeof searchLinearIssues> {
-    return searchLinearIssues(query, Math.min(Math.max(1, limit), 50), workspaceId)
-  }
-
-  linearSearchForAgents(args: {
-    query: string
-    limit?: number
-    workspaceId?: string | 'all'
-  }): ReturnType<typeof searchLinearIssuesForAgents> {
-    return searchLinearIssuesForAgents(args)
-  }
-
-  linearIssueContext(request: LinearIssueRequest): ReturnType<typeof readLinearIssueContext> {
-    return readLinearIssueContext(request, (context) => this.linearResolveCurrentIssue(context))
-  }
-
-  async linearTeamListForAgents(params: {
-    workspaceId?: string | 'all'
-  }): Promise<LinearTeamListResult> {
-    try {
-      const result = await listLinearTeamsForAgent(params.workspaceId)
-      const workspaceErrors = result.errors.map((error) => ({
-        workspace: { id: error.workspaceId, name: error.workspaceName ?? error.workspaceId },
-        code: this.linearWorkspaceErrorCode(error.type),
-        message: sanitizeLinearErrorMessage(error.message)
-      }))
-      return {
-        teams: result.teams.map((team) => this.linearTeamSummary(team)),
-        meta: {
-          workspaceId: params.workspaceId,
-          returned: result.teams.length,
-          partial: workspaceErrors.length > 0,
-          workspaceErrors
-        }
-      }
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-  }
-
-  async linearTeamMembersForAgents(params: {
-    teamInput: string
-    workspaceId?: string
-  }): Promise<LinearTeamMembersResult> {
-    const team = await this.resolveLinearTeamInput(params.teamInput, params.workspaceId)
-    try {
-      const members = await getLinearTeamMembersOrThrow(team.id, team.workspaceId)
-      return {
-        team: this.linearTeamSummary(team),
-        members: members.map((member) => ({
-          id: member.id,
-          displayName: member.displayName,
-          avatarUrl: member.avatarUrl
-        })),
-        meta: { workspaceId: team.workspaceId, returned: members.length }
-      }
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-  }
-
-  async linearTeamStatesForAgents(params: {
-    teamInput: string
-    workspaceId?: string
-  }): Promise<LinearTeamStatesResult> {
-    const team = await this.resolveLinearTeamInput(params.teamInput, params.workspaceId)
-    const states = await this.getLinearTeamStatesForWrite(team.id, team.workspaceId)
-    return {
-      team: this.linearTeamSummary(team),
-      states: states.map((state) => ({
-        id: state.id,
-        name: state.name,
-        type: state.type,
-        color: state.color,
-        position: state.position
-      })),
-      meta: { workspaceId: team.workspaceId, returned: states.length }
-    }
-  }
-
-  async linearTeamLabelsForAgents(params: {
-    teamInput: string
-    workspaceId?: string
-  }): Promise<LinearTeamLabelsResult> {
-    const team = await this.resolveLinearTeamInput(params.teamInput, params.workspaceId)
-    const labels = await this.getLinearTeamLabelsForWrite(team.id, team.workspaceId)
-    return {
-      team: this.linearTeamSummary(team),
-      labels: labels.map((label) => ({ id: label.id, name: label.name, color: label.color })),
-      meta: { workspaceId: team.workspaceId, returned: labels.length }
-    }
-  }
-
-  async linearProjectListForAgents(params: {
-    query?: string
-    limit?: number
-    workspaceId?: string | 'all'
-  }): Promise<LinearProjectListResult> {
-    const limit = clampLinearSearchLimit(params.limit)
-    try {
-      const result = await this.linearListProjects(params.query, limit, params.workspaceId, true)
-      const projects = result.items.slice(0, limit).map((project) => ({
-        id: project.id,
-        name: project.name,
-        ...(project.url ? { url: project.url } : {}),
-        ...(project.workspaceId ? { workspaceId: project.workspaceId } : {}),
-        ...(project.workspaceName ? { workspaceName: project.workspaceName } : {}),
-        ...(project.teams ? { teams: project.teams } : {})
-      }))
-      const workspaceErrors = (result.errors ?? []).map((error) => ({
-        workspace: { id: error.workspaceId, name: error.workspaceName ?? error.workspaceId },
-        code: this.linearWorkspaceErrorCode(error.type),
-        message: sanitizeLinearErrorMessage(error.message)
-      }))
-      return {
-        projects,
-        meta: {
-          query: params.query,
-          workspaceId: params.workspaceId,
-          limit,
-          returned: projects.length,
-          hasMore: result.hasMore === true || result.items.length > limit,
-          partial: workspaceErrors.length > 0,
-          workspaceErrors
-        }
-      }
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-  }
-
-  async linearIssueListForAgents(params: {
-    filter?: LinearIssueListFilter
-    teamInput?: string
-    limit?: number
-    workspaceId?: string | 'all'
-  }): Promise<LinearIssueListResult> {
-    const filter = params.filter ?? 'assigned'
-    const limit = clampLinearIssueListLimit(params.limit)
-    const team = params.teamInput
-      ? await this.resolveLinearTeamInput(params.teamInput, params.workspaceId)
-      : null
-    const workspaceId = team?.workspaceId ?? params.workspaceId
-    try {
-      const result = await listLinearIssues(filter, limit, workspaceId, {
-        teamId: team?.id
-      })
-      return {
-        issues: result.items.map((issue) => ({
-          id: issue.id,
-          identifier: issue.identifier,
-          title: issue.title,
-          url: issue.url,
-          state: issue.state,
-          team: issue.team,
-          project: issue.project ?? null,
-          assignee: issue.assignee ?? null,
-          priority: issue.priority,
-          estimate: issue.estimate,
-          dueDate: issue.dueDate,
-          updatedAt: issue.updatedAt,
-          workspace: {
-            id: issue.workspaceId ?? workspaceId ?? '',
-            name: issue.workspaceName ?? issue.workspaceId ?? workspaceId ?? ''
-          }
-        })),
-        meta: {
-          filter,
-          workspaceId,
-          ...(team ? { team: this.linearTeamSummary(team) } : {}),
-          limit,
-          returned: result.items.length,
-          hasMore: result.hasMore === true,
-          partial: (result.errors?.length ?? 0) > 0,
-          workspaceErrors: (result.errors ?? []).map((error) => ({
-            workspace: { id: error.workspaceId, name: error.workspaceName ?? error.workspaceId },
-            code: this.linearWorkspaceErrorCode(error.type),
-            message: sanitizeLinearErrorMessage(error.message)
-          }))
-        }
-      }
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-  }
-
-  async linearMcpIssueList(params: LinearMcpIssueListRequest): Promise<LinearMcpIssueListResult> {
-    try {
-      return await listMcpIssues(params)
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-  }
-
-  async linearResolveCurrentIssue(
-    context?: LinearCurrentIssueContextHints
-  ): Promise<ReturnType<typeof getLinearCurrentIssueFromWorktree>> {
-    if (!this.store) {
-      throw new Error('runtime_unavailable')
-    }
-
-    let worktree: ResolvedWorktree | null = null
-    if (context?.terminalHandle) {
-      try {
-        const terminal = await this.showTerminal(context.terminalHandle)
-        if (context.worktreeId && context.worktreeId !== terminal.worktreeId) {
-          throw new LinearAgentAccessError(
-            'linear_permission_denied',
-            'The provided Linear worktree context does not match the caller terminal.'
-          )
-        }
-        worktree = await this.resolveWorktreeSelector(`id:${terminal.worktreeId}`)
-      } catch (error) {
-        if (error instanceof LinearAgentAccessError) {
-          throw error
-        }
-        if (context.remote === true || context.worktreeId) {
-          throw new LinearAgentAccessError(
-            'linear_issue_required',
-            'Could not verify the current Linear-linked worktree.'
-          )
-        }
-      }
-    }
-
-    if (!worktree && context?.remote !== true && context?.cwd) {
-      worktree = await this.resolveWorktreeForContainedPath(context.cwd)
-      if (!worktree) {
-        throw new LinearAgentAccessError(
-          'linear_issue_required',
-          'Run --current from inside an Orca-managed worktree or pass an issue id.'
-        )
-      }
-    }
-
-    if (!worktree) {
-      throw new LinearAgentAccessError(
-        'linear_issue_required',
-        'Run --current from inside an Orca-managed worktree or pass an issue id.'
-      )
-    }
-
-    const link = getLinearCurrentIssueFromWorktree(worktree)
-    if (!link.workspaceId) {
-      const backfill = resolveLegacyLinearLinkWorkspace(
-        worktree.linkedLinearIssue ?? '',
-        worktree.linkedLinearIssueOrganizationUrlKey
-      )
-      if (backfill?.workspaceId) {
-        this.store.setWorktreeMeta(worktree.id, {
-          linkedLinearIssueWorkspaceId: backfill.workspaceId,
-          linkedLinearIssueOrganizationUrlKey: backfill.organizationUrlKey ?? null
-        })
-        return {
-          ...link,
-          workspaceId: backfill.workspaceId,
-          organizationUrlKey: backfill.organizationUrlKey ?? link.organizationUrlKey,
-          backfill
-        }
-      }
-    }
-    return link
-  }
-
-  private async resolveWorktreeForContainedPath(cwd: string): Promise<ResolvedWorktree | null> {
-    const currentPath = resolve(cwd)
-    let best: ResolvedWorktree | null = null
-    for (const candidate of await this.listResolvedWorktrees()) {
-      if (!isPathInsideOrEqual(candidate.path, currentPath)) {
-        continue
-      }
-      if (!best || candidate.path.length > best.path.length) {
-        best = candidate
-      }
-    }
-    return best
-  }
-
-  linearListIssues(
-    filter?: LinearListFilter,
-    limit = 20,
-    workspaceId?: LinearWorkspaceSelection,
-    options?: LinearIssueListOptions
-  ): ReturnType<typeof listLinearIssues> {
-    return listLinearIssues(filter, clampLinearIssueListLimit(limit), workspaceId, options)
-  }
-
-  linearCreateIssue(
-    teamId: string,
-    title: string,
-    description?: string,
-    workspaceId?: string,
-    parentIssueId?: string,
-    projectId?: string | null,
-    options?: {
-      stateId?: string
-      priority?: number
-      estimate?: number | null
-      dueDate?: string | null
-      assigneeId?: string | null
-      labelIds?: string[]
-    }
-  ): ReturnType<typeof createLinearIssue> {
-    return createLinearIssue(teamId, title, description, workspaceId, {
-      parentId: parentIssueId,
-      projectId,
-      ...options
-    })
-  }
-
-  linearGetIssue(id: string, workspaceId?: string): ReturnType<typeof getLinearIssue> {
-    return getLinearIssue(id, workspaceId)
-  }
-
-  linearUpdateIssue(
-    id: string,
-    updates: LinearIssueUpdate,
-    workspaceId?: string
-  ): ReturnType<typeof updateLinearIssue> {
-    return updateLinearIssue(id, updates, workspaceId)
-  }
-
-  linearAddIssueComment(
-    issueId: string,
-    body: string,
-    workspaceId?: string
-  ): ReturnType<typeof addLinearIssueComment> {
-    return addLinearIssueComment(issueId, body, workspaceId)
-  }
-
-  async linearIssueSetState(params: {
-    input?: string
-    current?: boolean
-    workspaceId?: string
-    to: string
-    context?: LinearCurrentIssueContextHints
-  }): Promise<LinearStatusSetResult> {
-    const target = await this.resolveLinearAgentWriteTarget(params)
-    const teamId = target.issue.team?.id
-    if (!teamId) {
-      throw linearError('linear_invalid_state', 'The Linear issue does not have a team.')
-    }
-    const states = await this.getLinearTeamStatesForWrite(teamId, target.workspaceId)
-    const state = this.resolveLinearAgentState(params.to, states)
-    if (!state) {
-      throw linearError(
-        'linear_invalid_state',
-        `No workflow state exactly matched "${params.to}".`,
-        {
-          states: states.map(({ id, name, type }) => ({ id, name, type })),
-          nextSteps: [`Retry with one of the exact state names for ${target.issue.identifier}.`]
-        }
-      )
-    }
-
-    const previousState =
-      target.issue.state?.id && target.issue.state.name
-        ? { id: target.issue.state.id, name: target.issue.state.name }
-        : null
-    const alreadyInState = target.issue.state?.id === state.id
-    if (!alreadyInState) {
-      await this.runLinearAgentWrite(
-        async (signal) => {
-          const updated = await updateLinearIssueForAgent(
-            target.issue.id,
-            { stateId: state.id },
-            target.workspaceId,
-            {
-              signal
-            }
-          )
-          if (updated.state?.id !== state.id) {
-            throw new LinearWriteFailure(
-              'unconfirmed',
-              'Linear state update could not be confirmed.'
-            )
-          }
-          return updated
-        },
-        (cause) =>
-          linearError(
-            'linear_write_unconfirmed',
-            'Linear may have applied the state change, but Orca could not confirm it.',
-            {
-              nextSteps: [
-                `Run \`orca linear issue ${target.issue.identifier} --workspace ${target.workspaceId} --json\` and check the current state before retrying.`
-              ],
-              ...(cause ? { cause } : {})
-            }
-          )
-      )
-    }
-    await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
-    return {
-      issue: this.linearWriteIssueRef(target.issue),
-      state: { id: state.id, name: state.name, type: state.type },
-      previousState,
-      meta: { workspaceId: target.workspaceId, alreadyInState }
-    }
-  }
-
-  async linearIssueRelationWrite(
-    params: LinearIssueRelationWriteRequest
-  ): Promise<LinearIssueRelationWriteResult> {
-    const target = await this.resolveLinearAgentWriteTarget(params)
-    const related = await this.resolveLinearAgentWriteTarget({
-      input: params.relatedInput,
-      workspaceId: target.workspaceId,
-      context: params.context
-    })
-    if (target.issue.id === related.issue.id) {
-      throw linearError('linear_write_failed', 'An issue cannot be related to itself.')
-    }
-    try {
-      const result = await this.runLinearAgentWrite(
-        (signal) =>
-          writeIssueRelation({
-            issue: { ...this.linearWriteIssueRef(target.issue), title: target.issue.title },
-            relatedIssue: {
-              ...this.linearWriteIssueRef(related.issue),
-              title: related.issue.title
-            },
-            relationship: params.relationship,
-            operation: params.operation,
-            workspaceId: target.workspaceId,
-            signal
-          }),
-        (cause) =>
-          linearError(
-            'linear_write_unconfirmed',
-            'Linear may have applied the relation change, but Orca could not confirm it.',
-            {
-              nextSteps: [
-                `Run \`orca linear issue ${target.issue.identifier} --relations --workspace ${target.workspaceId} --json\` before retrying.`
-              ],
-              ...(cause ? { cause } : {})
-            }
-          )
-      )
-      await this.notifyLinearLinkedIssueUpdated(target.workspaceId, [
-        target.issue.identifier,
-        related.issue.identifier
-      ])
-      return result
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-  }
-
-  async linearSaveIssue(params: LinearSaveIssueRequest): Promise<LinearSaveIssueResult> {
-    if ((params.description?.length ?? 0) > LINEAR_WRITE_BODY_CAP) {
-      throw linearError('linear_body_too_large', 'Linear issue body is too large.')
-    }
-    if (!params.input && !params.current) {
-      if (!params.title || !params.team) {
-        throw linearError(
-          'linear_write_failed',
-          'Creating with save-issue requires both team and title.'
-        )
-      }
-      const created = await this.linearIssueCreate({
-        title: params.title,
-        body: params.description,
-        teamInput: params.team,
-        state: params.state,
-        assignee: params.assignee ?? undefined,
-        priority: params.priority,
-        estimate: params.estimate ?? undefined,
-        dueDate: params.dueDate ?? undefined,
-        labels: params.labels,
-        projectInput: params.project ?? undefined,
-        parentInput: params.parentId ?? undefined,
-        workspaceId: params.workspaceId,
-        writeId: params.writeId,
-        context: params.context
-      })
-      return { ...created, meta: { ...created.meta, created: true } }
-    }
-    if (params.team !== undefined) {
-      throw linearError('linear_write_failed', 'Team can only be set when creating an issue.')
-    }
-    const target = await this.resolveLinearAgentWriteTarget(params)
-    const current = await this.readLinearAgentIssueWriteRecord(target.issue.id, target.workspaceId)
-    const fields = await this.buildLinearSaveUpdate(params, current, target.workspaceId)
-    if (Object.keys(fields).length === 0) {
-      throw linearError('linear_write_failed', 'No issue fields were provided to save.')
-    }
-    const alreadySet = this.linearSavedIssueMatchesIntent(current, fields)
-    const updated = alreadySet
-      ? current
-      : await this.runLinearAgentWrite(
-          async (signal) => {
-            const saved = await updateLinearIssueForAgent(
-              target.issue.id,
-              fields,
-              target.workspaceId,
-              { signal }
-            )
-            if (!this.linearSavedIssueMatchesIntent(saved, fields)) {
-              throw new LinearWriteFailure(
-                'unconfirmed',
-                'Linear issue save could not be confirmed.'
-              )
-            }
-            return saved
-          },
-          (cause) =>
-            linearError(
-              'linear_write_unconfirmed',
-              'Linear may have applied the issue save, but Orca could not confirm it.',
-              {
-                nextSteps: [
-                  `Run \`orca linear issue ${target.issue.identifier} --workspace ${target.workspaceId} --json\` before retrying.`
-                ],
-                ...(cause ? { cause } : {})
-              }
-            )
-        )
-    await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
-    return {
-      issue: updated,
-      meta: {
-        workspaceId: target.workspaceId,
-        created: false
-      }
-    }
-  }
-
-  async linearIssueUpdateTask(
-    params: LinearIssueTaskUpdateRequest
-  ): Promise<LinearIssueTaskUpdateResult> {
-    const target = await this.resolveLinearAgentWriteTarget(params)
-    const current = await this.readLinearAgentIssueWriteRecord(target.issue.id, target.workspaceId)
-    const update = await this.buildLinearTaskUpdate(params, current, target.workspaceId)
-    if (!update) {
-      throw linearError('linear_write_failed', 'No Linear task field update was requested.')
-    }
-    const alreadySet = this.linearTaskFieldAlreadySet(params.operation, current, update)
-    if (!alreadySet) {
-      await this.runLinearAgentWrite(
-        async (signal) => {
-          const updated = await updateLinearIssueForAgent(
-            target.issue.id,
-            update.fields,
-            target.workspaceId,
-            { signal }
-          )
-          if (!this.linearTaskFieldAlreadySet(params.operation, updated, update)) {
-            throw new LinearWriteFailure(
-              'unconfirmed',
-              'Linear task field update could not be confirmed.'
-            )
-          }
-          return updated
-        },
-        (cause) =>
-          linearError(
-            'linear_write_unconfirmed',
-            'Linear may have applied the task update, but Orca could not confirm it.',
-            {
-              nextSteps: [
-                `Run \`orca linear issue ${target.issue.identifier} --workspace ${target.workspaceId} --json\` and check the updated field before retrying.`
-              ],
-              ...(cause ? { cause } : {})
-            }
-          )
-      )
-    }
-    await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
-    const finalRecord = alreadySet
-      ? current
-      : await this.readLinearAgentIssueWriteRecord(target.issue.id, target.workspaceId)
-    return this.linearTaskUpdateResult(
-      params.operation,
-      target.issue,
-      target.workspaceId,
-      current,
-      finalRecord,
-      alreadySet
-    )
-  }
-
-  async linearIssueAddComment(params: {
-    input?: string
-    current?: boolean
-    workspaceId?: string
-    body: string
-    replyTo?: string
-    writeId?: string
-    context?: LinearCurrentIssueContextHints
-  }): Promise<LinearCommentAddResult> {
-    if (params.body.length > LINEAR_WRITE_BODY_CAP) {
-      throw linearError('linear_body_too_large', 'Linear comment body is too large.')
-    }
-    const target = await this.resolveLinearAgentWriteTarget(params)
-    const parentId = params.replyTo
-      ? await this.resolveLinearCommentParentId(target.issue.id, params.replyTo, target.workspaceId)
-      : null
-    const writeId = params.writeId ?? randomUUID()
-    const existing =
-      params.writeId !== undefined
-        ? await this.getMatchingLinearCommentWrite(
-            writeId,
-            target.issue.id,
-            parentId,
-            target.workspaceId,
-            true
-          )
-        : null
-    if (existing) {
-      await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
-      return this.linearCommentResult(existing, target, params.body.length, writeId, true)
-    }
-
-    try {
-      const comment = await this.runLinearAgentWrite(
-        (signal) =>
-          addLinearIssueCommentForAgent(target.issue.id, params.body, target.workspaceId, {
-            id: writeId,
-            parentId,
-            signal
-          }),
-        (cause) =>
-          this.linearCreateStyleUnconfirmed('comment', writeId, target, {
-            parentId,
-            bodyRequired: true,
-            cause
-          })
-      )
-      await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
-      return this.linearCommentResult(comment, target, params.body.length, writeId, false)
-    } catch (error) {
-      if (error instanceof LinearWriteFailure && error.kind === 'duplicate_id') {
-        const comment = await this.refetchLinearCommentAfterDuplicate(
-          writeId,
-          target.issue.id,
-          parentId,
-          target.workspaceId,
-          () =>
-            this.linearCreateStyleUnconfirmed('comment', writeId, target, {
-              parentId,
-              bodyRequired: true
-            })
-        )
-        await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
-        return this.linearCommentResult(comment, target, params.body.length, writeId, true)
-      }
-      throw error
-    }
-  }
-
-  async linearIssueAttachLink(params: {
-    input?: string
-    current?: boolean
-    workspaceId?: string
-    url: string
-    title?: string
-    writeId?: string
-    context?: LinearCurrentIssueContextHints
-  }): Promise<LinearAttachResult> {
-    const url = this.parseLinearAttachmentUrl(params.url)
-    const target = await this.resolveLinearAgentWriteTarget(params)
-    const writeId = params.writeId ?? randomUUID()
-    const title = params.title?.trim() || this.defaultLinearAttachmentTitle(url)
-    const existing =
-      params.writeId !== undefined
-        ? await this.getMatchingLinearAttachmentWrite(
-            writeId,
-            target.issue.id,
-            target.workspaceId,
-            true
-          )
-        : null
-    if (existing) {
-      await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
-      return this.linearAttachResult(existing, target, writeId, true)
-    }
-    try {
-      const attachment = await this.runLinearAgentWrite(
-        (signal) =>
-          createLinearIssueAttachment(
-            target.issue.id,
-            { id: writeId, title, url: url.toString() },
-            target.workspaceId,
-            { signal }
-          ),
-        (cause) =>
-          this.linearCreateStyleUnconfirmed('attach', writeId, target, {
-            title,
-            url: url.toString(),
-            cause
-          })
-      )
-      await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
-      return this.linearAttachResult(attachment, target, writeId, false)
-    } catch (error) {
-      if (error instanceof LinearWriteFailure && error.kind === 'duplicate_id') {
-        const attachment = await this.refetchLinearAttachmentAfterDuplicate(
-          writeId,
-          target.issue.id,
-          target.workspaceId,
-          () =>
-            this.linearCreateStyleUnconfirmed('attach', writeId, target, {
-              title,
-              url: url.toString()
-            })
-        )
-        await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
-        return this.linearAttachResult(attachment, target, writeId, true)
-      }
-      throw error
-    }
-  }
-
-  async linearIssueCreate(params: {
-    title: string
-    body?: string
-    teamInput?: string
-    teamKey?: string
-    state?: string
-    assignee?: string
-    priority?: number
-    estimate?: number
-    dueDate?: string
-    labels?: string[]
-    projectInput?: string
-    parentInput?: string
-    parentCurrent?: boolean
-    workspaceId?: string
-    writeId?: string
-    context?: LinearCurrentIssueContextHints
-  }): Promise<LinearCreateResult> {
-    if ((params.body?.length ?? 0) > LINEAR_WRITE_BODY_CAP) {
-      throw linearError('linear_body_too_large', 'Linear issue body is too large.')
-    }
-    const parent =
-      params.parentInput || params.parentCurrent
-        ? await this.resolveLinearAgentWriteTarget({
-            input: params.parentInput,
-            current: params.parentCurrent,
-            workspaceId: params.workspaceId,
-            context: params.context
-          })
-        : null
-    if (parent && params.workspaceId && params.workspaceId !== parent.workspaceId) {
-      throw linearError(
-        'linear_invalid_workspace',
-        'The parent issue belongs to a different workspace.'
-      )
-    }
-    const team = await this.resolveLinearCreateTeam(
-      params.teamInput ?? params.teamKey,
-      params.workspaceId,
-      parent
-    )
-    const createFields = await this.resolveLinearCreateFields(params, team)
-    const parentId = parent?.issue.id ?? null
-    const writeId = params.writeId ?? randomUUID()
-    const existing =
-      params.writeId !== undefined
-        ? await this.getMatchingLinearCreatedIssue(
-            writeId,
-            team.id,
-            parentId,
-            team.workspaceId,
-            true,
-            createFields
-          )
-        : null
-    if (existing) {
-      if (parent) {
-        await this.notifyLinearLinkedIssueUpdated(parent.workspaceId, parent.issue.identifier)
-      }
-      return this.linearCreateResult(existing, team.workspaceId, writeId, true)
-    }
-
-    try {
-      const issue = await this.runLinearAgentWrite(
-        async (signal) => {
-          const created = await createLinearIssueForAgent(
-            team.id,
-            params.title,
-            params.body,
-            team.workspaceId,
-            {
-              id: writeId,
-              parentId,
-              ...createFields,
-              signal
-            }
-          )
-          if (!this.linearCreatedIssueMatchesIntent(created, createFields)) {
-            throw new LinearWriteFailure(
-              'unconfirmed',
-              'Linear issue create could not be confirmed with the requested task fields.'
-            )
-          }
-          return created
-        },
-        (cause) =>
-          this.linearCreateStyleUnconfirmed('create', writeId, null, {
-            team,
-            parent,
-            title: params.title,
-            bodyRequired: params.body !== undefined,
-            createFields,
-            cause
-          })
-      )
-      if (parent) {
-        await this.notifyLinearLinkedIssueUpdated(parent.workspaceId, parent.issue.identifier)
-      }
-      return this.linearCreateResult(issue, team.workspaceId, writeId, false)
-    } catch (error) {
-      if (error instanceof LinearWriteFailure && error.kind === 'duplicate_id') {
-        const issue = await this.refetchLinearIssueAfterDuplicate(
-          writeId,
-          team.id,
-          parentId,
-          team.workspaceId,
-          createFields,
-          () =>
-            this.linearCreateStyleUnconfirmed('create', writeId, null, {
-              team,
-              parent,
-              title: params.title,
-              bodyRequired: params.body !== undefined,
-              createFields
-            })
-        )
-        if (parent) {
-          await this.notifyLinearLinkedIssueUpdated(parent.workspaceId, parent.issue.identifier)
-        }
-        return this.linearCreateResult(issue, team.workspaceId, writeId, true)
-      }
-      throw error
-    }
-  }
-
-  private async resolveLinearAgentWriteTarget(params: {
-    input?: string
-    current?: boolean
-    workspaceId?: string
-    context?: LinearCurrentIssueContextHints
-  }): Promise<LinearAgentWriteTarget> {
-    const result = await readLinearIssueContext(
-      {
-        input: params.input,
-        current: params.current,
-        workspaceId: params.workspaceId,
-        include: {
-          comments: false,
-          children: false,
-          attachments: false,
-          relations: false,
-          activity: false
-        },
-        depth: 0,
-        context: params.context
-      },
-      (context) => this.linearResolveCurrentIssue(context)
-    )
-    return { issue: result.issue, workspaceId: result.meta.resolved.workspaceId }
-  }
-
-  private async getLinearTeamStatesForWrite(
-    teamId: string,
-    workspaceId: string
-  ): Promise<Awaited<ReturnType<typeof getLinearTeamStatesOrThrow>>> {
-    try {
-      return await getLinearTeamStatesOrThrow(teamId, workspaceId)
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-  }
-
-  private resolveLinearAgentState(
-    input: string,
-    states: Awaited<ReturnType<typeof getLinearTeamStatesOrThrow>>
-  ): Awaited<ReturnType<typeof getLinearTeamStatesOrThrow>>[number] | null {
-    const normalized = input.toLocaleLowerCase()
-    const exact = states.find(
-      (state) =>
-        state.id.toLocaleLowerCase() === normalized || state.name.toLocaleLowerCase() === normalized
-    )
-    // Why: Linear MCP accepts lifecycle types; keep explicit IDs/names authoritative when they collide.
-    return exact ?? states.find((state) => state.type.toLocaleLowerCase() === normalized) ?? null
-  }
-
-  private async getLinearTeamLabelsForWrite(
-    teamId: string,
-    workspaceId: string
-  ): Promise<Awaited<ReturnType<typeof getLinearTeamLabelsOrThrow>>> {
-    try {
-      return await getLinearTeamLabelsOrThrow(teamId, workspaceId)
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-  }
-
-  private async readLinearAgentIssueWriteRecord(
-    issueId: string,
-    workspaceId: string
-  ): Promise<NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>> {
-    const issue = await this.readLinearWriteLookup(() =>
-      getLinearIssueByUuidForAgent(issueId, workspaceId)
-    )
-    if (!issue) {
-      throw linearError('linear_issue_not_found', 'Linear issue was not found.')
-    }
-    return issue
-  }
-
-  private async buildLinearTaskUpdate(
-    params: LinearIssueTaskUpdateRequest,
-    current: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
-    workspaceId: string
-  ): Promise<{
-    fields: {
-      assigneeId?: string | null
-      priority?: number
-      estimate?: number | null
-      dueDate?: string | null
-      labelIds?: string[]
-    }
-    labels?: { id: string; name: string }[]
-  } | null> {
-    if (params.operation === 'assignee') {
-      const assigneeId = params.assigneeMe
-        ? (await this.getLinearViewerForWrite(workspaceId)).id
-        : params.assigneeId
-      if (assigneeId === undefined) {
-        throw linearError('linear_invalid_assignee', 'Pass --me, --to-id, or clear assignee.')
-      }
-      return { fields: { assigneeId } }
-    }
-    if (params.operation === 'priority') {
-      if (params.priority === undefined) {
-        throw linearError('linear_write_failed', 'Missing priority value.')
-      }
-      return { fields: { priority: params.priority } }
-    }
-    if (params.operation === 'estimate') {
-      if (params.estimate === undefined) {
-        throw linearError('linear_write_failed', 'Missing estimate value.')
-      }
-      return { fields: { estimate: params.estimate } }
-    }
-    if (params.operation === 'dueDate') {
-      if (params.dueDate === undefined) {
-        throw linearError('linear_write_failed', 'Missing due date value.')
-      }
-      return { fields: { dueDate: params.dueDate } }
-    }
-    if (params.operation === 'labels') {
-      const mode = params.labelMode
-      const inputs = params.labels ?? []
-      if (!mode || inputs.length === 0) {
-        throw linearError('linear_invalid_label', 'Pass at least one --label.')
-      }
-      const labels = await this.resolveLinearLabelsForIssue(current, inputs, workspaceId)
-      const requestedIds = labels.map((label) => label.id)
-      const existingIds = current.labelIds ?? current.labels?.map((label) => label.id) ?? []
-      const nextIds =
-        mode === 'set'
-          ? requestedIds
-          : mode === 'add'
-            ? Array.from(new Set([...existingIds, ...requestedIds]))
-            : existingIds.filter((id) => !requestedIds.includes(id))
-      return {
-        fields: { labelIds: nextIds },
-        labels: labelsForIds(nextIds, [...(current.labels ?? []), ...labels])
-      }
-    }
-    return null
-  }
-
-  private async buildLinearSaveUpdate(
-    params: LinearSaveIssueRequest,
-    current: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
-    workspaceId: string
-  ): Promise<LinearIssueUpdate> {
-    const fields: LinearIssueUpdate = {}
-    if (params.title !== undefined) {
-      fields.title = params.title
-    }
-    if (params.description !== undefined) {
-      fields.description = params.description
-    }
-    if (params.priority !== undefined) {
-      fields.priority = params.priority
-    }
-    if (params.estimate !== undefined) {
-      fields.estimate = params.estimate
-    }
-    if (params.dueDate !== undefined) {
-      fields.dueDate = params.dueDate
-    }
-    if (params.state !== undefined) {
-      const states = await this.getLinearTeamStatesForWrite(current.team.id, workspaceId)
-      const state = this.resolveLinearAgentState(params.state, states)
-      if (!state) {
-        throw linearError(
-          'linear_invalid_state',
-          `No workflow state exactly matched "${params.state}".`
-        )
-      }
-      fields.stateId = state.id
-    }
-    if (params.assignee !== undefined) {
-      fields.assigneeId =
-        params.assignee === null
-          ? null
-          : await this.resolveLinearAssignee(params.assignee, current.team.id, workspaceId)
-    }
-    if (params.labels !== undefined) {
-      if (params.labels.length === 0) {
-        fields.labelIds = []
-      } else {
-        const labels = await this.resolveLinearLabelsForIssue(current, params.labels, workspaceId)
-        fields.labelIds = labels.map((label) => label.id)
-      }
-    }
-    if (params.project !== undefined) {
-      fields.projectId =
-        params.project === null
-          ? null
-          : (
-              await this.resolveLinearCreateProject(params.project, {
-                id: current.team.id,
-                workspaceId
-              })
-            ).id
-    }
-    if (params.parentId !== undefined) {
-      fields.parentId =
-        params.parentId === null
-          ? null
-          : (
-              await this.resolveLinearAgentWriteTarget({
-                input: params.parentId,
-                workspaceId,
-                context: params.context
-              })
-            ).issue.id
-      if (fields.parentId === current.id) {
-        throw linearError('linear_invalid_parent', 'An issue cannot be its own parent.')
-      }
-    }
-    return fields
-  }
-
-  private async resolveLinearAssignee(
-    input: string,
-    teamId: string,
-    workspaceId: string
-  ): Promise<string> {
-    if (input.toLocaleLowerCase() === 'me') {
-      return (await this.getLinearViewerForWrite(workspaceId)).id
-    }
-    // Why: caller-supplied IDs were accepted directly before save-issue; avoid a paginated member scan on that existing fast path.
-    if (isLinearUuid(input)) {
-      return input
-    }
-    let members: Awaited<ReturnType<typeof getLinearTeamMembersOrThrow>>
-    try {
-      members = await getLinearTeamMembersOrThrow(teamId, workspaceId)
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-    const normalized = input.toLocaleLowerCase()
-    const matches = members.filter(
-      (member) =>
-        member.id.toLocaleLowerCase() === normalized ||
-        member.displayName.toLocaleLowerCase() === normalized ||
-        member.name?.toLocaleLowerCase() === normalized ||
-        member.email?.toLocaleLowerCase() === normalized
-    )
-    if (matches.length === 1) {
-      return matches[0].id
-    }
-    throw linearError(
-      'linear_invalid_assignee',
-      matches.length === 0
-        ? `No team member exactly matched "${input}".`
-        : `Multiple team members exactly matched "${input}".`
-    )
-  }
-
-  private linearSavedIssueMatchesIntent(
-    issue: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
-    fields: LinearIssueUpdate
-  ): boolean {
-    if (fields.title !== undefined && issue.title !== fields.title) {
-      return false
-    }
-    if (fields.description !== undefined && (issue.description ?? '') !== fields.description) {
-      return false
-    }
-    if (fields.parentId !== undefined && (issue.parent?.id ?? null) !== fields.parentId) {
-      return false
-    }
-    if (fields.stateId !== undefined && issue.state?.id !== fields.stateId) {
-      return false
-    }
-    if (fields.assigneeId !== undefined && (issue.assignee?.id ?? null) !== fields.assigneeId) {
-      return false
-    }
-    if (fields.priority !== undefined && issue.priority !== fields.priority) {
-      return false
-    }
-    if (fields.estimate !== undefined && (issue.estimate ?? null) !== fields.estimate) {
-      return false
-    }
-    if (fields.dueDate !== undefined && (issue.dueDate ?? null) !== fields.dueDate) {
-      return false
-    }
-    if (fields.projectId !== undefined && (issue.project?.id ?? null) !== fields.projectId) {
-      return false
-    }
-    const issueLabelIds = issue.labelIds ?? issue.labels?.map((label) => label.id) ?? []
-    return fields.labelIds === undefined || sameStringSet(issueLabelIds, fields.labelIds)
-  }
-
-  private async resolveLinearCreateFields(
-    params: {
-      state?: string
-      assignee?: string
-      priority?: number
-      estimate?: number
-      dueDate?: string
-      labels?: string[]
-      projectInput?: string
-    },
-    team: { id: string; workspaceId: string }
-  ): Promise<LinearCreateFieldIntent> {
-    const fields: LinearCreateFieldIntent = {}
-    if (params.state) {
-      const states = await this.getLinearTeamStatesForWrite(team.id, team.workspaceId)
-      const state = this.resolveLinearAgentState(params.state, states)
-      if (!state) {
-        throw linearError(
-          'linear_invalid_state',
-          `No workflow state exactly matched "${params.state}".`,
-          { states: states.map(({ id, name, type }) => ({ id, name, type })) }
-        )
-      }
-      fields.stateId = state.id
-    }
-    if (params.assignee) {
-      fields.assigneeId = await this.resolveLinearAssignee(
-        params.assignee,
-        team.id,
-        team.workspaceId
-      )
-    }
-    if (params.priority !== undefined) {
-      fields.priority = params.priority
-    }
-    if (params.estimate !== undefined) {
-      fields.estimate = params.estimate
-    }
-    if (params.dueDate !== undefined) {
-      fields.dueDate = params.dueDate
-    }
-    if (params.labels && params.labels.length > 0) {
-      const labels = await this.resolveLinearLabelsForTeam(team.id, params.labels, team.workspaceId)
-      fields.labelIds = labels.map((label) => label.id)
-    }
-    if (params.projectInput) {
-      const project = await this.resolveLinearCreateProject(params.projectInput, team)
-      fields.projectId = project.id
-    }
-    return fields
-  }
-
-  private async resolveLinearCreateProject(
-    input: string,
-    team: { id: string; workspaceId: string }
-  ): Promise<LinearProjectSummary> {
-    const trimmed = input.trim()
-    if (!trimmed) {
-      throw linearError('linear_invalid_project', 'Pass a non-empty Linear project id or name.')
-    }
-    const byId = isLinearUuid(trimmed)
-      ? await this.readLinearProjectByIdForCreate(trimmed, team.workspaceId)
-      : null
-    if (byId) {
-      await this.assertLinearProjectIncludesTeam(byId, team.id, team.workspaceId, trimmed)
-      return byId
-    }
-    const searchCandidates = await this.readLinearProjectsForCreate(trimmed, team.workspaceId)
-    const normalized = trimmed.toLowerCase()
-    const idMatch = searchCandidates.find((project) => project.id.toLowerCase() === normalized)
-    if (idMatch) {
-      await this.assertLinearProjectIncludesTeam(idMatch, team.id, team.workspaceId, trimmed)
-      return idMatch
-    }
-    const slugMatch = searchCandidates.find(
-      (project) => project.slugId?.toLowerCase() === normalized
-    )
-    if (slugMatch) {
-      await this.assertLinearProjectIncludesTeam(slugMatch, team.id, team.workspaceId, trimmed)
-      return slugMatch
-    }
-    const nameMatches = await this.readLinearProjectsByExactNameForCreate(trimmed, team.workspaceId)
-    const compatibleNameMatches = await this.filterLinearProjectsForTeam(
-      nameMatches,
-      team.id,
-      team.workspaceId
-    )
-    if (compatibleNameMatches.length === 1) {
-      return compatibleNameMatches[0]
-    }
-    if (compatibleNameMatches.length > 1) {
-      throw linearError(
-        'linear_invalid_project',
-        `Multiple Linear projects exactly matched "${trimmed}".`,
-        {
-          projects: compatibleNameMatches.map((project) => ({
-            id: project.id,
-            name: project.name,
-            teams: project.teams
-          })),
-          nextSteps: ['Run `orca linear project list --query <name> --json` and retry by id.']
-        }
-      )
-    }
-    if (nameMatches.length > 0) {
-      await this.assertLinearProjectIncludesTeam(nameMatches[0], team.id, team.workspaceId, trimmed)
-    }
-    throw linearError('linear_invalid_project', `No Linear project exactly matched "${trimmed}".`, {
-      projects: searchCandidates.map((project) => ({
-        id: project.id,
-        name: project.name,
-        teams: project.teams
-      })),
-      nextSteps: ['Run `orca linear project list --query <name> --json` and retry by id.']
-    })
-  }
-
-  private async readLinearProjectByIdForCreate(
-    id: string,
-    workspaceId: string
-  ): Promise<LinearProjectSummary | null> {
-    try {
-      return await getLinearProject(id, workspaceId, true)
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-  }
-
-  private async readLinearProjectsForCreate(
-    query: string,
-    workspaceId: string
-  ): Promise<LinearProjectSummary[]> {
-    try {
-      return (await listLinearProjects(query, LINEAR_SEARCH_MAX_LIMIT, workspaceId, true)).items
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-  }
-
-  private async readLinearProjectsByExactNameForCreate(
-    name: string,
-    workspaceId: string
-  ): Promise<LinearProjectSummary[]> {
-    try {
-      return await listLinearProjectsByExactName(name, workspaceId, true)
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-  }
-
-  private async assertLinearProjectIncludesTeam(
-    project: LinearProjectSummary,
-    teamId: string,
-    workspaceId: string,
-    input: string
-  ): Promise<void> {
-    if (this.linearProjectIncludesTeam(project, teamId)) {
-      return
-    }
-    let teams: NonNullable<LinearProjectSummary['teams']> = []
-    try {
-      // Why: summary reads cap project teams, so large cross-team projects need a paged membership check before rejecting a valid create.
-      teams = await listLinearProjectTeams(project.id, workspaceId, true)
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-    if (teams.some((team) => team.id === teamId)) {
-      return
-    }
-    throw linearError(
-      'linear_invalid_project',
-      `Linear project "${input}" is not available to the target team.`,
-      {
-        project: { id: project.id, name: project.name, teams },
-        nextSteps: ['Choose a project that includes the create target team, then retry by id.']
-      }
-    )
-  }
-
-  private async filterLinearProjectsForTeam(
-    projects: LinearProjectSummary[],
-    teamId: string,
-    workspaceId: string
-  ): Promise<LinearProjectSummary[]> {
-    const compatible: LinearProjectSummary[] = []
-    for (const project of projects) {
-      if (this.linearProjectIncludesTeam(project, teamId)) {
-        compatible.push(project)
-        continue
-      }
-      try {
-        const teams = await listLinearProjectTeams(project.id, workspaceId, true)
-        if (teams.some((team) => team.id === teamId)) {
-          compatible.push({ ...project, teams })
-        }
-      } catch (error) {
-        throw this.mapLinearReadFailure(error)
-      }
-    }
-    return compatible
-  }
-
-  private linearProjectIncludesTeam(project: LinearProjectSummary, teamId: string): boolean {
-    return project.teams?.some((team) => team.id === teamId) === true
-  }
-
-  private async getLinearViewerForWrite(
-    workspaceId: string
-  ): Promise<{ id: string; displayName?: string | null; avatarUrl?: string | null }> {
-    try {
-      return await getLinearViewerForWorkspaceOrThrow(workspaceId)
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-  }
-
-  private async resolveLinearLabelsForIssue(
-    issue: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
-    inputs: string[],
-    workspaceId: string
-  ): Promise<{ id: string; name: string }[]> {
-    const labels = await this.getLinearTeamLabelsForWrite(issue.team.id, workspaceId)
-    const resolved = inputs.map((input) => {
-      const normalized = input.toLocaleLowerCase()
-      const idMatch = labels.find((label) => label.id.toLocaleLowerCase() === normalized)
-      if (idMatch) {
-        return { id: idMatch.id, name: idMatch.name }
-      }
-      const nameMatches = labels.filter((label) => label.name.toLocaleLowerCase() === normalized)
-      if (nameMatches.length === 1) {
-        return { id: nameMatches[0].id, name: nameMatches[0].name }
-      }
-      throw linearError(
-        'linear_invalid_label',
-        nameMatches.length === 0
-          ? `No label exactly matched "${input}".`
-          : `Multiple labels exactly matched "${input}".`,
-        {
-          labels: labels.map((label) => ({ id: label.id, name: label.name })),
-          nextSteps: ['Run `orca linear team labels --team <key-or-id> --json` and retry by id.']
-        }
-      )
-    })
-    return Array.from(new Map(resolved.map((label) => [label.id, label])).values())
-  }
-
-  private async resolveLinearLabelsForTeam(
-    teamId: string,
-    inputs: string[],
-    workspaceId: string
-  ): Promise<{ id: string; name: string }[]> {
-    const labels = await this.getLinearTeamLabelsForWrite(teamId, workspaceId)
-    const resolved = inputs.map((input) => {
-      const normalized = input.toLocaleLowerCase()
-      const idMatch = labels.find((label) => label.id.toLocaleLowerCase() === normalized)
-      if (idMatch) {
-        return { id: idMatch.id, name: idMatch.name }
-      }
-      const nameMatches = labels.filter((label) => label.name.toLocaleLowerCase() === normalized)
-      if (nameMatches.length === 1) {
-        return { id: nameMatches[0].id, name: nameMatches[0].name }
-      }
-      throw linearError(
-        'linear_invalid_label',
-        nameMatches.length === 0
-          ? `No label exactly matched "${input}".`
-          : `Multiple labels exactly matched "${input}".`,
-        { labels: labels.map((label) => ({ id: label.id, name: label.name })) }
-      )
-    })
-    return Array.from(new Map(resolved.map((label) => [label.id, label])).values())
-  }
-
-  private linearCreatedIssueMatchesIntent(
-    issue: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
-    intent: LinearCreateFieldIntent
-  ): boolean {
-    if (intent.stateId !== undefined && issue.state?.id !== intent.stateId) {
-      return false
-    }
-    if (intent.assigneeId !== undefined && (issue.assignee?.id ?? null) !== intent.assigneeId) {
-      return false
-    }
-    if (intent.priority !== undefined && issue.priority !== intent.priority) {
-      return false
-    }
-    if (intent.estimate !== undefined && (issue.estimate ?? null) !== intent.estimate) {
-      return false
-    }
-    if (intent.dueDate !== undefined && (issue.dueDate ?? null) !== intent.dueDate) {
-      return false
-    }
-    if (intent.projectId !== undefined && (issue.project?.id ?? null) !== intent.projectId) {
-      return false
-    }
-    const issueLabelIds = issue.labelIds ?? issue.labels?.map((label) => label.id) ?? []
-    if (intent.labelIds !== undefined && !sameStringSet(issueLabelIds, intent.labelIds)) {
-      return false
-    }
-    return true
-  }
-
-  private linearTaskFieldAlreadySet(
-    operation: LinearIssueTaskUpdateRequest['operation'],
-    record: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
-    update: {
-      fields: {
-        assigneeId?: string | null
-        priority?: number
-        estimate?: number | null
-        dueDate?: string | null
-        labelIds?: string[]
-      }
-    }
-  ): boolean {
-    if (operation === 'assignee') {
-      return (record.assignee?.id ?? null) === update.fields.assigneeId
-    }
-    if (operation === 'priority') {
-      return record.priority === update.fields.priority
-    }
-    if (operation === 'estimate') {
-      return (record.estimate ?? null) === update.fields.estimate
-    }
-    if (operation === 'dueDate') {
-      return (record.dueDate ?? null) === update.fields.dueDate
-    }
-    if (operation === 'labels') {
-      const recordLabelIds = record.labelIds ?? record.labels?.map((label) => label.id) ?? []
-      return sameStringSet(recordLabelIds, update.fields.labelIds ?? [])
-    }
-    return false
-  }
-
-  private linearTaskUpdateResult(
-    operation: LinearIssueTaskUpdateRequest['operation'],
-    issue: LinearIssueSummary,
-    workspaceId: string,
-    previous: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
-    current: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
-    alreadySet: boolean
-  ): LinearIssueTaskUpdateResult {
-    return {
-      issue: this.linearWriteIssueRef(issue),
-      operation,
-      previous: this.linearTaskResultFields(previous),
-      current: this.linearTaskResultFields(current),
-      meta: { workspaceId, alreadySet }
-    }
-  }
-
-  private linearTaskResultFields(
-    record: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>
-  ): LinearIssueTaskUpdateResult['current'] {
-    return {
-      assignee: record.assignee ?? null,
-      priority: record.priority ?? null,
-      estimate: record.estimate ?? null,
-      dueDate: record.dueDate ?? null,
-      labels: record.labels ?? []
-    }
-  }
-
-  private async resolveLinearCommentParentId(
-    issueId: string,
-    commentId: string,
-    workspaceId: string
-  ): Promise<string> {
-    try {
-      const root = await getLinearIssueCommentThreadRoot(issueId, commentId, workspaceId)
-      if (!root) {
-        throw linearError(
-          'linear_invalid_parent',
-          'The reply target is not a comment on this issue.',
-          {
-            nextSteps: ['Run `orca linear issue <id> --comments --json` to list valid comment ids.']
-          }
-        )
-      }
-      return root.id
-    } catch (error) {
-      if (error instanceof LinearAgentAccessError) {
-        throw error
-      }
-      throw this.mapLinearReadFailure(error)
-    }
-  }
-
-  private async runLinearAgentWrite<T>(
-    write: (signal: AbortSignal) => Promise<T>,
-    unconfirmed: (cause?: string) => LinearAgentAccessError
-  ): Promise<T> {
-    const controller = new AbortController()
-    const writePromise = write(controller.signal)
-    writePromise.catch(() => undefined)
-    let timer: ReturnType<typeof setTimeout> | null = null
-    try {
-      return await Promise.race([
-        writePromise,
-        new Promise<never>((_resolve, reject) => {
-          timer = setTimeout(() => {
-            controller.abort()
-            reject(
-              new LinearWriteFailure(
-                'unconfirmed',
-                'Linear write deadline elapsed before confirmation.'
-              )
-            )
-          }, 25_000)
-        })
-      ])
-    } catch (error) {
-      if (error instanceof LinearWriteFailure && error.kind === 'duplicate_id') {
-        throw error
-      }
-      if (error instanceof LinearWriteFailure && error.kind === 'unconfirmed') {
-        throw unconfirmed(this.linearWriteFailureCauseMessage(error))
-      }
-      if (error instanceof LinearWriteFailure && error.kind === 'network') {
-        throw linearError('linear_network_error', sanitizeLinearErrorMessage(error.message))
-      }
-      if (error instanceof LinearWriteFailure) {
-        throw linearError('linear_write_failed', sanitizeLinearErrorMessage(error.message))
-      }
-      throw this.mapLinearReadFailure(error)
-    } finally {
-      if (timer) {
-        clearTimeout(timer)
-      }
-    }
-  }
-
-  private linearWriteFailureCauseMessage(error: LinearWriteFailure): string {
-    if (error.cause instanceof Error) {
-      return sanitizeLinearErrorMessage(error.cause.message)
-    }
-    if (error.cause !== undefined) {
-      return sanitizeLinearErrorMessage(String(error.cause))
-    }
-    return sanitizeLinearErrorMessage(error.message)
-  }
-
-  private mapLinearReadFailure(error: unknown): LinearAgentAccessError {
-    if (error instanceof LinearAgentAccessError) {
-      return error
-    }
-    if (isLinearAuthError(error)) {
-      return linearError('linear_auth_expired', 'Linear authentication expired.', {
-        nextSteps: ['Reconnect Linear from Orca settings.']
-      })
-    }
-    return linearError(classifyLinearError(error), linearMessage(error))
-  }
-
-  private async getMatchingLinearCommentWrite(
-    writeId: string,
-    issueId: string,
-    parentId: string | null,
-    workspaceId: string,
-    required: boolean
-  ): Promise<Awaited<ReturnType<typeof getLinearCommentByUuidForAgent>> | null> {
-    const comment = await this.readLinearWriteLookup(() =>
-      getLinearCommentByUuidForAgent(writeId, workspaceId)
-    )
-    if (!comment) {
-      return null
-    }
-    if (comment.issue.id === issueId && comment.parentId === parentId) {
-      return comment
-    }
-    if (required) {
-      throw linearError(
-        'linear_invalid_write_id',
-        'The write id belongs to a different comment target.'
-      )
-    }
-    return null
-  }
-
-  private async getMatchingLinearAttachmentWrite(
-    writeId: string,
-    issueId: string,
-    workspaceId: string,
-    required: boolean
-  ): Promise<Awaited<ReturnType<typeof getLinearAttachmentByUuidForAgent>> | null> {
-    const attachment = await this.readLinearWriteLookup(() =>
-      getLinearAttachmentByUuidForAgent(writeId, workspaceId)
-    )
-    if (!attachment) {
-      return null
-    }
-    if (attachment.issue.id === issueId) {
-      return attachment
-    }
-    if (required) {
-      throw linearError(
-        'linear_invalid_write_id',
-        'The write id belongs to a different attachment target.'
-      )
-    }
-    return null
-  }
-
-  private async getMatchingLinearCreatedIssue(
-    writeId: string,
-    teamId: string,
-    parentId: string | null,
-    workspaceId: string,
-    required: boolean,
-    intent: LinearCreateFieldIntent = {}
-  ): Promise<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>> | null> {
-    const issue = await this.readLinearWriteLookup(() =>
-      getLinearIssueByUuidForAgent(writeId, workspaceId)
-    )
-    if (!issue) {
-      return null
-    }
-    if (
-      issue.team.id === teamId &&
-      (issue.parent?.id ?? null) === parentId &&
-      this.linearCreatedIssueMatchesIntent(issue, intent)
-    ) {
-      return issue
-    }
-    if (required) {
-      throw linearError(
-        'linear_invalid_write_id',
-        'The write id belongs to a different issue target.'
-      )
-    }
-    return null
-  }
-
-  private async refetchLinearCommentAfterDuplicate(
-    writeId: string,
-    issueId: string,
-    parentId: string | null,
-    workspaceId: string,
-    unconfirmed: (cause?: string) => LinearAgentAccessError
-  ): Promise<NonNullable<Awaited<ReturnType<typeof getLinearCommentByUuidForAgent>>>> {
-    try {
-      // Why: a duplicate-id response can mean the original write landed; only the exact target relationship proves this pinned retry.
-      const comment = await this.getMatchingLinearCommentWrite(
-        writeId,
-        issueId,
-        parentId,
-        workspaceId,
-        true
-      )
-      if (comment) {
-        return comment
-      }
-    } catch (error) {
-      if (error instanceof LinearAgentAccessError && error.code === 'linear_invalid_write_id') {
-        throw error
-      }
-      throw unconfirmed(
-        error instanceof Error
-          ? sanitizeLinearErrorMessage(error.message)
-          : sanitizeLinearErrorMessage(String(error))
-      )
-    }
-    throw unconfirmed()
-  }
-
-  private async refetchLinearAttachmentAfterDuplicate(
-    writeId: string,
-    issueId: string,
-    workspaceId: string,
-    unconfirmed: (cause?: string) => LinearAgentAccessError
-  ): Promise<NonNullable<Awaited<ReturnType<typeof getLinearAttachmentByUuidForAgent>>>> {
-    try {
-      // Why: a duplicate-id response can mean the original write landed; only the exact target relationship proves this pinned retry.
-      const attachment = await this.getMatchingLinearAttachmentWrite(
-        writeId,
-        issueId,
-        workspaceId,
-        true
-      )
-      if (attachment) {
-        return attachment
-      }
-    } catch (error) {
-      if (error instanceof LinearAgentAccessError && error.code === 'linear_invalid_write_id') {
-        throw error
-      }
-      throw unconfirmed(
-        error instanceof Error
-          ? sanitizeLinearErrorMessage(error.message)
-          : sanitizeLinearErrorMessage(String(error))
-      )
-    }
-    throw unconfirmed()
-  }
-
-  private async refetchLinearIssueAfterDuplicate(
-    writeId: string,
-    teamId: string,
-    parentId: string | null,
-    workspaceId: string,
-    intent: LinearCreateFieldIntent,
-    unconfirmed: (cause?: string) => LinearAgentAccessError
-  ): Promise<NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>> {
-    try {
-      // Why: a duplicate-id response can mean the original write landed; only the exact target relationship proves this pinned retry.
-      const issue = await this.getMatchingLinearCreatedIssue(
-        writeId,
-        teamId,
-        parentId,
-        workspaceId,
-        true,
-        intent
-      )
-      if (issue) {
-        return issue
-      }
-    } catch (error) {
-      if (error instanceof LinearAgentAccessError && error.code === 'linear_invalid_write_id') {
-        throw error
-      }
-      throw unconfirmed(
-        error instanceof Error
-          ? sanitizeLinearErrorMessage(error.message)
-          : sanitizeLinearErrorMessage(String(error))
-      )
-    }
-    throw unconfirmed()
-  }
-
-  private async readLinearWriteLookup<T>(lookup: () => Promise<T>): Promise<T> {
-    try {
-      return await lookup()
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-  }
-
-  private parseLinearAttachmentUrl(value: string): URL {
-    try {
-      const url = new URL(value)
-      if (url.protocol === 'http:' || url.protocol === 'https:') {
-        return url
-      }
-    } catch {
-      // Fall through to the stable agent-facing error below.
-    }
-    throw linearError('linear_invalid_url', 'Attachment URL must be an absolute http(s) URL.')
-  }
-
-  private defaultLinearAttachmentTitle(url: URL): string {
-    const tail = url.pathname.split('/').findLast(Boolean)
-    return tail ? `${url.host}/${tail}` : url.host
-  }
-
-  private linearWorkspaceErrorCode(type: string): LinearErrorCode {
-    if (type === 'auth') {
-      return 'linear_auth_expired'
-    }
-    if (type === 'network') {
-      return 'linear_network_error'
-    }
-    if (type === 'rate_limited') {
-      return 'linear_rate_limited'
-    }
-    return 'linear_write_failed'
-  }
-
-  private linearTeamSummary(team: {
-    id: string
-    name: string
-    key: string
-    url?: string
-    workspaceId?: string
-    workspaceName?: string
-  }): {
-    id: string
-    name: string
-    key: string
-    url?: string
-    workspace?: { id: string; name: string }
-  } {
-    return {
-      id: team.id,
-      name: team.name,
-      key: team.key,
-      ...(team.url ? { url: team.url } : {}),
-      ...(team.workspaceId
-        ? { workspace: { id: team.workspaceId, name: team.workspaceName ?? team.workspaceId } }
-        : {})
-    }
-  }
-
-  private async resolveLinearTeamInput(
-    teamInput: string,
-    workspaceId?: string | 'all'
-  ): Promise<{
-    id: string
-    key: string
-    name: string
-    workspaceId: string
-    workspaceName?: string
-  }> {
-    this.validateLinearCreateWorkspaceScope(workspaceId === 'all' ? undefined : workspaceId)
-    let teams: Awaited<ReturnType<typeof listLinearTeamsOrThrow>>
-    try {
-      teams = await listLinearTeamsOrThrow(workspaceId ?? 'all')
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-    const normalized = teamInput.toLocaleLowerCase()
-    const idMatches = teams.filter((team) => team.id.toLocaleLowerCase() === normalized)
-    const matches =
-      idMatches.length > 0
-        ? idMatches
-        : teams.filter((team) => team.key.toLocaleLowerCase() === normalized)
-    if (matches.length === 1 && matches[0].workspaceId) {
-      return {
-        id: matches[0].id,
-        key: matches[0].key,
-        name: matches[0].name,
-        workspaceId: matches[0].workspaceId,
-        workspaceName: matches[0].workspaceName
-      }
-    }
-    if (matches.length > 1) {
-      throw linearError(
-        'linear_workspace_ambiguous',
-        `Team ${teamInput} exists in multiple workspaces.`,
-        {
-          candidates: matches.map((team) => ({
-            workspaceId: team.workspaceId,
-            workspaceName: team.workspaceName,
-            teamId: team.id,
-            teamKey: team.key
-          }))
-        }
-      )
-    }
-    throw linearError('linear_team_required', `No connected Linear team matched ${teamInput}.`)
-  }
-
-  private async resolveLinearCreateTeam(
-    teamInput: string | undefined,
-    workspaceId: string | undefined,
-    parent: LinearAgentWriteTarget | null
-  ): Promise<{ id: string; key: string; name: string; workspaceId: string }> {
-    if (!teamInput && parent?.issue.team?.id && parent.issue.team.key && parent.issue.team.name) {
-      return {
-        id: parent.issue.team.id,
-        key: parent.issue.team.key,
-        name: parent.issue.team.name,
-        workspaceId: parent.workspaceId
-      }
-    }
-    if (!teamInput) {
-      throw linearError('linear_team_required', 'Pass --team or create under a parent issue.', {
-        nextSteps: ['Run `orca linear create --team <key> ...` or use --parent-current.']
-      })
-    }
-
-    const scope = parent?.workspaceId ?? workspaceId
-    this.validateLinearCreateWorkspaceScope(scope)
-    let teams: Awaited<ReturnType<typeof listLinearTeamsOrThrow>>
-    try {
-      teams = await listLinearTeamsOrThrow(scope ?? 'all')
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-    if (teams.length === 0 && (getLinearStatus().workspaces?.length ?? 0) === 0) {
-      throw linearError('linear_not_connected', 'Linear is not connected.', {
-        nextSteps: ['Connect Linear from Orca settings, then retry the issue create.']
-      })
-    }
-    const matches = teams.filter(
-      (team) =>
-        team.id.toLocaleLowerCase() === teamInput.toLocaleLowerCase() ||
-        team.key.toLocaleLowerCase() === teamInput.toLocaleLowerCase()
-    )
-    if (matches.length === 1 && matches[0].workspaceId) {
-      return {
-        id: matches[0].id,
-        key: matches[0].key,
-        name: matches[0].name,
-        workspaceId: matches[0].workspaceId
-      }
-    }
-    if (matches.length > 1) {
-      throw linearError(
-        'linear_workspace_ambiguous',
-        `Team ${teamInput} exists in multiple workspaces.`,
-        {
-          candidates: matches.map((team) => ({
-            workspaceId: team.workspaceId,
-            workspaceName: team.workspaceName,
-            teamKey: team.key
-          }))
-        }
-      )
-    }
-    if (parent) {
-      let globalTeams: Awaited<ReturnType<typeof listLinearTeamsOrThrow>>
-      try {
-        globalTeams = await listLinearTeamsOrThrow('all')
-      } catch (error) {
-        throw this.mapLinearReadFailure(error)
-      }
-      const globalMatch = globalTeams.find(
-        (team) =>
-          team.id.toLocaleLowerCase() === teamInput.toLocaleLowerCase() ||
-          team.key.toLocaleLowerCase() === teamInput.toLocaleLowerCase()
-      )
-      if (globalMatch) {
-        throw linearError(
-          'linear_invalid_workspace',
-          `Team ${teamInput} is not in the parent issue workspace.`
-        )
-      }
-    }
-    throw linearError('linear_team_required', `No connected Linear team matched ${teamInput}.`)
-  }
-
-  private validateLinearCreateWorkspaceScope(workspaceId: string | undefined): void {
-    if (!workspaceId) {
-      return
-    }
-    const workspaces = getLinearStatus().workspaces ?? []
-    if (workspaces.length > 0 && !workspaces.some((workspace) => workspace.id === workspaceId)) {
-      throw linearError(
-        'linear_invalid_workspace',
-        `No connected Linear workspace matched ${workspaceId}.`
-      )
-    }
-  }
-
-  private linearWriteIssueRef(issue: { id: string; identifier: string; url: string }): {
-    id: string
-    identifier: string
-    url: string
-  } {
-    return { id: issue.id, identifier: issue.identifier, url: issue.url }
-  }
-
-  private linearCommentResult(
-    comment: NonNullable<Awaited<ReturnType<typeof getLinearCommentByUuidForAgent>>>,
-    target: LinearAgentWriteTarget,
-    bodyChars: number,
-    writeId: string,
-    deduplicated: boolean
-  ): LinearCommentAddResult {
-    return {
-      comment: { id: comment.id, url: comment.url, parentId: comment.parentId },
-      issue: this.linearWriteIssueRef(target.issue),
-      meta: { workspaceId: target.workspaceId, bodyChars, writeId, deduplicated }
-    }
-  }
-
-  private linearAttachResult(
-    attachment: NonNullable<Awaited<ReturnType<typeof getLinearAttachmentByUuidForAgent>>>,
-    target: LinearAgentWriteTarget,
-    writeId: string,
-    deduplicated: boolean
-  ): LinearAttachResult {
-    return {
-      attachment: { id: attachment.id, title: attachment.title, url: attachment.url },
-      issue: this.linearWriteIssueRef(target.issue),
-      meta: { workspaceId: target.workspaceId, writeId, deduplicated }
-    }
-  }
-
-  private linearCreateResult(
-    issue: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
-    workspaceId: string,
-    writeId: string,
-    deduplicated: boolean
-  ): LinearCreateResult {
-    return {
-      issue,
-      meta: { workspaceId, writeId, deduplicated }
-    }
-  }
-
-  private linearCreateFieldRetryTokens(fields: LinearCreateFieldIntent | undefined): string[] {
-    if (!fields) {
-      return []
-    }
-    return [
-      ...(fields.stateId ? [`--state=${this.commandToken(fields.stateId, 'STATE_ID')}`] : []),
-      ...(fields.assigneeId
-        ? [`--assignee=${this.commandToken(fields.assigneeId, 'ASSIGNEE_ID')}`]
-        : []),
-      ...(fields.priority !== undefined
-        ? [`--priority=${this.linearPriorityRetryToken(fields.priority)}`]
-        : []),
-      ...(fields.estimate !== undefined && fields.estimate !== null
-        ? [`--estimate=${fields.estimate}`]
-        : []),
-      ...(fields.dueDate ? [`--due-date=${fields.dueDate}`] : []),
-      ...(fields.projectId
-        ? [`--project=${this.commandToken(fields.projectId, 'PROJECT_ID')}`]
-        : []),
-      ...(fields.labelIds ?? []).map(
-        (labelId) => `--label=${this.commandToken(labelId, 'LABEL_ID')}`
-      )
-    ]
-  }
-
-  private linearPriorityRetryToken(priority: number): string {
-    if (priority === 1) {
-      return 'urgent'
-    }
-    if (priority === 2) {
-      return 'high'
-    }
-    if (priority === 3) {
-      return 'medium'
-    }
-    if (priority === 4) {
-      return 'low'
-    }
-    return 'none'
-  }
-
-  private linearCreateStyleUnconfirmed(
-    verb: 'comment' | 'attach' | 'create',
-    writeId: string,
-    target: LinearAgentWriteTarget | null,
-    extra: {
-      parentId?: string | null
-      team?: { id: string; key: string; name: string; workspaceId: string }
-      parent?: LinearAgentWriteTarget | null
-      title?: string
-      url?: string
-      bodyRequired?: boolean
-      createFields?: LinearCreateFieldIntent
-      cause?: string
-    } = {}
-  ): LinearAgentAccessError {
-    const workspaceId = target?.workspaceId ?? extra.team?.workspaceId ?? ''
-    // Why: the retry preserves id and target so duplicate recovery can prove intent without matching mutable content.
-    const pinned =
-      verb === 'create'
-        ? [
-            'orca linear create',
-            `--workspace=${this.commandToken(workspaceId, 'WORKSPACE_ID')}`,
-            `--write-id=${this.commandToken(writeId, 'WRITE_ID')}`,
-            '--title TITLE_HERE',
-            ...(extra.bodyRequired ? ['--body-file -'] : []),
-            ...(extra.parent
-              ? [`--parent=${this.commandToken(extra.parent.issue.identifier, 'PARENT_ISSUE')}`]
-              : []),
-            ...(extra.team
-              ? [`--team=${this.commandToken(extra.team.key, 'TEAM_KEY')}`]
-              : []
-            ).concat(this.linearCreateFieldRetryTokens(extra.createFields))
-          ].join(' ')
-        : [
-            `orca linear ${verb === 'attach' ? 'attach' : 'comment add'}`,
-            this.commandToken(target?.issue.identifier ?? '', 'ISSUE_ID'),
-            `--workspace=${this.commandToken(workspaceId, 'WORKSPACE_ID')}`,
-            `--write-id=${this.commandToken(writeId, 'WRITE_ID')}`,
-            ...(verb === 'comment' ? ['--body-file -'] : []),
-            ...(verb === 'comment' && extra.parentId
-              ? [`--reply-to=${this.commandToken(extra.parentId, 'COMMENT_ID')}`]
-              : []),
-            ...(verb === 'attach' ? ['--url URL_HERE', '--title TITLE_HERE'] : [])
-          ].join(' ')
-    const retryPrefix = extra.bodyRequired || verb === 'comment' ? 'Pipe the same body and r' : 'R'
-    const payloadNote =
-      verb === 'attach'
-        ? ' Replace TITLE_HERE/URL_HERE with the exact original payload values before running.'
-        : verb === 'create'
-          ? ' Replace TITLE_HERE with the exact original title before running.'
-          : ''
-    return linearError(
-      'linear_write_unconfirmed',
-      'Linear may have applied the write, but Orca could not confirm it.',
-      {
-        writeId,
-        workspaceId,
-        issueIdentifier: target?.issue.identifier,
-        parentId: extra.parentId,
-        team: extra.team ? { id: extra.team.id, key: extra.team.key } : undefined,
-        parentIdentifier: extra.parent?.issue.identifier,
-        createFields: extra.createFields,
-        nextSteps: [
-          `${retryPrefix}etry once with the pinned command: \`${pinned}\`.${payloadNote}`
-        ],
-        ...(extra.cause ? { cause: sanitizeLinearErrorMessage(extra.cause) } : {})
-      }
-    )
-  }
-
-  private commandToken(value: string, placeholder: string): string {
-    return /^[A-Za-z0-9._:@%+=,/-]+$/.test(value) ? value : placeholder
-  }
-
-  private async notifyLinearLinkedIssueUpdated(
-    workspaceId: string,
-    identifier: string | readonly string[]
-  ): Promise<void> {
-    const identifiers = typeof identifier === 'string' ? [identifier] : identifier
-    const normalized = new Map(
-      identifiers.map((value) => [value.toLocaleUpperCase(), value] as const)
-    )
-    for (const worktree of await this.listResolvedWorktrees()) {
-      const linkedIdentifier = normalized.get(
-        (worktree.linkedLinearIssue ?? '').toLocaleUpperCase()
-      )
-      if (!linkedIdentifier) {
-        continue
-      }
-      const linkedWorkspaceId = worktree.linkedLinearIssueWorkspaceId ?? workspaceId
-      if (linkedWorkspaceId !== workspaceId) {
-        continue
-      }
-      this.emitClientEvent({
-        type: 'linearLinkedIssueUpdated',
-        worktreeId: worktree.id,
-        identifier: linkedIdentifier,
-        workspaceId
-      })
-    }
-  }
-
-  linearIssueComments(
-    issueId: string,
-    workspaceId?: string
-  ): ReturnType<typeof getLinearIssueComments> {
-    return getLinearIssueComments(issueId, workspaceId)
-  }
-
-  linearListTeams(workspaceId?: LinearWorkspaceSelection): ReturnType<typeof listLinearTeams> {
-    return listLinearTeams(workspaceId)
-  }
-
-  linearListProjects(
-    query?: string,
-    limit = 20,
-    workspaceId?: LinearWorkspaceSelection,
-    force?: boolean
-  ): ReturnType<typeof listLinearProjects> {
-    return listLinearProjects(query, Math.min(Math.max(1, limit), 50), workspaceId, force)
-  }
-
-  linearCreateProject(
-    input: LinearProjectCreateInput,
-    workspaceId?: string
-  ): ReturnType<typeof createLinearProject> {
-    return createLinearProject(input, workspaceId)
-  }
-
-  linearGetProject(
-    id: string,
-    workspaceId: string,
-    force?: boolean
-  ): ReturnType<typeof getLinearProject> {
-    return getLinearProject(id, workspaceId, force)
-  }
-
-  linearListProjectIssues(
-    projectId: string,
-    limit = 20,
-    workspaceId: string,
-    force?: boolean
-  ): ReturnType<typeof listLinearProjectIssues> {
-    return listLinearProjectIssues(projectId, clampLinearIssueListLimit(limit), workspaceId, force)
-  }
-
-  linearListCustomViews(
-    model: LinearCustomViewModel,
-    limit = 20,
-    workspaceId?: LinearWorkspaceSelection,
-    force?: boolean
-  ): ReturnType<typeof listLinearCustomViews> {
-    return listLinearCustomViews(model, Math.min(Math.max(1, limit), 50), workspaceId, force)
-  }
-
-  linearGetCustomView(
-    viewId: string,
-    model: LinearCustomViewModel,
-    workspaceId: string,
-    force?: boolean
-  ): ReturnType<typeof getLinearCustomView> {
-    return getLinearCustomView(viewId, model, workspaceId, force)
-  }
-
-  linearListCustomViewIssues(
-    viewId: string,
-    limit = 20,
-    workspaceId: string,
-    force?: boolean
-  ): ReturnType<typeof listLinearCustomViewIssues> {
-    return listLinearCustomViewIssues(viewId, clampLinearIssueListLimit(limit), workspaceId, force)
-  }
-
-  linearListCustomViewProjects(
-    viewId: string,
-    limit = 20,
-    workspaceId: string,
-    force?: boolean
-  ): ReturnType<typeof listLinearCustomViewProjects> {
-    return listLinearCustomViewProjects(
-      viewId,
-      Math.min(Math.max(1, limit), 50),
-      workspaceId,
-      force
-    )
-  }
-
-  linearTeamStates(teamId: string, workspaceId?: string): ReturnType<typeof getLinearTeamStates> {
-    return getLinearTeamStates(teamId, workspaceId)
-  }
-
-  linearTeamLabels(teamId: string, workspaceId?: string): ReturnType<typeof getLinearTeamLabels> {
-    return getLinearTeamLabels(teamId, workspaceId)
-  }
-
-  linearTeamMembers(teamId: string, workspaceId?: string): ReturnType<typeof getLinearTeamMembers> {
-    return getLinearTeamMembers(teamId, workspaceId)
-  }
-
-  // ── Jira integration ──
-
-  jiraConnect(args: JiraConnectArgs): ReturnType<typeof connectJira> {
-    return connectJira(args)
-  }
-
-  jiraDisconnect(siteId?: string): { ok: true } {
-    disconnectJira(siteId)
-    return { ok: true }
-  }
-
-  jiraSelectSite(siteId: JiraSiteSelection): ReturnType<typeof getJiraStatus> {
-    return selectJiraSite(siteId)
-  }
-
-  jiraStatus(): ReturnType<typeof getJiraStatus> {
-    return getJiraStatus()
-  }
-
-  jiraReadStatus(): ReturnType<typeof getJiraStatus> {
-    return getJiraStatus()
-  }
-
-  jiraTestConnection(siteId?: string): ReturnType<typeof testJiraConnection> {
-    return testJiraConnection(siteId)
-  }
-
-  jiraSearchIssues(
-    jql: string,
-    limit = 30,
-    siteId?: JiraSiteSelection,
-    signal?: AbortSignal
-  ): ReturnType<typeof searchJiraIssues> {
-    return searchJiraIssues(jql, Math.min(Math.max(1, limit), 100), siteId, signal)
-  }
-
-  jiraListIssues(
-    filter?: JiraIssueFilter,
-    limit = 30,
-    siteId?: JiraSiteSelection
-  ): ReturnType<typeof listJiraIssues> {
-    return listJiraIssues(filter, Math.min(Math.max(1, limit), 100), siteId)
-  }
-
-  jiraCreateIssue(args: JiraCreateIssueArgs): ReturnType<typeof createJiraIssue> {
-    return createJiraIssue(args)
-  }
-
-  jiraGetIssue(key: string, siteId?: string): ReturnType<typeof getJiraIssue> {
-    return getJiraIssue(key, siteId)
-  }
-
-  jiraLookupIssueSummary(
-    key: string,
-    siteId: string,
-    signal?: AbortSignal
-  ): ReturnType<typeof getJiraIssueSummary> {
-    return getJiraIssueSummary(key, siteId, signal)
-  }
-
-  jiraUpdateIssue(
-    key: string,
-    updates: JiraIssueUpdate,
-    siteId?: string
-  ): ReturnType<typeof updateJiraIssue> {
-    return updateJiraIssue(key, updates, siteId)
-  }
-
-  jiraAddIssueComment(
-    key: string,
-    body: string,
-    siteId?: string
-  ): ReturnType<typeof addJiraIssueComment> {
-    return addJiraIssueComment(key, body, siteId)
-  }
-
-  jiraIssueComments(key: string, siteId?: string): ReturnType<typeof getJiraIssueComments> {
-    return getJiraIssueComments(key, siteId)
-  }
-
-  jiraListProjects(siteId?: JiraSiteSelection): ReturnType<typeof listJiraProjects> {
-    return listJiraProjects(siteId)
-  }
-
-  jiraListIssueTypes(
-    projectIdOrKey: string,
-    siteId?: string
-  ): ReturnType<typeof listJiraIssueTypes> {
-    return listJiraIssueTypes(projectIdOrKey, siteId)
-  }
-
-  jiraListCreateFields(
-    projectIdOrKey: string,
-    issueTypeId: string,
-    siteId?: string
-  ): ReturnType<typeof listJiraCreateFields> {
-    return listJiraCreateFields(projectIdOrKey, issueTypeId, siteId)
-  }
-
-  jiraListPriorities(siteId?: string): ReturnType<typeof listJiraPriorities> {
-    return listJiraPriorities(siteId)
-  }
-
-  jiraListAssignableUsers(
-    key: string,
-    query?: string,
-    siteId?: string
-  ): ReturnType<typeof listJiraAssignableUsers> {
-    return listJiraAssignableUsers(key, query, siteId)
-  }
-
-  jiraListTransitions(key: string, siteId?: string): ReturnType<typeof listJiraTransitions> {
-    return listJiraTransitions(key, siteId)
-  }
-
-  jiraGetProjectStatusOrder(
-    projectKey: string,
-    siteId?: string
-  ): ReturnType<typeof getJiraProjectStatusOrder> {
-    return getJiraProjectStatusOrder(projectKey, siteId)
   }
 
   // ── Browser automation ──
@@ -36504,49 +31735,19 @@ function findActionableTerminalWaitBlockedSignal(
     return null
   }
   const dismissedModalIndex = findDismissedStartupModalIndex(normalized)
-  // Why: a live prompt after the modal means it was dismissed → signal no longer actionable, even mid-run (Cursor never reports idle via OSC title).
+  // Why: a live prompt after the modal means it was dismissed → signal no longer actionable, even mid-run.
   return dismissedModalIndex !== null && dismissedModalIndex > blockedSignal.index
     ? null
     : blockedSignal
 }
 
-// Why: a live prompt (idle OR busy) proves the startup modal was dismissed, so a mid-run Cursor lane stops reporting stale trust hits.
+// Why: a live prompt (idle OR busy) proves the startup modal was dismissed, so a mid-run lane stops reporting stale trust hits.
 function findDismissedStartupModalIndex(normalized: string): number | null {
-  const indexes = [
-    findCodexReadyPromptIndex(normalized),
-    findAntigravityReadyPromptIndex(normalized),
-    findCursorActivePromptIndex(normalized)
-  ].filter((index): index is number => index !== null)
-  return indexes.length > 0 ? Math.max(...indexes) : null
+  return findCodexReadyPromptIndex(normalized)
 }
 
 function findKnownReadyPromptIndex(normalized: string): number | null {
-  const indexes = [
-    findCodexReadyPromptIndex(normalized),
-    findAntigravityReadyPromptIndex(normalized),
-    findCursorReadyPromptIndex(normalized)
-  ].filter((index): index is number => index !== null)
-  return indexes.length > 0 ? Math.max(...indexes) : null
-}
-
-// Why: match the banner's last occurrence to skip the trust dialog's own "Cursor Agent" text; "→" is cursor-agent's persistent input prompt.
-function findCursorActivePromptIndex(normalized: string): number | null {
-  const headerIndex = normalized.lastIndexOf('cursor agent')
-  if (headerIndex === -1) {
-    return null
-  }
-  return normalized.includes('→', headerIndex) ? headerIndex : null
-}
-
-// Why: cursor-agent emits no idle OSC title; infer idle from the tail (braille spinner = busy, its absence = idle).
-const CURSOR_BUSY_SPINNER_RE = /[⠁-⣿]/
-
-function findCursorReadyPromptIndex(normalized: string): number | null {
-  const activeIndex = findCursorActivePromptIndex(normalized)
-  if (activeIndex === null) {
-    return null
-  }
-  return CURSOR_BUSY_SPINNER_RE.test(normalized.slice(activeIndex)) ? null : activeIndex
+  return findCodexReadyPromptIndex(normalized)
 }
 
 function findCodexReadyPromptIndex(normalized: string): number | null {
@@ -36559,50 +31760,6 @@ function findCodexReadyPromptIndex(normalized: string): number | null {
   return readySegment.includes('model:') && readySegment.includes('directory:') ? headerIndex : null
 }
 
-function findAntigravityReadyPromptIndex(normalized: string): number | null {
-  const headerIndex = normalized.lastIndexOf('antigravity cli')
-  if (headerIndex === -1) {
-    return null
-  }
-  let lineStart = headerIndex
-  let modelIndex: number | null = null
-  let promptIndex: number | null = null
-
-  // Why: ready previews can include echoed paste after the header; scan line bounds directly instead of splitting the whole tail.
-  for (let cursor = headerIndex; cursor <= normalized.length; cursor += 1) {
-    if (cursor < normalized.length && normalized.charCodeAt(cursor) !== 10) {
-      continue
-    }
-    let trimmedStart = lineStart
-    let trimmedEnd = cursor
-    while (trimmedStart < trimmedEnd && isTerminalWaitWhitespace(normalized, trimmedStart)) {
-      trimmedStart += 1
-    }
-    while (trimmedEnd > trimmedStart && isTerminalWaitWhitespace(normalized, trimmedEnd - 1)) {
-      trimmedEnd -= 1
-    }
-    if (lineStart > headerIndex && trimmedStart < trimmedEnd) {
-      if (modelIndex === null && normalized.startsWith('gemini', trimmedStart)) {
-        modelIndex = trimmedStart
-      }
-      if (
-        promptIndex === null &&
-        trimmedEnd - trimmedStart === 1 &&
-        normalized.charCodeAt(trimmedStart) === 62
-      ) {
-        promptIndex = trimmedStart
-      }
-    }
-    lineStart = cursor + 1
-  }
-
-  return modelIndex !== null && promptIndex !== null ? Math.max(modelIndex, promptIndex) : null
-}
-
-function isTerminalWaitWhitespace(value: string, index: number): boolean {
-  const code = value.charCodeAt(index)
-  return code === 32 || (code >= 9 && code <= 13)
-}
 
 const TERMINAL_WAIT_BLOCKED_SENTINEL_RE =
   /update available|choose working directory to|codex just got an upgrade|hooks need review|do you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust/i
@@ -36853,7 +32010,6 @@ function indexPersistedPtyWorktreeBindings(
   for (const [worktreeId, tabs] of Object.entries(session?.tabsByWorktree ?? {})) {
     for (const tab of tabs) {
       bind(tab.ptyId, worktreeId)
-      bind(session?.remoteSessionIdsByTabId?.[tab.id], worktreeId)
       const layout = session?.terminalLayoutsByTabId[tab.id]
       for (const ptyId of Object.values(layout?.ptyIdsByLeafId ?? {})) {
         bind(ptyId, worktreeId)

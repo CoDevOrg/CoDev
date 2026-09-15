@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawn, spawnSync } from 'node:child_process'
 import { createServer, type Server, type Socket } from 'node:net'
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
@@ -28,26 +28,14 @@ vi.mock('os', async (importOriginal) => {
   }
 })
 
-import { MANAGED_HOOK_TIMEOUT_MILLISECONDS, MANAGED_HOOK_TIMEOUT_SECONDS } from './installer-utils'
+import { MANAGED_HOOK_TIMEOUT_SECONDS } from './installer-utils'
 import { CodexHookService } from '../codex/hook-service'
-import { CursorHookService } from '../cursor/hook-service'
-import { CommandCodeHookService } from '../command-code/hook-service'
-import { GeminiHookService } from '../gemini/hook-service'
-import { AntigravityHookService } from '../antigravity/hook-service'
 import { ClaudeHookService } from '../claude/hook-service'
-import { GrokHookService } from '../grok/hook-service'
-import { CopilotHookService } from '../copilot/hook-service'
-import { DevinHookService } from '../devin/hook-service'
-import { DroidHookService } from '../droid/hook-service'
-import { KimiHookService } from '../kimi/hook-service'
-import { openClaudeHookService } from '../openclaude/hook-service'
 import { createAgentHookMemorySftp as createFakeSftp } from './agent-hook-memory-sftp.test-fixture'
 
 const REMOTE_HOME = '/home/dev'
 
-// Each managed agent that ships an SSH-compatible JSON/TOML hook config. Amp and
-// Hermes are intentionally excluded: they are plugin systems with no hook config
-// entries, so their transport budgets live in plugin source (see design doc).
+// Each managed agent that ships an SSH-compatible JSON/TOML hook config.
 const JSON_INSTALLERS = [
   {
     agent: 'claude',
@@ -56,58 +44,10 @@ const JSON_INSTALLERS = [
     install: (sftp: SFTPWrapper) => new ClaudeHookService().installRemote(sftp, REMOTE_HOME)
   },
   {
-    agent: 'openclaude',
-    timeout: MANAGED_HOOK_TIMEOUT_SECONDS,
-    configPath: `${REMOTE_HOME}/.openclaude/settings.json`,
-    install: (sftp: SFTPWrapper) => openClaudeHookService.installRemote(sftp, REMOTE_HOME)
-  },
-  {
     agent: 'codex',
     timeout: MANAGED_HOOK_TIMEOUT_SECONDS,
     configPath: `${REMOTE_HOME}/.codex/hooks.json`,
     install: (sftp: SFTPWrapper) => new CodexHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'gemini',
-    timeout: MANAGED_HOOK_TIMEOUT_MILLISECONDS,
-    configPath: `${REMOTE_HOME}/.gemini/settings.json`,
-    install: (sftp: SFTPWrapper) => new GeminiHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'antigravity',
-    timeout: MANAGED_HOOK_TIMEOUT_SECONDS,
-    configPath: `${REMOTE_HOME}/.gemini/config/hooks.json`,
-    install: (sftp: SFTPWrapper) => new AntigravityHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'cursor',
-    timeout: MANAGED_HOOK_TIMEOUT_SECONDS,
-    configPath: `${REMOTE_HOME}/.cursor/hooks.json`,
-    install: (sftp: SFTPWrapper) => new CursorHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'command-code',
-    timeout: MANAGED_HOOK_TIMEOUT_SECONDS,
-    configPath: `${REMOTE_HOME}/.commandcode/settings.json`,
-    install: (sftp: SFTPWrapper) => new CommandCodeHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'grok',
-    timeout: MANAGED_HOOK_TIMEOUT_SECONDS,
-    configPath: `${REMOTE_HOME}/.grok/hooks/orca-status.json`,
-    install: (sftp: SFTPWrapper) => new GrokHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'copilot',
-    timeout: 5,
-    configPath: `${REMOTE_HOME}/.copilot/hooks/orca.json`,
-    install: (sftp: SFTPWrapper) => new CopilotHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'devin',
-    timeout: MANAGED_HOOK_TIMEOUT_SECONDS,
-    configPath: `${REMOTE_HOME}/.config/devin/config.json`,
-    install: (sftp: SFTPWrapper) => new DevinHookService().installRemote(sftp, REMOTE_HOME)
   }
 ] as const
 
@@ -176,38 +116,6 @@ describe('managed agent hook timeouts', () => {
     }
   })
 
-  it('writes a timeout on the managed Kimi TOML hook block', async () => {
-    const { sftp, fs } = createFakeSftp()
-    const status = await new KimiHookService().installRemote(sftp, REMOTE_HOME)
-    expect(status.state).toBe('installed')
-    const config = fs.files.get(`${REMOTE_HOME}/.kimi-code/config.toml`)!
-    // One timeout line per managed [[hooks]] event entry.
-    const timeoutLines = config.match(new RegExp(`timeout = ${MANAGED_HOOK_TIMEOUT_SECONDS}`, 'g'))
-    expect(timeoutLines?.length ?? 0).toBeGreaterThan(0)
-    expect(config).toContain('/home/dev/.codev/agent-hooks/kimi-hook.sh')
-  })
-
-  it('writes a config-level timeout on local-only Droid hooks', () => {
-    const homeDir = mkdtempSync(join(tmpdir(), 'orca-droid-hook-timeout-'))
-    homedirMock.mockReturnValue(homeDir)
-    try {
-      const status = new DroidHookService().install()
-      expect(status.state).toBe('installed')
-      const config = JSON.parse(readFileSync(join(homeDir, '.factory', 'settings.json'), 'utf8'))
-      const carriers = countManagedCarriersWithTimeout(
-        config,
-        MANAGED_HOOK_TIMEOUT_SECONDS,
-        (command) =>
-          command.replaceAll('\\', '/').includes(MANAGED_HOOKS_DIR_NEEDLE) ||
-          (process.platform === 'win32' && command.includes('-EncodedCommand'))
-      )
-      expect(carriers).toBeGreaterThan(0)
-    } finally {
-      homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
-      rmSync(homeDir, { recursive: true, force: true })
-    }
-  })
-
   it('bounds every generated POSIX curl wrapper with --connect-timeout and --max-time', async () => {
     let curlWrappersChecked = 0
     for (const { agent, install } of JSON_INSTALLERS) {
@@ -223,12 +131,6 @@ describe('managed agent hook timeouts', () => {
         curlWrappersChecked += 1
       }
     }
-    const kimi = createFakeSftp()
-    await new KimiHookService().installRemote(kimi.sftp, REMOTE_HOME)
-    const kimiWrapper = kimi.fs.files.get(`${REMOTE_HOME}/.codev/agent-hooks/kimi-hook.sh`)!
-    expect(kimiWrapper, 'kimi wrapper missing --connect-timeout').toContain('--connect-timeout')
-    expect(kimiWrapper, 'kimi wrapper missing --max-time').toContain('--max-time')
-    curlWrappersChecked += 1
     expect(curlWrappersChecked).toBeGreaterThan(0)
   })
 

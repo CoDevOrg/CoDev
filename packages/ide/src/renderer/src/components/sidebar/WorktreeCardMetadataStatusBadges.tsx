@@ -58,34 +58,6 @@ export function IssueStateBadge({ state }: { state: IssueInfo['state'] }): React
   )
 }
 
-export function LinearStateBadge({ stateName }: { stateName: string }): React.JSX.Element {
-  const normalized = stateName.toLowerCase()
-  const done = /done|closed|complete|completed|merged|resolved/.test(normalized)
-  const cancelled = /cancel|canceled|duplicate|wontfix/.test(normalized)
-  const active = /progress|doing|started|active/.test(normalized)
-  const Icon = done ? CircleCheck : cancelled ? CircleX : active ? Clock : CircleDot
-  const tone = done
-    ? 'border-purple-500/25 bg-purple-500/5 text-purple-600 dark:text-purple-300'
-    : cancelled
-      ? 'border-rose-500/25 bg-rose-500/5 text-rose-600 dark:text-rose-300'
-      : active
-        ? 'border-amber-500/25 bg-amber-500/5 text-amber-600 dark:text-amber-300'
-        : 'border-border bg-muted/30 text-muted-foreground'
-
-  return (
-    <MetadataStatusBadge
-      label={translate(
-        'auto.components.sidebar.WorktreeCardMetadataStatusBadges.af2b07bda5',
-        'State: {{value0}}',
-        { value0: stateName }
-      )}
-      className={tone}
-    >
-      <Icon />
-    </MetadataStatusBadge>
-  )
-}
-
 export function ReviewStateBadge({
   state,
   label

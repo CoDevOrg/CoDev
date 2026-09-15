@@ -128,7 +128,7 @@ function shouldRefetchGitHubScopedResultForNoHint(
   hintKey: string
 ): boolean {
   // Why: a GitHub-scoped result does not prove the branch's publishing remote
-  // has no GitLab/other review for neutral lookup.
+  // has no review for neutral lookup.
   return (
     cached !== undefined &&
     hintKey === '' &&
@@ -255,10 +255,6 @@ type RefreshHostedReviewCardArgs = {
   branch: string
   linkedGitHubPR?: number | null
   fallbackGitHubPR?: number | null
-  linkedGitLabMR?: number | null
-  linkedBitbucketPR?: number | null
-  linkedAzureDevOpsPR?: number | null
-  linkedGiteaPR?: number | null
 }
 
 export function refreshHostedReviewCard(
@@ -270,11 +266,7 @@ export function refreshHostedReviewCard(
     force: true,
     repoId: args.repoId,
     linkedGitHubPR: args.linkedGitHubPR ?? null,
-    ...(fallbackGitHubPR !== null ? { fallbackGitHubPR } : {}),
-    linkedGitLabMR: args.linkedGitLabMR ?? null,
-    linkedBitbucketPR: args.linkedBitbucketPR ?? null,
-    linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
-    linkedGiteaPR: args.linkedGiteaPR ?? null
+    ...(fallbackGitHubPR !== null ? { fallbackGitHubPR } : {})
   })
 }
 
@@ -394,11 +386,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
             currentHeadOid: options?.currentHeadOid ?? null,
             ...(options?.active === true ? { active: true } : {}),
             linkedGitHubPR: options?.linkedGitHubPR ?? null,
-            ...(fallbackGitHubPR !== null ? { fallbackGitHubPR } : {}),
-            linkedGitLabMR: options?.linkedGitLabMR ?? null,
-            linkedBitbucketPR: options?.linkedBitbucketPR ?? null,
-            linkedAzureDevOpsPR: options?.linkedAzureDevOpsPR ?? null,
-            linkedGiteaPR: options?.linkedGiteaPR ?? null
+            ...(fallbackGitHubPR !== null ? { fallbackGitHubPR } : {})
           }
           const review =
             target.kind === 'environment'
@@ -461,12 +449,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
                   fetchedAt: Date.now(),
                   linkedReviewHintKey: hintKey,
                   // Why: fallback PR hints come from this branch's PR cache; preserve that provenance separately from request identity.
-                  ...(review?.provider === 'github' &&
-                  options?.linkedGitHubPR == null &&
-                  options?.linkedGitLabMR == null &&
-                  options?.linkedBitbucketPR == null &&
-                  options?.linkedAzureDevOpsPR == null &&
-                  options?.linkedGiteaPR == null
+                  ...(review?.provider === 'github' && options?.linkedGitHubPR == null
                     ? { branchLookupGitHubPRNumber: review.number }
                     : {})
                 })

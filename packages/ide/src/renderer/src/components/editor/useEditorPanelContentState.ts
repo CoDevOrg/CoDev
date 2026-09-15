@@ -166,9 +166,7 @@ export function useEditorPanelContentState({
           // Why: an out-of-worktree absolute path in an SSH workspace belongs to the
           // remote host, so the resolved connection owns it even when the tab predates
           // (or was opened outside) the terminal-link path that stamps the target id.
-          const externalSshOwnerId =
-            restoredOpenFile.externalSshTargetId?.trim() ||
-            (isLiveTailLogTab ? undefined : connectionId)
+          const externalSshOwnerId = isLiveTailLogTab ? undefined : connectionId
           const runtimeEnvironmentId = isLiveTailLogTab
             ? undefined
             : readSettings?.activeRuntimeEnvironmentId?.trim()
@@ -232,7 +230,6 @@ export function useEditorPanelContentState({
             relativePath: readRelativePath,
             worktreeId: readWorktreeId,
             connectionId: readConnectionId,
-            expectedExternalSshTargetId: restoredOpenFile?.externalSshTargetId,
             includeLocalLogMetadata: isLiveTailLogTab
           }) as Promise<FileContent>
           inFlightFileReads.set(key, pending)

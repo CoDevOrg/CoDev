@@ -14,8 +14,9 @@ export type ForegroundAgentCandidate = {
 export function shouldInspectOuterWrapperForegroundProcess(
   process: RecognizedAgentProcess
 ): boolean {
-  // Why: only Pi is currently embedded by a same-group wrapper; scanning OMP would add a subprocess to every relay poll.
-  return process.agent === 'pi'
+  // Why: no shipped agent is embedded by a same-title-group wrapper; scanning
+  // ancestors would add a subprocess to every foreground poll for nothing.
+  return getSyntheticAgentTitleProfile(process.agent)?.titleIdentityGroup !== undefined
 }
 
 /**

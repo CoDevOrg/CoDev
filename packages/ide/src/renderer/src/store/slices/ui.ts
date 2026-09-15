@@ -2,21 +2,13 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import { normalizeRightSidebarRoute } from '../right-sidebar-route'
-import {
-  findPrevLiveNonTaskStackHistoryIndex,
-  findPrevLiveWorktreeHistoryIndex
-} from './worktree-nav-history'
+import { findPrevLiveWorktreeHistoryIndex } from './worktree-nav-history'
 import type {
   ChangelogData,
-  CustomPet,
-  GitHubWorkItem,
-  JiraIssue,
-  LinearIssue,
   ManualRepoOrderEntry,
   PersistedTrustedOrcaHooks,
   PersistedUIState,
   StatusBarItem,
-  TaskProvider,
   TaskResumeState,
   TaskViewPresetId,
   TuiAgent,
@@ -47,32 +39,22 @@ import {
   normalizeStatusBarUsageMode,
   type StatusBarUsageMode
 } from '../../../../shared/status-bar-usage-mode'
-import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../shared/types'
 import {
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION,
   type WorkspaceCleanupDismissal
 } from '../../../../shared/workspace-cleanup'
 import { normalizeFeatureTipIds, type FeatureTipId } from '../../../../shared/feature-tips'
 import {
-  hasFeatureInteraction,
   normalizeFeatureInteractions,
   type FeatureInteractionId,
   type FeatureInteractionState
 } from '../../../../shared/feature-interactions'
 import {
-  getContextualTour,
   normalizeContextualTourIds,
   type ContextualTourId
 } from '../../../../shared/contextual-tours'
-import { PER_REPO_FETCH_LIMIT } from '../../../../shared/work-items'
-import {
-  normalizeVisibleTaskProviders,
-  restoreAvailableDefaultTaskProvider,
-  resolveVisibleTaskProvider
-} from '../../../../shared/task-providers'
 import {
   DEFAULT_HIDE_SLEEPING_WORKSPACES,
   DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
@@ -114,16 +96,7 @@ import {
   getSetupScriptPromptDismissalKey,
   sanitizeSetupScriptPromptDismissals
 } from '../../lib/setup-script-prompt'
-import { DEFAULT_PET_ID, isBundledPetId } from '../../components/pet/pet-models'
-import { revokeCustomPetBlobUrl } from '../../components/pet/pet-blob-cache'
-import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
-import {
-  getContextualTourRequestDecision,
-  hasContextualTourTarget,
-  getNextVisibleContextualTourStepIndex,
-  getPreviousVisibleContextualTourStepIndex
-} from '../../components/contextual-tours/contextual-tour-gate'
 import { agentKindForAgentType, formatAgentTypeLabel } from '../../lib/agent-status'
 import {
   deriveRunningAgentSendTargets,
@@ -210,63 +183,6 @@ function mergeContextualTourSeenIds(
   return [...merged]
 }
 
-function getContextualTourProgressionForFeatureInteraction(
-  state: AppState,
-  id: FeatureInteractionId
-): 'advance' | 'complete' | 'reveal-sidebar-and-advance' | null {
-  if (!state.activeContextualTourId) {
-    return null
-  }
-  const tour = getContextualTour(state.activeContextualTourId)
-  const step = tour.steps[state.activeContextualTourStepIndex]
-  if (step?.advanceOnFeatureInteraction !== id) {
-    return null
-  }
-  const nextStepIndex = getNextVisibleContextualTourStepIndex({
-    tour,
-    currentStepIndex: state.activeContextualTourStepIndex,
-    targetExists: hasContextualTourTarget
-  })
-  if (nextStepIndex !== null) {
-    return 'advance'
-  }
-  if (
-    state.activeContextualTourId === 'workspace-agent-sessions' &&
-    state.activeContextualTourStepIndex === 0 &&
-    id === 'terminal-pane-split' &&
-    !state.sidebarOpen
-  ) {
-    return 'reveal-sidebar-and-advance'
-  }
-  return 'complete'
-}
-
-function clampPetSize(size: number): number {
-  if (!Number.isFinite(size)) {
-    return PET_SIZE_DEFAULT
-  }
-  return Math.max(PET_SIZE_MIN, Math.min(PET_SIZE_MAX, Math.round(size)))
-}
-
-// Why: local copy of TaskPage's preset→query mapping avoids a store ↔ lib circular import while warming the exact cache key.
-function presetToQuery(presetId: TaskViewPresetId | null): string {
-  switch (presetId) {
-    case 'all':
-    case 'issues':
-      return 'is:issue is:open'
-    case 'my-issues':
-      return 'assignee:@me is:issue is:open'
-    case 'prs':
-      return 'is:pr is:open'
-    case 'review':
-      return 'review-requested:@me is:pr is:open'
-    case 'my-prs':
-      return 'author:@me is:pr is:open'
-    case null:
-      return 'is:issue is:open'
-  }
-}
-
 // Why: migrate legacy memory+sessions ids → resource-usage; keep unknown ids so downgrade→upgrade can't strip a newer build's ids.
 function migrateStatusBarItems(items: readonly string[] | undefined): StatusBarItem[] {
   const source = items ?? DEFAULT_STATUS_BAR_ITEMS
@@ -281,10 +197,6 @@ function migrateStatusBarItems(items: readonly string[] | undefined): StatusBarI
 }
 
 const DEFAULT_ON_PORTS_STATUS_BAR_ITEM: StatusBarItem = 'ports'
-const DEFAULT_ON_KIMI_STATUS_BAR_ITEM: StatusBarItem = 'kimi'
-const DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM: StatusBarItem = 'minimax'
-const DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM: StatusBarItem = 'antigravity'
-const DEFAULT_ON_GROK_STATUS_BAR_ITEM: StatusBarItem = 'grok'
 
 function normalizeHydratedVisibleWorkspaceHostIds(ui: PersistedUIState): VisibleWorkspaceHostIds {
   const visibleHostIds = normalizeVisibleExecutionHostIds(ui.visibleWorkspaceHostIds)
@@ -299,7 +211,6 @@ const MIN_SIDEBAR_WIDTH = 220
 const MAX_LEFT_SIDEBAR_WIDTH = 500
 // Why: right-sidebar resize is window-relative, so widths can far exceed 500px on wide displays; this ceiling is only a corruption safety net.
 const MAX_RIGHT_SIDEBAR_WIDTH = 4000
-const LINEAR_TASK_PREFETCH_LIMIT = 36
 // Why: bound disk growth across hard quits (crash paths leave acks pinned); mirrors HYDRATE_MAX_AGE_MS in agent-hooks/server.ts.
 const HYDRATE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 const VALID_TASK_PRESETS = new Set<TaskViewPresetId>([
@@ -309,24 +220,6 @@ const VALID_TASK_PRESETS = new Set<TaskViewPresetId>([
   'my-issues',
   'my-prs',
   'prs'
-])
-const VALID_LINEAR_PRESETS = new Set<NonNullable<TaskResumeState['linearPreset']>>([
-  'assigned',
-  'created',
-  'all',
-  'completed'
-])
-const VALID_LINEAR_MODES = new Set<NonNullable<TaskResumeState['linearMode']>>([
-  'issues',
-  'projects',
-  'views',
-  'in-orca'
-])
-const VALID_JIRA_PRESETS = new Set<NonNullable<TaskResumeState['jiraPreset']>>([
-  'assigned',
-  'reported',
-  'all',
-  'done'
 ])
 
 function resolvePaneKeyWorktreeIdFromTabs(state: AppState, paneKey: string): string | null {
@@ -510,7 +403,7 @@ function sanitizeHydratedActiveView(
   if (!isTopLevelView(value)) {
     return 'terminal'
   }
-  // Why: activity is hidden when its setting is off, so gate only it (mobile/automations stay functional when hidden).
+  // Why: activity is hidden when its setting is off, so gate only it (automations stay functional when hidden).
   if (value === 'activity' && !experimentalActivityEnabled) {
     return 'terminal'
   }
@@ -544,48 +437,6 @@ function sanitizeTaskResumeState(value: unknown): TaskResumeState | undefined {
   if (typeof input.githubItemsQuery === 'string') {
     next.githubItemsQuery = input.githubItemsQuery
   }
-  if (
-    typeof input.linearPreset === 'string' &&
-    VALID_LINEAR_PRESETS.has(input.linearPreset as NonNullable<TaskResumeState['linearPreset']>)
-  ) {
-    next.linearPreset = input.linearPreset as NonNullable<TaskResumeState['linearPreset']>
-  }
-  if (
-    typeof input.linearMode === 'string' &&
-    VALID_LINEAR_MODES.has(input.linearMode as NonNullable<TaskResumeState['linearMode']>)
-  ) {
-    next.linearMode = input.linearMode as NonNullable<TaskResumeState['linearMode']>
-  }
-  if (typeof input.linearQuery === 'string') {
-    next.linearQuery = input.linearQuery
-  }
-  if (input.linearContext && typeof input.linearContext === 'object') {
-    const context = input.linearContext as Record<string, unknown>
-    if (
-      (context.kind === 'project' || context.kind === 'view') &&
-      typeof context.id === 'string' &&
-      context.id.trim() &&
-      typeof context.workspaceId === 'string' &&
-      context.workspaceId.trim() &&
-      context.workspaceId !== 'all'
-    ) {
-      next.linearContext = {
-        kind: context.kind,
-        id: context.id,
-        workspaceId: context.workspaceId,
-        model: context.model === 'issue' || context.model === 'project' ? context.model : undefined
-      }
-    }
-  }
-  if (
-    typeof input.jiraPreset === 'string' &&
-    VALID_JIRA_PRESETS.has(input.jiraPreset as NonNullable<TaskResumeState['jiraPreset']>)
-  ) {
-    next.jiraPreset = input.jiraPreset as NonNullable<TaskResumeState['jiraPreset']>
-  }
-  if (typeof input.jiraQuery === 'string') {
-    next.jiraQuery = input.jiraQuery
-  }
 
   return Object.keys(next).length > 0 ? next : undefined
 }
@@ -610,81 +461,14 @@ export type UISlice = {
   acknowledgeAgents: (paneKeys: string[]) => void
   unacknowledgeAgents: (paneKeys: string[]) => void
   activeView: TopLevelView
-  previousViewBeforeTasks:
-    | 'terminal'
-    | 'settings'
-    | 'activity'
-    | 'automations'
-    | 'space'
-    | 'skills'
-    | 'mobile'
-  previousViewBeforeSettings:
-    | 'terminal'
-    | 'tasks'
-    | 'activity'
-    | 'automations'
-    | 'space'
-    | 'skills'
-    | 'mobile'
-  previousViewBeforeActivity:
-    | 'terminal'
-    | 'settings'
-    | 'tasks'
-    | 'automations'
-    | 'space'
-    | 'skills'
-    | 'mobile'
-  previousViewBeforeAutomations:
-    | 'terminal'
-    | 'settings'
-    | 'tasks'
-    | 'activity'
-    | 'space'
-    | 'skills'
-    | 'mobile'
-  previousViewBeforeSpace:
-    | 'terminal'
-    | 'settings'
-    | 'tasks'
-    | 'activity'
-    | 'automations'
-    | 'skills'
-    | 'mobile'
-  previousViewBeforeSkills:
-    | 'terminal'
-    | 'settings'
-    | 'tasks'
-    | 'activity'
-    | 'automations'
-    | 'space'
-    | 'mobile'
-  previousViewBeforeMobile:
-    | 'terminal'
-    | 'settings'
-    | 'tasks'
-    | 'activity'
-    | 'automations'
-    | 'space'
-    | 'skills'
+  previousViewBeforeSettings: 'terminal' | 'activity' | 'automations' | 'space' | 'skills'
+  previousViewBeforeActivity: 'terminal' | 'settings' | 'automations' | 'space' | 'skills'
+  previousViewBeforeAutomations: 'terminal' | 'settings' | 'activity' | 'space' | 'skills'
+  previousViewBeforeSpace: 'terminal' | 'settings' | 'activity' | 'automations' | 'skills'
+  previousViewBeforeSkills: 'terminal' | 'settings' | 'activity' | 'automations' | 'space'
   setActiveView: (view: UISlice['activeView']) => void
-  taskPageData: {
-    preselectedRepoId?: string
-    prefilledName?: string
-    taskSource?: TaskProvider
-    openGitHubWorkItem?: GitHubWorkItem
-    openGitHubSourceContext?: TaskSourceContext | null
-    openGitHubInitialTab?: 'conversation' | 'checks' | 'files'
-    openGitLabWorkItem?: GitLabWorkItem
-    openGitLabSourceContext?: TaskSourceContext | null
-    openLinearIssue?: LinearIssue
-    openLinearSourceContext?: TaskSourceContext | null
-    openJiraIssue?: JiraIssue
-    openJiraSourceContext?: TaskSourceContext | null
-  }
   taskResumeState: TaskResumeState | undefined
   setTaskResumeState: (updates: Partial<TaskResumeState>) => void
-  githubTaskDrawerWorkItem: GitHubWorkItem | null
-  setGithubTaskDrawerWorkItem: (item: GitHubWorkItem | null) => void
   newWorkspaceDraft: {
     repoId: string | null
     // Why: project-first creation uses these when present; old drafts keep using only repoId during the additive migration.
@@ -697,14 +481,11 @@ export type UISlice = {
     note: string
     attachments: string[]
     linkedWorkItem: {
-      provider?: 'github' | 'gitlab' | 'linear' | 'jira'
-      type: 'issue' | 'pr' | 'mr'
+      provider?: 'github'
+      type: 'issue' | 'pr'
       number: number
       title: string
       url: string
-      linearIdentifier?: string
-      linearBranchName?: string
-      jiraIdentifier?: string
       repoId?: string
     } | null
     /** Preserve where provider data came from, separately from the host chosen to run the workspace. */
@@ -721,11 +502,6 @@ export type UISlice = {
     // Why: review worktrees start from a head ref/SHA while Source Control compares against the provider target branch.
     compareBaseRef?: string
   } | null
-  openTaskPage: (
-    data?: UISlice['taskPageData'],
-    options?: { recordTasksInteraction?: boolean }
-  ) => void
-  closeTaskPage: () => void
   openActivityPage: () => void
   closeActivityPage: () => void
   selectedAutomationId: string | null
@@ -744,8 +520,6 @@ export type UISlice = {
   closeSpacePage: () => void
   openSkillsPage: () => void
   closeSkillsPage: () => void
-  openMobilePage: () => void
-  closeMobilePage: () => void
   setNewWorkspaceDraft: (draft: NonNullable<UISlice['newWorkspaceDraft']>) => void
   clearNewWorkspaceDraft: () => void
   openSettingsPage: () => void
@@ -782,9 +556,6 @@ export type UISlice = {
     | 'workspace-cleanup'
     | 'project-added'
     | 'worktree-visibility'
-    | 'setup-guide'
-    | 'feature-wall'
-    | 'feature-tips'
     | 'new-workspace-composer'
     | 'confirm-orca-yaml-hooks'
   modalData: Record<string, unknown>
@@ -794,35 +565,8 @@ export type UISlice = {
   markFeatureTipsSeen: (ids: FeatureTipId[]) => void
   featureInteractions: FeatureInteractionState
   recordFeatureInteraction: (id: FeatureInteractionId) => Promise<void>
+  /** Persisted so a desktop profile's dismissed tours survive; the embedded client renders no tours. */
   contextualToursSeenIds: ContextualTourId[]
-  contextualToursAutoEligible: boolean | null
-  activeContextualTourId: ContextualTourId | null
-  activeContextualTourStepIndex: number
-  activeContextualTourSource: string | null
-  activeContextualTourSourceDetached: boolean
-  activeContextualTourWasFeaturePreviouslyInteracted: boolean
-  contextualTourNavigationInteractionSnapshot: Partial<Record<ContextualTourId, boolean>>
-  activeContextualTourSuppressed: boolean
-  contextualTourShownThisSession: boolean
-  contextualToursOnboardingVisible: boolean
-  contextualToursBlockingSurfaceVisible: boolean
-  lastCompletedContextualTourId: ContextualTourId | null
-  setContextualToursAutoEligible: (eligible: boolean) => void
-  setContextualToursOnboardingVisible: (visible: boolean) => void
-  setContextualToursBlockingSurfaceVisible: (visible: boolean) => void
-  requestContextualTour: (
-    id: ContextualTourId,
-    source: string,
-    wasFeaturePreviouslyInteracted?: boolean,
-    options?: { force?: boolean }
-  ) => void
-  suppressContextualTour: (id: ContextualTourId, source: string) => void
-  detachContextualTourSource: (id: ContextualTourId, source: string) => void
-  advanceContextualTour: () => void
-  regressContextualTour: () => void
-  dismissContextualTour: (id?: ContextualTourId) => void
-  completeContextualTour: (id?: ContextualTourId) => void
-  cancelContextualTour: (id?: ContextualTourId) => void
   markContextualToursSeen: (ids: ContextualTourId[]) => void
   trustedOrcaHooks: PersistedTrustedOrcaHooks
   markOrcaHookScriptConfirmed: (
@@ -923,19 +667,6 @@ export type UISlice = {
   ) => void
   setWorkspacePortScanForKey: (key: string, result: WorkspacePortScanResult | null) => void
   setWorkspacePortScanRefreshing: (refreshing: boolean) => void
-  /** Whether the pet overlay is currently visible. Persisted so "Hide pet" survives reload. Independent of the experimentalPet flag (which gates whether it can render at all). */
-  petVisible: boolean
-  setPetVisible: (v: boolean) => void
-  /** Which pet is active — a bundled id or a custom UUID. Persisted via PersistedUIState. */
-  petId: string
-  setPetId: (id: string) => void
-  /** User-uploaded pet images. Metadata only — bytes live in main's userData. */
-  customPets: CustomPet[]
-  addCustomPet: (model: CustomPet) => void
-  removeCustomPet: (id: string) => void
-  /** Pet overlay size in CSS pixels (square). User-adjustable so an oversized imported sprite isn't stuck on screen. */
-  petSize: number
-  setPetSize: (size: number) => void
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null
   pendingRevealSidebarRow: PendingSidebarRowReveal | null
   revealWorktreeInSidebar: (
@@ -1229,193 +960,19 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     }),
 
   activeView: 'terminal',
-  previousViewBeforeTasks: 'terminal',
   previousViewBeforeSettings: 'terminal',
   previousViewBeforeActivity: 'terminal',
   previousViewBeforeAutomations: 'terminal',
   previousViewBeforeSpace: 'terminal',
   previousViewBeforeSkills: 'terminal',
-  previousViewBeforeMobile: 'terminal',
   setActiveView: (view) => set({ activeView: view }),
-  taskPageData: {},
   taskResumeState: undefined,
-  githubTaskDrawerWorkItem: null,
   newWorkspaceDraft: null,
-  openTaskPage: (data = {}, options = {}) => {
-    if (options.recordTasksInteraction !== false) {
-      const wasTasksPreviouslyInteracted = hasFeatureInteraction(get().featureInteractions, 'tasks')
-      set((state) => ({
-        contextualTourNavigationInteractionSnapshot: {
-          ...state.contextualTourNavigationInteractionSnapshot,
-          tasks: wasTasksPreviouslyInteracted
-        }
-      }))
-      get().recordFeatureInteraction?.('tasks')
-    }
-    if (data.openGitHubWorkItem) {
-      get().recordFeatureInteraction?.('github-tasks')
-    }
-    if (data.openGitLabWorkItem) {
-      get().recordFeatureInteraction?.('gitlab-tasks')
-    }
-    if (data.openLinearIssue) {
-      get().recordFeatureInteraction?.('linear-tasks')
-    }
-    if (data.openJiraIssue) {
-      get().recordFeatureInteraction?.('jira-tasks')
-    }
-    // Why: record a Tasks visit in shared back/forward history; all task-source variants collapse to one deduped 'tasks' entry.
-    const detailEntry = data.openGitHubWorkItem
-      ? ({
-          kind: 'task-detail',
-          source: 'github',
-          workItem: data.openGitHubWorkItem,
-          sourceContext: data.openGitHubSourceContext,
-          initialTab: data.openGitHubInitialTab
-        } as const)
-      : data.openGitLabWorkItem
-        ? ({
-            kind: 'task-detail',
-            source: 'gitlab',
-            workItem: data.openGitLabWorkItem,
-            sourceContext: data.openGitLabSourceContext
-          } as const)
-        : data.openLinearIssue
-          ? ({
-              kind: 'task-detail',
-              source: 'linear',
-              issue: data.openLinearIssue,
-              sourceContext: data.openLinearSourceContext
-            } as const)
-          : data.openJiraIssue
-            ? ({
-                kind: 'task-detail',
-                source: 'jira',
-                issue: data.openJiraIssue,
-                sourceContext: data.openJiraSourceContext
-              } as const)
-            : null
-    const currentEntry = get().worktreeNavHistory[get().worktreeNavHistoryIndex]
-    const currentIsTaskStack =
-      currentEntry === 'tasks' ||
-      (typeof currentEntry === 'object' && currentEntry.kind === 'task-detail')
-    if (!detailEntry || !currentIsTaskStack) {
-      get().recordViewVisit('tasks')
-    }
-    if (detailEntry) {
-      get().recordViewVisit(detailEntry)
-    }
-    set((state) => ({
-      activeView: 'tasks',
-      previousViewBeforeTasks:
-        state.activeView === 'tasks' ? state.previousViewBeforeTasks : state.activeView,
-      taskPageData: data
-    }))
-    // Why: prefetch the work-item list during first render so the page's effect hits a warm/in-flight SWR cache (~300–800ms win).
-    const state = get()
-    const preferredVisibleTaskProviders = normalizeVisibleTaskProviders(
-      state.settings?.visibleTaskProviders
-    )
-    const visibleTaskProviders = restoreAvailableDefaultTaskProvider(
-      preferredVisibleTaskProviders,
-      {
-        gitlabInstalled: state.preflightStatus?.glab?.installed === true,
-        linearConnected: state.linearStatus?.connected === true
-      },
-      state.settings?.defaultTaskSource
-    )
-    const resolvedSource = resolveVisibleTaskProvider(
-      data.taskSource ?? state.settings?.defaultTaskSource,
-      visibleTaskProviders
-    )
-    const resolvedMode = state.taskResumeState?.githubMode ?? 'items'
-    if (resolvedSource === 'github' && resolvedMode === 'items') {
-      const eligibleRepos = state.repos.filter((repo) => isGitRepoKind(repo) && repo.path)
-      const selectedRepos = (() => {
-        const preferred = data.preselectedRepoId
-        if (preferred) {
-          const repo = eligibleRepos.find((r) => r.id === preferred)
-          return repo ? [repo] : []
-        }
-        const persisted = state.settings?.defaultRepoSelection
-        if (Array.isArray(persisted)) {
-          const selected = eligibleRepos.filter((repo) => persisted.includes(repo.id))
-          if (selected.length > 0) {
-            return selected
-          }
-        }
-        return eligibleRepos
-      })()
-
-      const resume = state.taskResumeState
-      const defaultPreset = state.settings?.defaultTaskViewPreset ?? 'all'
-      // Why: must match the query TaskPage's resume effect mounts with, else the warm cache key misses and prefetch is wasted.
-      const query =
-        resume?.githubItemsPreset === null
-          ? (resume.githubItemsQuery ?? '').trim()
-          : presetToQuery(resume?.githubItemsPreset ?? defaultPreset)
-      for (const repo of selectedRepos) {
-        state.prefetchWorkItems(repo.id, repo.path, PER_REPO_FETCH_LIMIT, query, {
-          sourceContext:
-            data.openGitHubSourceContext?.provider === 'github' &&
-            data.openGitHubSourceContext.repoId === repo.id
-              ? data.openGitHubSourceContext
-              : null
-        })
-      }
-    }
-    if (resolvedSource === 'linear' && typeof state.prefetchLinearIssues === 'function') {
-      const resume = state.taskResumeState
-      const query = (resume?.linearQuery ?? '').trim()
-      const sourceContext =
-        data.openLinearSourceContext?.provider === 'linear' ? data.openLinearSourceContext : null
-      if (query) {
-        state.prefetchLinearIssues(
-          { kind: 'search', query, limit: LINEAR_TASK_PREFETCH_LIMIT },
-          { sourceContext }
-        )
-      } else {
-        // Why: TaskPage no longer exposes Linear preset filters; keep prefetch aligned with the default unsearched issue list.
-        state.prefetchLinearIssues(
-          {
-            kind: 'list',
-            filter: 'all',
-            limit: LINEAR_TASK_PREFETCH_LIMIT
-          },
-          { sourceContext }
-        )
-      }
-    }
-  },
   setTaskResumeState: (updates) =>
     set((s) => {
       const next = { ...s.taskResumeState, ...updates }
       window.api.ui.set({ taskResumeState: next }).catch(console.error)
       return { taskResumeState: next }
-    }),
-  setGithubTaskDrawerWorkItem: (item) => set({ githubTaskDrawerWorkItem: item }),
-  closeTaskPage: () =>
-    set((state) => {
-      // Why: if parked on a 'tasks' entry, rewind the history index so Back/Forward aren't no-ops; keep 0 if it's the only entry.
-      const currentEntry = state.worktreeNavHistory[state.worktreeNavHistoryIndex]
-      let nextHistoryIndex = state.worktreeNavHistoryIndex
-      if (
-        currentEntry === 'tasks' ||
-        (typeof currentEntry === 'object' && currentEntry.kind === 'task-detail')
-      ) {
-        const prev = findPrevLiveNonTaskStackHistoryIndex(state)
-        if (prev !== null) {
-          nextHistoryIndex = prev
-        } else if (typeof currentEntry === 'object' && state.worktreeNavHistory[0] === 'tasks') {
-          nextHistoryIndex = 0
-        }
-      }
-      return {
-        activeView: state.previousViewBeforeTasks,
-        taskPageData: {},
-        githubTaskDrawerWorkItem: null,
-        worktreeNavHistoryIndex: nextHistoryIndex
-      }
     }),
   openActivityPage: () => {
     if (get().settings?.experimentalActivity !== true) {
@@ -1480,16 +1037,6 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   closeSkillsPage: () =>
     set((state) => ({
       activeView: state.previousViewBeforeSkills
-    })),
-  openMobilePage: () =>
-    set((state) => ({
-      activeView: 'mobile',
-      previousViewBeforeMobile:
-        state.activeView === 'mobile' ? state.previousViewBeforeMobile : state.activeView
-    })),
-  closeMobilePage: () =>
-    set((state) => ({
-      activeView: state.previousViewBeforeMobile
     })),
   setNewWorkspaceDraft: (draft) => set({ newWorkspaceDraft: draft }),
   clearNewWorkspaceDraft: () => set({ newWorkspaceDraft: null }),
@@ -1591,13 +1138,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     }),
   featureInteractions: {},
   recordFeatureInteraction: (id) => {
-    let tourProgression: ReturnType<typeof getContextualTourProgressionForFeatureInteraction> = null
     let persistPromise = Promise.resolve()
     set((s) => {
       if (!s.persistedUIReady) {
         return s
       }
-      tourProgression = getContextualTourProgressionForFeatureInteraction(s, id)
       const existing = s.featureInteractions[id]
       const next: FeatureInteractionState = {
         ...s.featureInteractions,
@@ -1624,224 +1169,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           : window.api.ui.set({ featureInteractions: next })
         persistPromise = persist.catch(console.error)
       }
-      if (tourProgression === 'reveal-sidebar-and-advance') {
-        // Why: split can fire from keyboard/menu with the sidebar closed, but the next tour target lives in the sidebar.
-        return {
-          featureInteractions: next,
-          sidebarOpen: true,
-          activeContextualTourStepIndex: s.activeContextualTourStepIndex + 1
-        }
-      }
       return { featureInteractions: next }
     })
-    if (tourProgression === 'complete') {
-      get().completeContextualTour()
-    } else if (tourProgression === 'advance') {
-      get().advanceContextualTour()
-    }
     return persistPromise
   },
   contextualToursSeenIds: [],
-  contextualToursAutoEligible: null,
-  activeContextualTourId: null,
-  activeContextualTourStepIndex: 0,
-  activeContextualTourSource: null,
-  activeContextualTourSourceDetached: false,
-  activeContextualTourWasFeaturePreviouslyInteracted: false,
-  contextualTourNavigationInteractionSnapshot: {},
-  activeContextualTourSuppressed: false,
-  contextualTourShownThisSession: false,
-  contextualToursOnboardingVisible: false,
-  contextualToursBlockingSurfaceVisible: false,
-  lastCompletedContextualTourId: null,
-  setContextualToursAutoEligible: (eligible) =>
-    set((s) => {
-      if (s.contextualToursAutoEligible === eligible) {
-        return s
-      }
-      if (typeof window !== 'undefined') {
-        window.api.ui.set({ contextualToursAutoEligible: eligible }).catch(console.error)
-      }
-      return { contextualToursAutoEligible: eligible }
-    }),
-  setContextualToursOnboardingVisible: (visible) =>
-    set((s) =>
-      s.contextualToursOnboardingVisible === visible
-        ? s
-        : { contextualToursOnboardingVisible: visible }
-    ),
-  setContextualToursBlockingSurfaceVisible: (visible) =>
-    set((s) =>
-      s.contextualToursBlockingSurfaceVisible === visible
-        ? s
-        : { contextualToursBlockingSurfaceVisible: visible }
-    ),
-  requestContextualTour: (id, source, wasFeaturePreviouslyInteracted, options) =>
-    set((s) => {
-      const tour = getContextualTour(id)
-      const decision = getContextualTourRequestDecision({
-        tour,
-        persistedUIReady: s.persistedUIReady,
-        autoEligible: options?.force === true || s.contextualToursAutoEligible === true,
-        onboardingVisible: s.contextualToursOnboardingVisible,
-        seenIds: options?.force === true ? [] : s.contextualToursSeenIds,
-        sessionConsumed: options?.force === true ? false : s.contextualTourShownThisSession,
-        activeTourId: s.activeContextualTourId,
-        activeModal: s.activeModal,
-        blockingSurfaceVisible: s.contextualToursBlockingSurfaceVisible,
-        targetExists: hasContextualTourTarget
-      })
-      if (decision.kind !== 'start') {
-        if (s.contextualTourNavigationInteractionSnapshot[id] === undefined) {
-          return s
-        }
-        const { [id]: _consumed, ...remainingNavigationSnapshot } =
-          s.contextualTourNavigationInteractionSnapshot
-        void _consumed
-        return { contextualTourNavigationInteractionSnapshot: remainingNavigationSnapshot }
-      }
-      const navigationSnapshot = s.contextualTourNavigationInteractionSnapshot[id]
-      const { [id]: _consumed, ...remainingNavigationSnapshot } =
-        s.contextualTourNavigationInteractionSnapshot
-      void _consumed
-      return {
-        activeContextualTourId: id,
-        activeContextualTourStepIndex: decision.stepIndex,
-        activeContextualTourSource: source,
-        activeContextualTourSourceDetached: false,
-        activeContextualTourWasFeaturePreviouslyInteracted:
-          wasFeaturePreviouslyInteracted ??
-          navigationSnapshot ??
-          hasFeatureInteraction(s.featureInteractions, id),
-        contextualTourNavigationInteractionSnapshot: remainingNavigationSnapshot,
-        activeContextualTourSuppressed: false,
-        contextualTourShownThisSession: true,
-        lastCompletedContextualTourId: null
-      }
-    }),
-  suppressContextualTour: (id, source) =>
-    set((s) => {
-      if (
-        s.activeContextualTourId !== id ||
-        s.activeContextualTourSource !== source ||
-        s.activeContextualTourSourceDetached
-      ) {
-        return s
-      }
-      return s.activeContextualTourSuppressed ? s : { activeContextualTourSuppressed: true }
-    }),
-  detachContextualTourSource: (id, source) =>
-    set((s) => {
-      if (s.activeContextualTourId !== id || s.activeContextualTourSource !== source) {
-        return s
-      }
-      return s.activeContextualTourSourceDetached ? s : { activeContextualTourSourceDetached: true }
-    }),
-  advanceContextualTour: () =>
-    set((s) => {
-      if (!s.activeContextualTourId) {
-        return s
-      }
-      const tour = getContextualTour(s.activeContextualTourId)
-      const nextStepIndex = getNextVisibleContextualTourStepIndex({
-        tour,
-        currentStepIndex: s.activeContextualTourStepIndex,
-        targetExists: hasContextualTourTarget
-      })
-      if (nextStepIndex !== null) {
-        return { activeContextualTourStepIndex: nextStepIndex }
-      }
-      // Why: browser step 3's target lives in a closed menu until that step is active.
-      if (
-        s.activeContextualTourId === 'browser' &&
-        s.activeContextualTourStepIndex + 1 < tour.steps.length
-      ) {
-        return { activeContextualTourStepIndex: s.activeContextualTourStepIndex + 1 }
-      }
-      return s
-    }),
-  regressContextualTour: () =>
-    set((s) => {
-      if (!s.activeContextualTourId) {
-        return s
-      }
-      const previousStepIndex = getPreviousVisibleContextualTourStepIndex({
-        tour: getContextualTour(s.activeContextualTourId),
-        currentStepIndex: s.activeContextualTourStepIndex,
-        targetExists: hasContextualTourTarget
-      })
-      if (previousStepIndex === null) {
-        return s
-      }
-      return { activeContextualTourStepIndex: previousStepIndex }
-    }),
-  dismissContextualTour: (id) => {
-    const activeTourId = get().activeContextualTourId
-    if (id && activeTourId !== id) {
-      return
-    }
-    const tourId = id ?? activeTourId
-    if (tourId) {
-      get().markContextualToursSeen([tourId])
-    }
-    set((s) => {
-      if (id && s.activeContextualTourId !== id) {
-        return s
-      }
-      return {
-        activeContextualTourId: null,
-        activeContextualTourStepIndex: 0,
-        activeContextualTourSource: null,
-        activeContextualTourSourceDetached: false,
-        activeContextualTourWasFeaturePreviouslyInteracted: false,
-        activeContextualTourSuppressed: false,
-        lastCompletedContextualTourId: null
-      }
-    })
-  },
-  completeContextualTour: (id) => {
-    const activeTourId = get().activeContextualTourId
-    if (id && activeTourId !== id) {
-      return
-    }
-    const tourId = id ?? activeTourId
-    if (tourId) {
-      get().markContextualToursSeen([tourId])
-    }
-    set((s) => {
-      if (id && s.activeContextualTourId !== id) {
-        return s
-      }
-      return {
-        activeContextualTourId: null,
-        activeContextualTourStepIndex: 0,
-        activeContextualTourSource: null,
-        activeContextualTourSourceDetached: false,
-        activeContextualTourWasFeaturePreviouslyInteracted: false,
-        activeContextualTourSuppressed: false,
-        lastCompletedContextualTourId: tourId ?? null
-      }
-    })
-  },
-  cancelContextualTour: (id) =>
-    set((s) => {
-      const activeTourId = s.activeContextualTourId
-      const tourId = id ?? activeTourId
-      if (!tourId || (id && activeTourId !== id)) {
-        return s
-      }
-      const alreadyShown = s.contextualToursSeenIds.includes(tourId)
-      return {
-        activeContextualTourId: null,
-        activeContextualTourStepIndex: 0,
-        activeContextualTourSource: null,
-        activeContextualTourSourceDetached: false,
-        activeContextualTourWasFeaturePreviouslyInteracted: false,
-        activeContextualTourSuppressed: false,
-        lastCompletedContextualTourId: null,
-        contextualTourShownThisSession: alreadyShown ? s.contextualTourShownThisSession : false
-      }
-    }),
   markContextualToursSeen: (ids) =>
     set((s) => {
       if (ids.length === 0) {
@@ -2281,61 +1613,6 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     }),
   setWorkspacePortScanRefreshing: (refreshing) => set({ workspacePortScanRefreshing: refreshing }),
 
-  // Why: default true so enabling experimentalPet shows the pet immediately (persisted; "Hide pet" flips it false).
-  petVisible: true,
-  setPetVisible: (v) => {
-    window.api.ui.set({ petVisible: v }).catch(console.error)
-    set({ petVisible: v })
-  },
-
-  petId: DEFAULT_PET_ID,
-  setPetId: (id) => {
-    window.api.ui.set({ petId: id }).catch(console.error)
-    set({ petId: id })
-  },
-
-  petSize: PET_SIZE_DEFAULT,
-  setPetSize: (size) => {
-    const clamped = clampPetSize(size)
-    window.api.ui.set({ petSize: clamped }).catch(console.error)
-    set({ petSize: clamped })
-  },
-
-  customPets: [],
-  addCustomPet: (model) =>
-    set((s) => {
-      const next = [...s.customPets.filter((m) => m.id !== model.id), model]
-      window.api.ui.set({ customPets: next }).catch(console.error)
-      return { customPets: next }
-    }),
-  removeCustomPet: (id) =>
-    set((s) => {
-      const target = s.customPets.find((m) => m.id === id)
-      if (!target) {
-        return s
-      }
-      const next = s.customPets.filter((m) => m.id !== id)
-      // Why: removing the active custom pet falls back to bundled default so the overlay isn't empty.
-      const fallback = s.petId === id ? DEFAULT_PET_ID : s.petId
-      // Why: single combined IPC update so customPets and petId persist atomically.
-      const ipcPayload: { customPets: CustomPet[]; petId?: string } = {
-        customPets: next
-      }
-      if (fallback !== s.petId) {
-        ipcPayload.petId = fallback
-      }
-      window.api.ui.set(ipcPayload).catch(console.error)
-      // Why: revoke the cached blob: URL so the Blob is released, not leaked for the session.
-      revokeCustomPetBlobUrl(id)
-      // Why: best-effort delete — bytes owned by main; fresh-UUID imports mean an orphaned file is never re-referenced.
-      window.api.pet.delete(id, target.fileName, target.kind).catch(console.error)
-      const partial: Partial<UISlice> = { customPets: next }
-      if (fallback !== s.petId) {
-        partial.petId = fallback
-      }
-      return partial
-    }),
-
   pendingRevealWorktree: null,
   pendingRevealSidebarRow: null,
   revealWorktreeInSidebar: (worktreeId, options) =>
@@ -2372,13 +1649,6 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       const validRepoIds = new Set(s.repos.map((repo) => repo.id))
       const validRepoHostIdentities = new Set(s.repos.map(getRepoHostIdentity))
       const persistedFilterRepoIds = sanitizePersistedRepoIds(ui.filterRepoIds)
-      // Why: pre-rename builds used sidekick* keys; read as fallback only so new pet* writes win after upgrade.
-      const customPets = Array.isArray(ui.customPets)
-        ? ui.customPets
-        : Array.isArray(ui.customSidekicks)
-          ? ui.customSidekicks
-          : []
-      const petId = ui.petId ?? ui.sidekickId
       // Migration: one-shot old-'recent'→'smart' runs in main (_sortBySmartMigrated), not here, so a deliberate 'recent' choice survives restart.
       const sortBy = ui.sortBy
       const migratedStatusBarItems = migrateStatusBarItems(ui.statusBarItems)
@@ -2386,38 +1656,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         ui._portsStatusBarDefaultAdded || migratedStatusBarItems.includes('ports')
           ? migratedStatusBarItems
           : [...migratedStatusBarItems, DEFAULT_ON_PORTS_STATUS_BAR_ITEM]
-      const statusBarItems =
-        ui._kimiStatusBarDefaultAdded || statusBarItemsWithPorts.includes('kimi')
-          ? statusBarItemsWithPorts
-          : [...statusBarItemsWithPorts, DEFAULT_ON_KIMI_STATUS_BAR_ITEM]
-      const statusBarItemsWithMiniMax =
-        ui._minimaxStatusBarDefaultAdded || statusBarItems.includes('minimax')
-          ? statusBarItems
-          : [...statusBarItems, DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM]
-      const statusBarItemsWithAntigravity =
-        ui._antigravityStatusBarDefaultAdded || statusBarItemsWithMiniMax.includes('antigravity')
-          ? statusBarItemsWithMiniMax
-          : [...statusBarItemsWithMiniMax, DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM]
-      const statusBarItemsWithGrok =
-        ui._grokStatusBarDefaultAdded || statusBarItemsWithAntigravity.includes('grok')
-          ? statusBarItemsWithAntigravity
-          : [...statusBarItemsWithAntigravity, DEFAULT_ON_GROK_STATUS_BAR_ITEM]
-      if (
-        (!ui._portsStatusBarDefaultAdded ||
-          !ui._kimiStatusBarDefaultAdded ||
-          !ui._minimaxStatusBarDefaultAdded ||
-          !ui._antigravityStatusBarDefaultAdded ||
-          !ui._grokStatusBarDefaultAdded) &&
-        typeof window !== 'undefined'
-      ) {
+      if (!ui._portsStatusBarDefaultAdded && typeof window !== 'undefined') {
         window.api.ui
           .set({
-            statusBarItems: statusBarItemsWithGrok,
-            _portsStatusBarDefaultAdded: true,
-            _kimiStatusBarDefaultAdded: true,
-            _minimaxStatusBarDefaultAdded: true,
-            _antigravityStatusBarDefaultAdded: true,
-            _grokStatusBarDefaultAdded: true
+            statusBarItems: statusBarItemsWithPorts,
+            _portsStatusBarDefaultAdded: true
           })
           .catch(console.error)
       }
@@ -2487,28 +1730,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
         workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(ui.workspaceBoardColumnWidth),
         syncTaskStatusFromWorkspaceBoard: ui.syncTaskStatusFromWorkspaceBoard === true,
-        statusBarItems: statusBarItemsWithGrok,
+        statusBarItems: statusBarItemsWithPorts,
         statusBarVisible: ui.statusBarVisible ?? true,
         usagePercentageDisplay: normalizeUsagePercentageDisplay(ui.usagePercentageDisplay),
         statusBarUsageMode: normalizeStatusBarUsageMode(ui.statusBarUsageMode),
-        // Why: default true so existing users see the pet on first enabling the flag; only an explicit Hide persists false.
-        petVisible: ui.petVisible ?? ui.sidekickVisible ?? true,
-        petSize: clampPetSize(ui.petSize ?? ui.sidekickSize ?? PET_SIZE_DEFAULT),
-        customPets,
-        // Why: fall back to default when the persisted id is unknown (e.g. custom pet removed elsewhere) so the overlay renders.
-        petId: ((): string => {
-          const id = petId
-          if (typeof id !== 'string') {
-            return DEFAULT_PET_ID
-          }
-          if (isBundledPetId(id)) {
-            return id
-          }
-          if (customPets.some((m) => m.id === id)) {
-            return id
-          }
-          return DEFAULT_PET_ID
-        })(),
         dismissedUpdateVersion: ui.dismissedUpdateVersion ?? null,
         // Why: a persisted value from a build that knew a different channel set
         // would otherwise survive as-is; activeChannel only falls back on null,
@@ -2526,10 +1751,6 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         featureTipsSeenIds: normalizeFeatureTipIds(ui.featureTipsSeenIds),
         featureInteractions: normalizeFeatureInteractions(ui.featureInteractions),
         contextualToursSeenIds: normalizeContextualTourIds(ui.contextualToursSeenIds),
-        contextualToursAutoEligible:
-          typeof ui.contextualToursAutoEligible === 'boolean'
-            ? ui.contextualToursAutoEligible
-            : null,
         trustedOrcaHooks: hydrateTrustedOrcaHooks(ui.trustedOrcaHooks, validRepoIds),
         setupScriptPromptDismissedRepoIds:
           validRepoHostIdentities.size === 0

@@ -32,7 +32,6 @@ const worktree = {
   comment: '',
   linkedIssue: null,
   linkedPR: null,
-  linkedLinearIssue: null,
   branch: 'refs/heads/agent-map',
   head: 'abc123',
   isBare: false,

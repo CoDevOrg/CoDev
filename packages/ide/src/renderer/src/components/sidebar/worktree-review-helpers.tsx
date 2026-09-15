@@ -1,38 +1,24 @@
-import { GitMerge } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PullRequestIcon } from './WorktreeCardHelpers'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 
-export function getReviewLabel(review: WorktreeCardPrDisplay): 'MR' | 'PR' {
-  return review.provider === 'gitlab' ? 'MR' : 'PR'
+export function getReviewLabel(_review: WorktreeCardPrDisplay): 'PR' {
+  return 'PR'
 }
 
-export function getProviderName(review: WorktreeCardPrDisplay): string {
-  if (review.provider === 'gitlab') {
-    return 'GitLab'
-  }
-  if (review.provider === 'bitbucket') {
-    return 'Bitbucket'
-  }
-  if (review.provider === 'azure-devops') {
-    return 'Azure DevOps'
-  }
-  if (review.provider === 'gitea') {
-    return 'Gitea'
-  }
+export function getProviderName(_review: WorktreeCardPrDisplay): string {
   return 'GitHub'
 }
 
 export function ReviewIcon({
   review,
-  className,
-  variant = 'provider'
+  className
 }: {
   review: WorktreeCardPrDisplay
   className?: string
   variant?: 'provider' | 'generic'
 }): React.JSX.Element {
-  const Icon = variant === 'provider' && review.provider === 'gitlab' ? GitMerge : PullRequestIcon
+  const Icon = PullRequestIcon
   const checkTone =
     review.state !== 'merged' && review.status === 'failure'
       ? 'text-rose-500/85'

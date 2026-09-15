@@ -5,7 +5,6 @@ import type { AppState } from './types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
   getRepoExecutionHostId,
-  parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { getProjectHostSetupProjectionFromState } from './project-host-setup-selector'
@@ -194,15 +193,7 @@ export function selectRepoByIdForActiveWorkspace(
     if (hostMatch) {
       return hostMatch
     }
-    // Why: withRepoHostOwnership keeps a paired-hub worktree on its own SSH host while the repo
-    // stays hub-owned, so that one mismatch still names the right repo; every other stays closed.
-    if (parseExecutionHostId(state.activeWorkspaceExecutionHostId)?.kind !== 'ssh') {
-      return null
-    }
-    const pairedHubRepos = repoCandidates.filter(
-      (candidate) => parseExecutionHostId(getRepoExecutionHostId(candidate))?.kind === 'runtime'
-    )
-    return pairedHubRepos.length === 1 ? pairedHubRepos[0] : null
+    return null
   }
   return repo
 }

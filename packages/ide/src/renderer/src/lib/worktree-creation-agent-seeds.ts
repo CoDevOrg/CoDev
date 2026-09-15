@@ -3,8 +3,6 @@ import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/na
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-launch-prompt-delivery'
 import { queueHookCommandsForFirstWorktreeTab } from '@/lib/hook-command-delayed-delivery'
 import { decideInitialAgentTabViewMode } from '@/lib/native-chat-initial-view-mode'
-import { getConnectionIdFromState } from '@/lib/connection-context'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { toWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
@@ -62,14 +60,7 @@ function applyBackendSpawnedDraftViewMode(args: {
       openAgentTabsInChatByDefault: state.settings?.openAgentTabsInChatByDefault,
       agent,
       promptDelivery: 'draft',
-      launchDraftText: request.launchDraftPrompt,
-      ...(agent === 'grok'
-        ? {
-            nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
-              getConnectionIdFromState(state, worktreeId)
-            )
-          }
-        : {})
+      launchDraftText: request.launchDraftPrompt
     }) ?? 'terminal'
   const tab = state.unifiedTabsByWorktree?.[worktreeId]?.find((tab) => tab.id === tabId)
   if (!tab && getRuntimeEnvironmentIdForWorktree(state, worktreeId)) {

@@ -51,18 +51,6 @@ describe('orchestration worker launch preferences', () => {
     )
   })
 
-  it('rejects model selection for agents without a launch catalog', () => {
-    expect(() =>
-      resolveWorkerLaunchPreferences({ agent: 'grok', model: 'grok-code-fast-1' })
-    ).toThrow('does not support launch-time model selection')
-  })
-
-  it('does not expose deprecated Gemini model selection to worker-start', () => {
-    expect(() =>
-      resolveWorkerLaunchPreferences({ agent: 'gemini', model: 'gemini-3-pro-preview' })
-    ).toThrow('does not support launch-time model selection')
-  })
-
   it('rejects preferences when reusing an existing terminal', () => {
     expect(() =>
       assertWorkerLaunchPreferencesCreateTerminal({
