@@ -1,18 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
-import type { AppState } from '../types'
-import { getProviderSessionClaimKey } from '../../lib/sleeping-agent-pane-ownership'
-import { createTestStore, makeTab } from './store-test-helpers'
-
-const PI_COMPATIBLE_CASES = [
-  { agent: 'pi' as const, label: 'Pi' },
-  { agent: 'omp' as const, label: 'OMP' }
-]
-
-function makePiCompatibleProviderSession(agent: 'pi' | 'omp') {
-  const session = { key: 'session_id' as const, id: `${agent}-session-1` }
-  return agent === 'pi' ? { ...session, transcriptPath: '/tmp/pi-session-1.jsonl' } : session
-}
+import type { } from '../../../../shared/agent-session-resume'
+import type { } from '../types'
+import { } from '../../lib/sleeping-agent-pane-ownership'
+import { createTestStore, } from './store-test-helpers'
 
 describe('recordAgentProviderSession', () => {
   it('preserves the root session while a child permission hook moves Codex to waiting', () => {

@@ -154,37 +154,6 @@ const devboxNeedsSetupHostOption: ProjectHostSetupOption = {
   attention: false
 }
 
-const disconnectedDevboxNeedsSetupHostOption: ProjectHostSetupOption = {
-  kind: 'needs-setup',
-  id: 'needs-setup:ssh:devbox',
-  projectId: 'project-group:platform',
-  hostId: 'ssh:devbox',
-  label: 'Devbox',
-  detail: 'Connect this host to set up projects',
-  isAvailable: false,
-  attention: false,
-  connectAction: { kind: 'ssh', targetId: 'devbox' }
-}
-
-const disconnectedBastionNeedsSetupHostOption: ProjectHostSetupOption = {
-  kind: 'needs-setup',
-  id: 'needs-setup:ssh:bastion',
-  projectId: 'project-group:platform',
-  hostId: 'ssh:bastion',
-  label: 'Bastion',
-  detail: 'Connect this host to set up projects',
-  isAvailable: false,
-  attention: false,
-  connectAction: { kind: 'ssh', targetId: 'bastion' }
-}
-
-function findConnectButton(label: string): HTMLButtonElement | undefined {
-  const item = findRunTargetItem(label)
-  return [...(item?.querySelectorAll('button') ?? [])].find((button) =>
-    button.textContent?.includes('Connect')
-  )
-}
-
 function renderCard(
   overrides: Partial<React.ComponentProps<typeof NewWorkspaceComposerCard>> = {}
 ) {
@@ -235,11 +204,6 @@ function renderCard(
         shouldWaitForSetupCheck={false}
         resolvedSetupDecision={null}
         createError={null}
-        selectedRepoConnectionId={null}
-        selectedRepoSshStatus={null}
-        selectedRepoRequiresConnection={false}
-        selectedRepoConnectInProgress={false}
-        onConnectSelectedRepo={async () => {}}
         canUseSparseCheckout={false}
         sparsePresets={[]}
         sparseSelectedPresetId={null}
@@ -609,86 +573,6 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     expect(hostChanges).toEqual([])
   })
 
-  it('connects disconnected setup-needed SSH hosts without selecting them', async () => {
-    const hostChanges: string[] = []
-    current = renderCard({
-      projectHostSetupOptions: [localReadyHostOption, disconnectedDevboxNeedsSetupHostOption],
-      selectedProjectHostSetupId: 'setup-local',
-      onProjectHostSetupChange: (setupId) => hostChanges.push(setupId)
-    })
-
-    openRunTargetPicker(current.container)
-    const devboxItem = findRunTargetItem('Devbox')
-    expect(devboxItem).toBeTruthy()
-    const connectButton = [...(devboxItem?.querySelectorAll('button') ?? [])].find((button) =>
-      button.textContent?.includes('Connect')
-    )
-    expect(connectButton).toBeTruthy()
-
-    await act(async () => {
-      connectButton?.click()
-    })
-
-    expect(apiMocks.sshConnect).toHaveBeenCalledWith({ targetId: 'devbox' })
-    expect(hostChanges).toEqual([])
-    // The picker stays open so the connecting state is visible; the row is not auto-selected.
-    expect(findRunTargetItem('Devbox')).toBeTruthy()
-  })
-
-  it('keeps other hosts connectable while one connect is still in flight', async () => {
-    // First host's connect never resolves — a stalled connect must not disable the others.
-    apiMocks.sshConnect.mockImplementation(({ targetId }: { targetId: string }) =>
-      targetId === 'devbox' ? new Promise(() => {}) : Promise.resolve(undefined)
-    )
-    current = renderCard({
-      projectHostSetupOptions: [
-        localReadyHostOption,
-        disconnectedDevboxNeedsSetupHostOption,
-        disconnectedBastionNeedsSetupHostOption
-      ],
-      selectedProjectHostSetupId: 'setup-local'
-    })
-
-    openRunTargetPicker(current.container)
-    await act(async () => {
-      findConnectButton('Devbox')?.click()
-    })
-
-    // The picker stays open through the connect, so the state is inspectable in place.
-    // Devbox is mid-connect: disabled, showing the connecting indicator; Bastion stays clickable.
-    const devboxButton = findConnectButton('Devbox')
-    expect(devboxButton?.disabled).toBe(true)
-    expect(devboxButton?.textContent).toContain('Connecting')
-    const bastionButton = findConnectButton('Bastion')
-    expect(bastionButton?.disabled).toBe(false)
-    expect(bastionButton?.textContent).toContain('Connect')
-
-    await act(async () => {
-      bastionButton?.click()
-    })
-    expect(apiMocks.sshConnect).toHaveBeenCalledWith({ targetId: 'bastion' })
-  })
-
-  it('stops the connecting indicator when the connect fails', async () => {
-    // A failed connect must clear the spinner and restore the Connect button so the user
-    // can retry — the row can't stay stuck on "Connecting" after the error.
-    apiMocks.sshConnect.mockRejectedValue(new Error('connection refused'))
-    current = renderCard({
-      projectHostSetupOptions: [localReadyHostOption, disconnectedDevboxNeedsSetupHostOption],
-      selectedProjectHostSetupId: 'setup-local'
-    })
-
-    openRunTargetPicker(current.container)
-    await act(async () => {
-      findConnectButton('Devbox')?.click()
-    })
-
-    const devboxButton = findConnectButton('Devbox')
-    expect(devboxButton?.disabled).toBe(false)
-    expect(devboxButton?.textContent).toContain('Connect')
-    expect(devboxButton?.textContent).not.toContain('Connecting')
-  })
-
   it('opens the SSH host add dialog over the composer without leaving for Settings', () => {
     current = renderCard({
       projectHostSetupOptions: [localReadyHostOption, devboxNeedsSetupHostOption],
@@ -763,8 +647,7 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
       ] as never,
       selectedProjectHostSetupId: 'setup-local',
       onProjectHostSetupChange: (setupId) => hostChanges.push(setupId),
-      onEphemeralVmRecipeChange: (recipeId) => recipeChanges.push(recipeId)
-    })
+})
 
     expect(current.container.textContent).toContain('Run on')
     expect(current.container.textContent).not.toContain('VM recipe')
@@ -808,9 +691,7 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
       ] as never,
       selectedProjectHostSetupId: 'setup-local',
       onProjectHostSetupChange: (setupId) => hostChanges.push(setupId),
-      selectedEphemeralVmRecipeId: 'vercel',
-      onEphemeralVmRecipeChange: (recipeId) => recipeChanges.push(recipeId)
-    })
+})
 
     const runTargetShell = current.container.querySelector<HTMLElement>(
       'div[data-run-target-combobox-root="true"]'

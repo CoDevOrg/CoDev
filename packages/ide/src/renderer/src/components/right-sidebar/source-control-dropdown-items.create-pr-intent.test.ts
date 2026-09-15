@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   resolveDropdownItems,
   type DropdownActionInputs,
-  type } from './source-control-dropdown-items'
+} from './source-control-dropdown-items'
 
 // Why: a shared defaults object keeps each case row terse while making the
 // "this is the one knob that differs from the baseline" intent obvious.

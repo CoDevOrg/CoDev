@@ -62,7 +62,6 @@ describe('getEditorExternalWatchTargets', () => {
     rightSidebarTab?: EditorExternalWatchTargetState['rightSidebarTab']
     rightSidebarExplorerView?: EditorExternalWatchTargetState['rightSidebarExplorerView']
     gitStatusHugeByWorktree?: EditorExternalWatchTargetState['gitStatusHugeByWorktree']
-    sshConnectionStates?: EditorExternalWatchTargetState['sshConnectionStates']
   }): EditorExternalWatchTargetState => ({
     openFiles: args.openFiles ?? [],
     worktreesByRepo: { [args.repo.id]: [args.worktree] },
@@ -209,7 +208,6 @@ describe('getEditorExternalWatchTargets', () => {
           activeWorktreeId: worktree.id,
           rightSidebarOpen: true,
           rightSidebarTab: 'source-control',
-          sshConnectionStates: new Map([['ssh-1', { status: 'disconnected' } as never]])
         })
       ).targets
     ).toEqual([])
@@ -227,7 +225,6 @@ describe('getEditorExternalWatchTargets', () => {
           activeWorktreeId: worktree.id,
           rightSidebarOpen: true,
           rightSidebarTab: 'source-control',
-          sshConnectionStates: new Map([['ssh-1', { status: 'connected' } as never]])
         })
       ).targets
     ).toEqual([

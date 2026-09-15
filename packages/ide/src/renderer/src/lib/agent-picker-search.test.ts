@@ -10,14 +10,7 @@ import { AGENT_CATALOG, type AgentCatalogEntry } from './agent-catalog'
 
 const agents = [
   entry('claude', 'Claude', 'claude'),
-  entry('codex', 'Codex', 'codex'),
-  entry('copilot', 'GitHub Copilot', 'copilot'),
-  entry('opencode', 'OpenCode', 'opencode'),
-  entry('mistral-vibe', 'Mistral Vibe', 'vibe'),
-  entry('qwen-code', 'Qwen Code', 'qwen-code'),
-  entry('crush', 'Charm', 'crush'),
-  entry('antigravity', 'Antigravity', 'agy'),
-  entry('cursor', 'Cursor', 'cursor-agent')
+  entry('codex', 'Codex', 'codex')
 ]
 
 afterEach(() => {

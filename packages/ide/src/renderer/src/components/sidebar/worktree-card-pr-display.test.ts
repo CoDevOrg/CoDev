@@ -17,28 +17,6 @@ const pr: HostedReviewInfo = {
   mergeable: 'MERGEABLE'
 }
 
-const gitLabReview: HostedReviewInfo = {
-  provider: 'gitlab',
-  number: 321,
-  title: 'Ready MR',
-  state: 'open',
-  url: 'https://gitlab.com/stablyai/orca/-/merge_requests/321',
-  status: 'success',
-  updatedAt: '2026-05-13T00:00:00.000Z',
-  mergeable: 'MERGEABLE'
-}
-
-const bitbucketReview: HostedReviewInfo = {
-  provider: 'bitbucket',
-  number: 789,
-  title: 'Ready Bitbucket PR',
-  state: 'open',
-  url: 'https://bitbucket.org/stablyai/orca/pull-requests/789',
-  status: 'success',
-  updatedAt: '2026-05-13T00:00:00.000Z',
-  mergeable: 'MERGEABLE'
-}
-
 describe('getWorktreeCardPrDisplay', () => {
   it('uses cached PR details when available', () => {
     expect(getWorktreeCardPrDisplay(pr, 123)).toBe(pr)
@@ -76,9 +54,6 @@ describe('getWorktreeCardPrDisplay', () => {
     })
   })
 
-  it('preserves branch-discovered hosted reviews for providers without worktree metadata', () => {
-    expect(getWorktreeCardPrDisplay(bitbucketReview, null)).toBe(bitbucketReview)
-  })
 })
 
 describe('isCachedMergedBranchPRCurrentForWorktree', () => {

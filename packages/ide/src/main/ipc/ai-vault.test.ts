@@ -51,8 +51,6 @@ beforeEach(() => {
   )
   mocks.getSshFilesystemProvider.mockReturnValue(provider)
   mocks.requestActiveSshAiVaultSessionList.mockResolvedValue(null)
-  mocks.getActiveSshAiVaultHostInfo.mockReturnValue(hostInfo('dev-box'))
-  mocks.getActiveSshAiVaultHostInfos.mockReturnValue([hostInfo('dev-box')])
 })
 
 describe('listAiVaultSessions host routing', () => {
@@ -210,15 +208,6 @@ describe('listAiVaultSubagentSessions gating', () => {
   })
 
 })
-
-function hostInfo(targetId: string) {
-  return {
-    targetId,
-    executionHostId: `ssh:${targetId}` as const,
-    remoteHome: '/home/ada',
-    hostPlatform: getRemoteHostPlatform('linux-x64')
-  }
-}
 
 /** Mirrors the multiplexer's typed timeout: callers branch on the code, not on
  * the message text. */

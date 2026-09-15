@@ -98,7 +98,6 @@ describe('worktree base directory watcher', () => {
     watcherCallbacks.clear()
     unsubscribeMocks.clear()
     pollerOptions.clear()
-    vi.mocked(getSshFilesystemProvider).mockReturnValue(undefined)
     vi.mocked(readGitCommonHeadIdentities).mockResolvedValue([])
     vi.mocked(startWorktreeBaseDirectoryPoller).mockImplementation(
       async (target, _getRepos, onEvents, options) => {

@@ -39,7 +39,7 @@ async function renderRemoteFileBrowser(): Promise<{
   const root = createRoot(container)
 
   await act(async () => {
-    root.render(<RemoteFileBrowser targetId="target-1" onSelect={vi.fn()} onCancel={vi.fn()} />)
+    root.render(<RemoteFileBrowser runtimeEnvironmentId="env-1" onSelect={vi.fn()} onCancel={vi.fn()} />)
     await flushPromises()
   })
 

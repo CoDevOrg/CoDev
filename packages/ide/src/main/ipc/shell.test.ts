@@ -79,7 +79,7 @@ function createSpawnedProcess(result: 'spawn' | 'error' = 'spawn'): {
 
 describe('registerShellHandlers', () => {
   const settings = { activeRuntimeEnvironmentId: null as string | null }
-  const sshTargets = new Map<string, SshTarget>()
+  const sshTargets = new Map<string, never>()
   const store = {
     getSettings: () => settings,
     getSshTarget: (id: string) => sshTargets.get(id)

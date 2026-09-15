@@ -15,7 +15,7 @@ import {
   iterateTerminalPastePlanChunks,
   planTerminalPaste,
   planTerminalPasteWithYield,
-  type   type TerminalPasteTarget
+  type TerminalPasteTarget
 } from './terminal-paste-coordinator'
 
 const textEncoder = new TextEncoder()

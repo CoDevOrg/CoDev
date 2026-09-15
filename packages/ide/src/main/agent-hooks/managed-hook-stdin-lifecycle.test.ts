@@ -5,7 +5,6 @@ import { spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { SFTPWrapper } from 'ssh2'
 import type * as osModule from 'node:os'
 
 let isolatedUserDataDir = ''
@@ -76,17 +75,6 @@ import { POSIX_HOOK_STDIN_READER } from './hook-stdin-contract'
 
 const REMOTE_HOME = '/home/dev'
 const LARGE_PAYLOAD = Buffer.alloc(1_000_000, 'x')
-const REMOTE_INSTALLERS = [
-  {
-    agent: 'claude',
-    install: (sftp: SFTPWrapper) => new ClaudeHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'codex',
-    install: (sftp: SFTPWrapper) => new CodexHookService().installRemote(sftp, REMOTE_HOME)
-  }
-] as const
-
 const LOCAL_INSTALLERS = [
   { agent: 'claude', install: () => new ClaudeHookService().install() },
   { agent: 'codex', install: () => new CodexHookService().install() }
@@ -145,18 +133,25 @@ function runPosixHook(command: string, extraEnv: NodeJS.ProcessEnv = {}): Promis
 
 async function generatePosixScripts(): Promise<Map<string, string>> {
   const scripts = new Map<string, string>()
-  for (const entry of REMOTE_INSTALLERS) {
-    const memory = createAgentHookMemorySftp()
-    const status = await entry.install(memory.sftp)
-    expect(status.state, `${entry.agent} install status`).toBe('installed')
-    const generated = [...memory.fs.files.entries()].filter(
-      ([path]) => path.includes('/.codev/agent-hooks/') && path.endsWith('.sh')
-    )
-    // Why: Claude ships a second managed script (the statusline usage feed); the stdin lifecycle contract applies to every generated script.
-    expect(generated.length, `${entry.agent} generated scripts`).toBeGreaterThan(0)
-    for (const [path, script] of generated) {
-      scripts.set(`${entry.agent} ${path.split('/').pop()}`, script)
+  const home = mkdtempSync(join(tmpdir(), 'orca-hook-stdin-posix-'))
+  homedirMock.mockReturnValue(home)
+  try {
+    // Why: the serve host is Linux, so the local installers emit the same POSIX
+    // scripts the workspace agents run; generate them for real instead of a fixture.
+    for (const entry of LOCAL_INSTALLERS) {
+      expect(entry.install().state, `${entry.agent} install status`).toBe('installed')
     }
+    const hooksDir = join(home, '.codev', 'agent-hooks')
+    // Why: Claude ships a second managed script (the statusline usage feed); the stdin lifecycle contract applies to every generated script.
+    const generated = readdirSync(hooksDir).filter((name) => name.endsWith('.sh'))
+    expect(generated.length, 'generated POSIX scripts').toBeGreaterThan(0)
+    for (const fileName of generated) {
+      const agent = fileName.startsWith('codex') ? 'codex' : 'claude'
+      scripts.set(`${agent} ${fileName}`, readFileSync(join(hooksDir, fileName), 'utf8'))
+    }
+  } finally {
+    homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
+    rmSync(home, { recursive: true, force: true })
   }
   return scripts
 }

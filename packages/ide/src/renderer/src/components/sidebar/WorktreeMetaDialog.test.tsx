@@ -65,13 +65,7 @@ const updateWorktreeMeta =
       updates: Partial<WorktreeMeta>
     ) => Promise<{ ok: true } | { ok: false; error: string }>
   >()
-const fetchLinearIssue = vi.fn<(...args: never[]) => Promise<LinearIssue | null>>()
 const openUrl = vi.fn<(url: string) => void>()
-
-/** Only `url` is read by the open-issue path. */
-function makeLinearIssue(url: string): LinearIssue {
-  return { url } as LinearIssue
-}
 
 function makeRepo(id: string = REPO_ID, path: string = '/repo'): Repo {
   return { id, path, displayName: 'orca', badgeColor: '#999999', addedAt: 1 }
@@ -106,11 +100,11 @@ function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWo
     name: 'Docs folder',
     folderPath: '/repo/docs',
     linkedTask: {
-      provider: 'linear',
+      provider: 'github',
       type: 'issue',
       number: 901,
       title: 'Fix auth',
-      url: 'https://linear.app/acme/issue/STA-901',
+      url: 'https://github.com/acme/orca/issues/901',
 },
     comment: '',
     isArchived: false,
@@ -189,17 +183,11 @@ function saveButton(): HTMLButtonElement {
   return screen.getByRole('button', { name: 'Save' })
 }
 
-function openIssueButton(): HTMLButtonElement {
-  return screen.getByRole('button', { name: 'Open linked issue' })
-}
-
 describe('WorktreeMetaDialog issue link row', () => {
   beforeEach(() => {
     useAppStore.setState(initialState, true)
     updateWorktreeMeta.mockReset()
     updateWorktreeMeta.mockResolvedValue({ ok: true })
-    fetchLinearIssue.mockReset()
-    fetchLinearIssue.mockResolvedValue(null)
     openUrl.mockReset()
     Object.defineProperty(window, 'api', {
       configurable: true,
@@ -407,65 +395,12 @@ describe('WorktreeMetaDialog issue link row', () => {
   // A bare key names no organization. Building one from the connected viewer
   // opens a not-found page — or a colliding issue — for every other workspace
   // the user belongs to, and skips the lookup that would have said so.
-  it('resolves a bare Linear key across workspaces rather than the active organization', async () => {
-    fetchLinearIssue.mockResolvedValue(makeLinearIssue('https://linear.app/other/issue/STA-999'))
-    openDialog({
-      worktree: { },
-      linearViewerOrganizationUrlKey: 'active-org'
-    })
-
-    fireEvent.change(issueInput(), { target: { value: 'STA-999' } })
-    await act(async () => {
-      fireEvent.click(openIssueButton())
-    })
-
-    expect(fetchLinearIssue.mock.calls[0]?.slice(0, 2)).toEqual(['STA-999', 'all'])
-    expect(openUrl).toHaveBeenCalledWith('https://linear.app/other/issue/STA-999')
-  })
 
   // The stored key belongs to the persisted identifier, so it stays authoritative
   // for it — no lookup, no round trip.
-  it('opens a stored Linear link directly from its organization key', async () => {
-    openDialog({
-      worktree: {
-        linkedLinearIssueOrganizationUrlKey: 'acme'
-      },
-      linearViewerOrganizationUrlKey: 'active-org'
-    })
-
-    await act(async () => {
-      fireEvent.click(openIssueButton())
-    })
-
-    expect(fetchLinearIssue).not.toHaveBeenCalled()
-    expect(openUrl).toHaveBeenCalledWith('https://linear.app/acme/issue/STA-335')
-  })
 
   // Promise.race cannot cancel the lookup, and the field stays editable while it
   // runs — a late result must not open the issue the user just replaced.
-  it('does not open a lookup result after the field moved on', async () => {
-    let resolveLookup: ((issue: LinearIssue | null) => void) | undefined
-    fetchLinearIssue.mockReturnValue(
-      new Promise<LinearIssue | null>((resolve) => {
-        resolveLookup = resolve
-      })
-    )
-    openDialog({ worktree: { } })
-
-    fireEvent.change(issueInput(), { target: { value: 'STA-999' } })
-    fireEvent.click(openIssueButton())
-    fireEvent.change(issueInput(), { target: { value: 'STA-777' } })
-    await act(async () => {
-      resolveLookup?.(makeLinearIssue('https://linear.app/acme/issue/STA-999'))
-    })
-
-    expect(openUrl).not.toHaveBeenCalled()
-    expect(
-      screen.queryByText(
-        "Couldn't open that issue. Check the identifier and your Linear connection."
-      )
-    ).toBeNull()
-  })
 
   // Displacement is decided at save time, not at open: a link added by the CLI
   // while the dialog sat open must not outlive the save that warned about it.

@@ -1772,30 +1772,6 @@ describe('generateBranchNameFromContext', () => {
 
 })
 
-describe('linkedIssue template substitution', () => {
-
- {
-    return {
-      kind: 'remote',
-      cwd: '/repo',
-      missingBinaryLocation: 'remote PATH',
-      execute: async (plan) => {
-        return {
-          stdout: '{"base":"main","title":"Fix login","body":"body","draft":false}',
-          stderr: '',
-          exitCode: 0,
-          timedOut: false
-        }
-      }
-    }
-  }
-
-  // Why: a fixture-unique sentinel — a short number like 42 also appears in the
-  // character counts that truncateDiffForPrompt/limitSection emit, so growing any
-  // fixture past its limit would fail these guards for reasons unrelated to leakage.
-
-})
-
 describe('trimGeneratedCommitMessage', () => {
   it('removes trailing whitespace from generated messages', () => {
     const message = trimGeneratedCommitMessage('Update docs\n\n')

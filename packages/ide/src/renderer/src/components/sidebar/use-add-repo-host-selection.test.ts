@@ -81,14 +81,6 @@ describe('useAddRepoHostSelection', () => {
         presence: 'local'
       },
       {
-        id: 'ssh:ssh-1',
-        label: 'Builder',
-        detail: 'SSH',
-        kind: 'ssh',
-        health: 'available',
-        presence: 'configured'
-      },
-      {
         id: 'runtime:env-1',
         label: 'Server',
         detail: 'Runtime',

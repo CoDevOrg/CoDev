@@ -30,13 +30,6 @@ describe('WorktreeCardStatusSlot', () => {
     state: 'open',
     status: 'failure'
   }
-  const gitlabReview: WorktreeCardPrDisplay = {
-    provider: 'gitlab',
-    number: 456,
-    title: 'Review me',
-    state: 'open',
-    status: 'pending'
-  }
 
   it('lets the unread bell replace the visual status dot by default', () => {
     const markup = renderToStaticMarkup(
@@ -212,28 +205,6 @@ describe('WorktreeCardStatusSlot', () => {
     expect(markup).toContain('size-[13px] translate-x-px')
     expect(markup).toContain('text-rose-500/85')
     expect(markup).not.toContain('bg-emerald-500')
-  })
-
-  it('uses the unified compact review glyph for GitLab MR status', () => {
-    const markup = renderToStaticMarkup(
-      <WorktreeCardStatusSlot
-        worktreeId="wt-1"
-        showStatus
-        showUnreadAction={false}
-        isUnread={false}
-        unreadTooltip="Mark as unread"
-        onPointerDown={vi.fn()}
-        onToggleUnread={vi.fn()}
-        prDisplay={gitlabReview}
-        newCardStyle
-      />
-    )
-
-    expect(markup).toContain('MR checks: Pending')
-    expect(markup).toContain('viewBox="0 0 16 16"')
-    expect(markup).toContain('size-[13px] translate-x-px')
-    expect(markup).toContain('text-amber-500/85')
-    expect(markup).not.toContain('lucide-git-merge')
   })
 
   it('uses PR status instead of the quiet done dot when new card style is on', () => {

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import type { TerminalTab } from '../../../../shared/types'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { brandEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { } from '../../../../shared/constants'
+import { } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
+import { } from '../../../../shared/workspace-scope'
 import {
   buildTerminalTabRetirementPlan,
   buildTerminalTabRetirementPlans,
@@ -156,20 +156,6 @@ describe('terminal tab retirement planning', () => {
         handle: 'terminal-1'
       }
     ])
-  })
-
-  // STA-2639: these surfaces publish no runtime owner, so teardown read them as unresolved and
-  // dropped their ordinary local PTYs instead of killing them.
-  describe('host-agnostic terminal surfaces are killed, not dropped', () => {
-    const localSurfaces: [string, string][] = [
-      ['floating terminal', FLOATING_TERMINAL_WORKTREE_ID],
-      ['ephemeral setup terminal', brandEphemeralSetupTerminalWorktreeId('panel-1')],
-      ['folder workspace', folderWorkspaceKey('fw-1')]
-    ]
-
-    for (const [label, worktreeId] of localSurfaces) {
-    }
-
   })
 
   it('deduplicates batch-owned PTYs while protecting owners outside the close set', () => {

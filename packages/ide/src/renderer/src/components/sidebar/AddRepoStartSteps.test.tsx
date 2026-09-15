@@ -16,7 +16,7 @@ vi.mock('@/components/ui/dialog', () => ({
   DialogTitle: ({ children }: { children: ReactModule.ReactNode }) => <h1>{children}</h1>
 }))
 
-function renderLocalStartStep(isSshLikely: boolean): string {
+function renderLocalStartStep(_isSshLikely: boolean): string {
   return renderToStaticMarkup(
     <AddRepoLocalStartStep
       repoCount={1}
@@ -26,7 +26,6 @@ function renderLocalStartStep(isSshLikely: boolean): string {
       nestedScanId={null}
       onBrowse={vi.fn()}
       onOpenCloneStep={vi.fn()}
-      onOpenRemoteStep={vi.fn()}
       onOpenCreateStep={vi.fn()}
       onStopNestedScan={vi.fn()}
     />
@@ -58,7 +57,7 @@ type LocalStartStepDomOptions = {
 }
 
 async function renderLocalStartStepDom(
-  isSshLikely: boolean,
+  _isSshLikely: boolean,
   options: LocalStartStepDomOptions = {}
 ): Promise<{
   container: HTMLDivElement
@@ -79,7 +78,6 @@ async function renderLocalStartStepDom(
           nestedScanId={options.nestedScanId ?? null}
           onBrowse={vi.fn()}
           onOpenCloneStep={vi.fn()}
-          onOpenRemoteStep={vi.fn()}
           onOpenCreateStep={vi.fn()}
           onStopNestedScan={vi.fn()}
         />
@@ -107,7 +105,6 @@ function getActionTitles(_isSshLikely: boolean): {
   const { primaryAction, secondaryActions } = getAddRepoLocalStartActions({
     onBrowse: vi.fn(),
     onOpenCloneStep: vi.fn(),
-    onOpenRemoteStep: vi.fn(),
     onOpenCreateStep: vi.fn()
   })
 
@@ -125,7 +122,6 @@ function getHostAwareActionModel(): {
     showRemoteAction: false,
     onBrowse: vi.fn(),
     onOpenCloneStep: vi.fn(),
-    onOpenRemoteStep: vi.fn(),
     onOpenCreateStep: vi.fn()
   })
   const createAction = secondaryActions.find((action) => action.kind === 'create')
@@ -145,7 +141,6 @@ function getRuntimeHostActionModel(): {
     browseHostKind: 'runtime',
     onBrowse: vi.fn(),
     onOpenCloneStep: vi.fn(),
-    onOpenRemoteStep: vi.fn(),
     onOpenCreateStep: vi.fn()
   })
 

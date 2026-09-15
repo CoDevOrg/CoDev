@@ -71,8 +71,7 @@ import { HeadlessEmulator } from '../daemon/headless-emulator'
 import {
   HEADLESS_RUNTIME_WINDOW_ID,
   type RuntimeMobileSessionTabsResult,
-  type RuntimeSyncWindowGraph,
-  type RuntimeTerminalCreate
+  type RuntimeSyncWindowGraph
 } from '../../shared/runtime-types'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
@@ -90,10 +89,6 @@ import {
 } from '../../shared/agent-prompt-injection'
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../shared/clipboard-text'
 import { projectHostSetupProjectionFromRepos } from '../../shared/project-host-setup-projection'
-import {
-  registerSshFilesystemProvider,
-  unregisterSshFilesystemProvider
-} from '../providers/ssh-filesystem-dispatch'
 import {
   registerPty as registerLocalPtyMemoryRow,
   unregisterPty as unregisterLocalPtyMemoryRow
@@ -215,7 +210,6 @@ const {
   sshGitProviders,
   sshProviderGenerations,
   getSshGitProviderMock,
-  getSshGitProviderGenerationMock,
   registerSshGitProviderMock,
   unregisterSshGitProviderMock,
   getActiveMultiplexerMock,
@@ -1124,16 +1118,6 @@ const store = {
     branchPrefixCustom: ''
   }),
   getProjects: () => []
-}
-
-function createRuntimeWithSshLease(
-  ptyId: string,
-  tabId: string,
-  state: 'expired' | 'terminated' = 'expired'
-): OrcaRuntimeService {
-  return new OrcaRuntimeService({
-    ...store,
-})
 }
 
 async function createExplicitAgentStatusHarness(options: {
@@ -2581,42 +2565,6 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
-  it('recovers a disconnected pane through one HUB-owned replacement', async () => {
-    const tabId = 'tab-recover'
-    const runtime = createRuntimeWithSshLease('pty-expired', tabId)
-    const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    runtime.registerPty('pty-expired', TEST_WORKTREE_ID, null, {
-      tabId,
-      leafId: HEADLESS_LEAF_ID
-    })
-    const expiredHandle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    runtime.onPtyExit('pty-expired', 0)
-    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
-      handle: 'term-replacement',
-      tabId,
-      paneKey,
-      ptyId: 'pty-replacement',
-      worktreeId: TEST_WORKTREE_ID,
-      title: null,
-      surface: 'background'
-    })
-
-    await expect(
-      runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, expiredHandle)
-    ).resolves.toMatchObject({
-      handle: 'term-replacement',
-      tabId,
-      leafId: HEADLESS_LEAF_ID,
-      worktreeId: TEST_WORKTREE_ID
-    })
-    expect(createTerminal).toHaveBeenCalledWith(`id:${TEST_WORKTREE_ID}`, {
-      tabId,
-      leafId: HEADLESS_LEAF_ID,
-      focus: false,
-      persistHostSessionBinding: true
-    })
-  })
-
   it('rejects missing host panes without authoritative expired binding evidence', async () => {
     const runtime = new OrcaRuntimeService(store)
     const tabId = 'tab-missing'
@@ -2677,89 +2625,6 @@ describe('OrcaRuntimeService', () => {
 
     expect(recovered.handle).not.toBe(oldHandle)
     expect(recovered.ptyId).toBe('pty-new')
-    expect(createTerminal).not.toHaveBeenCalled()
-  })
-
-  it('deduplicates concurrent pane recovery across stale viewer handles', async () => {
-    const tabId = 'tab-concurrent'
-    const runtime = createRuntimeWithSshLease('pty-expired', tabId)
-    const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    runtime.registerPty('pty-expired', TEST_WORKTREE_ID, null, {
-      tabId,
-      leafId: HEADLESS_LEAF_ID
-    })
-    const expiredHandle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    runtime.onPtyExit('pty-expired', 0)
-    let finishCreate!: (result: RuntimeTerminalCreate) => void
-    const pendingCreate = new Promise<RuntimeTerminalCreate>((resolve) => {
-      finishCreate = resolve
-    })
-    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockReturnValue(pendingCreate)
-
-    const first = runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, expiredHandle)
-    const second = runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, 'term-other-viewer')
-    finishCreate({
-      handle: 'term-replacement',
-      tabId,
-      paneKey,
-      ptyId: 'pty-replacement',
-      worktreeId: TEST_WORKTREE_ID,
-      title: null,
-      surface: 'background'
-    })
-
-    await expect(first).resolves.toEqual(expect.objectContaining({ handle: 'term-replacement' }))
-    await expect(second).rejects.toThrow('terminal_not_found')
-    expect(createTerminal).toHaveBeenCalledOnce()
-  })
-
-  it('clears a failed pane recovery so a later reconnect can retry', async () => {
-    const tabId = 'tab-retry'
-    const runtime = createRuntimeWithSshLease('pty-expired', tabId)
-    const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    runtime.registerPty('pty-expired', TEST_WORKTREE_ID, null, {
-      tabId,
-      leafId: HEADLESS_LEAF_ID
-    })
-    const expiredHandle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    runtime.onPtyExit('pty-expired', 0)
-    const createTerminal = vi
-      .spyOn(runtime, 'createTerminal')
-      .mockRejectedValueOnce(new Error('relay_reconnecting'))
-      .mockResolvedValueOnce({
-        handle: 'term-retry',
-        tabId,
-        paneKey,
-        ptyId: 'pty-retry',
-        worktreeId: TEST_WORKTREE_ID,
-        title: null,
-        surface: 'background'
-      })
-
-    await expect(
-      runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, expiredHandle)
-    ).rejects.toThrow('relay_reconnecting')
-    await expect(
-      runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, expiredHandle)
-    ).resolves.toMatchObject({ handle: 'term-retry' })
-    expect(createTerminal).toHaveBeenCalledTimes(2)
-  })
-
-  it('does not recover a pane whose authoritative SSH lease was terminated', async () => {
-    const tabId = 'tab-terminated'
-    const runtime = createRuntimeWithSshLease('pty-terminated', tabId, 'terminated')
-    const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    runtime.registerPty('pty-terminated', TEST_WORKTREE_ID, null, {
-      tabId,
-      leafId: HEADLESS_LEAF_ID
-    })
-    const handle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    runtime.onPtyExit('pty-terminated', 0)
-    const createTerminal = vi.spyOn(runtime, 'createTerminal')
-
-    await expect(runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, handle)).rejects.toThrow(
-      'terminal_not_recoverable'
-    )
     expect(createTerminal).not.toHaveBeenCalled()
   })
 
@@ -3445,7 +3310,6 @@ describe('OrcaRuntimeService', () => {
         hasConflicts: false
       })
     }
-    registerSshFilesystemProvider('ssh-1', fsProvider as never)
     const runtime = new OrcaRuntimeService(remoteStore as never)
 
     try {
@@ -3455,7 +3319,6 @@ describe('OrcaRuntimeService', () => {
         path: '//Server/Share/Repo'
       })
     } finally {
-      unregisterSshFilesystemProvider('ssh-1')
     }
 
     expect(listWorktrees).not.toHaveBeenCalled()
@@ -3510,7 +3373,6 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(
       createFolderWorkspaceRuntimeStore(folderWorkspace, projectGroup) as never
     )
-    registerSshFilesystemProvider('ssh-folder', fsProvider as never)
 
     try {
       await expect(
@@ -3523,7 +3385,6 @@ describe('OrcaRuntimeService', () => {
         isBinary: false
       })
     } finally {
-      unregisterSshFilesystemProvider('ssh-folder')
     }
 
     expect(fsProvider.stat).toHaveBeenCalledWith(folderPath)
@@ -5219,11 +5080,6 @@ describe('OrcaRuntimeService', () => {
         return metaById[worktreeId]
       }
     }
-    const fsProvider = {
-      readFile: vi.fn().mockResolvedValue({ isBinary: false, content: 'hooks:\n' }),
-      createDir: vi.fn().mockResolvedValue(undefined),
-      writeFile: vi.fn().mockResolvedValue(undefined)
-    }
     vi.mocked(getEffectiveHooksFromConfig).mockReturnValue({
       scripts: { setup: 'pnpm worktree:setup' }
     })
@@ -5233,7 +5089,6 @@ describe('OrcaRuntimeService', () => {
       .mockResolvedValueOnce({ id: 'pty-remote-agent' })
       .mockResolvedValueOnce({ id: 'pty-remote-setup' })
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-remote' })
-    registerSshFilesystemProvider('ssh-1', fsProvider as never)
     getActiveMultiplexerMock.mockReturnValue({ request: muxRequestMock, notify: vi.fn() })
     const runtime = new OrcaRuntimeService(remoteStore as never)
     runtime.setPtyController({
@@ -5318,7 +5173,6 @@ describe('OrcaRuntimeService', () => {
         })
       )
     } finally {
-      unregisterSshFilesystemProvider('ssh-1')
     }
   })
 
@@ -5349,11 +5203,6 @@ describe('OrcaRuntimeService', () => {
         return metaById[worktreeId]
       }
     }
-    const fsProvider = {
-      readFile: vi.fn().mockResolvedValue({ isBinary: false, content: 'hooks:\n' }),
-      createDir: vi.fn().mockResolvedValue(undefined),
-      writeFile: vi.fn().mockResolvedValue(undefined)
-    }
     vi.mocked(getEffectiveHooksFromConfig).mockReturnValue({
       scripts: { setup: 'pnpm worktree:setup' }
     })
@@ -5363,7 +5212,6 @@ describe('OrcaRuntimeService', () => {
       .mockResolvedValueOnce({ id: 'pty-remote-initial' })
       .mockResolvedValueOnce({ id: 'pty-remote-setup-split' })
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-remote-split' })
-    registerSshFilesystemProvider('ssh-1', fsProvider as never)
     getActiveMultiplexerMock.mockReturnValue({ request: muxRequestMock, notify: vi.fn() })
     const runtime = new OrcaRuntimeService(remoteStore as never)
     runtime.setPtyController({
@@ -5411,7 +5259,6 @@ describe('OrcaRuntimeService', () => {
         })
       )
     } finally {
-      unregisterSshFilesystemProvider('ssh-1')
     }
   })
 
@@ -5595,7 +5442,6 @@ describe('OrcaRuntimeService', () => {
       })
     }
     vi.mocked(parseOrcaYaml).mockReturnValue({ scripts: { setup: 'pnpm install' } })
-    registerSshFilesystemProvider('ssh-1', fsProvider as never)
     const runtime = new OrcaRuntimeService(remoteStore as never)
 
     try {
@@ -5609,7 +5455,6 @@ describe('OrcaRuntimeService', () => {
         }
       })
     } finally {
-      unregisterSshFilesystemProvider('ssh-1')
     }
 
     expect(fsProvider.readFile).toHaveBeenCalledWith('C:\\remote\\repo\\codev.yaml')
@@ -5677,7 +5522,6 @@ describe('OrcaRuntimeService', () => {
       createDir: vi.fn().mockResolvedValue(undefined),
       deletePath: vi.fn().mockResolvedValue(undefined)
     }
-    registerSshFilesystemProvider('ssh-1', fsProvider as never)
     const runtime = new OrcaRuntimeService(remoteStore as never)
 
     try {
@@ -5694,7 +5538,6 @@ describe('OrcaRuntimeService', () => {
         ok: true
       })
     } finally {
-      unregisterSshFilesystemProvider('ssh-1')
     }
 
     expect(fsProvider.readFile).toHaveBeenCalledWith('C:\\remote\\repo\\codev.yaml')
@@ -5738,7 +5581,6 @@ describe('OrcaRuntimeService', () => {
 
     it('reports ok for a missing project config and error for any other read failure', async () => {
       const readFile = vi.fn()
-      registerSshFilesystemProvider('ssh-1', { readFile } as never)
       const runtime = new OrcaRuntimeService(remoteStore as never)
 
       try {
@@ -5758,7 +5600,6 @@ describe('OrcaRuntimeService', () => {
           hasHooks: false
         })
       } finally {
-        unregisterSshFilesystemProvider('ssh-1')
       }
     })
 
@@ -5801,7 +5642,6 @@ describe('OrcaRuntimeService', () => {
       createDir: vi.fn().mockResolvedValue(undefined),
       deletePath: vi.fn().mockResolvedValue(undefined)
     }
-    registerSshFilesystemProvider('ssh-1', fsProvider as never)
     const runtime = new OrcaRuntimeService(remoteStore as never)
 
     try {
@@ -5816,7 +5656,6 @@ describe('OrcaRuntimeService', () => {
         ok: true
       })
     } finally {
-      unregisterSshFilesystemProvider('ssh-1')
     }
 
     expect(fsProvider.readFile).toHaveBeenCalledWith('/remote/repo/codev.yaml')
@@ -19626,9 +19465,6 @@ describe('OrcaRuntimeService', () => {
       })
     )
     runtime.setNotifier({ revealTerminalSession } as never)
-    registerSshFilesystemProvider(connectionId, {
-      stat: vi.fn(async () => ({ size: 0, type: 'directory', mtime: 1 }))
-    } as never)
 
     try {
       expect(runtime.prepareLegacyWorkerTerminalRecovery()).toMatchObject({
@@ -19649,7 +19485,6 @@ describe('OrcaRuntimeService', () => {
         deferredDispatchIds: []
       })
     } finally {
-      unregisterSshFilesystemProvider(connectionId)
     }
 
     expect(sshSession.sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeUndefined()
@@ -36197,7 +36032,6 @@ describe('OrcaRuntimeService', () => {
         }
       ])
     })
-    registerSshFilesystemProvider('ssh-1', fsProvider as never)
     const runtimeStore = {
       ...store,
       getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined),
@@ -36220,7 +36054,6 @@ describe('OrcaRuntimeService', () => {
         })
       ).rejects.toThrow('Worktree instance identity was unavailable')
     } finally {
-      unregisterSshFilesystemProvider('ssh-1')
     }
 
     expect(fsProvider.createDir).not.toHaveBeenCalled()
@@ -41256,7 +41089,6 @@ describe('OrcaRuntimeService', () => {
       createDir: vi.fn().mockResolvedValue(undefined),
       writeFile: vi.fn().mockResolvedValue(undefined)
     }
-    registerSshFilesystemProvider('ssh-1', fsProvider as never)
     const runtime = new OrcaRuntimeService(remoteStore as never)
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-remote-codex-draft' })
     runtime.setPtyController({
@@ -41297,7 +41129,6 @@ describe('OrcaRuntimeService', () => {
       )
       expect(metaById[result.worktree.id]).toMatchObject({ createdWithAgent: 'codex' })
     } finally {
-      unregisterSshFilesystemProvider('ssh-1')
     }
   })
 
@@ -41338,7 +41169,6 @@ describe('OrcaRuntimeService', () => {
       createDir: vi.fn().mockResolvedValue(undefined),
       writeFile: vi.fn().mockResolvedValue(undefined)
     }
-    registerSshFilesystemProvider('ssh-1', fsProvider as never)
     const runtime = new OrcaRuntimeService(remoteStore as never)
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-remote-codex-command' })
     runtime.setPtyController({
@@ -41379,7 +41209,6 @@ describe('OrcaRuntimeService', () => {
       )
       expect(metaById[result.worktree.id]).toMatchObject({ createdWithAgent: 'codex' })
     } finally {
-      unregisterSshFilesystemProvider('ssh-1')
     }
   })
 

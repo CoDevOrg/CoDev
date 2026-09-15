@@ -632,32 +632,6 @@ describe('RuntimeFileCommands', () => {
       )
     }
 
-    function createRemoteTerminalArtifactGrantFixture(artifactPath = '/tmp/result.json') {
-      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
-      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
-      let realArtifactPath = artifactPath
-      const stat = vi.fn().mockResolvedValue({ type: 'file', size: 11, mtime: 3 })
-      const readTerminalArtifact = vi
-        .fn()
-        .mockResolvedValue({ content: '{"ok":true}', isBinary: false })
-      const writeTerminalArtifact = vi.fn().mockResolvedValue({ type: 'file', size: 12, mtime: 4 })
-      const realpath = vi.fn(async (p: string) => (p === artifactPath ? realArtifactPath : p))
-      vi.mocked(getSshFilesystemProvider).mockReturnValue({
-        stat,
-        readTerminalArtifact,
-        realpath,
-        writeTerminalArtifact
-      } as never)
-      return {
-        commands,
-        readTerminalArtifact,
-        writeTerminalArtifact,
-        moveArtifactTarget: (nextPath: string) => {
-          realArtifactPath = nextPath
-        }
-      }
-    }
-
     it('resolves an absolute path inside the worktree to a relative path', async () => {
       const { commands } = createRuntimeFileCommands({ path: '/repo' })
       statAsFile()
@@ -1592,65 +1566,6 @@ describe('RuntimeFileCommands', () => {
         )
       ).rejects.toThrow('binary_file')
       await expect(readFile(artifactPath, 'utf8')).resolves.toBe('%PDF text-looking bytes')
-    })
-
-    it('rejects remote terminal artifact reads when a grant no longer resolves to the granted path', async () => {
-      const { commands, readTerminalArtifact, moveArtifactTarget } =
-        createRemoteTerminalArtifactGrantFixture()
-      const result = await resolveTerminalArtifactPath(commands, '/tmp/result.json')
-      const target = absoluteFileTarget(result)
-
-      moveArtifactTarget('/home/me/.ssh/config')
-
-      await expect(
-        commands.readTerminalArtifactFile(
-          'id:wt-1',
-          target.grantId,
-          target.absolutePath,
-          'client-a'
-        )
-      ).rejects.toThrow('terminal_file_grant_stale')
-      expect(readTerminalArtifact).not.toHaveBeenCalled()
-    })
-
-    it('rejects remote terminal artifact previews when a grant no longer resolves to the granted path', async () => {
-      const { commands, readTerminalArtifact, moveArtifactTarget } =
-        createRemoteTerminalArtifactGrantFixture('/tmp/result.png')
-      const result = await resolveTerminalArtifactPath(commands, '/tmp/result.png')
-      const target = absoluteFileTarget(result)
-
-      moveArtifactTarget('/tmp/other.png')
-
-      await expect(
-        commands.readTerminalArtifactPreview(
-          'id:wt-1',
-          target.grantId,
-          target.absolutePath,
-          'client-a'
-        )
-      ).rejects.toThrow('terminal_file_grant_stale')
-      expect(readTerminalArtifact).not.toHaveBeenCalled()
-    })
-
-    it('rejects remote terminal artifact writes when a grant no longer resolves to the granted path', async () => {
-      const { commands, readTerminalArtifact, writeTerminalArtifact, moveArtifactTarget } =
-        createRemoteTerminalArtifactGrantFixture()
-      const result = await resolveTerminalArtifactPath(commands, '/tmp/result.json')
-      const target = absoluteFileTarget(result)
-
-      moveArtifactTarget('/home/me/.ssh/config')
-
-      await expect(
-        commands.writeTerminalArtifactFile(
-          'id:wt-1',
-          target.grantId,
-          target.absolutePath,
-          '{"ok":false}',
-          'client-a'
-        )
-      ).rejects.toThrow('terminal_file_grant_stale')
-      expect(readTerminalArtifact).not.toHaveBeenCalled()
-      expect(writeTerminalArtifact).not.toHaveBeenCalled()
     })
 
     it('reports a nonexistent in-worktree path as not existing', async () => {

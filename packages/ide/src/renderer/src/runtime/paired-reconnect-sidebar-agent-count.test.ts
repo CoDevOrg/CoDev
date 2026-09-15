@@ -70,7 +70,7 @@ type TestStore = ReturnType<typeof createTestStore>
 type PaneSpec = {
   hostTabId: string
   leafId: string
-  agentType: 'claude' | 'omp'
+  agentType: 'claude' | 'codex'
   /** Which writer publishes this pane's agent status. */
   statusSource: 'host-hook' | 'client-bytes'
   /** Host-resolved surface title. */
@@ -90,28 +90,28 @@ const PANES: PaneSpec[] = [
   {
     hostTabId: 'host-tab-1',
     leafId: leafUuid(1),
-    agentType: 'omp',
+    agentType: 'codex',
     statusSource: 'host-hook',
     title: 'OMP'
   },
   {
     hostTabId: 'host-tab-2',
     leafId: leafUuid(2),
-    agentType: 'omp',
+    agentType: 'codex',
     statusSource: 'host-hook',
     title: 'OMP'
   },
   {
     hostTabId: 'host-tab-3',
     leafId: leafUuid(3),
-    agentType: 'omp',
+    agentType: 'codex',
     statusSource: 'client-bytes',
     title: 'Terminal'
   },
   {
     hostTabId: 'host-tab-4',
     leafId: leafUuid(4),
-    agentType: 'omp',
+    agentType: 'codex',
     statusSource: 'client-bytes',
     title: 'Terminal'
   },

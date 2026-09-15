@@ -20,7 +20,7 @@ function makeRecord(
     paneKey,
     tabId: 'tab-1',
     worktreeId: 'wt-1',
-    agent: 'omp',
+    agent: 'claude',
     providerSession: { key: 'session_id', id: 'sess-1' },
     prompt: 'finish the task',
     state: 'working',
@@ -28,9 +28,9 @@ function makeRecord(
     updatedAt: 1,
     origin,
     launchConfig: {
-      agentCommand: 'omp',
+      agentCommand: 'claude',
       agentArgs: '',
-      agentEnv: { PI_CODING_AGENT_DIR: '/tmp/omp-agent' }
+      agentEnv: {}
     }
   }
 }

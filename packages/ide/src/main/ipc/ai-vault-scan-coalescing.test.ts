@@ -34,8 +34,6 @@ beforeEach(() => {
   mocks.scanRemoteAiVaultSessions.mockResolvedValue(EMPTY_RESULT)
   mocks.scanRuntimeAiVaultSessions.mockResolvedValue(EMPTY_RESULT)
   mocks.getSshFilesystemProvider.mockReturnValue({} as IFilesystemProvider)
-  mocks.getActiveSshAiVaultHostInfo.mockReturnValue(hostInfo())
-  mocks.getActiveSshAiVaultHostInfos.mockReturnValue([hostInfo()])
   mocks.requestActiveSshAiVaultSessionList.mockResolvedValue(null)
 })
 
@@ -115,15 +113,6 @@ function registerRuntimeHost(): void {
     ],
     scanRuntimeAiVaultSessions: mocks.scanRuntimeAiVaultSessions
   })
-}
-
-function hostInfo() {
-  return {
-    targetId: 'dev-box',
-    executionHostId: 'ssh:dev-box' as const,
-    remoteHome: '/home/ada',
-    hostPlatform: getRemoteHostPlatform('linux-x64')
-  }
 }
 
 function ipcHandler(channel: string): (...args: unknown[]) => unknown {
