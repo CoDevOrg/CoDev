@@ -1,1 +1,0 @@
-import{Eg as e,Sg as t}from"./web-index-B5IJlBI7.js";var n=e(t());const r=(0,n.createContext)(null);function i(){let e=(0,n.useContext)(r);if(!e)throw Error(`useConfirmationDialog must be used inside ConfirmationDialogProvider`);return e}export{i as n,r as t};

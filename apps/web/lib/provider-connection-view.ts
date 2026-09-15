@@ -138,6 +138,8 @@ export type ProviderConnectionSnapshot = {
   claudeCliToken: ClaudeCliTokenRecord;
   /** Whether the in-app "Connect Claude" flow can run in this deployment. */
   hostedClaudeConnect: boolean;
+  /** Whether the in-app "Connect ChatGPT" device-code flow can run. */
+  hostedOpenAIConnect: boolean;
   /** Whether the *current workspace* (not the viewer personally) has a
    *  connected, shared (`--org`) login for this provider — only populated
    *  when the snapshot was loaded with a workspace id; see
@@ -254,6 +256,7 @@ export function toProviderConnectionSnapshot(input: {
   >;
   claudeCliToken?: ProviderCredentialStatus | null;
   hostedClaudeConnect?: boolean;
+  hostedOpenAIConnect?: boolean;
   sharedWorkspaceLogin?: { anthropic: boolean; openai: boolean };
 }): ProviderConnectionSnapshot {
   const connections = PROVIDERS.map((provider) =>
@@ -273,6 +276,7 @@ export function toProviderConnectionSnapshot(input: {
     ),
     claudeCliToken: toClaudeCliTokenRecord(input.claudeCliToken ?? null),
     hostedClaudeConnect: input.hostedClaudeConnect ?? false,
+    hostedOpenAIConnect: input.hostedOpenAIConnect ?? false,
     ...(input.sharedWorkspaceLogin
       ? { sharedWorkspaceLogin: input.sharedWorkspaceLogin }
       : {}),

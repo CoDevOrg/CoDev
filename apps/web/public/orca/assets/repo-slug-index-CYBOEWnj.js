@@ -1,1 +1,0 @@
-import{Eg as e,Sg as t,cn as n,ln as r,un as i}from"./web-index-B5IJlBI7.js";t();var a=new Map,o=new Map;function s(e){a.delete(e),o.set(e,(o.get(e)??0)+1)}function c(e){let t=`:${e}`,r=new Set;for(let e of i.keys())e.endsWith(t)&&r.add(e);for(let e of a.keys())e.endsWith(t)&&r.add(e);for(let e of r)n(e),s(e)}export{c as clearRepoSlugCacheEntry};

@@ -34,6 +34,8 @@ import type { SettingsNavSection } from '@/lib/settings-navigation-types'
 import { getGeneralPaneSearchEntries } from '@/components/settings/general-search'
 import { getAgentsPaneSearchEntries } from '@/components/settings/agents-search'
 import { getAccountsPaneSearchEntries } from '@/components/settings/accounts-search'
+import { getCodevAccountsSearchEntries } from '@/components/settings/codev-accounts-search'
+import { filterCodevEmbeddedSettingsSections } from '@/components/settings/codev-personal-settings'
 import { getIntegrationsPaneSearchEntries } from '@/components/settings/integrations-search'
 import { getGitPaneSearchEntries } from '@/components/settings/git-search'
 import { getGitProviderApiBudgetSearchEntries } from '@/components/settings/git-provider-api-budget-search'
@@ -101,6 +103,7 @@ export function buildSettingsNavigationMetadata({
   isWindowsTerminalHost = isWindows,
   isWebClient,
   isDev = import.meta.env.DEV,
+  isCodevEmbedded = false,
   repos
 }: {
   isMac: boolean
@@ -109,6 +112,7 @@ export function buildSettingsNavigationMetadata({
   isWindowsTerminalHost?: boolean
   isWebClient: boolean
   isDev?: boolean
+  isCodevEmbedded?: boolean
   repos: readonly Repo[]
 }): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
@@ -127,7 +131,7 @@ export function buildSettingsNavigationMetadata({
     }
   }
 
-  return [
+  const sections: SettingsNavSection[] = [
     // Why: this array's order must mirror SETTINGS_NAV_GROUPS so the Settings
     // sidebar and the Cmd+J palette both read top-to-bottom in the same grouped
     // order — keep each new entry beside its group's siblings.
@@ -148,12 +152,16 @@ export function buildSettingsNavigationMetadata({
         'auto.hooks.useSettingsNavigationMetadata.f70ac54d38',
         'AI Provider Accounts'
       ),
-      description: translate(
-        'auto.hooks.useSettingsNavigationMetadata.b1c2f8b0ac',
-        'Optional account switching and usage setup for Claude, Codex, Gemini, OpenCode Go, MiniMax, and Grok.'
-      ),
+      description: isCodevEmbedded
+        ? 'Connect the accounts your agents run on. Chat rooms and coding workspaces are set up separately.'
+        : translate(
+            'auto.hooks.useSettingsNavigationMetadata.b1c2f8b0ac',
+            'Optional account switching and usage setup for Claude, Codex, Gemini, OpenCode Go, MiniMax, and Grok.'
+          ),
       icon: UserCog,
-      searchEntries: getAccountsPaneSearchEntries(),
+      searchEntries: isCodevEmbedded
+        ? getCodevAccountsSearchEntries()
+        : getAccountsPaneSearchEntries(),
       group: 'capabilities',
       badge: translate('auto.hooks.useSettingsNavigationMetadata.7c79d3b7bf', 'Optional')
     },
@@ -461,6 +469,8 @@ export function buildSettingsNavigationMetadata({
       }
     })
   ]
+
+  return filterCodevEmbeddedSettingsSections(sections, isCodevEmbedded)
 }
 
 export function useSettingsNavigationMetadata(): SettingsNavSection[] {
@@ -475,6 +485,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   const isMac = isMacUserAgent()
   const isWindows = isWindowsUserAgent()
   const isWebClient = isWebClientLocation()
+  const isCodevEmbedded = Boolean(window.__CODEV_EMBEDDED__)
   const windowsTerminalCapabilityOwnerKey = useWindowsTerminalCapabilityOwnerKey(
     settings?.activeRuntimeEnvironmentId
   )
@@ -514,6 +525,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
         isWindowsTerminalHost,
         isWebClient,
         isDev: import.meta.env.DEV,
+        isCodevEmbedded,
         repos
       }),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- activeLocale is read implicitly by the translate() calls inside buildSettingsNavigationMetadata; without it the memo keeps the previous language's sections.
@@ -523,6 +535,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
       isLocalWindowsHost,
       isWindowsTerminalHost,
       isWebClient,
+      isCodevEmbedded,
       repos,
       activeLocale
     ]

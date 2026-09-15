@@ -9,13 +9,29 @@
  * context to apply it to.
  */
 
+/**
+ * Orca CLI / token "app connections" that cannot run in CoDev's hosted
+ * workspace: `gh` / `glab`, GitLab, Bitbucket, Azure DevOps, Gitea, Linear,
+ * and Jira. GitHub for CoDev is the account OAuth on home settings, not these
+ * cards. Hide the Settings panes that only exist to wire those up.
+ */
+export const CODEV_EMBEDDED_HIDDEN_SETTINGS_SECTION_IDS = new Set([
+  'integrations',
+  'linear',
+  'tasks'
+])
+
 /** Section ids that belong to the person rather than a workspace. */
 const PERSONAL_SECTION_IDS = new Set([
   'agents',
   'accounts',
   'orchestration',
+  'linear',
+  'computer-use',
+  'voice',
   'general',
   'integrations',
+  'mobile',
   'appearance',
   'input',
   'notifications',
@@ -32,8 +48,28 @@ export function isCodevSettingsOnly(
   return target.__CODEV_SETTINGS_ONLY__ === true
 }
 
+export function isCodevEmbedded(
+  target: Pick<Window, 'self'> & { __CODEV_EMBEDDED__?: boolean } = window
+): boolean {
+  return target.__CODEV_EMBEDDED__ === true
+}
+
 export function isPersonalSettingsSection(sectionId: string): boolean {
   return PERSONAL_SECTION_IDS.has(sectionId)
+}
+
+export function isCodevEmbeddedHiddenSettingsSection(sectionId: string): boolean {
+  return CODEV_EMBEDDED_HIDDEN_SETTINGS_SECTION_IDS.has(sectionId)
+}
+
+export function filterCodevEmbeddedSettingsSections<T extends { id: string }>(
+  sections: readonly T[],
+  embedded: boolean
+): T[] {
+  if (!embedded) {
+    return [...sections]
+  }
+  return sections.filter((section) => !isCodevEmbeddedHiddenSettingsSection(section.id))
 }
 
 /**

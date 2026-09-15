@@ -82,7 +82,12 @@ import {
   isWebClientLocation,
   useSettingsNavigationMetadata
 } from '@/hooks/useSettingsNavigationMetadata'
-import { filterPersonalSettingsSections, isCodevSettingsOnly } from './codev-personal-settings'
+import {
+  filterPersonalSettingsSections,
+  isCodevEmbedded,
+  isCodevSettingsOnly
+} from './codev-personal-settings'
+import { CODEV_PROVIDER_ACCOUNTS_DESCRIPTION } from './codev-provider-connection-types'
 import type {
   SettingsNavGroup,
   SettingsNavInstallStatus,
@@ -689,6 +694,7 @@ function Settings(): React.JSX.Element {
     skillFreshnessInventory
   ])
   const codevSettingsOnly = useMemo(() => isCodevSettingsOnly(), [])
+  const codevEmbedded = useMemo(() => isCodevEmbedded(), [])
   // Why: Profile has no upstream nav entry at all — it's a CoDev-only concept
   // that only exists in the personal settings surface, so it's injected here
   // rather than added to useSettingsNavigationMetadata's native registry.
@@ -1159,10 +1165,14 @@ function Settings(): React.JSX.Element {
                     'auto.components.settings.Settings.ad6c529693',
                     'AI Provider Accounts'
                   )}
-                  description={translate(
-                    'auto.components.settings.Settings.21f09426ea',
-                    'Optional. Orca works with your existing provider logins; add accounts only if you want Orca to help switch between them.'
-                  )}
+                  description={
+                    codevEmbedded
+                      ? CODEV_PROVIDER_ACCOUNTS_DESCRIPTION
+                      : translate(
+                          'auto.components.settings.Settings.21f09426ea',
+                          'Optional. Orca works with your existing provider logins; add accounts only if you want Orca to help switch between them.'
+                        )
+                  }
                   badge={translate(
                     'auto.hooks.useSettingsNavigationMetadata.7c79d3b7bf',
                     'Optional'
@@ -1170,8 +1180,9 @@ function Settings(): React.JSX.Element {
                   searchEntries={getSectionSearchEntries('accounts')}
                 >
                   {isSectionMounted('accounts') ? (
-                    <div className="space-y-4">
+                    codevEmbedded ? (
                       <CodevProviderConnectionsSection />
+                    ) : (
                       <AccountsPane
                         settings={settings}
                         updateSettings={updateSettings}
@@ -1181,7 +1192,7 @@ function Settings(): React.JSX.Element {
                         wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
                         accountOwnerPlatform={windowsTerminalCapabilities.hostPlatform}
                       />
-                    </div>
+                    )
                   ) : null}
                 </SettingsSection>
 
@@ -1231,18 +1242,23 @@ function Settings(): React.JSX.Element {
                   ) : null}
                 </SettingsSection>
 
-                <SettingsSection
-                  id="integrations"
-                  title={translate('auto.components.settings.Settings.c9ca101a3b', 'Integrations')}
-                  description={translate(
-                    'auto.components.settings.Settings.b07041697f',
-                    'Connect GitHub and source-hosting services.'
-                  )}
-                  searchEntries={getSectionSearchEntries('integrations')}
-                  bodyClassName="rounded-none border-0 bg-transparent p-0 shadow-none"
-                >
-                  {isSectionMounted('integrations') ? <IntegrationsPane /> : null}
-                </SettingsSection>
+                {codevEmbedded ? null : (
+                  <SettingsSection
+                    id="integrations"
+                    title={translate(
+                      'auto.components.settings.Settings.c9ca101a3b',
+                      'Integrations'
+                    )}
+                    description={translate(
+                      'auto.components.settings.Settings.b07041697f',
+                      'Connect GitHub and source-hosting services.'
+                    )}
+                    searchEntries={getSectionSearchEntries('integrations')}
+                    bodyClassName="rounded-none border-0 bg-transparent p-0 shadow-none"
+                  >
+                    {isSectionMounted('integrations') ? <IntegrationsPane /> : null}
+                  </SettingsSection>
+                )}
 
                 <SettingsSection
                   id="git"
@@ -1318,10 +1334,7 @@ function Settings(): React.JSX.Element {
                     searchEntries={getSectionSearchEntries('browser')}
                   >
                     {isSectionMounted('browser') ? (
-                      <BrowserPane
-                        settings={settings}
-                        updateSettings={updateSettings}
-                      />
+                      <BrowserPane settings={settings} updateSettings={updateSettings} />
                     ) : null}
                   </SettingsSection>
                 ) : null}

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import {
   useActiveRepo,
@@ -25,10 +24,6 @@ import {
   buildAiVaultProjectContext,
   buildAiVaultSessionProjectById
 } from './ai-vault-session-projects'
-import {
-  resolveAiVaultSessionResumeActions,
-  resolveAiVaultSessionResumeState
-} from './ai-vault-session-resume'
 import { useAiVaultSessionLaunchActions } from './ai-vault-session-launch-actions'
 import {
   useAiVaultSessionWorktreeMap,
@@ -50,7 +45,8 @@ import { usePersistedAiVaultViewOptions } from './use-persisted-ai-vault-view-op
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
 import { AiVaultScanIssueBanners } from './AiVaultScanIssueBanners'
 import { CodevSharedSessionPanel } from './CodevSharedSessionPanel'
-import { startCodevManagedAgent } from '@/web/codev-managed-agent'
+import { useCodevVaultManagedAgent } from './use-codev-vault-managed-agent'
+import { useAiVaultSessionLookups } from './use-ai-vault-session-lookups'
 
 export default function AiVaultPanel(): React.JSX.Element {
   const activeWorktreeId = useActiveWorktreeId()
@@ -90,8 +86,15 @@ export default function AiVaultPanel(): React.JSX.Element {
     resetViewOptions
   } = usePersistedAiVaultViewOptions()
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
-  const [creatingProposal, setCreatingProposal] = useState(false)
   const [sharedRefreshToken, setSharedRefreshToken] = useState(0)
+  const bumpSharedRefresh = useCallback(() => {
+    setSharedRefreshToken((current) => current + 1)
+  }, [])
+  const { creating: creatingProposal, createProposal } = useCodevVaultManagedAgent(
+    activeWorktreeId,
+    activeWorktree?.repoId ?? activeRepo?.id ?? null,
+    bumpSharedRefresh
+  )
   const userChangedScopeRef = useRef(false)
   const preferredScopeRef = useRef<AiVaultScope>(DEFAULT_AI_VAULT_SCOPE)
 
@@ -253,42 +256,13 @@ export default function AiVaultPanel(): React.JSX.Element {
     [filteredSessions, group, projectLabelByKey, sessionProjectById]
   )
 
-  const copyText = useCallback(async (text: string, label: string): Promise<void> => {
-    await window.api.ui.writeClipboardText(text)
-    toast.success(
-      translate('auto.components.right.sidebar.AiVaultPanel.valueCopied', '{{value0}} copied', {
-        value0: label
-      })
-    )
-  }, [])
-
-  const getSessionResumeState = useCallback(
-    (session: AiVaultSession) =>
-      resolveAiVaultSessionResumeState({
-        sessionFilePath: session.filePath,
-        sessionExecutionHostId: session.executionHostId,
-        worktreeInfo: getSessionWorktreeInfo(session),
-        activeWorktreeId: effectiveActiveWorktreeId,
-        worktrees: allWorktrees,
-        repos,
-        targetState: resumeTargetState
-      }),
-    [allWorktrees, effectiveActiveWorktreeId, getSessionWorktreeInfo, repos, resumeTargetState]
-  )
-
-  const getSessionResumeActions = useCallback(
-    (session: AiVaultSession) =>
-      resolveAiVaultSessionResumeActions({
-        sessionFilePath: session.filePath,
-        sessionExecutionHostId: session.executionHostId,
-        worktreeInfo: getSessionWorktreeInfo(session),
-        activeWorktreeId: effectiveActiveWorktreeId,
-        worktrees: allWorktrees,
-        repos,
-        targetState: resumeTargetState
-      }),
-    [allWorktrees, effectiveActiveWorktreeId, getSessionWorktreeInfo, repos, resumeTargetState]
-  )
+  const { copyText, getSessionResumeState, getSessionResumeActions } = useAiVaultSessionLookups({
+    effectiveActiveWorktreeId,
+    getSessionWorktreeInfo,
+    allWorktrees,
+    repos,
+    resumeTargetState
+  })
 
   const handleScopeChange = useCallback((nextScope: AiVaultScope) => {
     preferredScopeRef.current = nextScope
@@ -307,26 +281,6 @@ export default function AiVaultPanel(): React.JSX.Element {
       return next
     })
   }, [])
-
-  const createProposal = useCallback(() => {
-    setCreatingProposal(true)
-    void startCodevManagedAgent({
-      baseWorktreeId: activeWorktreeId,
-      repoId: activeWorktree?.repoId ?? activeRepo?.id
-    })
-      .then(() => {
-        setSharedRefreshToken((current) => current + 1)
-        toast.success('CoDev agent ready', {
-          description: 'Use Agents to queue its first instruction.'
-        })
-      })
-      .catch((error: unknown) => {
-        toast.error('Failed to prepare managed proposal', {
-          description: error instanceof Error ? error.message : String(error)
-        })
-      })
-      .finally(() => setCreatingProposal(false))
-  }, [activeRepo?.id, activeWorktree?.id, activeWorktree?.repoId, activeWorktreeId])
 
   return (
     <div className="@container/ai-vault flex h-full min-h-0 flex-col bg-sidebar">

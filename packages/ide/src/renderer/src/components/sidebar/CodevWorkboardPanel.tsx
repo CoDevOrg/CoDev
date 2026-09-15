@@ -54,7 +54,9 @@ export function CodevWorkboardPanel({ open }: { open: boolean }): JSX.Element | 
   }, [])
 
   const refresh = useCallback(async () => {
-    if (!embedded || snapshot.status !== 'connected') return
+    if (!embedded || snapshot.status !== 'connected') {
+      return
+    }
     setBusy('refresh')
     try {
       const result = await requestCodevBridge<CodevWorkboardSnapshot>('workboard.list')
@@ -80,12 +82,16 @@ export function CodevWorkboardPanel({ open }: { open: boolean }): JSX.Element | 
   }, [embedded, snapshot.status])
 
   useEffect(() => {
-    if (!open || !embedded || snapshot.status !== 'connected') return
+    if (!open || !embedded || snapshot.status !== 'connected') {
+      return
+    }
     void refresh()
   }, [embedded, open, refresh, snapshot.status])
 
   const startSession = useCallback(async () => {
-    if (!embedded || snapshot.status !== 'connected') return
+    if (!embedded || snapshot.status !== 'connected') {
+      return
+    }
     setBusy('create')
     try {
       await startCodevManagedAgent()

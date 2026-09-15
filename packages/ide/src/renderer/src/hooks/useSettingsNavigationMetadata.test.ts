@@ -18,6 +18,7 @@ function ids(
     isWindows?: boolean
     isWebClient?: boolean
     isDev?: boolean
+    isCodevEmbedded?: boolean
   } = {}
 ): string[] {
   return buildSettingsNavigationMetadata({
@@ -25,6 +26,7 @@ function ids(
     isWindows: args.isWindows ?? false,
     isWebClient: args.isWebClient ?? false,
     isDev: args.isDev ?? false,
+    isCodevEmbedded: args.isCodevEmbedded ?? false,
     repos: [repo]
   }).map((section) => section.id)
 }
@@ -252,6 +254,33 @@ describe('settings navigation metadata', () => {
   it('keeps macOS permissions mac-only', () => {
     expect(ids({ isMac: false })).not.toContain('developer-permissions')
     expect(ids({ isMac: true })).toContain('developer-permissions')
+  })
+
+  it('uses the CoDev provider-account copy instead of Orca account switching when embedded', () => {
+    const section = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: true,
+      isCodevEmbedded: true,
+      repos: [repo]
+    }).find((entry) => entry.id === 'accounts')
+
+    expect(section?.description).toContain('Chat rooms and coding workspaces')
+    expect(section?.searchEntries.some((entry) => entry.keywords?.includes('cursor'))).toBe(true)
+    expect(section?.description).not.toContain('Gemini')
+  })
+
+  it('hides CLI app connections from CoDev-embedded workspace Settings', () => {
+    const embeddedIds = ids({
+      isWebClient: true,
+      isCodevEmbedded: true
+    })
+
+    expect(embeddedIds).not.toContain('integrations')
+    expect(embeddedIds).not.toContain('linear')
+    expect(embeddedIds).not.toContain('tasks')
+    expect(embeddedIds).toContain('accounts')
+    expect(ids({ isWebClient: true })).toContain('integrations')
   })
 
   it('does not import Settings page or pane UI modules from the metadata hook', () => {

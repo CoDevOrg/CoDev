@@ -13,6 +13,8 @@ import { useNativeChatCanSend } from './use-native-chat-can-send'
 import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { isCodevEmbedded } from '@/web/codev-embedded'
+import { useCodevAgentSendGate } from '@/web/codev-provider-readiness'
+import { CodevFirstChatProviderSetup } from '../settings/CodevFirstChatProviderSetup'
 import { NativeChatSessionGate } from './NativeChatSessionGate'
 import { useNativeChatInteractiveSend } from './use-native-chat-interactive-send'
 import { findTabAgentEntry } from './native-chat-tab-agent-entry'
@@ -427,6 +429,7 @@ function NativeChatResolvedView({
   // Non-CoDev builds keep the existing tab-bar/shortcut toggle instead.
   const [terminalDrawerOpen, setTerminalDrawerOpen] = useState(false)
   const codevEmbedded = isCodevEmbedded()
+  const sendGate = useCodevAgentSendGate()
   const drawerWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const drawerPtyId = useCodevDrawerTerminal({
     worktreeId: codevEmbedded ? drawerWorktreeId : null,
@@ -562,7 +565,11 @@ function NativeChatResolvedView({
         ) : viewState.kind === 'error' ? (
           <NativeChatEmptyState kind="error" message={viewState.message} />
         ) : viewState.kind === 'empty' ? (
-          <NativeChatEmptyState kind="empty" agent={agent} />
+          sendGate.blocked ? (
+            <CodevFirstChatProviderSetup reason={sendGate.reason} />
+          ) : (
+            <NativeChatEmptyState kind="empty" agent={agent} />
+          )
         ) : (
           <NativeChatMessageList
             session={sessionWithPending}

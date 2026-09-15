@@ -331,8 +331,9 @@ function TabBarInner({
     [agentCmdOverrides, defaultAgent, detectedIds]
   )
   const isWebClient = (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ === true
-  const windowsTerminalCapabilityOwnerKey =
-    getWindowsTerminalCapabilityOwnerKey(activeRuntimeEnvironmentId)
+  const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
+    activeRuntimeEnvironmentId
+  )
   const runtimeTarget = useMemo(
     () => getActiveRuntimeTarget({ activeRuntimeEnvironmentId }),
     [activeRuntimeEnvironmentId]
@@ -890,7 +891,9 @@ function TabBarInner({
   // something else. `viewMode` is the signal that survives a paired host's tab
   // mirror; `launchAgent` comes back unset from it.
   const codevChatTabId = useMemo(() => {
-    if (!isCodevEmbedded()) return null
+    if (!isCodevEmbedded()) {
+      return null
+    }
     const chat = unifiedTabs.find((tab) => tab.viewMode === 'chat')
     return chat?.entityId ?? chat?.id ?? null
   }, [unifiedTabs])

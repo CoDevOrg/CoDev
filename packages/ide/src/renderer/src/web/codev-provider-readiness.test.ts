@@ -1,17 +1,20 @@
 // @vitest-environment happy-dom
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  applyCodevProviderReadiness,
   getCodevProviderReadiness,
   installCodevProviderReadinessListener,
   isAgentSendBlocked,
+  requestCodevProviderReadinessRefresh,
   resetCodevProviderReadinessForTest,
   setCodevProviderReadinessForTest
 } from './codev-provider-readiness'
 
 afterEach(() => {
   resetCodevProviderReadinessForTest()
+  vi.restoreAllMocks()
 })
 
 describe('isAgentSendBlocked', () => {
@@ -100,5 +103,49 @@ describe('setCodevProviderReadinessForTest', () => {
       settingsHref: null
     })
     expect(isAgentSendBlocked(getCodevProviderReadiness())).toBe(true)
+  })
+})
+
+describe('applyCodevProviderReadiness', () => {
+  it('unblocks send after a local connect without waiting for the parent', () => {
+    applyCodevProviderReadiness({
+      ready: false,
+      agent: null,
+      reason: 'blocked',
+      settingsHref: null
+    })
+    applyCodevProviderReadiness({
+      ready: true,
+      agent: 'claude',
+      reason: null,
+      settingsHref: null
+    })
+    expect(getCodevProviderReadiness()).toMatchObject({ ready: true, agent: 'claude' })
+    expect(isAgentSendBlocked(getCodevProviderReadiness())).toBe(false)
+  })
+})
+
+describe('requestCodevProviderReadinessRefresh', () => {
+  it('asks the parent to re-read connections when this window is nested', () => {
+    const postMessage = vi.fn()
+    const parent = { postMessage } as unknown as Window
+    vi.spyOn(window, 'parent', 'get').mockReturnValue(parent)
+
+    requestCodevProviderReadinessRefresh()
+
+    expect(postMessage).toHaveBeenCalledWith(
+      { type: 'codev:provider-readiness-refresh' },
+      window.location.origin
+    )
+  })
+
+  it('does not post when this window is the top frame', () => {
+    const postMessage = vi.fn()
+    vi.spyOn(window, 'parent', 'get').mockReturnValue(window)
+    vi.spyOn(window, 'postMessage').mockImplementation(postMessage)
+
+    requestCodevProviderReadinessRefresh()
+
+    expect(postMessage).not.toHaveBeenCalled()
   })
 })

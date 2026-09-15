@@ -29,6 +29,7 @@ import {
   workspaceProviderReadiness,
   type WorkspaceProviderPreflight,
 } from "@/lib/provider-surface-capability";
+import { refreshWorkspaceProviderPreflight } from "@/lib/refresh-workspace-provider-preflight";
 import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
 
 type ConnectionPhase =
@@ -141,6 +142,7 @@ type CodevOrcaMessage =
       slotsTotal?: number;
     }
   | { type: "codev:retry-connect" }
+  | { type: "codev:provider-readiness-refresh" }
   | {
       type: "codev:discard-proposal";
       requestId: string;
@@ -690,6 +692,7 @@ export function OrcaWorkspace({
   const connectFailureRef = useRef(connectFailure);
   // The embed can ask for a fresh connect poll; `retry` is defined below.
   const retryRef = useRef<() => void>(() => undefined);
+  const [livePreflight, setLivePreflight] = useState(providerPreflight);
   const [iframeKey, setIframeKey] = useState(0);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const disposeIframeBranding = useRef<(() => void) | null>(null);
@@ -713,6 +716,10 @@ export function OrcaWorkspace({
       }),
     [repository, defaultAgent, cursorAvailable],
   );
+
+  useEffect(() => {
+    setLivePreflight(providerPreflight);
+  }, [providerPreflight]);
 
   // Hand the pairing to the embedded IDE. Safe to call repeatedly and before
   // the pairing exists — it no-ops until both the pairing and a live iframe
@@ -771,9 +778,8 @@ export function OrcaWorkspace({
   // Sent rather than merely rendered in the banner: without it the embedded
   // IDE opened a chat tab and took messages for an agent that could not reply.
   const readiness = useMemo(
-    () =>
-      providerPreflight ? workspaceProviderReadiness(providerPreflight) : null,
-    [providerPreflight],
+    () => (livePreflight ? workspaceProviderReadiness(livePreflight) : null),
+    [livePreflight],
   );
   const reportProviderReadiness = useCallback(() => {
     if (!readiness) return;
@@ -782,6 +788,11 @@ export function OrcaWorkspace({
       window.location.origin,
     );
   }, [readiness]);
+  const refreshProviderPreflight = useCallback(() => {
+    void refreshWorkspaceProviderPreflight().then((next) => {
+      if (next) setLivePreflight(next);
+    });
+  }, []);
 
   // Time-to-shell / time-to-project, measured from this component's first
   // paint (which is when the iframe starts loading the static bundle).
@@ -936,6 +947,8 @@ export function OrcaWorkspace({
         // The embedded cover offers "Retry now" when this page reports the
         // runtime as unreachable; the poll is ours to restart.
         retryRef.current();
+      } else if (event.data.type === "codev:provider-readiness-refresh") {
+        refreshProviderPreflight();
       } else if (event.data.type === "codev:startup-failure") {
         // The embedded IDE has no telemetry channel of its own, so its startup
         // faults reach the outside world only through here.
@@ -961,6 +974,7 @@ export function OrcaWorkspace({
     deliverPairing,
     reportHostState,
     reportProviderReadiness,
+    refreshProviderPreflight,
   ]);
 
   // Fallback reveal: if the iframe never sends `codev:shell-ready` (older
@@ -1282,10 +1296,10 @@ export function OrcaWorkspace({
       workspaceId={workspaceId}
     >
       <div className="workspace-iframe-wrap">
-        {providerPreflight ? (
+        {livePreflight ? (
           <ProviderPreflightBanner
             phase={shellReady ? "ready" : "starting"}
-            preflight={providerPreflight}
+            preflight={livePreflight}
           />
         ) : null}
         <iframe

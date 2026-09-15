@@ -1,1 +1,0 @@
-import{an as e}from"./web-index-B5IJlBI7.js";function t(t){return e(t)}function n({pr:e}){return e?t(e):null}export{n,t};

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { ProviderPreflightBanner } from "./provider-preflight-banner";
@@ -51,17 +51,26 @@ describe("ProviderPreflightBanner", () => {
     expect(screen.queryByRole("status")).toBeNull();
   });
 
-  it("stays up once the workspace is ready when there is something to fix, until dismissed", () => {
+  it("leaves first-visit setup to the IDE instead of linking out of the workspace", () => {
     render(
       <ProviderPreflightBanner
         phase="ready"
         preflight={{ starting: null, notReady: [] }}
       />,
     );
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Set up a coding agent",
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("leaves a rooms-only gap to the IDE when nothing can run here yet", () => {
+    render(
+      <ProviderPreflightBanner
+        phase="ready"
+        preflight={{
+          starting: null,
+          notReady: [{ agent: "claude", connectedForRooms: true }],
+        }}
+      />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
     expect(screen.queryByRole("status")).toBeNull();
   });
 });
