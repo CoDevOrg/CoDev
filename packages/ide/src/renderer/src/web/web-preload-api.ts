@@ -3326,13 +3326,10 @@ function getStoredSettings(): GlobalSettings {
     migratedStored
   )
   if (isCodevEmbedded()) {
-    // The workspace's default tab is a native chat (see
-    // `web/codev-default-chat-tab.ts`), and the in-chat provider/model/effort
-    // pickers all assume the native surface. Force it on regardless of any
-    // stored value — a browser that ran an earlier CoDev build, or any
-    // `settings.set()` that re-persisted the upstream `false` default, must
-    // not leave the workspace showing a raw agent TUI. This also makes the
-    // one-shot `codev-preload.js` localStorage seed unnecessary.
+    // CoDev keeps the native-chat surface available for old persisted tabs,
+    // but new agent work is managed by CoDev and surfaced through Orca's
+    // control/review panels. This also makes the one-shot `codev-preload.js`
+    // localStorage seed unnecessary.
     merged.experimentalNativeChat = true
     merged.openAgentTabsInChatByDefault = true
     // The left sidebar's "Agents" and "Agent Dashboard" entries are redundant

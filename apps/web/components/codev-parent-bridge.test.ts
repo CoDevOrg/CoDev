@@ -715,7 +715,7 @@ describe("codev parent bridge", () => {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        name: "Managed proposal",
+        name: "CoDev agent",
         draft: true,
         attachments: [],
       }),

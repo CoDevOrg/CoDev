@@ -41,7 +41,8 @@ import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import { maybeLaunchCodevAgentInOwnWorktree } from '@/web/codev-launch-agent-worktree'
+import { isCodevEmbedded } from '@/web/codev-embedded'
+import { startCodevManagedAgentWithToast } from '@/web/codev-managed-agent'
 import { normalizeRelativePath } from '@/lib/path'
 import {
   getWindowsTerminalCapabilityOwnerKey,
@@ -81,7 +82,6 @@ import { canToggleNativeChat } from '../native-chat/native-chat-availability'
 import { selectTabBarAgentProjections } from './tab-agent-types-by-tab-id'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import { CodevPresenceSegment } from './CodevPresenceSegment'
-import { isCodevEmbedded } from '@/web/codev-embedded'
 
 const isWindows = navigator.userAgent.includes('Windows')
 const isMacOs = navigator.userAgent.includes('Mac')
@@ -576,15 +576,10 @@ function TabBarInner({
   }
   const launchAgentFromNewTabEntry = (agent: TuiAgent): void => {
     const option = agentLaunchOptions.find((candidate) => candidate.agent === agent)
-    // CoDev-embedded: isolate the agent in its own worktree; the host creates
-    // the tab and focus follows the next session-tabs snapshot.
-    if (
-      maybeLaunchCodevAgentInOwnWorktree({
-        agent,
-        baseWorktreeId: worktreeId,
-        launchSource: 'tab_bar_quick_launch'
-      })
-    ) {
+    if (isCodevEmbedded()) {
+      void startCodevManagedAgentWithToast({ agent, baseWorktreeId: worktreeId }).catch(
+        () => undefined
+      )
       queueNewActiveTerminalFocusAfterNewTabMenuClose()
       return
     }

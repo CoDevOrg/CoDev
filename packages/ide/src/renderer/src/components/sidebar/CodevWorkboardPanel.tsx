@@ -1,14 +1,11 @@
 import { useCallback, useEffect, useState, type JSX } from 'react'
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
-import { useActiveRepo, useActiveWorktree } from '@/store/selectors'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import {
   getCodevBridgeSnapshot,
   requestCodevBridge,
   subscribeCodevBridge
 } from '../../web/codev-bridge-singleton'
-import { openCodevManagedProposalWorktree } from '../../web/codev-proposal-discard'
+import { startCodevManagedAgent } from '../../web/codev-managed-agent'
 import { publishCodevWorkboard, setCodevWorkboardStartSession } from './codev-workboard-store'
 import { publishCodevPathClaims } from './codev-path-claims-store'
 import type { CodevPathClaimsSnapshot } from './CodevPathClaimsView'
@@ -20,7 +17,11 @@ import {
   type CodevWorkboardSnapshot
 } from './CodevWorkboardView'
 
-export { CodevWorkboardViewPanel, type CodevWorkboardSnapshot, type CodevWorkboardSlot } from './CodevWorkboardView'
+export {
+  CodevWorkboardViewPanel,
+  type CodevWorkboardSnapshot,
+  type CodevWorkboardSlot
+} from './CodevWorkboardView'
 
 function applySnapshot(result: CodevWorkboardSnapshot): {
   slots: CodevWorkboardSlot[]
@@ -45,8 +46,6 @@ export function CodevWorkboardPanel({ open }: { open: boolean }): JSX.Element | 
   const [rejection, setRejection] = useState<CodevWorkboardRejection | null>(null)
   const [canCoSteer, setCanCoSteer] = useState(false)
   const [busy, setBusy] = useState('')
-  const activeRepo = useActiveRepo()
-  const activeWorktree = useActiveWorktree()
 
   useEffect(() => {
     return subscribeCodevBridge(() => {
@@ -89,47 +88,10 @@ export function CodevWorkboardPanel({ open }: { open: boolean }): JSX.Element | 
     if (!embedded || snapshot.status !== 'connected') return
     setBusy('create')
     try {
-      const result = await requestCodevBridge<CodevWorkboardSnapshot>('workboard.create')
-      const next = applySnapshot(result)
-      setSlots(next.slots)
-      setCapacity(next.capacity)
-      setCanCoSteer(next.canCoSteer)
-      setRejection(next.rejection)
-      if (next.rejection) {
-        return
-      }
-      const worktreeId = result.created?.worktreeId
-      if (!worktreeId) {
-        throw new Error('CoDev did not return a managed proposal worktree.')
-      }
-      const store = useAppStore.getState()
-      const orcaWorktreeId = await openCodevManagedProposalWorktree(worktreeId, {
-        repoId: activeWorktree?.repoId ?? activeRepo?.id,
-        createWorktree: (
-          repoId,
-          name,
-          baseBranch,
-          setupDecision,
-          sparseCheckout,
-          telemetrySource,
-          displayName
-        ) =>
-          store.createWorktree(
-            repoId,
-            name,
-            baseBranch,
-            setupDecision,
-            sparseCheckout,
-            telemetrySource,
-            displayName
-          ),
-        updateComment: async (id, comment) => {
-          await store.updateWorktreeMeta(id, { comment })
-        }
-      })
-      activateAndRevealWorktree(orcaWorktreeId, { sidebarRevealBehavior: 'auto' })
-      toast.success('Agent session started', {
-        description: 'CoDev reserved one of the three worktree slots.'
+      await startCodevManagedAgent()
+      await refresh()
+      toast.success('CoDev agent started', {
+        description: 'Orca is now showing the managed agent workspace.'
       })
     } catch (error: unknown) {
       toast.error('Failed to start agent session', {
@@ -138,7 +100,7 @@ export function CodevWorkboardPanel({ open }: { open: boolean }): JSX.Element | 
     } finally {
       setBusy('')
     }
-  }, [activeRepo?.id, activeWorktree?.repoId, embedded, snapshot.status])
+  }, [embedded, refresh, snapshot.status])
 
   useEffect(() => {
     setCodevWorkboardStartSession(startSession)

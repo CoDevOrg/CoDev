@@ -50,11 +50,7 @@ import { usePersistedAiVaultViewOptions } from './use-persisted-ai-vault-view-op
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
 import { AiVaultScanIssueBanners } from './AiVaultScanIssueBanners'
 import { CodevSharedSessionPanel } from './CodevSharedSessionPanel'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import {
-  openCodevManagedProposalWorktree,
-  requestCodevProposalCreate
-} from '@/web/codev-proposal-discard'
+import { startCodevManagedAgent } from '@/web/codev-managed-agent'
 
 export default function AiVaultPanel(): React.JSX.Element {
   const activeWorktreeId = useActiveWorktreeId()
@@ -314,42 +310,14 @@ export default function AiVaultPanel(): React.JSX.Element {
 
   const createProposal = useCallback(() => {
     setCreatingProposal(true)
-    void requestCodevProposalCreate()
-      .then(async (result) => {
-        if (result === null) return
-        if (!result.ok) {
-          throw new Error(result.error)
-        }
-        const store = useAppStore.getState()
-        const orcaWorktreeId = await openCodevManagedProposalWorktree(result.worktreeId, {
-          repoId: activeWorktree?.repoId ?? activeRepo?.id,
-          createWorktree: (
-            repoId,
-            name,
-            baseBranch,
-            setupDecision,
-            sparseCheckout,
-            telemetrySource,
-            displayName
-          ) =>
-            store.createWorktree(
-              repoId,
-              name,
-              baseBranch,
-              setupDecision,
-              sparseCheckout,
-              telemetrySource,
-              displayName
-            ),
-          updateComment: async (id, comment) => {
-            await store.updateWorktreeMeta(id, { comment })
-          }
-        })
-        activateAndRevealWorktree(orcaWorktreeId, { sidebarRevealBehavior: 'auto' })
+    void startCodevManagedAgent({
+      baseWorktreeId: activeWorktreeId,
+      repoId: activeWorktree?.repoId ?? activeRepo?.id
+    })
+      .then(() => {
         setSharedRefreshToken((current) => current + 1)
-        toast.success('Managed proposal prepared', {
-          description:
-            'CoDev created an isolated worktree. Use Delete Worktree on its native card to discard it.'
+        toast.success('CoDev agent ready', {
+          description: 'Use Agents to queue its first instruction.'
         })
       })
       .catch((error: unknown) => {
@@ -358,7 +326,7 @@ export default function AiVaultPanel(): React.JSX.Element {
         })
       })
       .finally(() => setCreatingProposal(false))
-  }, [activeRepo?.id, activeWorktree?.repoId])
+  }, [activeRepo?.id, activeWorktree?.id, activeWorktree?.repoId, activeWorktreeId])
 
   return (
     <div className="@container/ai-vault flex h-full min-h-0 flex-col bg-sidebar">
@@ -409,49 +377,51 @@ export default function AiVaultPanel(): React.JSX.Element {
         <CodevSharedSessionPanel refreshToken={sharedRefreshToken} />
       ) : null}
 
-      <AiVaultSessionVirtualList
-        groups={groups}
-        collapsedGroups={collapsedGroups}
-        loading={loading}
-        sessionsCount={sessions.length}
-        filteredSessionsCount={filteredSessions.length}
-        noAgentsSelected={agents.length === 0}
-        error={error}
-        vaultScope={scope}
-        buildResumeStartup={launchActions.buildResumeStartup}
-        getSessionResumeState={getSessionResumeState}
-        getSessionResumeActions={getSessionResumeActions}
-        getOriginalPaneTarget={getOriginalPaneTarget}
-        getSessionLiveState={getSessionLiveState}
-        getWorktreeInfo={getSessionWorktreeInfo}
-        onToggleGroup={toggleGroup}
-        onJumpToOriginalPane={jumpToOriginalPane}
-        onJumpToWorktree={jumpToWorktree}
-        onResume={launchActions.handleResume}
-        onContinueInNewSession={launchActions.handleContinueInNewSession}
-        onCopyResume={(session, worktreeId) =>
-          void launchActions.copyResumeCommand(session, worktreeId)
-        }
-        onCopyId={(session) =>
-          void copyText(
-            session.sessionId,
-            translate('auto.components.right.sidebar.AiVaultPanel.sessionId', 'Session ID')
-          )
-        }
-        onCopyPath={(session) =>
-          void copyText(
-            session.filePath,
-            translate('auto.components.right.sidebar.AiVaultPanel.logPath', 'Log path')
-          )
-        }
-        onOpenLog={(session) => void openAiVaultSessionLogInOrca(session)}
-        onRevealLog={(session) => void window.api.shell.openPath(session.filePath)}
-        onOpenCwd={(session) => {
-          if (session.cwd) {
-            void window.api.shell.openPath(session.cwd)
+      {typeof window !== 'undefined' && window.__CODEV_EMBEDDED__ ? null : (
+        <AiVaultSessionVirtualList
+          groups={groups}
+          collapsedGroups={collapsedGroups}
+          loading={loading}
+          sessionsCount={sessions.length}
+          filteredSessionsCount={filteredSessions.length}
+          noAgentsSelected={agents.length === 0}
+          error={error}
+          vaultScope={scope}
+          buildResumeStartup={launchActions.buildResumeStartup}
+          getSessionResumeState={getSessionResumeState}
+          getSessionResumeActions={getSessionResumeActions}
+          getOriginalPaneTarget={getOriginalPaneTarget}
+          getSessionLiveState={getSessionLiveState}
+          getWorktreeInfo={getSessionWorktreeInfo}
+          onToggleGroup={toggleGroup}
+          onJumpToOriginalPane={jumpToOriginalPane}
+          onJumpToWorktree={jumpToWorktree}
+          onResume={launchActions.handleResume}
+          onContinueInNewSession={launchActions.handleContinueInNewSession}
+          onCopyResume={(session, worktreeId) =>
+            void launchActions.copyResumeCommand(session, worktreeId)
           }
-        }}
-      />
+          onCopyId={(session) =>
+            void copyText(
+              session.sessionId,
+              translate('auto.components.right.sidebar.AiVaultPanel.sessionId', 'Session ID')
+            )
+          }
+          onCopyPath={(session) =>
+            void copyText(
+              session.filePath,
+              translate('auto.components.right.sidebar.AiVaultPanel.logPath', 'Log path')
+            )
+          }
+          onOpenLog={(session) => void openAiVaultSessionLogInOrca(session)}
+          onRevealLog={(session) => void window.api.shell.openPath(session.filePath)}
+          onOpenCwd={(session) => {
+            if (session.cwd) {
+              void window.api.shell.openPath(session.cwd)
+            }
+          }}
+        />
+      )}
       {launchActions.continuationRequest && (
         <AgentSessionContinuationDialog
           open

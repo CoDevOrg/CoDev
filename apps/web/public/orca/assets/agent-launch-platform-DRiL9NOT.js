@@ -1,0 +1,1 @@
+import{Gf as e}from"./web-index-B5IJlBI7.js";import{_ as t}from"./native-chat-session-option-cache-Bu96KToM.js";function n(n,r){return n.connectionId?e(n.path)?`win32`:`linux`:r?.status===`repair-required`?r.repair.preferredRuntime.kind===`wsl`?`linux`:t:r?.status===`resolved`&&r.runtime.kind===`wsl`?`linux`:t}export{n as t};

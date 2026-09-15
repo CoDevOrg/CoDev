@@ -99,7 +99,11 @@ export function CodevWorkboardViewPanel({
   const available = capacity?.availableSlots ?? 0
   const filled = capacity?.activeSessions ?? slots.filter((slot) => slot.occupied).length
   const startLabel =
-    filled >= 3 ? 'Start fourth session' : available === 2 ? 'Start second session' : 'Start agent session'
+    filled >= 3
+      ? 'Start fourth CoDev agent'
+      : available === 2
+        ? 'Start second CoDev agent'
+        : 'Start CoDev agent'
 
   return (
     <section
@@ -116,13 +120,19 @@ export function CodevWorkboardViewPanel({
             Agent worktree slots
           </h2>
         </div>
-        <Button type="button" size="sm" variant="ghost" disabled={busy === 'refresh'} onClick={onRefresh}>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={busy === 'refresh'}
+          onClick={onRefresh}
+        >
           {busy === 'refresh' ? 'Refreshing…' : 'Refresh workboard'}
         </Button>
       </div>
       <p className="mb-3 text-xs text-muted-foreground">
         {connected
-          ? `${filled} of 3 agent slots in use. Native worktree cards show assignment, owner, provider, status, and elapsed time.`
+          ? `${filled} of 3 CoDev agent slots in use. Orca worktree cards show assignment, owner, provider, status, and elapsed time.`
           : 'Waiting for the workspace-bound CoDev bridge.'}
       </p>
       <div className="grid grid-cols-3 gap-2" aria-label="Active agent workboard slots">
@@ -166,15 +176,25 @@ export function CodevWorkboardViewPanel({
         ))}
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <Button type="button" size="sm" disabled={!connected || !canCoSteer || busy === 'create'} onClick={onStart}>
+        <Button
+          type="button"
+          size="sm"
+          disabled={!connected || !canCoSteer || busy === 'create'}
+          onClick={onStart}
+        >
           {busy === 'create' ? 'Checking capacity…' : startLabel}
         </Button>
         {!canCoSteer ? (
-          <span className="text-[11px] text-muted-foreground">Co-steer permission is required to start a session.</span>
+          <span className="text-[11px] text-muted-foreground">
+            Co-steer permission is required to start a session.
+          </span>
         ) : null}
       </div>
       {rejection ? (
-        <div className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs" role="alert">
+        <div
+          className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs"
+          role="alert"
+        >
           <strong>{rejection.title}</strong>
           <p className="mt-1">{rejection.message}</p>
         </div>

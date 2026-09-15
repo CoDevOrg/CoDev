@@ -26,12 +26,9 @@ export type CodevChatProviderPickerProps = {
 }
 
 /**
- * In CoDev-embedded mode, lets a member pick which linked coding subscription
- * the chat tab runs on — Claude or Codex — from the same row as the model and
- * reasoning-effort pickers. Choosing a different provider starts a fresh chat
- * on it in this worktree and retires the current tab (see
- * `switchCodevChatProvider`); the model and effort for the new provider are
- * then chosen from the pickers beside this one.
+ * Kept as a compatibility boundary for old native-chat tabs. New CoDev work
+ * uses the managed-agent controls, so this picker is intentionally hidden in
+ * embedded mode and never starts an Orca-local agent.
  */
 function CodevChatProviderPickerInner({
   agent,

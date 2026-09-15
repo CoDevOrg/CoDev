@@ -2,9 +2,7 @@ import { useEffect, useState } from 'react'
 import { NativeChatEmptyState } from '../native-chat/NativeChatEmptyState'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
 import { retryCodevProjectBootstrap } from '@/web/codev-project-bootstrap'
-import { failedCodevWorktreeCreationError } from '@/web/codev-default-chat-tab'
 import { requestCodevHostRetry, useCodevHostState } from '@/web/codev-host-state'
 
 /** How long the plain loading state holds before offering a manual retry, once
@@ -29,16 +27,12 @@ const RETRY_OFFER_DELAY_MS = 90_000
  * parent is already polling, and re-running the handoff cannot make an EC2
  * instance boot faster. Only once the host is up does the stopwatch start, and
  * only then can retrying mean anything.
- *
- * A worktree create that already failed is shown verbatim instead of a spinner,
- * because that failure is otherwise announced only as a toast that expires.
  */
 export function CodevAwaitingWorkspaceCover(): React.JSX.Element {
   const [showRetry, setShowRetry] = useState(false)
   // Why: bumping this restarts the wait-then-offer cycle after a click, so the
   // retry button does not vanish for good once used.
   const [cycle, setCycle] = useState(0)
-  const creationError = useAppStore((state) => failedCodevWorktreeCreationError(state))
   const hostState = useCodevHostState()
   const hostStarting = hostState?.phase === 'starting'
 
@@ -52,12 +46,6 @@ export function CodevAwaitingWorkspaceCover(): React.JSX.Element {
     const timer = window.setTimeout(() => setShowRetry(true), RETRY_OFFER_DELAY_MS)
     return () => window.clearTimeout(timer)
   }, [cycle, hostStarting])
-
-  if (creationError) {
-    return (
-      <AwaitingWorkspaceNotice message={creationError} onRetry={() => setCycle((c) => c + 1)} />
-    )
-  }
 
   // The parent's poll is failing, not merely waiting: say what it hit and
   // offer the one thing that helps, restarting that poll. Without this an

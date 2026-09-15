@@ -1,0 +1,1 @@
+import{Eg as e,Sg as t,Vu as n,l as r,zc as i}from"./web-index-B5IJlBI7.js";var a=e(t()),o=Symbol(`skill-discovery-runtime-unresolved`);function s(){let e=r(e=>e.runtimeEnvironmentCatalogSettled?i(e):o);return(0,a.useMemo)(()=>e===o?null:n({activeRuntimeEnvironmentId:e}),[e])}export{s as t};

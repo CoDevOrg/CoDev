@@ -49,8 +49,6 @@ import {
   openCodevProject,
   registerCodevProjectBootstrapRetry
 } from './web/codev-project-bootstrap'
-import { waitForCodevDefaultChatTab } from './web/codev-default-chat-tab'
-import { restoreCodevChatTabs } from './web/codev-restore-chat-tabs'
 import { isCodevEmbedded } from './web/codev-embedded'
 import { CodevCenterUnderlay } from './components/codev/CodevCenterUnderlay'
 import { reportCodevStartupFailure } from './web/codev-host-state'
@@ -475,9 +473,7 @@ function App(): React.JSX.Element {
       store: useAppStore.getState(),
       getStore: useAppStore.getState,
       openDefaultCheckout: openProjectDefaultCheckout,
-      activateDefaultCheckoutFromSidebar: activateWorktreeFromSidebar,
-      restoreChatTabs: restoreCodevChatTabs,
-      waitForDefaultChatTab: waitForCodevDefaultChatTab
+      activateDefaultCheckoutFromSidebar: activateWorktreeFromSidebar
     })
       .then((opened) => {
         window.parent.postMessage(

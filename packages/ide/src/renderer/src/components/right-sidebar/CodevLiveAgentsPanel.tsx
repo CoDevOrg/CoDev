@@ -1,30 +1,21 @@
 /* eslint-disable max-lines -- The Mission Control container keeps polling, merge, and stop actions together so the live-room lifecycle is auditable in one place. */
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react'
-import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import {
-  activateWebRuntimeSessionTab,
-  isWebRuntimeSessionActive
-} from '@/runtime/web-runtime-session'
 import {
   getCodevBridgeSnapshot,
   requestCodevBridge,
   subscribeCodevBridge
 } from '../../web/codev-bridge-singleton'
-import { AGENT_STATUS_STATES } from '../../../../shared/agent-status-types'
 import { describeAgentStopPlan, planAgentStop } from '../../web/codev-agent-stop-plan'
-import { isCodevAgentWorktree } from '../../web/codev-launch-agent-worktree'
+import { getCodevProposalWorktreeId } from '../../web/codev-proposal-discard'
 import { consumeCodevSurfaceFocus, useCodevSurfaceFocus } from '../../web/codev-surface-focus'
 import { CodevMissionControlView } from './CodevMissionControlView'
 import {
   attachMissionControlHolds,
-  distinctLocalAgentEntries,
   EMPTY_MISSION_CONTROL_COORDINATION,
   mergeMissionControlAgents,
-  missionControlPhaseFromState,
   missionControlPhaseFromStatus,
   summarizeAgentActivity,
   type MissionControlAgent,
@@ -33,13 +24,6 @@ import {
   type MissionControlPendingAction,
   type MissionControlSlotUsage
 } from './codev-mission-control-model'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
-import {
-  localAgentTabsWithoutStatus,
-  resolveLocalStatusAgent,
-  resolveLocalTabAgent,
-  tabIdFromPaneKey
-} from './codev-local-agent-tabs'
 
 /**
  * Mission Control container.
@@ -49,14 +33,9 @@ import {
  * reading a status string. This is the workspace's default right-sidebar tab,
  * so the state of the room is on screen while you work.
  *
- * Two real sources, merged:
- *
- *  - Orca's local `agentStatusByPaneKey` — the agent in *this* tab, updated as
- *    tokens stream. The workboard never sees a chat-tab PTY agent, so without
- *    this the panel would read "0 agents" with one visibly working.
- *  - `workboard.list` over the CoDev bridge — every teammate's managed agent
- *    session, polled on an interval, with real owner attribution and a
- *    session id that "Steer" and "Pause" act on.
+ * The panel has one source of truth: `workboard.list` over the CoDev bridge.
+ * Orca remains the editor and review shell, but its native PTY agent rows are
+ * intentionally not treated as CoDev agents.
  *  - `coordination.list` over the same bridge — the workspace's live path
  *    claims and brain overlaps. The panel used to decide an agent was "blocked
  *    on a file claim" by regex over its status text and then describe the
@@ -82,10 +61,6 @@ type WorkboardSlot = {
 type WorkboardSnapshot = {
   viewer?: { id?: string; name?: string; canCoSteer?: boolean }
   slots?: WorkboardSlot[]
-}
-
-function isLiveState(value: unknown): boolean {
-  return typeof value === 'string' && (AGENT_STATUS_STATES as readonly string[]).includes(value)
 }
 
 /** Stable per-name hue so a person keeps one colour across the panel. */
@@ -115,29 +90,6 @@ function providerLabel(raw: string): string {
 }
 
 /**
- * Orca's `terminalTitle` is whatever the PTY last set: sometimes the prompt
- * summary we want ("Repository overview"), but often the raw shell prompt
- * (`orca-ws-…@ip-10-…:/srv/codev/…`) or the bare CLI name. Take it only when
- * it reads like a task, not a shell line.
- */
-function usableTaskTitle(raw: string | undefined, providerName: string): string | null {
-  const value = raw?.replace(/^[\s✳✶✻*•]+/, '').trim()
-  if (!value) {
-    return null
-  }
-  if (/@|\/srv\/|~[/$]|\$\s*$|^orca-ws-/i.test(value)) {
-    return null
-  }
-  if (value.toLowerCase() === providerName.toLowerCase()) {
-    return null
-  }
-  if (/^(claude code|codex cli|cursor)$/i.test(value)) {
-    return null
-  }
-  return value
-}
-
-/**
  * Removing the active worktree leaves `activeWorktreeId: null` and nothing
  * picks a replacement — fine on the desktop's worktree list, a blank pane in
  * the embed where the chat *is* the workspace. Prefer a worktree another agent
@@ -160,17 +112,21 @@ function settleOnSurvivingWorktree(removedWorktreeId: string, preferred: string[
 
 /** A worktree CoDev made for an agent, as opposed to the workspace's own. */
 function isReleasableWorktree(worktreeId: string): boolean {
-  const worktree = findWorktreeById(useAppStore.getState().worktreesByRepo, worktreeId)
-  return worktree ? isCodevAgentWorktree(worktree) : false
+  // Managed CoDev sessions are stopped through the backend session id. Orca
+  // never releases a sandbox worktree directly because the two filesystems do
+  // not share lifecycle ownership.
+  void worktreeId
+  return false
 }
 
-/** Where a chat tab currently lives, or null once it has been closed. */
-function findAgentTab(tabId: string): { tabId: string; worktreeId: string | null } | null {
+/** Map the backend sandbox id to the local Orca control/review worktree. */
+function findOrcaWorktreeForManagedId(managedWorktreeId: string): string | null {
   const state = useAppStore.getState()
-  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
-    const tab = tabs.find((candidate) => candidate.id === tabId)
-    if (tab) {
-      return { tabId: tab.id, worktreeId: tab.worktreeId || worktreeId || null }
+  for (const worktrees of Object.values(state.worktreesByRepo)) {
+    for (const worktree of worktrees) {
+      if (getCodevProposalWorktreeId(worktree.path, worktree.comment) === managedWorktreeId) {
+        return worktree.id
+      }
     }
   }
   return null
@@ -186,7 +142,6 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
   const [coordination, setCoordination] = useState<MissionControlCoordination>(
     EMPTY_MISSION_CONTROL_COORDINATION
   )
-  const [viewerName, setViewerName] = useState('You')
   const [canCoSteer, setCanCoSteer] = useState(false)
   const [openKey, setOpenKey] = useState<string | null>(null)
   // One lifecycle request per agent at a time; the drawer shows which.
@@ -206,10 +161,6 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
   const managedRefreshInFlightRef = useRef(false)
   const coordinationRefreshInFlightRef = useRef(false)
 
-  const statuses = useAppStore(useShallow((state) => state.agentStatusByPaneKey))
-  const tabsByWorktree = useAppStore(useShallow((state) => state.tabsByWorktree))
-  const worktreesByRepo = useAppStore(useShallow((state) => state.worktreesByRepo))
-
   useEffect(
     () =>
       subscribeCodevBridge(() => {
@@ -217,102 +168,6 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
       }),
     []
   )
-
-  const local = useMemo<MissionControlAgent[]>(() => {
-    const entries = Object.entries(statuses ?? {})
-      // A status row with no agent identity is a plain terminal pane or a
-      // half-torn-down entry, not an agent.
-      .filter(([, entry]) => isLiveState(entry.state) && Boolean(entry.agentType))
-      .sort(([, a], [, b]) => b.updatedAt - a.updatedAt)
-
-    // One row per tab, not per worktree: every agent the user started is its
-    // own agent even when several run the same provider in one worktree.
-    const statusAgents = distinctLocalAgentEntries(entries).map(([paneKey, entry]) => {
-      const label = providerLabel(
-        resolveLocalStatusAgent(entry.agentType, entry.terminalTitle, entry.prompt)
-      )
-      const phase = missionControlPhaseFromState(entry.state)
-      // The prompt is often blank for a native-chat turn, so fall back to the
-      // agent tab's own title (Orca derives it from the first prompt) before
-      // the generic label.
-      const title =
-        entry.prompt?.trim() || usableTaskTitle(entry.terminalTitle, label) || `${label} session`
-      // What it is doing *right now*: a live question, then the current tool
-      // call, then its last message, then the prompt, then a state default.
-      const toolLine = entry.toolName
-        ? `${entry.toolName}${entry.toolInput ? ` · ${entry.toolInput}` : ''}`
-        : null
-      const activity =
-        entry.interactivePrompt?.trim() ||
-        (phase === 'working' ? toolLine : null) ||
-        entry.lastAssistantMessage?.trim() ||
-        entry.prompt?.trim() ||
-        (phase === 'done'
-          ? 'Idle — send a message to continue.'
-          : phase === 'blocked'
-            ? 'Waiting on your input.'
-            : 'Waiting for the next instruction.')
-      return {
-        key: `local:${paneKey}`,
-        origin: 'you' as const,
-        sessionId: null,
-        worktreeId: entry.worktreeId ?? null,
-        tabId: tabIdFromPaneKey(paneKey),
-        // A chat-tab agent has no CoDev session id here, so its branch is the
-        // only identity its `cli` coordination session shares with it.
-        branch: entry.worktreeId
-          ? (findWorktreeById(worktreesByRepo, entry.worktreeId)?.branch ?? null)
-          : null,
-        ownerName: viewerName,
-        ownerHue: hueFor(viewerName || paneKey),
-        providerLabel: label,
-        model: entry.model ?? null,
-        phase,
-        title,
-        activity,
-        startedAt: entry.stateStartedAt,
-        serverElapsed: null,
-        canSteer: false,
-        holds: []
-      }
-    })
-
-    const fallbackAgent =
-      typeof window !== 'undefined' && window.__CODEV_DEFAULT_AGENT__
-        ? window.__CODEV_DEFAULT_AGENT__
-        : 'Agent'
-    // Only the rows that render above count as "has a status": a row with no
-    // agent identity was dropped from `entries`, so its tab must still show.
-    const tabAgents = localAgentTabsWithoutStatus(tabsByWorktree, Object.fromEntries(entries)).map(
-      ({ worktreeId, tab }): MissionControlAgent => {
-        const label = providerLabel(resolveLocalTabAgent(tab, fallbackAgent))
-        const title = usableTaskTitle(tab.generatedTitle ?? tab.title, label) || `${label} session`
-        return {
-          key: `local:tab:${tab.id}`,
-          origin: 'you',
-          sessionId: null,
-          worktreeId: tab.worktreeId ?? worktreeId,
-          tabId: tab.id,
-          branch: tab.worktreeId
-            ? (findWorktreeById(worktreesByRepo, tab.worktreeId)?.branch ?? null)
-            : (findWorktreeById(worktreesByRepo, worktreeId)?.branch ?? null),
-          ownerName: viewerName,
-          ownerHue: hueFor(viewerName || tab.id),
-          providerLabel: label,
-          model: null,
-          phase: 'waiting',
-          title,
-          activity: 'Waiting for the next instruction.',
-          startedAt: tab.createdAt ?? null,
-          serverElapsed: null,
-          canSteer: false,
-          holds: []
-        }
-      }
-    )
-
-    return [...statusAgents, ...tabAgents]
-  }, [statuses, tabsByWorktree, viewerName, worktreesByRepo])
 
   const refreshManaged = useCallback(async () => {
     if (bridgeStatus !== 'connected') {
@@ -324,9 +179,6 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
     managedRefreshInFlightRef.current = true
     try {
       const snapshot = await requestCodevBridge<WorkboardSnapshot>('workboard.list')
-      if (snapshot?.viewer?.name) {
-        setViewerName(snapshot.viewer.name)
-      }
       setCanCoSteer(Boolean(snapshot?.viewer?.canCoSteer))
       const slotRows = snapshot?.slots ?? []
       setSlots(
@@ -340,7 +192,7 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
           key: `managed:${slot.sessionId}`,
           origin: 'managed',
           sessionId: slot.sessionId ?? null,
-          worktreeId: slot.worktreeId ?? null,
+          worktreeId: slot.worktreeId ? findOrcaWorktreeForManagedId(slot.worktreeId) : null,
           tabId: null,
           branch: null,
           ownerName: slot.owner?.trim() || 'Teammate',
@@ -359,9 +211,8 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
       hadWorkboardRef.current = true
       setFeedFailures((current) => (current.workboard ? { ...current, workboard: null } : current))
     } catch (error: unknown) {
-      // Keep the last known managed set; local agents still render, and the
-      // interval retries on its own. But say so: rows from before the failure
-      // are not live, and a stopped agent could otherwise look running.
+      // Keep the last known managed set and label it stale; the interval
+      // retries on its own so a stopped agent cannot silently look live.
       if (hadWorkboardRef.current) {
         const message = error instanceof Error ? error.message : String(error)
         setFeedFailures((current) => ({
@@ -439,8 +290,8 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
   }, [embedded, refreshManaged, refreshCoordination])
 
   const agents = useMemo(
-    () => attachMissionControlHolds(mergeMissionControlAgents(managed, local), coordination),
-    [managed, local, coordination]
+    () => attachMissionControlHolds(mergeMissionControlAgents(managed, []), coordination),
+    [managed, coordination]
   )
 
   const activity = useMemo(() => summarizeAgentActivity(agents), [agents])
@@ -511,45 +362,11 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
   )
   const pendingAction = pending && pending.key === openKey ? pending.action : null
 
-  /**
-   * Step in lands on the agent you clicked, not merely its worktree: several
-   * agents share one checkout, and activating the worktree alone left the
-   * member in whichever chat that worktree last showed. A local agent's tab
-   * is activated in its owning worktree; a managed session, which has no tab
-   * here, still reveals its worktree.
-   */
+  /** Step in reveals the Orca control/review worktree linked to the session. */
   const handleStepIn = useCallback(
     (key: string) => {
       const agent = byKey(key)
       if (!agent) {
-        return
-      }
-      if (agent.tabId) {
-        const target = findAgentTab(agent.tabId)
-        if (!target) {
-          toast.error('This agent’s chat is no longer open', {
-            description: 'Its tab has been closed. The list refreshes on the next status update.'
-          })
-          return
-        }
-        if (target.worktreeId && target.worktreeId !== useAppStore.getState().activeWorktreeId) {
-          activateAndRevealWorktree(target.worktreeId, { revealInSidebar: true })
-        }
-        // Same steps as the tab strip: a paired host learns the selection too.
-        const state = useAppStore.getState()
-        const runtimeEnvironmentId = target.worktreeId
-          ? getRuntimeEnvironmentIdForWorktree(state, target.worktreeId)
-          : null
-        if (target.worktreeId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-          void activateWebRuntimeSessionTab({
-            worktreeId: target.worktreeId,
-            tabId: target.tabId,
-            environmentId: runtimeEnvironmentId
-          })
-        }
-        state.setActiveTab(target.tabId)
-        state.setActiveTabType('terminal')
-        setOpenKey(null)
         return
       }
       if (agent.worktreeId) {
@@ -641,30 +458,7 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
           void refreshManaged()
           return
         }
-        if (plan.kind === 'close-tab') {
-          // 'cleanup', not 'user': the embed refuses a user-close of a chat tab
-          // so a workspace always keeps one.
-          useAppStore.getState().closeTab(plan.tabId, { reason: 'cleanup' })
-          // The store can decline a close without saying so. Announcing success
-          // over an agent that is still running is worse than a plain failure.
-          if (findAgentTab(plan.tabId)) {
-            toast.error('Could not stop this agent', {
-              description: 'Its chat tab did not close. Try again, or close the tab directly.'
-            })
-            return
-          }
-          setOpenKey(null)
-          toast.success('Agent stopped', {
-            description:
-              plan.siblingCount === 0
-                ? "Its checkout is the workspace's own, so it stays."
-                : plan.siblingCount === 1
-                  ? 'The worktree stays for the other agent in it.'
-                  : `The worktree stays for the other ${plan.siblingCount} agents in it.`
-          })
-          return
-        }
-        if (plan.kind === 'unsupported') {
+        if (plan.kind === 'unsupported' || plan.kind === 'close-tab') {
           toast.error('This agent cannot be stopped from here.')
           return
         }

@@ -16,9 +16,8 @@ import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 /**
  * Shared startup-plan resolution for launching a TUI agent: platform, shell,
  * argv/env defaults, the CoDev per-member credential marker, and the
- * prompt-delivery plan. Factored out of `launchAgentInNewTab` so a launch that
- * first creates its own worktree (`codev-launch-agent-worktree.ts`) builds the
- * exact same plan.
+ * prompt-delivery plan. Factored out of `launchAgentInNewTab` so standalone
+ * Orca launches build the exact same plan.
  */
 export type ResolvedAgentLaunchStartup = {
   resolvedLaunchPlatform: NodeJS.Platform

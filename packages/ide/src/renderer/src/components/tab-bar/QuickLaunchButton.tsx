@@ -8,7 +8,8 @@ import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTar
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import { maybeLaunchCodevAgentInOwnWorktree } from '@/web/codev-launch-agent-worktree'
+import { isCodevEmbedded } from '@/web/codev-embedded'
+import { startCodevManagedAgentWithToast } from '@/web/codev-managed-agent'
 import type { TuiAgent } from '../../../../shared/types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import {
@@ -127,19 +128,14 @@ function QuickLaunchAgentMenuItemsInner({
     (agent: TuiAgent) => {
       const entry = getCatalogEntry(agent)
       const label = entry?.label ?? agent
-      // CoDev-embedded: every agent gets its own worktree. The host creates the
-      // tab, so focus follows the next session-tabs snapshot (as for paired
-      // launches), and nothing local to focus here.
-      if (
-        maybeLaunchCodevAgentInOwnWorktree({
+      if (isCodevEmbedded()) {
+        void startCodevManagedAgentWithToast({
           agent,
           baseWorktreeId: worktreeId,
-          ...(prompt !== undefined ? { prompt } : {}),
-          ...(promptDelivery !== undefined ? { promptDelivery } : {}),
-          ...(launchSource !== undefined ? { launchSource } : {})
+          ...(prompt !== undefined ? { prompt } : {})
         })
-      ) {
-        onPromptDelivered?.()
+          .then(() => onPromptDelivered?.())
+          .catch(() => undefined)
         return
       }
       const result = launchAgentInNewTab({

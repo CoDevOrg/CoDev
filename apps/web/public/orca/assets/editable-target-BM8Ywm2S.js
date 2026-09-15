@@ -1,1 +1,0 @@
-function e(e){return!(e instanceof HTMLElement)||e.classList.contains(`xterm-helper-textarea`)?!1:e.isContentEditable?!0:e.closest(`input, textarea, select, [contenteditable=""], [contenteditable="true"]`)!==null}export{e as t};

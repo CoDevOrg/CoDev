@@ -583,16 +583,56 @@ export async function executeCodevBridgeRequest(
     }
 
     if (request.method === "workboard.create") {
+      const requestedName = request.params?.name;
+      const prompt = request.params?.prompt;
+      const provider = request.params?.provider;
+      if (
+        requestedName !== undefined &&
+        (typeof requestedName !== "string" ||
+          requestedName.trim().length === 0 ||
+          requestedName.trim().length > 32)
+      ) {
+        return fail(
+          "The CoDev agent name must be between 1 and 32 characters.",
+        );
+      }
+      if (
+        prompt !== undefined &&
+        (typeof prompt !== "string" ||
+          prompt.trim().length === 0 ||
+          prompt.trim().length > 20_000)
+      ) {
+        return fail(
+          "The CoDev agent instruction must be between 1 and 20,000 characters.",
+        );
+      }
+      if (
+        provider !== undefined &&
+        provider !== "openai" &&
+        provider !== "anthropic" &&
+        provider !== "cursor" &&
+        provider !== "bedrock" &&
+        provider !== "azure_foundry"
+      ) {
+        return fail("Choose a supported CoDev agent provider.");
+      }
+      const createBody = {
+        name:
+          typeof requestedName === "string" && requestedName.trim().length > 0
+            ? requestedName.trim()
+            : "CoDev agent",
+        ...(typeof prompt === "string" && prompt.trim().length > 0
+          ? { prompt: prompt.trim() }
+          : { draft: true }),
+        ...(typeof provider === "string" ? { provider } : {}),
+        attachments: [],
+      };
       const createResponse = await fetcher(
         `/api/workspaces/${workspaceId}/agents`,
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            name: "Managed proposal",
-            draft: true,
-            attachments: [],
-          }),
+          body: JSON.stringify(createBody),
         },
       );
       const createPayload = await readJson(createResponse);

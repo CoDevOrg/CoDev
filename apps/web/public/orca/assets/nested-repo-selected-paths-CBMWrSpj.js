@@ -1,1 +1,0 @@
-function e(e,t){return e.repos.filter(e=>t.has(e.path)).map(e=>e.path)}export{e as t};

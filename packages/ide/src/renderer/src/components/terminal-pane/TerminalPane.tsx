@@ -67,7 +67,6 @@ import {
   clearPaneTitleOverlayRects
 } from './pane-title-overlay-rects'
 import NativeChatView from '../native-chat/NativeChatView'
-import { CodevAwaitingAgentCover } from './CodevAwaitingAgentCover'
 import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import { TerminalAgentSessionForkDialog } from './TerminalAgentSessionForkDialog'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
@@ -111,7 +110,6 @@ import {
   type NativeChatLeafRoute
 } from '../native-chat/native-chat-leaf-routing'
 import { isCodevEmbedded } from '@/web/codev-embedded'
-import { worktreeHasAgentTabInState } from '@/web/codev-default-chat-tab'
 import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { clearTerminalScrollbackAndFollowOutput } from '@/lib/pane-manager/terminal-scrollback-clear'
@@ -444,15 +442,6 @@ function TerminalPane(
   )
   const nativeChatEnabled = useAppStore((store) => store.settings?.experimentalNativeChat === true)
   const effectiveChatViewMode = nativeChatEnabled && isChatViewMode
-  // CoDev: the center is only ever chat. A terminal tab not in chat view — the
-  // host's raw shell before the agent launches, or a stray shell fronted over
-  // an existing chat — is always covered; the cover moves back to the chat or
-  // offers to start one. The shell a member wants lives in the chat's drawer.
-  const codevWorktreeHasAgentTab = useAppStore((store) =>
-    worktreeHasAgentTabInState(worktreeId, store)
-  )
-  const showCodevAwaitingAgentCover =
-    isCodevEmbedded() && !effectiveChatViewMode && worktreeId !== FLOATING_TERMINAL_WORKTREE_ID
   const unifiedTabLabel = useAppStore(
     (store) =>
       getCachedUnifiedTerminalTabForWorktree(store.unifiedTabsByWorktree, worktreeId, tabId)?.label
@@ -470,13 +459,8 @@ function TerminalPane(
   const terminalTab = useAppStore((store) =>
     getCachedTerminalTabForWorktree(store.tabsByWorktree, worktreeId, tabId)
   )
-  // CoDev: belt-and-suspenders for "an agent tab is always chat, never a raw
-  // TUI" — launch-time viewMode decisions (initialAgentTabViewModeProps) and
-  // the one-shot re-assertion on workspace open (ensureAgentTabsRenderAsChat
-  // in codev-default-chat-tab.ts) both have timing windows where a tab can
-  // exist with launchAgent set before either has run. Rather than find and
-  // close every such window, self-heal reactively here: any tab this render
-  // sees with an agent but not chat view flips to chat immediately.
+  // Keep old persisted native-chat tabs readable, but do not create new agent
+  // tabs in embedded CoDev; new work starts through the managed-agent bridge.
   useEffect(() => {
     if (!isCodevEmbedded() || !unifiedTabId || !terminalTab?.launchAgent || isChatViewMode) {
       return
@@ -3025,20 +3009,6 @@ function TerminalPane(
             </div>,
             chatPane.container,
             `native-chat-${tabId}-${chatPane.leafId}`
-          )
-        : null}
-      {showCodevAwaitingAgentCover && activePane?.container
-        ? createPortal(
-            <div className="absolute inset-0 z-10 flex min-h-0 min-w-0 bg-background">
-              <CodevAwaitingAgentCover
-                worktreeId={worktreeId}
-                tabId={tabId}
-                isActive={isActive && isolatedPaneKey === null}
-                hasChatTab={codevWorktreeHasAgentTab}
-              />
-            </div>,
-            activePane.container,
-            `codev-awaiting-agent-${tabId}-${activePane.leafId}`
           )
         : null}
       <TerminalContextMenu

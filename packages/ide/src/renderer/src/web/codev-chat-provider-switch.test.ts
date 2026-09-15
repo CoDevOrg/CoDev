@@ -52,28 +52,21 @@ describe('codevChatProviders / isCodevChatProvider / otherCodevChatProvider', ()
 })
 
 describe('switchCodevChatProvider', () => {
-  it('launches the new provider in the tab’s worktree and retires the old tab', () => {
+  it('does not launch a local Orca agent', () => {
     switchCodevChatProvider({ terminalTabId: 'chat-old', nextAgent: 'codex' })
 
-    expect(launchAgentInNewTab).toHaveBeenCalledWith({
-      agent: 'codex',
-      worktreeId: 'wt-1',
-      promptDelivery: 'draft',
-      launchSource: 'new_workspace_composer'
-    })
-    expect(closeTab).not.toHaveBeenCalled()
-
     vi.runAllTimers()
-    expect(closeTab).toHaveBeenCalledWith('chat-old', { reason: 'user' })
+    expect(launchAgentInNewTab).not.toHaveBeenCalled()
+    expect(closeTab).not.toHaveBeenCalled()
   })
 
-  it('keeps the previous tab when it is the worktree’s only one (replacement not mirrored yet)', () => {
+  it('does nothing when the local tab is the only remaining tab', () => {
     storeState.tabsByWorktree = { 'wt-1': [{ id: 'chat-old' }] }
 
     switchCodevChatProvider({ terminalTabId: 'chat-old', nextAgent: 'codex' })
     vi.runAllTimers()
 
-    expect(launchAgentInNewTab).toHaveBeenCalledTimes(1)
+    expect(launchAgentInNewTab).not.toHaveBeenCalled()
     expect(closeTab).not.toHaveBeenCalled()
   })
 
