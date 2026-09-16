@@ -157,11 +157,24 @@ export async function getHostState(): Promise<HostState> {
   return (await resolveHost()).state;
 }
 
-export async function requestHostWake(): Promise<"running" | "starting"> {
+/**
+ * Turns of the loop below spent waiting out a `stopping` host. Each costs an
+ * ARM describe plus two seconds, so the default is a minute of patience — the
+ * right trade for a caller with no poll of its own, and the wrong one for the
+ * workspace open path, which passes a small number and reports `host-starting`
+ * instead. A returning member hits `stopping` routinely: the idle timer
+ * deallocates at ten minutes, so coming back a moment later lands squarely on
+ * it.
+ */
+const DEFAULT_STOPPING_ATTEMPTS = 30;
+
+export async function requestHostWake(
+  stoppingAttempts = DEFAULT_STOPPING_ATTEMPTS,
+): Promise<"running" | "starting"> {
   const resolved = await resolveHost();
   const { name } = resolved;
 
-  for (let attempt = 0; attempt < 30; attempt++) {
+  for (let attempt = 0; attempt < Math.max(1, stoppingAttempts); attempt++) {
     const state = attempt === 0 ? resolved.state : await describeHost(name);
 
     if (state === "running") return "running";

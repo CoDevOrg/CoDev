@@ -41,6 +41,30 @@ const STALE_IDE_PROCESS_MESSAGE =
   "Orca IDE process exited before reporting readiness";
 
 /**
+ * How long the open path will sit waiting for a host that is not yet serving
+ * before answering `host-starting`.
+ *
+ * This is deliberately far below `waitForOrchestrator`'s own 45s default. The
+ * client polls this route every few seconds and treats a 202 as "still
+ * booting", so blocking here buys nothing: it only pushes a single attempt
+ * past the browser's request timeout, which aborts the fetch mid-wait and
+ * starts the next attempt from the session probe again. A cold host takes
+ * minutes to bootstrap — no single request was ever going to outlast it, so
+ * answer quickly and let the poll do the waiting.
+ *
+ * `ensureHostReady` in orchestrator.ts keeps the long budget, because the
+ * callers on that path (a mutating action) have no poll to fall back on.
+ */
+const OPEN_PATH_ORCHESTRATOR_WAIT_MS = 8_000;
+
+/**
+ * The same reasoning applied to a host caught mid-deallocate: wait one turn
+ * for it to land in `stopped` so this request can start it, and otherwise
+ * answer `host-starting` rather than holding the request open.
+ */
+const OPEN_PATH_STOPPING_ATTEMPTS = 2;
+
+/**
  * Orchestrator responses that mean "ask again shortly" rather than "this
  * failed": the host is mid-restart (502/503/504), a call timed out while it
  * booted (408), it hit an internal blip (500), or every IDE slot is taken
@@ -354,11 +378,11 @@ export async function ensureOrcaSession(
         const hostState = await getHostState();
         if (
           hostState !== "running" &&
-          (await requestHostWake()) !== "running"
+          (await requestHostWake(OPEN_PATH_STOPPING_ATTEMPTS)) !== "running"
         ) {
           return false;
         }
-        await waitForOrchestrator();
+        await waitForOrchestrator(OPEN_PATH_ORCHESTRATOR_WAIT_MS);
         return true;
       });
       if (!available) return { state: "host-starting" };

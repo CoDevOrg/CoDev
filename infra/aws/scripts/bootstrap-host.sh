@@ -104,6 +104,65 @@ codev_restart_if_changed() {
   fi
 }
 
+# ---------------------------------------------------------------------------
+# Stages
+#
+# This script re-runs on every boot, and the host boots far more often than it
+# is deployed to: the orchestrator deallocates it after ten idle minutes, so
+# every member returning from a break pays for whatever this script does. Most
+# of it is installation -- apt, npm, the Cursor installer, the Orca tarball,
+# Firecracker, and a 3 GB guest rootfs rebuilt from a downloaded Ubuntu
+# squashfs -- and on a two-core host that is minutes of work reproducing, byte
+# for byte, what the root disk already holds from the last boot. The
+# orchestrator only starts at the end, so all of it lands on somebody watching
+# a workspace open.
+#
+# So each expensive stage below declares a key naming exactly what it would
+# install, and runs only when that key differs from what the last successful
+# run recorded. Rolling a release changes the keys that depend on the release;
+# a plain reboot changes none of them and skips straight to the service
+# restarts at the bottom.
+#
+# Two rules for adding or editing a stage:
+#
+#   - The key must cover every input. A stage keyed on less than it installs
+#     is a stage that silently keeps a stale copy after a deploy, which is far
+#     worse than a slow boot. When in doubt, hash the artifact itself (see the
+#     Orca stage, which fetches the published .sha256 and keys on its contents)
+#     or fall back to ${CODEV_RELEASE_VERSION}.
+#   - The stamp is recorded only after the stage succeeds. `set -e` aborts the
+#     script on a failure, so a half-finished stage leaves the old stamp (or
+#     none) and the next boot runs it again.
+#
+# Set CODEV_BOOTSTRAP_FORCE=1 to run everything regardless, which is what to
+# reach for when a host is in an unexplained state.
+readonly stamp_dir="${runtime_dir}/bootstrap-stamps"
+
+# A key over a stage's inputs. NUL-separated so that no combination of
+# arguments can collide with a different one.
+codev_stage_key() {
+  printf '%s\0' "$@" | sha256sum | cut -d' ' -f1
+}
+
+# True when this stage's recorded key already matches, i.e. skip it.
+codev_stage_done() {
+  local name="$1" key="$2"
+  if [[ -n "${CODEV_BOOTSTRAP_FORCE:-}" ]]; then
+    return 1
+  fi
+  [[ "$(cat "${stamp_dir}/${name}" 2>/dev/null || true)" == "${key}" ]]
+}
+
+codev_stage_record() {
+  local name="$1" key="$2"
+  install -d -m 0755 "${stamp_dir}"
+  printf '%s\n' "${key}" >"${stamp_dir}/${name}"
+}
+
+codev_stage_skipped() {
+  echo "bootstrap: $1 is already current, skipping"
+}
+
 # This host's own public IPv4, used to derive the nip.io hostname Orca
 # advertises to browsers. Both clouds answer on 169.254.169.254 but with
 # different paths and a different anti-SSRF header.
@@ -235,63 +294,91 @@ ASKPASS
 chmod 0755 /usr/local/libexec/codev-git-askpass
 
 export DEBIAN_FRONTEND=noninteractive
-apt-get -o DPkg::Lock::Timeout=300 update
-apt-get -o DPkg::Lock::Timeout=300 install -y \
-  ca-certificates \
-  build-essential \
-  curl \
-  debian-keyring \
-  debian-archive-keyring \
-  apt-transport-https \
-  gnupg \
-  e2fsprogs \
-  git \
-  gh \
-  iptables \
-  jq \
-  python3 \
-  python3-gi \
-  gir1.2-atspi-2.0 \
-  at-spi2-core \
-  xdotool \
-  xclip \
-  xvfb \
-  ripgrep \
-  squashfs-tools \
-  sudo \
-  xz-utils \
-  xfsprogs \
-  libgtk-3-0t64 \
-  libnss3 \
-  libnspr4 \
-  libasound2t64 \
-  libatk1.0-0t64 \
-  libatk-bridge2.0-0t64 \
-  libcups2t64 \
-  libdrm2 \
-  libgbm1 \
-  libxkbcommon0 \
-  libxcomposite1 \
-  libxdamage1 \
-  libxfixes3 \
-  libxrandr2 \
-  libxshmfence1 \
-  libxss1 \
-  libxtst6 \
-  libpango-1.0-0 \
-  libpangocairo-1.0-0 \
-  libcairo2 \
-  libglib2.0-0t64 \
-  libdbus-1-3 \
-  fonts-liberation \
+# Kept as an array rather than a backslash-continued argument list so the
+# stage key can cover it: adding or removing a package changes the key, and
+# the next boot installs the difference instead of trusting a stale stamp.
+readonly host_packages=(
+  ca-certificates
+  build-essential
+  curl
+  debian-keyring
+  debian-archive-keyring
+  apt-transport-https
+  gnupg
+  e2fsprogs
+  git
+  gh
+  iptables
+  jq
+  python3
+  python3-gi
+  gir1.2-atspi-2.0
+  at-spi2-core
+  xdotool
+  xclip
+  xvfb
+  ripgrep
+  squashfs-tools
+  sudo
+  xz-utils
+  xfsprogs
+  libgtk-3-0t64
+  libnss3
+  libnspr4
+  libasound2t64
+  libatk1.0-0t64
+  libatk-bridge2.0-0t64
+  libcups2t64
+  libdrm2
+  libgbm1
+  libxkbcommon0
+  libxcomposite1
+  libxdamage1
+  libxfixes3
+  libxrandr2
+  libxshmfence1
+  libxss1
+  libxtst6
+  libpango-1.0-0
+  libpangocairo-1.0-0
+  libcairo2
+  libglib2.0-0t64
+  libdbus-1-3
+  fonts-liberation
   xdg-utils
+)
+packages_key="$(codev_stage_key apt-v1 "${host_packages[@]}")"
+if codev_stage_done packages "${packages_key}"; then
+  codev_stage_skipped "host packages"
+else
+  apt-get -o DPkg::Lock::Timeout=300 update
+  apt-get -o DPkg::Lock::Timeout=300 install -y "${host_packages[@]}"
+  codev_stage_record packages "${packages_key}"
+fi
 
-curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
-apt-get install -y nodejs
-corepack enable
-corepack prepare pnpm@11.5.0 --activate
-npm install -g @openai/codex@0.148.0
-npm install -g @anthropic-ai/claude-code@2.1.236
+# Pinned in variables rather than inline so the stage key below covers them.
+# The guest rootfs further down copies the two npm packages into the microVM
+# image, so its own key names these same versions: bumping one here reinstalls
+# it on the host and rebuilds the guest, which is the pair that has to move
+# together.
+readonly node_setup_url="https://deb.nodesource.com/setup_24.x"
+readonly pnpm_version="11.5.0"
+readonly codex_version="0.148.0"
+readonly claude_code_version="2.1.236"
+
+node_key="$(codev_stage_key node-v1 "${node_setup_url}" "${pnpm_version}" \
+  "${codex_version}" "${claude_code_version}")"
+if codev_stage_done node "${node_key}"; then
+  codev_stage_skipped "Node.js and the agent CLIs"
+else
+  curl -fsSL "${node_setup_url}" | bash -
+  apt-get install -y nodejs
+  corepack enable
+  corepack prepare "pnpm@${pnpm_version}" --activate
+  npm install -g "@openai/codex@${codex_version}"
+  npm install -g "@anthropic-ai/claude-code@${claude_code_version}"
+  codev_stage_record node "${node_key}"
+fi
 
 # Orca's own agent launcher (the IDE's "Launch agent" quick-open menu) probes
 # PATH for each agent's detectCmd at runtime and only lists the ones it
@@ -310,13 +397,25 @@ npm install -g @anthropic-ai/claude-code@2.1.236
 # payload at /.local/share/... (filesystem root) instead, leaving the /root
 # symlinks dangling. Export HOME explicitly so both steps agree.
 export HOME=/root
-curl -fsS https://cursor.com/install | bash
-cursor_agent_target="$(readlink -f /root/.local/bin/cursor-agent)"
-install -d -m 0755 /opt/cursor-agent
-cp -a "$(dirname "${cursor_agent_target}")/." /opt/cursor-agent/
-chmod -R go+rX /opt/cursor-agent
-ln -sf "/opt/cursor-agent/$(basename "${cursor_agent_target}")" /usr/local/bin/cursor-agent
-ln -sf "/opt/cursor-agent/$(basename "${cursor_agent_target}")" /usr/local/bin/agent
+# Cursor's installer always fetches the current release and offers no way to
+# pin one, so there is no version to key on. The release version stands in for
+# it: rolling a runtime release picks up whatever Cursor ships that day, and a
+# reboot in between keeps what the host already has. That is the same bargain
+# as before -- the installer's answer was never reproducible -- except that it
+# is now paid once per deploy instead of once per boot.
+cursor_key="$(codev_stage_key cursor-v1 "${CODEV_RELEASE_VERSION}")"
+if codev_stage_done cursor "${cursor_key}"; then
+  codev_stage_skipped "the Cursor agent CLI"
+else
+  curl -fsS https://cursor.com/install | bash
+  cursor_agent_target="$(readlink -f /root/.local/bin/cursor-agent)"
+  install -d -m 0755 /opt/cursor-agent
+  cp -a "$(dirname "${cursor_agent_target}")/." /opt/cursor-agent/
+  chmod -R go+rX /opt/cursor-agent
+  ln -sf "/opt/cursor-agent/$(basename "${cursor_agent_target}")" /usr/local/bin/cursor-agent
+  ln -sf "/opt/cursor-agent/$(basename "${cursor_agent_target}")" /usr/local/bin/agent
+  codev_stage_record cursor "${cursor_key}"
+fi
 
 # Log shipping. The CloudWatch agent is EC2-only in a way that is not merely
 # cosmetic: it resolves its instance identity through EC2 IMDS
@@ -391,21 +490,32 @@ trap 'rm -rf "${work_dir}"' EXIT
 # prebuilt third-party AppImage release asset. codev-orchestrator spawns one
 # instance of this per workspace (services/orchestrator/src/backend/orca.rs).
 readonly orca_archive="orca-serve-linux-${artifact_arch}.tar.gz"
-codev_fetch "${orca_archive}" "${work_dir}/${orca_archive}"
+# The checksum the build published, fetched on its own first. It is a few
+# bytes against the archive's hundreds of megabytes, and it is the exact
+# identity of what the archive would extract to -- so it makes both the
+# integrity check below and this stage's key, and a boot that already has this
+# build of Orca on disk never downloads the archive at all.
 codev_fetch "${orca_archive}.sha256" "${work_dir}/${orca_archive}.sha256"
-(
-  cd "${work_dir}"
-  echo "$(cat "${orca_archive}.sha256")  ${orca_archive}" | sha256sum --check
-)
-rm -rf "${orca_dir}"
-install -d -m 0755 "${orca_dir}"
-tar -xzf "${work_dir}/${orca_archive}" -C "${orca_dir}"
-# `--appimage-extract` (in the build container) creates squashfs-root as
-# 0700, since it's normally only ever run by the user who extracted it. Here
-# it's `AppRun`-ed by each workspace's own dedicated, unprivileged Linux user
-# (see services/orchestrator/src/backend/orca.rs), so every file and
-# directory underneath needs to be at least world-readable/traversable.
-chmod -R go+rX "${orca_dir}"
+orca_key="$(codev_stage_key orca-v1 "$(cat "${work_dir}/${orca_archive}.sha256")")"
+if codev_stage_done orca "${orca_key}"; then
+  codev_stage_skipped "the Orca IDE backend"
+else
+  codev_fetch "${orca_archive}" "${work_dir}/${orca_archive}"
+  (
+    cd "${work_dir}"
+    echo "$(cat "${orca_archive}.sha256")  ${orca_archive}" | sha256sum --check
+  )
+  rm -rf "${orca_dir}"
+  install -d -m 0755 "${orca_dir}"
+  tar -xzf "${work_dir}/${orca_archive}" -C "${orca_dir}"
+  # `--appimage-extract` (in the build container) creates squashfs-root as
+  # 0700, since it's normally only ever run by the user who extracted it. Here
+  # it's `AppRun`-ed by each workspace's own dedicated, unprivileged Linux user
+  # (see services/orchestrator/src/backend/orca.rs), so every file and
+  # directory underneath needs to be at least world-readable/traversable.
+  chmod -R go+rX "${orca_dir}"
+  codev_stage_record orca "${orca_key}"
+fi
 
 # orca serve is a full Electron app: even run headless via `--serve`, it
 # still needs a real X display to attach to, or it exits immediately before
@@ -439,20 +549,29 @@ codev_restart_if_changed codev-orca-xvfb.service "${xvfb_unit_before}" \
 # Orca's WebSocket protocol; the orchestrator manages its routing table at
 # runtime over the local admin API (127.0.0.1:2019), one `handle_path
 # /w/<workspaceId>/*` route per active IDE session.
-install -d -m 0755 /usr/share/keyrings
-# --batch --yes, because this script is not run once. Rolling a release
-# restarts the host, which re-runs the whole bootstrap, and on the second
-# pass the keyring already exists: gpg then tries to ask whether to
-# overwrite it, finds no tty, and exits 2 -- taking the bootstrap with it
-# after everything before this point has already succeeded.
-curl -1sLf "https://dl.cloudsmith.io/public/caddy/stable/gpg.key" \
-  | gpg --batch --yes --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-curl -1sLf "https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt" \
-  -o /etc/apt/sources.list.d/caddy-stable.list
-chmod o+r /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-chmod o+r /etc/apt/sources.list.d/caddy-stable.list
-apt-get -o DPkg::Lock::Timeout=300 update
-apt-get -o DPkg::Lock::Timeout=300 install -y caddy
+caddy_key="$(codev_stage_key caddy-v1 "https://dl.cloudsmith.io/public/caddy/stable")"
+if codev_stage_done caddy "${caddy_key}"; then
+  codev_stage_skipped "Caddy"
+else
+  install -d -m 0755 /usr/share/keyrings
+  # --batch --yes, because this script is not run once. Rolling a release
+  # restarts the host, which re-runs the whole bootstrap, and on the second
+  # pass the keyring already exists: gpg then tries to ask whether to
+  # overwrite it, finds no tty, and exits 2 -- taking the bootstrap with it
+  # after everything before this point has already succeeded.
+  curl -1sLf "https://dl.cloudsmith.io/public/caddy/stable/gpg.key" \
+    | gpg --batch --yes --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+  curl -1sLf "https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt" \
+    -o /etc/apt/sources.list.d/caddy-stable.list
+  chmod o+r /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+  chmod o+r /etc/apt/sources.list.d/caddy-stable.list
+  # The second apt index refresh of this script, and unavoidable: the Caddy
+  # repository was only added a few lines ago, so the index from the packages
+  # stage above cannot know about it.
+  apt-get -o DPkg::Lock::Timeout=300 update
+  apt-get -o DPkg::Lock::Timeout=300 install -y caddy
+  codev_stage_record caddy "${caddy_key}"
+fi
 
 # Orca's browser client connects to a `nip.io` hostname that resolves to
 # this instance's own current public IP, so a real domain/DNS record is not
@@ -591,23 +710,63 @@ codev_restart_if_changed caddy.service "${caddyfile_before}" \
 systemctl daemon-reload
 systemctl enable --now codev-caddy-cert-sync.timer
 
-curl -fsSL \
-  "https://github.com/firecracker-microvm/firecracker/releases/download/${firecracker_version}/firecracker-${firecracker_version}-${firecracker_arch}.tgz" \
-  -o "${work_dir}/firecracker.tgz"
-tar -xzf "${work_dir}/firecracker.tgz" -C "${work_dir}"
-release_dir="${work_dir}/release-${firecracker_version}-${firecracker_arch}"
-(
-  cd "${release_dir}"
-  sha256sum --check --ignore-missing SHA256SUMS
-)
-install -m 0755 \
-  "${release_dir}/firecracker-${firecracker_version}-${firecracker_arch}" \
-  /usr/local/bin/firecracker
-install -m 0755 \
-  "${release_dir}/jailer-${firecracker_version}-${firecracker_arch}" \
-  /usr/local/bin/jailer
+firecracker_key="$(codev_stage_key firecracker-v1 "${firecracker_version}" \
+  "${firecracker_arch}")"
+if codev_stage_done firecracker "${firecracker_key}"; then
+  codev_stage_skipped "Firecracker and the jailer"
+else
+  curl -fsSL \
+    "https://github.com/firecracker-microvm/firecracker/releases/download/${firecracker_version}/firecracker-${firecracker_version}-${firecracker_arch}.tgz" \
+    -o "${work_dir}/firecracker.tgz"
+  tar -xzf "${work_dir}/firecracker.tgz" -C "${work_dir}"
+  release_dir="${work_dir}/release-${firecracker_version}-${firecracker_arch}"
+  (
+    cd "${release_dir}"
+    sha256sum --check --ignore-missing SHA256SUMS
+  )
+  install -m 0755 \
+    "${release_dir}/firecracker-${firecracker_version}-${firecracker_arch}" \
+    /usr/local/bin/firecracker
+  install -m 0755 \
+    "${release_dir}/jailer-${firecracker_version}-${firecracker_arch}" \
+    /usr/local/bin/jailer
+  codev_stage_record firecracker "${firecracker_key}"
+fi
 
-curl -fsSL "${firecracker_ci_base}/vmlinux-6.1.176" -o "${base_dir}/vmlinux"
+# The guest kernel. Its CI prefix pins an immutable build, so the URL is the
+# whole of this stage's identity.
+readonly guest_kernel="vmlinux-6.1.176"
+kernel_key="$(codev_stage_key kernel-v1 "${firecracker_ci_base}/${guest_kernel}")"
+if codev_stage_done kernel "${kernel_key}"; then
+  codev_stage_skipped "the guest kernel"
+else
+  curl -fsSL "${firecracker_ci_base}/${guest_kernel}" -o "${base_dir}/vmlinux"
+  chmod 0644 "${base_dir}/vmlinux"
+  codev_stage_record kernel "${kernel_key}"
+fi
+
+# The guest root filesystem: a downloaded Ubuntu squashfs, unpacked, dressed
+# with the agent CLIs and this release's guest daemon, and written out as a
+# 3 GB ext4 image. The single most expensive thing this script does, and the
+# one with the least reason to repeat itself -- the result is a pure function
+# of the four inputs named in the key.
+#
+# `packages_key` and `node_key` stand in for the host files copied into the
+# image below (node, git, ripgrep, git-core, the shared libraries, and the two
+# npm packages). Those files change only when the stages holding those keys
+# run, so naming the keys is exact and costs nothing, where hashing the whole
+# of /usr/lib on every boot would cost a good part of what this saves.
+rootfs_key="$(codev_stage_key rootfs-v1 \
+  "${firecracker_ci_base}/ubuntu-24.04.squashfs" \
+  "$(codev_fingerprint /usr/local/bin/codev-guestd)" \
+  "${packages_key}" \
+  "${node_key}")"
+if codev_stage_done rootfs "${rootfs_key}"; then
+  codev_stage_skipped "the guest root filesystem"
+else
+# Deliberately not indented to the `if`: the block below writes the guest's
+# unit files with unindented heredocs, whose bodies are file contents rather
+# than shell, and re-indenting them would change what lands in the image.
 curl -fsSL "${firecracker_ci_base}/ubuntu-24.04.squashfs" -o "${work_dir}/ubuntu.squashfs"
 unsquashfs -no-progress -d "${work_dir}/rootfs" "${work_dir}/ubuntu.squashfs"
 
@@ -694,7 +853,8 @@ RESOLV
 truncate -s 3G "${base_dir}/rootfs.ext4"
 mkfs.ext4 -q -F -d "${work_dir}/rootfs" -L CODEV_ROOT "${base_dir}/rootfs.ext4"
 chmod 0600 "${base_dir}/rootfs.ext4"
-chmod 0644 "${base_dir}/vmlinux"
+codev_stage_record rootfs "${rootfs_key}"
+fi
 
 swapoff --all
 sed -i.bak '/\sswap\s/s/^/#/' /etc/fstab

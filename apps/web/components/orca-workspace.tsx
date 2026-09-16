@@ -88,8 +88,23 @@ export function isActionableOrcaConnectStatus(status: number): boolean {
 /**
  * Bound on a single connect request. Without one, a request that never
  * settled kept the starting state up forever with nothing to report.
+ *
+ * It has to sit above what a legitimate attempt costs, which is why it is
+ * this large. A request that finds the host already running goes on to spawn
+ * this workspace's Orca process and clone its repository, and `startIde`
+ * allows that 110 seconds. The 20 seconds this used to be aborted that spawn
+ * halfway through: the next attempt then found the half-started process,
+ * tore it down and began again (`startIdeRecoveringStaleProcess`), so the
+ * timeout meant to report a stuck request was itself making the workspace
+ * slower to open — and putting "no answer within 20s" on screen while the
+ * runtime was working normally.
+ *
+ * Waiting is free here because nothing else can proceed anyway, and the
+ * cold-start path no longer relies on it: a host that is not serving yet is
+ * answered as `host-starting` within seconds (OPEN_PATH_ORCHESTRATOR_WAIT_MS
+ * in lib/orca-host.ts) and polled on HOST_STARTING_RETRY_MS.
  */
-const CONNECT_REQUEST_TIMEOUT_MS = 20_000;
+const CONNECT_REQUEST_TIMEOUT_MS = 120_000;
 /**
  * Consecutive genuine failures - not "still starting" answers - before the
  * waiting copy names the failure instead of describing a normal boot.

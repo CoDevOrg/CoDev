@@ -46,7 +46,7 @@ test("builds and bootstraps architecture-specific runtime artifacts", () => {
   assert.match(deploy, /aarch64-unknown-linux-musl/);
   assert.match(deploy, /CODEV_PURCHASE_OPTION:-on-demand/);
   assert.match(bootstrap, /codev-orchestrator-linux-\$\{artifact_arch\}/);
-  assert.match(bootstrap, /\n  gh \\\n/);
+  assert.match(bootstrap, /\n  gh\n/);
   assert.match(
     bootstrap,
     /firecracker-\$\{firecracker_version\}-\$\{firecracker_arch\}/,
@@ -144,6 +144,90 @@ test("the direct bearer route serves /healthz and both copies agree", () => {
     1,
     "bootstrap should declare the direct matcher exactly once",
   );
+});
+
+// The bootstrap runs on every boot, not once, and the host boots far more
+// often than it is deployed to -- it deallocates itself after ten idle
+// minutes. Reinstalling apt packages, Node, the agent CLIs, Orca, Caddy,
+// Firecracker and a 3 GB guest rootfs on each of those boots put minutes in
+// front of whoever was opening a workspace, because the orchestrator only
+// starts once all of it finishes. Each of those stages is now keyed on its own
+// inputs and skipped when the key is unchanged.
+test("every expensive bootstrap stage is skipped when already current", () => {
+  for (const stage of [
+    "packages",
+    "node",
+    "cursor",
+    "orca",
+    "caddy",
+    "firecracker",
+    "kernel",
+    "rootfs",
+  ]) {
+    assert.match(
+      bootstrap,
+      new RegExp(`codev_stage_done ${stage} "\\$\\{${stage}_key\\}"`),
+      `${stage} should run only when its key changed`,
+    );
+    // Recorded after the work, never before: `set -e` aborts the script on a
+    // failure, and a stamp written up front would make the next boot skip a
+    // stage that never finished.
+    assert.match(
+      bootstrap,
+      new RegExp(`codev_stage_record ${stage} "\\$\\{${stage}_key\\}"`),
+      `${stage} should record its key once it succeeds`,
+    );
+  }
+
+  // The two downloads worth singling out, both hundreds of megabytes: Orca
+  // keys on the checksum the build published, fetched on its own so the
+  // archive itself is never pulled when the host already has that build.
+  assert.match(
+    bootstrap,
+    /orca_key="\$\(codev_stage_key orca-v1 "\$\(cat "\$\{work_dir\}\/\$\{orca_archive\}\.sha256"\)"\)"/,
+  );
+  const orcaStage = bootstrap.slice(
+    bootstrap.indexOf('orca_key="'),
+    bootstrap.indexOf("codev_stage_record orca"),
+  );
+  assert.doesNotMatch(
+    orcaStage.slice(0, orcaStage.indexOf("else")),
+    /codev_fetch "\$\{orca_archive\}"/,
+    "the Orca archive must be fetched inside the stage, not before its guard",
+  );
+
+  // And the guest rootfs names every input it bakes in: the Ubuntu image, this
+  // release's guest daemon, and the two keys standing for the host files it
+  // copies from.
+  assert.match(
+    bootstrap,
+    /rootfs_key="\$\(codev_stage_key rootfs-v1 \\\n\s+"\$\{firecracker_ci_base\}\/ubuntu-24\.04\.squashfs" \\\n\s+"\$\(codev_fingerprint \/usr\/local\/bin\/codev-guestd\)" \\\n\s+"\$\{packages_key\}" \\\n\s+"\$\{node_key\}"\)"/,
+  );
+});
+
+test("a bootstrap stage stamp tracks its key and honours the force switch", () => {
+  const helpers = bootstrap.slice(
+    bootstrap.indexOf("codev_stage_key() {"),
+    bootstrap.indexOf("# This host's own public IPv4"),
+  );
+  const harness = `
+set -euo pipefail
+stamp_dir="$(mktemp -d)/stamps"
+${helpers}
+key_a="$(codev_stage_key demo one two)"
+key_b="$(codev_stage_key demo one three)"
+[[ "\${key_a}" != "\${key_b}" ]] || { echo "keys collided"; exit 1; }
+# Nothing recorded yet, so the stage has to run.
+codev_stage_done demo "\${key_a}" && { echo "ran without a stamp"; exit 1; }
+codev_stage_record demo "\${key_a}"
+codev_stage_done demo "\${key_a}" || { echo "repeated a current stage"; exit 1; }
+# A changed input is a different key, and the stage runs again.
+codev_stage_done demo "\${key_b}" && { echo "skipped a changed stage"; exit 1; }
+CODEV_BOOTSTRAP_FORCE=1 codev_stage_done demo "\${key_a}" \
+  && { echo "force did not override"; exit 1; }
+echo ok
+`;
+  assert.equal(execFileSync("bash", ["-c", harness]).toString().trim(), "ok");
 });
 
 test("deployment shell scripts parse", () => {

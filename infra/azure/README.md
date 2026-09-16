@@ -94,6 +94,26 @@ If you change the unit, check a real reboot, not `what-if` and not the first
 boot. `journalctl -b -u codev-bootstrap.service` on the rebooted host should
 show it running; a line containing `ordering cycle` means it did not.
 
+### The bootstrap re-runs, but it does not reinstall
+
+Re-running on every boot is what makes a release roll forward, and it used to
+mean a full reinstall each time: apt, Node, the agent CLIs, the Cursor
+installer, the Orca tarball, Caddy, Firecracker, and a 3 GB guest rootfs
+rebuilt from a freshly downloaded Ubuntu squashfs. On a two-core host that is
+minutes of work, and because `codev-orchestrator` only starts once the script
+finishes, every one of those minutes landed on whoever was sitting in front of
+an opening workspace. With a ten-minute idle deallocation, that is most of the
+times anyone opens one.
+
+So each of those stages now declares a key over its own inputs and runs only
+when the key differs from what the last successful run recorded, under
+`/var/lib/codev/bootstrap-stamps`. A release roll changes the keys and
+reinstalls what actually moved; a plain reboot changes none of them and goes
+straight to the service restarts at the end. `CODEV_BOOTSTRAP_FORCE=1` runs
+everything regardless, which is the thing to reach for when a host is in a
+state nobody can explain. The rules for adding a stage are in the script, next
+to the helpers.
+
 ### Rolling a host that is off
 
 The host deallocates itself after ten idle minutes, so a deploy usually finds

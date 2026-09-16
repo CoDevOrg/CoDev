@@ -147,6 +147,31 @@ describe("ensureOrcaSession", () => {
     expect(mocks.startIde).not.toHaveBeenCalled();
   });
 
+  it("answers host-starting quickly instead of holding the request open", async () => {
+    // The client polls this route and shows a 202 as "still booting", so
+    // waiting here buys nothing and costs the attempt: the browser's own
+    // request timeout fires mid-wait, aborts the fetch, and the next attempt
+    // starts over from the session probe. A cold host takes minutes to
+    // bootstrap, which no single request was ever going to outlast.
+    mocks.getIde.mockRejectedValueOnce(
+      new mocks.OrchestratorError("not found", 404),
+    );
+    mocks.getHostState.mockResolvedValueOnce("stopped");
+    mocks.requestHostWake.mockResolvedValueOnce("running");
+    mocks.startIde.mockResolvedValueOnce(session);
+    await ensureOrcaSession(workspace, userId);
+
+    const orchestratorWaitMs = mocks.waitForOrchestrator.mock.calls.at(-1)?.[0];
+    expect(orchestratorWaitMs).toBeGreaterThan(0);
+    expect(orchestratorWaitMs).toBeLessThanOrEqual(15_000);
+    // A host caught mid-deallocate is the routine case for somebody coming
+    // back from a break, and each turn of that wait is an ARM call plus two
+    // seconds. Give it a turn or two, then poll.
+    const stoppingAttempts = mocks.requestHostWake.mock.calls.at(-1)?.[0];
+    expect(stoppingAttempts).toBeGreaterThan(0);
+    expect(stoppingAttempts).toBeLessThanOrEqual(3);
+  });
+
   it("does not treat denied runtime access as a reason to wake or start a host", async () => {
     mocks.getIde.mockRejectedValueOnce(
       new mocks.OrchestratorError("forbidden", 403),
