@@ -51,8 +51,12 @@ import {
 } from './web/codev-project-bootstrap'
 import { isCodevEmbedded } from './web/codev-embedded'
 import { CodevCenterUnderlay } from './components/codev/CodevCenterUnderlay'
+import { CodevChatFirstCover } from './components/codev/CodevChatFirstCover'
 import { reportCodevStartupFailure } from './web/codev-host-state'
 import { isCodevPendingShell } from './web/codev-pending-shell'
+import { codevChatTabIdInState } from './web/codev-center-chat-tab'
+import { ensureCodevDefaultChat } from './web/codev-default-chat'
+import { useCodevAgentLaunching } from './web/codev-agent-launch-state'
 
 /** Stable id for the sticky degraded-mode toast, so a later successful
  *  hydration can clear one raised by an earlier pass. */
@@ -438,8 +442,24 @@ function App(): React.JSX.Element {
   const floatingVisibleTabCount = useAppStore(selectFloatingVisibleTabCount)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const startupWorktreeRefreshCompleted = useAppStore((s) => s.startupWorktreeRefreshCompleted)
+  const activeCodevChatTabId = useAppStore((s) =>
+    isCodevEmbedded() && s.activeWorktreeId ? codevChatTabIdInState(s.activeWorktreeId, s) : null
+  )
+  const activeCodevPrimaryChat = useAppStore((s) => {
+    if (!isCodevEmbedded() || !s.activeWorktreeId) {
+      return false
+    }
+    const activeWorktree = s.getKnownWorktreeById(s.activeWorktreeId)
+    return Boolean(
+      activeWorktree?.isMainWorktree || activeWorktree?.path === window.__CODEV_PROJECT_PATH__
+    )
+  })
+  const activeCodevChatLaunching = useCodevAgentLaunching(activeWorktreeId ?? '')
   const codevBootstrapStartedRef = useRef(false)
   const [codevBootstrapAttempt, setCodevBootstrapAttempt] = useState(0)
+  const [codevChatLaunchAttempt, setCodevChatLaunchAttempt] = useState(0)
+  const [codevChatLaunchError, setCodevChatLaunchError] = useState<string | null>(null)
+  const codevChatLaunchWorktreeRef = useRef<string | null>(null)
   // Why: the awaiting-workspace cover is the only way back when the handoff
   // lands without a chat, and it renders far below this effect.
   useEffect(() => {
@@ -498,6 +518,54 @@ function App(): React.JSX.Element {
         codevBootstrapStartedRef.current = false
       })
   }, [startupWorktreeRefreshCompleted, workspaceSessionReady, codevBootstrapAttempt])
+  useEffect(() => {
+    if (
+      !isCodevEmbedded() ||
+      !activeWorktreeId ||
+      activeCodevChatTabId ||
+      isCodevPendingShell() ||
+      codevChatLaunchWorktreeRef.current === activeWorktreeId
+    ) {
+      return
+    }
+
+    // Managed CoDev control worktrees are review surfaces, not the workspace's
+    // primary chat. Only the checkout opened by the workspace bootstrap gets a
+    // default native chat, so creating an agent cannot recursively launch more
+    // local sessions in its control worktree.
+    const activeWorktree = useAppStore.getState().getKnownWorktreeById(activeWorktreeId)
+    if (
+      activeWorktree &&
+      activeWorktree.path !== window.__CODEV_PROJECT_PATH__ &&
+      !activeWorktree.isMainWorktree
+    ) {
+      return
+    }
+
+    codevChatLaunchWorktreeRef.current = activeWorktreeId
+    setCodevChatLaunchError(null)
+    void ensureCodevDefaultChat(activeWorktreeId)
+      .then((ready) => {
+        if (!ready) {
+          setCodevChatLaunchError(
+            'CoDev could not open the workspace chat. Check the connection and try again.'
+          )
+        }
+      })
+      .catch((error: unknown) => {
+        setCodevChatLaunchError(
+          error instanceof Error
+            ? `CoDev could not open the workspace chat: ${error.message}`
+            : 'CoDev could not open the workspace chat. Check the connection and try again.'
+        )
+      })
+  }, [
+    activeCodevChatLaunching,
+    activeCodevChatTabId,
+    activeWorktreeId,
+    codevBootstrapAttempt,
+    codevChatLaunchAttempt
+  ])
   const backgroundTerminalMountRequested = useSyncExternalStore(
     subscribeBackgroundTerminalWorktreeMountRequests,
     hasRequestedBackgroundTerminalWorktreeMount,
@@ -535,7 +603,10 @@ function App(): React.JSX.Element {
   const workspaceChromeActive =
     activeView === 'terminal' && activeWorktreeId !== null && !creationLayoutActive
   const terminalWorkbenchVisible =
-    activeView === 'terminal' && activeWorktreeId !== null && !creationLayoutActive
+    activeView === 'terminal' &&
+    activeWorktreeId !== null &&
+    !creationLayoutActive &&
+    (!isCodevEmbedded() || activeCodevChatTabId !== null)
   // Why: once the floating workspace owns tabs, keep it mounted while closed so hidden terminal/browser/editor panes retain local state.
   const shouldMountFloatingTerminalPanel =
     floatingTerminalEnabled && (floatingTerminalOpen || floatingVisibleTabCount > 0)
@@ -2124,6 +2195,25 @@ function App(): React.JSX.Element {
                                 </RecoverableRenderErrorBoundary>
                               </Suspense>
                             </div>
+                          ) : null}
+                          {isCodevEmbedded() &&
+                          activeView === 'terminal' &&
+                          activeWorktreeId !== null &&
+                          !creationLayoutActive &&
+                          activeCodevChatTabId === null ? (
+                            <CodevChatFirstCover
+                              managed={!activeCodevPrimaryChat}
+                              error={
+                                activeCodevPrimaryChat && activeCodevChatLaunching
+                                  ? null
+                                  : codevChatLaunchError
+                              }
+                              onRetry={() => {
+                                codevChatLaunchWorktreeRef.current = null
+                                setCodevChatLaunchError(null)
+                                setCodevChatLaunchAttempt((attempt) => attempt + 1)
+                              }}
+                            />
                           ) : null}
                           <Suspense fallback={null}>
                             <RecoverableRenderErrorBoundary
