@@ -20,8 +20,13 @@ on:
       - "packages/ide/**"
       - "services/**"
       - "infra/azure/**"
-      - "infra/aws/scripts/bootstrap-host.sh"
-      - "infra/aws/scripts/build-orca-serve.sh"
+      # Everything the release artifact is built from or that deploy.sh
+      # uploads. Listing the two build scripts by name used to leave
+      # verify-lifecycle.sh out, even though deploy.sh ships it to the host.
+      # The runtime-config test is excluded on purpose: it changes far more
+      # often than the runtime and a host roll takes tens of minutes.
+      - "infra/runtime/scripts/**"
+      - "infra/runtime/orca-build/**"
       - ".github/workflows/deploy-runtime-azure.yml"
   workflow_dispatch:
 
@@ -71,7 +76,7 @@ jobs:
       # electron-builder spawns the freshly unpacked, not-yet-bundled electron
       # binary during the build (native module rebuild, icon generation), so
       # the runner needs the shared libraries a desktop Chromium needs. Kept
-      # in step with infra/aws/orca-build/Containerfile's apt list.
+      # in step with infra/runtime/orca-build/Containerfile's apt list.
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update

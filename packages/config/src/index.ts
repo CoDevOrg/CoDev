@@ -43,8 +43,7 @@ export const serverEnvironmentSchema = z.object({
     .regex(/^[^/\s]+\/[^/\s]+$/)
     .optional(),
   CREDENTIAL_ENCRYPTION_KEY: z.string().min(1).optional(),
-  CREDENTIAL_KMS_KEY_ID: z.string().min(1).optional(),
-  /** Key Vault key identifier; the Azure counterpart of CREDENTIAL_KMS_KEY_ID. */
+  /** Key Vault key identifier that wraps every stored provider credential. */
   CREDENTIAL_KEY_VAULT_KEY_ID: z.string().url().optional(),
   PLATFORM_FALLBACK_API_KEY: z.string().min(1).optional(),
   PLATFORM_FALLBACK_BEDROCK_ROLE_ARN: z
@@ -77,18 +76,13 @@ export const serverEnvironmentSchema = z.object({
   UPSTASH_REDIS_REST_URL: optionalUrl,
   UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
   REDIS_URL: optionalUrl,
-  AWS_REGION: z.string().min(1).optional(),
-  AWS_ROLE_ARN: z.string().startsWith("arn:aws:iam::").optional(),
-  AWS_HOST_INSTANCE_ID: z
-    .string()
-    .regex(/^i-[0-9a-f]+$/)
-    .optional(),
   /**
-   * Which cloud hosts the Firecracker runtime. Unset means AWS, because that
-   * is what serves production; see apps/web/lib/cloud.ts for why an absent
-   * value must never resolve to Azure by accident.
+   * Region for Amazon Bedrock, which members can bring as a model provider
+   * (see ai-model.ts and the `bedrock` provider in packages/db). This is the
+   * one remaining AWS variable, and it has nothing to do with the retired
+   * EC2 runtime -- it serves somebody else's Bedrock account, not ours.
    */
-  CLOUD_PROVIDER: z.enum(["aws", "azure"]).optional(),
+  AWS_REGION: z.string().min(1).optional(),
   AZURE_TENANT_ID: z.string().uuid().optional(),
   /**
    * Application (client) id of the Entra app registration apps/web federates
@@ -101,17 +95,15 @@ export const serverEnvironmentSchema = z.object({
   AZURE_RESOURCE_GROUP: z.string().min(1).optional(),
   /** Pins host resolution to one VM; unset resolves through the stack tags. */
   AZURE_HOST_VM_NAME: z.string().min(1).optional(),
-  ORCHESTRATOR_URL: optionalUrl,
   /**
-   * Direct HTTPS path to the Firecracker host's orchestrator, bypassing the
-   * API Gateway + Lambda proxy fronted by ORCHESTRATOR_URL. That proxy has a
-   * hard, non-configurable 29-second timeout (an AWS platform limit on
-   * Lambda proxy integrations), which is incompatible with long-running
-   * calls like an authenticated Codex CLI turn (up to 900s). This path goes
-   * straight to a Caddy route on the host instead, gated by
-   * ORCHESTRATOR_DIRECT_SECRET since the orchestrator itself performs no
-   * request authentication of its own (it normally relies on the Lambda's
-   * security-group-restricted network path).
+   * HTTPS path to the Firecracker host's orchestrator: a Caddy route on the
+   * host, gated by ORCHESTRATOR_DIRECT_SECRET since the orchestrator performs
+   * no request authentication of its own.
+   *
+   * It is named "direct" because it began as a bypass around the API Gateway
+   * + Lambda proxy that fronted the EC2 host, whose hard 29-second
+   * integration timeout could not carry an authenticated Codex turn (up to
+   * 900s). That proxy is gone; this is now simply the path.
    */
   ORCHESTRATOR_DIRECT_URL: optionalUrl,
   ORCHESTRATOR_DIRECT_SECRET: z.string().min(32).optional(),
@@ -130,15 +122,11 @@ export function readServerEnvironment(
 export function isGitHubAuthConfigured(
   input: Record<string, string | undefined> = process.env,
 ) {
-  // Production must have a managed key on whichever cloud is configured.
-  // Checking only the AWS one would let an Azure deployment fall through to
-  // the development key and write credentials the platform cannot protect.
-  const managedKeyConfigured =
-    input.CLOUD_PROVIDER === "azure"
-      ? input.CREDENTIAL_KEY_VAULT_KEY_ID
-      : input.CREDENTIAL_KMS_KEY_ID;
+  // Production must have the managed key. Without it, a deployment falls
+  // through to the development key and writes credentials the platform
+  // cannot protect.
   const productionStorageReady =
-    input.NODE_ENV !== "production" || managedKeyConfigured;
+    input.NODE_ENV !== "production" || input.CREDENTIAL_KEY_VAULT_KEY_ID;
 
   return Boolean(
     input.AUTH_SECRET &&

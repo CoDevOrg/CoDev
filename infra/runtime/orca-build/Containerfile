@@ -1,6 +1,6 @@
 # Builds `orca serve` (the Electron main process / IDE backend) from CoDev's own
 # first-party IDE source in packages/ide, which is this image's build context.
-# See infra/aws/scripts/build-orca-serve.sh, which builds the image with Apple's
+# See infra/runtime/scripts/build-orca-serve.sh, which builds the image with Apple's
 # `container` tool and copies the resulting artifact out.
 #
 # There is no upstream clone and no patch step any more: the IDE is forked into
@@ -38,6 +38,6 @@ WORKDIR /build
 COPY . /build
 
 # One script builds the artifact, shared with the non-container Linux path in
-# infra/aws/scripts/build-orca-serve.sh so the two cannot drift.
+# infra/runtime/scripts/build-orca-serve.sh so the two cannot drift.
 RUN TARGET_ARCH="${TARGET_ARCH}" ARTIFACT_ARCH="${ARTIFACT_ARCH}" \
     bash scripts/build-orca-serve-artifact.sh

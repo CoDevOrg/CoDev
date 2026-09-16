@@ -1,24 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const environment = vi.hoisted(() => ({
-  CLOUD_PROVIDER: undefined as "aws" | "azure" | undefined,
-  ORCHESTRATOR_URL: "https://gateway.example.test",
   ORCHESTRATOR_DIRECT_URL: "https://host.example.test",
   ORCHESTRATOR_DIRECT_SECRET: "0123456789abcdef0123456789abcdef",
 }));
 
 vi.mock("@codev/config", () => ({
   readServerEnvironment: () => environment,
-}));
-
-vi.mock("./aws", () => ({
-  getAwsConfiguration: () => ({
-    region: "us-east-2",
-    credentials: {
-      accessKeyId: "AKIATEST",
-      secretAccessKey: "secret",
-    },
-  }),
 }));
 
 vi.mock("./host", () => ({
@@ -33,45 +21,28 @@ import { checkOrchestratorConnection } from "./orchestrator";
 const healthy = () =>
   new Response(
     JSON.stringify({ status: "ok", service: "codev-orchestrator" }),
-    { status: 200, headers: { "content-type": "application/json" } },
+    {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    },
   );
 
-describe("orchestrator transport selection", () => {
+describe("orchestrator transport", () => {
   beforeEach(() => {
     fetchMock.mockReset();
     fetchMock.mockResolvedValue(healthy());
-    environment.CLOUD_PROVIDER = undefined;
-  });
-
-  it("signs ordinary calls for the API Gateway on AWS", async () => {
-    environment.CLOUD_PROVIDER = "aws";
-    await checkOrchestratorConnection();
-    const [url, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
-    expect(url.toString()).toBe("https://gateway.example.test/healthz");
-    const headers = init.headers as Record<string, string>;
-    expect(headers.authorization).toMatch(/^AWS4-HMAC-SHA256 /);
   });
 
   /**
-   * The default moved to Azure when the migration finished. An environment
-   * that forgets the variable must land on the cloud that actually runs the
-   * host, not on the retired one — the old AWS default is what made a local
-   * checkout poll EC2 for a host that no longer exists.
+   * There is one transport now. apps/web used to carry a second — SigV4-signed
+   * requests to the API Gateway + Lambda proxy that fronted the EC2 host — and
+   * chose between them on CLOUD_PROVIDER. That proxy's hard 29-second timeout
+   * could not carry a 900-second Codex turn, which is why the bearer path was
+   * built to bypass it; with AWS retired the bypass is simply the path. The
+   * health check is the smallest call that exercises the shared request
+   * function.
    */
-  it("treats an unset CLOUD_PROVIDER as Azure", async () => {
-    await checkOrchestratorConnection();
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("https://host.example.test/healthz");
-    const headers = init.headers as Record<string, string>;
-    expect(headers.authorization).toMatch(/^Bearer /);
-  });
-
-  it("sends every call down the bearer-authenticated direct path on Azure", async () => {
-    // Not only the long-running exec calls: on Azure there is no API Gateway
-    // to sign for, so a signed request would be sent to an endpoint that
-    // does not exist for that cloud. The health check is the smallest call
-    // that exercises the shared request function.
-    environment.CLOUD_PROVIDER = "azure";
+  it("sends every call down the bearer-authenticated host path", async () => {
     await checkOrchestratorConnection();
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://host.example.test/healthz");
@@ -79,10 +50,11 @@ describe("orchestrator transport selection", () => {
     expect(headers.authorization).toBe(
       "Bearer 0123456789abcdef0123456789abcdef",
     );
+    // Nothing should be reaching for an AWS signature any more.
+    expect(headers.authorization).not.toMatch(/^AWS4-HMAC-SHA256 /);
   });
 
-  it("fails loudly on Azure when the direct path is not configured", async () => {
-    environment.CLOUD_PROVIDER = "azure";
+  it("fails loudly when the host path is not configured", async () => {
     environment.ORCHESTRATOR_DIRECT_URL = "";
     await expect(checkOrchestratorConnection()).rejects.toThrow(
       /ORCHESTRATOR_DIRECT_URL/,

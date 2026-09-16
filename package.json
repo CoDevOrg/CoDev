@@ -12,9 +12,9 @@
     "lint": "pnpm -r --if-present lint",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm run test:infra && pnpm -r --if-present test",
-    "test:infra": "node --test infra/aws/runtime-config.test.mjs",
+    "test:infra": "node --test infra/runtime/runtime-config.test.mjs",
     "test:e2e": "pnpm --filter @codev/web test:e2e",
-    "orca:web": "infra/aws/scripts/build-orca-web.sh",
+    "orca:web": "infra/runtime/scripts/build-orca-web.sh",
     "ide:dev": "bash scripts/ide.sh dev:web",
     "ide:check": "bash scripts/ide.sh typecheck:web",
     "ide:test:web": "bash scripts/ide.sh exec vitest run --config config/vitest.config.ts src/renderer/src/web",
@@ -23,8 +23,7 @@
     "db:generate": "pnpm --filter @codev/db db:generate",
     "db:migrate": "pnpm --filter @codev/db db:migrate",
     "rust:check": "cd services/orchestrator && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test",
-    "prepare": "husky",
-    "rewrap:credentials": "tsx --conditions react-server scripts/rewrap-credentials.ts"
+    "prepare": "husky"
   },
   "devDependencies": {
     "@eslint/js": "9.39.2",

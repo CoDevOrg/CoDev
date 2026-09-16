@@ -1,14 +1,9 @@
 import "server-only";
 
-import { Sha256 } from "@aws-crypto/sha256-js";
 import { readServerEnvironment } from "@codev/config";
 import { sandboxInstanceSchema, type SandboxInstance } from "@codev/contracts";
-import { HttpRequest } from "@smithy/protocol-http";
-import { SignatureV4 } from "@smithy/signature-v4";
 import { z } from "zod";
 
-import { getAwsConfiguration } from "./aws";
-import { isAzure } from "./cloud";
 import { requestHostWake } from "./host";
 import type { RepositorySnapshot } from "./github";
 
@@ -100,89 +95,28 @@ const publicationExportSchema = z.object({
     .max(5 * 1_024 * 1_024),
 });
 
-function getOrchestratorConfiguration() {
-  const environment = readServerEnvironment();
-  const endpoint =
-    environment.ORCHESTRATOR_URL && environment.ORCHESTRATOR_URL.trim() !== ""
-      ? environment.ORCHESTRATOR_URL
-      : "https://y0h0aur7sc.execute-api.us-east-2.amazonaws.com";
-  return {
-    ...getAwsConfiguration(),
-    endpoint,
-  };
-}
-
+/**
+ * Every orchestrator call, over the bearer-authenticated direct HTTPS path.
+ *
+ * There used to be a second transport here: SigV4-signed requests to an API
+ * Gateway + Lambda proxy, which was how apps/web reached the EC2 host. That
+ * proxy imposed a hard, non-configurable 29-second integration timeout, and
+ * an authenticated Codex turn can run for 900 seconds -- which is the entire
+ * reason the direct path was built as a bypass in the first place. The Azure
+ * host has no such tier, so the bypass became the only path, and with AWS
+ * retired the signed one is gone along with its SigV4 machinery.
+ */
 async function orchestratorRequest(
   method: string,
   path: string,
   body?: unknown,
   timeoutMs = 70_000,
 ) {
-  // On Azure there is no API Gateway or Lambda proxy to sign for: the
-  // bearer-authenticated direct path is the only path, for every call, not
-  // just the long-running exec ones. Deciding here, at the single choke
-  // point, is what lets the 30-odd exported functions stay cloud-agnostic.
-  if (isAzure()) {
-    return orchestratorDirectRequest(method, path, body, timeoutMs);
-  }
-  const configuration = getOrchestratorConfiguration();
-  const url = new URL(path, configuration.endpoint);
-  const encodedBody = body === undefined ? undefined : JSON.stringify(body);
-  const headers: Record<string, string> = {
-    accept: "application/json",
-    host: url.host,
-    "x-codev-request-id": crypto.randomUUID(),
-  };
-  if (encodedBody !== undefined) {
-    headers["content-type"] = "application/json";
-  }
-  const signer = new SignatureV4({
-    credentials: configuration.credentials,
-    region: configuration.region,
-    service: "execute-api",
-    sha256: Sha256,
-  });
-  const signed = await signer.sign(
-    new HttpRequest({
-      protocol: url.protocol,
-      hostname: url.hostname,
-      method,
-      path: `${url.pathname}${url.search}`,
-      headers,
-      ...(url.port ? { port: Number(url.port) } : {}),
-      ...(encodedBody === undefined ? {} : { body: encodedBody }),
-    }),
-  );
-  const response = await fetch(url, {
-    method,
-    headers: signed.headers,
-    ...(encodedBody === undefined ? {} : { body: encodedBody }),
-    cache: "no-store",
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-  if (!response.ok) {
-    const payload = errorSchema.safeParse(
-      await response.json().catch(() => null),
-    );
-    throw new OrchestratorError(
-      payload.success
-        ? payload.data.error
-        : `Sandbox service returned HTTP ${response.status}.`,
-      response.status,
-      payload.success ? (payload.data.conflictPaths ?? []) : [],
-    );
-  }
-  return response;
+  return orchestratorDirectRequest(method, path, body, timeoutMs);
 }
 
-/**
- * Direct HTTPS path to the orchestrator (see ORCHESTRATOR_DIRECT_URL). On
- * AWS it is used only for calls that can legitimately run longer than the
- * API Gateway Lambda proxy's hard 29-second integration timeout — currently
- * just the authenticated Codex exec — and everything else keeps using the
- * signed orchestratorRequest. On Azure it is the only path and every call
- * comes through here.
- */
+/** The orchestrator's bearer-authenticated HTTPS endpoint, via Caddy on the
+ * host (see ORCHESTRATOR_DIRECT_URL). */
 async function orchestratorDirectRequest(
   method: string,
   path: string,
@@ -231,9 +165,9 @@ async function orchestratorDirectRequest(
 }
 
 /**
- * Routes to the direct-bypass endpoint (see orchestratorDirectRequest) when
- * configured, else falls back to the standard signed path — used only for
- * Codex exec calls, the sole reason ORCHESTRATOR_DIRECT_* exists.
+ * Kept as its own name because its callers pass timeouts measured in minutes
+ * -- an authenticated Codex turn can run for 900 seconds -- even though it
+ * now reaches the same transport as everything else.
  */
 async function codexExecRequest(
   method: string,
@@ -241,11 +175,7 @@ async function codexExecRequest(
   body: unknown,
   timeoutMs: number,
 ) {
-  const environment = readServerEnvironment();
-  return environment.ORCHESTRATOR_DIRECT_URL &&
-    environment.ORCHESTRATOR_DIRECT_SECRET
-    ? orchestratorDirectRequest(method, path, body, timeoutMs)
-    : orchestratorRequest(method, path, body, timeoutMs);
+  return orchestratorDirectRequest(method, path, body, timeoutMs);
 }
 
 async function claudeSetupRequest(

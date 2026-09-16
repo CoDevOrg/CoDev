@@ -1,41 +1,39 @@
 # CoDev runtime on Azure
 
-The Azure counterpart of [`infra/aws`](../aws). Both can be deployed at once;
-`CLOUD_PROVIDER` in `apps/web` decides which one actually serves traffic.
+The CoDev runtime: one Firecracker host VM, its network, key vault, artifact
+storage and monitoring. [`infra/runtime`](../runtime) holds the cloud-neutral
+half — the host bootstrap and the Orca build scripts this stack deploys.
 
-## Why this exists alongside the AWS stack, not instead of it
+## This used to be one of two stacks
 
-The cutover is reversible by construction. `apps/web/lib/host.ts` and
-`apps/web/lib/kms.ts` dispatch on `CLOUD_PROVIDER` at call time, and
-`decryptSecret` dispatches on each stored envelope's own version prefix
-rather than on the current provider. So a credential wrapped by AWS KMS stays
-readable after the switch to Azure, and one wrapped by Key Vault stays
-readable after a rollback. Flipping the variable moves the runtime; flipping
-it back moves it home. Nothing has to be migrated first.
+The runtime ran on EC2 until it was migrated here, and for a while both stacks
+shipped at once: `apps/web` dispatched on a `CLOUD_PROVIDER` variable, so
+flipping it moved the runtime and flipping it back moved it home. That
+reversibility is spent — the AWS account holds no stack, no instance, no
+bucket and no role for CoDev any more, and every stored credential has been
+re-wrapped onto Key Vault. The dispatch, the EC2 implementation, the
+CloudFormation templates and the re-wrap script are all deleted.
 
-## What is different from the AWS stack
+What remains worth knowing is why some of this looks the way it does, because
+several decisions here are reactions to how the EC2 host behaved.
 
-Most of it maps one to one: VNet for VPC, Key Vault for KMS, Blob Storage for
-S3, Azure Monitor for CloudWatch, a static Public IP for the Elastic IP. Three
-things genuinely differ.
-
-**There is no API Gateway or Lambda proxy.** On AWS, `apps/web` signs requests
-with SigV4 to API Gateway, which forwards to a Lambda, which reaches the host
-over a security-group-restricted path. That proxy has a hard, non-configurable
-29-second timeout, and an authenticated Codex turn can run for 900 seconds —
-which is the entire reason `ORCHESTRATOR_DIRECT_URL` exists on the AWS side as
-a bypass. Azure uses that direct path as the only path: `apps/web` calls Caddy
-on the host over TLS with the shared secret. One fewer tier, and the timeout is
-gone rather than worked around.
+**There is no API Gateway or Lambda proxy.** On AWS, `apps/web` signed
+requests with SigV4 to API Gateway, which forwarded to a Lambda, which reached
+the host over a security-group-restricted path. That proxy had a hard,
+non-configurable 29-second timeout, and an authenticated Codex turn can run
+for 900 seconds — which is the entire reason `ORCHESTRATOR_DIRECT_URL` was
+built as a bypass. It is now simply the path: `apps/web` calls Caddy on the
+host over TLS with the shared secret. The variable keeps its "direct" name
+from when there was something to be direct _about_.
 
 **The host has to deallocate itself.** An EC2 instance carries
 `InstanceInitiatedShutdownBehavior: stop`, so the orchestrator's idle timer
-running `systemctl poweroff` stops the instance and stops the bill. An Azure VM
-shut down from inside the guest stays _allocated_ and keeps charging for its
-cores. The orchestrator therefore calls `/usr/local/sbin/codev-host-poweroff`,
-which the bootstrap installs per cloud, and the VM's managed identity holds
-Virtual Machine Contributor scoped to itself so it can ask ARM to deallocate.
-Getting this wrong produces a host that looks off and costs full price.
+running `systemctl poweroff` stopped the instance and stopped the bill. An
+Azure VM shut down from inside the guest stays _allocated_ and keeps charging
+for its cores. The orchestrator therefore calls
+`/usr/local/sbin/codev-host-poweroff`, which asks ARM to deallocate, and the
+VM's managed identity holds Virtual Machine Contributor scoped to itself so it
+can. Getting this wrong produces a host that looks off and costs full price.
 
 **The VM size is load-bearing.** Firecracker needs `/dev/kvm`. The default
 `Standard_D2s_v7` was verified to expose `vmx` with `kvm_intel` loaded and to
@@ -44,19 +42,23 @@ virtualization provisions perfectly and then cannot start a single microVM.
 Note also that 850 of 1,333 sizes are restricted on this subscription,
 including the whole x86 B-family, so there is no cheap burstable tier here.
 
-## One bootstrap, two clouds
+## The bootstrap
 
-`infra/aws/scripts/bootstrap-host.sh` serves both. Roughly 600 of its lines —
-Firecracker, the jailer, XFS reflinks, network isolation, Caddy, Orca — are
-cloud-agnostic, and only four operations differ: fetching an artifact, reading
-this host's public IP, reading the direct secret, and syncing Caddy's
-certificates. Those four sit behind shim functions selected by `CODEV_CLOUD`,
-which defaults to `aws`. Forking a second copy would have guaranteed drift in
-the 600 lines to save changing four.
+`infra/runtime/scripts/bootstrap-host.sh` builds the host. It used to serve two
+clouds, with four operations behind a `CODEV_CLOUD` shim — fetching an
+artifact, reading the host's public IP, reading the direct secret, and syncing
+Caddy's certificates — and roughly 600 cloud-agnostic lines around them. The
+shim is gone; those 600 lines are the whole file now.
 
-The script keeps its `infra/aws/` path because moving it would touch
-`deploy.sh`, `package.json`, a contents-asserting test, and the workflow path
-filters — all on the live AWS deploy path, for a rename.
+It lives under `infra/runtime/` rather than `infra/azure/` because it is also
+what the `verify-runtime` CI job and `pnpm orca:web` build against, and because
+the directory it used to sit in was named `infra/aws/` long after it had
+stopped being about AWS.
+
+One leftover: cloud-init still exports `CODEV_CLOUD=azure` into the host's
+environment file. Nothing reads it. It stays because `osProfile.customData` is
+immutable on an existing VM (see below), so removing that line would force a
+host replacement to delete a variable that costs nothing.
 
 ## Changing cloud-init means replacing the VM
 
@@ -160,9 +162,9 @@ az ad app federated-credential create --id <AZURE_CLIENT_ID> --parameters '{
 }'
 ```
 
-The same ids appear in [`docs/OPERATIONS.md`](../../docs/OPERATIONS.md) for
-the AWS role's trust policy; if the org or repo is ever recreated, both
-change together.
+Those numeric ids are the GitHub org and repository ids, not names, so a
+rename is safe and a recreation is not: if the org or repo is ever recreated,
+this subject has to be updated to match.
 
 Required repository variables:
 
@@ -226,19 +228,14 @@ az role assignment create \
 The three GUIDs are the built-in role definition ids of Key Vault Secrets
 User, Storage Blob Data Reader and Virtual Machine Contributor.
 
-## Retiring the AWS key
+## Credential envelopes
 
-Once both runtimes have been live, credentials exist in both envelope formats.
-Everything keeps working, but the KMS key cannot be deleted while anything is
-still sealed under it. To re-wrap:
+Every stored provider credential is wrapped by the Key Vault key above and
+carries an `akv-v1` prefix. `decryptSecret` dispatches on that prefix rather
+than on any configured provider, which is what allowed the AWS-wrapped
+`kms-v1` format to be read throughout the migration and then dropped once
+production held none of it. The AWS key is scheduled for deletion and nothing
+depends on it.
 
-```bash
-CLOUD_PROVIDER=azure \
-CREDENTIAL_KMS_KEY_ID=... \
-CREDENTIAL_KEY_VAULT_KEY_ID=... \
-pnpm rewrap:credentials --commit
-```
-
-It defaults to a dry run and reports what it would change. Shared-chat invite
-tokens are deliberately skipped: they expire within their TTL, so re-wrapping
-them preserves values that are worthless within hours.
+The other format still read is `v1`, the local development envelope an
+unconfigured checkout writes. Production refuses to write it.

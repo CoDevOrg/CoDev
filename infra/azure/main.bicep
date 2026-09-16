@@ -1,6 +1,6 @@
 // CoDev runtime on Azure — the Firecracker host and everything around it.
 //
-// This is the port of infra/aws/cloudformation/runtime.yaml. The resource
+// This is the port of infra/runtime/cloudformation/runtime.yaml. The resource
 // list maps across almost one-to-one (VNet for VPC, Key Vault for KMS, Blob
 // for S3, Azure Monitor for CloudWatch), with one deliberate difference:
 // AWS fronts the orchestrator with API Gateway + a Lambda proxy, and that

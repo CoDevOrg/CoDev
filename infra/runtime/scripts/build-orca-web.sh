@@ -16,7 +16,7 @@ set -euo pipefail
 
 readonly repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 readonly source_dir="${repo_root}/packages/ide"
-readonly brand_script="${repo_root}/infra/aws/orca-build/brand-web.mjs"
+readonly brand_script="${repo_root}/infra/runtime/orca-build/brand-web.mjs"
 readonly target_dir="${repo_root}/apps/web/public/orca"
 readonly -a pnpm_cmd=(corepack pnpm@10.24.0)
 

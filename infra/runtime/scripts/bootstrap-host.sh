@@ -1,41 +1,28 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Which cloud this host runs on. Everything below is written against the four
-# shim functions defined further down rather than against a provider's CLI, so
-# the Firecracker, jailer, networking and Orca logic -- the overwhelming
-# majority of this script -- stays single-sourced across both. Defaults to aws
-# so an existing EC2 deploy behaves exactly as it did before the shim existed.
-readonly codev_cloud="${CODEV_CLOUD:-aws}"
+# This script bootstraps the Azure Firecracker host on every boot.
+#
+# It used to carry a second implementation behind a `CODEV_CLOUD` shim, from
+# when the runtime ran on EC2 and the cutover had to stay reversible. That
+# migration is finished and the AWS account holds nothing to go back to, so
+# the shim and its four aws branches are gone; what is left is the Firecracker,
+# jailer, networking and Orca logic that was always the bulk of this file.
 
 : "${CODEV_RELEASE_VERSION:?CODEV_RELEASE_VERSION is required}"
-case "${codev_cloud}" in
-  aws)
-    : "${CODEV_ARTIFACT_BUCKET:?CODEV_ARTIFACT_BUCKET is required}"
-    readonly release_prefix="s3://${CODEV_ARTIFACT_BUCKET}/releases/${CODEV_RELEASE_VERSION}"
-    ;;
-  azure)
-    : "${CODEV_ARTIFACT_ACCOUNT:?CODEV_ARTIFACT_ACCOUNT is required}"
-    readonly release_prefix="${CODEV_RELEASE_VERSION}"
-    ;;
-  *)
-    echo "Unsupported CODEV_CLOUD: ${codev_cloud}" >&2
-    exit 1
-    ;;
-esac
+: "${CODEV_ARTIFACT_ACCOUNT:?CODEV_ARTIFACT_ACCOUNT is required}"
+readonly release_prefix="${CODEV_RELEASE_VERSION}"
 readonly firecracker_version="v1.13.2"
 readonly host_arch="${CODEV_HOST_ARCH:-$(uname -m)}"
 case "${host_arch}" in
   x86_64)
     readonly artifact_arch="x86_64"
     readonly firecracker_arch="x86_64"
-    readonly cloudwatch_arch="amd64"
     readonly guest_lib_dir="x86_64-linux-gnu"
     ;;
   aarch64 | arm64)
     readonly artifact_arch="arm64"
     readonly firecracker_arch="aarch64"
-    readonly cloudwatch_arch="arm64"
     readonly guest_lib_dir="aarch64-linux-gnu"
     ;;
   *)
@@ -48,19 +35,10 @@ readonly firecracker_ci_base="https://s3.amazonaws.com/spec.ccfc.min/${firecrack
 readonly runtime_dir="/var/lib/codev"
 readonly base_dir="${runtime_dir}/base"
 readonly jailer_dir="/srv/jailer"
-readonly host_log_group="${CODEV_HOST_LOG_GROUP:-/codev/orchestrator/codev-runtime}"
 readonly orca_dir="/opt/orca"
 readonly orca_workspaces_root="/srv/codev/workspaces"
 
-# ---------------------------------------------------------------------------
-# Cloud shim
-#
-# Four operations differ between clouds; everything else in this script does
-# not. Keeping them behind functions is what lets one bootstrap serve both
-# runtimes instead of two copies drifting apart.
-# ---------------------------------------------------------------------------
-
-# Fetch one release artifact to a local path.
+# Fetch one release artifact from Blob Storage to a local path.
 #
 # Downloaded beside the destination and renamed into place, never written
 # into the destination directly. This script re-runs on every boot to roll a
@@ -72,19 +50,12 @@ readonly orca_workspaces_root="/srv/codev/workspaces"
 codev_fetch() {
   local name="$1" destination="$2"
   local staging="${destination}.codev-fetch.$$"
-  case "${codev_cloud}" in
-    aws)
-      aws s3 cp "${release_prefix}/${name}" "${staging}"
-      ;;
-    azure)
-      az storage blob download \
-        --account-name "${CODEV_ARTIFACT_ACCOUNT}" \
-        --container-name releases \
-        --name "${release_prefix}/${name}" \
-        --file "${staging}" \
-        --auth-mode login --only-show-errors --no-progress >/dev/null
-      ;;
-  esac
+  az storage blob download \
+    --account-name "${CODEV_ARTIFACT_ACCOUNT}" \
+    --container-name releases \
+    --name "${release_prefix}/${name}" \
+    --file "${staging}" \
+    --auth-mode login --only-show-errors --no-progress >/dev/null
   mv -f "${staging}" "${destination}"
 }
 
@@ -163,110 +134,65 @@ codev_stage_skipped() {
   echo "bootstrap: $1 is already current, skipping"
 }
 
-# This host's own public IPv4, used to derive the nip.io hostname Orca
-# advertises to browsers. Both clouds answer on 169.254.169.254 but with
-# different paths and a different anti-SSRF header.
+# The nip.io fallback for Orca's advertised hostname, from when the EC2 host
+# derived one from its own public IPv4. The Azure stack always supplies
+# CODEV_PUBLIC_HOST, so this only ever fires on a misconfigured deploy. It
+# fails loudly rather than returning an empty string, because Azure IMDS
+# reports an empty publicIpAddress for Standard-SKU addresses and returning
+# that produced a Caddyfile asking for a certificate for ".nip.io".
 codev_public_ipv4() {
-  case "${codev_cloud}" in
-    aws)
-      local token
-      token="$(curl -fsS -X PUT "http://169.254.169.254/latest/api/token" \
-        -H "X-aws-ec2-metadata-token-ttl-seconds: 60")"
-      curl -fsS -H "X-aws-ec2-metadata-token: ${token}" \
-        "http://169.254.169.254/latest/meta-data/public-ipv4"
-      ;;
-    azure)
-      # Unreachable in practice: the Azure stack always supplies
-      # CODEV_PUBLIC_HOST, so the caller never needs an address. Kept as a
-      # loud failure rather than a silent empty string, because Azure IMDS
-      # reports an empty publicIpAddress for Standard-SKU addresses and
-      # returning that produced a Caddyfile asking for a certificate for
-      # ".nip.io".
-      echo "Azure hosts take their hostname from CODEV_PUBLIC_HOST" >&2
-      return 1
-      ;;
-  esac
+  echo "Set CODEV_PUBLIC_HOST: the host cannot derive its own name." >&2
+  return 1
 }
 
-# Read the orchestrator's direct-route bearer token. SSM Parameter Store on
-# AWS, Key Vault on Azure; both authenticate as the host's own instance
-# identity, so no secret is baked into an image or a template.
+# Read the orchestrator's direct-route bearer token from Key Vault, which the
+# host reaches as its own managed identity -- so no secret is baked into an
+# image or a template.
 codev_read_direct_secret() {
-  case "${codev_cloud}" in
-    aws)
-      [[ -n "${CODEV_DIRECT_SECRET_PARAMETER:-}" ]] || return 0
-      aws ssm get-parameter \
-        --name "${CODEV_DIRECT_SECRET_PARAMETER}" \
-        --with-decryption \
-        --query 'Parameter.Value' \
-        --output text 2>/dev/null || true
-      ;;
-    azure)
-      [[ -n "${CODEV_KEY_VAULT_NAME:-}" ]] || return 0
-      az keyvault secret show \
-        --vault-name "${CODEV_KEY_VAULT_NAME}" \
-        --name orchestrator-direct-secret \
-        --query value --output tsv 2>/dev/null || true
-      ;;
-  esac
+  [[ -n "${CODEV_KEY_VAULT_NAME:-}" ]] || return 0
+  az keyvault secret show \
+    --vault-name "${CODEV_KEY_VAULT_NAME}" \
+    --name orchestrator-direct-secret \
+    --query value --output tsv 2>/dev/null || true
 }
 
 # Caddy certificate persistence, in both directions.
 codev_caddy_sync() {
   local direction="$1" local_dir="$2"
-  case "${codev_cloud}" in
-    aws)
-      if [[ "${direction}" == "down" ]]; then
-        aws s3 sync "s3://${CODEV_ARTIFACT_BUCKET}/caddy-data/" "${local_dir}/" --only-show-errors
-      else
-        aws s3 sync "${local_dir}/" "s3://${CODEV_ARTIFACT_BUCKET}/caddy-data/" --sse AES256 --only-show-errors
-      fi
-      ;;
-    azure)
-      if [[ "${direction}" == "down" ]]; then
-        az storage blob download-batch \
-          --account-name "${CODEV_ARTIFACT_ACCOUNT}" --source caddy-data \
-          --destination "${local_dir}" --auth-mode login --only-show-errors --no-progress >/dev/null
-      else
-        az storage blob upload-batch \
-          --account-name "${CODEV_ARTIFACT_ACCOUNT}" --destination caddy-data \
-          --source "${local_dir}" --overwrite --auth-mode login --only-show-errors --no-progress >/dev/null
-      fi
-      ;;
-  esac
+  if [[ "${direction}" == "down" ]]; then
+    az storage blob download-batch \
+      --account-name "${CODEV_ARTIFACT_ACCOUNT}" --source caddy-data \
+      --destination "${local_dir}" --auth-mode login --only-show-errors --no-progress >/dev/null
+  else
+    az storage blob upload-batch \
+      --account-name "${CODEV_ARTIFACT_ACCOUNT}" --destination caddy-data \
+      --source "${local_dir}" --overwrite --auth-mode login --only-show-errors --no-progress >/dev/null
+  fi
 }
 
-# The host authenticates to Azure as its own system-assigned managed identity.
-# This is the Azure analogue of the EC2 instance profile: nothing to rotate,
-# nothing stored on disk.
-if [[ "${codev_cloud}" == "azure" ]]; then
-  until az login --identity >/dev/null 2>&1; do sleep 5; done
-fi
+# The host authenticates to Azure as its own system-assigned managed identity:
+# nothing to rotate, nothing stored on disk.
+until az login --identity >/dev/null 2>&1; do sleep 5; done
 
 # How this host powers itself down when the orchestrator's idle timer fires.
 #
-# This is not cosmetic on Azure. EC2 instances carry
-# `InstanceInitiatedShutdownBehavior: stop`, so a guest `systemctl poweroff`
-# stops the instance and stops the bill. An Azure VM shut down from inside the
-# guest stays *allocated* -- the platform keeps reserving its cores and keeps
-# charging for them -- so the same call would produce a host that looks off,
-# costs full price, and never appears in any stopped-instance report. Only a
-# control-plane deallocate actually releases it, which is why the Azure branch
-# calls ARM instead of the init system.
+# It has to be a control-plane deallocate, never `systemctl poweroff`. An
+# Azure VM shut down from inside the guest stays *allocated* -- the platform
+# keeps reserving its cores and keeps charging for them -- so the init system
+# would produce a host that looks off, costs full price, and never appears in
+# any stopped-instance report. (The EC2 host this replaced could poweroff
+# itself, because its instance carried `InstanceInitiatedShutdownBehavior:
+# stop`.)
 install -d -m 0755 /usr/local/sbin
 cat >/usr/local/sbin/codev-host-poweroff <<'POWEROFF'
 #!/usr/bin/env bash
 set -euo pipefail
-if [[ "${CODEV_CLOUD:-aws}" == "azure" ]]; then
-  resource_id="$(curl -fsS -H "Metadata: true" \
-    "http://169.254.169.254/metadata/instance/compute/resourceId?api-version=2021-02-01&format=text")"
-  # --no-wait: the deallocate tears down the very machine making the request,
-  # so waiting for completion means waiting to be killed.
-  exec az vm deallocate --ids "${resource_id}" --no-wait
-fi
-exec systemctl poweroff
+resource_id="$(curl -fsS -H "Metadata: true" \
+  "http://169.254.169.254/metadata/instance/compute/resourceId?api-version=2021-02-01&format=text")"
+# --no-wait: the deallocate tears down the very machine making the request,
+# so waiting for completion means waiting to be killed.
+exec az vm deallocate --ids "${resource_id}" --no-wait
 POWEROFF
-sed -i "1a export CODEV_CLOUD=${codev_cloud}" /usr/local/sbin/codev-host-poweroff
 chmod 0755 /usr/local/sbin/codev-host-poweroff
 
 # Instances can initially inherit the image build clock. Wait for the platform
@@ -278,10 +204,6 @@ if ! chronyc waitsync 60 1.0 0.0 2; then
   echo "system clock did not synchronize" >&2
   exit 1
 fi
-if [[ "${codev_cloud}" == "aws" ]]; then
-  systemctl restart snap.amazon-ssm-agent.amazon-ssm-agent.service
-fi
-
 install -d -m 0755 /usr/local/libexec
 cat >/usr/local/libexec/codev-git-askpass <<'ASKPASS'
 #!/bin/sh
@@ -417,17 +339,6 @@ else
   codev_stage_record cursor "${cursor_key}"
 fi
 
-# Log shipping. The CloudWatch agent is EC2-only in a way that is not merely
-# cosmetic: it resolves its instance identity through EC2 IMDS
-# (/latest/meta-data/instance-id), which does not exist on Azure, so it exits
-# non-zero and takes the whole bootstrap with it.
-if [[ "${codev_cloud}" == "aws" ]]; then
-  curl -fsSL \
-    "https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/${cloudwatch_arch}/latest/amazon-cloudwatch-agent.deb" \
-    -o /tmp/amazon-cloudwatch-agent.deb
-  dpkg -i /tmp/amazon-cloudwatch-agent.deb
-fi
-
 install -d -m 0700 "${runtime_dir}/workspaces"
 install -d -m 0755 "${base_dir}" "${jailer_dir}"
 
@@ -486,7 +397,7 @@ work_dir="$(mktemp -d)"
 trap 'rm -rf "${work_dir}"' EXIT
 
 # orca serve: the per-workspace Orca IDE backend, built by CoDev from source
-# (infra/aws/scripts/build-orca-serve.sh) rather than downloaded as a
+# (infra/runtime/scripts/build-orca-serve.sh) rather than downloaded as a
 # prebuilt third-party AppImage release asset. codev-orchestrator spawns one
 # instance of this per workspace (services/orchestrator/src/backend/orca.rs).
 readonly orca_archive="orca-serve-linux-${artifact_arch}.tar.gz"
@@ -663,27 +574,22 @@ chown -R caddy:caddy /var/lib/caddy
 # asynchronously after Caddy starts, so a one-shot copy here would miss the
 # first issuance; a timer also covers renewals. No --delete: an empty or
 # half-populated local directory must never wipe the stored copy.
-# The timer runs this outside the bootstrap process, so it re-derives the
-# shim rather than inheriting it: certificates arrive asynchronously after
-# Caddy starts and renew long after bootstrap has exited.
+# The timer runs this outside the bootstrap process, long after it has
+# exited, so the account name is expanded into the file rather than inherited
+# from the environment.
 cat >/usr/local/sbin/codev-caddy-cert-sync <<SYNC
 #!/usr/bin/env bash
 set -euo pipefail
-if [[ "${codev_cloud}" == "azure" ]]; then
-  az storage blob upload-batch \
-    --account-name "${CODEV_ARTIFACT_ACCOUNT:-}" --destination caddy-data \
-    --source "${caddy_data_dir}" --overwrite --auth-mode login \
-    --only-show-errors --no-progress >/dev/null
-else
-  aws s3 sync "${caddy_data_dir}/" "s3://${CODEV_ARTIFACT_BUCKET:-}/caddy-data/" \
-    --sse AES256 --only-show-errors
-fi
+az storage blob upload-batch \
+  --account-name "${CODEV_ARTIFACT_ACCOUNT:-}" --destination caddy-data \
+  --source "${caddy_data_dir}" --overwrite --auth-mode login \
+  --only-show-errors --no-progress >/dev/null
 SYNC
 chmod 0700 /usr/local/sbin/codev-caddy-cert-sync
 
 cat >/etc/systemd/system/codev-caddy-cert-sync.service <<'UNIT'
 [Unit]
-Description=Persist Caddy certificate storage to S3
+Description=Persist Caddy certificate storage to Blob Storage
 After=caddy.service
 
 [Service]
@@ -969,44 +875,10 @@ StandardError=append:/var/log/codev-orchestrator.log
 WantedBy=multi-user.target
 UNIT
 
-if [[ "${codev_cloud}" == "aws" ]]; then
-cat >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<AGENT
-{
-  "agent": {
-    "metrics_collection_interval": 60,
-    "run_as_user": "root"
-  },
-  "logs": {
-    "logs_collected": {
-      "files": {
-        "collect_list": [
-          {
-            "file_path": "/var/log/codev-orchestrator.log",
-            "log_group_name": "${host_log_group}",
-            "log_stream_name": "{instance_id}",
-            "retention_in_days": 14
-          }
-        ]
-      }
-    }
-  }
-}
-AGENT
-fi
-
 systemctl daemon-reload
 systemctl enable codev-firecracker-network-isolation.service
 systemctl start codev-firecracker-network-isolation.service
 systemctl enable codev-orchestrator.service
-if [[ "${codev_cloud}" == "aws" ]]; then
-  systemctl enable amazon-cloudwatch-agent.service
-  # -m ec2 is literal: this mode reads the instance id from EC2 IMDS.
-  /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-    -a fetch-config \
-    -m ec2 \
-    -s \
-    -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
-fi
 codev_restart_if_changed codev-orchestrator.service "${orchestrator_before}" \
   "$(codev_fingerprint "${orchestrator_files[@]}")"
 systemctl --no-pager --full status codev-orchestrator.service

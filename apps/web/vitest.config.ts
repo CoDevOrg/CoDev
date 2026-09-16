@@ -32,9 +32,6 @@ export default defineConfig({
           name: "lib",
           environment: "node",
           include: ["lib/**/*.test.ts"],
-          // `lib/retired` is parked out of the typecheck program; running its
-          // tests would report green on code TypeScript no longer checks.
-          exclude: ["lib/retired/**"],
         },
       },
       {

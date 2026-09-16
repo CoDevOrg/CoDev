@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Roll out the CoDev runtime on Azure.
 #
-# The Azure counterpart of infra/aws/deploy.sh, and deliberately the same
+# The Azure counterpart of infra/runtime/deploy.sh, and deliberately the same
 # shape: build the orchestrator and guestd, build orca serve, upload both to
 # the artifact store, then apply the stack. The differences are the ones the
 # platform forces -- Bicep instead of CloudFormation, a blob container instead
@@ -73,7 +73,7 @@ install -m 0755 \
 # target release version.
 if [[ -z "${skip_orca_build}" ]]; then
   echo "==> Building orca serve"
-  "${repo_root}/infra/aws/scripts/build-orca-serve.sh" "${build_dir}" "${host_arch}"
+  "${repo_root}/infra/runtime/scripts/build-orca-serve.sh" "${build_dir}" "${host_arch}"
 fi
 
 # ---------------------------------------------------------------------------
@@ -164,8 +164,8 @@ echo "==> Uploading release ${release_version}"
 for artifact in "${build_dir}"/*; do
   [[ -f "${artifact}" ]] && upload "${artifact}"
 done
-upload "${repo_root}/infra/aws/scripts/bootstrap-host.sh"
-upload "${repo_root}/infra/aws/scripts/verify-lifecycle.sh"
+upload "${repo_root}/infra/runtime/scripts/bootstrap-host.sh"
+upload "${repo_root}/infra/runtime/scripts/verify-lifecycle.sh"
 
 # The container the host syncs Caddy's certificates into. Created here rather
 # than in the template because the template would recreate it empty on a

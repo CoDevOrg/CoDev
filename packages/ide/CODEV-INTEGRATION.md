@@ -2,7 +2,7 @@
 
 Everything in this tree that exists because the IDE runs inside CoDev rather
 than on someone's desktop. All of it is ordinary source now — before the fork
-these were hunks in `infra/aws/orca-build/codev-web.patch`, re-applied over a
+these were hunks in `infra/runtime/orca-build/codev-web.patch`, re-applied over a
 fresh upstream clone on every build.
 
 Files added for CoDev are prefixed `Codev`/`codev-`, which makes them easy to
@@ -177,7 +177,7 @@ CoDev-owned and neither is a patch any more, but they still run post-build:
   accents toward CoDev's deep-green / burnt-orange palette while leaving Monaco,
   terminal, and diff regions alone. Its selectors target compiled Tailwind class
   names, so re-check them after significant UI changes in here.
-- **Branding** — `infra/aws/orca-build/brand-web.mjs` rewrites capitalized
+- **Branding** — `infra/runtime/orca-build/brand-web.mjs` rewrites capitalized
   whole-word `Orca`/`ORCA` to `CoDev`/`CODEV` across non-locale chunks, swaps
   the logo module's data URI, and retitles the page. It also fixes the resulting
   "an CoDev" → "a CoDev" article mismatch.

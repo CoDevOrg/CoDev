@@ -7,7 +7,7 @@ artifacts built from this one source tree:
   and served at `/orca/web-index.html`. `apps/web/components/orca-workspace.tsx`
   boots it in an iframe on the workspace page.
 - **`orca serve`** — the Electron main process that backs it. Built by
-  `infra/aws/scripts/build-orca-serve.sh`; the orchestrator
+  `infra/runtime/scripts/build-orca-serve.sh`; the orchestrator
   (`services/orchestrator/src/backend/orca.rs`) runs one per workspace on the
   Firecracker host.
 
@@ -80,7 +80,7 @@ directory, so renaming them would orphan user data rather than rename a command.
 
 What is left is display copy, not identifiers: `Orca` strings in the built
 bundle are still rewritten to `CoDev` after the fact by
-`infra/aws/orca-build/brand-web.mjs`, and the non-English locale bundles are
+`infra/runtime/orca-build/brand-web.mjs`, and the non-English locale bundles are
 untouched. Folding that into the source is the remaining work.
 
 ## How CoDev uses it

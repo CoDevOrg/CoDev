@@ -4,17 +4,13 @@ import * as azureHost from "./azure-host";
 import type { HostState } from "./cloud";
 
 /**
- * The runtime host. Azure — the migration is done.
+ * The runtime host, on Azure.
  *
- * The EC2 implementation is parked in `lib/retired/aws-host.ts`, out of the
- * typecheck program. It was reachable from here through `isAzure()`, and that
- * one import loaded `@aws-sdk/client-ec2` — 1012 declaration files, a fifth of
- * this app's typecheck — to serve a branch nothing selects and a host that no
- * longer exists.
- *
- * To bring it back: restore the import, put the `isAzure()` ternaries back on
- * these three functions, and drop `lib/retired` from the tsconfig `exclude`.
- * Nothing else moved.
+ * This file is a thin pass-through to `azure-host.ts` rather than the cloud
+ * dispatcher it used to be. The EC2 implementation it once selected between
+ * has been deleted along with the AWS account it addressed; keeping the
+ * indirection costs nothing and keeps the ~thirty call sites naming a host
+ * rather than a provider.
  */
 
 export type { HostState };
@@ -38,9 +34,7 @@ export function requestHostWake(
  *
  * Azure needs the explicit call: a VM shut down from inside the guest stays
  * *allocated* and keeps charging for compute, so the platform has to be told
- * to deallocate it from outside. (The EC2 host stopped itself — its instance
- * carried `InstanceInitiatedShutdownBehavior: stop` — which is why this was
- * once guarded by `isAzure()`.)
+ * to deallocate it from outside.
  */
 export async function releaseIdleHost(): Promise<void> {
   await azureHost.deallocateHost();

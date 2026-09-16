@@ -152,7 +152,7 @@ async fn stop_idle_host(backend: SharedBackend, ide: IdeBackend, idle_timeout: D
         // instance's shutdown behaviour stops it and stops the bill), and on
         // Azure it asks ARM to deallocate, because a guest-initiated
         // poweroff there leaves the VM allocated and still charging for its
-        // cores. See codev-host-poweroff in infra/aws/scripts/bootstrap-host.sh.
+        // cores. See codev-host-poweroff in infra/runtime/scripts/bootstrap-host.sh.
         match time::timeout(
             Duration::from_secs(30),
             Command::new("/usr/local/sbin/codev-host-poweroff").output(),

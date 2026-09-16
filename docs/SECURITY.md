@@ -7,14 +7,15 @@ CoDev separates the Vercel control plane from untrusted Firecracker guests.
 - GitHub user tokens and OpenAI keys are encrypted in PostgreSQL and decrypted
   only inside server-side Vercel functions.
 - GitHub publication uses the GitHub Git Database API from Vercel. Tokens never
-  enter an API body sent to AWS, a microVM environment, a terminal, a clone URL,
-  or a Git credential helper.
-- AWS access uses short-lived Vercel OIDC credentials. Long-lived AWS access
-  keys are prohibited.
+  enter an API body sent to the runtime, a microVM environment, a terminal, a
+  clone URL, or a Git credential helper.
+- Azure access uses workload identity federation from Vercel's own OIDC token.
+  Long-lived cloud keys and Azure client secrets are prohibited.
 - Logs redact authorization, cookies, tokens, encrypted values, prompts, file
   contents, diffs, and terminal output.
 - Private repositories are read by the Vercel control plane and transferred to
-  AWS only as credential-free file snapshots. Snapshots reject unsafe paths,
+  the runtime only as credential-free file snapshots. Snapshots reject unsafe
+  paths,
   submodules, unsupported modes, more than 500 files, individual files over
   1 MiB, and total decoded content over 3 MiB.
 
@@ -60,8 +61,7 @@ CoDev separates the Vercel control plane from untrusted Firecracker guests.
 
 - Production dependencies are pinned and the lockfile is checked against pnpm's
   supply-chain policy before installation.
-- The AWS SDK, Smithy signing stack, Sharp, and PostCSS are pinned to patched
-  releases.
+- Sharp and PostCSS are pinned to patched releases.
 - The remaining `brace-expansion` advisory is reachable only through the
   Workflow DevKit build CLI and is not bundled into, imported by, or invoked
   from a Vercel request handler. Replacing it across incompatible major

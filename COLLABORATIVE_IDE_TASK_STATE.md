@@ -1920,7 +1920,7 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
 - Changed files: `apps/web/app/api/workspaces/[workspaceId]/agents/route.ts`,
   `apps/web/components/orca-workspace.tsx`,
   `apps/web/components/orca-workspace.test.ts`,
-  `infra/aws/orca-build/codev-web.patch`, and the rebuilt vendored Orca web
+  `infra/runtime/orca-build/codev-web.patch`, and the rebuilt vendored Orca web
   assets under `apps/web/public/orca/`.
 - Checks: focused CoDev Vitest
   (`orca-workspace.test.ts`, `agent-session-route.test.ts`,
@@ -1973,7 +1973,7 @@ found` after discard because discarded sessions are not shown there; the
 - Changed files: `apps/web/components/codev-parent-bridge.ts`,
   `apps/web/components/codev-parent-bridge.test.ts`,
   `apps/web/components/orca-workspace.tsx`,
-  `infra/aws/orca-build/codev-web.patch`, and the rebuilt vendored Orca web
+  `infra/runtime/orca-build/codev-web.patch`, and the rebuilt vendored Orca web
   assets under `apps/web/public/orca/`.
 - Checks: focused CoDev Vitest (`codev-parent-bridge.test.ts`,
   `orca-workspace.test.ts`) — 15 passed; patched-Orca Vitest
@@ -2018,7 +2018,7 @@ Connected` with visible `CoDev · Connected`, opened that native status-bar
   `apps/web/components/codev-parent-bridge.ts`,
   `apps/web/components/codev-parent-bridge.test.ts`,
   `apps/web/components/orca-workspace.tsx`,
-  `infra/aws/orca-build/codev-web.patch`, and the rebuilt vendored Orca web
+  `infra/runtime/orca-build/codev-web.patch`, and the rebuilt vendored Orca web
   assets under `apps/web/public/orca/`.
 - Checks: focused CoDev Vitest (`workspaces.test.ts`,
   `codev-parent-bridge.test.ts`, `orca-workspace.test.ts`) — 25 passed;
@@ -2062,7 +2062,7 @@ The invitee is not a workspace member.` Membership remained owner-only.
   `apps/web/components/codev-parent-bridge.ts`,
   `apps/web/components/codev-parent-bridge.test.ts`,
   `apps/web/lib/collaboration-server.ts`,
-  `infra/aws/orca-build/codev-web.patch`, and the regenerated vendored Orca
+  `infra/runtime/orca-build/codev-web.patch`, and the regenerated vendored Orca
   web assets under `apps/web/public/orca/`.
 - Checks: `pnpm format:check`, `pnpm lint` (2 pre-existing warnings), `pnpm
 typecheck`, `pnpm test` (226 passed, 1 skipped), `pnpm build`, `pnpm
@@ -2093,7 +2093,7 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
   `apps/web/app/api/workspaces/[workspaceId]/presence/route.test.ts`,
   `apps/web/components/codev-parent-bridge.ts`,
   `apps/web/components/codev-parent-bridge.test.ts`,
-  `apps/web/lib/collaboration-server.ts`, `infra/aws/orca-build/codev-web.patch`,
+  `apps/web/lib/collaboration-server.ts`, `infra/runtime/orca-build/codev-web.patch`,
   and the regenerated vendored Orca web assets under `apps/web/public/orca/`.
 - Checks: focused bridge tests (7), contracts tests (19), patched Orca cursor
   test, pinned `typecheck:web` and `build:web`, `pnpm format:check`, `pnpm lint`
@@ -2134,7 +2134,7 @@ rust:check`, and `git diff --check` passed for the validated implementation.
   `apps/web/app/api/workspaces/[workspaceId]/collaboration/conflicts/route.test.ts`,
   `apps/web/components/codev-parent-bridge.ts`,
   `apps/web/components/codev-parent-bridge.test.ts`,
-  `infra/aws/orca-build/codev-web.patch`, and the regenerated vendored Orca
+  `infra/runtime/orca-build/codev-web.patch`, and the regenerated vendored Orca
   web assets under `apps/web/public/orca/`.
 - Checks: focused contracts/bridge/collaboration tests, patched Orca
   `typecheck:web` plus banner/compare/conflict unit tests (21 passed),
@@ -2180,7 +2180,7 @@ rust:check`, and `git diff --check` passed for the validated implementation.
   `apps/web/app/api/workspaces/[workspaceId]/agents/[sessionId]/controlled/route.ts`,
   `apps/web/app/api/workspaces/[workspaceId]/agents/[sessionId]/interrupt/route.ts`,
   `apps/web/app/api/workspaces/[workspaceId]/agents/route.ts`,
-  `infra/aws/orca-build/codev-web.patch`, and the regenerated vendored Orca
+  `infra/runtime/orca-build/codev-web.patch`, and the regenerated vendored Orca
   web assets under `apps/web/public/orca/`.
 - Checks: focused shared-session/bridge tests (14 targeted), `pnpm lint` (0
   errors, 2 existing warnings), `pnpm typecheck`, `pnpm test` (237 passed, 1
@@ -2234,7 +2234,7 @@ dbf9fa6c-2385-4eb1-aaca-fca106779bed`). Alex interrupted the running
   `apps/web/components/codev-parent-bridge.test.ts`,
   `apps/web/components/orca-workspace.tsx`,
   `apps/web/components/orca-workspace.test.ts`,
-  `infra/aws/orca-build/codev-web.patch`, and the regenerated vendored Orca
+  `infra/runtime/orca-build/codev-web.patch`, and the regenerated vendored Orca
   web assets under `apps/web/public/orca/`.
 - Checks: focused workboard/bridge tests, `pnpm lint` (0 errors, 2 existing
   warnings), `pnpm typecheck`, `pnpm test` (244 passed, 1 skipped),
@@ -2277,7 +2277,7 @@ dbf9fa6c-2385-4eb1-aaca-fca106779bed`). Alex interrupted the running
   `apps/web/components/codev-parent-bridge.ts`,
   `apps/web/components/codev-parent-bridge.test.ts`,
   `apps/web/tests/e2e/smoke.spec.ts`,
-  `infra/aws/orca-build/codev-web.patch`, and the regenerated vendored Orca
+  `infra/runtime/orca-build/codev-web.patch`, and the regenerated vendored Orca
   web assets under `apps/web/public/orca/`.
 - Checks: focused path-claim/bridge tests, `pnpm lint` (0 errors, 2 existing
   warnings), `pnpm typecheck`, `pnpm test` (255 passed, 1 skipped),
@@ -2325,7 +2325,7 @@ dbf9fa6c-2385-4eb1-aaca-fca106779bed`). Alex interrupted the running
   `apps/web/app/api/workspaces/[workspaceId]/sandbox/exec/route.ts`,
   `apps/web/components/codev-parent-bridge.ts`,
   `apps/web/components/codev-parent-bridge.test.ts`,
-  `infra/aws/orca-build/codev-web.patch`, and the regenerated vendored Orca
+  `infra/runtime/orca-build/codev-web.patch`, and the regenerated vendored Orca
   web assets under `apps/web/public/orca/`.
 - Checks: focused review/checkpoint/bridge tests, `pnpm lint` (0 errors, 2
   existing warnings), `pnpm typecheck`, `pnpm test` (275 passed, 1 skipped),
@@ -2404,7 +2404,7 @@ dbf9fa6c-2385-4eb1-aaca-fca106779bed`). Alex interrupted the running
   `apps/web/app/api/workspaces/[workspaceId]/events/route.ts`,
   `apps/web/components/codev-parent-bridge.ts`,
   `apps/web/components/codev-parent-bridge.test.ts`,
-  `infra/aws/orca-build/codev-web.patch`, and regenerated vendored Orca web
+  `infra/runtime/orca-build/codev-web.patch`, and regenerated vendored Orca web
   assets under `apps/web/public/orca/`. This run also landed unrelated
   password-reset work as `553b4c28` so the scheduler worktree was clean.
 - Checks (from the source commit): focused activity/bridge tests (16
@@ -2450,7 +2450,7 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff
   `apps/web/app/api/workspaces/[workspaceId]/connections/route.ts`,
   `apps/web/components/codev-parent-bridge.ts`,
   `apps/web/components/codev-parent-bridge.test.ts`,
-  `infra/aws/orca-build/codev-web.patch`, and regenerated vendored Orca web
+  `infra/runtime/orca-build/codev-web.patch`, and regenerated vendored Orca web
   assets under `apps/web/public/orca/`.
 - Checks (from the source commit): focused provider-connection/bridge tests
   (17 passed), patched-Orca panel test, patched-Orca `typecheck:web`,
@@ -2495,7 +2495,7 @@ format:check` on pre-existing `apps/web/lib/workboard-view.test.ts` and
   `apps/web/app/api/workspaces/[workspaceId]/connections/route.ts`,
   `apps/web/components/codev-parent-bridge.ts`,
   `apps/web/components/codev-parent-bridge.test.ts`,
-  `infra/aws/orca-build/codev-web.patch`, and regenerated vendored Orca web
+  `infra/runtime/orca-build/codev-web.patch`, and regenerated vendored Orca web
   assets under `apps/web/public/orca/`.
 - Checks: focused provider-connection/bridge tests (21 passed), patched-Orca
   panel tests (2 passed), patched-Orca `typecheck:web`, `pnpm lint` (0
@@ -2543,7 +2543,7 @@ rust:check`, and `git diff --check`. TestSprite backend test
   `apps/web/lib/shared-session-routes.test.ts`,
   `apps/web/lib/agent-runtime.ts`,
   `apps/web/app/api/workspaces/[workspaceId]/agents/[sessionId]/turns/route.ts`,
-  `infra/aws/orca-build/codev-web.patch`, and regenerated vendored Orca web
+  `infra/runtime/orca-build/codev-web.patch`, and regenerated vendored Orca web
   assets under `apps/web/public/orca/`.
 - Checks: focused provider-turn-auth / shared-session / credentials tests
   (13 passed), patched-Orca shared-session panel tests (3 passed),
@@ -2591,7 +2591,7 @@ turn. The existing session is unchanged.` Queue stayed **0 queued**;
   `docs/OAUTH_SETUP.md`, `COLLABORATIVE_IDE_FEATURES.md`,
   `apps/web/lib/provider-connection-view.ts`,
   `apps/web/lib/provider-connection-view.test.ts`,
-  `infra/aws/orca-build/codev-web.patch`, and regenerated vendored Orca web
+  `infra/runtime/orca-build/codev-web.patch`, and regenerated vendored Orca web
   assets under `apps/web/public/orca/`.
 - Checks: focused provider-connection tests (6 passed), patched-Orca
   provider-connections panel tests (3 passed), `pnpm lint` (0 errors, 2
@@ -2639,7 +2639,7 @@ turn. The existing session is unchanged.` Queue stayed **0 queued**;
   `apps/web/components/codev-parent-bridge.ts`,
   `apps/web/components/codev-parent-bridge.test.ts`,
   `docs/provider-oauth-openai-codex.md`, `docs/OAUTH_SETUP.md`,
-  `COLLABORATIVE_IDE_FEATURES.md`, `infra/aws/orca-build/codev-web.patch`,
+  `COLLABORATIVE_IDE_FEATURES.md`, `infra/runtime/orca-build/codev-web.patch`,
   and regenerated vendored Orca web assets under `apps/web/public/orca/`.
 - Checks: focused connection/OAuth/bridge tests (26 passed), patched-Orca
   provider-connections tests (4 passed), patched-Orca `typecheck:web`,
@@ -2682,7 +2682,7 @@ test` (307 passed, 1 skipped), `pnpm build`, `pnpm test:e2e` (32 passed,
   `apps/web/lib/shared-session-view.ts`,
   `apps/web/lib/shared-session-view.test.ts`,
   `apps/web/lib/shared-session-server.ts`,
-  `infra/aws/orca-build/codev-web.patch`, and regenerated vendored Orca
+  `infra/runtime/orca-build/codev-web.patch`, and regenerated vendored Orca
   web assets under `apps/web/public/orca/`.
 - Checks: focused provider-event and shared-session tests (9 passed),
   patched-Orca shared-session panel tests (3 passed), `pnpm lint` (0
@@ -2732,7 +2732,7 @@ format:check` still fails on pre-existing files
   `apps/web/components/codev-parent-bridge.ts`,
   `apps/web/components/codev-parent-bridge.test.ts`,
   `apps/web/app/api/workspaces/[workspaceId]/agents/[sessionId]/provider/route.ts`,
-  `infra/aws/orca-build/codev-web.patch`, and regenerated vendored Orca
+  `infra/runtime/orca-build/codev-web.patch`, and regenerated vendored Orca
   web assets under `apps/web/public/orca/`.
 - Checks: focused capability, shared-session, and bridge tests (29
   passed), patched-Orca shared-session panel tests (4 passed), patched-Orca
@@ -2774,7 +2774,7 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff
   `apps/web/lib/shared-session-view.ts`,
   `apps/web/lib/shared-session-view.test.ts`,
   `apps/web/lib/shared-session-server.ts`,
-  `infra/aws/orca-build/codev-web.patch`, and regenerated vendored Orca
+  `infra/runtime/orca-build/codev-web.patch`, and regenerated vendored Orca
   web assets under `apps/web/public/orca/`.
 - Checks: focused shared-session and capability tests (14 passed),
   `pnpm lint` (0 errors, 2 existing warnings), `pnpm typecheck`, `pnpm

@@ -7,32 +7,24 @@ import {
   getKeyVaultKeyId,
 } from "./azure-kms";
 import {
-  decryptWithKms,
-  encryptWithKms,
-  getKmsKeyId,
-  KMS_VERSION,
-} from "./aws-kms";
-import { isAzure } from "./cloud";
-import {
   decryptWithKey,
   encryptWithKey,
   type EncryptionContext,
 } from "./envelope";
 
 /**
- * Credential encryption, whichever cloud holds the key.
+ * Credential encryption, wrapped by Azure Key Vault.
  *
- * The asymmetry here is deliberate and is what makes the AWS-to-Azure cutover
- * survivable. **Writes** follow `CLOUD_PROVIDER`: new secrets are wrapped by
- * whichever provider is current. **Reads** follow the envelope's own version
- * prefix, so a secret written under AWS KMS months ago stays readable after
- * the switch without a migration having to run first, and a rollback to AWS
- * leaves Azure-written secrets readable too.
+ * This used to dispatch on `CLOUD_PROVIDER` for writes while decrypting on
+ * each envelope's own version prefix, so that AWS-wrapped secrets survived
+ * the cutover to Azure and Azure-wrapped ones would survive a rollback. That
+ * asymmetry did its job: production now holds no `kms-v1` envelope at all,
+ * every stored credential is `akv-v1`, and the AWS key is scheduled for
+ * deletion. So the AWS half is gone, along with the re-wrap script whose
+ * whole purpose was to empty it.
  *
- * Without that split, flipping the provider would brick every stored
- * credential the instant it happened. With it, `scripts/rewrap-credentials.ts`
- * becomes an optimisation you run at leisure rather than a gate on the
- * cutover.
+ * The local development format is still read below, because it is not an AWS
+ * thing -- it is what an unconfigured checkout writes.
  */
 
 export type KmsEncryptionContext = EncryptionContext;
@@ -64,23 +56,19 @@ export async function encryptSecret(
   value: string,
   encryptionContext?: KmsEncryptionContext,
 ) {
-  // The development fallback belongs to both clouds, not to the AWS branch.
-  // It only ever sat there because AWS was the default; when the default moved
-  // to Azure, an unconfigured local checkout — which has no Key Vault key —
-  // started throwing on the first credential it tried to store. Production
-  // still refuses either way: `getKeyVaultKeyId` and `getDevelopmentKey` both
-  // throw there rather than write an unmanaged envelope.
-  const keyId = isAzure() ? getKeyVaultKeyId() : getKmsKeyId();
+  // An unconfigured local checkout has no Key Vault key and falls back to the
+  // development format. Production refuses either way: `getKeyVaultKeyId` and
+  // `getDevelopmentKey` both throw there rather than write an unmanaged
+  // envelope.
+  const keyId = getKeyVaultKeyId();
   if (!keyId) return encryptWithKey(value, getDevelopmentKey(), LEGACY_VERSION);
-  return isAzure()
-    ? encryptWithAzure(value, encryptionContext)
-    : encryptWithKms(value, encryptionContext);
+  return encryptWithAzure(value, encryptionContext);
 }
 
 /**
- * Decrypt any envelope this codebase has ever written: the local development
- * format, the AWS KMS format, and the Azure Key Vault format. Dispatch is on
- * the stored version prefix, never on the current provider.
+ * Decrypt any envelope still in use: the local development format and the
+ * Azure Key Vault format. Dispatch is on the stored version prefix, which is
+ * what let the `kms-v1` format be dropped once nothing carried it.
  */
 export async function decryptSecret(
   value: string,
@@ -91,20 +79,8 @@ export async function decryptSecret(
   if (version === LEGACY_VERSION) {
     return decryptWithKey(value, getDevelopmentKey());
   }
-  if (version === KMS_VERSION) {
-    return decryptWithKms(value, encryptionContext);
-  }
   if (version === AZURE_VERSION) {
     return decryptWithAzure(value, encryptionContext);
   }
   throw new Error("The encrypted secret has an unsupported format.");
-}
-
-/** Which provider wrote a stored secret. Used by the re-wrap script. */
-export function envelopeProvider(value: string) {
-  const [version] = value.split(".");
-  if (version === KMS_VERSION) return "aws" as const;
-  if (version === AZURE_VERSION) return "azure" as const;
-  if (version === LEGACY_VERSION) return "local" as const;
-  return "unknown" as const;
 }

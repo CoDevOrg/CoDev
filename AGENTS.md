@@ -52,12 +52,12 @@ Firecracker sandboxes and per-workspace Orca IDE sessions do **not** share a fil
 - Anything an interactive IDE session must see (terminals, Git, `codex resume`) uses **`/ide` file and execution routes**.
 
 Preserve the split between the Vercel-hosted web control plane and the
-Azure-hosted Firecracker/Orca infrastructure. `CLOUD_PROVIDER` selects the cloud
-and defaults to Azure. The EC2 implementation is parked in
-`apps/web/lib/retired/`, which tsconfig and vitest both exclude — `host.ts` no
-longer branches on the cloud, so `CLOUD_PROVIDER=aws` does **not** restore the
-old runtime on its own; `host.ts` documents what to put back. Do not describe
-the runtime as AWS-hosted.
+Azure-hosted Firecracker/Orca infrastructure. The runtime is Azure only: the
+EC2 implementation, the `CLOUD_PROVIDER` dispatch and the AWS account
+resources are all gone. Do not describe the runtime as AWS-hosted, and do not
+reintroduce a cloud-selection branch. The cloud-neutral half of the runtime
+(the host bootstrap, the Orca build scripts) lives in `infra/runtime/`; the
+Azure stack itself is `infra/azure/`.
 
 ## packages/ide
 
@@ -85,14 +85,10 @@ the runtime as AWS-hosted.
   one retired module, and taking it out of the program moved the typecheck from
   171s to 20s. Prefer the narrowest client that does the job, and retire a
   dependency in the same change as its last caller.
-- `apps/web/lib/retired/` holds code kept for reference and excluded from both
-  the typecheck and the test run. Nothing there is verified, so nothing may
-  import it. Do not add to it casually and do not "fix" what is in it — either
-  bring a module back properly (restore its imports, drop the excludes) or
-  delete it.
-- `@aws-sdk/client-kms` is **not** dead weight: `decryptSecret` dispatches on
-  the stored envelope prefix and must keep reading legacy `kms-v1.` credentials.
-  Leave it.
+- The AWS SDK is gone from `apps/web` apart from `@aws-sdk/credential-providers`
+  and `@ai-sdk/amazon-bedrock`, which serve **Bedrock as a member's own model
+  provider** and have nothing to do with the retired runtime. Do not remove
+  those two, and do not add the rest back.
 
 ## UI & Design (required skills)
 

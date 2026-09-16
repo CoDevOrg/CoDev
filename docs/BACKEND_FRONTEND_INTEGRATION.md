@@ -15,7 +15,7 @@ honors the contracts and permission boundaries below.
 Frontend
   -> authenticated Next.js workspace APIs on Vercel
     -> PostgreSQL / Redis / OpenFGA / provider services
-    -> Rust orchestrator on AWS
+    -> Rust orchestrator on the Azure runtime host
       -> isolated Firecracker microVM
         -> codev-guestd and /workspace
 ```

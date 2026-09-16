@@ -20,23 +20,16 @@ describe("server environment", () => {
     expect(() =>
       readServerEnvironment({
         NODE_ENV: "production",
-        ORCHESTRATOR_URL: "not a URL",
+        ORCHESTRATOR_DIRECT_URL: "not a URL",
       }),
     ).toThrow();
   });
 
-  it("accepts a Vercel OIDC role and orchestrator endpoint", () => {
-    expect(
-      readServerEnvironment({
-        AWS_REGION: "us-east-2",
-        AWS_ROLE_ARN: "arn:aws:iam::014576992564:role/codev-vercel-production",
-        AWS_HOST_INSTANCE_ID: "i-013491494b11b2ec5",
-        ORCHESTRATOR_URL: "https://example.execute-api.us-east-2.amazonaws.com",
-      }),
-    ).toMatchObject({
+  // The only AWS variable left, and it serves a member's own Bedrock account
+  // as a model provider -- not CoDev's runtime, which is entirely on Azure.
+  it("accepts a Bedrock region", () => {
+    expect(readServerEnvironment({ AWS_REGION: "us-east-2" })).toMatchObject({
       AWS_REGION: "us-east-2",
-      AWS_ROLE_ARN: "arn:aws:iam::014576992564:role/codev-vercel-production",
-      AWS_HOST_INSTANCE_ID: "i-013491494b11b2ec5",
     });
   });
 
@@ -73,7 +66,7 @@ describe("server environment", () => {
     ).toBe(false);
   });
 
-  it("requires KMS-backed token storage for production GitHub OAuth", () => {
+  it("requires Key Vault-backed token storage for production GitHub OAuth", () => {
     const base = {
       NODE_ENV: "production",
       AUTH_SECRET: "a-secret",
@@ -82,12 +75,22 @@ describe("server environment", () => {
       CREDENTIAL_ENCRYPTION_KEY: "development-fallback-key",
     };
 
+    // A development key alone is not enough in production: it would write
+    // envelopes the platform cannot protect.
     expect(isGitHubAuthConfigured(base)).toBe(false);
+    expect(
+      isGitHubAuthConfigured({
+        ...base,
+        CREDENTIAL_KEY_VAULT_KEY_ID:
+          "https://codev.vault.azure.net/keys/credentials/abc123",
+      }),
+    ).toBe(true);
+    // The retired AWS key must not satisfy it any more.
     expect(
       isGitHubAuthConfigured({
         ...base,
         CREDENTIAL_KMS_KEY_ID: "arn:aws:kms:us-east-2:014576992564:key/example",
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 });

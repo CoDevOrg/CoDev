@@ -7,7 +7,7 @@ Firecracker migration remains gated by the prototype and data-migration work bel
 
 CoDev owns the editor, terminal, agent experience, and workspace lifecycle as one
 product. Opening and developing a workspace should not require understanding a
-separate Orca product. Preserve the hosted Vercel control plane and AWS execution
+separate Orca product. Preserve the hosted Vercel control plane and cloud execution
 boundary while consolidating the workspace implementation behind it.
 
 The desired result is one authoritative workspace filesystem, one execution
@@ -18,7 +18,7 @@ does not imply unrestricted access to other members' credentials or permissions.
 ## What is already integrated
 
 - `packages/ide` is CoDev's editable fork, with required upstream license notices.
-- `infra/aws/scripts/build-orca-web.sh` and `build-orca-serve.sh` build the browser
+- `infra/runtime/scripts/build-orca-web.sh` and `build-orca-serve.sh` build the browser
   and runtime artifacts from that local source. Neither needs an upstream clone.
 - The browser loads the IDE shell while the runtime connects.
 - An existing Orca session can be reused by the orchestrator.
@@ -31,7 +31,7 @@ does not imply unrestricted access to other members' credentials or permissions.
 - The browser paints the owned IDE shell before a workspace is ready, applies the
   saved light or dark theme immediately, and accepts the pairing payload later.
 - The web control plane probes an already-running IDE session before waiting for
-  AWS host state. The warm path still checks membership, quota, member credentials,
+  runtime host state. The warm path still checks membership, quota, member credentials,
   and metering, and rejects failed session authorization.
 - Warm reconnects no longer wait on the orchestrator's global provisioning lock.
   The idle reaper rechecks activity under the same lifecycle lock before stopping a
@@ -57,14 +57,14 @@ does not itself prevent deployed client/server version skew.
 
 ## Remaining seams and proposed ownership
 
-| Current seam                                                                                        | Consolidation direction                                                                                                                           |
-| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Parent page changes IDE DOM, injects theme/branding, and patches browser APIs                       | Move CoDev behavior into owned IDE source with explicit supported configuration; remove each external patch after equivalent behavior is verified |
-| Web startup checks AWS and prepares multiple agent credentials before returning an existing session | Establish an authorized healthy-session reconnect path; make provider setup a prerequisite of agent launch rather than editor rendering           |
-| IDE and backend agents operate on separate filesystems                                              | Prototype the IDE runtime inside the workspace microVM; migrate consumers to one authoritative filesystem only after isolation and recovery pass  |
-| Independent IDE and sandbox lifecycle/heartbeat semantics                                           | Have one workspace runtime authority for readiness, activity, suspension, recovery, and metering                                                  |
-| Browser and server artifacts deploy independently                                                   | Record matching build/protocol versions and support a tested compatibility window during rollout                                                  |
-| Separate IDE tools and root tools                                                                   | Provide explicit root entry points for IDE development and targeted checks, retaining its isolated dependency graph initially                     |
+| Current seam                                                                                                     | Consolidation direction                                                                                                                           |
+| ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Parent page changes IDE DOM, injects theme/branding, and patches browser APIs                                    | Move CoDev behavior into owned IDE source with explicit supported configuration; remove each external patch after equivalent behavior is verified |
+| Web startup checks the runtime host and prepares multiple agent credentials before returning an existing session | Establish an authorized healthy-session reconnect path; make provider setup a prerequisite of agent launch rather than editor rendering           |
+| IDE and backend agents operate on separate filesystems                                                           | Prototype the IDE runtime inside the workspace microVM; migrate consumers to one authoritative filesystem only after isolation and recovery pass  |
+| Independent IDE and sandbox lifecycle/heartbeat semantics                                                        | Have one workspace runtime authority for readiness, activity, suspension, recovery, and metering                                                  |
+| Browser and server artifacts deploy independently                                                                | Record matching build/protocol versions and support a tested compatibility window during rollout                                                  |
+| Separate IDE tools and root tools                                                                                | Provide explicit root entry points for IDE development and targeted checks, retaining its isolated dependency graph initially                     |
 
 Keep `packages/ide` excluded from root recursive pnpm and formatting operations
 under the current repository rules. A convenient top-level command can delegate
@@ -96,7 +96,7 @@ around capacity and routing mutations.
 
 ### 2. Make the existing IDE an ordinary CoDev component
 
-Move supported integration behavior from `infra/aws/orca-build/codev-preload.js`,
+Move supported integration behavior from `infra/runtime/orca-build/codev-preload.js`,
 `brand-web.mjs`, and parent DOM manipulation into the relevant IDE modules.
 Use validated, versioned messages for session, member, permissions, readiness, and
 theme. Retain useful module and browser isolation boundaries; removing an iframe
@@ -114,7 +114,7 @@ Firecracker workspace VM in a prototype. Verify Electron/virtual-display support
 memory, networking, filesystem watching, PTYs, and real agent execution before
 choosing whether a headless runtime extraction is necessary.
 
-Keep code execution isolated from the AWS host and other workspaces. Apply resource
+Keep code execution isolated from the runtime host and other workspaces. Apply resource
 limits and restrict infrastructure network access. Enforce member capabilities at
 runtime operations, not only when rendering buttons. Explicitly test that terminal
 access does not expose another member's provider credentials; separate credential

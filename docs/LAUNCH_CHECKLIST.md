@@ -2,7 +2,7 @@
 
 Use this checklist for each early-access session. A design-partner session is
 not complete until its workspace is published or explicitly discarded and the
-AWS host is returning to `stopped`.
+runtime host is returning to `deallocated`.
 
 ## Preflight
 
@@ -36,9 +36,9 @@ AWS host is returning to `stopped`.
 1. Stop the workspace after publication.
 2. Run lifecycle reconciliation twice; the second call must be a no-op.
 3. Confirm the workspace is stopped and the Firecracker host transitions to
-   `stopped`.
-4. On the AWS host, run `sudo /opt/codev-verify-lifecycle.sh` and preserve its
-   snapshot/restore timings as deployment evidence.
-5. Confirm Vercel has no new error logs and AWS alarms remain `OK`.
+   `deallocated`.
+4. On the runtime host, run `sudo /opt/codev-verify-lifecycle.sh` and preserve
+   its snapshot/restore timings as deployment evidence.
+5. Confirm Vercel has no new error logs and Azure Monitor alerts remain `OK`.
 6. Preserve the publication URL, request IDs for failures, preflight result,
    feedback identifier, and test results in the session notes.

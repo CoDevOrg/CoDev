@@ -5,7 +5,7 @@ set -euo pipefail
 # from CoDev's own first-party IDE source in packages/ide. Runs the build inside
 # a matching Linux container via Apple's `container` tool
 # (https://github.com/apple/container) so the packaged AppImage can be
-# self-extracted natively (see infra/aws/orca-build/Containerfile) regardless
+# self-extracted natively (see infra/runtime/orca-build/Containerfile) regardless
 # of the build host's own OS/arch.
 #
 # Usage: build-orca-serve.sh <output-dir> [x86_64|aarch64]
@@ -13,7 +13,7 @@ set -euo pipefail
 # deploy.sh the same way it already consumes the orchestrator/guestd binaries.
 
 readonly repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-readonly containerfile="${repo_root}/infra/aws/orca-build/Containerfile"
+readonly containerfile="${repo_root}/infra/runtime/orca-build/Containerfile"
 # The IDE source *is* the build context now that it lives in this repo — the
 # Containerfile copies it in rather than cloning it.
 readonly build_context="${repo_root}/packages/ide"

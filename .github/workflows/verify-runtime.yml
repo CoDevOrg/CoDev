@@ -4,7 +4,7 @@ on:
   pull_request:
     paths:
       - "packages/ide/**"
-      - "infra/aws/**"
+      - "infra/runtime/**"
       - "services/**"
       - ".github/workflows/verify-runtime.yml"
   workflow_dispatch:
@@ -44,7 +44,7 @@ jobs:
         working-directory: packages/ide
         run: node --test config/scripts/prepare-pnpm-native-build.test.mjs
       - name: Build the deployable runtime without AWS credentials
-        run: ./infra/aws/scripts/build-orca-serve.sh "$RUNNER_TEMP/codev-artifact" x86_64
+        run: ./infra/runtime/scripts/build-orca-serve.sh "$RUNNER_TEMP/codev-artifact" x86_64
       - name: Verify packaged terminals and server readiness
         working-directory: packages/ide
         run: xvfb-run -a node scripts/verify-serve-artifact.mjs | tee "$RUNNER_TEMP/codev-runtime-evidence.jsonl"

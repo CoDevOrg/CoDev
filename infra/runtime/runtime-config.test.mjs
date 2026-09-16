@@ -5,25 +5,41 @@ import test from "node:test";
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 
-const template = read("./cloudformation/runtime.yaml");
-const deploy = read("./deploy.sh");
+/**
+ * The slice of `source` between two markers, both of which must be present.
+ *
+ * Several tests below assert against one region of a script rather than the
+ * whole file. Reaching for `indexOf` directly is a trap: a marker that gets
+ * renamed returns -1, `slice` reads that as "one from the end", and the test
+ * silently widens to almost the entire file instead of failing. That is not
+ * hypothetical -- it happened to the stage-helper test here, which then fed
+ * most of bootstrap-host.sh to a real `bash` and hung on its `az login` retry
+ * loop. Prefer function signatures as markers over comment text, and fail
+ * loudly when one is gone.
+ */
+const between = (source, startMarker, endMarker) => {
+  const start = source.indexOf(startMarker);
+  assert.ok(start >= 0, `marker not found: ${startMarker}`);
+  const end = source.indexOf(endMarker, start + startMarker.length);
+  assert.ok(end > start, `marker not found after start: ${endMarker}`);
+  return source.slice(start, end);
+};
+
 const bootstrap = read("./scripts/bootstrap-host.sh");
 const buildOrca = read("./scripts/build-orca-serve.sh");
 const buildOrcaWeb = read("./scripts/build-orca-web.sh");
 const azureTemplate = read("../azure/main.bicep");
 const azureDeploy = read("../azure/deploy.sh");
 
-test("defaults the Firecracker host to on-demand capacity with nested KVM", () => {
-  assert.match(template, /Default: m7i-flex\.large/);
-  assert.match(template, /Default: x86_64/);
-  // On-demand, not Spot: a stopped Spot instance can refuse to restart when
-  // its pool is full, which strands a workspace that is only ever reopened
-  // by starting the host back up.
-  assert.match(template, /Default: on-demand/);
-  assert.match(template, /NestedVirtualization: enabled/);
-  // Spot stays selectable, and still needs these to be stoppable/resumable.
-  assert.match(template, /InstanceInterruptionBehavior: stop/);
-  assert.match(template, /SpotInstanceType: persistent/);
+// Firecracker needs /dev/kvm, and not every Azure size exposes it: a size
+// without nested virtualization provisions perfectly and then cannot start a
+// single microVM. Standard_D2s_v7 was verified to expose vmx with kvm_intel
+// loaded, so the default must not drift off it by accident.
+test("defaults the Firecracker host to a size that exposes nested KVM", () => {
+  assert.match(azureTemplate, /param hostVmSize string = 'Standard_D2s_v7'/);
+  // On-demand only. A Spot VM that loses its pool refuses to start again,
+  // which strands a workspace whose only way back is starting the host.
+  assert.doesNotMatch(azureTemplate, /priority:\s*'Spot'/);
 });
 
 test("stops the host after ten idle minutes, counting IDE sessions", () => {
@@ -42,9 +58,8 @@ test("stops the host after ten idle minutes, counting IDE sessions", () => {
 });
 
 test("builds and bootstraps architecture-specific runtime artifacts", () => {
-  assert.match(deploy, /x86_64-unknown-linux-musl/);
-  assert.match(deploy, /aarch64-unknown-linux-musl/);
-  assert.match(deploy, /CODEV_PURCHASE_OPTION:-on-demand/);
+  assert.match(azureDeploy, /x86_64-unknown-linux-musl/);
+  assert.match(azureDeploy, /aarch64-unknown-linux-musl/);
   assert.match(bootstrap, /codev-orchestrator-linux-\$\{artifact_arch\}/);
   assert.match(bootstrap, /\n  gh\n/);
   assert.match(
@@ -87,9 +102,10 @@ test("IDE artifacts build from packages/ide, never from an upstream clone", () =
 // silently skips it. It looked fine on the first boot, where runcmd started
 // it by hand, and only a real reboot showed the host never rolling forward.
 test("Azure bootstrap unit re-runs on every boot without an ordering cycle", () => {
-  const unit = azureTemplate.slice(
-    azureTemplate.indexOf("path: /etc/systemd/system/codev-bootstrap.service"),
-    azureTemplate.indexOf("runcmd:"),
+  const unit = between(
+    azureTemplate,
+    "path: /etc/systemd/system/codev-bootstrap.service",
+    "runcmd:",
   );
   assert.match(unit, /WantedBy=cloud-init\.target/);
   assert.doesNotMatch(unit, /WantedBy=multi-user\.target/);
@@ -107,15 +123,8 @@ test("Azure bootstrap unit re-runs on every boot without an ordering cycle", () 
 // new binary into that path fails with ETXTBSY and kills the bootstrap, so
 // every artifact is fetched to a staging path and renamed into place.
 test("bootstrap never writes a release artifact onto a running binary", () => {
-  const fetch = bootstrap.slice(
-    bootstrap.indexOf("codev_fetch() {"),
-    bootstrap.indexOf("codev_public_ipv4() {"),
-  );
+  const fetch = between(bootstrap, "codev_fetch() {", "codev_fingerprint() {");
   assert.match(fetch, /staging="\$\{destination\}\.codev-fetch\.\$\$"/);
-  assert.match(
-    fetch,
-    /aws s3 cp "\$\{release_prefix\}\/\$\{name\}" "\$\{staging\}"/,
-  );
   assert.match(fetch, /--file "\$\{staging\}"/);
   assert.doesNotMatch(fetch, /--file "\$\{destination\}"/);
   assert.match(fetch, /mv -f "\$\{staging\}" "\$\{destination\}"/);
@@ -130,9 +139,9 @@ test("Azure release roll starts a deallocated host instead of failing", () => {
   assert.doesNotMatch(azureTemplate, /__RELEASE_VERSION__/);
 });
 
-// apps/web's health check calls /healthz. On AWS that goes through API
-// Gateway; on Azure the bearer route on the host is the only way in, so it has
-// to match /healthz as well as /v1/*. The Caddyfile block is written twice, in
+// apps/web's health check calls /healthz. The bearer route on the host is the
+// only way in, so it has to match /healthz as well as /v1/*. The Caddyfile
+// block is written twice, in
 // the bootstrap and in the orchestrator that later replaces it over the admin
 // API, and the two must not drift.
 test("the direct bearer route serves /healthz and both copies agree", () => {
@@ -186,10 +195,7 @@ test("every expensive bootstrap stage is skipped when already current", () => {
     bootstrap,
     /orca_key="\$\(codev_stage_key orca-v1 "\$\(cat "\$\{work_dir\}\/\$\{orca_archive\}\.sha256"\)"\)"/,
   );
-  const orcaStage = bootstrap.slice(
-    bootstrap.indexOf('orca_key="'),
-    bootstrap.indexOf("codev_stage_record orca"),
-  );
+  const orcaStage = between(bootstrap, 'orca_key="', "codev_stage_record orca");
   assert.doesNotMatch(
     orcaStage.slice(0, orcaStage.indexOf("else")),
     /codev_fetch "\$\{orca_archive\}"/,
@@ -206,9 +212,10 @@ test("every expensive bootstrap stage is skipped when already current", () => {
 });
 
 test("a bootstrap stage stamp tracks its key and honours the force switch", () => {
-  const helpers = bootstrap.slice(
-    bootstrap.indexOf("codev_stage_key() {"),
-    bootstrap.indexOf("# This host's own public IPv4"),
+  const helpers = between(
+    bootstrap,
+    "codev_stage_key() {",
+    "codev_public_ipv4() {",
   );
   const harness = `
 set -euo pipefail
@@ -232,7 +239,6 @@ echo ok
 
 test("deployment shell scripts parse", () => {
   for (const script of [
-    "deploy.sh",
     "scripts/bootstrap-host.sh",
     "scripts/build-orca-serve.sh",
     "scripts/build-orca-web.sh",

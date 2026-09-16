@@ -21,7 +21,6 @@ export async function GET(request: Request) {
     directUrlLength: environment.ORCHESTRATOR_DIRECT_URL?.length ?? 0,
     hasDirectSecret: Boolean(environment.ORCHESTRATOR_DIRECT_SECRET),
     directSecretLength: environment.ORCHESTRATOR_DIRECT_SECRET?.length ?? 0,
-    hostInstanceId: environment.AWS_HOST_INSTANCE_ID ?? null,
   };
 
   try {

@@ -5,9 +5,9 @@ set -euo pipefail
 # this package's source, on the machine that runs this script.
 #
 # Both callers share it so the container build and the CI build cannot drift:
-#   - infra/aws/orca-build/Containerfile (macOS dev machines, via Apple
+#   - infra/runtime/orca-build/Containerfile (macOS dev machines, via Apple
 #     `container`, possibly cross-architecture)
-#   - infra/aws/scripts/build-orca-serve.sh, directly, when it is already
+#   - infra/runtime/scripts/build-orca-serve.sh, directly, when it is already
 #     running on Linux with the target architecture
 #
 # TARGET_ARCH is electron-builder's name (arm64|x64); ARTIFACT_ARCH is the
