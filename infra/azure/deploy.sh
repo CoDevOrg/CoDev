@@ -236,7 +236,6 @@ cat <<SUMMARY
 
 Runtime deployed. Set these in the Vercel project:
 
-  CLOUD_PROVIDER=azure
   AZURE_TENANT_ID=$(az account show --query tenantId -o tsv)
   AZURE_SUBSCRIPTION_ID=${subscription_id}
   AZURE_RESOURCE_GROUP=${resource_group}
