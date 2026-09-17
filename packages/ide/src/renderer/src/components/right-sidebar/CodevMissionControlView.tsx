@@ -35,6 +35,7 @@ import { AgentDrawer } from './CodevMissionControlDrawer'
  */
 export function CodevMissionControlView({
   agents,
+  branchLabel,
   coordination,
   now,
   openKey,
@@ -51,6 +52,8 @@ export function CodevMissionControlView({
   onStop
 }: {
   agents: MissionControlAgent[]
+  /** The branch selected in the persistent workspace shell. */
+  branchLabel?: string
   coordination?: MissionControlCoordination
   now: number
   openKey: string | null
@@ -85,21 +88,33 @@ export function CodevMissionControlView({
   }
 
   return (
-    <section className="codev-agents-panel codev-mc" aria-label="Live agents in this workspace">
+    <section
+      className="codev-agents-panel codev-mc"
+      aria-label={`Agents in ${branchLabel ?? 'this branch'}`}
+      data-codev-agent-branch={branchLabel ?? ''}
+    >
       <header className="codev-agents-head">
         <div>
           <p className="codev-agents-kicker">
             <i className="codev-agents-dot" aria-hidden />
-            {working > 0 ? `${working} working now` : 'Live in this workspace'}
+            {working > 0 ? `${working} working now` : 'Agents on this branch'}
           </p>
-          <h3>Mission Control</h3>
+          <h3>{branchLabel ? `Mission Control · ${branchLabel}` : 'Mission Control'}</h3>
         </div>
         <span className="codev-mc-counts">
-          <span className="codev-agents-count" title="Agents running in this workspace">
+          <span className="codev-agents-count" title="Agents operating on this branch">
             <strong>{agents.length}</strong>
             <span>{agents.length === 1 ? 'agent' : 'agents'}</span>
           </span>
-          {slots ? (
+          {slots?.state === 'reconciling' ? (
+            <span
+              className="codev-agents-count is-slots"
+              title="Capacity is being reconciled with agent sessions"
+            >
+              <strong>—</strong>
+              <span>rechecking slots</span>
+            </span>
+          ) : slots ? (
             <span
               className="codev-agents-count is-slots"
               title="Agent worktree slots in use. Several agents can share one slot, and a chat in the workspace's own checkout uses none."
@@ -111,11 +126,16 @@ export function CodevMissionControlView({
         </span>
       </header>
 
-      {feed?.staleSince ? (
+      {feed && (feed.phase ? feed.phase !== 'live' : Boolean(feed.staleSince)) ? (
         <p className="codev-mc-alert is-soft codev-mc-stale" role="status">
           <span>
-            Live data last refreshed {missionControlElapsed(feed.staleSince, now)} ago
-            {feed.message ? ` — ${feed.message}` : ''}. What is shown may be behind.
+            {feed.phase === 'reconciling'
+              ? (feed.message ?? 'Branch and agent status are being reconciled.')
+              : feed.phase === 'reconnecting'
+                ? (feed.message ?? 'Live data is reconnecting.')
+                : feed.staleSince
+                  ? `Live data last refreshed ${missionControlElapsed(feed.staleSince, now)} ago${feed.message ? ` — ${feed.message}` : ''}. What is shown may be behind.`
+                  : (feed.message ?? 'Live data is not available yet.')}
           </span>
           {onRetryFeed ? (
             <button type="button" className="codev-mc-ghost" onClick={onRetryFeed}>
@@ -164,8 +184,8 @@ export function CodevMissionControlView({
 
       {agents.length === 0 ? (
         <p className="codev-agents-empty">
-          No agents are running yet. Start a session from Chats in the left rail, and it appears
-          here the moment it starts working.
+          No agents are attached to this branch yet. Open another branch from the branch list to see
+          its agents, or start a chat here to create one.
         </p>
       ) : (
         <ul className="codev-mc-list">

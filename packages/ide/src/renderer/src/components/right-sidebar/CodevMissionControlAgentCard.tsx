@@ -1,8 +1,9 @@
-import type { JSX, KeyboardEvent } from 'react'
+import type { JSX } from 'react'
 import {
   MISSION_CONTROL_PHASE_LABEL,
   missionControlFaceBackground,
   missionControlInitials,
+  missionControlElapsed,
   phaseLabel,
   runtimeText,
   type MissionControlAgent,
@@ -78,21 +79,22 @@ export function AgentCard({
   onOpen: () => void
   onStepIn: () => void
 }): JSX.Element {
-  const activate = (event: KeyboardEvent<HTMLDivElement>): void => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault()
-      onOpen()
-    }
-  }
+  const openLabel = agent.tabId
+    ? 'Open chat'
+    : agent.worktreeId
+      ? 'Open branch'
+      : agent.conversation
+        ? 'Open conversation'
+        : 'Preparing branch…'
+  const canOpen = Boolean(agent.tabId || agent.worktreeId || agent.conversation)
 
   return (
     <li className={`codev-mc-card is-${agent.phase}`}>
-      <div
+      <button
+        type="button"
         className="codev-mc-card-open"
-        role="button"
-        tabIndex={0}
         onClick={onOpen}
-        onKeyDown={activate}
+        aria-label={`Open ${agent.agentName} owned by ${agent.ownerName}`}
       >
         <div className="codev-mc-card-head">
           <Face
@@ -101,9 +103,9 @@ export function AgentCard({
             title={`Started by ${agent.ownerName}`}
           />
           <div className="codev-mc-card-who">
-            <span className="codev-mc-owner">{agent.ownerName}</span>
+            <span className="codev-mc-owner">Owner · {agent.ownerName}</span>
             <span className="codev-mc-sub">
-              {agent.providerLabel}
+              Agent · {agent.agentName} · {agent.providerLabel}
               {agent.model ? ` · ${agent.model}` : ''}
             </span>
           </div>
@@ -133,19 +135,37 @@ export function AgentCard({
         ) : null}
 
         <div className="codev-mc-cardfoot">
-          <span className="codev-mc-runtime">{runtimeText(agent, now)}</span>
+          <span className="codev-mc-runtime">
+            {agent.lastActivityAt
+              ? `Last active ${missionControlElapsed(agent.lastActivityAt, now)} ago`
+              : runtimeText(agent, now)}
+          </span>
           <span className="codev-mc-tag">
             {agent.origin === 'you' ? 'your chat tab' : 'managed session'}
           </span>
         </div>
-      </div>
+      </button>
 
       <div className="codev-mc-card-actions">
-        <button type="button" onClick={onStepIn}>
-          Step in
+        <button
+          type="button"
+          onClick={onStepIn}
+          disabled={!canOpen}
+          title={canOpen ? undefined : 'The branch workspace is still being prepared.'}
+        >
+          {openLabel}
         </button>
-        <button type="button" onClick={onOpen} disabled={agent.origin !== 'managed'}>
-          Steer
+        <button
+          type="button"
+          onClick={onOpen}
+          disabled={agent.origin === 'managed' && !agent.permissions.canSteer}
+          title={
+            agent.origin === 'managed' && !agent.permissions.canSteer
+              ? agent.permissions.steerReason
+              : undefined
+          }
+        >
+          {agent.permissions.canSteer ? 'Steer' : 'View details'}
         </button>
       </div>
     </li>

@@ -1,4 +1,6 @@
+/* eslint-disable max-lines -- Mission Control keeps its pure identity, coordination, and display rules together. */
 import { tabIdFromPaneKey } from './codev-local-agent-tabs'
+import type { CodevSharedSessionView } from './codev-shared-session-model'
 
 /**
  * Mission Control's data model: the agent row, the coordination slice it is
@@ -7,12 +9,16 @@ import { tabIdFromPaneKey } from './codev-local-agent-tabs'
  * as plain functions.
  */
 export type MissionControlPhase =
+  | 'starting'
   | 'planning'
   | 'working'
   | 'testing'
   | 'reviewing'
   | 'blocked'
   | 'waiting'
+  | 'paused'
+  | 'failed'
+  | 'stopped'
   | 'done'
 
 /** One path this agent is holding, straight from `path_claims`. */
@@ -50,13 +56,20 @@ export type MissionControlAgent = {
   phase: MissionControlPhase
   /** The assignment, in the owner's words. */
   title: string
+  /** Provider/session name, kept separate from the assignment and owner. */
+  agentName: string
   /** The one line describing what it is doing right now. */
   activity: string
   /** Epoch ms; drives the live-ticking runtime for local agents. */
   startedAt: number | null
   /** `MM:SS` from the server, used when `startedAt` is unknown. */
   serverElapsed: string | null
+  /** Durable activity timestamp, when the bridge has one. */
+  lastActivityAt: number | null
   canSteer: boolean
+  permissions: MissionControlPermissions
+  /** Full shared-session transcript used by the detail drawer. */
+  conversation: CodevSharedSessionView | null
   /** Paths this agent currently holds. Empty until the coordination snapshot
    *  arrives, and empty for an agent that has claimed nothing — never a guess. */
   holds: MissionControlHold[]
@@ -69,38 +82,77 @@ export type MissionControlPendingAction = 'stop' | 'pause' | 'steer'
 /** Worktree slots in use, from the workboard. Distinct from the agent count:
  *  several agents share one checkout, and a chat in the workspace's own
  *  checkout holds no slot at all. */
-export type MissionControlSlotUsage = { used: number; total: number }
+export type MissionControlSlotUsage = {
+  used: number
+  total: number
+  state?: 'live' | 'reconciling'
+}
 
 /** Whether the live feeds behind the panel are current. `staleSince` is the
  *  first failed refresh after a good snapshot; the data on screen is from
  *  before it. */
-export type MissionControlFeedHealth = { staleSince: number | null; message: string | null }
+export type MissionControlFeedHealth = {
+  staleSince: number | null
+  message: string | null
+  phase?: 'live' | 'stale' | 'reconnecting' | 'failed' | 'reconciling'
+}
 
 /** What Stop will do to the open agent, from its actual stop plan. */
 export type MissionControlStopDescription = { allowed: boolean; button: string; detail: string }
 
+export type MissionControlPermissions = {
+  canView: boolean
+  canSteer: boolean
+  canPause: boolean
+  canEdit: boolean
+  canPublish: boolean
+  canStop: boolean
+  steerReason?: string
+  pauseReason?: string
+  editReason?: string
+  publishReason?: string
+  stopReason?: string
+}
+
 export const MISSION_CONTROL_PHASE_LABEL: Record<MissionControlPhase, string> = {
+  starting: 'Starting',
   planning: 'Planning',
   working: 'Working',
   testing: 'Running tests',
   reviewing: 'In review',
   blocked: 'Blocked',
   waiting: 'Waiting',
+  paused: 'Paused',
+  failed: 'Failed',
+  stopped: 'Stopped',
   done: 'Ready to merge'
 }
 
 /** Ordering for the list: whatever needs a human first, settled work last. */
 const PHASE_RANK: Record<MissionControlPhase, number> = {
   blocked: 0,
+  failed: 1,
   working: 1,
   testing: 2,
   reviewing: 3,
-  planning: 4,
-  waiting: 5,
-  done: 6
+  starting: 4,
+  planning: 5,
+  paused: 6,
+  waiting: 7,
+  stopped: 8,
+  done: 9
 }
 
 export function missionControlPhaseFromState(state: string): MissionControlPhase {
+  if (state === 'failed') {
+    return 'failed'
+  }
+  if (state === 'interrupted') {
+    return 'paused'
+  }
+  if (state === 'completed') {
+    return 'stopped'
+  }
   if (state === 'blocked') {
     return 'blocked'
   }
@@ -110,7 +162,13 @@ export function missionControlPhaseFromState(state: string): MissionControlPhase
   if (state === 'done') {
     return 'done'
   }
-  return 'working'
+  if (state === 'running') {
+    return 'working'
+  }
+  if (state === 'idle') {
+    return 'starting'
+  }
+  return 'starting'
 }
 
 export function missionControlPhaseFromStatus(status: string): MissionControlPhase {
@@ -384,7 +442,14 @@ export function missionControlElapsed(since: number, now: number): string {
  * bar printing "1 agent live" beside a card reading "Idle".
  */
 export function isAgentWorking(agent: Pick<MissionControlAgent, 'phase'>): boolean {
-  return agent.phase !== 'done' && agent.phase !== 'waiting'
+  return (
+    agent.phase === 'starting' ||
+    agent.phase === 'planning' ||
+    agent.phase === 'working' ||
+    agent.phase === 'testing' ||
+    agent.phase === 'reviewing' ||
+    agent.phase === 'blocked'
+  )
 }
 
 /** Agents doing work now, agents merely open, and the total. */
@@ -404,7 +469,7 @@ export function summarizeAgentActivity(
  * idle between turns. Only managed sessions reach a real merge-ready state.
  */
 export function phaseLabel(agent: MissionControlAgent): string {
-  if (agent.origin === 'you' && agent.phase === 'done') {
+  if (agent.origin === 'you' && (agent.phase === 'done' || agent.phase === 'stopped')) {
     return 'Idle'
   }
   return MISSION_CONTROL_PHASE_LABEL[agent.phase]

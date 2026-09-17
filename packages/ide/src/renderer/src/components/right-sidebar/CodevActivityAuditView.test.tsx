@@ -24,7 +24,7 @@ const snapshot: CodevActivitySnapshot = {
       }
     }
   ],
-  filtered: [],
+  filtered: []
 }
 
 describe('CodevActivityAuditViewPanel', () => {
@@ -37,6 +37,7 @@ describe('CodevActivityAuditViewPanel', () => {
         query="review_merged"
         busy=""
         jumped=""
+        branchLabel="feature/chat-first"
         onKindChange={() => undefined}
         onQueryChange={() => undefined}
         onRefresh={() => undefined}
@@ -44,6 +45,8 @@ describe('CodevActivityAuditViewPanel', () => {
       />
     )
     expect(html).toContain('Workspace activity')
+    expect(html).toContain('feature/chat-first')
+    expect(html).toContain('Branch context: feature/chat-first')
     expect(html).toContain('Activity filter')
     expect(html).toContain('CoDev Test Jordan integrated a reviewed checkpoint')
     expect(html).toContain('agent.review_merged')

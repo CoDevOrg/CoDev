@@ -58,6 +58,7 @@ function asListItem(
     status: session.status,
     worktreeId: session.worktreeId,
     worktreeName: session.worktreeName,
+    worktreeStatus: session.worktreeStatus,
     createdBy: session.createdBy,
     ownerName: session.ownerName,
     ownerLogin: session.ownerLogin,

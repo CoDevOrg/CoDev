@@ -75,6 +75,10 @@ declare global {
     __CODEV_DEFAULT_AGENT__?: 'claude' | 'codex'
     __CODEV_MEMBER_ID__?: string
     __CODEV_SETTINGS_ONLY__?: boolean
+    /** Optional branch name selected by the workspace route. */
+    __CODEV_BRANCH__?: string
+    /** Optional managed agent session selected by the workspace route. */
+    __CODEV_AGENT__?: string
     __paneManagers?: Map<string, PaneManager>
     __terminalParkingDebug?: {
       parkDelayMs: number

@@ -60,6 +60,10 @@ import { codexTerminalScreenToMessages } from './codex-terminal-transcript'
 import { assembleNativeChatSession } from './native-chat-session-assembler'
 import { NativeChatTerminalDrawer } from './native-chat-terminal-drawer'
 import { useCodevDrawerTerminal } from './use-codev-drawer-terminal'
+import {
+  CODEV_OPEN_TERMINAL_DRAWER_EVENT,
+  type CodevTerminalDrawerRequest
+} from './codev-terminal-drawer-event'
 import { FileDiff, Globe, TerminalSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -70,6 +74,7 @@ export type { NativeChatViewProps } from './native-chat-view-types'
 /** Resolves an agent terminal into its native conversation and composer UI. */
 export default function NativeChatView({
   terminalTabId,
+  worktreeId,
   paneKey: preferredPaneKey,
   targetPtyId = null,
   launchAgent,
@@ -107,6 +112,7 @@ export default function NativeChatView({
           transcriptPath={resolution.transcriptPath}
           targetPtyId={targetPtyId}
           terminalTabId={terminalTabId}
+          worktreeId={worktreeId}
           onSwitchToTerminal={onSwitchToTerminal}
           readTerminalScreen={readTerminalScreen}
           contextMenuActions={contextMenuActions}
@@ -123,6 +129,7 @@ function NativeChatResolvedView({
   transcriptPath,
   targetPtyId,
   terminalTabId,
+  worktreeId,
   onSwitchToTerminal,
   readTerminalScreen,
   contextMenuActions
@@ -133,6 +140,7 @@ function NativeChatResolvedView({
   transcriptPath: string | null
   targetPtyId: string | null
   terminalTabId: string
+  worktreeId?: string
   onSwitchToTerminal?: () => void
   readTerminalScreen?: () => string | null
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
@@ -429,6 +437,24 @@ function NativeChatResolvedView({
   // Non-CoDev builds keep the existing tab-bar/shortcut toggle instead.
   const [terminalDrawerOpen, setTerminalDrawerOpen] = useState(false)
   const codevEmbedded = isCodevEmbedded()
+  useEffect(() => {
+    if (!codevEmbedded || !worktreeId) {
+      return
+    }
+    const handleTerminalDrawerRequest = (event: Event): void => {
+      const detail = (event as CustomEvent<CodevTerminalDrawerRequest>).detail
+      if (detail?.worktreeId !== worktreeId) {
+        return
+      }
+      if (detail.terminalTabId && detail.terminalTabId !== terminalTabId) {
+        return
+      }
+      setTerminalDrawerOpen(true)
+    }
+    window.addEventListener(CODEV_OPEN_TERMINAL_DRAWER_EVENT, handleTerminalDrawerRequest)
+    return () =>
+      window.removeEventListener(CODEV_OPEN_TERMINAL_DRAWER_EVENT, handleTerminalDrawerRequest)
+  }, [codevEmbedded, terminalTabId, worktreeId])
   const sendGate = useCodevAgentSendGate()
   const drawerWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const drawerPtyId = useCodevDrawerTerminal({

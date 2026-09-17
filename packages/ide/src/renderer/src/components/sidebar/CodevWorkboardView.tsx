@@ -100,7 +100,7 @@ export function CodevWorkboardViewPanel({
   const filled = capacity?.activeSessions ?? slots.filter((slot) => slot.occupied).length
   const startLabel =
     filled >= 3
-      ? 'Start fourth CoDev agent'
+      ? 'Start fourth session'
       : available === 2
         ? 'Start second CoDev agent'
         : 'Start CoDev agent'

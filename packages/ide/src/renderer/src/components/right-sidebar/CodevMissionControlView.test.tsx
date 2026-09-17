@@ -12,6 +12,7 @@ import {
   type MissionControlAgent,
   type MissionControlCoordination
 } from './codev-mission-control-model'
+import type { CodevSharedSessionView } from './codev-shared-session-model'
 
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
@@ -29,10 +30,21 @@ function agent(overrides: Partial<MissionControlAgent>): MissionControlAgent {
     model: 'sonnet',
     phase: 'working',
     title: 'Wire the billing webhook',
+    agentName: 'Agent session',
     activity: 'Editing app/api/webhooks/route.ts',
     startedAt: null,
     serverElapsed: '01:20',
+    lastActivityAt: null,
     canSteer: true,
+    permissions: {
+      canView: true,
+      canSteer: true,
+      canPause: true,
+      canEdit: true,
+      canPublish: true,
+      canStop: true
+    },
+    conversation: null,
     branch: null,
     holds: [],
     ...overrides
@@ -201,6 +213,80 @@ describe('CodevMissionControlView', () => {
     expect(drawerTag).toContain('tabindex="-1"')
   })
 
+  it('shows ownership, access limits, and the shared conversation separately', () => {
+    const conversation: CodevSharedSessionView = {
+      session: {
+        sessionId: 's1',
+        ownerId: 'owner-1',
+        worktreeId: 'w1',
+        provider: 'claude',
+        model: 'sonnet',
+        state: 'waiting',
+        activeTurnId: null,
+        streamCursor: 2,
+        queue: []
+      },
+      name: 'Release agent',
+      ownerName: 'Alex Morgan',
+      worktreeName: 'release branch',
+      model: 'sonnet',
+      transcript: [
+        {
+          position: 1,
+          turnId: 'turn-1',
+          authorId: 'owner-1',
+          authorName: 'Alex Morgan',
+          prompt: 'Add the release note',
+          status: 'completed',
+          tool: null,
+          output: 'I added the release note.'
+        }
+      ],
+      lastCompletedAction: null
+    }
+    const html = renderToStaticMarkup(
+      <CodevMissionControlView
+        agents={[
+          agent({
+            key: 'managed:s1',
+            agentName: 'Release agent',
+            conversation,
+            permissions: {
+              canView: true,
+              canSteer: false,
+              canPause: false,
+              canEdit: false,
+              canPublish: false,
+              canStop: false,
+              steerReason: 'Co-steer permission is required.',
+              editReason: 'The branch is still being prepared.',
+              publishReason: 'The local branch is not ready.',
+              stopReason: 'Only the owner can stop this session.'
+            }
+          })
+        ]}
+        branchLabel="release"
+        now={Date.now()}
+        openKey="managed:s1"
+        pendingAction={null}
+        onOpen={noop}
+        onClose={noop}
+        onStepIn={noop}
+        onSteer={noop}
+        onPause={noop}
+        onStop={noop}
+      />
+    )
+    expect(html).toContain('Owner · Alex Morgan')
+    expect(html).toContain('Agent · Release agent · Claude')
+    expect(html).toContain('Agent permissions')
+    expect(html).toContain('Only the owner can stop this session.')
+    expect(html).toContain('Agent conversation')
+    expect(html).toContain('Add the release note')
+    expect(html).toContain('I added the release note.')
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>Stop agent<\/button>/)
+  })
+
   it('offers to open the agent’s own chat when it has a tab, its worktree otherwise', () => {
     const local = agent({
       key: 'local:tab:t1',
@@ -241,7 +327,7 @@ describe('CodevMissionControlView', () => {
         onStop={noop}
       />
     )
-    expect(managedOnly).toContain('Open this worktree')
+    expect(managedOnly).toContain('Open this branch')
   })
 
   it('counts agents and worktree slots as two different numbers', () => {
@@ -345,7 +431,7 @@ describe('CodevMissionControlView', () => {
         onStop={noop}
       />
     )
-    expect(html).toContain('No agents are running yet')
+    expect(html).toContain('No agents are attached to this branch yet')
   })
 })
 

@@ -1,1 +1,0 @@
-import{Nt as e,Pt as t,d as n,el as r}from"./web-index-msQ2CV7V.js";function i(e){return t(n.getState(),e)}function a(e){return!e||r(e)?.type===`folder`?!0:i(e)!==void 0}function o(t,r){return e(n.getState(),t,r)}export{o as n,a as r,i as t};

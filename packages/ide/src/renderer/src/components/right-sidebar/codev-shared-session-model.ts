@@ -63,6 +63,11 @@ export type CodevSharedSessionView = {
   }
   name: string
   ownerName: string
+  worktreeStatus?: string
+  lastError?: string | null
+  /** Durable timestamp of the latest session, turn, or provider event. */
+  lastActivityAt?: string | null
+  activeTurnAuthorName?: string | null
   worktreeName: string
   model: string
   attributedQueue?: CodevSharedQueueEntry[]
@@ -100,7 +105,7 @@ export function stateLabel(view: CodevSharedSessionView): string {
     return 'Running · CoDev turn'
   }
   if (state === 'interrupted') {
-    return 'Interrupted · CoDev turn'
+    return 'Interrupted · controlled turn'
   }
   if (queue.length > 0) {
     return 'Queued · awaiting turn'

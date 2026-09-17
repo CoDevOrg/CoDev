@@ -4,6 +4,8 @@ import type { NativeChatContextMenuActions } from './use-native-chat-context-men
 export type NativeChatViewProps = {
   /** The terminal tab hosting the agent. paneKey is `${tabId}:${leafId}`. */
   terminalTabId: string
+  /** Worktree owning this chat, used by workspace-level branch actions. */
+  worktreeId?: string
   /** Specific split leaf this chat surface replaces. */
   paneKey?: string
   /** PTY bound to `paneKey`, used for composer and interactive-card sends. */

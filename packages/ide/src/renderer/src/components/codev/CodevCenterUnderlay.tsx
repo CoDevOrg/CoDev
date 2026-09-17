@@ -1,5 +1,7 @@
 import type { JSX, ReactNode } from 'react'
 import { useCodevChannelId } from '@/web/codev-channel-view'
+import { isCodevEmbedded } from '@/web/codev-embedded'
+import { useCodevBranchesOpen } from './codev-branches-view'
 
 /**
  * The workspace center — chat, terminal, pages — as the layer a team channel
@@ -19,7 +21,8 @@ export function CodevCenterUnderlay({
   className: string
   children: ReactNode
 }): JSX.Element {
-  const covered = useCodevChannelId() !== null
+  const branchesOpen = useCodevBranchesOpen()
+  const covered = useCodevChannelId() !== null || (isCodevEmbedded() && branchesOpen)
   return (
     <div className={className} inert={covered || undefined}>
       {children}

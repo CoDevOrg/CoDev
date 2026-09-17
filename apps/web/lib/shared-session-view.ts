@@ -61,6 +61,13 @@ export type SharedSessionView = {
   session: SharedSession;
   name: string;
   ownerName: string;
+  /** Authoritative backend state for the checkout behind this session. */
+  worktreeStatus?: string;
+  /** Persisted session error, kept separate from provider-auth blocks so the
+   * client can explain failed provisioning and runtime failures too. */
+  lastError: string | null;
+  /** Latest durable session, turn, or provider-event timestamp. */
+  lastActivityAt: string | null;
   activeTurnAuthorName: string | null;
   worktreeName: string;
   model: string;
@@ -115,6 +122,7 @@ export type SharedSessionListItem = {
   status: SharedSession["state"];
   worktreeId: string;
   worktreeName: string;
+  worktreeStatus?: string;
   createdBy: string;
   ownerName?: string | null;
   ownerLogin?: string | null;
@@ -126,6 +134,24 @@ export type SharedSessionListItem = {
 
 function iso(value: Date | string) {
   return value instanceof Date ? value.toISOString() : value;
+}
+
+function latestActivityAt(
+  session: Pick<SharedSessionListItem, "createdAt" | "turns" | "events">,
+) {
+  const timestamps = [
+    iso(session.createdAt),
+    ...session.turns.map((turn) => iso(turn.createdAt)),
+    ...session.events.map((event) => iso(event.createdAt)),
+  ]
+    .map((value) => ({ value, time: Date.parse(value) }))
+    .filter((entry) => Number.isFinite(entry.time));
+  const latest = timestamps.reduce<{ value: string; time: number } | null>(
+    (current, entry) =>
+      current === null || entry.time > current.time ? entry : current,
+    null,
+  );
+  return latest?.value ?? null;
 }
 
 export function displayMemberName(
@@ -276,6 +302,9 @@ export function toSharedSessionView(
       session.ownerLogin,
       "Owner",
     ),
+    worktreeStatus: session.worktreeStatus ?? "unknown",
+    lastError: session.lastError ?? null,
+    lastActivityAt: latestActivityAt(session),
     activeTurnAuthorName: running
       ? displayMemberName(running.authorName, running.authorLogin)
       : null,

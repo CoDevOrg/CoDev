@@ -1,5 +1,6 @@
 import { useState, type JSX } from 'react'
 import { Dialog as DialogPrimitive } from 'radix-ui'
+import { X } from 'lucide-react'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import {
   phaseLabel,
@@ -63,9 +64,48 @@ export function AgentDrawer({
   // Stopping ends a running agent and frees its slot, so it asks first — in
   // place, because a modal over a drawer is a lot of chrome for one button.
   const [confirmingStop, setConfirmingStop] = useState(false)
-  const steerable = agent.origin === 'managed' && agent.canSteer && Boolean(agent.sessionId)
+  const steerable =
+    agent.origin === 'managed' && agent.permissions.canSteer && Boolean(agent.sessionId)
   const busy = pendingAction !== null
-  const stop = stopDescription ?? FALLBACK_STOP
+  const stop = agent.permissions.canStop
+    ? (stopDescription ?? FALLBACK_STOP)
+    : {
+        allowed: false,
+        button: 'Stop agent',
+        detail: agent.permissions.stopReason ?? 'You do not have permission to stop this agent.'
+      }
+  const openLabel = agent.tabId
+    ? 'Open this chat'
+    : agent.worktreeId
+      ? 'Open this branch'
+      : agent.conversation
+        ? 'Open conversation'
+        : 'Preparing branch…'
+  const canOpen = Boolean(agent.tabId || agent.worktreeId || agent.conversation)
+  const accessRows = [
+    ['View', agent.permissions.canView ? 'Available' : 'Unavailable', null],
+    [
+      'Steer',
+      agent.permissions.canSteer ? 'Available' : 'Unavailable',
+      agent.permissions.steerReason
+    ],
+    [
+      'Pause',
+      agent.permissions.canPause ? 'Available' : 'Unavailable',
+      agent.permissions.pauseReason
+    ],
+    [
+      'Edit',
+      agent.permissions.canEdit ? 'Branch workspace' : 'Preparing',
+      agent.permissions.editReason
+    ],
+    [
+      'Publish',
+      agent.permissions.canPublish ? 'Use Source Control' : 'Unavailable',
+      agent.permissions.publishReason
+    ],
+    ['Stop', agent.permissions.canStop ? 'Available' : 'Unavailable', agent.permissions.stopReason]
+  ] as const
 
   // The typed instruction is cleared only once the request is accepted. It
   // used to clear on click, so a failed steer took the text with it.
@@ -98,7 +138,7 @@ export function AgentDrawer({
         <header className="codev-mc-drawer-head">
           <div>
             <p className="codev-mc-drawer-kicker">
-              {agent.ownerName} · {agent.providerLabel}
+              Owner · {agent.ownerName} · Agent · {agent.agentName} · {agent.providerLabel}
               {agent.model ? ` · ${agent.model}` : ''}
             </p>
             <DialogPrimitive.Title asChild>
@@ -107,7 +147,7 @@ export function AgentDrawer({
           </div>
           <DialogPrimitive.Close asChild>
             <button type="button" className="codev-mc-drawer-close" aria-label="Close agent detail">
-              ✕
+              <X size={16} aria-hidden="true" />
             </button>
           </DialogPrimitive.Close>
         </header>
@@ -124,26 +164,25 @@ export function AgentDrawer({
           <i className="codev-mc-caret" aria-hidden />
           <span>{agent.activity}</span>
         </p>
+        {agent.permissions.canSteer === false &&
+        agent.permissions.steerReason?.includes('connection') ? (
+          <p className="codev-mc-alert is-soft" role="alert">
+            {agent.permissions.steerReason} Open provider settings, reconnect, then retry this
+            action.
+          </p>
+        ) : null}
 
         <div className="codev-mc-drawer-actions">
           <button
             type="button"
             className="codev-mc-ghost"
             onClick={onStepIn}
-            disabled={!agent.tabId && !agent.worktreeId}
-            title={
-              agent.tabId || agent.worktreeId
-                ? undefined
-                : 'This agent has no open chat or worktree to step into.'
-            }
+            disabled={!canOpen}
+            title={canOpen ? undefined : 'The branch workspace is still being prepared.'}
           >
-            {agent.tabId
-              ? 'Open this chat'
-              : agent.worktreeId
-                ? 'Open this worktree'
-                : 'Nothing to open'}
+            {openLabel}
           </button>
-          {steerable ? (
+          {steerable && agent.permissions.canPause ? (
             <button
               type="button"
               className="codev-mc-ghost"
@@ -198,6 +237,56 @@ export function AgentDrawer({
           <p className="codev-mc-drawer-activity">{stop.detail}</p>
         ) : null}
         {!stop.allowed ? <p className="codev-mc-drawer-activity">{stop.detail}</p> : null}
+
+        <section className="codev-mc-access" aria-label="Agent permissions">
+          <h5>Access</h5>
+          <dl>
+            {accessRows.map(([label, value, reason]) => (
+              <div key={label}>
+                <dt>{label}</dt>
+                <dd title={reason ?? undefined}>{value}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="codev-mc-steer-note">
+            Access is shown separately from ownership. Branch editing and publishing are still
+            checked by the branch and Source Control surfaces.
+          </p>
+        </section>
+
+        {agent.conversation ? (
+          <section className="codev-mc-conversation" aria-label="Agent conversation">
+            <div className="codev-mc-conversation-head">
+              <h5>Conversation</h5>
+              <span>{agent.conversation.transcript.length} completed turns</span>
+            </div>
+            {agent.conversation.attributedQueue?.length ? (
+              <p className="codev-mc-drawer-activity">
+                {agent.conversation.attributedQueue.length === 1
+                  ? 'One instruction is queued.'
+                  : `${agent.conversation.attributedQueue.length} instructions are queued.`}
+              </p>
+            ) : null}
+            {agent.conversation.transcript.length > 0 ? (
+              <div className="codev-mc-conversation-list">
+                {agent.conversation.transcript.slice(-8).map((turn) => (
+                  <article key={turn.turnId}>
+                    <div>
+                      <strong>{turn.authorName}</strong>
+                      <span>{turn.status}</span>
+                    </div>
+                    <p>{turn.prompt}</p>
+                    {turn.output ? <p>{turn.output}</p> : null}
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="codev-mc-steer-note">
+                No completed turns yet. The shared conversation will appear here as the agent works.
+              </p>
+            )}
+          </section>
+        ) : null}
 
         {steerable ? (
           <footer className="codev-mc-steer">

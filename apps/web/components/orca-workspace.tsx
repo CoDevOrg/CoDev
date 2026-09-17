@@ -158,6 +158,12 @@ type CodevOrcaMessage =
     }
   | { type: "codev:retry-connect" }
   | { type: "codev:provider-readiness-refresh" }
+  | { type: "codev:branch-route"; branch: string | null }
+  | {
+      type: "codev:agent-route";
+      branch: string | null;
+      agent: string | null;
+    }
   | {
       type: "codev:discard-proposal";
       requestId: string;
@@ -190,6 +196,54 @@ type CodevProposalCreateResult =
 
 const WORKTREE_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isSafeWorkspaceBranchRoute(value: string): boolean {
+  if (!value || value.length > 255) {
+    return false;
+  }
+  return !Array.from(value).some((character) => {
+    const code = character.charCodeAt(0);
+    return code < 0x20 || code === 0x7f;
+  });
+}
+
+/** Build the browser URL after the embedded client selects a branch. */
+export function replaceWorkspaceBranchRoute(
+  currentUrl: URL,
+  branch: string | null,
+): string {
+  const next = new URL(currentUrl.toString());
+  const normalized = branch?.trim() ?? "";
+  if (normalized && isSafeWorkspaceBranchRoute(normalized)) {
+    next.searchParams.set("branch", normalized);
+  } else {
+    next.searchParams.delete("branch");
+  }
+  next.searchParams.delete("agent");
+  return `${next.pathname}${next.search}${next.hash}`;
+}
+
+/** Build the browser URL after the embedded client opens an agent detail. */
+export function replaceWorkspaceAgentRoute(
+  currentUrl: URL,
+  branch: string | null,
+  agent: string | null,
+): string {
+  const next = new URL(currentUrl.toString());
+  const normalizedBranch = branch?.trim() ?? "";
+  const normalizedAgent = agent?.trim() ?? "";
+  if (normalizedBranch && isSafeWorkspaceBranchRoute(normalizedBranch)) {
+    next.searchParams.set("branch", normalizedBranch);
+  } else if (!normalizedBranch) {
+    next.searchParams.delete("branch");
+  }
+  if (normalizedAgent && isSafeWorkspaceBranchRoute(normalizedAgent)) {
+    next.searchParams.set("agent", normalizedAgent);
+  } else {
+    next.searchParams.delete("agent");
+  }
+  return `${next.pathname}${next.search}${next.hash}`;
+}
 
 /** A non-negative whole number arriving over `postMessage`, where anything is
  *  possible. */
@@ -329,6 +383,8 @@ export function buildOrcaIframeSource({
   memberId,
   settingsOnly,
   cursorAvailable,
+  branch,
+  agent,
 }: {
   webClientPath: string;
   pairingCode: string;
@@ -348,6 +404,10 @@ export function buildOrcaIframeSource({
   /** Whether this member has a linked Cursor credential — gates offering it
    *  in the IDE's in-chat provider switcher. */
   cursorAvailable?: boolean;
+  /** Optional raw branch name to select after the embedded workspace loads. */
+  branch?: string;
+  /** Optional managed agent session to open in the selected branch. */
+  agent?: string;
 }) {
   const fragment = new URLSearchParams({
     pairing: pairingCode,
@@ -370,6 +430,12 @@ export function buildOrcaIframeSource({
   if (cursorAvailable) {
     fragment.set("codevCursorAvailable", "1");
   }
+  if (branch) {
+    fragment.set("codevBranch", branch);
+  }
+  if (agent) {
+    fragment.set("codevAgent", agent);
+  }
   return `${webClientPath}#${fragment.toString()}`;
 }
 
@@ -383,11 +449,15 @@ export function buildOrcaPendingIframeSource({
   projectName,
   defaultAgent,
   cursorAvailable,
+  branch,
+  agent,
 }: {
   projectKind: "git" | "folder";
   projectName?: string;
   defaultAgent?: OrcaDefaultAgent;
   cursorAvailable?: boolean;
+  branch?: string;
+  agent?: string;
 }) {
   const fragment = new URLSearchParams({
     codev: "1",
@@ -402,6 +472,12 @@ export function buildOrcaPendingIframeSource({
   }
   if (cursorAvailable) {
     fragment.set("codevCursorAvailable", "1");
+  }
+  if (branch) {
+    fragment.set("codevBranch", branch);
+  }
+  if (agent) {
+    fragment.set("codevAgent", agent);
   }
   return `${ORCA_WEB_CLIENT_PATH}#${fragment.toString()}`;
 }
@@ -663,6 +739,8 @@ export function OrcaWorkspace({
   canInvite,
   defaultAgent,
   cursorAvailable,
+  initialBranch,
+  initialAgent,
   providerPreflight,
 }: {
   workspaceId: string;
@@ -672,6 +750,10 @@ export function OrcaWorkspace({
   /** Whether this member has a linked Cursor credential — gates offering it
    *  in the IDE's in-chat provider switcher. */
   cursorAvailable?: boolean;
+  /** Optional branch route selected by the workspace page. */
+  initialBranch?: string;
+  /** Optional managed agent route selected by the workspace page. */
+  initialAgent?: string;
   /** Which agent is about to run, and any the member must still connect for
    *  workspaces — shown on the startup screen, and kept up when actionable. */
   providerPreflight?: WorkspaceProviderPreflight;
@@ -733,8 +815,10 @@ export function OrcaWorkspace({
         ...(repository ? { projectName: repository } : {}),
         ...(defaultAgent ? { defaultAgent } : {}),
         ...(cursorAvailable ? { cursorAvailable } : {}),
+        ...(initialBranch ? { branch: initialBranch } : {}),
+        ...(initialAgent ? { agent: initialAgent } : {}),
       }),
-    [repository, defaultAgent, cursorAvailable],
+    [repository, defaultAgent, cursorAvailable, initialAgent, initialBranch],
   );
 
   // Hand the pairing to the embedded IDE. Safe to call repeatedly and before
@@ -963,6 +1047,37 @@ export function OrcaWorkspace({
         // The embedded cover offers "Retry now" when this page reports the
         // runtime as unreachable; the poll is ours to restart.
         retryRef.current();
+      } else if (event.data.type === "codev:branch-route") {
+        const branch = event.data.branch?.trim() ?? "";
+        if (branch && !isSafeWorkspaceBranchRoute(branch)) {
+          return;
+        }
+        window.history.replaceState(
+          window.history.state,
+          "",
+          replaceWorkspaceBranchRoute(
+            new URL(window.location.href),
+            branch || null,
+          ),
+        );
+      } else if (event.data.type === "codev:agent-route") {
+        const branch = event.data.branch?.trim() ?? "";
+        const agent = event.data.agent?.trim() ?? "";
+        if (
+          (branch && !isSafeWorkspaceBranchRoute(branch)) ||
+          (agent && !isSafeWorkspaceBranchRoute(agent))
+        ) {
+          return;
+        }
+        window.history.replaceState(
+          window.history.state,
+          "",
+          replaceWorkspaceAgentRoute(
+            new URL(window.location.href),
+            branch || null,
+            agent || null,
+          ),
+        );
       } else if (event.data.type === "codev:provider-readiness-refresh") {
         refreshProviderPreflight();
       } else if (event.data.type === "codev:startup-failure") {

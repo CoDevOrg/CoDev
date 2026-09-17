@@ -1072,11 +1072,25 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 .codev-mc-card.is-done {
   border-color: rgba(120, 200, 150, 0.3);
 }
+.codev-mc-card.is-failed {
+  border-color: rgba(224, 128, 92, 0.55);
+  background: rgba(224, 128, 92, 0.08);
+}
+.codev-mc-card.is-paused,
+.codev-mc-card.is-stopped,
+.codev-mc-card.is-starting {
+  border-color: rgba(155, 161, 171, 0.24);
+}
 
 .codev-mc-card-open {
   display: block;
   width: 100%;
+  min-height: 44px;
   padding: 0.7rem 0.72rem 0.6rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
   cursor: pointer;
   text-align: left;
 }
@@ -1165,6 +1179,15 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   color: #93d3a8;
   background: rgba(120, 200, 150, 0.16);
 }
+.codev-mc-phase.is-failed {
+  color: #f2a58a;
+  background: rgba(224, 128, 92, 0.2);
+}
+.codev-mc-phase.is-paused,
+.codev-mc-phase.is-stopped,
+.codev-mc-phase.is-starting {
+  color: #b7c0cf;
+}
 
 .codev-mc-title {
   margin: 0.5rem 0 0.3rem;
@@ -1227,6 +1250,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 
 .codev-mc-card-actions button {
   flex: 1;
+  min-height: 44px;
   padding: 6px 8px;
   background: transparent;
   border: 0;
@@ -1252,6 +1276,14 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 .codev-mc-card-actions button:disabled {
   opacity: 0.3;
   cursor: default;
+}
+
+.codev-mc-card-actions button:focus-visible,
+.codev-mc-drawer button:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid var(--codev-gold-500, #f2604a);
+  outline-offset: -2px;
 }
 
 /* Detail drawer ---------------------------------------------------------- */
@@ -1320,8 +1352,8 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 
 .codev-mc-drawer-close {
   flex: none;
-  width: 24px;
-  height: 24px;
+  width: 44px;
+  height: 44px;
   border-radius: 6px;
   border: 1px solid rgba(237, 238, 240, 0.14);
   background: transparent;
@@ -1368,6 +1400,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 
 .codev-mc-ghost {
   flex: 1;
+  min-height: 44px;
   padding: 7px 10px;
   border-radius: 8px;
   border: 1px solid rgba(237, 238, 240, 0.16);
@@ -1417,6 +1450,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 }
 
 .codev-mc-quick-chip {
+  min-height: 44px;
   padding: 4px 9px;
   border-radius: 999px;
   border: 1px solid rgba(237, 238, 240, 0.16);
@@ -1447,6 +1481,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 .codev-mc-steer-input {
   flex: 1;
   min-width: 0;
+  min-height: 44px;
   padding: 7px 10px;
   border-radius: 8px;
   border: 1px solid rgba(237, 238, 240, 0.18);
@@ -1462,6 +1497,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 
 .codev-mc-steer-send {
   flex: none;
+  min-height: 44px;
   padding: 7px 14px;
   border-radius: 8px;
   border: 0;
@@ -1482,6 +1518,107 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   font-size: 10px;
   line-height: 1.5;
   opacity: 0.55;
+}
+
+.codev-mc-access,
+.codev-mc-conversation {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid rgba(237, 238, 240, 0.1);
+}
+
+.codev-mc-access h5,
+.codev-mc-conversation h5 {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.codev-mc-access dl {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+}
+
+.codev-mc-access dl > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: baseline;
+  font-size: 10.5px;
+}
+
+.codev-mc-access dt {
+  opacity: 0.62;
+}
+
+.codev-mc-access dd {
+  margin: 0;
+  max-width: 62%;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.codev-mc-access dd[title] {
+  color: #e8d5a8;
+}
+
+.codev-mc-conversation-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.codev-mc-conversation-head > span {
+  font-size: 10px;
+  opacity: 0.55;
+}
+
+.codev-mc-conversation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  max-height: 18rem;
+  overflow-y: auto;
+}
+
+.codev-mc-conversation-list article {
+  padding: 0.5rem 0.55rem;
+  border-radius: 8px;
+  background: rgba(237, 238, 240, 0.045);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.codev-mc-conversation-list article > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.codev-mc-conversation-list article > div span {
+  opacity: 0.55;
+  text-transform: capitalize;
+}
+
+.codev-mc-conversation-list article p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.codev-mc-conversation-list article p + p {
+  margin-top: 0.35rem;
+  opacity: 0.72;
 }
 
 /* ---------------------------------------------------------------------------

@@ -1,1 +1,0 @@
-import{sn as e}from"./web-index-msQ2CV7V.js";function t(t){return e(t)}function n({pr:e}){return e?t(e):null}export{n,t};

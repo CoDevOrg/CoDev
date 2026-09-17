@@ -29,6 +29,8 @@ export function WorkspaceHome({
   providerPreflight,
   canInvite,
   cursorAvailable,
+  initialBranch,
+  initialAgent,
 }: {
   workspaceId: string;
   repository: string | null;
@@ -39,6 +41,10 @@ export function WorkspaceHome({
   /** Whether this member has a linked Cursor credential — gates offering it
    *  in the IDE's in-chat provider switcher. */
   cursorAvailable: boolean;
+  /** Optional branch route carried into the embedded IDE's startup fragment. */
+  initialBranch?: string;
+  /** Optional managed agent route carried into the embedded IDE. */
+  initialAgent?: string;
 }) {
   // Codex/Claude/Cursor chat lives inside the IDE itself (Orca's native agent
   // panes), so the IDE is the workspace's only surface. The old standalone
@@ -52,6 +58,8 @@ export function WorkspaceHome({
       providerPreflight={providerPreflight}
       repository={repository}
       workspaceId={workspaceId}
+      {...(initialBranch ? { initialBranch } : {})}
+      {...(initialAgent ? { initialAgent } : {})}
       {...(defaultAgent ? { defaultAgent } : {})}
     />
   );

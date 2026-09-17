@@ -53,3 +53,51 @@ for (const colorScheme of ["light", "dark"] as const) {
     });
   });
 }
+
+test("pending workspaces open on the branches surface, not the terminal", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto(
+    "/orca/web-index.html#codev=1&codevPending=1&codevProjectKind=folder",
+  );
+
+  const branches = page.locator('[data-codev-branches="true"]');
+  await expect(branches).toBeVisible({ timeout: 20_000 });
+  await expect(
+    branches.getByRole("heading", { name: "Branches", exact: true }),
+  ).toBeVisible();
+  await expect(
+    branches.getByText(
+      "Every active branch has one shared place for code, chat, agents, and changes.",
+    ),
+  ).toBeVisible();
+  await expect(
+    branches.getByRole("button", { name: "Refresh", exact: true }),
+  ).toBeVisible();
+
+  // The branch overview owns the first surface. The persistent branch header
+  // and terminal disclosure only exist after a branch is selected.
+  await expect(
+    page.getByRole("button", { name: "Terminal", exact: true }),
+  ).toHaveCount(0);
+  await expect(page.locator('[data-codev-chat-first="true"]')).toHaveCount(0);
+
+  await expect(
+    branches.getByRole("button", { name: "Refresh", exact: true }),
+  ).toBeDisabled();
+  const focusTarget = branches.locator("button:not([disabled])").first();
+  await expect(focusTarget).toBeVisible();
+  await focusTarget.focus();
+  await expect(focusTarget).toBeFocused();
+});
+
+test("direct branch routes survive web-client bootstrap", async ({ page }) => {
+  await page.goto(
+    "/orca/web-index.html#codev=1&codevPending=1&codevProjectKind=folder&codevBranch=feature%2Fchat-first",
+  );
+
+  await expect
+    .poll(() => page.evaluate(() => window.__CODEV_BRANCH__))
+    .toBe("feature/chat-first");
+});

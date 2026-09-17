@@ -94,7 +94,10 @@ describe("shared session view", () => {
       streamCursor: 1,
     });
     expect(view.ownerName).toBe("Alex Morgan");
+    expect(view.worktreeStatus).toBe("unknown");
+    expect(view.lastError).toBeNull();
     expect(view.activeTurnAuthorName).toBe("Alex Morgan");
+    expect(view.lastActivityAt).toBe("2026-07-30T12:02:00.000Z");
     expect(view.worktreeName).toBe("agent-alex");
     expect(view.attributedQueue).toEqual([
       expect.objectContaining({

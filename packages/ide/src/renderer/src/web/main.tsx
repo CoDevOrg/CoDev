@@ -20,7 +20,11 @@ import {
 import { installWebPreloadApi } from './web-preload-api'
 import { I18nProvider } from '../i18n/I18nProvider'
 import { translate } from '../i18n/i18n'
-import { readCodevBootstrap } from './codev-bootstrap'
+import {
+  readCodevAgentSelection,
+  readCodevBootstrap,
+  readCodevBranchSelection
+} from './codev-bootstrap'
 import { detachStoredEnvironmentForPendingShell } from './codev-pending-shell'
 import {
   parseCodevPairMessage,
@@ -34,6 +38,8 @@ const App = lazy(() => import('../App'))
 
 function WebRoot(): React.JSX.Element {
   const codevBootstrap = useMemo(() => readCodevBootstrap(window.location), [])
+  const codevBranch = useMemo(() => readCodevBranchSelection(window.location), [])
+  const codevAgent = useMemo(() => readCodevAgentSelection(window.location), [])
   // CoDev opens this client the instant the workspace route mounts, before its
   // EC2 host is awake: the fragment then says `codev=1&codevPending=1` and the
   // real pairing + project path arrive later over a `codev:pair` message.
@@ -53,6 +59,8 @@ function WebRoot(): React.JSX.Element {
   window.__CODEV_DEFAULT_AGENT__ = codevBoot?.defaultAgent
   window.__CODEV_MEMBER_ID__ = codevBoot?.memberId
   window.__CODEV_SETTINGS_ONLY__ = codevBoot?.settingsOnly === true
+  window.__CODEV_BRANCH__ = codevBranch ?? undefined
+  window.__CODEV_AGENT__ = codevAgent ?? undefined
 
   // Before the preload API installs: a waking workspace must not connect to
   // the pairing some other workspace left in browser-wide storage.

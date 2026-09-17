@@ -52,6 +52,8 @@ import {
 import { isCodevEmbedded } from './web/codev-embedded'
 import { CodevCenterUnderlay } from './components/codev/CodevCenterUnderlay'
 import { CodevChatFirstCover } from './components/codev/CodevChatFirstCover'
+import { CodevBranchesOverview } from './components/codev/CodevBranchesOverview'
+import { CodevBranchWorkspaceHeader } from './components/codev/CodevBranchWorkspaceHeader'
 import { reportCodevStartupFailure } from './web/codev-host-state'
 import { isCodevPendingShell } from './web/codev-pending-shell'
 import { codevChatTabIdInState } from './web/codev-center-chat-tab'
@@ -534,6 +536,14 @@ function App(): React.JSX.Element {
     // default native chat, so creating an agent cannot recursively launch more
     // local sessions in its control worktree.
     const activeWorktree = useAppStore.getState().getKnownWorktreeById(activeWorktreeId)
+    const requestedBranch = window.__CODEV_BRANCH__?.trim()
+    const activeBranch = activeWorktree?.branch.trim().replace(/^refs\/heads\//, '')
+    const selectedRouteBranch = requestedBranch?.replace(/^refs\/heads\//, '')
+    // A direct branch URL must not briefly start chat in the bootstrap's main
+    // checkout before the branch overview activates the requested worktree.
+    if (selectedRouteBranch && activeBranch !== selectedRouteBranch) {
+      return
+    }
     if (
       activeWorktree &&
       activeWorktree.path !== window.__CODEV_PROJECT_PATH__ &&
@@ -2168,93 +2178,97 @@ function App(): React.JSX.Element {
                         )}
                         {/* CoDev: inert while a team channel covers it, so the
                             hidden chat is not reachable by Tab or a screen reader. */}
-                        <CodevCenterUnderlay className="flex flex-1 min-w-0 min-h-0 flex-col">
-                          {shouldMountTerminalWorkbench ? (
-                            <div
-                              className={
-                                !terminalWorkbenchVisible
-                                  ? 'hidden flex-1 min-w-0 min-h-0'
-                                  : 'flex flex-1 min-w-0 min-h-0'
-                              }
-                            >
-                              <Suspense fallback={null}>
-                                <RecoverableRenderErrorBoundary
-                                  boundaryId="terminal.workbench"
-                                  surface="terminal-workbench"
-                                  resetKey="terminal"
-                                  title={translate(
-                                    'auto.App.5a9519aef0',
-                                    'The workspace workbench hit an error.'
-                                  )}
-                                  description={translate(
-                                    'auto.App.98d4ea2823',
-                                    'Terminal, browser, or editor rendering failed in this workspace. Retry to remount it.'
-                                  )}
-                                >
-                                  <Terminal />
-                                </RecoverableRenderErrorBoundary>
-                              </Suspense>
-                            </div>
-                          ) : null}
-                          {isCodevEmbedded() &&
-                          activeView === 'terminal' &&
-                          activeWorktreeId !== null &&
-                          !creationLayoutActive &&
-                          activeCodevChatTabId === null ? (
-                            <CodevChatFirstCover
-                              managed={!activeCodevPrimaryChat}
-                              error={
-                                activeCodevPrimaryChat && activeCodevChatLaunching
-                                  ? null
-                                  : codevChatLaunchError
-                              }
-                              onRetry={() => {
-                                codevChatLaunchWorktreeRef.current = null
-                                setCodevChatLaunchError(null)
-                                setCodevChatLaunchAttempt((attempt) => attempt + 1)
-                              }}
-                            />
-                          ) : null}
-                          <Suspense fallback={null}>
-                            <RecoverableRenderErrorBoundary
-                              boundaryId={`page.${activeView}`}
-                              surface="page"
-                              resetKey={activeView}
-                              title={translate('auto.App.b7a714db1e', 'This page hit an error.')}
-                              description={translate(
-                                'auto.App.03a14f6b5b',
-                                'Retry the page or navigate to another Orca surface.'
-                              )}
-                            >
-                              {activeView === 'settings' ? <Settings /> : null}
-                              {activeView === 'skills' ? <SkillsPage /> : null}
-                              {activeView === 'automations' ? <AutomationsPage /> : null}
-                              {activeView === 'activity' ? <ActivityPrototypePage /> : null}
-                              {activeView === 'space' ? <WorkspaceSpacePage /> : null}
-                              {activeView === 'terminal' &&
-                              creationLayoutActive &&
-                              activePendingCreationId ? (
-                                <WorktreeCreationPanel
-                                  creationId={activePendingCreationId}
-                                  reserveCollapsedSidebarHeaderSpace={
-                                    leftTitlebarChromeLayout.isFloating
-                                  }
-                                />
-                              ) : null}
-                              {activeView === 'terminal' &&
-                              !activeWorktreeId &&
-                              !creationLayoutActive ? (
-                                // CoDev has no worktree list in the sidebar and no
-                                // "+" menu, so Landing's advice is unreachable.
-                                isCodevEmbedded() ? (
-                                  <CodevAwaitingWorkspaceCover />
-                                ) : (
-                                  <Landing />
-                                )
-                              ) : null}
-                            </RecoverableRenderErrorBoundary>
-                          </Suspense>
-                        </CodevCenterUnderlay>
+                        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                          <CodevBranchWorkspaceHeader />
+                          <CodevCenterUnderlay className="flex flex-1 min-w-0 min-h-0 flex-col">
+                            {shouldMountTerminalWorkbench ? (
+                              <div
+                                className={
+                                  !terminalWorkbenchVisible
+                                    ? 'hidden flex-1 min-w-0 min-h-0'
+                                    : 'flex flex-1 min-w-0 min-h-0'
+                                }
+                              >
+                                <Suspense fallback={null}>
+                                  <RecoverableRenderErrorBoundary
+                                    boundaryId="terminal.workbench"
+                                    surface="terminal-workbench"
+                                    resetKey="terminal"
+                                    title={translate(
+                                      'auto.App.5a9519aef0',
+                                      'The workspace workbench hit an error.'
+                                    )}
+                                    description={translate(
+                                      'auto.App.98d4ea2823',
+                                      'Terminal, browser, or editor rendering failed in this workspace. Retry to remount it.'
+                                    )}
+                                  >
+                                    <Terminal />
+                                  </RecoverableRenderErrorBoundary>
+                                </Suspense>
+                              </div>
+                            ) : null}
+                            {isCodevEmbedded() &&
+                            activeView === 'terminal' &&
+                            activeWorktreeId !== null &&
+                            !creationLayoutActive &&
+                            activeCodevChatTabId === null ? (
+                              <CodevChatFirstCover
+                                managed={!activeCodevPrimaryChat}
+                                error={
+                                  activeCodevPrimaryChat && activeCodevChatLaunching
+                                    ? null
+                                    : codevChatLaunchError
+                                }
+                                onRetry={() => {
+                                  codevChatLaunchWorktreeRef.current = null
+                                  setCodevChatLaunchError(null)
+                                  setCodevChatLaunchAttempt((attempt) => attempt + 1)
+                                }}
+                              />
+                            ) : null}
+                            <Suspense fallback={null}>
+                              <RecoverableRenderErrorBoundary
+                                boundaryId={`page.${activeView}`}
+                                surface="page"
+                                resetKey={activeView}
+                                title={translate('auto.App.b7a714db1e', 'This page hit an error.')}
+                                description={translate(
+                                  'auto.App.03a14f6b5b',
+                                  'Retry the page or navigate to another Orca surface.'
+                                )}
+                              >
+                                {activeView === 'settings' ? <Settings /> : null}
+                                {activeView === 'skills' ? <SkillsPage /> : null}
+                                {activeView === 'automations' ? <AutomationsPage /> : null}
+                                {activeView === 'activity' ? <ActivityPrototypePage /> : null}
+                                {activeView === 'space' ? <WorkspaceSpacePage /> : null}
+                                {activeView === 'terminal' &&
+                                creationLayoutActive &&
+                                activePendingCreationId ? (
+                                  <WorktreeCreationPanel
+                                    creationId={activePendingCreationId}
+                                    reserveCollapsedSidebarHeaderSpace={
+                                      leftTitlebarChromeLayout.isFloating
+                                    }
+                                  />
+                                ) : null}
+                                {activeView === 'terminal' &&
+                                !activeWorktreeId &&
+                                !creationLayoutActive ? (
+                                  // CoDev has no worktree list in the sidebar and no
+                                  // "+" menu, so Landing's advice is unreachable.
+                                  isCodevEmbedded() ? (
+                                    <CodevAwaitingWorkspaceCover />
+                                  ) : (
+                                    <Landing />
+                                  )
+                                ) : null}
+                              </RecoverableRenderErrorBoundary>
+                            </Suspense>
+                          </CodevCenterUnderlay>
+                        </div>
+                        <CodevBranchesOverview />
                         {showFloatingTerminalButton ? (
                           <FloatingTerminalToggleButton
                             open={floatingTerminalOpen}

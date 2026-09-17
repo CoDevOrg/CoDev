@@ -2971,6 +2971,7 @@ function TerminalPane(
             <div className="absolute inset-0 z-10 flex min-h-0 min-w-0 bg-background">
               <NativeChatView
                 terminalTabId={tabId}
+                worktreeId={worktreeId}
                 paneKey={makePaneKey(tabId, chatPane.leafId)}
                 targetPtyId={chatPanePtyId}
                 launchAgent={chatPaneLaunchAgent}
@@ -3108,22 +3109,22 @@ function TerminalPane(
         onRenameBlur={handleRenameBlur}
       />
       {managedPanes.map((pane) => {
-            const recoveryState = ptyRecoveryStatesByPaneId[pane.id]
-            if (!recoveryState) {
-              return null
-            }
-            return createPortal(
-              <TerminalRemoteRuntimeReconnectBanner
-                key={`remote-runtime-reconnect-${pane.id}-${recoveryState.epoch}`}
-                phase={recoveryState.phase}
-                onReconnect={() => {
-                  paneTransportsRef.current.get(pane.id)?.retryRecovery?.()
-                }}
-              />,
-              pane.container,
-              `remote-runtime-reconnect-${pane.id}`
-            )
-          })}
+        const recoveryState = ptyRecoveryStatesByPaneId[pane.id]
+        if (!recoveryState) {
+          return null
+        }
+        return createPortal(
+          <TerminalRemoteRuntimeReconnectBanner
+            key={`remote-runtime-reconnect-${pane.id}-${recoveryState.epoch}`}
+            phase={recoveryState.phase}
+            onReconnect={() => {
+              paneTransportsRef.current.get(pane.id)?.retryRecovery?.()
+            }}
+          />,
+          pane.container,
+          `remote-runtime-reconnect-${pane.id}`
+        )
+      })}
       {managedPanes.map((pane) => {
         // Why: pane IDs collide across tabs, so key overlays by the transport's actual ptyId to avoid wrong-pane banners.
         const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId()

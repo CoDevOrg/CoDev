@@ -37,8 +37,12 @@ export function filterCodevActivityEvents(
 ): CodevActivityEvent[] {
   const needle = query.trim().toLowerCase()
   return events.filter((event) => {
-    if (kind !== 'all' && event.jump?.kind !== kind) return false
-    if (!needle) return true
+    if (kind !== 'all' && event.jump?.kind !== kind) {
+      return false
+    }
+    if (!needle) {
+      return true
+    }
     return (
       event.summary.toLowerCase().includes(needle) ||
       event.type.toLowerCase().includes(needle) ||
@@ -55,6 +59,7 @@ export function CodevActivityAuditViewPanel({
   query,
   busy,
   jumped,
+  branchLabel,
   onKindChange,
   onQueryChange,
   onRefresh,
@@ -66,6 +71,7 @@ export function CodevActivityAuditViewPanel({
   query: string
   busy: string
   jumped: string
+  branchLabel?: string | null
   onKindChange: (kind: 'all' | CodevActivityJumpKind) => void
   onQueryChange: (query: string) => void
   onRefresh: () => void
@@ -84,16 +90,24 @@ export function CodevActivityAuditViewPanel({
             CoDev · audit
           </p>
           <h2 id="codev-activity-heading" className="text-sm font-semibold">
-            Workspace activity
+            {branchLabel ? `Workspace activity · ${branchLabel}` : 'Workspace activity'}
           </h2>
         </div>
-        <Button type="button" size="sm" variant="ghost" disabled={busy === 'refresh'} onClick={onRefresh}>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={busy === 'refresh'}
+          onClick={onRefresh}
+        >
           {busy === 'refresh' ? 'Refreshing…' : 'Refresh activity'}
         </Button>
       </div>
       <p className="mb-2 text-[11px] text-muted-foreground" role="status">
         {connected
-          ? 'Durable workspace actions appear here. Filter an event, then jump to Explorer, Agents, or Checks.'
+          ? branchLabel
+            ? `Branch context: ${branchLabel}. Durable workspace actions appear here; file jumps open in this branch.`
+            : 'Durable workspace actions appear here. Filter an event, then jump to Explorer, Agents, or Checks.'
           : 'Waiting for the workspace-bound CoDev bridge.'}
       </p>
       <div className="mb-2 flex flex-col gap-2">
@@ -129,7 +143,11 @@ export function CodevActivityAuditViewPanel({
           {jumped}
         </p>
       ) : null}
-      <div className="min-h-0 flex-1 overflow-auto" role="list" aria-label="Workspace activity events">
+      <div
+        className="scrollbar-sleek min-h-0 flex-1 overflow-auto"
+        role="list"
+        aria-label="Workspace activity events"
+      >
         {rows.length === 0 ? (
           <p className="text-xs text-muted-foreground" role="status">
             No matching activity events.

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { createElement } from "react";
 
@@ -9,6 +9,8 @@ import {
   createOrcaManagedProposal,
   discardOrcaManagedProposal,
   isActionableOrcaConnectStatus,
+  replaceWorkspaceAgentRoute,
+  replaceWorkspaceBranchRoute,
   WorkspaceTopBar,
 } from "./orca-workspace";
 
@@ -281,6 +283,41 @@ describe("buildOrcaIframeSource", () => {
 
     expect(fragment.get("codevDefaultAgent")).toBe("codex");
   });
+
+  it("carries an optional branch route without putting it in the query string", () => {
+    const source = buildOrcaIframeSource({
+      webClientPath: "/orca/web-index.html",
+      pairingCode: "secret pairing offer",
+      workspacePath:
+        "/srv/codev/workspaces/c1f9fe13-6881-44a6-adbd-96bc5a946afa",
+      projectKind: "git",
+      branch: "feature/chat-first",
+    });
+    const url = new URL(source, "https://codev.example");
+
+    expect(url.search).toBe("");
+    expect(new URLSearchParams(url.hash.slice(1)).get("codevBranch")).toBe(
+      "feature/chat-first",
+    );
+  });
+
+  it("carries the selected agent alongside its branch", () => {
+    const source = buildOrcaIframeSource({
+      webClientPath: "/orca/web-index.html",
+      pairingCode: "secret pairing offer",
+      workspacePath:
+        "/srv/codev/workspaces/c1f9fe13-6881-44a6-adbd-96bc5a946afa",
+      projectKind: "git",
+      branch: "feature/chat-first",
+      agent: "session-1",
+    });
+    const fragment = new URLSearchParams(
+      new URL(source, "https://codev.example").hash.slice(1),
+    );
+
+    expect(fragment.get("codevBranch")).toBe("feature/chat-first");
+    expect(fragment.get("codevAgent")).toBe("session-1");
+  });
 });
 
 describe("buildOrcaPendingIframeSource", () => {
@@ -318,6 +355,85 @@ describe("buildOrcaPendingIframeSource", () => {
     expect(fragment.get("codevProjectName")).toBeNull();
     expect(fragment.get("codevDefaultAgent")).toBeNull();
     expect(fragment.get("codevCursorAvailable")).toBeNull();
+  });
+
+  it("keeps the branch route while the runtime is still starting", () => {
+    const fragment = new URLSearchParams(
+      new URL(
+        buildOrcaPendingIframeSource({
+          projectKind: "git",
+          branch: "feature/chat-first",
+        }),
+        "https://codev.example",
+      ).hash.slice(1),
+    );
+
+    expect(fragment.get("codevBranch")).toBe("feature/chat-first");
+  });
+
+  it("keeps the selected agent while the runtime is still starting", () => {
+    const fragment = new URLSearchParams(
+      new URL(
+        buildOrcaPendingIframeSource({
+          projectKind: "git",
+          branch: "feature/chat-first",
+          agent: "session-1",
+        }),
+        "https://codev.example",
+      ).hash.slice(1),
+    );
+
+    expect(fragment.get("codevAgent")).toBe("session-1");
+  });
+});
+
+describe("replaceWorkspaceBranchRoute", () => {
+  it("keeps the workspace route and unrelated URL state while selecting a branch", () => {
+    const current = new URL(
+      "https://codev.example/workspaces/workspace-1?tab=activity&branch=old#shell",
+    );
+
+    expect(replaceWorkspaceBranchRoute(current, "feature/chat-first")).toBe(
+      "/workspaces/workspace-1?tab=activity&branch=feature%2Fchat-first#shell",
+    );
+  });
+
+  it("removes the branch selection when returning to the branch overview", () => {
+    const current = new URL(
+      "https://codev.example/workspaces/workspace-1?tab=activity&branch=feature%2Fold#shell",
+    );
+
+    expect(replaceWorkspaceBranchRoute(current, null)).toBe(
+      "/workspaces/workspace-1?tab=activity#shell",
+    );
+  });
+
+  it("does not put control characters or oversized values into the browser URL", () => {
+    const current = new URL(
+      "https://codev.example/workspaces/workspace-1?branch=feature%2Fold",
+    );
+
+    expect(replaceWorkspaceBranchRoute(current, "feature/\u0007bad")).toBe(
+      "/workspaces/workspace-1",
+    );
+    expect(replaceWorkspaceBranchRoute(current, "x".repeat(256))).toBe(
+      "/workspaces/workspace-1",
+    );
+  });
+
+  it("preserves branch context while opening and closing an agent", () => {
+    const current = new URL(
+      "https://codev.example/workspaces/workspace-1?tab=activity&branch=feature%2Fold",
+    );
+
+    expect(
+      replaceWorkspaceAgentRoute(current, "feature/chat-first", "session-1"),
+    ).toBe(
+      "/workspaces/workspace-1?tab=activity&branch=feature%2Fchat-first&agent=session-1",
+    );
+    expect(
+      replaceWorkspaceAgentRoute(current, "feature/chat-first", null),
+    ).toBe("/workspaces/workspace-1?tab=activity&branch=feature%2Fchat-first");
   });
 });
 

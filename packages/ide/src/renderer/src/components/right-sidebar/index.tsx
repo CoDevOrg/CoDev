@@ -53,6 +53,7 @@ import {
 } from './right-sidebar-width'
 import { isCodevEmbedded } from '@/web/codev-embedded'
 import { translate } from '@/i18n/i18n'
+import { codevBranchLabel } from '../codev/codev-branches-model'
 import { RightSidebarPanelContent } from './right-sidebar-panel-content'
 import { useMeasuredWidth } from './right-sidebar-measured-width'
 import { normalizeRightSidebarRoute } from '@/store/right-sidebar-route'
@@ -95,6 +96,7 @@ function RightSidebarInner(): React.JSX.Element {
   const activeWorktree = useAppStore((s) =>
     activeWorktreeId ? (s.getKnownWorktreeById(activeWorktreeId) ?? null) : null
   )
+  const codevBranchContextLabel = activeWorktree ? codevBranchLabel(activeWorktree, null) : ''
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
   const activeWorkspaceScope = parseWorkspaceKey(activeWorktreeId ?? '')
   const isFolderWorkspace = activeWorkspaceScope?.type === 'folder'
@@ -507,6 +509,20 @@ function RightSidebarInner(): React.JSX.Element {
             </TooltipProvider>
           </div>
         )}
+
+        {isCodevEmbedded() && activeWorktreeId && activeWorktree ? (
+          <div
+            className="flex min-h-9 shrink-0 items-center gap-2 border-b border-border/70 bg-background/40 px-3 text-xs text-muted-foreground"
+            data-codev-current-branch={activeWorktreeId}
+            aria-label={`Current branch: ${codevBranchContextLabel}`}
+          >
+            <GitBranch className="size-3.5 shrink-0" aria-hidden="true" />
+            <span className="shrink-0 font-medium">Branch</span>
+            <span className="min-w-0 truncate text-foreground" title={codevBranchContextLabel}>
+              {codevBranchContextLabel}
+            </span>
+          </div>
+        ) : null}
 
         {panelContent}
 

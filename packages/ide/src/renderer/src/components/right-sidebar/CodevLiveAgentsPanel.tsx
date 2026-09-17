@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
+import { useActiveWorktree, useAllWorktrees } from '@/store/selectors'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import {
   getCodevBridgeSnapshot,
@@ -9,21 +10,36 @@ import {
   subscribeCodevBridge
 } from '../../web/codev-bridge-singleton'
 import { describeAgentStopPlan, planAgentStop } from '../../web/codev-agent-stop-plan'
-import { getCodevProposalWorktreeId } from '../../web/codev-proposal-discard'
 import { consumeCodevSurfaceFocus, useCodevSurfaceFocus } from '../../web/codev-surface-focus'
+import { setCodevAgentSelection, setCodevBranchSelection } from '../codev/codev-branches-view'
+import { codevBranchLabel, findCodevWorktreeForManagedId } from '../codev/codev-branches-model'
 import { CodevMissionControlView } from './CodevMissionControlView'
+import type { CodevSharedSessionView } from './codev-shared-session-model'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { Worktree } from '../../../../shared/types'
+import type { CodevWorkboardSnapshot } from '../sidebar/CodevWorkboardView'
+import { reconcileCodevStatus } from '../codev/codev-status-model'
 import {
   attachMissionControlHolds,
   EMPTY_MISSION_CONTROL_COORDINATION,
+  distinctLocalAgentEntries,
   mergeMissionControlAgents,
-  missionControlPhaseFromStatus,
+  missionControlPhaseFromState,
   summarizeAgentActivity,
+  type MissionControlPermissions,
   type MissionControlAgent,
   type MissionControlCoordination,
   type MissionControlFeedHealth,
   type MissionControlPendingAction,
   type MissionControlSlotUsage
 } from './codev-mission-control-model'
+import {
+  localAgentTabsWithoutStatus,
+  resolveLocalStatusAgent,
+  resolveLocalTabAgent,
+  tabIdFromPaneKey,
+  type MissionControlTab
+} from './codev-local-agent-tabs'
 
 /**
  * Mission Control container.
@@ -46,21 +62,9 @@ import {
 const REFRESH_MS = 5_000
 const TICK_MS = 1_000
 
-type WorkboardSlot = {
-  occupied?: boolean
-  sessionId?: string | null
-  worktreeId?: string | null
-  assignment?: string
-  owner?: string
-  provider?: string
-  status?: string
-  currentTask?: string
-  elapsed?: string
-}
-
-type WorkboardSnapshot = {
+type SharedSessionSnapshot = {
   viewer?: { id?: string; name?: string; canCoSteer?: boolean }
-  slots?: WorkboardSlot[]
+  sharedSessions?: CodevSharedSessionView[]
 }
 
 /** Stable per-name hue so a person keeps one colour across the panel. */
@@ -119,44 +123,294 @@ function isReleasableWorktree(worktreeId: string): boolean {
   return false
 }
 
-/** Map the backend sandbox id to the local Orca control/review worktree. */
-function findOrcaWorktreeForManagedId(managedWorktreeId: string): string | null {
-  const state = useAppStore.getState()
-  for (const worktrees of Object.values(state.worktreesByRepo)) {
-    for (const worktree of worktrees) {
-      if (getCodevProposalWorktreeId(worktree.path, worktree.comment) === managedWorktreeId) {
-        return worktree.id
-      }
+function parseActivityTimestamp(value: string | null | undefined): number | null {
+  if (!value) {
+    return null
+  }
+  const timestamp = Date.parse(value)
+  return Number.isFinite(timestamp) ? timestamp : null
+}
+
+function statusActivity(session: CodevSharedSessionView): string {
+  if (session.connectionBlocked) {
+    return session.connectionBlocked
+  }
+  if (session.session.state === 'failed') {
+    return session.lastError ?? 'The agent session failed. Retry or inspect the branch.'
+  }
+  if (session.session.state === 'interrupted') {
+    return 'The last turn was paused. Review the conversation before continuing.'
+  }
+  if (session.session.state === 'running') {
+    return session.activeTurnAuthorName
+      ? `${session.activeTurnAuthorName} is running a turn.`
+      : 'Running a CoDev turn.'
+  }
+  const queue = session.attributedQueue ?? session.session.queue
+  if (queue.length > 0) {
+    return `${queue.length === 1 ? 'Instruction' : 'Instructions'} queued.`
+  }
+  if (session.lastCompletedAction) {
+    return `Last action: ${session.lastCompletedAction.tool}.`
+  }
+  if (session.transcript.length > 0) {
+    return `${session.transcript.length} completed ${session.transcript.length === 1 ? 'turn' : 'turns'}.`
+  }
+  return 'Waiting for an instruction.'
+}
+
+function managedPermissions(
+  session: CodevSharedSessionView,
+  canCoSteer: boolean,
+  localWorktreeId: string | null
+): MissionControlPermissions {
+  const providerCanQueue = session.capabilities?.canQueue ?? true
+  const providerCanInterrupt = session.capabilities?.canInterrupt ?? true
+  const providerIssue =
+    session.connectionBlocked ??
+    (session.session.state === 'failed' ? (session.lastError ?? 'The agent session failed.') : null)
+  const canSteer = canCoSteer && providerCanQueue && !providerIssue
+  const canPause = canCoSteer && providerCanInterrupt && !providerIssue
+  return {
+    canView: true,
+    canSteer,
+    canPause,
+    canEdit: localWorktreeId !== null,
+    canPublish: localWorktreeId !== null,
+    canStop: canCoSteer,
+    ...(canSteer
+      ? {}
+      : {
+          steerReason: !canCoSteer
+            ? 'Co-steer permission is required to send instructions.'
+            : (providerIssue ??
+              session.capabilities?.queueUnavailable ??
+              'This provider cannot queue instructions.')
+        }),
+    ...(canPause
+      ? {}
+      : {
+          pauseReason: !canCoSteer
+            ? 'Co-steer permission is required to pause this agent.'
+            : (providerIssue ??
+              session.capabilities?.interruptUnavailable ??
+              'This provider cannot pause turns.')
+        }),
+    ...(localWorktreeId
+      ? {
+          publishReason: 'Review and publish this branch from Source Control.'
+        }
+      : {
+          editReason: 'The local branch workspace is still being prepared.',
+          publishReason: 'Wait for the local branch workspace before publishing.'
+        }),
+    ...(canCoSteer
+      ? {}
+      : { stopReason: 'Co-steer permission is required to stop a managed session.' })
+  }
+}
+
+function localPermissions(
+  worktreeId: string | null,
+  tabId: string | null
+): MissionControlPermissions {
+  return {
+    canView: true,
+    canSteer: false,
+    canPause: false,
+    canEdit: worktreeId !== null,
+    canPublish: worktreeId !== null,
+    canStop: tabId !== null,
+    steerReason: 'Open this chat to steer your agent directly.',
+    pauseReason: 'Open this chat to control the agent directly.',
+    ...(worktreeId
+      ? { publishReason: 'Review and publish this branch from Source Control.' }
+      : { editReason: 'The branch workspace is not available.' }),
+    ...(tabId ? {} : { stopReason: 'This chat does not have a closable tab.' })
+  }
+}
+
+function toManagedAgent(
+  session: CodevSharedSessionView,
+  canCoSteer: boolean,
+  worktrees: readonly Worktree[]
+): MissionControlAgent {
+  const localWorktree = findCodevWorktreeForManagedId(worktrees, session.session.worktreeId)
+  const agentName = session.name.trim() || 'Agent session'
+  return {
+    key: `managed:${session.session.sessionId}`,
+    origin: 'managed',
+    sessionId: session.session.sessionId,
+    worktreeId: localWorktree?.id ?? null,
+    tabId: null,
+    branch: localWorktree?.branch ?? null,
+    ownerName: session.ownerName.trim() || 'Teammate',
+    ownerHue: hueFor(session.ownerName.trim() || session.session.sessionId),
+    providerLabel: providerLabel(session.session.provider),
+    model: session.model || session.session.model || null,
+    phase: missionControlPhaseFromState(session.session.state),
+    title: agentName,
+    agentName,
+    activity: statusActivity(session),
+    startedAt: null,
+    serverElapsed: null,
+    lastActivityAt: parseActivityTimestamp(session.lastActivityAt),
+    canSteer: managedPermissions(session, canCoSteer, localWorktree?.id ?? null).canSteer,
+    permissions: managedPermissions(session, canCoSteer, localWorktree?.id ?? null),
+    conversation: session,
+    holds: []
+  }
+}
+
+function worktreeForTab(
+  tabId: string | null,
+  tabsByWorktree: Readonly<Record<string, readonly MissionControlTab[]>>
+): string | null {
+  if (!tabId) {
+    return null
+  }
+  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
+    if (tabs.some((tab) => tab.id === tabId)) {
+      return worktreeId
     }
   }
   return null
 }
 
+function localAgent(
+  entry: AgentStatusEntry,
+  paneKey: string,
+  worktreeId: string,
+  worktree: Worktree | undefined,
+  tabId: string | null
+): MissionControlAgent {
+  const provider = resolveLocalStatusAgent(entry.agentType, entry.terminalTitle, entry.prompt)
+  const activity = entry.toolName
+    ? `${entry.toolName}${entry.toolInput ? ` · ${entry.toolInput}` : ''}`
+    : entry.lastAssistantMessage?.trim() ||
+      `${entry.state[0]?.toUpperCase() ?? ''}${entry.state.slice(1)}.`
+  const title = entry.prompt.trim() || entry.terminalTitle?.trim() || `${provider} chat`
+  const permissions = localPermissions(worktreeId, tabId)
+  return {
+    key: `local:${paneKey}`,
+    origin: 'you',
+    sessionId: null,
+    worktreeId,
+    tabId,
+    branch: worktree?.branch ?? null,
+    ownerName: 'You',
+    ownerHue: hueFor('You'),
+    providerLabel: providerLabel(provider),
+    model: entry.model ?? null,
+    phase: missionControlPhaseFromState(entry.state),
+    title,
+    agentName: providerLabel(provider),
+    activity,
+    startedAt: entry.stateStartedAt || null,
+    serverElapsed: null,
+    lastActivityAt: Number.isFinite(entry.updatedAt) ? entry.updatedAt : null,
+    canSteer: false,
+    permissions,
+    conversation: null,
+    holds: []
+  }
+}
+
+function buildLocalAgents(
+  agentStatusByPaneKey: Readonly<Record<string, AgentStatusEntry>>,
+  tabsByWorktree: Readonly<Record<string, readonly MissionControlTab[]>>,
+  worktrees: readonly Worktree[],
+  fallbackAgent: string
+): MissionControlAgent[] {
+  const worktreeById = new Map(worktrees.map((worktree) => [worktree.id, worktree]))
+  const statusEntries = distinctLocalAgentEntries(
+    Object.entries(agentStatusByPaneKey)
+      .filter(([, entry]) => Boolean(entry.agentType))
+      .sort(([, left], [, right]) => right.updatedAt - left.updatedAt)
+  )
+  const local = statusEntries.flatMap(([paneKey, entry]) => {
+    const tabId = entry.tabId ?? tabIdFromPaneKey(paneKey)
+    const worktreeId = entry.worktreeId ?? worktreeForTab(tabId, tabsByWorktree)
+    if (!worktreeId) {
+      return []
+    }
+    return [localAgent(entry, paneKey, worktreeId, worktreeById.get(worktreeId), tabId)]
+  })
+
+  const statusByPaneKey = Object.fromEntries(
+    Object.entries(agentStatusByPaneKey).map(([paneKey, entry]) => [
+      paneKey,
+      { agentType: entry.agentType }
+    ])
+  )
+  const tabsWithoutStatus = localAgentTabsWithoutStatus(tabsByWorktree, statusByPaneKey)
+  for (const { worktreeId, tab } of tabsWithoutStatus) {
+    const provider = resolveLocalTabAgent(tab, fallbackAgent)
+    const permissions = localPermissions(worktreeId, tab.id)
+    local.push({
+      key: `local:tab:${tab.id}`,
+      origin: 'you',
+      sessionId: null,
+      worktreeId,
+      tabId: tab.id,
+      branch: worktreeById.get(worktreeId)?.branch ?? null,
+      ownerName: 'You',
+      ownerHue: hueFor('You'),
+      providerLabel: providerLabel(provider),
+      model: null,
+      phase: 'waiting',
+      title: tab.generatedTitle?.trim() || tab.title?.trim() || `${provider} chat`,
+      agentName: providerLabel(provider),
+      activity: 'Ready in your chat.',
+      startedAt: null,
+      serverElapsed: null,
+      lastActivityAt: Number.isFinite(tab.createdAt ?? 0) ? (tab.createdAt ?? null) : null,
+      canSteer: false,
+      permissions,
+      conversation: null,
+      holds: []
+    })
+  }
+  return local
+}
+
 export function CodevLiveAgentsPanel(): JSX.Element | null {
   const embedded = typeof window !== 'undefined' && Boolean(window.__CODEV_EMBEDDED__)
+  const activeWorktree = useActiveWorktree()
+  const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
+  const allWorktrees = useAllWorktrees()
+  const agentStatusByPaneKey = useAppStore((state) => state.agentStatusByPaneKey)
+  const tabsByWorktree = useAppStore((state) => state.tabsByWorktree)
+  const fallbackAgent =
+    typeof window !== 'undefined' && window.__CODEV_DEFAULT_AGENT__
+      ? window.__CODEV_DEFAULT_AGENT__
+      : 'claude'
   const [now, setNow] = useState(() => Date.now())
   const [bridgeStatus, setBridgeStatus] = useState<string>(() =>
     typeof window === 'undefined' ? 'disconnected' : getCodevBridgeSnapshot().status
   )
-  const [managed, setManaged] = useState<MissionControlAgent[]>([])
+  const [sharedSessions, setSharedSessions] = useState<CodevSharedSessionView[]>([])
+  const [workboardSnapshot, setWorkboardSnapshot] = useState<CodevWorkboardSnapshot | null>(null)
   const [coordination, setCoordination] = useState<MissionControlCoordination>(
     EMPTY_MISSION_CONTROL_COORDINATION
   )
-  const [canCoSteer, setCanCoSteer] = useState(false)
+  const [workboardCanCoSteer, setWorkboardCanCoSteer] = useState(false)
+  const [sharedCanCoSteer, setSharedCanCoSteer] = useState(false)
   const [openKey, setOpenKey] = useState<string | null>(null)
   // One lifecycle request per agent at a time; the drawer shows which.
   const [pending, setPending] = useState<{
     key: string
     action: MissionControlPendingAction
   } | null>(null)
-  const [slots, setSlots] = useState<MissionControlSlotUsage | null>(null)
   // Each feed remembers its first failure after a good snapshot, so the
   // panel can say the data is old instead of presenting it as live.
   const [feedFailures, setFeedFailures] = useState<{
     workboard: { at: number; message: string } | null
+    sessions: { at: number; message: string } | null
     coordination: { at: number; message: string } | null
-  }>({ workboard: null, coordination: null })
+  }>({ workboard: null, sessions: null, coordination: null })
   const hadWorkboardRef = useRef(false)
+  const hadSessionsRef = useRef(false)
   const hadCoordinationRef = useRef(false)
   const managedRefreshInFlightRef = useRef(false)
   const coordinationRefreshInFlightRef = useRef(false)
@@ -178,48 +432,43 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
     }
     managedRefreshInFlightRef.current = true
     try {
-      const snapshot = await requestCodevBridge<WorkboardSnapshot>('workboard.list')
-      setCanCoSteer(Boolean(snapshot?.viewer?.canCoSteer))
-      const slotRows = snapshot?.slots ?? []
-      setSlots(
-        slotRows.length > 0
-          ? { used: slotRows.filter((slot) => slot.occupied).length, total: slotRows.length }
-          : null
-      )
-      const rows = slotRows
-        .filter((slot) => slot.occupied && slot.sessionId)
-        .map<MissionControlAgent>((slot) => ({
-          key: `managed:${slot.sessionId}`,
-          origin: 'managed',
-          sessionId: slot.sessionId ?? null,
-          worktreeId: slot.worktreeId ? findOrcaWorktreeForManagedId(slot.worktreeId) : null,
-          tabId: null,
-          branch: null,
-          ownerName: slot.owner?.trim() || 'Teammate',
-          ownerHue: hueFor(slot.owner?.trim() || String(slot.sessionId)),
-          providerLabel: providerLabel(String(slot.provider ?? '')),
-          model: null,
-          phase: missionControlPhaseFromStatus(String(slot.status ?? '')),
-          title: slot.assignment?.trim() || 'Agent session',
-          activity: slot.currentTask?.trim() || slot.status?.trim() || 'Working.',
-          startedAt: null,
-          serverElapsed: slot.elapsed?.trim() || null,
-          canSteer: Boolean(snapshot?.viewer?.canCoSteer),
-          holds: []
-        }))
-      setManaged(rows)
-      hadWorkboardRef.current = true
-      setFeedFailures((current) => (current.workboard ? { ...current, workboard: null } : current))
-    } catch (error: unknown) {
-      // Keep the last known managed set and label it stale; the interval
-      // retries on its own so a stopped agent cannot silently look live.
-      if (hadWorkboardRef.current) {
+      try {
+        const snapshot = await requestCodevBridge<CodevWorkboardSnapshot>('workboard.list')
+        setWorkboardSnapshot(snapshot)
+        setWorkboardCanCoSteer(Boolean(snapshot?.viewer?.canCoSteer))
+        hadWorkboardRef.current = true
+        setFeedFailures((current) =>
+          current.workboard ? { ...current, workboard: null } : current
+        )
+      } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error)
         setFeedFailures((current) => ({
           ...current,
           workboard: current.workboard ?? { at: Date.now(), message }
         }))
       }
+
+      try {
+        const snapshot = await requestCodevBridge<SharedSessionSnapshot>('agents.list')
+        setSharedCanCoSteer(Boolean(snapshot?.viewer?.canCoSteer))
+        setSharedSessions(snapshot?.sharedSessions ?? [])
+        hadSessionsRef.current = true
+        setFeedFailures((current) => (current.sessions ? { ...current, sessions: null } : current))
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error)
+        setFeedFailures((current) => ({
+          ...current,
+          sessions: current.sessions ?? { at: Date.now(), message }
+        }))
+      }
+    } catch (error: unknown) {
+      // The individual feeds above own their stale-state handling. This guard
+      // only protects the polling loop from an unexpected projection error.
+      const message = error instanceof Error ? error.message : String(error)
+      setFeedFailures((current) => ({
+        ...current,
+        sessions: current.sessions ?? { at: Date.now(), message }
+      }))
     } finally {
       managedRefreshInFlightRef.current = false
     }
@@ -260,16 +509,61 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
     }
   }, [bridgeStatus])
 
+  const reconciled = useMemo(
+    () =>
+      reconcileCodevStatus({
+        bridge: bridgeStatus as 'connected' | 'reconnecting' | 'disconnected',
+        workboard: {
+          value: workboardSnapshot,
+          loaded: workboardSnapshot !== null,
+          error: feedFailures.workboard?.message ?? null,
+          hadSuccessfulSnapshot: workboardSnapshot !== null,
+          failedAt: feedFailures.workboard?.at ?? null
+        },
+        sessions: {
+          value: sharedSessions,
+          loaded: hadSessionsRef.current,
+          error: feedFailures.sessions?.message ?? null,
+          hadSuccessfulSnapshot: hadSessionsRef.current,
+          failedAt: feedFailures.sessions?.at ?? null
+        }
+      }),
+    [bridgeStatus, feedFailures, sharedSessions, workboardSnapshot]
+  )
+
   const feed = useMemo<MissionControlFeedHealth>(() => {
-    const failures = [feedFailures.workboard, feedFailures.coordination].filter(
-      (entry): entry is { at: number; message: string } => entry !== null
-    )
-    if (failures.length === 0) {
-      return { staleSince: null, message: null }
+    const base = reconciled.feed
+    if (feedFailures.coordination) {
+      return {
+        phase: hadCoordinationRef.current ? 'stale' : 'failed',
+        staleSince: feedFailures.coordination.at,
+        message: feedFailures.coordination.message
+      }
     }
-    const first = failures.reduce((oldest, entry) => (entry.at < oldest.at ? entry : oldest))
-    return { staleSince: first.at, message: first.message }
-  }, [feedFailures])
+    return {
+      ...base,
+      phase:
+        base.phase === 'live'
+          ? 'live'
+          : base.phase === 'reconciling'
+            ? 'reconciling'
+            : base.phase === 'reconnecting'
+              ? 'reconnecting'
+              : base.phase === 'failed'
+                ? 'failed'
+                : 'stale'
+    }
+  }, [feedFailures.coordination, reconciled])
+
+  const visibleSlots = useMemo<MissionControlSlotUsage | null>(() => {
+    if (reconciled.slots) {
+      return { ...reconciled.slots, state: 'live' }
+    }
+    if (reconciled.feed.phase === 'reconciling') {
+      return { used: 0, total: 0, state: 'reconciling' }
+    }
+    return null
+  }, [reconciled])
 
   const retryFeeds = useCallback(() => {
     void refreshManaged()
@@ -289,12 +583,49 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
     return () => clearInterval(timer)
   }, [embedded, refreshManaged, refreshCoordination])
 
+  const canCoSteer = workboardCanCoSteer || sharedCanCoSteer
+
+  const managed = useMemo(
+    () => sharedSessions.map((session) => toManagedAgent(session, canCoSteer, allWorktrees)),
+    [allWorktrees, canCoSteer, sharedSessions]
+  )
+  const local = useMemo(
+    () => buildLocalAgents(agentStatusByPaneKey, tabsByWorktree, allWorktrees, fallbackAgent),
+    [agentStatusByPaneKey, allWorktrees, fallbackAgent, tabsByWorktree]
+  )
+  const workspaceAgents = useMemo(() => mergeMissionControlAgents(managed, local), [local, managed])
+  const branchAgents = useMemo(
+    () => workspaceAgents.filter((agent) => agent.worktreeId === activeWorktreeId),
+    [activeWorktreeId, workspaceAgents]
+  )
+  const branchCoordination = useMemo(() => {
+    if (!activeWorktreeId) {
+      return EMPTY_MISSION_CONTROL_COORDINATION
+    }
+    const sessionIds = new Set(
+      branchAgents
+        .map((agent) => agent.sessionId)
+        .filter((sessionId): sessionId is string => Boolean(sessionId))
+    )
+    const claims = coordination.claims.filter(
+      (claim) => sessionIds.has(claim.sessionId) || claim.worktreeId === activeWorktreeId
+    )
+    return {
+      claims,
+      contests: coordination.contests.filter((contest) =>
+        contest.holders.some((holder) => sessionIds.has(holder.sessionId))
+      ),
+      overlaps: coordination.overlaps.filter((overlap) =>
+        overlap.sessionIds.some((sessionId) => sessionIds.has(sessionId))
+      )
+    }
+  }, [activeWorktreeId, branchAgents, coordination])
   const agents = useMemo(
-    () => attachMissionControlHolds(mergeMissionControlAgents(managed, []), coordination),
-    [managed, coordination]
+    () => attachMissionControlHolds(branchAgents, branchCoordination),
+    [branchAgents, branchCoordination]
   )
 
-  const activity = useMemo(() => summarizeAgentActivity(agents), [agents])
+  const activity = useMemo(() => summarizeAgentActivity(workspaceAgents), [workspaceAgents])
 
   // The workboard only knows managed sessions, so the bar needs this merged
   // figure. Report the split, not a total: the list includes open-but-idle
@@ -311,11 +642,13 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
         count: activity.total,
         // Slots are a different number from agents, and the top bar used to
         // print the agent count over a slot denominator.
-        ...(slots ? { slotsUsed: slots.used, slotsTotal: slots.total } : {})
+        ...(visibleSlots?.state === 'live'
+          ? { slotsUsed: visibleSlots.used, slotsTotal: visibleSlots.total }
+          : {})
       },
       window.location.origin
     )
-  }, [activity, embedded, slots])
+  }, [activity, embedded, visibleSlots])
 
   const busy = activity.active > 0
 
@@ -333,6 +666,32 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
     [agents]
   )
 
+  const branchLabel = activeWorktree ? codevBranchLabel(activeWorktree, null) : 'Selected branch'
+
+  useEffect(() => {
+    const requestedAgent = typeof window !== 'undefined' ? window.__CODEV_AGENT__?.trim() : ''
+    const requestedBranch = typeof window !== 'undefined' ? window.__CODEV_BRANCH__?.trim() : ''
+    const activeBranch = activeWorktree?.branch.trim().replace(/^refs\/heads\//, '') ?? ''
+    if (
+      !requestedAgent ||
+      !activeWorktreeId ||
+      (requestedBranch && activeBranch !== requestedBranch.replace(/^refs\/heads\//, ''))
+    ) {
+      return
+    }
+    const key = `managed:${requestedAgent}`
+    if (agents.some((agent) => agent.key === key)) {
+      setOpenKey(key)
+    }
+  }, [activeWorktree?.branch, activeWorktreeId, agents])
+
+  useEffect(() => {
+    if (openKey && !agents.some((agent) => agent.key === openKey)) {
+      setOpenKey(null)
+      setCodevAgentSelection(null)
+    }
+  }, [agents, openKey])
+
   // An activity jump names a session; open its drawer once the row is here.
   // Until the first workboard snapshot lands the row may simply not have
   // arrived, so "not running" is only concluded after that.
@@ -347,44 +706,118 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
       consumeCodevSurfaceFocus(focus.id)
       return
     }
-    if (hadWorkboardRef.current) {
+    if (hadSessionsRef.current) {
       toast.message('That agent session is no longer running.')
       consumeCodevSurfaceFocus(focus.id)
     }
-  }, [agents, focus, managed])
+  }, [agents, focus, sharedSessions])
 
   // The confirmation the drawer shows is the plan Stop will run, not a
   // generic promise about slots.
-  const stopDescription = useMemo(
-    () =>
-      openKey ? describeAgentStopPlan(planAgentStop(openKey, agents, isReleasableWorktree)) : null,
-    [agents, openKey]
-  )
+  const stopDescription = useMemo(() => {
+    if (!openKey) {
+      return null
+    }
+    const agent = byKey(openKey)
+    if (!agent) {
+      return null
+    }
+    if (!agent.permissions.canStop) {
+      return {
+        allowed: false,
+        button: 'Stop agent',
+        detail: agent.permissions.stopReason ?? 'You do not have permission to stop this agent.'
+      }
+    }
+    return describeAgentStopPlan(planAgentStop(openKey, agents, isReleasableWorktree))
+  }, [agents, byKey, openKey])
   const pendingAction = pending && pending.key === openKey ? pending.action : null
 
-  /** Step in reveals the Orca control/review worktree linked to the session. */
+  /** Open the agent's own chat, its branch workspace, or its conversation. */
   const handleStepIn = useCallback(
     (key: string) => {
       const agent = byKey(key)
       if (!agent) {
         return
       }
-      if (agent.worktreeId) {
-        activateAndRevealWorktree(agent.worktreeId, { revealInSidebar: true })
+      if (agent.tabId && agent.worktreeId) {
+        const activated = activateAndRevealWorktree(agent.worktreeId, { revealInSidebar: true })
+        if (!activated) {
+          toast.error('Could not open this agent chat', {
+            description: 'The branch workspace is no longer available.'
+          })
+          return
+        }
+        const state = useAppStore.getState()
+        if (!(state.tabsByWorktree[agent.worktreeId] ?? []).some((tab) => tab.id === agent.tabId)) {
+          toast.error('Could not open this agent chat', {
+            description: 'The chat tab is no longer available.'
+          })
+          return
+        }
+        state.setActiveTabForWorktree(agent.worktreeId, agent.tabId)
+        if (state.activeWorktreeId === agent.worktreeId) {
+          state.setActiveTab(agent.tabId)
+        }
+        if (agent.branch) {
+          setCodevBranchSelection(agent.branch)
+        }
+        setCodevAgentSelection(null)
         setOpenKey(null)
         return
       }
-      toast.message('This agent has no open chat or worktree to step into.')
+      if (agent.worktreeId) {
+        const activated = activateAndRevealWorktree(agent.worktreeId, { revealInSidebar: true })
+        if (!activated) {
+          toast.error('Could not open this branch', {
+            description: 'The local worktree is no longer available.'
+          })
+          return
+        }
+        if (agent.branch) {
+          setCodevBranchSelection(agent.branch)
+        }
+        setCodevAgentSelection(null)
+        setOpenKey(null)
+        return
+      }
+      if (agent.conversation && agent.sessionId) {
+        setCodevAgentSelection(agent.sessionId)
+        setOpenKey(agent.key)
+        return
+      }
+      toast.message('This agent’s branch is still being prepared. Its status is shown here.')
     },
     [byKey]
   )
+
+  const handleOpen = useCallback(
+    (key: string) => {
+      const agent = byKey(key)
+      if (!agent) {
+        return
+      }
+      setOpenKey(key)
+      if (agent.sessionId) {
+        setCodevAgentSelection(agent.sessionId)
+      } else {
+        setCodevAgentSelection(null)
+      }
+    },
+    [byKey]
+  )
+
+  const handleClose = useCallback(() => {
+    setOpenKey(null)
+    setCodevAgentSelection(null)
+  }, [])
 
   /** Resolves true once the host queued the instruction; false keeps the draft. */
   const handleSteer = useCallback(
     async (key: string, text: string): Promise<boolean> => {
       const agent = byKey(key)
       const prompt = text.trim()
-      if (!agent?.sessionId || !prompt || pending) {
+      if (!agent?.sessionId || !agent.permissions.canSteer || !prompt || pending) {
         return false
       }
       setPending({ key, action: 'steer' })
@@ -408,7 +841,7 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
   const handlePause = useCallback(
     async (key: string) => {
       const agent = byKey(key)
-      if (!agent?.sessionId || pending) {
+      if (!agent?.sessionId || !agent.permissions.canPause || pending) {
         return
       }
       setPending({ key, action: 'pause' })
@@ -437,7 +870,8 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
    */
   const handleStop = useCallback(
     async (key: string) => {
-      if (pending) {
+      const agent = byKey(key)
+      if (pending || !agent?.permissions.canStop) {
         return
       }
       const plan = planAgentStop(key, agents, isReleasableWorktree)
@@ -479,7 +913,7 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
         setPending(null)
       }
     },
-    [agents, pending, refreshManaged]
+    [agents, byKey, pending, refreshManaged]
   )
 
   if (!embedded) {
@@ -489,19 +923,18 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
   return (
     <div className="codev-agents-panel">
       <CodevMissionControlView
-        agents={agents.map((agent) =>
-          agent.origin === 'managed' ? { ...agent, canSteer: canCoSteer } : agent
-        )}
-        coordination={coordination}
+        agents={agents}
+        branchLabel={branchLabel}
+        coordination={branchCoordination}
         now={now}
         openKey={openKey}
         pendingAction={pendingAction}
-        slots={slots}
+        slots={visibleSlots}
         feed={feed}
         stopDescription={stopDescription}
         onRetryFeed={retryFeeds}
-        onOpen={setOpenKey}
-        onClose={() => setOpenKey(null)}
+        onOpen={handleOpen}
+        onClose={handleClose}
         onStepIn={handleStepIn}
         onSteer={handleSteer}
         onPause={handlePause}

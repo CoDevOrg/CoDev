@@ -45,6 +45,34 @@ export const CODEV_WORKSPACE_PATH =
 export const CODEV_GITHUB_REPOSITORY = /^[a-z0-9_.-]{1,100}\/[a-z0-9_.-]{1,100}$/i
 export const CODEV_MEMBER_ID =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
+const CODEV_BRANCH_MAX_LENGTH = 255
+
+/** Read the optional managed-agent route without allowing control characters. */
+export function readCodevAgentSelection(location: Pick<Location, 'hash'>): string | null {
+  const value = new URLSearchParams(location.hash.replace(/^#/, '')).get('codevAgent')?.trim() ?? ''
+  const hasControlCharacter = Array.from(value).some((character) => {
+    const code = character.charCodeAt(0)
+    return code < 0x20 || code === 0x7f
+  })
+  if (!value || value.length > CODEV_BRANCH_MAX_LENGTH || hasControlCharacter) {
+    return null
+  }
+  return value
+}
+
+/** Read the optional branch route without allowing control characters into the renderer. */
+export function readCodevBranchSelection(location: Pick<Location, 'hash'>): string | null {
+  const value =
+    new URLSearchParams(location.hash.replace(/^#/, '')).get('codevBranch')?.trim() ?? ''
+  const hasControlCharacter = Array.from(value).some((character) => {
+    const code = character.charCodeAt(0)
+    return code < 0x20 || code === 0x7f
+  })
+  if (!value || value.length > CODEV_BRANCH_MAX_LENGTH || hasControlCharacter) {
+    return null
+  }
+  return value
+}
 
 export function readCodevBootstrap(location: Pick<Location, 'hash'>): CodevBootstrap | null {
   const params = new URLSearchParams(location.hash.replace(/^#/, ''))

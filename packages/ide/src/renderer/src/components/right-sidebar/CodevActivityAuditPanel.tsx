@@ -15,6 +15,7 @@ import {
   type CodevActivityJumpKind,
   type CodevActivitySnapshot
 } from './CodevActivityAuditView'
+import { codevBranchLabel } from '../codev/codev-branches-model'
 
 export { CodevActivityAuditViewPanel, type CodevActivitySnapshot } from './CodevActivityAuditView'
 
@@ -60,6 +61,8 @@ export function CodevActivityAuditPanel(): JSX.Element | null {
   if (!embedded) {
     return null
   }
+
+  const selectedBranchLabel = activeWorktree ? codevBranchLabel(activeWorktree, null) : null
 
   /**
    * A jump lands on the event's target, not just its surface. It used to
@@ -119,6 +122,7 @@ export function CodevActivityAuditPanel(): JSX.Element | null {
       query={query}
       busy={busy}
       jumped={jumped}
+      branchLabel={selectedBranchLabel}
       onKindChange={setKind}
       onQueryChange={setQuery}
       onRefresh={() => {
