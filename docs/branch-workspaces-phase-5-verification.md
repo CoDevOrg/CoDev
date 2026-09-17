@@ -1,30 +1,31 @@
 # Branch Workspaces — Phase 5 Verification
 
-**Status:** Local verification complete; production rollout is pending deployment
+**Status:** Local and public-production verification complete; authenticated three-agent verification is blocked by workspace compute credits
 **Date:** 2026-09-17
 **Scope:** Branches-first navigation, branch context, agent visibility, terminal disclosure, status reconciliation, and rollout readiness
 
 ## Result
 
-The branches-first flow is verified locally across the web application, the embedded Orca client, focused component tests, and browser tests. The local bundle opens on **Branches**, keeps the raw terminal out of the first surface, preserves the direct branch route during bootstrap, and exposes terminal access only from a selected branch workspace.
+The branches-first flow is verified locally and on the public production alias across the web application, the embedded Orca client, focused component tests, and browser tests. The deployed bundle opens on **Branches**, keeps the raw terminal out of the first surface, preserves the direct branch route during bootstrap, and exposes terminal access only from a selected branch workspace.
 
-The production three-agent demonstration has not been signed off. The current worktree contains uncommitted changes, so the deployed production workspace cannot exercise this exact build. Running that test before deployment would produce evidence for the previous production revision and would not verify this phase.
+The production three-agent demonstration has not been signed off because the authenticated workspace currently reports that its monthly compute credit is used up. The product supplied a clear recovery message, but starting agents is not possible until the credit resets or another workspace member frees capacity.
 
 ## Evidence matrix
 
-| Acceptance area                         | Local evidence                                                                         | Result                    | Production gate                      |
-| --------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------- | ------------------------------------ |
-| New workspace opens to Branches         | `workspace-shell.spec.ts`: pending workspace surface                                   | Pass                      | Re-run after deploy                  |
-| Terminal is secondary                   | Branches browser test, `CodevChatFirstCover` tests, terminal drawer event tests        | Pass locally              | Re-run after deploy                  |
-| Branch row context                      | `CodevBranchCard.test.tsx`, `codev-branches-model.test.ts`                             | Pass                      | Live branch data pending             |
-| Branch entry and context header         | `CodevBranchWorkspaceHeader.test.tsx`, branch activation path                          | Pass locally              | Re-run with a real branch            |
-| Agent/provider/status mapping           | `codev-status-model.test.ts`, `codev-branches-model.test.ts`, branch-card failure test | Pass                      | Re-run with real providers           |
-| Refresh-race and contradictory counts   | status reconciliation tests                                                            | Pass                      | Re-run during live refresh           |
-| Provider failure and recovery copy      | status model and branch-card unavailable-provider tests                                | Pass                      | Re-run with a revoked connection     |
-| Direct branch URL                       | bootstrap browser test plus `orca-workspace` and bootstrap unit tests                  | Pass locally              | Re-run with a real branch URL        |
-| Keyboard/focus and accessible naming    | semantic roles, labels, focus assertions, component tests                              | Pass for covered surfaces | Complete viewport/screen-reader pass |
-| Light/dark and reduced motion           | `workspace-shell.spec.ts` in both themes with reduced motion                           | Pass                      | Re-run after deploy                  |
-| Three agents on three isolated branches | Not executable against this un-deployed working tree                                   | Pending                   | Required before rollout              |
+| Acceptance area                              | Local evidence                                                                         | Result                    | Production gate                      |
+| -------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------- | ------------------------------------ |
+| New workspace opens to Branches              | `workspace-shell.spec.ts`: pending workspace surface                                   | Pass                      | Re-run after deploy                  |
+| Public production alias serves the new shell | Same 4-test browser suite against `https://www.trycodev.com`                           | Pass                      | Complete                             |
+| Terminal is secondary                        | Branches browser test, `CodevChatFirstCover` tests, terminal drawer event tests        | Pass locally              | Re-run after deploy                  |
+| Branch row context                           | `CodevBranchCard.test.tsx`, `codev-branches-model.test.ts`                             | Pass                      | Live branch data pending             |
+| Branch entry and context header              | `CodevBranchWorkspaceHeader.test.tsx`, branch activation path                          | Pass locally              | Re-run with a real branch            |
+| Agent/provider/status mapping                | `codev-status-model.test.ts`, `codev-branches-model.test.ts`, branch-card failure test | Pass                      | Re-run with real providers           |
+| Refresh-race and contradictory counts        | status reconciliation tests                                                            | Pass                      | Re-run during live refresh           |
+| Provider failure and recovery copy           | status model and branch-card unavailable-provider tests                                | Pass                      | Re-run with a revoked connection     |
+| Direct branch URL                            | bootstrap browser test plus `orca-workspace` and bootstrap unit tests                  | Pass locally              | Re-run with a real branch URL        |
+| Keyboard/focus and accessible naming         | semantic roles, labels, focus assertions, component tests                              | Pass for covered surfaces | Complete viewport/screen-reader pass |
+| Light/dark and reduced motion                | `workspace-shell.spec.ts` in both themes with reduced motion                           | Pass                      | Re-run after deploy                  |
+| Three agents on three isolated branches      | Authenticated workspace blocked by exhausted monthly compute credit                    | Blocked externally        | Required before final sign-off       |
 
 ## Automated verification run
 
@@ -36,6 +37,7 @@ The following checks passed during this phase or were already passed after the P
 - `pnpm build`
 - `pnpm --filter @codev/web exec playwright test tests/e2e/workspace-shell.spec.ts` — 4 passed
 - `pnpm test:e2e` — 38 passed, 1 skipped
+- Production alias browser smoke — 4 passed against `https://www.trycodev.com`
 - Focused Orca suite — 4 files, 20 tests passed
 - `pnpm typecheck:web`
 - Targeted Oxlint/Oxfmt and `git diff --check`
@@ -61,9 +63,10 @@ The browser suite additionally verified that the `codevBranch` fragment survives
 
 Before calling Phase 5 complete:
 
-- [ ] Commit the local implementation and generated Orca bundle.
-- [ ] Push the commit to `main` and wait for the Deploy web workflow and production deployment to succeed.
-- [ ] Open an authenticated production workspace using the deployed revision.
+- [x] Commit the local implementation and generated Orca bundle.
+- [x] Push the commit to `main` and wait for the Deploy web workflow and production deployment to succeed.
+- [x] Verify the public production alias serves the branches-first shell.
+- [ ] Open an authenticated production workspace using the deployed revision. **Blocked:** the workspace reports that its monthly compute credit is used up.
 - [ ] Start three agents on three distinct branches/worktrees.
 - [ ] Confirm each branch shows the correct owner, provider, agent, status, code context, and changed files.
 - [ ] Enter each agent from its branch without a blank view or unrelated worktree.
