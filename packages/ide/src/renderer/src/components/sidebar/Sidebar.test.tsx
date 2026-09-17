@@ -51,8 +51,8 @@ vi.mock('./WorktreeList', () => ({
   default: () => <div data-testid="worktree-list" />
 }))
 
-vi.mock('./CodevTeamPanel', () => ({
-  CodevTeamPanel: () => <div data-testid="codev-team-panel" />
+vi.mock('../right-sidebar/CodevChatHistorySection', () => ({
+  CodevChatHistorySection: () => <div data-testid="codev-chat-history" />
 }))
 
 vi.mock('./CodevChatsSection', () => ({
@@ -149,15 +149,15 @@ describe('Sidebar', () => {
     setSidebarState(getDefaultSettings(tmpdir()))
     const view = render(sidebarElement())
     expect(view.queryByTestId('worktree-list')).not.toBeNull()
-    expect(view.queryByTestId('codev-team-panel')).not.toBeNull()
+    expect(view.queryByTestId('codev-chat-history')).toBeNull()
   })
 
-  it('drops the worktree list in the CoDev-embedded client so the team rail fills it', () => {
+  it('shows recent chats in the CoDev-embedded client instead of team controls', () => {
     ;(window as { __CODEV_EMBEDDED__?: boolean }).__CODEV_EMBEDDED__ = true
     setSidebarState(getDefaultSettings(tmpdir()))
     const view = render(sidebarElement())
     expect(view.queryByTestId('worktree-list')).toBeNull()
-    expect(view.queryByTestId('codev-team-panel')).not.toBeNull()
+    expect(view.queryByTestId('codev-chat-history')).not.toBeNull()
   })
 
   it('anchors the setup script popup to the bottom toolbar', () => {

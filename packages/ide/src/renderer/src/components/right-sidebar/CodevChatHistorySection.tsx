@@ -229,11 +229,11 @@ export function CodevChatHistorySection({
   )
 
   return (
-    <section className={cn('codev-chat-history', className)} aria-label="Chat history">
+    <section className={cn('codev-chat-history', className)} aria-label="Recent chats">
       <header className="codev-chat-history-header">
         <div className="codev-chat-history-title">
           <History className="size-3.5 opacity-70" aria-hidden="true" />
-          <h3>Chats</h3>
+          <h3>Recents</h3>
         </div>
         {newChatAction ??
           (onNewChat ? (
@@ -261,7 +261,7 @@ export function CodevChatHistorySection({
           value={query}
           placeholder="Search chats"
           onChange={(event) => setQuery(event.target.value)}
-          aria-label="Search chats in this project"
+          aria-label="Search recent chats in this project"
         />
       </label>
 

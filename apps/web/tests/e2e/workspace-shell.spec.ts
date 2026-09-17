@@ -98,6 +98,11 @@ test("direct branch routes survive web-client bootstrap", async ({ page }) => {
   );
 
   await expect
-    .poll(() => page.evaluate(() => window.__CODEV_BRANCH__))
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as Window & { __CODEV_BRANCH__?: string }).__CODEV_BRANCH__,
+      ),
+    )
     .toBe("feature/chat-first");
 });

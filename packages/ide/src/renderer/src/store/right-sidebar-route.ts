@@ -45,7 +45,8 @@ export function normalizeRightSidebarRoute(
     tab === 'checks' ||
     tab === 'ports' ||
     tab === 'activity' ||
-    tab === 'codev-agents'
+    tab === 'codev-agents' ||
+    tab === 'codev-branches'
   ) {
     return {
       rightSidebarTab: tab,

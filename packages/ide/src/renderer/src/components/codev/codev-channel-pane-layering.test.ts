@@ -41,4 +41,8 @@ describe('codev channel pane layering', () => {
       expect(z).toBeGreaterThan(paneZ)
     }
   })
+
+  it('does not mount the team channel pane in the embedded app', () => {
+    expect(appSource).not.toContain('CodevChannelPane')
+  })
 })

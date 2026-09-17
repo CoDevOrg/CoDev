@@ -1,51 +1,45 @@
-import { useSyncExternalStore } from 'react'
+import { useAppStore } from '@/store'
 import { isCodevEmbedded } from '@/web/codev-embedded'
 
-const listeners = new Set<() => void>()
-let branchesOpen =
-  typeof window !== 'undefined' &&
-  isCodevEmbedded() &&
-  window.__CODEV_SETTINGS_ONLY__ !== true &&
-  !window.__CODEV_BRANCH__
-
-function emit(): void {
-  for (const listener of listeners) {
-    listener()
-  }
-}
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
-function getSnapshot(): boolean {
-  return branchesOpen
-}
-
 export function useCodevBranchesOpen(): boolean {
-  return useSyncExternalStore(subscribe, getSnapshot, () => false)
+  const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
+  const rightSidebarTab = useAppStore((state) => state.rightSidebarTab)
+  return (
+    isCodevEmbedded() &&
+    typeof window !== 'undefined' &&
+    window.__CODEV_SETTINGS_ONLY__ !== true &&
+    rightSidebarOpen &&
+    rightSidebarTab === 'codev-branches'
+  )
 }
 
 export function openCodevBranches(): void {
-  setCodevBranchSelection(null)
-  if (branchesOpen) {
+  if (
+    typeof window === 'undefined' ||
+    !isCodevEmbedded() ||
+    window.__CODEV_SETTINGS_ONLY__ === true
+  ) {
     return
   }
-  branchesOpen = true
-  emit()
+  setCodevBranchSelection(null)
+  const store = useAppStore.getState()
+  store.setRightSidebarTab('codev-branches')
+  store.setRightSidebarOpen(true)
 }
 
 export function closeCodevBranches(): void {
-  if (!branchesOpen) {
+  const store = useAppStore.getState()
+  if (store.rightSidebarTab !== 'codev-branches') {
     return
   }
-  branchesOpen = false
-  emit()
+  // Keep the sidebar mounted with the Agents tab selected. The Branches tab
+  // remains one click away and the center chat never gets covered.
+  store.setRightSidebarTab('codev-agents')
 }
 
 export function toggleCodevBranches(): void {
-  if (branchesOpen) {
+  const store = useAppStore.getState()
+  if (store.rightSidebarOpen && store.rightSidebarTab === 'codev-branches') {
     closeCodevBranches()
     return
   }

@@ -84,6 +84,7 @@ function RightSidebarInner(): React.JSX.Element {
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const rightSidebarRouteRequestId = useAppStore((s) => s.rightSidebarRouteRequestId)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
+  const setRightSidebarOpen = useAppStore((s) => s.setRightSidebarOpen)
   const showRightSidebarFiles = useAppStore((s) => s.showRightSidebarFiles)
   const toggleRightSidebar = useAppStore((s) => s.toggleRightSidebar)
   const checksStatus = useAppStore((s) => (s.rightSidebarOpen ? getActiveChecksStatus(s) : null))
@@ -128,6 +129,12 @@ function RightSidebarInner(): React.JSX.Element {
               id: 'codev-agents' as const,
               icon: Radio,
               title: 'Agents',
+              shortcut: ''
+            },
+            {
+              id: 'codev-branches' as const,
+              icon: GitBranch,
+              title: 'Branches',
               shortcut: ''
             }
           ]
@@ -264,6 +271,24 @@ function RightSidebarInner(): React.JSX.Element {
     normalizedTab: normalizedActiveTab,
     setStoredTab: setRightSidebarTab
   })
+
+  // A branch deep link should open the Branches panel in the right sidebar so
+  // the chat-first center remains visible while the requested worktree loads.
+  useEffect(() => {
+    if (
+      !isCodevEmbedded() ||
+      window.__CODEV_SETTINGS_ONLY__ === true ||
+      !window.__CODEV_BRANCH__?.trim()
+    ) {
+      return
+    }
+    if (rightSidebarTab !== 'codev-branches') {
+      setRightSidebarTab('codev-branches')
+    }
+    if (!rightSidebarOpen) {
+      setRightSidebarOpen(true)
+    }
+  }, [rightSidebarOpen, rightSidebarTab, setRightSidebarOpen, setRightSidebarTab])
 
   useEffect(() => {
     lastRightSidebarRouteRequestIdRef.current = rightSidebarRouteRequestId

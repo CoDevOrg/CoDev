@@ -1,1 +1,0 @@
-import{Og as e,wg as t}from"./web-index-CatYuVvP.js";var n=e(t());function r(){let e=(0,n.useRef)(!0);return(0,n.useEffect)(()=>(e.current=!0,()=>{e.current=!1}),[]),e}export{r as t};

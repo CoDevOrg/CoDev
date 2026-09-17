@@ -3,6 +3,7 @@ import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import type { ActiveRightSidebarTab } from '@/store/slices/editor'
 import { isPluginPanelTabKey } from '../../../../shared/plugins/plugin-manifest'
 import { CodevReviewCheckpointPanel } from '../sidebar/CodevReviewCheckpointPanel'
+import { CodevBranchesOverview } from '../codev/CodevBranchesOverview'
 import { CodevActivityAuditPanel } from './CodevActivityAuditPanel'
 import { CodevLiveAgentsPanel } from './CodevLiveAgentsPanel'
 
@@ -53,6 +54,7 @@ export function RightSidebarPanelContent({
         {effectiveTab === 'vault' && <AiVaultPanel />}
         {effectiveTab === 'activity' && <CodevActivityAuditPanel />}
         {effectiveTab === 'codev-agents' && <CodevLiveAgentsPanel />}
+        {effectiveTab === 'codev-branches' && <CodevBranchesOverview />}
         {effectiveTab === 'workspaces' && <FolderWorkspaceWorktreesPanel />}
         {effectiveTab === 'pr-checks' && (
           <FolderWorkspacePrChecksPanel

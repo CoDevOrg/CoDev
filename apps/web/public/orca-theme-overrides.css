@@ -1777,8 +1777,8 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   opacity: 0.55;
 }
 
-/* The same list, in the top half of the left rail: it owns the space above the
-   team section, so the rows scroll inside it rather than growing the sidebar. */
+/* The same list in the left rail: it owns the space below the new-chat action,
+   so the rows scroll inside it rather than growing the sidebar. */
 .codev-chat-history.in-left-rail {
   flex: 1 1 0;
   min-height: 0;

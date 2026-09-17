@@ -4,8 +4,8 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import SidebarHeader from './SidebarHeader'
 import SidebarNav from './SidebarNav'
-import { CodevTeamPanel } from './CodevTeamPanel'
 import { CodevChatsSection } from './CodevChatsSection'
+import { CodevChatHistorySection } from '../right-sidebar/CodevChatHistorySection'
 import SetupScriptPromptCard from './SetupScriptPromptCard'
 import WorktreeList from './WorktreeList'
 import SidebarToolbar from './SidebarToolbar'
@@ -60,7 +60,7 @@ function Sidebar({
   ) as React.CSSProperties | undefined
   const { nativeDropTarget, dropHandlers, affordance } = useSidebarProjectDrop()
   // CoDev embeds one repo per workspace; the worktree/project list has nothing
-  // to navigate, so the team rail becomes this sidebar's sole content.
+  // to navigate, so the recents rail becomes this sidebar's sole content.
   const codevEmbedded = isCodevEmbedded()
   const {
     workspaceBoardOpen,
@@ -133,11 +133,11 @@ function Sidebar({
               />
             )}
 
-            {/* CoDev: the embedded rail is this worktree's chats over the team
-                (people, status, channels), replacing the worktree list rather
-                than sitting under it. No-ops outside the embedded client. */}
+            {/* CoDev: keep starting a chat discoverable, then show the recent
+                chats for this workspace. Team and channel navigation stays
+                hidden until that surface is ready to return. */}
             <CodevChatsSection />
-            <CodevTeamPanel />
+            {codevEmbedded ? <CodevChatHistorySection className="in-left-rail" /> : null}
 
             <div className="relative shrink-0">
               <SetupScriptPromptCard />

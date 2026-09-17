@@ -1,5 +1,5 @@
 import React from 'react'
-import { Bell, CalendarClock, GitBranch, Search } from 'lucide-react'
+import { Bell, CalendarClock, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
@@ -12,12 +12,6 @@ import { HideSidebarMenu } from './sidebar-nav-controls'
 import { translate } from '@/i18n/i18n'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import { isCodevEmbedded } from '@/web/codev-embedded'
-import {
-  closeCodevBranches,
-  openCodevBranches,
-  setCodevBranchSelection,
-  useCodevBranchesOpen
-} from '../codev/codev-branches-view'
 
 export function shouldShowAgentsButton(
   settings: Pick<GlobalSettings, 'experimentalActivity'> | null | undefined
@@ -60,41 +54,12 @@ const SidebarNav = React.memo(function SidebarNav() {
   // CoDev ships Automations in a later release; hide the nav entry for now
   // without touching the page or its wiring.
   const codevEmbedded = isCodevEmbedded()
-  const branchesOpen = useCodevBranchesOpen()
-  const activeWorktree = useAppStore((state) => {
-    const worktreeId = state.activeWorktreeId
-    if (!worktreeId) {
-      return null
-    }
-    if (typeof state.getKnownWorktreeById === 'function') {
-      return state.getKnownWorktreeById(
-        worktreeId,
-        state.activeWorkspaceExecutionHostId ?? undefined
-      )
-    }
-    // Keep the nav harmless in lightweight embedded/test stores that omit
-    // the full worktree index; the branch overview remains the source of
-    // truth for navigation.
-    const worktrees = Object.values(state.worktreesByRepo ?? {}).flat()
-    return worktrees.find((worktree) => worktree.id === worktreeId) ?? null
-  })
   const automationsActive = activeView === 'automations'
   const activityActive = activeView === 'activity'
   const activityUnreadCount = useActivityUnreadCount(showAgentsButton, 'sidebar-badge')
   const hideAutomationsButton = React.useCallback(() => {
     void updateSettings({ showAutomationsButton: false })
   }, [updateSettings])
-  const handleBranchesClick = React.useCallback(() => {
-    if (branchesOpen) {
-      const branch = activeWorktree?.branch.trim()
-      if (branch) {
-        setCodevBranchSelection(branch)
-      }
-      closeCodevBranches()
-      return
-    }
-    openCodevBranches()
-  }, [activeWorktree?.branch, branchesOpen])
 
   return (
     <div
@@ -129,30 +94,6 @@ const SidebarNav = React.memo(function SidebarNav() {
           </ContextMenuTrigger>
           <HideSidebarMenu onHide={hideAutomationsButton} />
         </ContextMenu>
-      ) : null}
-      {codevEmbedded ? (
-        <button
-          type="button"
-          onClick={handleBranchesClick}
-          aria-current={branchesOpen ? 'page' : undefined}
-          className={cn(
-            'flex min-h-11 w-full items-center gap-2 rounded-md px-2 text-left text-[13px] font-medium tracking-tight transition-colors',
-            'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-worktree-sidebar-ring/50',
-            branchesOpen
-              ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
-              : 'text-worktree-sidebar-foreground/70 hover:bg-worktree-sidebar-foreground/8'
-          )}
-        >
-          <GitBranch
-            className={cn(
-              'size-4 shrink-0',
-              !branchesOpen && 'text-worktree-sidebar-foreground/35'
-            )}
-            strokeWidth={branchesOpen ? 2.25 : 1.75}
-            aria-hidden="true"
-          />
-          <span className="flex-1">Branches</span>
-        </button>
       ) : null}
       {showAgentDashboardButton ? (
         <React.Suspense fallback={null}>

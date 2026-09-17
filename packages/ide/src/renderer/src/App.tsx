@@ -52,7 +52,6 @@ import {
 import { isCodevEmbedded } from './web/codev-embedded'
 import { CodevCenterUnderlay } from './components/codev/CodevCenterUnderlay'
 import { CodevChatFirstCover } from './components/codev/CodevChatFirstCover'
-import { CodevBranchesOverview } from './components/codev/CodevBranchesOverview'
 import { CodevBranchWorkspaceHeader } from './components/codev/CodevBranchWorkspaceHeader'
 import { reportCodevStartupFailure } from './web/codev-host-state'
 import { isCodevPendingShell } from './web/codev-pending-shell'
@@ -326,11 +325,6 @@ function WindowControls(): React.JSX.Element {
 }
 
 const Landing = lazy(() => import('./components/Landing'))
-const CodevChannelPane = lazy(() =>
-  import('./components/codev/CodevChannelPane').then((m) => ({
-    default: m.CodevChannelPane
-  }))
-)
 const CodevAwaitingWorkspaceCover = lazy(() =>
   import('./components/codev/CodevAwaitingWorkspaceCover').then((m) => ({
     default: m.CodevAwaitingWorkspaceCover
@@ -2153,14 +2147,6 @@ function App(): React.JSX.Element {
                         <div className="titlebar">{titlebarMainStrip}</div>
                       ) : null}
                       <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
-                        {/* CoDev: a team channel layers over the center while the
-                            member reads it, leaving the chat and its agent mounted
-                            underneath so switching back costs nothing. */}
-                        {isCodevEmbedded() ? (
-                          <Suspense fallback={null}>
-                            <CodevChannelPane />
-                          </Suspense>
-                        ) : null}
                         {/* Why: match the RightSidebar header's 36px/top-0 so the toggle's vertical center is identical open vs closed — else the icon jitters. */}
                         {workspaceChromeActive && !rightSidebarOpen && (
                           <div
@@ -2176,8 +2162,6 @@ function App(): React.JSX.Element {
                             {rightSidebarToggle}
                           </div>
                         )}
-                        {/* CoDev: inert while a team channel covers it, so the
-                            hidden chat is not reachable by Tab or a screen reader. */}
                         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
                           <CodevBranchWorkspaceHeader />
                           <CodevCenterUnderlay className="flex flex-1 min-w-0 min-h-0 flex-col">
@@ -2268,7 +2252,6 @@ function App(): React.JSX.Element {
                             </Suspense>
                           </CodevCenterUnderlay>
                         </div>
-                        <CodevBranchesOverview />
                         {showFloatingTerminalButton ? (
                           <FloatingTerminalToggleButton
                             open={floatingTerminalOpen}

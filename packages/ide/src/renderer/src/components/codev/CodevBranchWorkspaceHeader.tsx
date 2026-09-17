@@ -27,7 +27,7 @@ import { useActiveWorktree } from '@/store/selectors'
 import { isCodevEmbedded } from '@/web/codev-embedded'
 import { codevChatTabIdInState } from '@/web/codev-center-chat-tab'
 import { requestCodevTerminalDrawerOpen } from '../native-chat/codev-terminal-drawer-event'
-import { openCodevBranches, useCodevBranchesOpen } from './codev-branches-view'
+import { openCodevBranches } from './codev-branches-view'
 import { codevBranchLabel, type CodevBranchState } from './codev-branches-model'
 import { useCodevBranchRows } from './use-codev-branch-rows'
 
@@ -98,7 +98,6 @@ function HeaderAction({
 /** The persistent context bar for the currently selected branch workspace. */
 export function CodevBranchWorkspaceHeader(): JSX.Element | null {
   const embedded = isCodevEmbedded()
-  const branchesOpen = useCodevBranchesOpen()
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const activeChatTabId = useAppStore((state) => {
@@ -106,9 +105,9 @@ export function CodevBranchWorkspaceHeader(): JSX.Element | null {
     return worktreeId ? codevChatTabIdInState(worktreeId, state) : null
   })
   const activeWorktree = useActiveWorktree()
-  const { rows } = useCodevBranchRows(embedded && !branchesOpen && Boolean(activeWorktreeId))
+  const { rows } = useCodevBranchRows(embedded && Boolean(activeWorktreeId))
 
-  if (!embedded || branchesOpen || !activeWorktreeId) {
+  if (!embedded || !activeWorktreeId) {
     return null
   }
 

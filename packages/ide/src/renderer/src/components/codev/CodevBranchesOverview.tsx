@@ -134,27 +134,24 @@ export function CodevBranchesOverview(): JSX.Element | null {
 
   return (
     <section
-      className="absolute inset-0 z-50 flex min-h-0 min-w-0 flex-col bg-background text-foreground"
+      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background text-foreground"
       data-codev-branches="true"
       aria-labelledby="codev-branches-title"
       aria-describedby="codev-branches-description"
     >
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-4 border-b border-border/70 px-6 py-5 sm:px-8">
+      <header className="flex shrink-0 flex-col gap-3 border-b border-border/70 px-3 py-3">
         <div className="min-w-0">
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
             CoDev workspace
           </p>
-          <h1 id="codev-branches-title" className="mt-1 text-2xl font-semibold tracking-tight">
+          <h1 id="codev-branches-title" className="mt-1 text-lg font-semibold tracking-tight">
             Branches
           </h1>
-          <p
-            id="codev-branches-description"
-            className="mt-1 max-w-2xl text-sm text-muted-foreground"
-          >
+          <p id="codev-branches-description" className="mt-1 text-xs text-muted-foreground">
             Every active branch has one shared place for code, chat, agents, and changes.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <button
             type="button"
             onClick={() => void refresh()}
@@ -182,7 +179,7 @@ export function CodevBranchesOverview(): JSX.Element | null {
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-6 pt-5 sm:px-8">
-          <p className="text-sm text-muted-foreground" role="status" aria-live="polite">
+          <p className="px-3 pt-3 text-xs text-muted-foreground" role="status" aria-live="polite">
             {loading ? 'Loading branch workspaces…' : `${branchCountLabel} in this workspace`}
           </p>
           {bridge.status !== 'connected' ? (
@@ -209,7 +206,7 @@ export function CodevBranchesOverview(): JSX.Element | null {
 
         {liveDataError && hasRows ? (
           <div
-            className="mx-6 mt-4 flex shrink-0 items-start gap-2 rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-3 text-sm text-destructive sm:mx-8"
+            className="mx-3 mt-3 flex shrink-0 items-start gap-2 rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-3 text-xs text-destructive"
             role="alert"
           >
             <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
@@ -227,7 +224,7 @@ export function CodevBranchesOverview(): JSX.Element | null {
         ) : null}
         {status.feed.phase === 'reconciling' ? (
           <p
-            className="mx-6 mt-4 rounded-lg border border-border/70 bg-muted px-3 py-3 text-sm text-muted-foreground sm:mx-8"
+            className="mx-3 mt-3 rounded-lg border border-border/70 bg-muted px-3 py-3 text-xs text-muted-foreground"
             role="status"
           >
             Branch and agent status are being reconciled. Capacity and agent counts will appear when
@@ -236,7 +233,7 @@ export function CodevBranchesOverview(): JSX.Element | null {
         ) : null}
         {routeError ? (
           <div
-            className="mx-6 mt-4 flex shrink-0 items-start gap-2 rounded-lg border border-border bg-muted px-3 py-3 text-sm text-foreground sm:mx-8"
+            className="mx-3 mt-3 flex shrink-0 items-start gap-2 rounded-lg border border-border bg-muted px-3 py-3 text-xs text-foreground"
             role="alert"
           >
             <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
@@ -257,7 +254,7 @@ export function CodevBranchesOverview(): JSX.Element | null {
             role="status"
             aria-live="polite"
           >
-            <div className="flex max-w-sm flex-col items-center gap-3 text-center">
+            <div className="flex max-w-sm flex-col items-center gap-3 p-3 text-center">
               <LoaderCircle
                 className="size-7 animate-spin text-muted-foreground motion-reduce:animate-none"
                 aria-hidden="true"
@@ -270,7 +267,7 @@ export function CodevBranchesOverview(): JSX.Element | null {
           </div>
         ) : showFullFailure ? (
           <div className="flex min-h-0 flex-1 items-center justify-center p-8" role="alert">
-            <div className="flex max-w-sm flex-col items-center gap-3 text-center">
+            <div className="flex max-w-sm flex-col items-center gap-3 p-3 text-center">
               <CircleAlert className="size-7 text-destructive" aria-hidden="true" />
               <p className="text-sm font-medium">Branches could not be loaded</p>
               <p className="text-sm text-muted-foreground">
@@ -288,7 +285,7 @@ export function CodevBranchesOverview(): JSX.Element | null {
           </div>
         ) : showFullDisconnected ? (
           <div className="flex min-h-0 flex-1 items-center justify-center p-8" role="status">
-            <div className="flex max-w-sm flex-col items-center gap-3 text-center">
+            <div className="flex max-w-sm flex-col items-center gap-3 p-3 text-center">
               <WifiOff className="size-7 text-muted-foreground" aria-hidden="true" />
               <p className="text-sm font-medium">Waiting for the workspace connection</p>
               <p className="text-sm text-muted-foreground">
@@ -315,7 +312,7 @@ export function CodevBranchesOverview(): JSX.Element | null {
             </div>
           </div>
         ) : (
-          <ul className="scrollbar-sleek grid min-h-0 flex-1 auto-rows-max grid-cols-1 content-start gap-4 overflow-y-auto p-6 sm:grid-cols-2 sm:px-8 xl:grid-cols-3">
+          <ul className="scrollbar-sleek grid min-h-0 flex-1 auto-rows-max grid-cols-1 content-start gap-3 overflow-y-auto p-3">
             {rows.map((row) => (
               <CodevBranchCard
                 key={row.id}
@@ -329,7 +326,7 @@ export function CodevBranchesOverview(): JSX.Element | null {
           </ul>
         )}
         {rosterError && !liveDataError ? (
-          <p className="shrink-0 px-6 pb-4 text-xs text-muted-foreground sm:px-8" role="status">
+          <p className="shrink-0 px-3 pb-3 text-[11px] text-muted-foreground" role="status">
             Ownership details are temporarily unavailable; showing the latest branch data.
           </p>
         ) : null}

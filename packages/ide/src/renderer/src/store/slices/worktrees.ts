@@ -49,9 +49,7 @@ import {
   isRuntimeScopeForbiddenError,
   RuntimeRpcCallError
 } from '../../runtime/runtime-rpc-client'
-import {
-  WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
+import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { getHostedReviewCacheKey, refreshHostedReviewCard } from './hosted-review'
 import { routeListingBranchSwitchesThroughGitIdentity } from './worktree-listing-branch-switch'
@@ -2279,7 +2277,8 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
         tab === 'checks' ||
         tab === 'ports' ||
         tab === 'activity' ||
-        tab === 'codev-agents'
+        tab === 'codev-agents' ||
+        tab === 'codev-branches'
       ) {
         out[id] = tab
       } else {
@@ -2526,7 +2525,7 @@ function isCurrentDetectedWorktreeRefresh(
   if (refresh.runtimeAuthority) {
     return (
       getRuntimeEnvironmentConnectionGeneration(refresh.runtimeAuthority.environmentId) ===
-        refresh.runtimeAuthority.runtimeConnectionGeneration
+      refresh.runtimeAuthority.runtimeConnectionGeneration
     )
   }
   return true
@@ -2578,12 +2577,7 @@ function mergeFetchedWorktrees(
   set((s) => {
     if (
       !isCurrentDetectedWorktreeRefresh(s, args.refresh) ||
-      !repoHasExactlyOneExecutionHostOwner(
-        s,
-        args.repoId,
-        args.hostId,
-        args.ownerWasMissingAtStart
-      )
+      !repoHasExactlyOneExecutionHostOwner(s, args.repoId, args.hostId, args.ownerWasMissingAtStart)
     ) {
       return s
     }
