@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, isNull, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 
@@ -25,6 +25,28 @@ export const MONTHLY_MINUTES_PER_MEMBER = Math.floor(
   (MONTHLY_CREDIT_USD_PER_MEMBER / HOST_HOURLY_RATE_USD) * 60,
 );
 
+export type WorkspaceCreditStatus = {
+  /** Non-admin members whose pooled allowance is enforced. */
+  memberCount: number;
+  allottedMinutes: number;
+  usedMinutes: number;
+  remainingMinutes: number;
+  allottedUsd: number;
+  usedUsd: number;
+  remainingUsd: number;
+  resetAt: string;
+};
+
+export type MemberComputeCreditStatus = {
+  isAdmin: boolean;
+  usedMinutes: number;
+  usedUsd: number;
+  allottedMinutes: number | null;
+  allottedUsd: number | null;
+  remainingMinutes: number | null;
+  remainingUsd: number | null;
+};
+
 /**
  * Orca's IDE session — not the Firecracker sandbox — is the primary compute
  * surface today (see orca-host.ts). Tagging its intervals with a distinct
@@ -44,6 +66,45 @@ function startOfCurrentMonth() {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 }
 
+function startOfNextMonth() {
+  const current = startOfCurrentMonth();
+  return new Date(
+    Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + 1, 1),
+  );
+}
+
+export function creditUsdForMinutes(minutes: number) {
+  return (minutes * HOST_HOURLY_RATE_USD) / 60;
+}
+
+export function memberComputeCreditStatus(
+  usedMinutes: number,
+  isAdmin: boolean,
+): MemberComputeCreditStatus {
+  const usedUsd = creditUsdForMinutes(usedMinutes);
+  if (isAdmin) {
+    return {
+      isAdmin: true,
+      usedMinutes,
+      usedUsd,
+      allottedMinutes: null,
+      allottedUsd: null,
+      remainingMinutes: null,
+      remainingUsd: null,
+    };
+  }
+
+  return {
+    isAdmin: false,
+    usedMinutes,
+    usedUsd,
+    allottedMinutes: MONTHLY_MINUTES_PER_MEMBER,
+    allottedUsd: MONTHLY_CREDIT_USD_PER_MEMBER,
+    remainingMinutes: Math.max(0, MONTHLY_MINUTES_PER_MEMBER - usedMinutes),
+    remainingUsd: Math.max(0, MONTHLY_CREDIT_USD_PER_MEMBER - usedUsd),
+  };
+}
+
 /**
  * Minutes of compute a single member has used this calendar month, across
  * every workspace they belong to — closed intervals plus live elapsed time
@@ -52,45 +113,71 @@ function startOfCurrentMonth() {
  * lifetime-only and unrelated to this monthly scope), so correctness never
  * depends on a reset job having run.
  */
-async function getMemberMinutesUsedThisMonth(userId: string) {
+export async function getComputeMinutesByUserThisMonth(
+  userIds?: readonly string[],
+) {
   const db = getDatabase();
   const monthStart = startOfCurrentMonth();
   const now = new Date();
+  if (userIds && userIds.length === 0) return new Map<string, number>();
   const intervals = await db
     .select({
+      userId: schema.sandboxRuntimeIntervals.userId,
       startedAt: schema.sandboxRuntimeIntervals.startedAt,
       endedAt: schema.sandboxRuntimeIntervals.endedAt,
     })
     .from(schema.sandboxRuntimeIntervals)
     .where(
       and(
-        eq(schema.sandboxRuntimeIntervals.userId, userId),
+        userIds
+          ? inArray(schema.sandboxRuntimeIntervals.userId, [...userIds])
+          : undefined,
         or(
           isNull(schema.sandboxRuntimeIntervals.endedAt),
           sql`${schema.sandboxRuntimeIntervals.endedAt} >= ${monthStart}`,
         ),
       ),
     );
-  return intervals.reduce((total, interval) => {
+  const minutesByUser = new Map<string, number>();
+  for (const interval of intervals) {
     const started =
       interval.startedAt < monthStart ? monthStart : interval.startedAt;
     const ended = interval.endedAt ?? now;
-    return total + minutesBetween(started, ended);
-  }, 0);
+    minutesByUser.set(
+      interval.userId,
+      (minutesByUser.get(interval.userId) ?? 0) +
+        minutesBetween(started, ended),
+    );
+  }
+  return minutesByUser;
+}
+
+export async function getMemberMinutesUsedThisMonth(userId: string) {
+  return (await getComputeMinutesByUserThisMonth([userId])).get(userId) ?? 0;
 }
 
 export async function getWorkspaceCreditStatus(workspaceId: string) {
   const members = await listWorkspaceMembers(workspaceId);
-  const allottedMinutes = members.length * MONTHLY_MINUTES_PER_MEMBER;
-  const usedMinutes = (
-    await Promise.all(
-      members.map((member) => getMemberMinutesUsedThisMonth(member.userId)),
-    )
-  ).reduce((total, minutes) => total + minutes, 0);
+  const billableMembers = members.filter((member) => !member.isAdmin);
+  const minutesByUser = await getComputeMinutesByUserThisMonth(
+    billableMembers.map((member) => member.userId),
+  );
+  const allottedMinutes = billableMembers.length * MONTHLY_MINUTES_PER_MEMBER;
+  const usedMinutes = billableMembers.reduce(
+    (total, member) => total + (minutesByUser.get(member.userId) ?? 0),
+    0,
+  );
+  const allottedUsd = billableMembers.length * MONTHLY_CREDIT_USD_PER_MEMBER;
+  const usedUsd = creditUsdForMinutes(usedMinutes);
   return {
+    memberCount: billableMembers.length,
     allottedMinutes,
     usedMinutes,
     remainingMinutes: Math.max(0, allottedMinutes - usedMinutes),
+    allottedUsd,
+    usedUsd,
+    remainingUsd: Math.max(0, allottedUsd - usedUsd),
+    resetAt: startOfNextMonth().toISOString(),
   };
 }
 

@@ -4,6 +4,7 @@ import { and, count, eq, inArray } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 
+import { isUserAdmin } from "./admin";
 import { getWorkspaceCreditStatus } from "./compute-credits";
 import { getDatabase } from "./database";
 import { consumeRateLimit } from "./rate-limit";
@@ -89,11 +90,19 @@ export async function assertVmMinuteQuota(ownerId: string) {
  * once exhausted — the workspace's files and agent-session history stay
  * fully readable regardless, since this only guards starting new compute.
  */
-export async function assertWorkspaceCreditQuota(workspaceId: string) {
-  const { remainingMinutes } = await getWorkspaceCreditStatus(workspaceId);
+export async function assertWorkspaceCreditQuota(
+  workspaceId: string,
+  userId?: string,
+) {
+  // Application admins can operate the product without consuming the pooled
+  // member allowance. Their runtime is still recorded for the admin report.
+  if (userId && (await isUserAdmin(userId))) return;
+
+  const { remainingMinutes, memberCount, allottedUsd } =
+    await getWorkspaceCreditStatus(workspaceId);
   if (remainingMinutes <= 0) {
     throw new QuotaError(
-      "This workspace's monthly compute credit is used up. It resets next month, or another member can free up credit.",
+      `This workspace's monthly compute allowance is exhausted. It includes $${allottedUsd.toFixed(2)} per calendar month pooled across ${memberCount} non-admin member${memberCount === 1 ? "" : "s"}. It resets at the start of next month.`,
       "workspace_credit_quota",
       3_600,
     );

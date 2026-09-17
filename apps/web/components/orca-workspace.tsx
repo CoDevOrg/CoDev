@@ -29,6 +29,7 @@ import {
   workspaceProviderReadiness,
   type WorkspaceProviderPreflight,
 } from "@/lib/provider-surface-capability";
+import type { WorkspaceCreditStatus } from "@/lib/compute-credits";
 import { refreshWorkspaceProviderPreflight } from "@/lib/refresh-workspace-provider-preflight";
 import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
 
@@ -581,11 +582,47 @@ export function agentActivityText(
   return "No agents running";
 }
 
+function creditMinutesText(minutes: number) {
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
+}
+
+function creditUsdText(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function computeCreditText(
+  creditStatus: WorkspaceCreditStatus | null | undefined,
+  isAdmin: boolean,
+) {
+  if (isAdmin) {
+    return {
+      label: "Compute · No limit",
+      ariaLabel:
+        "Compute credit: no limit for administrators; runtime is still tracked in the admin console",
+    };
+  }
+  if (!creditStatus) return null;
+  return {
+    label: `Compute · ${creditUsdText(creditStatus.remainingUsd)}/${creditUsdText(creditStatus.allottedUsd)}`,
+    ariaLabel: `Compute credit: ${creditUsdText(creditStatus.remainingUsd)} remaining of ${creditUsdText(creditStatus.allottedUsd)} pooled across ${creditStatus.memberCount} member${creditStatus.memberCount === 1 ? "" : "s"}; ${creditMinutesText(creditStatus.remainingMinutes)} remaining; resets at the start of next month`,
+  };
+}
+
 export function WorkspaceTopBar({
   repository,
   workspaceId,
   canInvite,
+  creditStatus = null,
   agents = null,
+  isAdmin = false,
   slotsUsed = null,
   slotsTotal = MAX_PARALLEL_AGENT_SESSIONS,
   isStarting = false,
@@ -593,6 +630,10 @@ export function WorkspaceTopBar({
   repository: string | null;
   workspaceId: string;
   canInvite: boolean;
+  /** Current pooled member allowance; admins receive an unlimited label. */
+  creditStatus?: WorkspaceCreditStatus | null;
+  /** Application-wide administrators bypass the pooled compute gate. */
+  isAdmin?: boolean;
   /** What the embedded Mission Control reports: agents working now, and agent
    *  sessions open but idle. `null` until it has reported at all. */
   agents?: { active: number; idle: number } | null;
@@ -619,6 +660,7 @@ export function WorkspaceTopBar({
     : agentsText == null
       ? `Agent worktree capacity: ${slotsTotal} slots`
       : `${agentsText}${slotsText ? `; worktree slots: ${slotsUsed} of ${slotsTotal} in use` : ""}`;
+  const computeCredit = computeCreditText(creditStatus, isAdmin);
 
   return (
     <header className="workspace-topbar">
@@ -644,6 +686,16 @@ export function WorkspaceTopBar({
         <span className="workspace-topbar-repo">{repository}</span>
       ) : null}
       <div className="workspace-topbar-actions">
+        {computeCredit ? (
+          <span
+            className={`workspace-topbar-credit${isAdmin ? " is-unlimited" : ""}`}
+            role="status"
+            aria-label={computeCredit.ariaLabel}
+            title={computeCredit.ariaLabel}
+          >
+            {computeCredit.label}
+          </span>
+        ) : null}
         <span
           className={`workspace-topbar-capacity${!isStarting && agents && agents.active > 0 ? " is-live" : ""}`}
           role="status"
@@ -683,6 +735,8 @@ function WorkspaceChrome({
   repository,
   workspaceId,
   canInvite,
+  creditStatus = null,
+  isAdmin = false,
   embeddedAgents = null,
   embeddedSlots = null,
   isStarting = false,
@@ -691,6 +745,8 @@ function WorkspaceChrome({
   repository: string | null;
   workspaceId: string;
   canInvite: boolean;
+  creditStatus?: WorkspaceCreditStatus | null;
+  isAdmin?: boolean;
   /** The embedded Mission Control's merged report, when the IDE has sent one.
    *  It sees this client's own chat-tab agents, which the server-side
    *  workboard never registers, so it is the only source that can count
@@ -707,6 +763,7 @@ function WorkspaceChrome({
     <div className="workspace-page">
       <WorkspaceTopBar
         canInvite={canInvite}
+        creditStatus={creditStatus}
         // Only the IDE can count agents. The workboard's `occupied` is
         // `capacity.activeSessions` — worktree slots held by managed sessions
         // — so the old fallback printed a slot count as an agent count, and
@@ -715,6 +772,7 @@ function WorkspaceChrome({
         slotsUsed={embeddedSlots?.used ?? activity?.occupied ?? null}
         slotsTotal={embeddedSlots?.total ?? MAX_PARALLEL_AGENT_SESSIONS}
         isStarting={isStarting}
+        isAdmin={isAdmin}
         repository={repository}
         workspaceId={workspaceId}
       />
@@ -737,6 +795,8 @@ export function OrcaWorkspace({
   workspaceId,
   repository,
   canInvite,
+  creditStatus = null,
+  isAdmin = false,
   defaultAgent,
   cursorAvailable,
   initialBranch,
@@ -746,6 +806,10 @@ export function OrcaWorkspace({
   workspaceId: string;
   repository: string | null;
   canInvite: boolean;
+  /** Current pooled member allowance; admins receive an unlimited label. */
+  creditStatus?: WorkspaceCreditStatus | null;
+  /** Application-wide administrators bypass the pooled compute gate. */
+  isAdmin?: boolean;
   defaultAgent?: OrcaDefaultAgent;
   /** Whether this member has a linked Cursor credential — gates offering it
    *  in the IDE's in-chat provider switcher. */
@@ -1389,6 +1453,8 @@ export function OrcaWorkspace({
     return (
       <WorkspaceChrome
         canInvite={canInvite}
+        creditStatus={creditStatus}
+        isAdmin={isAdmin}
         repository={repository}
         workspaceId={workspaceId}
       >
@@ -1420,6 +1486,8 @@ export function OrcaWorkspace({
   return (
     <WorkspaceChrome
       canInvite={canInvite}
+      creditStatus={creditStatus}
+      isAdmin={isAdmin}
       isStarting={!hostReady || isOpeningProject}
       embeddedAgents={embeddedAgents}
       embeddedSlots={embeddedSlots}

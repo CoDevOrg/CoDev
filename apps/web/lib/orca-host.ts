@@ -339,7 +339,7 @@ export async function ensureOrcaSession(
 ): Promise<OrcaRuntimeState> {
   try {
     await timing.measure("quota", () =>
-      assertWorkspaceCreditQuota(workspace.id),
+      assertWorkspaceCreditQuota(workspace.id, userId),
     );
   } catch (error) {
     if (error instanceof QuotaError) {

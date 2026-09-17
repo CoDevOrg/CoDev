@@ -151,6 +151,49 @@ describe("WorkspaceTopBar", () => {
     ).toHaveTextContent("3 agent worktree slots");
   });
 
+  it("makes the pooled member compute allowance visible", () => {
+    render(
+      createElement(WorkspaceTopBar, {
+        repository: "yousef20920/CoDev",
+        workspaceId: "workspace-1",
+        canInvite: true,
+        creditStatus: {
+          memberCount: 1,
+          allottedMinutes: 7_731,
+          usedMinutes: 120,
+          remainingMinutes: 7_611,
+          allottedUsd: 5,
+          usedUsd: 0.08,
+          remainingUsd: 4.92,
+          resetAt: "2026-07-01T00:00:00.000Z",
+        },
+      }),
+    );
+
+    expect(
+      screen.getByLabelText(
+        "Compute credit: $4.92 remaining of $5.00 pooled across 1 member; 126h 51m remaining; resets at the start of next month",
+      ),
+    ).toHaveTextContent("Compute · $4.92/$5.00");
+  });
+
+  it("labels administrators as unlimited without hiding capacity", () => {
+    render(
+      createElement(WorkspaceTopBar, {
+        repository: "yousef20920/CoDev",
+        workspaceId: "workspace-1",
+        canInvite: true,
+        isAdmin: true,
+      }),
+    );
+
+    expect(
+      screen.getByLabelText(
+        "Compute credit: no limit for administrators; runtime is still tracked in the admin console",
+      ),
+    ).toHaveTextContent("Compute · No limit");
+  });
+
   it("shows how many agents are working without opening a panel", () => {
     render(
       createElement(WorkspaceTopBar, {

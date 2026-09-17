@@ -120,7 +120,7 @@ export async function ensureWorkspaceRuntimeReady(
     throw new WorkspaceLifecycleError("Workspace not found.", 404);
   }
   const githubConnected = Boolean(workspace.repository && workspace.baseSha);
-  await assertWorkspaceCreditQuota(workspaceId);
+  await assertWorkspaceCreditQuota(workspaceId, userId);
   const expiresAt = await beginWorkspaceProvisioning(
     workspaceId,
     userId,

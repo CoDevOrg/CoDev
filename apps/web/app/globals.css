@@ -137,6 +137,22 @@
   white-space: nowrap;
 }
 
+.workspace-topbar-credit {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border: 1px solid rgba(237, 238, 240, 0.14);
+  border-radius: 999px;
+  color: var(--workspace-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.workspace-topbar-credit.is-unlimited {
+  border-color: rgba(63, 191, 122, 0.35);
+  background: rgba(63, 191, 122, 0.08);
+  color: #d7f7de;
+}
+
 .workspace-topbar-capacity.is-live {
   border-color: rgba(63, 191, 122, 0.45);
   background: rgba(63, 191, 122, 0.12);

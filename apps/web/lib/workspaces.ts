@@ -593,6 +593,7 @@ export async function listWorkspaceMembers(workspaceId: string) {
       login: schema.users.login,
       name: schema.users.name,
       avatarUrl: schema.users.avatarUrl,
+      isAdmin: schema.users.isAdmin,
       role: schema.workspaceMembers.role,
       accessRole: schema.workspaceMembers.accessRole,
       canTerminal: schema.workspaceMembers.canTerminal,

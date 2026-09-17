@@ -19,7 +19,9 @@ vi.mock("./vm-usage", () => ({
 }));
 
 import {
+  MONTHLY_CREDIT_USD_PER_MEMBER,
   MONTHLY_MINUTES_PER_MEMBER,
+  memberComputeCreditStatus,
   getWorkspaceCreditStatus,
 } from "./compute-credits";
 
@@ -27,8 +29,8 @@ function intervalsSelect(rows: unknown[]) {
   return { from: () => ({ where: async () => rows }) };
 }
 
-function member(userId: string) {
-  return { userId } as ReturnType<typeof mockListWorkspaceMembers>;
+function member(userId: string, isAdmin = false) {
+  return { userId, isAdmin } as ReturnType<typeof mockListWorkspaceMembers>;
 }
 
 describe("getWorkspaceCreditStatus", () => {
@@ -61,12 +63,16 @@ describe("getWorkspaceCreditStatus", () => {
     expect(status.allottedMinutes).toBe(3 * MONTHLY_MINUTES_PER_MEMBER);
     expect(status.usedMinutes).toBe(0);
     expect(status.remainingMinutes).toBe(3 * MONTHLY_MINUTES_PER_MEMBER);
+    expect(status.allottedUsd).toBe(3 * MONTHLY_CREDIT_USD_PER_MEMBER);
+    expect(status.memberCount).toBe(3);
   });
 
   it("counts live elapsed time on a still-open interval", async () => {
     mockListWorkspaceMembers.mockResolvedValue([member("user-1")]);
     const startedAt = new Date(Date.now() - 5 * 60_000);
-    mockSelect.mockReturnValue(intervalsSelect([{ startedAt, endedAt: null }]));
+    mockSelect.mockReturnValue(
+      intervalsSelect([{ userId: "user-1", startedAt, endedAt: null }]),
+    );
 
     const status = await getWorkspaceCreditStatus("workspace-1");
 
@@ -86,7 +92,11 @@ describe("getWorkspaceCreditStatus", () => {
     );
     mockSelect.mockReturnValue(
       intervalsSelect([
-        { startedAt: startedLastMonth, endedAt: endedTenMinutesIntoMonth },
+        {
+          userId: "user-1",
+          startedAt: startedLastMonth,
+          endedAt: endedTenMinutesIntoMonth,
+        },
       ]),
     );
 
@@ -102,10 +112,44 @@ describe("getWorkspaceCreditStatus", () => {
     const startedAt = new Date(
       Date.now() - (MONTHLY_MINUTES_PER_MEMBER + 100) * 60_000,
     );
-    mockSelect.mockReturnValue(intervalsSelect([{ startedAt, endedAt: null }]));
+    mockSelect.mockReturnValue(
+      intervalsSelect([{ userId: "user-1", startedAt, endedAt: null }]),
+    );
 
     const status = await getWorkspaceCreditStatus("workspace-1");
 
     expect(status.remainingMinutes).toBe(0);
+  });
+
+  it("excludes admin runtime from the pooled member allowance", async () => {
+    mockListWorkspaceMembers.mockResolvedValue([
+      member("admin-1", true),
+      member("user-1"),
+    ]);
+    const startedAt = new Date(Date.now() - 8 * 60_000);
+    mockSelect.mockReturnValue(
+      intervalsSelect([
+        { userId: "admin-1", startedAt, endedAt: null },
+        { userId: "user-1", startedAt, endedAt: null },
+      ]),
+    );
+
+    const status = await getWorkspaceCreditStatus("workspace-1");
+
+    expect(status.memberCount).toBe(1);
+    expect(status.allottedMinutes).toBe(MONTHLY_MINUTES_PER_MEMBER);
+    expect(status.usedMinutes).toBeGreaterThanOrEqual(8);
+    expect(status.usedMinutes).toBeLessThan(10);
+  });
+});
+
+describe("memberComputeCreditStatus", () => {
+  it("marks admins as unlimited while retaining measured usage", () => {
+    expect(memberComputeCreditStatus(12, true)).toMatchObject({
+      isAdmin: true,
+      usedMinutes: 12,
+      allottedMinutes: null,
+      remainingMinutes: null,
+    });
   });
 });

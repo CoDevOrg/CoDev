@@ -1,6 +1,7 @@
 "use client";
 
 import { OrcaWorkspace } from "@/components/orca-workspace";
+import type { WorkspaceCreditStatus } from "@/lib/compute-credits";
 import type { WorkspaceProviderPreflight } from "@/lib/provider-surface-capability";
 
 type ChatProvider = "openai" | "anthropic";
@@ -29,6 +30,8 @@ export function WorkspaceHome({
   providerPreflight,
   canInvite,
   cursorAvailable,
+  creditStatus,
+  isAdmin,
   initialBranch,
   initialAgent,
 }: {
@@ -41,6 +44,10 @@ export function WorkspaceHome({
   /** Whether this member has a linked Cursor credential — gates offering it
    *  in the IDE's in-chat provider switcher. */
   cursorAvailable: boolean;
+  /** Current pooled member credit snapshot; null for unlimited admins. */
+  creditStatus: WorkspaceCreditStatus | null;
+  /** Application-wide administrators are not gated by workspace credits. */
+  isAdmin: boolean;
   /** Optional branch route carried into the embedded IDE's startup fragment. */
   initialBranch?: string;
   /** Optional managed agent route carried into the embedded IDE. */
@@ -55,6 +62,8 @@ export function WorkspaceHome({
     <OrcaWorkspace
       canInvite={canInvite}
       cursorAvailable={cursorAvailable}
+      creditStatus={creditStatus}
+      isAdmin={isAdmin}
       providerPreflight={providerPreflight}
       repository={repository}
       workspaceId={workspaceId}

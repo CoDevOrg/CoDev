@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { WorkspaceHome } from "@/components/workspace-home";
 import { permissionsForRole } from "@/lib/access";
 import { hasLinkedCursorCredential } from "@/lib/credentials";
+import { getWorkspaceCreditStatus } from "@/lib/compute-credits";
+import { isUserAdmin } from "@/lib/admin";
 import { loadProviderConnectionSnapshot } from "@/lib/provider-connection-server";
 import {
   workspaceProviderPreflight,
@@ -63,6 +65,10 @@ export default async function WorkspacePage({
   if (!workspace) {
     notFound();
   }
+  const isAdmin = await isUserAdmin(user.id);
+  const creditStatus = isAdmin
+    ? null
+    : await getWorkspaceCreditStatus(workspaceId);
 
   // What the workspace chat tab can actually *run*, not merely what the member
   // has connected: a workspace-enabled API key or supported subscription.
@@ -78,6 +84,8 @@ export default async function WorkspacePage({
       providerPreflight={workspaceProviderPreflight(providerSnapshot)}
       canInvite={permissionsForRole(workspace.accessRole).invite}
       cursorAvailable={cursorAvailable}
+      creditStatus={creditStatus}
+      isAdmin={isAdmin}
       repository={workspace.repository}
       workspaceId={workspace.id}
       {...(initialBranch ? { initialBranch } : {})}

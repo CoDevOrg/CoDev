@@ -121,7 +121,10 @@ describe("ensureOrcaSession", () => {
     mocks.startIde.mockResolvedValueOnce(session);
     const result = await ensureOrcaSession(workspace, userId);
     expect(result.state).toBe("ready");
-    expect(mocks.assertWorkspaceCreditQuota).toHaveBeenCalledWith(workspaceId);
+    expect(mocks.assertWorkspaceCreditQuota).toHaveBeenCalledWith(
+      workspaceId,
+      userId,
+    );
     expect(mocks.getIde).toHaveBeenCalledWith(workspaceId, 1_500);
     expect(mocks.getHostState).not.toHaveBeenCalled();
     expect(mocks.requestHostWake).not.toHaveBeenCalled();

@@ -4,6 +4,10 @@ import { and, countDistinct, desc, eq, gte, sql } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 
+import {
+  getComputeMinutesByUserThisMonth,
+  memberComputeCreditStatus,
+} from "./compute-credits";
 import { getDatabase } from "./database";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -115,6 +119,12 @@ export type AdminUserRow = {
   createdAt: string;
   lastSeenAt: string | null;
   visits: number;
+  computeUsedMinutes: number;
+  computeUsedUsd: number;
+  computeAllottedMinutes: number | null;
+  computeAllottedUsd: number | null;
+  computeRemainingMinutes: number | null;
+  computeRemainingUsd: number | null;
 };
 
 export async function getUserDirectory(): Promise<AdminUserRow[]> {
@@ -145,20 +155,38 @@ export async function getUserDirectory(): Promise<AdminUserRow[]> {
       desc(users.createdAt),
     );
 
-  return rows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    email: row.email,
-    login: row.login,
-    avatarUrl: row.avatarUrl,
-    isAdmin: row.isAdmin,
-    hasGithub: row.githubUserId !== null,
-    hasGoogle: row.googleUserId !== null,
-    hasPassword: row.passwordHash !== null,
-    createdAt: row.createdAt.toISOString(),
-    lastSeenAt: row.lastSeenAt ? new Date(row.lastSeenAt).toISOString() : null,
-    visits: row.visits ?? 0,
-  }));
+  const minutesByUser = await getComputeMinutesByUserThisMonth(
+    rows.map((row) => row.id),
+  );
+
+  return rows.map((row) => {
+    const credit = memberComputeCreditStatus(
+      minutesByUser.get(row.id) ?? 0,
+      row.isAdmin,
+    );
+    return {
+      id: row.id,
+      name: row.name,
+      email: row.email,
+      login: row.login,
+      avatarUrl: row.avatarUrl,
+      isAdmin: row.isAdmin,
+      hasGithub: row.githubUserId !== null,
+      hasGoogle: row.googleUserId !== null,
+      hasPassword: row.passwordHash !== null,
+      createdAt: row.createdAt.toISOString(),
+      lastSeenAt: row.lastSeenAt
+        ? new Date(row.lastSeenAt).toISOString()
+        : null,
+      visits: row.visits ?? 0,
+      computeUsedMinutes: credit.usedMinutes,
+      computeUsedUsd: credit.usedUsd,
+      computeAllottedMinutes: credit.allottedMinutes,
+      computeAllottedUsd: credit.allottedUsd,
+      computeRemainingMinutes: credit.remainingMinutes,
+      computeRemainingUsd: credit.remainingUsd,
+    };
+  });
 }
 
 export type AdminRecentVisit = {

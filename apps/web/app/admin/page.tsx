@@ -96,6 +96,20 @@ export default async function AdminPage() {
   ).length;
 
   const maxDaily = Math.max(1, ...daily.map((point) => point.views));
+  const memberCreditRows = directory.filter((row) => !row.isAdmin);
+  const adminCreditRows = directory.filter((row) => row.isAdmin);
+  const totalMemberAllocationUsd = memberCreditRows.reduce(
+    (total, row) => total + (row.computeAllottedUsd ?? 0),
+    0,
+  );
+  const totalMemberUsedUsd = memberCreditRows.reduce(
+    (total, row) => total + row.computeUsedUsd,
+    0,
+  );
+  const totalAdminUsedUsd = adminCreditRows.reduce(
+    (total, row) => total + row.computeUsedUsd,
+    0,
+  );
 
   const stats: { label: string; value: string; hint?: string }[] = [
     {
@@ -161,6 +175,117 @@ export default async function AdminPage() {
             organization exceptions and plans.
           </p>
           <AdminFeatureControls data={featureAccess} />
+        </section>
+
+        <section className="admin-section">
+          <h2>Compute credits · this month</h2>
+          <p className="admin-console-sub admin-section-intro">
+            Each non-admin member contributes a $5 monthly allowance that is
+            pooled within their workspaces. Admin sessions bypass that limit,
+            but their runtime is still recorded here. Dollar values are
+            estimated from the current host rate and are separate from the real
+            Azure spend report below.
+          </p>
+          <div className="admin-stat-grid" style={{ marginBottom: "1rem" }}>
+            <div className="admin-stat">
+              <div className="admin-stat-label">Member allowance</div>
+              <div className="admin-stat-value">
+                {formatCost(totalMemberAllocationUsd, "USD")}
+              </div>
+              <div className="admin-stat-hint">
+                pooled across {numberFmt.format(memberCreditRows.length)}{" "}
+                non-admin members
+              </div>
+            </div>
+            <div className="admin-stat">
+              <div className="admin-stat-label">Member credits used</div>
+              <div className="admin-stat-value">
+                {formatCost(totalMemberUsedUsd, "USD")}
+              </div>
+              <div className="admin-stat-hint">
+                estimated credit-equivalent runtime
+              </div>
+            </div>
+            <div className="admin-stat">
+              <div className="admin-stat-label">Admin runtime tracked</div>
+              <div className="admin-stat-value">
+                {formatCost(totalAdminUsedUsd, "USD")}
+              </div>
+              <div className="admin-stat-hint">
+                unlimited sessions, still metered
+              </div>
+            </div>
+          </div>
+          <div className="admin-table-wrap">
+            <div className="admin-table-scroll">
+              <table className="admin-table">
+                <caption className="sr-only">
+                  Per-user compute credit usage for the current calendar month
+                </caption>
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Role</th>
+                    <th className="num">Used</th>
+                    <th className="num">Allowance</th>
+                    <th className="num">Remaining</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {directory.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="admin-muted">
+                        No users yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    directory.map((row) => (
+                      <tr key={`credit-${row.id}`}>
+                        <td>
+                          <span className="admin-user-name">
+                            {row.name ?? row.login}
+                          </span>
+                          <br />
+                          <span className="admin-user-login">@{row.login}</span>
+                        </td>
+                        <td>
+                          {row.isAdmin ? (
+                            <span className="admin-badge is-admin">admin</span>
+                          ) : (
+                            <span className="admin-muted">member</span>
+                          )}
+                        </td>
+                        <td className="num">
+                          <div>{formatMinutes(row.computeUsedMinutes)}</div>
+                          <span className="admin-time">
+                            {formatCost(row.computeUsedUsd, "USD")} est.
+                          </span>
+                        </td>
+                        <td className="num">
+                          {row.isAdmin ? (
+                            <span className="admin-badge is-admin">
+                              unlimited
+                            </span>
+                          ) : (
+                            <>
+                              {formatCost(row.computeAllottedUsd, "USD")}
+                              <br />
+                              <span className="admin-time">pooled</span>
+                            </>
+                          )}
+                        </td>
+                        <td className="num">
+                          {row.isAdmin
+                            ? "—"
+                            : formatCost(row.computeRemainingUsd, "USD")}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </section>
 
         <section className="admin-section">

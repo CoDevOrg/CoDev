@@ -118,7 +118,7 @@ export async function POST(
     if (runtime?.status === "provisioning" || runtime?.status === "stopping") {
       return Response.json({ state: runtime.status }, { status: 202 });
     }
-    await assertWorkspaceCreditQuota(workspaceId);
+    await assertWorkspaceCreditQuota(workspaceId, user.id);
     const hostState = await requestHostWake();
     if (hostState === "starting") {
       return Response.json({ state: "starting" }, { status: 202 });
