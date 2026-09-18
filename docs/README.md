@@ -21,16 +21,16 @@ kept for the record only.
 
 ## Architecture and integration
 
-| Document                                                                                   | Status  | Covers                                                                  |
-| ------------------------------------------------------------------------------------------ | ------- | ----------------------------------------------------------------------- |
-| [BACKEND_FRONTEND_INTEGRATION.md](./BACKEND_FRONTEND_INTEGRATION.md)                       | Current | Contract between the workspace frontend and the control-plane APIs      |
-| [WORKSPACE_CONSOLIDATION.md](./WORKSPACE_CONSOLIDATION.md)                                 | Current | Sandbox/IDE consolidation; what shipped and what is still gated         |
-| [branch-workspaces-plan.md](./branch-workspaces-plan.md)                                   | Current | Branches-first collaboration plan, phases 1 to 5                        |
-| [branch-workspaces-phase-5-verification.md](./branch-workspaces-phase-5-verification.md)   | Current | Verification record for the branch-workspaces rollout                   |
-| [provider-oauth-openai-codex.md](./provider-oauth-openai-codex.md)                         | Current | How a member connects OpenAI Codex (official CLI auth cache)            |
-| [openai-codex-hosted-subscription-bridge.md](./openai-codex-hosted-subscription-bridge.md) | Current | Running the Codex CLI headless in the cloud with that cache             |
-| [agent-session-portability.md](./agent-session-portability.md)                             | Current | Capsule v0 contract and provider-adapter boundary for imported sessions |
-| [GIT_PROXY.md](./GIT_PROXY.md)                                                             | Design  | Git over the control plane without credentials in the guest (unbuilt)   |
+| Document                                                                                   | Status  | Covers                                                                |
+| ------------------------------------------------------------------------------------------ | ------- | --------------------------------------------------------------------- |
+| [BACKEND_FRONTEND_INTEGRATION.md](./BACKEND_FRONTEND_INTEGRATION.md)                       | Current | Contract between the workspace frontend and the control-plane APIs    |
+| [WORKSPACE_CONSOLIDATION.md](./WORKSPACE_CONSOLIDATION.md)                                 | Current | Sandbox/IDE consolidation; what shipped and what is still gated       |
+| [branch-workspaces-plan.md](./branch-workspaces-plan.md)                                   | Current | Branches-first collaboration plan, phases 1 to 5                      |
+| [branch-workspaces-phase-5-verification.md](./branch-workspaces-phase-5-verification.md)   | Current | Verification record for the branch-workspaces rollout                 |
+| [provider-oauth-openai-codex.md](./provider-oauth-openai-codex.md)                         | Current | How a member connects OpenAI Codex (official CLI auth cache)          |
+| [openai-codex-hosted-subscription-bridge.md](./openai-codex-hosted-subscription-bridge.md) | Current | Running the Codex CLI headless in the cloud with that cache           |
+| [agent-session-portability.md](./agent-session-portability.md)                             | Current | Capsule v0 contract, adapter boundary, and durable import storage     |
+| [GIT_PROXY.md](./GIT_PROXY.md)                                                             | Design  | Git over the control plane without credentials in the guest (unbuilt) |
 
 ## Product
 

@@ -1,7 +1,8 @@
 # Provider-neutral agent session portability
 
-Status: Current for the Capsule v0 contract foundation. Durable storage,
-repository restoration, provider rehydration, and launch are future work.
+Status: Current for the Capsule v0 contract and durable import-storage
+foundation. Repository restoration, provider rehydration, and launch are future
+work.
 
 ## Product model
 
@@ -55,9 +56,37 @@ The Codex implementation owner should keep ownership of the existing Codex rollo
 parser, import API route, tests, and dormant resume dialog. That work may consume
 the shared contract, but must not introduce Codex-only fields into it.
 
+## Durable import storage
+
+An accepted import has two PostgreSQL records. `agent_session_imports` is the
+queryable control-plane record: ownership, source identity, capsule version and
+digest, lifecycle state, repository-restore state, lineage, and eventual links
+to a worktree and managed agent session. `agent_session_import_artifacts` holds
+the serialized capsule bytes separately so ordinary import queries never load
+the large encrypted value.
+
+The artifact is encrypted before it reaches PostgreSQL using the existing Azure
+Key Vault envelope-encryption path in production. Its authenticated context is
+bound to the organization, workspace, import, and importing member. CoDev checks
+the SHA-256 digest and byte count again after decryption, limits stored artifacts
+to 32 MiB, and refuses to read an artifact through a different scope. Local
+development uses the configured development key and embeds the same context
+fingerprint inside the encrypted envelope.
+
+The normalized transcript and handoff will become workspace-visible when the
+import view is built. The serialized artifact, including opaque provider-native
+payload, remains importer-scoped. Audit events contain metadata only, never
+capsule contents. Imports are retained until the import or owning workspace is
+explicitly deleted; deleting an import physically removes its encrypted artifact
+and leaves a soft-deleted metadata record for lifecycle accounting.
+
+Storage is idempotent per workspace, importing member, and caller-supplied key.
+Reusing a key for different capsule bytes or lineage is rejected. A retry may
+repair an import in `storing` or `failed`, but cannot move a later lifecycle
+state backward.
+
 ## Deliberately deferred
 
-Capsule persistence, encryption, archive/upload transport, import records,
-repository restoration, runtime rehydration after IDE-home recreation, active
-writer enforcement, and user-facing continuation selection are not implemented by
-this contract-only milestone.
+Archive/upload transport, the public import API, repository restoration, runtime
+rehydration after IDE-home recreation, active-writer enforcement, and user-facing
+continuation selection are not implemented by this milestone.
