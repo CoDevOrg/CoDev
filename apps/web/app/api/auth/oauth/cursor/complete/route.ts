@@ -1,4 +1,4 @@
-import { completeCursorApiKey } from "@/lib/oauth-route";
+import { completeCursorApiKey } from "@/lib/providers/oauth-route";
 
 export const runtime = "nodejs";
 

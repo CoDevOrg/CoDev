@@ -2,8 +2,11 @@ import { z } from "zod";
 
 import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
 
-import { AgentCapacityError, assertAgentCapacity } from "@/lib/agent-capacity";
-import { isVerificationFixtureEnabled } from "@/lib/verification-fixture";
+import {
+  AgentCapacityError,
+  assertAgentCapacity,
+} from "@/lib/agents/agent-capacity";
+import { isVerificationFixtureEnabled } from "@/lib/admin/verification-fixture";
 
 const requestSchema = z.object({
   activeSessions: z.number().int().nonnegative(),

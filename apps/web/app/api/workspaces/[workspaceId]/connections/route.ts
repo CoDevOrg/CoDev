@@ -1,12 +1,12 @@
 import { z } from "zod";
 
-import { withWorkspace } from "@/lib/api-route";
+import { withWorkspace } from "@/lib/http/api-route";
 import {
   loadProviderConnectionSnapshot,
   revokePersonalProviderConnection,
   savePersonalProviderConnection,
-} from "@/lib/provider-connection-server";
-import { publicProviderConnectionPayload } from "@/lib/provider-connection-view";
+} from "@/lib/providers/provider-connection-server";
+import { publicProviderConnectionPayload } from "@/lib/providers/provider-connection-view";
 
 const providerSchema = z.enum(["openai", "anthropic"]);
 

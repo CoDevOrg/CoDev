@@ -2,9 +2,9 @@ import { z } from "zod";
 
 import { createAgentEvent } from "@codev/shared-types";
 
-import { readJson, withWorkspace } from "@/lib/api-route";
-import { appendWorkspaceEvent } from "@/lib/audit";
-import { appendWorkspaceStateEvent } from "@/lib/workspace-state";
+import { readJson, withWorkspace } from "@/lib/http/api-route";
+import { appendWorkspaceEvent } from "@/lib/workspaces/audit";
+import { appendWorkspaceStateEvent } from "@/lib/workspaces/workspace-state";
 
 const relativePathSchema = z
   .string()

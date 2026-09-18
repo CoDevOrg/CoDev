@@ -6,7 +6,7 @@ import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import { ArrowLeft, Blocks, Plug, Search, User } from "lucide-react";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/platform/utils";
 
 type SettingsNavItem = {
   name: string;

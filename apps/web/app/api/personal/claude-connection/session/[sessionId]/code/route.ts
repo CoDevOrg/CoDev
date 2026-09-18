@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-import { apiError, getApiUser } from "@/lib/api";
-import { toClaudeConnectionFailure } from "@/lib/claude-connection";
-import { submitClaudeConnectionCode } from "@/lib/claude-connection-session";
+import { apiError, getApiUser } from "@/lib/http/api";
+import { toClaudeConnectionFailure } from "@/lib/providers/claude-connection";
+import { submitClaudeConnectionCode } from "@/lib/providers/claude-connection-session";
 
 export const runtime = "nodejs";
 

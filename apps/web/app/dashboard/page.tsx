@@ -2,11 +2,11 @@ import type { Metadata } from "next";
 
 import { isGitHubAuthConfigured } from "@codev/config";
 
-import { AppChrome } from "@/components/app-chrome";
-import { WorkspaceGrid } from "@/components/workspace-grid";
-import { listWorkspacePresence } from "@/lib/collaboration-server";
-import { requireUser } from "@/lib/session";
-import { listWorkspacesForUser } from "@/lib/workspaces";
+import { AppChrome } from "@/components/shell/app-chrome";
+import { WorkspaceGrid } from "@/components/workspace/workspace-grid";
+import { listWorkspacePresence } from "@/lib/workspaces/collaboration-server";
+import { requireUser } from "@/lib/auth/session";
+import { listWorkspacesForUser } from "@/lib/workspaces/workspaces";
 
 export const metadata: Metadata = { title: "Workspaces" };
 

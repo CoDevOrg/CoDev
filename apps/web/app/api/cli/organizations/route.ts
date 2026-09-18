@@ -1,5 +1,5 @@
-import { cliAuthErrorResponse } from "@/lib/cli-auth";
-import { listCliOrganizations } from "@/lib/codex-cli-auth-cache";
+import { cliAuthErrorResponse } from "@/lib/auth/cli-auth";
+import { listCliOrganizations } from "@/lib/providers/codex-cli-auth-cache";
 
 export const runtime = "nodejs";
 

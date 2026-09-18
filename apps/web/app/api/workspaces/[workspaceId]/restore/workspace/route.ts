@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import { readJson, withUser } from "@/lib/api-route";
-import { restoreWorkspaceToRevision } from "@/lib/workspace-restore";
+import { readJson, withUser } from "@/lib/http/api-route";
+import { restoreWorkspaceToRevision } from "@/lib/workspaces/workspace-restore";
 
 const bodySchema = z.object({
   revision: z.string().min(7).max(40),

@@ -11,7 +11,7 @@ import { ProviderAccountCard } from "./provider-account-card";
 import type {
   CliSubscriptionRecord,
   ProviderConnectionRecord,
-} from "@/lib/provider-connection-view";
+} from "@/lib/providers/provider-connection-view";
 
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({

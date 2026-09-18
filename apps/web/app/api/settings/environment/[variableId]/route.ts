@@ -1,10 +1,10 @@
 import { z } from "zod";
 
-import { apiError, getApiUser } from "@/lib/api";
+import { apiError, getApiUser } from "@/lib/http/api";
 import {
   deleteUserEnvironmentVariable,
   updateUserEnvironmentVariable,
-} from "@/lib/user-environment";
+} from "@/lib/providers/user-environment";
 
 const paramsSchema = z.object({
   variableId: z.uuid(),

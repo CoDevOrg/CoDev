@@ -4,11 +4,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { FlaskConical, GitBranch, MessagesSquare } from "lucide-react";
 
-import { LandingMotion } from "@/components/landing-motion";
-import { LandingWorkspaceDemo } from "@/components/landing-workspace-demo";
-import { RequestAccessButton } from "@/components/request-access-button";
-import { WaitlistInline } from "@/components/waitlist-inline";
-import { getCurrentAppUser } from "@/lib/identity";
+import { LandingMotion } from "@/components/landing/landing-motion";
+import { LandingWorkspaceDemo } from "@/components/landing/landing-workspace-demo";
+import { RequestAccessButton } from "@/components/landing/request-access-button";
+import { WaitlistInline } from "@/components/landing/waitlist-inline";
+import { getCurrentAppUser } from "@/lib/auth/identity";
 
 import "./landing.css";
 

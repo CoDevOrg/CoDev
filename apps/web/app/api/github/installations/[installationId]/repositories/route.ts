@@ -1,5 +1,5 @@
-import { apiError, getApiUserAnyAuth } from "@/lib/api";
-import { listRepositories } from "@/lib/github";
+import { apiError, getApiUserAnyAuth } from "@/lib/http/api";
+import { listRepositories } from "@/lib/github/github";
 
 export async function GET(
   request: Request,

@@ -1,5 +1,8 @@
-import { ApiError, withUser } from "@/lib/api-route";
-import { deleteWorkspace, getWorkspaceForMember } from "@/lib/workspaces";
+import { ApiError, withUser } from "@/lib/http/api-route";
+import {
+  deleteWorkspace,
+  getWorkspaceForMember,
+} from "@/lib/workspaces/workspaces";
 
 type Params = { workspaceId: string };
 

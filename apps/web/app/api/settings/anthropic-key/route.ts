@@ -1,11 +1,11 @@
 import { z } from "zod";
 
-import { apiError, getApiUser } from "@/lib/api";
+import { apiError, getApiUser } from "@/lib/http/api";
 import {
   deleteProviderCredential,
   getProviderCredentialStatus,
   saveAnthropicCredential,
-} from "@/lib/credentials";
+} from "@/lib/providers/credentials";
 
 const requestSchema = z.object({ apiKey: z.string().min(20).max(512) });
 

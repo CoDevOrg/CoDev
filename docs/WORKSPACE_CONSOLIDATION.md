@@ -79,8 +79,8 @@ lookup/start, pairing, editor editability, and first terminal command. Separate
 running-session, new-process, suspended-workspace, stopped-host, and new-repository
 cases. Report median and p95 latency with errors, not just successful openings.
 
-Start from `apps/web/lib/orca-host.ts`, `apps/web/lib/host.ts`,
-`apps/web/components/orca-workspace.tsx`, and
+Start from `apps/web/lib/runtime/orca-host.ts`, `apps/web/lib/runtime/host.ts`,
+`apps/web/components/workspace/orca-workspace.tsx`, and
 `services/orchestrator/src/backend/orca.rs`.
 
 Preserve membership checks, quotas, and fresh scoped connection authorization on

@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { Brand } from "@/components/app-chrome";
-import { ResetPasswordForm } from "@/components/reset-password-form";
-import { openPasswordResetToken } from "@/lib/password-reset";
+import { Brand } from "@/components/shell/app-chrome";
+import { ResetPasswordForm } from "@/components/auth/reset-password-form";
+import { openPasswordResetToken } from "@/lib/auth/password-reset";
 
 export const metadata: Metadata = {
   title: "Reset password",

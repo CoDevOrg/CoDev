@@ -6,25 +6,25 @@ import { z } from "zod";
 import { schema } from "@codev/db";
 import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
 
-import { kickAgentSession } from "@/lib/agent-service";
+import { kickAgentSession } from "@/lib/agents/agent-service";
 import {
   branchWorktreeName,
   deriveBranchSessionName,
   selectTurnsThroughReply,
-} from "@/lib/agent-branch";
-import { apiError } from "@/lib/api";
-import { withWorkspace } from "@/lib/api-route";
+} from "@/lib/agents/agent-branch";
+import { apiError } from "@/lib/http/api";
+import { withWorkspace } from "@/lib/http/api-route";
 import {
   createSandboxWorktree,
   checkpointSandboxWorktree,
   deleteSandboxWorktree,
-} from "@/lib/orchestrator";
-import { getDatabase } from "@/lib/database";
+} from "@/lib/runtime/orchestrator";
+import { getDatabase } from "@/lib/platform/database";
 import {
   getWorkspaceForMember,
   WorkspaceLifecycleError,
-} from "@/lib/workspaces";
-import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
+} from "@/lib/workspaces/workspaces";
+import { ensureWorkspaceRuntimeReady } from "@/lib/runtime/runtime-resume";
 
 const branchSchema = z.object({
   name: z.string().trim().min(1).max(32).optional(),

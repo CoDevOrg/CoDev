@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-import { apiError } from "@/lib/api";
-import { withWorkspace } from "@/lib/api-route";
-import { executeInSandbox } from "@/lib/orchestrator";
+import { apiError } from "@/lib/http/api";
+import { withWorkspace } from "@/lib/http/api-route";
+import { executeInSandbox } from "@/lib/runtime/orchestrator";
 
 const bodySchema = z.object({
   branch: z

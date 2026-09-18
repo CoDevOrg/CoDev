@@ -1,4 +1,4 @@
-import { apiError } from "@/lib/api";
+import { apiError } from "@/lib/http/api";
 
 export const runtime = "nodejs";
 

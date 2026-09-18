@@ -1,10 +1,10 @@
 import { z } from "zod";
 
-import { apiError, getApiUserAnyAuth } from "@/lib/api";
+import { apiError, getApiUserAnyAuth } from "@/lib/http/api";
 import {
   registerMobilePushToken,
   unregisterMobilePushToken,
-} from "@/lib/mobile-push";
+} from "@/lib/platform/mobile-push";
 
 const registerSchema = z.object({
   expoPushToken: z.string().trim().min(1),

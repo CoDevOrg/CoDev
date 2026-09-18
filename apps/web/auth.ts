@@ -7,24 +7,27 @@ import Google from "next-auth/providers/google";
 
 import { schema } from "@codev/db";
 
-import { resolveSignInProviderGate } from "@/lib/auth-sign-in-gate";
-import { resolveCredentialsSignIn } from "@/lib/credentials-auth";
-import { encryptSecret } from "@/lib/crypto";
-import { getDatabase } from "@/lib/database";
-import { GITHUB_LINK_COOKIE, openGithubLinkState } from "@/lib/github-link";
-import { resolveGithubConnection } from "@/lib/github";
+import { resolveSignInProviderGate } from "@/lib/auth/auth-sign-in-gate";
+import { resolveCredentialsSignIn } from "@/lib/auth/credentials-auth";
+import { encryptSecret } from "@/lib/platform/crypto";
+import { getDatabase } from "@/lib/platform/database";
+import {
+  GITHUB_LINK_COOKIE,
+  openGithubLinkState,
+} from "@/lib/github/github-link";
+import { resolveGithubConnection } from "@/lib/github/github";
 import {
   getSharedAuthCookieDomain,
   getSharedAuthCookieName,
-} from "@/lib/auth-cookie";
+} from "@/lib/auth/auth-cookie";
 import {
   assertCanRegister,
   clearInviteGrantCookie,
   consumeInvite,
   evaluateRegistration,
   RegistrationError,
-} from "@/lib/registration";
-import { mergeUserIntoCanonical } from "@/lib/user-merge";
+} from "@/lib/auth/registration";
+import { mergeUserIntoCanonical } from "@/lib/auth/user-merge";
 
 /**
  * Invite gate for a brand-new account (OAuth paths). Returns `ok: false` when

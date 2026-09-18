@@ -3,16 +3,16 @@ import { eq } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 
-import { apiError } from "@/lib/api";
-import { withWorkspace } from "@/lib/api-route";
+import { apiError } from "@/lib/http/api";
+import { withWorkspace } from "@/lib/http/api-route";
 import {
   collaborationSocketMaxPayload,
   handleCollaborationSocket,
-} from "@/lib/collaboration-server";
-import { getDatabase } from "@/lib/database";
-import { getWorkspaceForMember } from "@/lib/workspaces";
-import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
-import { getWorkspaceRuntime } from "@/lib/workspaces";
+} from "@/lib/workspaces/collaboration-server";
+import { getDatabase } from "@/lib/platform/database";
+import { getWorkspaceForMember } from "@/lib/workspaces/workspaces";
+import { ensureWorkspaceRuntimeReady } from "@/lib/runtime/runtime-resume";
+import { getWorkspaceRuntime } from "@/lib/workspaces/workspaces";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;

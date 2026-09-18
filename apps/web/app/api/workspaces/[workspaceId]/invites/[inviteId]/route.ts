@@ -1,5 +1,5 @@
-import { withUser } from "@/lib/api-route";
-import { revokeWorkspaceInvite } from "@/lib/workspaces";
+import { withUser } from "@/lib/http/api-route";
+import { revokeWorkspaceInvite } from "@/lib/workspaces/workspaces";
 
 export const DELETE = withUser<{ workspaceId: string; inviteId: string }>(
   async ({ user, params: { workspaceId, inviteId } }) => {

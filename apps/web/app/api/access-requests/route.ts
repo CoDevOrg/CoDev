@@ -7,9 +7,9 @@ import { and, eq, gt, sql } from "drizzle-orm";
 import {
   notifyTeamOfAccessRequest,
   sendAccessRequestReceipt,
-} from "@/lib/access-request-mail";
-import { getDatabase } from "@/lib/database";
-import { logEvent } from "@/lib/observability";
+} from "@/lib/admin/access-request-mail";
+import { getDatabase } from "@/lib/platform/database";
+import { logEvent } from "@/lib/platform/observability";
 
 /** How many requests one network address may file per hour. */
 const MAX_REQUESTS_PER_IP_PER_HOUR = 5;

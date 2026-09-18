@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   requireWorkspacePermission: vi.fn(),
 }));
 
-vi.mock("@/lib/api", () => ({
+vi.mock("@/lib/http/api", () => ({
   apiError: (error: unknown, status = 400) =>
     Response.json(
       { error: error instanceof Error ? error.message : "request failed" },
@@ -15,13 +15,13 @@ vi.mock("@/lib/api", () => ({
     ),
   getApiUser: mocks.getApiUser,
 }));
-vi.mock("@/lib/access", () => ({
+vi.mock("@/lib/auth/access", () => ({
   requireWorkspacePermission: mocks.requireWorkspacePermission,
 }));
-vi.mock("@/lib/audit", () => ({
+vi.mock("@/lib/workspaces/audit", () => ({
   appendWorkspaceEvent: mocks.appendWorkspaceEvent,
 }));
-vi.mock("@/lib/workspace-state", () => ({
+vi.mock("@/lib/workspaces/workspace-state", () => ({
   appendWorkspaceStateEvent: mocks.appendWorkspaceStateEvent,
 }));
 

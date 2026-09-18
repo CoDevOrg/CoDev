@@ -114,7 +114,7 @@ When the task is complete, users export their work directly from the browser:
 
 ## 2. Auto-Hibernation & Scale-to-Zero Architecture
 
-Cloud compute (AWS EC2 Bare Metal + MicroVMs) is expensive. To keep costs at **$0.00 for idle sessions**, CoDev automatically scales active sandboxes to zero after **1 hour of inactivity** (`workspaceHibernateIdleMs` in `apps/web/lib/workspaces.ts`), without losing a single line of code, agent context, terminal log, or uncommitted diff.
+Cloud compute (AWS EC2 Bare Metal + MicroVMs) is expensive. To keep costs at **$0.00 for idle sessions**, CoDev automatically scales active sandboxes to zero after **1 hour of inactivity** (`workspaceHibernateIdleMs` in `apps/web/lib/workspaces/workspaces.ts`), without losing a single line of code, agent context, terminal log, or uncommitted diff.
 
 ---
 

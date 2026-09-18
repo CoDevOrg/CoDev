@@ -1,9 +1,9 @@
 import { createPublicationSchema } from "@codev/contracts";
 
-import { readJson, withUser } from "@/lib/api-route";
-import { exportWorkspaceToPullRequest } from "@/lib/github-export";
-import { requestId } from "@/lib/observability";
-import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
+import { readJson, withUser } from "@/lib/http/api-route";
+import { exportWorkspaceToPullRequest } from "@/lib/github/github-export";
+import { requestId } from "@/lib/platform/observability";
+import { ensureWorkspaceRuntimeReady } from "@/lib/runtime/runtime-resume";
 
 // GitHub export, publication and pull request errors carry their own status;
 // anything else is an upstream failure.

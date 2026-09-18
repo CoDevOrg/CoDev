@@ -1,12 +1,12 @@
 import { z } from "zod";
 
-import { withUser, withWorkspace } from "@/lib/api-route";
-import { requireOrganizationSettingsWrite } from "@/lib/settings-access";
+import { withUser, withWorkspace } from "@/lib/http/api-route";
+import { requireOrganizationSettingsWrite } from "@/lib/auth/settings-access";
 import {
   deleteProviderCredential,
   getProviderCredentialStatus,
   saveProviderCredential,
-} from "@/lib/credentials";
+} from "@/lib/providers/credentials";
 
 const requestSchema = z.object({
   provider: z.enum([

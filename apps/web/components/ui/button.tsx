@@ -1,6 +1,6 @@
 import * as React from "react";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/platform/utils";
 
 const VARIANT_CLASSES = {
   default: "bg-primary text-primary-foreground hover:bg-primary/90",

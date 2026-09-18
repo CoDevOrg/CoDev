@@ -1,4 +1,4 @@
-import { startOAuth } from "@/lib/oauth-route";
+import { startOAuth } from "@/lib/providers/oauth-route";
 
 export const runtime = "nodejs";
 

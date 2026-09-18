@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import { withWorkspace } from "@/lib/api-route";
-import { enqueueSharedSessionInstruction } from "@/lib/shared-session-server";
+import { withWorkspace } from "@/lib/http/api-route";
+import { enqueueSharedSessionInstruction } from "@/lib/chat/shared-session-server";
 
 const inputSchema = z.object({
   prompt: z.string().min(1).max(20_000),

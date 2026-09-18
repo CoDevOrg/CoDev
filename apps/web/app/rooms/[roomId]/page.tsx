@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { AppChrome } from "@/components/app-chrome";
-import { SharedChatRoom } from "@/components/shared-chat-room";
-import { requireUser } from "@/lib/session";
-import { getSharedChatRoom, listSharedChatsForUser } from "@/lib/shared-chat";
+import { AppChrome } from "@/components/shell/app-chrome";
+import { SharedChatRoom } from "@/components/chat/shared-chat-room";
+import { requireUser } from "@/lib/auth/session";
+import {
+  getSharedChatRoom,
+  listSharedChatsForUser,
+} from "@/lib/chat/shared-chat";
 
 export const metadata: Metadata = { title: "Collaborative room" };
 

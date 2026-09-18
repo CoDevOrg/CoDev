@@ -1,8 +1,8 @@
-import { withWorkspace } from "@/lib/api-route";
+import { withWorkspace } from "@/lib/http/api-route";
 import {
   createWorkspacePathClaim,
   loadPathClaimsSnapshot,
-} from "@/lib/path-claims-server";
+} from "@/lib/coordination/path-claims-server";
 
 export const GET = withWorkspace("view", async ({ user, workspaceId }) =>
   Response.json(await loadPathClaimsSnapshot(workspaceId, user)),

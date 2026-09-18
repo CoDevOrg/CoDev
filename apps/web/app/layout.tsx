@@ -7,9 +7,9 @@ import "./globals.css";
 import "./app-theme.css";
 import "./team-chat.css";
 
-import { clerkAuthConfigured } from "@/lib/identity";
-import { AppClerkProvider } from "@/components/clerk-provider";
-import { VisitTracker } from "@/components/visit-tracker";
+import { clerkAuthConfigured } from "@/lib/auth/identity";
+import { AppClerkProvider } from "@/components/auth/clerk-provider";
+import { VisitTracker } from "@/components/landing/visit-tracker";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

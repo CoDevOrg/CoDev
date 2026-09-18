@@ -5,42 +5,42 @@ import { z } from "zod";
 
 import { schema } from "@codev/db";
 import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
-import { kickAgentSession } from "@/lib/agent-service";
-import { listAgentSessions } from "@/lib/agent-runtime";
-import { apiError } from "@/lib/api";
-import { withWorkspace } from "@/lib/api-route";
+import { kickAgentSession } from "@/lib/agents/agent-service";
+import { listAgentSessions } from "@/lib/agents/agent-runtime";
+import { apiError } from "@/lib/http/api";
+import { withWorkspace } from "@/lib/http/api-route";
 import {
   getAgentProvider,
   getSelectableAgentModels,
   parseAgentProvider,
   resolveSelectableAgentModel,
-} from "@/lib/ai-model";
-import { resolveAgentCredential } from "@/lib/credentials";
-import { getDatabase } from "@/lib/database";
-import { getGitHubUserToken } from "@/lib/github";
+} from "@/lib/providers/ai-model";
+import { resolveAgentCredential } from "@/lib/providers/credentials";
+import { getDatabase } from "@/lib/platform/database";
+import { getGitHubUserToken } from "@/lib/github/github";
 import {
   createSandboxWorktree,
   deleteSandboxWorktree,
-} from "@/lib/orchestrator";
+} from "@/lib/runtime/orchestrator";
 import {
   getWorkspaceForMember,
   WorkspaceLifecycleError,
-} from "@/lib/workspaces";
-import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
-import { readWorkspaceStateEvents } from "@/lib/workspace-state";
+} from "@/lib/workspaces/workspaces";
+import { ensureWorkspaceRuntimeReady } from "@/lib/runtime/runtime-resume";
+import { readWorkspaceStateEvents } from "@/lib/workspaces/workspace-state";
 import {
   AgentCapacityError,
   assertAgentCapacity,
   summarizeAgentCapacity,
-} from "@/lib/agent-capacity";
+} from "@/lib/agents/agent-capacity";
 import {
   agentAttachmentsSchema,
   toStoredAgentAttachments,
-} from "@/lib/agent-attachments";
+} from "@/lib/agents/agent-attachments";
 import {
   AgentPromptRateLimitError,
   enforceAgentPromptRateLimit,
-} from "@/lib/agent-rate-limit";
+} from "@/lib/agents/agent-rate-limit";
 
 const createSchema = z
   .object({

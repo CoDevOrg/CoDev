@@ -3,8 +3,11 @@ import { cookies } from "next/headers";
 import { isGitHubAuthConfigured } from "@codev/config";
 
 import { signIn } from "@/auth";
-import { apiError, getApiUser } from "@/lib/api";
-import { createGithubLinkState, GITHUB_LINK_COOKIE } from "@/lib/github-link";
+import { apiError, getApiUser } from "@/lib/http/api";
+import {
+  createGithubLinkState,
+  GITHUB_LINK_COOKIE,
+} from "@/lib/github/github-link";
 
 /**
  * Starts the GitHub account-linking OAuth flow from the embedded personal

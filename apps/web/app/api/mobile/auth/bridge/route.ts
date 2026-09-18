@@ -1,5 +1,5 @@
-import { getCurrentAppUser } from "@/lib/identity";
-import { mintCliAccessToken } from "@/lib/cli-auth";
+import { getCurrentAppUser } from "@/lib/auth/identity";
+import { mintCliAccessToken } from "@/lib/auth/cli-auth";
 
 export const runtime = "nodejs";
 

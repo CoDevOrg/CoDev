@@ -9,7 +9,7 @@
 - Azure Monitor collects the host's orchestrator log and VM availability; see
   the Log Analytics workspace in `infra/azure/main.bicep`.
 - Runtime spend is Azure Cost Management, surfaced in the admin dashboard
-  (`apps/web/lib/azure-cost.ts`).
+  (`apps/web/lib/admin/azure-cost.ts`).
 - Workspace audit events retain for 90 days.
 
 ## Domain email

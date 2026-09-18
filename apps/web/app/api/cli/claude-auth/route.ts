@@ -1,5 +1,5 @@
-import { cliAuthErrorResponse } from "@/lib/cli-auth";
-import { saveClaudeCliAuth } from "@/lib/claude-cli-auth";
+import { cliAuthErrorResponse } from "@/lib/auth/cli-auth";
+import { saveClaudeCliAuth } from "@/lib/providers/claude-cli-auth";
 
 export const runtime = "nodejs";
 

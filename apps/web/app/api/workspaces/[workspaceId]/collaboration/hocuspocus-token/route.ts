@@ -1,9 +1,9 @@
 import { createHmac } from "node:crypto";
 
-import { withWorkspace } from "@/lib/api-route";
-import { recordWorkspaceHeartbeat } from "@/lib/heartbeat";
-import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
-import { getWorkspaceRuntime } from "@/lib/workspaces";
+import { withWorkspace } from "@/lib/http/api-route";
+import { recordWorkspaceHeartbeat } from "@/lib/runtime/heartbeat";
+import { ensureWorkspaceRuntimeReady } from "@/lib/runtime/runtime-resume";
+import { getWorkspaceRuntime } from "@/lib/workspaces/workspaces";
 
 const HOCUSPOCUS_TOKEN_TTL_MS = 5 * 60 * 1_000;
 

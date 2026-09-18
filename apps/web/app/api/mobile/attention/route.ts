@@ -2,8 +2,8 @@ import { and, eq, inArray, isNotNull, or } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 
-import { apiError, getApiUserAnyAuth } from "@/lib/api";
-import { getDatabase } from "@/lib/database";
+import { apiError, getApiUserAnyAuth } from "@/lib/http/api";
+import { getDatabase } from "@/lib/platform/database";
 
 /**
  * Combined "needs your attention" list across every workspace the caller is

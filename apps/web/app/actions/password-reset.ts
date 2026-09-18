@@ -6,18 +6,18 @@ import { redirect } from "next/navigation";
 
 import { schema } from "@codev/db";
 
-import { hashPassword } from "@/lib/crypto";
-import { getDatabase } from "@/lib/database";
-import { getNewAccountPasswordError } from "@/lib/password-policy";
+import { hashPassword } from "@/lib/platform/crypto";
+import { getDatabase } from "@/lib/platform/database";
+import { getNewAccountPasswordError } from "@/lib/auth/password-policy";
 import {
   createPasswordResetToken,
   getPublicAppOrigin,
   openPasswordResetToken,
   passwordResetTokenStillValid,
   shouldSendPasswordReset,
-} from "@/lib/password-reset";
-import { sendPasswordResetEmail } from "@/lib/password-reset-mail";
-import { consumeRateLimit } from "@/lib/rate-limit";
+} from "@/lib/auth/password-reset";
+import { sendPasswordResetEmail } from "@/lib/auth/password-reset-mail";
+import { consumeRateLimit } from "@/lib/platform/rate-limit";
 
 function normalizeEmail(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim().toLowerCase() : "";

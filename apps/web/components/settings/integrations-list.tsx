@@ -5,7 +5,7 @@ import { Search } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { OrcaCard } from "@/components/settings/orca-style";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/platform/utils";
 
 export type IntegrationRow = {
   id: string;

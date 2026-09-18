@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import { updateCoordinationMessageStatus } from "@/lib/agent-coordination";
-import { withWorkspace } from "@/lib/api-route";
+import { updateCoordinationMessageStatus } from "@/lib/coordination/agent-coordination";
+import { withWorkspace } from "@/lib/http/api-route";
 
 const inputSchema = z.object({
   status: z.enum(["delivered", "resolved"]),

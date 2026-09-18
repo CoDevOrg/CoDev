@@ -1,15 +1,15 @@
-import { apiError } from "@/lib/api";
+import { apiError } from "@/lib/http/api";
 import {
   COORDINATION_BEARER_PREFIX,
   openCoordinationToken,
   openWorkspaceCoordinationToken,
   resolveCliAgentSessionForBranch,
-} from "@/lib/cli-agent-session";
+} from "@/lib/agents/cli-agent-session";
 import {
   callCoordinationTool,
   COORDINATION_TOOLS,
-} from "@/lib/coordination-mcp-tools";
-import { handleMcpHttpRequest } from "@/lib/mcp-server";
+} from "@/lib/coordination/coordination-mcp-tools";
+import { handleMcpHttpRequest } from "@/lib/coordination/mcp-server";
 
 export const runtime = "nodejs";
 

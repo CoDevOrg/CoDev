@@ -541,7 +541,7 @@ pub struct IdeExecRequest {
 /// A running per-workspace Orca IDE process. `ready` is the verbatim
 /// `orca_server_ready` JSON object the process printed on startup; the
 /// control plane already knows how to validate and parse that shape
-/// (`orcaReadySchema` in `apps/web/lib/orca-pairing.ts`), so the orchestrator
+/// (`orcaReadySchema` in `apps/web/lib/runtime/orca-pairing.ts`), so the orchestrator
 /// passes it through rather than re-implementing that parsing in Rust.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

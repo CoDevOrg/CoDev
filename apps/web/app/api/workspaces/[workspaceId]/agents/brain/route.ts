@@ -1,9 +1,9 @@
-import { withWorkspace } from "@/lib/api-route";
+import { withWorkspace } from "@/lib/http/api-route";
 import {
   listBrainEntries,
   listWorkspaceBriefs,
   listWorkspaceOverlaps,
-} from "@/lib/workspace-brain";
+} from "@/lib/coordination/workspace-brain";
 
 /**
  * The read model Mission Control renders: every live agent's brief, the

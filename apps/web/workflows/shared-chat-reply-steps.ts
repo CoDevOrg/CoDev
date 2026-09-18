@@ -1,7 +1,7 @@
 export async function prepareReplyStep(id: string) {
   "use step";
   const { prepareRoomReply, failRoomReply } =
-    await import("@/lib/shared-chat-reply");
+    await import("@/lib/chat/shared-chat-reply");
   try {
     return await prepareRoomReply(id);
   } catch (error) {
@@ -20,7 +20,7 @@ export async function pollReplyStep(
   after: number,
 ) {
   "use step";
-  const { pollRoomReply } = await import("@/lib/shared-chat-reply");
+  const { pollRoomReply } = await import("@/lib/chat/shared-chat-reply");
   try {
     return await pollRoomReply(id, sessionId, credentialId, after);
   } catch (error) {
@@ -37,7 +37,7 @@ export async function finishReplyStep(
   exitCode: number,
 ) {
   "use step";
-  const { finishCodexRoomReply } = await import("@/lib/shared-chat-reply");
+  const { finishCodexRoomReply } = await import("@/lib/chat/shared-chat-reply");
   try {
     await finishCodexRoomReply(id, output, exitCode);
   } catch (error) {
@@ -53,7 +53,7 @@ async function logReplyStepError(
   error: unknown,
   extra: Record<string, number | string> = {},
 ) {
-  const { logEvent } = await import("@/lib/observability");
+  const { logEvent } = await import("@/lib/platform/observability");
   logEvent("error", "room_reply_step_failed", {
     replyId: id,
     stage,
@@ -65,7 +65,7 @@ async function logReplyStepError(
 export async function failReplyStep(id: string) {
   "use step";
   const { finishRoomReply, ROOM_REPLY_FAILURE } =
-    await import("@/lib/shared-chat-reply");
+    await import("@/lib/chat/shared-chat-reply");
   await finishRoomReply(id, ROOM_REPLY_FAILURE, true);
 }
 
@@ -75,6 +75,6 @@ export async function cleanupReplyStep(
   sessionId: string,
 ) {
   "use step";
-  const { cleanupRoomReply } = await import("@/lib/shared-chat-reply");
+  const { cleanupRoomReply } = await import("@/lib/chat/shared-chat-reply");
   await cleanupRoomReply(id, credentialId, sessionId);
 }

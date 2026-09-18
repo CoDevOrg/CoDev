@@ -1,5 +1,5 @@
-import { withWorkspace } from "@/lib/api-route";
-import { loadWorkspaceCoordinationSnapshot } from "@/lib/coordination-snapshot-server";
+import { withWorkspace } from "@/lib/http/api-route";
+import { loadWorkspaceCoordinationSnapshot } from "@/lib/coordination/coordination-snapshot-server";
 
 /**
  * The live claims and overlaps behind Mission Control's collision banner.

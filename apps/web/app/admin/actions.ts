@@ -2,22 +2,22 @@
 
 import { revalidatePath } from "next/cache";
 
-import { requireAdmin } from "@/lib/admin";
+import { requireAdmin } from "@/lib/admin/admin";
 import {
   assignOrganizationPlan,
   setOrganizationFeatureOverride,
   setUserFeatureOverride,
-} from "@/lib/admin-feature-access";
+} from "@/lib/admin/admin-feature-access";
 import {
   parseOrganizationOverride,
   parsePlanAssignment,
   parseUserOverride,
-} from "@/lib/admin-feature-access-input";
+} from "@/lib/admin/admin-feature-access-input";
 import {
   declineAccessRequest,
   issueAccessRequestInvite,
   type WaitlistActionResult,
-} from "@/lib/access-requests";
+} from "@/lib/admin/access-requests";
 
 export type AdminFeatureActionResult = { ok: boolean; message: string };
 

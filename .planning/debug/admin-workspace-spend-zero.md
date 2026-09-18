@@ -47,11 +47,11 @@ started: Unknown whether it ever worked.
 
 - timestamp: 2026-09-05T16:17:30Z
   checked: admin page spend rendering references
-  found: apps/web/app/admin/page.tsx renders workspace.estimatedCostUsd and aggregate costTracking values supplied by apps/web/lib/admin-workspaces.ts
+  found: apps/web/app/admin/page.tsx renders workspace.estimatedCostUsd and aggregate costTracking values supplied by apps/web/lib/admin/admin-workspaces.ts
   implication: the report builder is the first server-side boundary to inspect; UI formatting alone cannot explain aggregate and per-workspace zero values without checking its inputs
 
 - timestamp: 2026-09-05T16:18:00Z
-  checked: complete apps/web/lib/admin-workspaces.ts allocation path
+  checked: complete apps/web/lib/admin/admin-workspaces.ts allocation path
   found: each workspace cost is (trackedMinutes / totalTrackedMinutes) * spend.ec2Usd when runtime exists; aggregate values are copied directly from getRealCodevAwsSpend
   implication: with non-zero runtime, an ec2Usd input of zero deterministically renders $0.00 for every workspace
 
@@ -72,7 +72,7 @@ started: Unknown whether it ever worked.
 
 - timestamp: 2026-09-05T16:18:20Z
   checked: runtime interval persistence path
-  found: apps/web/lib/vm-usage.ts inserts sandbox_runtime_intervals at sandbox start and closes them with real timestamps; admin-workspaces reads both closed intervals ending after the tracking start and all open intervals
+  found: apps/web/lib/runtime/vm-usage.ts inserts sandbox_runtime_intervals at sandbox start and closes them with real timestamps; admin-workspaces reads both closed intervals ending after the tracking start and all open intervals
   implication: runtime data is an independent allocation input and can be diagnosed without modifying records
 
 - timestamp: 2026-09-05T16:18:40Z
@@ -102,7 +102,7 @@ started: Unknown whether it ever worked.
 
 ## Resolution
 
-root_cause: apps/web/lib/aws-cost.ts sets both COST_TRACKING_START_DATE and today's UTC endDate to 2026-09-05, then treats endDate <= start as an empty period and returns hard-coded zeros before calling Cost Explorer. Cost Explorer requires an exclusive end date and already returns non-zero tagged spend for the valid 2026-09-05 to 2026-09-06 window. apps/web/lib/admin-workspaces.ts multiplies every positive runtime share by the injected ec2Usd=0, producing $0.00 for every workspace. The one-hour unstable_cache can retain that synthetic zero temporarily.
+root_cause: apps/web/lib/aws-cost.ts sets both COST_TRACKING_START_DATE and today's UTC endDate to 2026-09-05, then treats endDate <= start as an empty period and returns hard-coded zeros before calling Cost Explorer. Cost Explorer requires an exclusive end date and already returns non-zero tagged spend for the valid 2026-09-05 to 2026-09-06 window. apps/web/lib/admin/admin-workspaces.ts multiplies every positive runtime share by the injected ec2Usd=0, producing $0.00 for every workspace. The one-hour unstable_cache can retain that synthetic zero temporarily.
 fix: Not applied (diagnose-only mode). Suggested direction is to construct a valid exclusive end date for the current-day query and distinguish unavailable/incomplete billing data from a confirmed zero; add activation-day and allocation regression tests.
 verification: Root cause confirmed by direct code-path computation (earlyReturn=true), read-only AWS tag inventory, and read-only Cost Explorer results showing $0.2750953323 tagged total and $0.2269578323 tagged EC2 spend for the suppressed current-day window. No application or external state was modified.
 files_changed: []

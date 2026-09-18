@@ -1,5 +1,5 @@
-import { apiError, getApiUser } from "@/lib/api";
-import { acceptWorkspaceInvite } from "@/lib/workspaces";
+import { apiError, getApiUser } from "@/lib/http/api";
+import { acceptWorkspaceInvite } from "@/lib/workspaces/workspaces";
 
 export async function POST(
   _request: Request,

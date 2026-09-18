@@ -1,6 +1,9 @@
-import { withWorkspace } from "@/lib/api-route";
-import { getWorkspaceSnapshot, readSnapshotFile } from "@/lib/hibernation";
-import { parseFileList } from "@/lib/ide";
+import { withWorkspace } from "@/lib/http/api-route";
+import {
+  getWorkspaceSnapshot,
+  readSnapshotFile,
+} from "@/lib/runtime/hibernation";
+import { parseFileList } from "@/lib/runtime/ide";
 import {
   PREVIEW_CSP,
   assertPreviewPath,
@@ -9,12 +12,12 @@ import {
   extensionOf,
   previewDirectoryPrefix,
   resolvePreviewEntry,
-} from "@/lib/preview";
+} from "@/lib/runtime/preview";
 import {
   OrchestratorError,
   listSandboxFiles,
   readSandboxFile,
-} from "@/lib/orchestrator";
+} from "@/lib/runtime/orchestrator";
 
 function previewHeaders(contentType: string) {
   return {

@@ -743,7 +743,7 @@ fn token_pattern() -> &'static Regex {
 
 /// Idempotently clones a workspace's repository into its clone directory,
 /// mirroring the shell script `buildCloneScript` in
-/// `apps/web/lib/orca-pairing.ts` previously ran over SSM. Using `Command`'s
+/// `apps/web/lib/runtime/orca-pairing.ts` previously ran over SSM. Using `Command`'s
 /// argv form (no shell) instead of an interpolated script removes the need
 /// for the quoting/escaping care that script required.
 async fn ensure_workspace_clone(expected_root: &Path, clone: &IdeCloneRequest) -> Result<()> {

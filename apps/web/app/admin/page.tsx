@@ -3,20 +3,20 @@ import Image from "next/image";
 
 import "./admin.css";
 
-import { AdminWaitlist } from "@/components/admin-waitlist";
-import { AdminFeatureControls } from "@/components/admin-feature-controls";
-import { AppChrome } from "@/components/app-chrome";
-import { listAccessRequests } from "@/lib/access-requests";
-import { requireAdmin } from "@/lib/admin";
+import { AdminWaitlist } from "@/components/admin/admin-waitlist";
+import { AdminFeatureControls } from "@/components/admin/admin-feature-controls";
+import { AppChrome } from "@/components/shell/app-chrome";
+import { listAccessRequests } from "@/lib/admin/access-requests";
+import { requireAdmin } from "@/lib/admin/admin";
 import {
   getAdminSummary,
   getDailyTraffic,
   getRecentVisits,
   getTopPaths,
   getUserDirectory,
-} from "@/lib/admin-stats";
-import { listAllWorkspacesForAdmin } from "@/lib/admin-workspaces";
-import { getAdminFeatureAccessData } from "@/lib/admin-feature-access";
+} from "@/lib/admin/admin-stats";
+import { listAllWorkspacesForAdmin } from "@/lib/admin/admin-workspaces";
+import { getAdminFeatureAccessData } from "@/lib/admin/admin-feature-access";
 
 export const metadata: Metadata = { title: "Admin" };
 export const dynamic = "force-dynamic";

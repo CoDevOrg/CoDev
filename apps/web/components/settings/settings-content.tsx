@@ -1,8 +1,8 @@
 import { isGitHubAuthConfigured } from "@codev/config";
 
 import { connectGitHubAccount } from "@/app/actions/github";
-import type { AppUser, ConnectedAccounts } from "@/lib/identity";
-import type { OrganizationSettingsContext } from "@/lib/settings-access";
+import type { AppUser, ConnectedAccounts } from "@/lib/auth/identity";
+import type { OrganizationSettingsContext } from "@/lib/auth/settings-access";
 export function SettingsPageHeader({
   eyebrow,
   title,

@@ -1,12 +1,12 @@
-import { EnvironmentVariablesPanel } from "@/components/environment-variables-panel";
+import { EnvironmentVariablesPanel } from "@/components/settings/environment-variables-panel";
 import {
   OrcaCard,
   OrcaPageHeader,
   OrcaPageShell,
   OrcaSubsectionHeader,
 } from "@/components/settings/orca-style";
-import { listUserEnvironmentVariables } from "@/lib/user-environment";
-import { requireUser } from "@/lib/session";
+import { listUserEnvironmentVariables } from "@/lib/providers/user-environment";
+import { requireUser } from "@/lib/auth/session";
 
 export default async function PersonalEnvironmentPage() {
   const user = await requireUser();

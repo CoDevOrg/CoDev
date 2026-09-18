@@ -1,15 +1,15 @@
 import { z } from "zod";
 
-import { requireWorkspacePermission } from "@/lib/access";
-import { withUser, withWorkspace } from "@/lib/api-route";
+import { requireWorkspacePermission } from "@/lib/auth/access";
+import { withUser, withWorkspace } from "@/lib/http/api-route";
 import {
   closeSandboxTerminal,
   pollSandboxTerminal,
   resizeSandboxTerminal,
   sendSandboxTerminalInput,
   startSandboxTerminal,
-} from "@/lib/orchestrator";
-import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
+} from "@/lib/runtime/orchestrator";
+import { ensureWorkspaceRuntimeReady } from "@/lib/runtime/runtime-resume";
 
 const sessionIdSchema = z.string().regex(/^term-[0-9]+-[0-9]+$/);
 const dimensionsSchema = z.object({

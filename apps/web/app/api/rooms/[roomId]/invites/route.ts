@@ -1,6 +1,9 @@
-import { apiError, getApiUser } from "@/lib/api";
-import { consumeRateLimit } from "@/lib/rate-limit";
-import { createSharedChatInvite, SharedChatError } from "@/lib/shared-chat";
+import { apiError, getApiUser } from "@/lib/http/api";
+import { consumeRateLimit } from "@/lib/platform/rate-limit";
+import {
+  createSharedChatInvite,
+  SharedChatError,
+} from "@/lib/chat/shared-chat";
 
 type Context = { params: Promise<{ roomId: string }> };
 

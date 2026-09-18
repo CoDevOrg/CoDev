@@ -1,5 +1,8 @@
-import { createPathClaim, listPathClaims } from "@/lib/agent-coordination";
-import { withWorkspace } from "@/lib/api-route";
+import {
+  createPathClaim,
+  listPathClaims,
+} from "@/lib/coordination/agent-coordination";
+import { withWorkspace } from "@/lib/http/api-route";
 
 type Params = { workspaceId: string; sessionId: string };
 

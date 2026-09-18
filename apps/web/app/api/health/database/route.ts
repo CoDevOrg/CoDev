@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { checkDatabaseConnection } from "@/lib/database";
+import { checkDatabaseConnection } from "@/lib/platform/database";
 
 export const runtime = "nodejs";
 

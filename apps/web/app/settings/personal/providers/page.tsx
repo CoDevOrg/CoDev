@@ -9,11 +9,11 @@ import {
   OrcaPageShell,
 } from "@/components/settings/orca-style";
 import { ProviderSurfaceTabs } from "@/components/settings/provider-surface-tabs";
-import { isHostedClaudeConnectEnabled } from "@/lib/claude-connection-runner";
-import { isHostedCodexSubscriptionEnabled } from "@/lib/hosted-codex-subscription-flag";
-import { loadProviderConnectionSnapshot } from "@/lib/provider-connection-server";
-import { providerSurfaceCapability } from "@/lib/provider-surface-capability";
-import { requireUser } from "@/lib/session";
+import { isHostedClaudeConnectEnabled } from "@/lib/providers/claude-connection-runner";
+import { isHostedCodexSubscriptionEnabled } from "@/lib/providers/hosted-codex-subscription-flag";
+import { loadProviderConnectionSnapshot } from "@/lib/providers/provider-connection-server";
+import { providerSurfaceCapability } from "@/lib/providers/provider-surface-capability";
+import { requireUser } from "@/lib/auth/session";
 
 const CARDS = [
   {

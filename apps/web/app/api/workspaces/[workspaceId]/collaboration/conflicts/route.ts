@@ -1,9 +1,9 @@
-import { withWorkspace } from "@/lib/api-route";
+import { withWorkspace } from "@/lib/http/api-route";
 import {
   listCollaborationConflicts,
   reportCollaborationConflict,
-} from "@/lib/collaboration-server";
-import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
+} from "@/lib/workspaces/collaboration-server";
+import { ensureWorkspaceRuntimeReady } from "@/lib/runtime/runtime-resume";
 
 export const GET = withWorkspace("view", async ({ workspaceId }) =>
   Response.json({

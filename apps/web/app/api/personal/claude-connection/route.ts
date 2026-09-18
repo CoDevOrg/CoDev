@@ -1,10 +1,10 @@
 import { z } from "zod";
 
-import { apiError, getApiUser } from "@/lib/api";
+import { apiError, getApiUser } from "@/lib/http/api";
 import {
   ClaudeConnectionError,
   saveClaudeConnectionForUser,
-} from "@/lib/claude-connection";
+} from "@/lib/providers/claude-connection";
 
 export const runtime = "nodejs";
 

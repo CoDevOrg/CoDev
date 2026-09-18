@@ -1,5 +1,5 @@
-import { withUser } from "@/lib/api-route";
-import { syncWorkspaceToDefaultBranch } from "@/lib/workspaces";
+import { withUser } from "@/lib/http/api-route";
+import { syncWorkspaceToDefaultBranch } from "@/lib/workspaces/workspaces";
 
 // WorkspaceLifecycleError carries its own status; anything else is upstream.
 export const POST = withUser<{ workspaceId: string }>(

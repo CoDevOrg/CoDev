@@ -1,6 +1,6 @@
-import { apiError, getApiUser } from "@/lib/api";
-import { getSharedChatRoom } from "@/lib/shared-chat";
-import { roomReplyOptions } from "@/lib/shared-chat-reply";
+import { apiError, getApiUser } from "@/lib/http/api";
+import { getSharedChatRoom } from "@/lib/chat/shared-chat";
+import { roomReplyOptions } from "@/lib/chat/shared-chat-reply";
 
 export async function GET(
   _request: Request,

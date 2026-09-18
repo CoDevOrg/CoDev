@@ -1,9 +1,9 @@
 import { z } from "zod";
 
-import { apiError } from "@/lib/api";
-import { withWorkspace } from "@/lib/api-route";
-import { executeInSandbox } from "@/lib/orchestrator";
-import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
+import { apiError } from "@/lib/http/api";
+import { withWorkspace } from "@/lib/http/api-route";
+import { executeInSandbox } from "@/lib/runtime/orchestrator";
+import { ensureWorkspaceRuntimeReady } from "@/lib/runtime/runtime-resume";
 
 export const maxDuration = 300;
 

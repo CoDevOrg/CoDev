@@ -1,5 +1,5 @@
-import { createCliDeviceAuthorization } from "@/lib/cli-auth";
-import { consumeRateLimit } from "@/lib/rate-limit";
+import { createCliDeviceAuthorization } from "@/lib/auth/cli-auth";
+import { consumeRateLimit } from "@/lib/platform/rate-limit";
 
 export const runtime = "nodejs";
 

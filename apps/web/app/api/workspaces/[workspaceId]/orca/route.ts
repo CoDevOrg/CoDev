@@ -1,9 +1,12 @@
-import { apiError, getApiUserAnyAuth } from "@/lib/api";
-import { logEvent, requestId } from "@/lib/observability";
-import { WorkspaceAccessError, requireWorkspacePermission } from "@/lib/access";
-import { OrcaHostError, ensureOrcaSession } from "@/lib/orca-host";
-import { getWorkspaceForMember } from "@/lib/workspaces";
-import { WorkspaceOpenTiming } from "@/lib/workspace-open-timing";
+import { apiError, getApiUserAnyAuth } from "@/lib/http/api";
+import { logEvent, requestId } from "@/lib/platform/observability";
+import {
+  WorkspaceAccessError,
+  requireWorkspacePermission,
+} from "@/lib/auth/access";
+import { OrcaHostError, ensureOrcaSession } from "@/lib/runtime/orca-host";
+import { getWorkspaceForMember } from "@/lib/workspaces/workspaces";
+import { WorkspaceOpenTiming } from "@/lib/workspaces/workspace-open-timing";
 
 export const maxDuration = 300;
 

@@ -1,6 +1,6 @@
-import { prepareAgentReview } from "@/lib/agent-review";
-import { withUser } from "@/lib/api-route";
-import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
+import { prepareAgentReview } from "@/lib/agents/agent-review";
+import { withUser } from "@/lib/http/api-route";
+import { ensureWorkspaceRuntimeReady } from "@/lib/runtime/runtime-resume";
 
 export const POST = withUser<{ workspaceId: string; sessionId: string }>(
   async ({ user, params: { workspaceId, sessionId } }) => {

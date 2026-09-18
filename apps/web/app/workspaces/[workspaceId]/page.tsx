@@ -1,18 +1,18 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { WorkspaceHome } from "@/components/workspace-home";
-import { permissionsForRole } from "@/lib/access";
-import { hasLinkedCursorCredential } from "@/lib/credentials";
-import { getWorkspaceCreditStatus } from "@/lib/compute-credits";
-import { isUserAdmin } from "@/lib/admin";
-import { loadProviderConnectionSnapshot } from "@/lib/provider-connection-server";
+import { WorkspaceHome } from "@/components/workspace/workspace-home";
+import { permissionsForRole } from "@/lib/auth/access";
+import { hasLinkedCursorCredential } from "@/lib/providers/credentials";
+import { getWorkspaceCreditStatus } from "@/lib/runtime/compute-credits";
+import { isUserAdmin } from "@/lib/admin/admin";
+import { loadProviderConnectionSnapshot } from "@/lib/providers/provider-connection-server";
 import {
   workspaceProviderPreflight,
   workspaceReadyProviders,
-} from "@/lib/provider-surface-capability";
-import { requireUser } from "@/lib/session";
-import { getWorkspaceForMember } from "@/lib/workspaces";
+} from "@/lib/providers/provider-surface-capability";
+import { requireUser } from "@/lib/auth/session";
+import { getWorkspaceForMember } from "@/lib/workspaces/workspaces";
 
 export const metadata: Metadata = { title: "Workspace" };
 

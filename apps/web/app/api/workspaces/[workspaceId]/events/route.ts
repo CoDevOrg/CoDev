@@ -1,6 +1,6 @@
-import { withWorkspace } from "@/lib/api-route";
-import { loadActivityAuditSnapshot } from "@/lib/activity-audit-server";
-import type { ActivityFilterKind } from "@/lib/activity-audit-view";
+import { withWorkspace } from "@/lib/http/api-route";
+import { loadActivityAuditSnapshot } from "@/lib/workspaces/activity-audit-server";
+import type { ActivityFilterKind } from "@/lib/workspaces/activity-audit-view";
 
 const FILTER_KINDS = new Set<ActivityFilterKind>([
   "all",

@@ -1,11 +1,11 @@
 import { conversationImportPreviewInputSchema } from "@codev/contracts";
 
-import { apiError, getApiUser } from "@/lib/api";
+import { apiError, getApiUser } from "@/lib/http/api";
 import {
   ChatGptShareFetchError,
   previewChatGptShare,
-} from "@/lib/conversation-import/chatgpt-share-fetch";
-import { consumeRateLimit } from "@/lib/rate-limit";
+} from "@/lib/chat/conversation-import/chatgpt-share-fetch";
+import { consumeRateLimit } from "@/lib/platform/rate-limit";
 
 const PREVIEW_LIMIT = 20;
 const PREVIEW_WINDOW_SECONDS = 10 * 60;

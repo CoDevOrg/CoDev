@@ -2,13 +2,13 @@ import { experimental_upgradeWebSocket } from "@vercel/functions";
 import type { WebSocket } from "ws";
 import { z } from "zod";
 
-import { apiError } from "@/lib/api";
-import { withWorkspace } from "@/lib/api-route";
+import { apiError } from "@/lib/http/api";
+import { withWorkspace } from "@/lib/http/api-route";
 import {
   handleSandboxTerminalSocket,
   sandboxTerminalSocketMaxPayload,
-} from "@/lib/sandbox-terminal-server";
-import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
+} from "@/lib/runtime/sandbox-terminal-server";
+import { ensureWorkspaceRuntimeReady } from "@/lib/runtime/runtime-resume";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;

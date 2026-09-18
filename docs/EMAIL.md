@@ -24,7 +24,7 @@ to _send_ from `yousef@trycodev.com`. Receiving does not require it.
 The website sends mail with `RESEND_API_KEY` through `https://api.resend.com/emails`.
 
 - From: `AUTH_EMAIL_FROM`, defaulting to `CoDev <noreply@trycodev.com>`
-- Used by `apps/web/lib/password-reset-mail.ts` and `apps/web/lib/access-request-mail.ts`
+- Used by `apps/web/lib/auth/password-reset-mail.ts` and `apps/web/lib/admin/access-request-mail.ts`
 
 Resend is verified on `trycodev.com`. Its DNS lives on the `send` subdomain and
 `resend._domainkey`, so it does not conflict with apex MX used for receiving.

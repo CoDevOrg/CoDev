@@ -2,14 +2,14 @@ import { designPartnerFeedbackInputSchema } from "@codev/contracts";
 import { schema } from "@codev/db";
 import { eq } from "drizzle-orm";
 
-import { apiError, getApiUser } from "@/lib/api";
-import { getDatabase } from "@/lib/database";
+import { apiError, getApiUser } from "@/lib/http/api";
+import { getDatabase } from "@/lib/platform/database";
 import {
   createFeedbackGitHubIssue,
   feedbackGitHubConfigured,
-} from "@/lib/feedback-github";
-import { logEvent } from "@/lib/observability";
-import { consumeRateLimit } from "@/lib/rate-limit";
+} from "@/lib/admin/feedback-github";
+import { logEvent } from "@/lib/platform/observability";
+import { consumeRateLimit } from "@/lib/platform/rate-limit";
 
 export async function POST(request: Request) {
   const user = await getApiUser();

@@ -179,15 +179,15 @@ The existing session is unchanged.` Queue stayed **0 queued**; the
 worktree blocker`). The same unrelated local files remain and were not
   overwritten or included: modified `apps/web/app/app-theme.css`,
   `apps/web/app/globals.css`, `apps/web/app/sign-in/page.tsx`,
-  `apps/web/components/credentials-sign-in-form.test.tsx`,
-  `apps/web/components/credentials-sign-in-form.tsx`,
+  `apps/web/components/auth/credentials-sign-in-form.test.tsx`,
+  `apps/web/components/auth/credentials-sign-in-form.tsx`,
   `apps/web/components/sign-in-layout.test.ts`,
   `apps/web/tests/e2e/smoke.spec.ts`, and `packages/config/src/index.ts`;
   untracked `apps/web/app/actions/password-reset.ts`,
   `apps/web/app/forgot-password/`, `apps/web/app/reset-password/`,
-  `apps/web/components/reset-password-form.tsx`,
-  `apps/web/lib/password-reset-mail.ts`, `apps/web/lib/password-reset.test.ts`,
-  and `apps/web/lib/password-reset.ts`. No OI.12 product source was changed.
+  `apps/web/components/auth/reset-password-form.tsx`,
+  `apps/web/lib/auth/password-reset-mail.ts`, `apps/web/lib/auth/password-reset.test.ts`,
+  and `apps/web/lib/auth/password-reset.ts`. No OI.12 product source was changed.
   Current task remains OI.12; do not begin F6.1.
 
 - **OI.12 — dirty worktree blocker 2026-08-15T21:01:00Z:** The required
@@ -197,15 +197,15 @@ OI.12 Production workspace open blocker`). Unrelated local changes are
   present and were not overwritten or included: modified
   `apps/web/app/app-theme.css`, `apps/web/app/globals.css`,
   `apps/web/app/sign-in/page.tsx`,
-  `apps/web/components/credentials-sign-in-form.test.tsx`,
-  `apps/web/components/credentials-sign-in-form.tsx`,
+  `apps/web/components/auth/credentials-sign-in-form.test.tsx`,
+  `apps/web/components/auth/credentials-sign-in-form.tsx`,
   `apps/web/components/sign-in-layout.test.ts`,
   `apps/web/tests/e2e/smoke.spec.ts`, and `packages/config/src/index.ts`;
   untracked `apps/web/app/actions/password-reset.ts`,
   `apps/web/app/forgot-password/`, `apps/web/app/reset-password/`,
-  `apps/web/components/reset-password-form.tsx`,
-  `apps/web/lib/password-reset-mail.ts`, `apps/web/lib/password-reset.test.ts`,
-  and `apps/web/lib/password-reset.ts`. No OI.12 product source was changed
+  `apps/web/components/auth/reset-password-form.tsx`,
+  `apps/web/lib/auth/password-reset-mail.ts`, `apps/web/lib/auth/password-reset.test.ts`,
+  and `apps/web/lib/auth/password-reset.ts`. No OI.12 product source was changed
   in this run, and `git pull --ff-only origin main` was not applied over the
   dirty tree. Current task remains OI.12; do not begin F6.1. Clear or
   separately commit those unrelated files, then resume OI.12 Production
@@ -379,7 +379,7 @@ rejection and exactly-once integration in Orca`). Focused review/bridge
   `pnpm test` (273 passed, 1 skipped), `pnpm build`, `pnpm test:e2e` (32
   passed, 1 skipped), `pnpm rust:check`, and `git diff --check` passed.
   `pnpm format:check` remains blocked only by the pre-existing formatting
-  violations in this ledger and `apps/web/lib/workboard-view.test.ts`.
+  violations in this ledger and `apps/web/lib/coordination/workboard-view.test.ts`.
   GitHub records Ready Production deployment `5919829904` for that exact
   commit at
   `https://codev-o22mkezqs-yousef20920s-projects.vercel.app`, which aliases
@@ -863,8 +863,8 @@ in 24 hours · single use`; F1.3 timed out waiting for `Revoke invite`.
 
 - Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
   `apps/web/app/verification/b0-2/page.tsx`,
-  `apps/web/lib/verification-fixture.test.ts`,
-  `apps/web/lib/verification-fixture.ts`,
+  `apps/web/lib/admin/verification-fixture.test.ts`,
+  `apps/web/lib/admin/verification-fixture.ts`,
   `apps/web/playwright.config.ts`,
   `apps/web/tests/e2e/verification-fixture.spec.ts`, and
   `COLLABORATIVE_IDE_FIXTURES.md`.
@@ -912,10 +912,10 @@ playwright test tests/e2e/verification-fixture.spec.ts` — 1 passed; `git diff
 - Completed: 2026-08-11T13:11:40Z.
 - Changed files: `PLAN.md`, `docs/LAUNCH_CHECKLIST.md`,
   `packages/contracts/src/domain.ts`, `packages/contracts/src/contracts.test.ts`,
-  `apps/web/lib/agent-capacity.ts`, `apps/web/lib/agent-coordination.test.ts`,
-  `apps/web/lib/agent-runtime.ts`, `apps/web/app/globals.css`,
-  `apps/web/components/orca-workspace.tsx`,
-  `apps/web/components/orca-workspace.test.ts`,
+  `apps/web/lib/agents/agent-capacity.ts`, `apps/web/lib/coordination/agent-coordination.test.ts`,
+  `apps/web/lib/agents/agent-runtime.ts`, `apps/web/app/globals.css`,
+  `apps/web/components/workspace/orca-workspace.tsx`,
+  `apps/web/components/workspace/orca-workspace.test.ts`,
   `apps/web/app/api/workspaces/[workspaceId]/agents/route.ts`,
   `apps/web/app/api/workspaces/[workspaceId]/agents/[sessionId]/branch/route.ts`,
   `apps/web/app/verification/b0-2/page.tsx`,
@@ -950,11 +950,11 @@ available` capacity state. Then opened `/workspaces/b0-4` and confirmed the
 
 - Completed: 2026-08-11T14:12:34Z.
 - Changed files: `packages/contracts/src/domain.ts`,
-  `packages/contracts/src/contracts.test.ts`, `apps/web/lib/access.ts`,
-  `apps/web/lib/access.test.ts`, `apps/web/lib/settings-access.ts`,
-  `apps/web/lib/settings-access.test.ts`, `apps/web/lib/workspaces.ts`,
-  `apps/web/lib/verification-fixture.ts`,
-  `apps/web/lib/verification-fixture.test.ts`,
+  `packages/contracts/src/contracts.test.ts`, `apps/web/lib/auth/access.ts`,
+  `apps/web/lib/auth/access.test.ts`, `apps/web/lib/auth/settings-access.ts`,
+  `apps/web/lib/auth/settings-access.test.ts`, `apps/web/lib/workspaces/workspaces.ts`,
+  `apps/web/lib/admin/verification-fixture.ts`,
+  `apps/web/lib/admin/verification-fixture.test.ts`,
   `apps/web/app/verification/b0-2/page.tsx`,
   `apps/web/app/verification/b0-2/fixture.module.css`, and
   `apps/web/tests/e2e/verification-fixture.spec.ts`.
@@ -985,8 +985,8 @@ available` capacity state. Then opened `/workspaces/b0-4` and confirmed the
 - Completed: 2026-08-11T15:11:17Z.
 - Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
   `apps/web/app/verification/b0-2/page.tsx`,
-  `apps/web/components/invite-lifecycle-fixture.tsx`,
-  `apps/web/components/invite-lifecycle-fixture.test.tsx`, and
+  `apps/web/components/fixtures/invite-lifecycle-fixture.tsx`,
+  `apps/web/components/fixtures/invite-lifecycle-fixture.test.tsx`, and
   `apps/web/tests/e2e/verification-fixture.spec.ts`.
 - Checks: focused invite component test — 1 passed; focused fixture
   Playwright suite — 4 passed; targeted Prettier check — passed; web lint — 0
@@ -1014,9 +1014,9 @@ used`. No credentials or secrets were entered.
 
 - Completed: 2026-08-11T16:11:13Z.
 - Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
-  `apps/web/components/invite-lifecycle-fixture.tsx`,
-  `apps/web/components/invite-lifecycle-fixture.test.tsx`,
-  `apps/web/lib/workspaces.ts`, `apps/web/lib/workspaces.test.ts`, and
+  `apps/web/components/fixtures/invite-lifecycle-fixture.tsx`,
+  `apps/web/components/fixtures/invite-lifecycle-fixture.test.tsx`,
+  `apps/web/lib/workspaces/workspaces.ts`, `apps/web/lib/workspaces/workspaces.test.ts`, and
   `apps/web/tests/e2e/verification-fixture.spec.ts`.
 - Checks: focused server and fixture tests — 11 passed; targeted Prettier
   check — passed; web typecheck — passed; web lint — 0 errors with the same 2
@@ -1056,8 +1056,8 @@ used`. No credentials or secrets were entered.
 - Completed: 2026-08-11T17:09:17Z.
 - Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
   `apps/web/app/verification/b0-2/page.tsx`,
-  `apps/web/components/member-role-management-fixture.tsx`,
-  `apps/web/components/member-role-management-fixture.test.tsx`, and
+  `apps/web/components/fixtures/member-role-management-fixture.tsx`,
+  `apps/web/components/fixtures/member-role-management-fixture.test.tsx`, and
   `apps/web/tests/e2e/verification-fixture.spec.ts`.
 - Checks: focused fixture/component tests — 7 passed; targeted Prettier check
   — passed; web lint — 0 errors with the same 2 pre-existing warnings; web
@@ -1089,11 +1089,11 @@ used`. No credentials or secrets were entered.
 - Completed: 2026-08-11T18:13:14Z.
 - Changed files: `packages/contracts/src/events.ts`,
   `packages/contracts/src/contracts.test.ts`,
-  `apps/web/lib/presence-events.ts`,
-  `apps/web/lib/presence-events.test.ts`,
-  `apps/web/lib/collaboration-server.ts`,
-  `apps/web/components/presence-events-fixture.tsx`,
-  `apps/web/components/presence-events-fixture.test.tsx`,
+  `apps/web/lib/workspaces/presence-events.ts`,
+  `apps/web/lib/workspaces/presence-events.test.ts`,
+  `apps/web/lib/workspaces/collaboration-server.ts`,
+  `apps/web/components/fixtures/presence-events-fixture.tsx`,
+  `apps/web/components/fixtures/presence-events-fixture.test.tsx`,
   `apps/web/app/verification/b0-2/page.tsx`,
   `apps/web/app/verification/b0-2/fixture.module.css`, and
   `apps/web/tests/e2e/verification-fixture.spec.ts`.
@@ -1134,8 +1134,8 @@ used`. No credentials or secrets were entered.
 - Completed: 2026-08-11T19:09:52Z.
 - Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
   `apps/web/app/verification/b0-2/page.tsx`,
-  `apps/web/components/shared-ide-presence-fixture.tsx`,
-  `apps/web/components/shared-ide-presence-fixture.test.tsx`, and
+  `apps/web/components/fixtures/shared-ide-presence-fixture.tsx`,
+  `apps/web/components/fixtures/shared-ide-presence-fixture.test.tsx`, and
   `apps/web/tests/e2e/verification-fixture.spec.ts`.
 - Checks: focused component test — 1 passed; focused F2.1/F2.2 Playwright
   verification on the built app — 2 passed; targeted Prettier check — passed;
@@ -1166,8 +1166,8 @@ used`. No credentials or secrets were entered.
 
 - Completed: 2026-08-11T20:09:28Z.
 - Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
-  `apps/web/components/shared-ide-presence-fixture.tsx`,
-  `apps/web/components/shared-ide-presence-fixture.test.tsx`, and
+  `apps/web/components/fixtures/shared-ide-presence-fixture.tsx`,
+  `apps/web/components/fixtures/shared-ide-presence-fixture.test.tsx`, and
   `apps/web/tests/e2e/verification-fixture.spec.ts`.
 - Checks: focused component test — 2 passed; focused F2.1/F2.2/F2.3
   Playwright verification on the built app — 3 passed; targeted Prettier check
@@ -1208,8 +1208,8 @@ used`. No credentials or secrets were entered.
 
 - Completed: 2026-08-11T21:12:10Z.
 - Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
-  `apps/web/components/shared-ide-presence-fixture.tsx`,
-  `apps/web/components/shared-ide-presence-fixture.test.tsx`, and
+  `apps/web/components/fixtures/shared-ide-presence-fixture.tsx`,
+  `apps/web/components/fixtures/shared-ide-presence-fixture.test.tsx`, and
   `apps/web/tests/e2e/verification-fixture.spec.ts`.
 - Checks: focused component test — 3 passed; focused F2.1–F2.4 Playwright
   verification on the built app — 4 passed; targeted Prettier check — passed;
@@ -1252,8 +1252,8 @@ Jordan`, and confirmed Jordan showed `offline · reconnecting` while the
 
 - Completed: 2026-08-11T22:08:46Z.
 - Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
-  `apps/web/components/shared-ide-presence-fixture.tsx`,
-  `apps/web/components/shared-ide-presence-fixture.test.tsx`, and
+  `apps/web/components/fixtures/shared-ide-presence-fixture.tsx`,
+  `apps/web/components/fixtures/shared-ide-presence-fixture.test.tsx`, and
   `apps/web/tests/e2e/verification-fixture.spec.ts`.
 - Checks: focused component and reconciliation tests — 7 passed; complete
   verification-fixture Playwright suite — 12 passed; targeted Prettier check —
@@ -1295,8 +1295,8 @@ external filesystem`, and `Merge manually` as resolution choices. No
 - Changed files: `packages/contracts/src/shared-session.ts`,
   `packages/contracts/src/events.ts`, `packages/contracts/src/index.ts`,
   `packages/contracts/src/contracts.test.ts`,
-  `apps/web/components/shared-session-queue-fixture.tsx`,
-  `apps/web/components/shared-session-queue-fixture.test.tsx`,
+  `apps/web/components/fixtures/shared-session-queue-fixture.tsx`,
+  `apps/web/components/fixtures/shared-session-queue-fixture.test.tsx`,
   `apps/web/app/verification/b0-2/page.tsx`,
   `apps/web/app/verification/b0-2/fixture.module.css`, and
   `apps/web/tests/e2e/verification-fixture.spec.ts`.
@@ -1332,8 +1332,8 @@ external filesystem`, and `Merge manually` as resolution choices. No
 
 - Completed: 2026-08-12T00:07:58Z.
 - Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
-  `apps/web/components/shared-session-queue-fixture.tsx`,
-  `apps/web/components/shared-session-queue-fixture.test.tsx`, and
+  `apps/web/components/fixtures/shared-session-queue-fixture.tsx`,
+  `apps/web/components/fixtures/shared-session-queue-fixture.test.tsx`, and
   `apps/web/tests/e2e/verification-fixture.spec.ts`.
 - Checks: focused shared-session component tests — 2 passed; focused F3.1/F3.2
   Playwright verification on the built app — 2 passed; targeted Prettier check
@@ -1368,8 +1368,8 @@ transcript`, and confirmed the visible Codex-compatible provider, Alex Morgan
 
 - Completed: 2026-08-12T01:09:00Z.
 - Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
-  `apps/web/components/shared-session-queue-fixture.test.tsx`,
-  `apps/web/components/shared-session-queue-fixture.tsx`, and
+  `apps/web/components/fixtures/shared-session-queue-fixture.test.tsx`,
+  `apps/web/components/fixtures/shared-session-queue-fixture.tsx`, and
   `apps/web/tests/e2e/verification-fixture.spec.ts`.
 - Checks: focused shared-session component tests — 3 passed; focused F3.3
   Playwright verification on the built app — 1 passed; targeted Prettier
@@ -1409,8 +1409,8 @@ transcript`, and confirmed the visible Codex-compatible provider, Alex Morgan
 
 - Completed: 2026-08-12T03:09:37Z.
 - Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
-  `apps/web/components/shared-session-queue-fixture.tsx`,
-  `apps/web/components/shared-session-queue-fixture.test.tsx`, and
+  `apps/web/components/fixtures/shared-session-queue-fixture.tsx`,
+  `apps/web/components/fixtures/shared-session-queue-fixture.test.tsx`, and
   `apps/web/tests/e2e/verification-fixture.spec.ts`.
 - Checks: focused shared-session component tests — 4 passed; focused F3.4
   Playwright verification on the rebuilt app — 1 passed; targeted Prettier
@@ -1451,8 +1451,8 @@ unavailable` remained disabled. No credentials or secrets were entered.
 ### F3.5 completion evidence
 
 - Completed: 2026-08-12T04:12:21Z.
-- Changed files: `apps/web/components/shared-session-queue-fixture.tsx`,
-  `apps/web/components/shared-session-queue-fixture.test.tsx`, and
+- Changed files: `apps/web/components/fixtures/shared-session-queue-fixture.tsx`,
+  `apps/web/components/fixtures/shared-session-queue-fixture.test.tsx`, and
   `apps/web/tests/e2e/verification-fixture.spec.ts`.
 - Checks: focused shared-session component tests — 5 passed; focused F3.5
   Playwright verification on the rebuilt app — 1 passed; targeted Prettier
@@ -1570,10 +1570,10 @@ instruction preserved once.` status. Confirmed the `Instruction queued`
   `apps/web/app/api/verification/b0-2/agent-capacity/route.ts`,
   `apps/web/app/verification/b0-2/fixture.module.css`,
   `apps/web/app/verification/b0-2/page.tsx`,
-  `apps/web/components/agent-capacity-fixture.test.tsx`,
-  `apps/web/components/agent-capacity-fixture.tsx`,
-  `apps/web/lib/agent-capacity.ts`,
-  `apps/web/lib/agent-coordination.test.ts`, and
+  `apps/web/components/fixtures/agent-capacity-fixture.test.tsx`,
+  `apps/web/components/fixtures/agent-capacity-fixture.tsx`,
+  `apps/web/lib/agents/agent-capacity.ts`,
+  `apps/web/lib/coordination/agent-coordination.test.ts`, and
   `apps/web/tests/e2e/verification-fixture.spec.ts`.
 - Checks: focused web unit/component tests — 7 passed; focused F4.3
   Playwright verification on the rebuilt app — 1 passed; contracts tests — 19
@@ -1608,8 +1608,8 @@ finish before starting another.` No credentials or secrets were entered.
 - Completed: 2026-08-12T08:11:52Z.
 - Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
   `apps/web/app/verification/b0-2/page.tsx`,
-  `apps/web/components/agent-path-claim-fixture.tsx`,
-  `apps/web/components/agent-path-claim-fixture.test.tsx`, and
+  `apps/web/components/fixtures/agent-path-claim-fixture.tsx`,
+  `apps/web/components/fixtures/agent-path-claim-fixture.test.tsx`, and
   `apps/web/tests/e2e/verification-fixture.spec.ts`.
 - Checks: focused agent coordination and claim-fixture tests — 7 passed;
   focused F4.4 Playwright verification on the rebuilt app — 1 passed;
@@ -1649,8 +1649,8 @@ finish before starting another.` No credentials or secrets were entered.
 
 - Completed: 2026-08-12T09:08:17Z.
 - Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
-  `apps/web/components/agent-path-claim-fixture.tsx`,
-  `apps/web/components/agent-path-claim-fixture.test.tsx`, and
+  `apps/web/components/fixtures/agent-path-claim-fixture.tsx`,
+  `apps/web/components/fixtures/agent-path-claim-fixture.test.tsx`, and
   `apps/web/tests/e2e/verification-fixture.spec.ts`.
 - Checks: focused claim-fixture Vitest — 3 passed; focused F4.5 Playwright
   verification on the rebuilt app — 1 passed; targeted Prettier check and
@@ -1690,8 +1690,8 @@ claim` for slot 1, clicked `Request overlapping claim` for slot 2, and
 
 - Completed: 2026-08-12T10:07:48Z.
 - Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
-  `apps/web/components/agent-path-claim-fixture.tsx`,
-  `apps/web/components/agent-path-claim-fixture.test.tsx`, and
+  `apps/web/components/fixtures/agent-path-claim-fixture.tsx`,
+  `apps/web/components/fixtures/agent-path-claim-fixture.test.tsx`, and
   `apps/web/tests/e2e/verification-fixture.spec.ts`.
 - Checks: focused claim-fixture Vitest — 4 passed; focused F4.6 Playwright
   verification on the rebuilt app — 1 passed; targeted Prettier check and
@@ -1728,8 +1728,8 @@ claim` for slot 1, captured the active claim, clicked `Stop agent`, and
 - Completed: 2026-08-12T11:07:06Z.
 - Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
   `apps/web/app/verification/b0-2/page.tsx`,
-  `apps/web/components/agent-review-checkpoint-fixture.tsx`,
-  `apps/web/components/agent-review-checkpoint-fixture.test.tsx`, and
+  `apps/web/components/fixtures/agent-review-checkpoint-fixture.tsx`,
+  `apps/web/components/fixtures/agent-review-checkpoint-fixture.test.tsx`, and
   `apps/web/tests/e2e/verification-fixture.spec.ts`.
 - Checks: focused review-checkpoint Vitest — 1 passed; focused F5.1
   Playwright verification on the rebuilt app — 1 passed; targeted Prettier
@@ -1765,8 +1765,8 @@ claim` for slot 1, captured the active claim, clicked `Stop agent`, and
 
 - Completed: 2026-08-12T12:10:07Z.
 - Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
-  `apps/web/components/agent-review-checkpoint-fixture.tsx`,
-  `apps/web/components/agent-review-checkpoint-fixture.test.tsx`, and
+  `apps/web/components/fixtures/agent-review-checkpoint-fixture.tsx`,
+  `apps/web/components/fixtures/agent-review-checkpoint-fixture.test.tsx`, and
   `apps/web/tests/e2e/verification-fixture.spec.ts`.
 - Checks: focused review-checkpoint Vitest — 1 passed; focused F5.2
   Playwright verification on the rebuilt app — 1 passed; targeted Prettier
@@ -1801,8 +1801,8 @@ claim` for slot 1, captured the active claim, clicked `Stop agent`, and
 
 - Completed: 2026-08-12T13:09:00Z.
 - Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
-  `apps/web/components/agent-review-checkpoint-fixture.test.tsx`,
-  `apps/web/components/agent-review-checkpoint-fixture.tsx`, and
+  `apps/web/components/fixtures/agent-review-checkpoint-fixture.test.tsx`,
+  `apps/web/components/fixtures/agent-review-checkpoint-fixture.tsx`, and
   `apps/web/tests/e2e/verification-fixture.spec.ts`.
 - Checks: focused review-checkpoint Vitest — 2 passed; focused F5.3
   Playwright verification on the rebuilt app — 1 passed; targeted Prettier
@@ -1836,9 +1836,9 @@ claim` for slot 1, captured the active claim, clicked `Stop agent`, and
 
 - Completed: 2026-08-12T14:11:34Z.
 - Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
-  `apps/web/components/agent-review-checkpoint-fixture.test.tsx`,
-  `apps/web/components/agent-review-checkpoint-fixture.tsx`,
-  `apps/web/lib/agent-review.test.ts`, `apps/web/lib/agent-review.ts`, and
+  `apps/web/components/fixtures/agent-review-checkpoint-fixture.test.tsx`,
+  `apps/web/components/fixtures/agent-review-checkpoint-fixture.tsx`,
+  `apps/web/lib/agents/agent-review.test.ts`, `apps/web/lib/agents/agent-review.ts`, and
   `apps/web/tests/e2e/verification-fixture.spec.ts`.
 - Checks: focused review and fixture Vitest — 4 passed; focused F5.4
   Playwright verification on the rebuilt app — 1 passed; targeted Prettier
@@ -1875,9 +1875,9 @@ checkpoint` while the integration head was `fixture-main-r1`, and confirmed
 
 - Completed: 2026-08-12T15:12:25Z.
 - Changed files: `apps/web/app/verification/b0-2/fixture.module.css`,
-  `apps/web/components/agent-review-checkpoint-fixture.test.tsx`,
-  `apps/web/components/agent-review-checkpoint-fixture.tsx`,
-  `apps/web/lib/agent-review.test.ts`, `apps/web/lib/agent-review.ts`, and
+  `apps/web/components/fixtures/agent-review-checkpoint-fixture.test.tsx`,
+  `apps/web/components/fixtures/agent-review-checkpoint-fixture.tsx`,
+  `apps/web/lib/agents/agent-review.test.ts`, `apps/web/lib/agents/agent-review.ts`, and
   `apps/web/tests/e2e/verification-fixture.spec.ts`.
 - Checks: focused review and fixture Vitest — 6 passed; focused F5.5
   Playwright verification on the local rebuilt app — 1 passed; targeted
@@ -1918,8 +1918,8 @@ proposal`, and confirmed the visible `Proposal discarded · final state`,
 
 - Completed: 2026-08-13T03:49:00Z.
 - Changed files: `apps/web/app/api/workspaces/[workspaceId]/agents/route.ts`,
-  `apps/web/components/orca-workspace.tsx`,
-  `apps/web/components/orca-workspace.test.ts`,
+  `apps/web/components/workspace/orca-workspace.tsx`,
+  `apps/web/components/workspace/orca-workspace.test.ts`,
   `infra/runtime/orca-build/codev-web.patch`, and the rebuilt vendored Orca web
   assets under `apps/web/public/orca/`.
 - Checks: focused CoDev Vitest
@@ -1970,9 +1970,9 @@ found` after discard because discarded sessions are not shown there; the
 ### OI.1 completion evidence
 
 - Completed: 2026-08-13T04:37:00Z.
-- Changed files: `apps/web/components/codev-parent-bridge.ts`,
-  `apps/web/components/codev-parent-bridge.test.ts`,
-  `apps/web/components/orca-workspace.tsx`,
+- Changed files: `apps/web/components/workspace/codev-parent-bridge.ts`,
+  `apps/web/components/workspace/codev-parent-bridge.test.ts`,
+  `apps/web/components/workspace/orca-workspace.tsx`,
   `infra/runtime/orca-build/codev-web.patch`, and the rebuilt vendored Orca web
   assets under `apps/web/public/orca/`.
 - Checks: focused CoDev Vitest (`codev-parent-bridge.test.ts`,
@@ -2012,12 +2012,12 @@ Connected` with visible `CoDev · Connected`, opened that native status-bar
 ### OI.2 completion evidence
 
 - Completed: 2026-08-13T05:06:00Z.
-- Changed files: `apps/web/lib/workspaces.ts`,
-  `apps/web/lib/workspaces.test.ts`,
+- Changed files: `apps/web/lib/workspaces/workspaces.ts`,
+  `apps/web/lib/workspaces/workspaces.test.ts`,
   `apps/web/app/api/workspaces/[workspaceId]/invites/route.ts`,
-  `apps/web/components/codev-parent-bridge.ts`,
-  `apps/web/components/codev-parent-bridge.test.ts`,
-  `apps/web/components/orca-workspace.tsx`,
+  `apps/web/components/workspace/codev-parent-bridge.ts`,
+  `apps/web/components/workspace/codev-parent-bridge.test.ts`,
+  `apps/web/components/workspace/orca-workspace.tsx`,
   `infra/runtime/orca-build/codev-web.patch`, and the rebuilt vendored Orca web
   assets under `apps/web/public/orca/`.
 - Checks: focused CoDev Vitest (`workspaces.test.ts`,
@@ -2059,9 +2059,9 @@ The invitee is not a workspace member.` Membership remained owner-only.
 - Completed: 2026-08-14T18:03:24Z.
 - Changed files: `apps/web/app/api/workspaces/[workspaceId]/presence/route.ts`,
   `apps/web/app/api/workspaces/[workspaceId]/presence/route.test.ts`,
-  `apps/web/components/codev-parent-bridge.ts`,
-  `apps/web/components/codev-parent-bridge.test.ts`,
-  `apps/web/lib/collaboration-server.ts`,
+  `apps/web/components/workspace/codev-parent-bridge.ts`,
+  `apps/web/components/workspace/codev-parent-bridge.test.ts`,
+  `apps/web/lib/workspaces/collaboration-server.ts`,
   `infra/runtime/orca-build/codev-web.patch`, and the regenerated vendored Orca
   web assets under `apps/web/public/orca/`.
 - Checks: `pnpm format:check`, `pnpm lint` (2 pre-existing warnings), `pnpm
@@ -2091,9 +2091,9 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff --check`
 - Completed: 2026-08-15T01:09:18Z.
 - Changed files: `apps/web/app/api/workspaces/[workspaceId]/presence/route.ts`,
   `apps/web/app/api/workspaces/[workspaceId]/presence/route.test.ts`,
-  `apps/web/components/codev-parent-bridge.ts`,
-  `apps/web/components/codev-parent-bridge.test.ts`,
-  `apps/web/lib/collaboration-server.ts`, `infra/runtime/orca-build/codev-web.patch`,
+  `apps/web/components/workspace/codev-parent-bridge.ts`,
+  `apps/web/components/workspace/codev-parent-bridge.test.ts`,
+  `apps/web/lib/workspaces/collaboration-server.ts`, `infra/runtime/orca-build/codev-web.patch`,
   and the regenerated vendored Orca web assets under `apps/web/public/orca/`.
 - Checks: focused bridge tests (7), contracts tests (19), patched Orca cursor
   test, pinned `typecheck:web` and `build:web`, `pnpm format:check`, `pnpm lint`
@@ -2128,12 +2128,12 @@ rust:check`, and `git diff --check` passed for the validated implementation.
 - Completed: 2026-08-15T06:14:00Z.
 - Changed files: `packages/contracts/src/domain.ts`,
   `packages/contracts/src/contracts.test.ts`,
-  `apps/web/lib/collaboration-server.ts`,
-  `apps/web/lib/collaboration-server.test.ts`,
+  `apps/web/lib/workspaces/collaboration-server.ts`,
+  `apps/web/lib/workspaces/collaboration-server.test.ts`,
   `apps/web/app/api/workspaces/[workspaceId]/collaboration/conflicts/route.ts`,
   `apps/web/app/api/workspaces/[workspaceId]/collaboration/conflicts/route.test.ts`,
-  `apps/web/components/codev-parent-bridge.ts`,
-  `apps/web/components/codev-parent-bridge.test.ts`,
+  `apps/web/components/workspace/codev-parent-bridge.ts`,
+  `apps/web/components/workspace/codev-parent-bridge.test.ts`,
   `infra/runtime/orca-build/codev-web.patch`, and the regenerated vendored Orca
   web assets under `apps/web/public/orca/`.
 - Checks: focused contracts/bridge/collaboration tests, patched Orca
@@ -2168,13 +2168,13 @@ rust:check`, and `git diff --check` passed for the validated implementation.
 ### OI.7 completion evidence
 
 - Completed: 2026-08-15T07:04:00Z.
-- Changed files: `apps/web/lib/shared-session-view.ts`,
-  `apps/web/lib/shared-session-view.test.ts`,
-  `apps/web/lib/shared-session-server.ts`,
+- Changed files: `apps/web/lib/chat/shared-session-view.ts`,
+  `apps/web/lib/chat/shared-session-view.test.ts`,
+  `apps/web/lib/chat/shared-session-server.ts`,
   `apps/web/lib/shared-session-routes.test.ts`,
-  `apps/web/lib/agent-runtime.ts`,
-  `apps/web/components/codev-parent-bridge.ts`,
-  `apps/web/components/codev-parent-bridge.test.ts`,
+  `apps/web/lib/agents/agent-runtime.ts`,
+  `apps/web/components/workspace/codev-parent-bridge.ts`,
+  `apps/web/components/workspace/codev-parent-bridge.test.ts`,
   `apps/web/app/api/workspaces/[workspaceId]/agents/shared/route.ts`,
   `apps/web/app/api/workspaces/[workspaceId]/agents/[sessionId]/queue/route.ts`,
   `apps/web/app/api/workspaces/[workspaceId]/agents/[sessionId]/controlled/route.ts`,
@@ -2224,16 +2224,16 @@ dbf9fa6c-2385-4eb1-aaca-fca106779bed`). Alex interrupted the running
 ### OI.8 completion evidence
 
 - Completed: 2026-08-15T08:42:00Z.
-- Changed files: `apps/web/lib/workboard-view.ts`,
-  `apps/web/lib/workboard-view.test.ts`,
-  `apps/web/lib/workboard-server.ts`,
+- Changed files: `apps/web/lib/coordination/workboard-view.ts`,
+  `apps/web/lib/coordination/workboard-view.test.ts`,
+  `apps/web/lib/coordination/workboard-server.ts`,
   `apps/web/lib/workboard-routes.test.ts`,
   `apps/web/app/api/workspaces/[workspaceId]/agents/workboard/route.ts`,
   `apps/web/app/api/workspaces/[workspaceId]/agents/route.ts`,
-  `apps/web/components/codev-parent-bridge.ts`,
-  `apps/web/components/codev-parent-bridge.test.ts`,
-  `apps/web/components/orca-workspace.tsx`,
-  `apps/web/components/orca-workspace.test.ts`,
+  `apps/web/components/workspace/codev-parent-bridge.ts`,
+  `apps/web/components/workspace/codev-parent-bridge.test.ts`,
+  `apps/web/components/workspace/orca-workspace.tsx`,
+  `apps/web/components/workspace/orca-workspace.test.ts`,
   `infra/runtime/orca-build/codev-web.patch`, and the regenerated vendored Orca
   web assets under `apps/web/public/orca/`.
 - Checks: focused workboard/bridge tests, `pnpm lint` (0 errors, 2 existing
@@ -2266,16 +2266,16 @@ dbf9fa6c-2385-4eb1-aaca-fca106779bed`). Alex interrupted the running
 ### OI.9 completion evidence
 
 - Completed: 2026-08-15T09:03:00Z.
-- Changed files: `apps/web/lib/path-claims-view.ts`,
-  `apps/web/lib/path-claims-view.test.ts`,
-  `apps/web/lib/path-claims-server.ts`,
+- Changed files: `apps/web/lib/coordination/path-claims-view.ts`,
+  `apps/web/lib/coordination/path-claims-view.test.ts`,
+  `apps/web/lib/coordination/path-claims-server.ts`,
   `apps/web/lib/path-claims-routes.test.ts`,
-  `apps/web/lib/agent-coordination.ts`,
+  `apps/web/lib/coordination/agent-coordination.ts`,
   `apps/web/app/api/workspaces/[workspaceId]/agents/claims/route.ts`,
   `apps/web/app/api/workspaces/[workspaceId]/agents/claims/reassign/route.ts`,
   `apps/web/app/api/workspaces/[workspaceId]/agents/claims/cancel/route.ts`,
-  `apps/web/components/codev-parent-bridge.ts`,
-  `apps/web/components/codev-parent-bridge.test.ts`,
+  `apps/web/components/workspace/codev-parent-bridge.ts`,
+  `apps/web/components/workspace/codev-parent-bridge.test.ts`,
   `apps/web/tests/e2e/smoke.spec.ts`,
   `infra/runtime/orca-build/codev-web.patch`, and the regenerated vendored Orca
   web assets under `apps/web/public/orca/`.
@@ -2310,21 +2310,21 @@ dbf9fa6c-2385-4eb1-aaca-fca106779bed`). Alex interrupted the running
 ### OI.10 completion evidence
 
 - Completed: 2026-08-15T10:31:00Z.
-- Changed files: `apps/web/lib/review-checkpoint-view.ts`,
-  `apps/web/lib/review-checkpoint-view.test.ts`,
-  `apps/web/lib/review-diff-view.ts`,
-  `apps/web/lib/review-diff-view.test.ts`,
-  `apps/web/lib/review-checkpoint-server.ts`,
+- Changed files: `apps/web/lib/agents/review-checkpoint-view.ts`,
+  `apps/web/lib/agents/review-checkpoint-view.test.ts`,
+  `apps/web/lib/agents/review-diff-view.ts`,
+  `apps/web/lib/agents/review-diff-view.test.ts`,
+  `apps/web/lib/agents/review-checkpoint-server.ts`,
   `apps/web/lib/review-checkpoint-routes.test.ts`,
-  `apps/web/lib/agent-review.ts`,
+  `apps/web/lib/agents/agent-review.ts`,
   `apps/web/lib/agent-review-prepare.test.ts`,
-  `apps/web/lib/runtime-resume.ts`,
-  `apps/web/lib/runtime-resume.test.ts`,
-  `apps/web/lib/workspaces.ts`,
+  `apps/web/lib/runtime/runtime-resume.ts`,
+  `apps/web/lib/runtime/runtime-resume.test.ts`,
+  `apps/web/lib/workspaces/workspaces.ts`,
   `apps/web/app/api/workspaces/[workspaceId]/agents/reviews/route.ts`,
   `apps/web/app/api/workspaces/[workspaceId]/sandbox/exec/route.ts`,
-  `apps/web/components/codev-parent-bridge.ts`,
-  `apps/web/components/codev-parent-bridge.test.ts`,
+  `apps/web/components/workspace/codev-parent-bridge.ts`,
+  `apps/web/components/workspace/codev-parent-bridge.test.ts`,
   `infra/runtime/orca-build/codev-web.patch`, and the regenerated vendored Orca
   web assets under `apps/web/public/orca/`.
 - Checks: focused review/checkpoint/bridge tests, `pnpm lint` (0 errors, 2
@@ -2357,8 +2357,8 @@ dbf9fa6c-2385-4eb1-aaca-fca106779bed`). Alex interrupted the running
 ### OI.11 completion evidence
 
 - Completed: 2026-08-15T19:28:00Z.
-- Changed files: `apps/web/lib/review-checkpoint-server.ts` and
-  `apps/web/lib/review-checkpoint-server.test.ts`. OI.11 native review
+- Changed files: `apps/web/lib/agents/review-checkpoint-server.ts` and
+  `apps/web/lib/agents/review-checkpoint-server.test.ts`. OI.11 native review
   actions were already on `main` from `dffbcb1a`; this follow-up keeps the
   Source Control snapshot visible when the 403 diff fallback cannot find the
   sandbox after a host reboot.
@@ -2397,13 +2397,13 @@ dbf9fa6c-2385-4eb1-aaca-fca106779bed`). Alex interrupted the running
 
 - Completed: 2026-08-15T21:25:00Z.
 - Changed files (already on `main` from the OI.12 source commit):
-  `apps/web/lib/activity-audit-view.ts`,
-  `apps/web/lib/activity-audit-view.test.ts`,
-  `apps/web/lib/activity-audit-server.ts`,
+  `apps/web/lib/workspaces/activity-audit-view.ts`,
+  `apps/web/lib/workspaces/activity-audit-view.test.ts`,
+  `apps/web/lib/workspaces/activity-audit-server.ts`,
   `apps/web/lib/activity-audit-route.test.ts`,
   `apps/web/app/api/workspaces/[workspaceId]/events/route.ts`,
-  `apps/web/components/codev-parent-bridge.ts`,
-  `apps/web/components/codev-parent-bridge.test.ts`,
+  `apps/web/components/workspace/codev-parent-bridge.ts`,
+  `apps/web/components/workspace/codev-parent-bridge.test.ts`,
   `infra/runtime/orca-build/codev-web.patch`, and regenerated vendored Orca web
   assets under `apps/web/public/orca/`. This run also landed unrelated
   password-reset work as `553b4c28` so the scheduler worktree was clean.
@@ -2443,13 +2443,13 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff
 
 - Completed: 2026-08-15T21:53:00Z.
 - Changed files (already on `main` from the F6.1 source commit):
-  `apps/web/lib/provider-connection-view.ts`,
-  `apps/web/lib/provider-connection-view.test.ts`,
-  `apps/web/lib/provider-connection-server.ts`,
+  `apps/web/lib/providers/provider-connection-view.ts`,
+  `apps/web/lib/providers/provider-connection-view.test.ts`,
+  `apps/web/lib/providers/provider-connection-server.ts`,
   `apps/web/lib/provider-connection-route.test.ts`,
   `apps/web/app/api/workspaces/[workspaceId]/connections/route.ts`,
-  `apps/web/components/codev-parent-bridge.ts`,
-  `apps/web/components/codev-parent-bridge.test.ts`,
+  `apps/web/components/workspace/codev-parent-bridge.ts`,
+  `apps/web/components/workspace/codev-parent-bridge.test.ts`,
   `infra/runtime/orca-build/codev-web.patch`, and regenerated vendored Orca web
   assets under `apps/web/public/orca/`.
 - Checks (from the source commit): focused provider-connection/bridge tests
@@ -2480,7 +2480,7 @@ test` (294 passed, 1 skipped), `pnpm build`, `pnpm test:e2e` (32 passed),
   and `artifacts/verification/f6-1/`.
 - Known limitations: this card is status-only; add/replace/revoke is F6.2.
   The GitHub `verify` check for the source commit failed `pnpm
-format:check` on pre-existing `apps/web/lib/workboard-view.test.ts` and
+format:check` on pre-existing `apps/web/lib/coordination/workboard-view.test.ts` and
   `COLLABORATIVE_IDE_TASK_STATE.md`, not on F6.1 product files.
 - Next task: F6.2 — implement API-key add/replace/revoke for one provider
   using test-only credentials.
@@ -2488,13 +2488,13 @@ format:check` on pre-existing `apps/web/lib/workboard-view.test.ts` and
 ### F6.2 completion evidence
 
 - Completed: 2026-08-15T22:05:00Z.
-- Changed files: `apps/web/lib/provider-connection-view.ts`,
-  `apps/web/lib/provider-connection-view.test.ts`,
-  `apps/web/lib/provider-connection-server.ts`,
+- Changed files: `apps/web/lib/providers/provider-connection-view.ts`,
+  `apps/web/lib/providers/provider-connection-view.test.ts`,
+  `apps/web/lib/providers/provider-connection-server.ts`,
   `apps/web/lib/provider-connection-route.test.ts`,
   `apps/web/app/api/workspaces/[workspaceId]/connections/route.ts`,
-  `apps/web/components/codev-parent-bridge.ts`,
-  `apps/web/components/codev-parent-bridge.test.ts`,
+  `apps/web/components/workspace/codev-parent-bridge.ts`,
+  `apps/web/components/workspace/codev-parent-bridge.test.ts`,
   `infra/runtime/orca-build/codev-web.patch`, and regenerated vendored Orca web
   assets under `apps/web/public/orca/`.
 - Checks: focused provider-connection/bridge tests (21 passed), patched-Orca
@@ -2535,13 +2535,13 @@ rust:check`, and `git diff --check`. TestSprite backend test
 ### F6.3 completion evidence
 
 - Completed: 2026-08-15T22:24:00Z.
-- Changed files: `apps/web/lib/provider-turn-auth.ts`,
-  `apps/web/lib/provider-turn-auth.test.ts`,
-  `apps/web/lib/shared-session-server.ts`,
-  `apps/web/lib/shared-session-view.ts`,
-  `apps/web/lib/shared-session-view.test.ts`,
+- Changed files: `apps/web/lib/providers/provider-turn-auth.ts`,
+  `apps/web/lib/providers/provider-turn-auth.test.ts`,
+  `apps/web/lib/chat/shared-session-server.ts`,
+  `apps/web/lib/chat/shared-session-view.ts`,
+  `apps/web/lib/chat/shared-session-view.test.ts`,
   `apps/web/lib/shared-session-routes.test.ts`,
-  `apps/web/lib/agent-runtime.ts`,
+  `apps/web/lib/agents/agent-runtime.ts`,
   `apps/web/app/api/workspaces/[workspaceId]/agents/[sessionId]/turns/route.ts`,
   `infra/runtime/orca-build/codev-web.patch`, and regenerated vendored Orca web
   assets under `apps/web/public/orca/`.
@@ -2589,8 +2589,8 @@ turn. The existing session is unchanged.` Queue stayed **0 queued**;
 - Completed: 2026-08-15T22:32:00Z.
 - Changed files: `docs/provider-oauth-openai-codex.md`,
   `docs/OAUTH_SETUP.md`, `COLLABORATIVE_IDE_FEATURES.md`,
-  `apps/web/lib/provider-connection-view.ts`,
-  `apps/web/lib/provider-connection-view.test.ts`,
+  `apps/web/lib/providers/provider-connection-view.ts`,
+  `apps/web/lib/providers/provider-connection-view.test.ts`,
   `infra/runtime/orca-build/codev-web.patch`, and regenerated vendored Orca web
   assets under `apps/web/public/orca/`.
 - Checks: focused provider-connection tests (6 passed), patched-Orca
@@ -2631,13 +2631,13 @@ turn. The existing session is unchanged.` Queue stayed **0 queued**;
 - Completed: 2026-08-15T23:19:00Z.
 - Changed files: `apps/web/lib/provider-oauth-fixture.ts`,
   `apps/web/lib/provider-oauth-fixture.test.ts`,
-  `apps/web/lib/provider-connection-view.ts`,
-  `apps/web/lib/provider-connection-view.test.ts`,
-  `apps/web/lib/provider-connection-server.ts`,
+  `apps/web/lib/providers/provider-connection-view.ts`,
+  `apps/web/lib/providers/provider-connection-view.test.ts`,
+  `apps/web/lib/providers/provider-connection-server.ts`,
   `apps/web/lib/provider-connection-route.test.ts`,
   `apps/web/app/api/workspaces/[workspaceId]/connections/route.ts`,
-  `apps/web/components/codev-parent-bridge.ts`,
-  `apps/web/components/codev-parent-bridge.test.ts`,
+  `apps/web/components/workspace/codev-parent-bridge.ts`,
+  `apps/web/components/workspace/codev-parent-bridge.test.ts`,
   `docs/provider-oauth-openai-codex.md`, `docs/OAUTH_SETUP.md`,
   `COLLABORATIVE_IDE_FEATURES.md`, `infra/runtime/orca-build/codev-web.patch`,
   and regenerated vendored Orca web assets under `apps/web/public/orca/`.
@@ -2677,11 +2677,11 @@ test` (307 passed, 1 skipped), `pnpm build`, `pnpm test:e2e` (32 passed,
 ### F7.1 completion evidence
 
 - Completed: 2026-08-15T23:28:00Z.
-- Changed files: `apps/web/lib/provider-event-view.ts`,
-  `apps/web/lib/provider-event-view.test.ts`,
-  `apps/web/lib/shared-session-view.ts`,
-  `apps/web/lib/shared-session-view.test.ts`,
-  `apps/web/lib/shared-session-server.ts`,
+- Changed files: `apps/web/lib/providers/provider-event-view.ts`,
+  `apps/web/lib/providers/provider-event-view.test.ts`,
+  `apps/web/lib/chat/shared-session-view.ts`,
+  `apps/web/lib/chat/shared-session-view.test.ts`,
+  `apps/web/lib/chat/shared-session-server.ts`,
   `infra/runtime/orca-build/codev-web.patch`, and regenerated vendored Orca
   web assets under `apps/web/public/orca/`.
 - Checks: focused provider-event and shared-session tests (9 passed),
@@ -2723,14 +2723,14 @@ format:check` still fails on pre-existing files
 ### F7.2 completion evidence
 
 - Completed: 2026-08-16T07:38:00Z.
-- Changed files: `apps/web/lib/provider-capabilities.ts`,
-  `apps/web/lib/provider-capabilities.test.ts`,
-  `apps/web/lib/shared-session-view.ts`,
-  `apps/web/lib/shared-session-view.test.ts`,
-  `apps/web/lib/shared-session-server.ts`,
+- Changed files: `apps/web/lib/providers/provider-capabilities.ts`,
+  `apps/web/lib/providers/provider-capabilities.test.ts`,
+  `apps/web/lib/chat/shared-session-view.ts`,
+  `apps/web/lib/chat/shared-session-view.test.ts`,
+  `apps/web/lib/chat/shared-session-server.ts`,
   `apps/web/lib/shared-session-routes.test.ts`,
-  `apps/web/components/codev-parent-bridge.ts`,
-  `apps/web/components/codev-parent-bridge.test.ts`,
+  `apps/web/components/workspace/codev-parent-bridge.ts`,
+  `apps/web/components/workspace/codev-parent-bridge.test.ts`,
   `apps/web/app/api/workspaces/[workspaceId]/agents/[sessionId]/provider/route.ts`,
   `infra/runtime/orca-build/codev-web.patch`, and regenerated vendored Orca
   web assets under `apps/web/public/orca/`.
@@ -2770,10 +2770,10 @@ test:e2e` (32 passed, 1 skipped), `pnpm rust:check`, and `git diff
 ### F7.3 completion evidence
 
 - Completed: 2026-08-16T07:52:00Z.
-- Changed files: `apps/web/lib/provider-capabilities.ts`,
-  `apps/web/lib/shared-session-view.ts`,
-  `apps/web/lib/shared-session-view.test.ts`,
-  `apps/web/lib/shared-session-server.ts`,
+- Changed files: `apps/web/lib/providers/provider-capabilities.ts`,
+  `apps/web/lib/chat/shared-session-view.ts`,
+  `apps/web/lib/chat/shared-session-view.test.ts`,
+  `apps/web/lib/chat/shared-session-server.ts`,
   `infra/runtime/orca-build/codev-web.patch`, and regenerated vendored Orca
   web assets under `apps/web/public/orca/`.
 - Checks: focused shared-session and capability tests (14 passed),

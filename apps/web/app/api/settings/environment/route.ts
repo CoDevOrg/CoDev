@@ -1,8 +1,8 @@
-import { apiError, getApiUser } from "@/lib/api";
+import { apiError, getApiUser } from "@/lib/http/api";
 import {
   createUserEnvironmentVariable,
   listUserEnvironmentVariables,
-} from "@/lib/user-environment";
+} from "@/lib/providers/user-environment";
 
 export async function GET() {
   const user = await getApiUser();

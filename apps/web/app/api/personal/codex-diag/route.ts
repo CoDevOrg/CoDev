@@ -1,8 +1,8 @@
 import { readServerEnvironment } from "@codev/config";
 
-import { apiError, getApiUser } from "@/lib/api";
-import { resolveAgentCredential } from "@/lib/credentials";
-import { getWorkspaceForMember } from "@/lib/workspaces";
+import { apiError, getApiUser } from "@/lib/http/api";
+import { resolveAgentCredential } from "@/lib/providers/credentials";
+import { getWorkspaceForMember } from "@/lib/workspaces/workspaces";
 
 export async function GET(request: Request) {
   const user = await getApiUser();

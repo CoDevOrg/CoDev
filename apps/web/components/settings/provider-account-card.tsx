@@ -20,12 +20,12 @@ import type {
   CliSubscriptionRecord,
   ProviderConnectionProvider,
   ProviderConnectionRecord,
-} from "@/lib/provider-connection-view";
+} from "@/lib/providers/provider-connection-view";
 import type {
   ProviderSurface,
   ProviderSurfaceCapability,
-} from "@/lib/provider-surface-capability";
-import { cn } from "@/lib/utils";
+} from "@/lib/providers/provider-surface-capability";
+import { cn } from "@/lib/platform/utils";
 
 const RETURN_TO = "/settings/personal/providers";
 

@@ -5,19 +5,19 @@ import {
   validateRoomReply,
   finishRoomReply,
   ROOM_REPLY_FAILURE,
-} from "@/lib/shared-chat-reply";
+} from "@/lib/chat/shared-chat-reply";
 
 import { sharedChatMessageInputSchema } from "@codev/contracts";
 
-import { apiError, getApiUser } from "@/lib/api";
-import { consumeRateLimit } from "@/lib/rate-limit";
+import { apiError, getApiUser } from "@/lib/http/api";
+import { consumeRateLimit } from "@/lib/platform/rate-limit";
 import {
   listSharedChatMessages,
   postSharedChatMessage,
   SharedChatError,
   getSharedChatRoom,
-} from "@/lib/shared-chat";
-import { publishRoomMessages } from "@/lib/shared-chat-stream";
+} from "@/lib/chat/shared-chat";
+import { publishRoomMessages } from "@/lib/chat/shared-chat-stream";
 
 type Context = { params: Promise<{ roomId: string }> };
 

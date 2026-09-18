@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import { withWorkspace } from "@/lib/api-route";
-import { selectSharedSessionProvider } from "@/lib/shared-session-server";
+import { withWorkspace } from "@/lib/http/api-route";
+import { selectSharedSessionProvider } from "@/lib/chat/shared-session-server";
 
 const inputSchema = z.object({
   provider: z.enum(["openai", "restricted"]),

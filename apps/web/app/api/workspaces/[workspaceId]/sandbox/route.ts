@@ -1,23 +1,23 @@
-import { apiError } from "@/lib/api";
-import { ApiError, withWorkspace } from "@/lib/api-route";
+import { apiError } from "@/lib/http/api";
+import { ApiError, withWorkspace } from "@/lib/http/api-route";
 import {
   clearWorkspaceSnapshot,
   E2B_LIFECYCLE_OPTIONS,
   getWorkspaceSnapshot,
-} from "@/lib/hibernation";
-import { getRepositorySnapshot } from "@/lib/github";
-import { getHostState, requestHostWake } from "@/lib/host";
+} from "@/lib/runtime/hibernation";
+import { getRepositorySnapshot } from "@/lib/github/github";
+import { getHostState, requestHostWake } from "@/lib/runtime/host";
 import {
   getSandbox,
   OrchestratorError,
   provisionSandbox,
   waitForOrchestrator,
-} from "@/lib/orchestrator";
+} from "@/lib/runtime/orchestrator";
 import {
   assertWorkspaceCreditQuota,
   QuotaError,
   quotaResponse,
-} from "@/lib/quotas";
+} from "@/lib/runtime/quotas";
 import {
   beginWorkspaceProvisioning,
   getWorkspaceForMember,
@@ -26,7 +26,7 @@ import {
   markWorkspaceReady,
   markWorkspaceStopped,
   WorkspaceLifecycleError,
-} from "@/lib/workspaces";
+} from "@/lib/workspaces/workspaces";
 
 export const maxDuration = 60;
 

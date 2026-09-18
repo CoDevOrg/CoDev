@@ -1,4 +1,4 @@
-import { pollDeviceOAuth } from "@/lib/oauth-route";
+import { pollDeviceOAuth } from "@/lib/providers/oauth-route";
 
 export const runtime = "nodejs";
 

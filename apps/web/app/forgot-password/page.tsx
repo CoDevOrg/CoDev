@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { requestPasswordReset } from "@/app/actions/password-reset";
-import { Brand } from "@/components/app-chrome";
+import { Brand } from "@/components/shell/app-chrome";
 
 export const metadata: Metadata = {
   title: "Forgot password",

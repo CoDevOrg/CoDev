@@ -7,15 +7,15 @@ import { redirect } from "next/navigation";
 import { isGitHubAuthConfigured, isGoogleAuthConfigured } from "@codev/config";
 
 import { auth, signIn } from "@/auth";
-import { Brand } from "@/components/app-chrome";
-import { ClerkSignIn } from "@/components/clerk-sign-in";
-import { CredentialsSignInForm } from "@/components/credentials-sign-in-form";
-import { clerkAuthConfigured } from "@/lib/identity";
+import { Brand } from "@/components/shell/app-chrome";
+import { ClerkSignIn } from "@/components/auth/clerk-sign-in";
+import { CredentialsSignInForm } from "@/components/auth/credentials-sign-in-form";
+import { clerkAuthConfigured } from "@/lib/auth/identity";
 import {
   assertCanRegister,
   readInviteGrant,
   RegistrationError,
-} from "@/lib/registration";
+} from "@/lib/auth/registration";
 
 const INVITE_ONLY_MESSAGE =
   "CoDev is invite-only right now. Join the waitlist and we'll email you a link when you're in.";

@@ -1,9 +1,9 @@
-import { apiError, getApiUser } from "@/lib/api";
-import { toClaudeConnectionFailure } from "@/lib/claude-connection";
+import { apiError, getApiUser } from "@/lib/http/api";
+import { toClaudeConnectionFailure } from "@/lib/providers/claude-connection";
 import {
   cancelClaudeConnectionSession,
   getClaudeConnectionSession,
-} from "@/lib/claude-connection-session";
+} from "@/lib/providers/claude-connection-session";
 
 export const runtime = "nodejs";
 

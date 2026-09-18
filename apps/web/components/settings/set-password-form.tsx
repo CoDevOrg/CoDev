@@ -6,8 +6,8 @@ import { Check, Circle } from "lucide-react";
 import { setAccountPassword } from "@/app/actions/set-password";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getNewAccountPasswordRequirements } from "@/lib/password-policy";
-import { cn } from "@/lib/utils";
+import { getNewAccountPasswordRequirements } from "@/lib/auth/password-policy";
+import { cn } from "@/lib/platform/utils";
 
 export function SetPasswordForm({ redirectTo }: { redirectTo: string }) {
   const [password, setPassword] = useState("");

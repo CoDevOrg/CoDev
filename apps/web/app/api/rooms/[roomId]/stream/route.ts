@@ -1,14 +1,14 @@
-import { apiError, getApiUser } from "@/lib/api";
+import { apiError, getApiUser } from "@/lib/http/api";
 import {
   getSharedChatRoom,
   listSharedChatMessages,
   SharedChatError,
-} from "@/lib/shared-chat";
+} from "@/lib/chat/shared-chat";
 import {
   createRoomReader,
   latestRoomStreamId,
   readRoomMessages,
-} from "@/lib/shared-chat-stream";
+} from "@/lib/chat/shared-chat-stream";
 
 type Context = { params: Promise<{ roomId: string }> };
 

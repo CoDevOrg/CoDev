@@ -1,5 +1,5 @@
-import { withWorkspace } from "@/lib/api-route";
-import { reassignWorkspacePathClaim } from "@/lib/path-claims-server";
+import { withWorkspace } from "@/lib/http/api-route";
+import { reassignWorkspacePathClaim } from "@/lib/coordination/path-claims-server";
 
 export const POST = withWorkspace(
   "coSteer",

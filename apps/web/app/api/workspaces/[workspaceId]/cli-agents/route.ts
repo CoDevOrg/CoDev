@@ -1,10 +1,10 @@
 import { z } from "zod";
 
-import { withWorkspace } from "@/lib/api-route";
+import { withWorkspace } from "@/lib/http/api-route";
 import {
   mintCoordinationToken,
   registerCliAgentSession,
-} from "@/lib/cli-agent-session";
+} from "@/lib/agents/cli-agent-session";
 
 export const runtime = "nodejs";
 

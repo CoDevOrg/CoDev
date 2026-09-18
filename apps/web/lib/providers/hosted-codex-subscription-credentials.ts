@@ -1,0 +1,318 @@
+import "server-only";
+
+import { and, eq, isNull, lt, or } from "drizzle-orm";
+
+import { schema } from "@codev/db";
+import type { HostedCodexScopeType } from "@codev/shared-types";
+
+import { getDatabase } from "../platform/database";
+import { recordHostedCodexAuditEvent } from "./hosted-codex-subscription-audit";
+import { isHostedCodexSubscriptionEnabled } from "./hosted-codex-subscription-flag";
+import {
+  HOSTED_CODEX_KIND,
+  type HostedCodexPublicStatus,
+} from "./hosted-codex-subscription-view";
+import { decryptSecret, encryptSecret } from "../platform/kms";
+import {
+  defaultSharingEnabled,
+  resolvePersonalOrSharedCredential,
+} from "./scoped-credential-sharing";
+
+const HOSTED_CODEX_CONTEXT = {
+  application: "codev",
+  purpose: "hosted-codex-subscription",
+};
+
+export class HostedCodexSubscriptionError extends Error {
+  constructor(
+    message: string,
+    readonly status = 400,
+    readonly code = "hosted_codex_error",
+  ) {
+    super(message);
+    this.name = "HostedCodexSubscriptionError";
+  }
+}
+
+export type HostedCodexMaterial = { authCacheJson: string };
+
+async function encryptHostedMaterial(material: HostedCodexMaterial) {
+  return encryptSecret(JSON.stringify(material), HOSTED_CODEX_CONTEXT);
+}
+
+export async function decryptHostedMaterial(encrypted: string) {
+  return JSON.parse(
+    await decryptSecret(encrypted, HOSTED_CODEX_CONTEXT),
+  ) as HostedCodexMaterial;
+}
+
+function validateAuthCache(authCacheJson: string) {
+  if (Buffer.byteLength(authCacheJson, "utf8") > 128 * 1024) {
+    throw new HostedCodexSubscriptionError(
+      "The Codex auth cache is too large.",
+    );
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(authCacheJson);
+  } catch {
+    throw new HostedCodexSubscriptionError("The Codex auth cache is invalid.");
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new HostedCodexSubscriptionError("The Codex auth cache is invalid.");
+  }
+}
+
+export async function updateHostedCodexAuthCache(
+  credentialId: string,
+  authCacheJson: string,
+) {
+  validateAuthCache(authCacheJson);
+  await getDatabase()
+    .update(schema.providerCredentials)
+    .set({
+      encryptedMaterial: await encryptHostedMaterial({ authCacheJson }),
+      lastRefreshedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.providerCredentials.id, credentialId));
+}
+
+export async function claimHostedCodexExecution(credentialId: string) {
+  const [claimed] = await getDatabase()
+    .update(schema.providerCredentials)
+    .set({
+      unavailableUntil: new Date(Date.now() + 16 * 60 * 1_000),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(schema.providerCredentials.id, credentialId),
+        eq(schema.providerCredentials.status, "active"),
+        eq(schema.providerCredentials.isConnected, true),
+        or(
+          isNull(schema.providerCredentials.unavailableUntil),
+          lt(schema.providerCredentials.unavailableUntil, new Date()),
+        ),
+      ),
+    )
+    .returning({ id: schema.providerCredentials.id });
+  if (!claimed) {
+    throw new HostedCodexSubscriptionError(
+      "This Codex connection is already running another cloud turn. Try again shortly.",
+      409,
+      "hosted_codex_busy",
+    );
+  }
+}
+
+export async function releaseHostedCodexExecution(credentialId: string) {
+  await getDatabase()
+    .update(schema.providerCredentials)
+    .set({ unavailableUntil: null, updatedAt: new Date() })
+    .where(eq(schema.providerCredentials.id, credentialId));
+}
+
+export async function persistHostedCodexConnection(input: {
+  userId: string;
+  scopeType: HostedCodexScopeType;
+  scopeId: string;
+  /** Defaults to true for an ORGANIZATION scope, false for USER — see
+   *  `defaultSharingEnabled`. Override to connect a workspace-scoped login
+   *  that only its connector may use, or vice versa. */
+  sharingEnabled?: boolean;
+  material: HostedCodexMaterial;
+  accountLabel?: string;
+  /** Browser and CLI logins produce byte-identical auth caches, so the caller
+   *  must say which it was: only a `cli` login may power a coding workspace. */
+  connectedVia: "browser" | "cli";
+  /** Surfaces to enable on create; existing toggles are kept on reconnect. */
+  enabledFor?: { rooms: boolean; workspace: boolean };
+}) {
+  validateAuthCache(input.material.authCacheJson);
+  const sharingEnabled =
+    input.sharingEnabled ?? defaultSharingEnabled(input.scopeType);
+  const encryptedMaterial = await encryptHostedMaterial(input.material);
+  const [credential] = await getDatabase()
+    .insert(schema.providerCredentials)
+    .values({
+      scopeType: input.scopeType,
+      scopeId: input.scopeId,
+      provider: "openai",
+      credentialType: "HOSTED_CODEX_SUBSCRIPTION",
+      encryptedMaterial,
+      isConnected: true,
+      keyVersion: 2,
+      lastFour: input.accountLabel ?? "Codex CLI",
+      status: "active",
+      lastRefreshedAt: new Date(),
+      createdBy: input.userId,
+      sharingEnabled,
+      unavailableUntil: null,
+      revokedAt: null,
+      connectedVia: input.connectedVia,
+      enabledForRooms: input.enabledFor?.rooms ?? true,
+      enabledForWorkspace: input.enabledFor?.workspace ?? true,
+    })
+    .onConflictDoUpdate({
+      target: [
+        schema.providerCredentials.scopeType,
+        schema.providerCredentials.scopeId,
+        schema.providerCredentials.provider,
+        schema.providerCredentials.credentialType,
+      ],
+      set: {
+        encryptedMaterial,
+        isConnected: true,
+        keyVersion: 2,
+        lastFour: input.accountLabel ?? "Codex CLI",
+        status: "active",
+        lastRefreshedAt: new Date(),
+        createdBy: input.userId,
+        sharingEnabled,
+        unavailableUntil: null,
+        revokedAt: null,
+        connectedVia: input.connectedVia,
+        ...(input.enabledFor
+          ? {
+              enabledForRooms: input.enabledFor.rooms,
+              enabledForWorkspace: input.enabledFor.workspace,
+            }
+          : {}),
+        updatedAt: new Date(),
+      },
+    })
+    .returning({ id: schema.providerCredentials.id });
+  await recordHostedCodexAuditEvent({
+    credentialId: credential?.id ?? null,
+    actorId: input.userId,
+    type: "connection_created",
+    scopeType: input.scopeType,
+    scopeId: input.scopeId,
+    result: "success",
+  });
+}
+
+async function findActiveHostedCredential(
+  scopeType: HostedCodexScopeType,
+  scopeId: string,
+  includeBusy = false,
+) {
+  const [credential] = await getDatabase()
+    .select()
+    .from(schema.providerCredentials)
+    .where(
+      and(
+        eq(schema.providerCredentials.scopeType, scopeType),
+        eq(schema.providerCredentials.scopeId, scopeId),
+        eq(schema.providerCredentials.provider, "openai"),
+        eq(
+          schema.providerCredentials.credentialType,
+          "HOSTED_CODEX_SUBSCRIPTION",
+        ),
+        eq(schema.providerCredentials.status, "active"),
+        eq(schema.providerCredentials.isConnected, true),
+      ),
+    )
+    .limit(1);
+  if (
+    !includeBusy &&
+    credential?.unavailableUntil &&
+    credential.unavailableUntil.getTime() > Date.now()
+  ) {
+    return null;
+  }
+  return credential ?? null;
+}
+
+export async function resolveHostedCodexSubscription(input: {
+  userId: string;
+  workspaceId?: string;
+  includeBusy?: boolean;
+}) {
+  if (!isHostedCodexSubscriptionEnabled()) return null;
+  return resolvePersonalOrSharedCredential(input, {
+    findPersonal: (userId) =>
+      findActiveHostedCredential("USER", userId, input.includeBusy),
+    // A busy (in-use) shared login is unavailable the same as a personal one;
+    // includeBusy is only ever passed for a personal lookup's own caller need.
+    findShared: (workspaceId) =>
+      findActiveHostedCredential("ORGANIZATION", workspaceId),
+  });
+}
+
+export async function getHostedCodexPublicStatus(input: {
+  scopeType: HostedCodexScopeType;
+  scopeId: string;
+  canManage: boolean;
+}): Promise<HostedCodexPublicStatus> {
+  const enabled = isHostedCodexSubscriptionEnabled();
+  const [credential] = await getDatabase()
+    .select()
+    .from(schema.providerCredentials)
+    .where(
+      and(
+        eq(schema.providerCredentials.scopeType, input.scopeType),
+        eq(schema.providerCredentials.scopeId, input.scopeId),
+        eq(schema.providerCredentials.provider, "openai"),
+        eq(
+          schema.providerCredentials.credentialType,
+          "HOSTED_CODEX_SUBSCRIPTION",
+        ),
+      ),
+    )
+    .limit(1);
+  const connected = Boolean(
+    credential?.isConnected &&
+    credential.status === "active" &&
+    credential.encryptedMaterial,
+  );
+  return {
+    kind: HOSTED_CODEX_KIND,
+    scopeType: input.scopeType,
+    status: connected ? "connected" : enabled ? "not_connected" : "unavailable",
+    stateText: connected
+      ? input.scopeType === "ORGANIZATION"
+        ? "Connected for this organization"
+        : "Connected · Codex CLI"
+      : "Not connected",
+    accountLabel: connected ? "Codex CLI" : null,
+    sharingEnabled: Boolean(credential?.sharingEnabled),
+    canManage: input.canManage,
+    enabled,
+    configured: enabled,
+  };
+}
+
+export async function disconnectHostedCodexSubscription(input: {
+  userId: string;
+  scopeType: HostedCodexScopeType;
+  scopeId: string;
+}) {
+  const [credential] = await getDatabase()
+    .delete(schema.providerCredentials)
+    .where(
+      and(
+        eq(schema.providerCredentials.scopeType, input.scopeType),
+        eq(schema.providerCredentials.scopeId, input.scopeId),
+        eq(schema.providerCredentials.provider, "openai"),
+        eq(
+          schema.providerCredentials.credentialType,
+          "HOSTED_CODEX_SUBSCRIPTION",
+        ),
+      ),
+    )
+    .returning({ id: schema.providerCredentials.id });
+  if (credential) {
+    await recordHostedCodexAuditEvent({
+      credentialId: credential.id,
+      actorId: input.userId,
+      type: "disconnect",
+      scopeType: input.scopeType,
+      scopeId: input.scopeId,
+      result: "success",
+    });
+  }
+}
+
+export type { HostedCodexPublicStatus } from "./hosted-codex-subscription-view";

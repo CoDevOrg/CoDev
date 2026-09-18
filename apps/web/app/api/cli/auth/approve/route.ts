@@ -1,8 +1,8 @@
 import {
   approveCliDeviceAuthorization,
   cliAuthErrorResponse,
-} from "@/lib/cli-auth";
-import { getCurrentAppUser } from "@/lib/identity";
+} from "@/lib/auth/cli-auth";
+import { getCurrentAppUser } from "@/lib/auth/identity";
 
 export const runtime = "nodejs";
 

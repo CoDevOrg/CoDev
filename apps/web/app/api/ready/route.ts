@@ -1,4 +1,4 @@
-import { getReadiness } from "@/lib/readiness";
+import { getReadiness } from "@/lib/runtime/readiness";
 
 export const dynamic = "force-dynamic";
 

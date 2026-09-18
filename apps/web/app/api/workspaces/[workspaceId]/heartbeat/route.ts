@@ -1,5 +1,5 @@
-import { withWorkspace } from "@/lib/api-route";
-import { recordWorkspaceHeartbeat } from "@/lib/heartbeat";
+import { withWorkspace } from "@/lib/http/api-route";
+import { recordWorkspaceHeartbeat } from "@/lib/runtime/heartbeat";
 
 export const POST = withWorkspace(
   "view",

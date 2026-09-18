@@ -1,5 +1,8 @@
-import { apiError, getApiUser } from "@/lib/api";
-import { acceptSharedChatInvite, SharedChatError } from "@/lib/shared-chat";
+import { apiError, getApiUser } from "@/lib/http/api";
+import {
+  acceptSharedChatInvite,
+  SharedChatError,
+} from "@/lib/chat/shared-chat";
 
 type Context = { params: Promise<{ token: string }> };
 

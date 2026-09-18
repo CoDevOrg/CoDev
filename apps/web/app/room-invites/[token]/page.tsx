@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { MessagesSquare } from "lucide-react";
 
-import { AcceptRoomInvite } from "@/components/accept-room-invite";
-import { Brand } from "@/components/app-chrome";
-import { getCurrentAppUser } from "@/lib/identity";
+import { AcceptRoomInvite } from "@/components/auth/accept-room-invite";
+import { Brand } from "@/components/shell/app-chrome";
+import { getCurrentAppUser } from "@/lib/auth/identity";
 
 export const metadata: Metadata = { title: "Room invitation" };
 

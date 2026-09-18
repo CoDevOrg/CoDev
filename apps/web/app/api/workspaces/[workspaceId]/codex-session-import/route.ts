@@ -1,15 +1,15 @@
 import { z } from "zod";
 
-import { apiError } from "@/lib/api";
-import { ApiError, withWorkspace } from "@/lib/api-route";
+import { apiError } from "@/lib/http/api";
+import { ApiError, withWorkspace } from "@/lib/http/api-route";
 import {
   InvalidCodexRolloutError,
   codexRolloutSessionPath,
   parseCodexRolloutHeader,
-} from "@/lib/codex-session-import";
-import { ensureOrcaSession } from "@/lib/orca-host";
-import { writeIdeFile } from "@/lib/orchestrator";
-import { getWorkspaceForMember } from "@/lib/workspaces";
+} from "@/lib/agents/codex-session-import";
+import { ensureOrcaSession } from "@/lib/runtime/orca-host";
+import { writeIdeFile } from "@/lib/runtime/orchestrator";
+import { getWorkspaceForMember } from "@/lib/workspaces/workspaces";
 
 export const runtime = "nodejs";
 

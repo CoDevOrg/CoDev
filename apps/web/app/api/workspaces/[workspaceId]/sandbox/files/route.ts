@@ -1,22 +1,26 @@
 import { z } from "zod";
 
-import { apiError } from "@/lib/api";
-import { withWorkspace } from "@/lib/api-route";
+import { apiError } from "@/lib/http/api";
+import { withWorkspace } from "@/lib/http/api-route";
 import {
   getWorkspaceSnapshot,
   listSnapshotFiles,
   readSnapshotFile,
-} from "@/lib/hibernation";
+} from "@/lib/runtime/hibernation";
 import {
   getSandboxGitOutput,
   listSandboxFiles,
   readSandboxFile,
   searchSandboxFiles,
   writeSandboxFile,
-} from "@/lib/orchestrator";
-import { attachGitStatus, parseFileList, parseSearchMatches } from "@/lib/ide";
-import { getWorkspaceRuntime } from "@/lib/workspaces";
-import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
+} from "@/lib/runtime/orchestrator";
+import {
+  attachGitStatus,
+  parseFileList,
+  parseSearchMatches,
+} from "@/lib/runtime/ide";
+import { getWorkspaceRuntime } from "@/lib/workspaces/workspaces";
+import { ensureWorkspaceRuntimeReady } from "@/lib/runtime/runtime-resume";
 
 export const runtime = "nodejs";
 

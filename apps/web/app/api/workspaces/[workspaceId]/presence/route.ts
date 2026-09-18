@@ -4,13 +4,13 @@ import { z } from "zod";
 import { schema } from "@codev/db";
 import { collaborationPathSchema } from "@codev/contracts";
 
-import { withWorkspace } from "@/lib/api-route";
+import { withWorkspace } from "@/lib/http/api-route";
 import {
   listWorkspacePresenceEntries,
   recordOrcaActiveFile,
   recordOrcaCursor,
-} from "@/lib/collaboration-server";
-import { getDatabase } from "@/lib/database";
+} from "@/lib/workspaces/collaboration-server";
+import { getDatabase } from "@/lib/platform/database";
 
 const activeFileSchema = z.object({ path: collaborationPathSchema });
 const cursorSchema = activeFileSchema.extend({

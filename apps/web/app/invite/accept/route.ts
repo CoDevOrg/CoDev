@@ -3,9 +3,12 @@ import { eq } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 
-import { hashInviteToken } from "@/lib/crypto";
-import { getDatabase } from "@/lib/database";
-import { createInviteGrant, INVITE_GRANT_COOKIE } from "@/lib/invite-grant";
+import { hashInviteToken } from "@/lib/platform/crypto";
+import { getDatabase } from "@/lib/platform/database";
+import {
+  createInviteGrant,
+  INVITE_GRANT_COOKIE,
+} from "@/lib/auth/invite-grant";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

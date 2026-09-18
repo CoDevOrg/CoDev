@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import { readJson, withUser } from "@/lib/api-route";
-import { restoreWorkspaceFile } from "@/lib/workspace-restore";
+import { readJson, withUser } from "@/lib/http/api-route";
+import { restoreWorkspaceFile } from "@/lib/workspaces/workspace-restore";
 
 const bodySchema = z.object({
   path: z.string().min(1).max(4_096),

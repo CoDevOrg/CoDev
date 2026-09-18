@@ -1,6 +1,6 @@
-import { apiError, getApiUser } from "@/lib/api";
+import { apiError, getApiUser } from "@/lib/http/api";
 import { isGitHubAuthConfigured } from "@codev/config";
-import { getConnectedAccounts } from "@/lib/identity";
+import { getConnectedAccounts } from "@/lib/auth/identity";
 
 /**
  * The signed-in member's own profile identity and connected-account status,

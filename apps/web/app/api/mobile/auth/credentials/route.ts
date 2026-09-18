@@ -1,8 +1,8 @@
-import { mintCliAccessToken } from "@/lib/cli-auth";
-import { apiError } from "@/lib/api";
-import { resolveCredentialsSignIn } from "@/lib/credentials-auth";
-import { consumeRateLimit } from "@/lib/rate-limit";
-import { isEmailAllowlisted } from "@/lib/registration";
+import { mintCliAccessToken } from "@/lib/auth/cli-auth";
+import { apiError } from "@/lib/http/api";
+import { resolveCredentialsSignIn } from "@/lib/auth/credentials-auth";
+import { consumeRateLimit } from "@/lib/platform/rate-limit";
+import { isEmailAllowlisted } from "@/lib/auth/registration";
 
 export const runtime = "nodejs";
 

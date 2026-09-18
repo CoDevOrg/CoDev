@@ -3,22 +3,22 @@ import { z } from "zod";
 
 import { schema } from "@codev/db";
 
-import { kickAgentSession } from "@/lib/agent-service";
-import { apiError } from "@/lib/api";
-import { withWorkspace } from "@/lib/api-route";
+import { kickAgentSession } from "@/lib/agents/agent-service";
+import { apiError } from "@/lib/http/api";
+import { withWorkspace } from "@/lib/http/api-route";
 import {
   parseAgentProvider,
   resolveSelectableAgentModel,
-} from "@/lib/ai-model";
-import { assertProviderConnectionForTurn } from "@/lib/provider-turn-auth";
-import { getDatabase } from "@/lib/database";
-import { assertTurnQuota } from "@/lib/quotas";
-import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
+} from "@/lib/providers/ai-model";
+import { assertProviderConnectionForTurn } from "@/lib/providers/provider-turn-auth";
+import { getDatabase } from "@/lib/platform/database";
+import { assertTurnQuota } from "@/lib/runtime/quotas";
+import { ensureWorkspaceRuntimeReady } from "@/lib/runtime/runtime-resume";
 import {
   agentAttachmentsSchema,
   toStoredAgentAttachments,
-} from "@/lib/agent-attachments";
-import { enforceAgentPromptRateLimit } from "@/lib/agent-rate-limit";
+} from "@/lib/agents/agent-attachments";
+import { enforceAgentPromptRateLimit } from "@/lib/agents/agent-rate-limit";
 
 const inputSchema = z.object({
   prompt: z.string().trim().min(1).max(20_000),

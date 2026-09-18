@@ -1,10 +1,10 @@
 import { z } from "zod";
 
-import { withUser } from "@/lib/api-route";
+import { withUser } from "@/lib/http/api-route";
 import {
   createWorkspaceInvite,
   listWorkspaceInviteState,
-} from "@/lib/workspaces";
+} from "@/lib/workspaces/workspaces";
 
 const inviteSchema = z.object({
   invitee: z.string().trim().max(320).optional(),

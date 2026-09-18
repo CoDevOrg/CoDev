@@ -12,7 +12,7 @@ const alias = {
 /**
  * next-auth's ESM build imports `next/server` without an extension, which
  * Node's own resolver rejects ("Did you mean next/server.js?"). Left
- * external, any node-environment test whose imports reach `lib/identity`
+ * external, any node-environment test whose imports reach `lib/auth/identity`
  * fails to load; inlining it lets Vite resolve the import instead.
  */
 const server = { deps: { inline: ["next-auth"] } };

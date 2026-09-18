@@ -2,8 +2,8 @@ import {
   OrganizationSettingsCard,
   OrganizationSettingsPage,
 } from "@/components/settings/settings-content";
-import { getActiveOrganizationSettingsContext } from "@/lib/organization-settings";
-import { requireUser } from "@/lib/session";
+import { getActiveOrganizationSettingsContext } from "@/lib/admin/organization-settings";
+import { requireUser } from "@/lib/auth/session";
 
 export default async function OrganizationGeneralPage() {
   const user = await requireUser();

@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from "react";
 
-import { AgentMissionControl } from "@/components/agent-mission-control";
+import { AgentMissionControl } from "@/components/workspace/agent-mission-control";
 import {
   advanceDemo,
   createDemoSnapshot,
   interruptDemo,
   steerDemo,
-} from "@/lib/mission-control-demo";
-import type { MissionControlSnapshot } from "@/lib/mission-control-model";
+} from "@/lib/coordination/mission-control-demo";
+import type { MissionControlSnapshot } from "@/lib/coordination/mission-control-model";
 
 /** How often the simulated workspace advances. Fast enough to feel alive on a
  *  projector, slow enough that a viewer can actually read a line. */

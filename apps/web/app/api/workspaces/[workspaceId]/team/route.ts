@@ -1,7 +1,7 @@
 import { memberStatusSchema } from "@codev/contracts";
 
-import { withWorkspace } from "@/lib/api-route";
-import { getTeamRoster, setMemberStatus } from "@/lib/team-roster";
+import { withWorkspace } from "@/lib/http/api-route";
+import { getTeamRoster, setMemberStatus } from "@/lib/chat/team-roster";
 
 export const GET = withWorkspace("view", async ({ user, workspaceId }) =>
   Response.json(await getTeamRoster(workspaceId, user.id)),

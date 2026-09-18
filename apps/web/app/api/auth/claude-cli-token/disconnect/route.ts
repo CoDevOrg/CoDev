@@ -1,4 +1,4 @@
-import { disconnectClaudeCliTokenConnection } from "@/lib/claude-cli-token-route";
+import { disconnectClaudeCliTokenConnection } from "@/lib/providers/claude-cli-token-route";
 
 export const runtime = "nodejs";
 

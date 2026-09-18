@@ -169,9 +169,9 @@ tokens, and `mergedContents` only for the merged strategy.
 The backend supports OpenAI/Codex, Anthropic/Claude, Cursor, Amazon Bedrock,
 Azure Foundry, and configured custom providers. The authoritative provider
 options and model defaults live in `packages/contracts/src/providers.ts` and
-`apps/web/lib/ai-model.ts`.
+`apps/web/lib/providers/ai-model.ts`.
 
-Agent attachments are validated by `apps/web/lib/agent-attachments.ts`. The
+Agent attachments are validated by `apps/web/lib/agents/agent-attachments.ts`. The
 frontend should enforce those limits before upload and still handle server-side
 validation errors. Agent quotas and concurrent-turn limits are enforced by the
 backend and may return `429` with `Retry-After`.

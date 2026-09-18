@@ -1,8 +1,11 @@
 import { brainEntryKindSchema, recordBrainEntrySchema } from "@codev/contracts";
 import { z } from "zod";
 
-import { withWorkspace } from "@/lib/api-route";
-import { listBrainEntries, recordBrainEntry } from "@/lib/workspace-brain";
+import { withWorkspace } from "@/lib/http/api-route";
+import {
+  listBrainEntries,
+  recordBrainEntry,
+} from "@/lib/coordination/workspace-brain";
 
 const postBodySchema = recordBrainEntrySchema.extend({
   sessionId: z.uuid().optional(),

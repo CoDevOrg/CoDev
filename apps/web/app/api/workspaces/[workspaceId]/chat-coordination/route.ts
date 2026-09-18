@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import { requireWorkspacePermission } from "@/lib/access";
-import { withUser, withWorkspace } from "@/lib/api-route";
+import { requireWorkspacePermission } from "@/lib/auth/access";
+import { withUser, withWorkspace } from "@/lib/http/api-route";
 import {
   acquireWorkspaceChatLease,
   heartbeatWorkspaceChat,
@@ -10,7 +10,7 @@ import {
   recordWorkspaceChatPrompt,
   releaseWorkspaceChatLease,
   renewWorkspaceChatLease,
-} from "@/lib/workspace-chat-coordination";
+} from "@/lib/chat/workspace-chat-coordination";
 
 const chatIdSchema = z.string().trim().min(1).max(240);
 const clientIdSchema = z.uuid();

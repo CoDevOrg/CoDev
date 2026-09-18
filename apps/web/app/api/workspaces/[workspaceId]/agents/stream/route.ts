@@ -3,25 +3,28 @@ import { z } from "zod";
 
 import { createAgentEvent, type AgentEvent } from "@codev/shared-types";
 
-import { apiError } from "@/lib/api";
-import { withWorkspace } from "@/lib/api-route";
+import { apiError } from "@/lib/http/api";
+import { withWorkspace } from "@/lib/http/api-route";
 import {
   createAgentModel,
   getAgentModel,
   getAgentProvider,
   parseAgentProvider,
   resolveSelectableAgentModel,
-} from "@/lib/ai-model";
-import { resolveAgentCredential } from "@/lib/credentials";
+} from "@/lib/providers/ai-model";
+import { resolveAgentCredential } from "@/lib/providers/credentials";
 import {
   requireCursorApiKey,
   runCursorCloudAgent,
-} from "@/lib/cursor-agent-runtime";
-import { enforceAgentPromptRateLimit } from "@/lib/agent-rate-limit";
-import { readSandboxFile, searchSandboxFiles } from "@/lib/orchestrator";
-import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
-import { getWorkspaceForMember } from "@/lib/workspaces";
-import { appendWorkspaceStateEvent } from "@/lib/workspace-state";
+} from "@/lib/agents/cursor-agent-runtime";
+import { enforceAgentPromptRateLimit } from "@/lib/agents/agent-rate-limit";
+import {
+  readSandboxFile,
+  searchSandboxFiles,
+} from "@/lib/runtime/orchestrator";
+import { ensureWorkspaceRuntimeReady } from "@/lib/runtime/runtime-resume";
+import { getWorkspaceForMember } from "@/lib/workspaces/workspaces";
+import { appendWorkspaceStateEvent } from "@/lib/workspaces/workspace-state";
 
 export const runtime = "nodejs";
 

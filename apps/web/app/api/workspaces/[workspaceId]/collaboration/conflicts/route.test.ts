@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   ensureWorkspaceRuntimeReady: vi.fn(),
 }));
 
-vi.mock("@/lib/api", () => ({
+vi.mock("@/lib/http/api", () => ({
   apiError: (error: unknown, status = 400) =>
     Response.json(
       { error: error instanceof Error ? error.message : "request failed" },
@@ -16,14 +16,14 @@ vi.mock("@/lib/api", () => ({
     ),
   getApiUser: mocks.getApiUser,
 }));
-vi.mock("@/lib/access", () => ({
+vi.mock("@/lib/auth/access", () => ({
   requireWorkspacePermission: mocks.requireWorkspacePermission,
 }));
-vi.mock("@/lib/collaboration-server", () => ({
+vi.mock("@/lib/workspaces/collaboration-server", () => ({
   listCollaborationConflicts: mocks.listCollaborationConflicts,
   reportCollaborationConflict: mocks.reportCollaborationConflict,
 }));
-vi.mock("@/lib/runtime-resume", () => ({
+vi.mock("@/lib/runtime/runtime-resume", () => ({
   ensureWorkspaceRuntimeReady: mocks.ensureWorkspaceRuntimeReady,
 }));
 

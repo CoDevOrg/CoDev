@@ -1,9 +1,9 @@
-import { CliAuthorizationForm } from "@/components/cli-authorization-form";
+import { CliAuthorizationForm } from "@/components/auth/cli-authorization-form";
 import {
   SettingsCard,
   SettingsPageHeader,
 } from "@/components/settings/settings-content";
-import { requireUser } from "@/lib/session";
+import { requireUser } from "@/lib/auth/session";
 
 export default async function CliAuthorizePage({
   searchParams,

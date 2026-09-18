@@ -1,18 +1,18 @@
 export async function claimNextAgentTurnStep(sessionId: string) {
   "use step";
-  const { claimNextAgentTurn } = await import("@/lib/agent-runtime");
+  const { claimNextAgentTurn } = await import("@/lib/agents/agent-runtime");
   return claimNextAgentTurn(sessionId);
 }
 
 export async function prepareAgentTurnStep(turnId: string) {
   "use step";
-  const { prepareAgentTurn } = await import("@/lib/agent-runtime");
+  const { prepareAgentTurn } = await import("@/lib/agents/agent-runtime");
   return prepareAgentTurn(turnId);
 }
 
 export async function checkTurnInterruptedStep(turnId: string) {
   "use step";
-  const { checkTurnInterrupted } = await import("@/lib/agent-runtime");
+  const { checkTurnInterrupted } = await import("@/lib/agents/agent-runtime");
   return checkTurnInterrupted(turnId);
 }
 
@@ -22,7 +22,7 @@ export async function pollCodexTurnStep(
   after: number,
 ) {
   "use step";
-  const { pollCodexTurn } = await import("@/lib/agent-runtime");
+  const { pollCodexTurn } = await import("@/lib/agents/agent-runtime");
   return pollCodexTurn(workspaceId, codexSessionId, after);
 }
 
@@ -32,7 +32,7 @@ export async function finishCodexTurnStep(
   poll: { output: string; exitCode: number; codexAuthCacheJson?: string },
 ) {
   "use step";
-  const { finishCodexTurn } = await import("@/lib/agent-runtime");
+  const { finishCodexTurn } = await import("@/lib/agents/agent-runtime");
   return finishCodexTurn(turnId, credentialId, poll);
 }
 
@@ -42,12 +42,12 @@ export async function cancelCodexTurnStep(
   credentialId: string,
 ) {
   "use step";
-  const { cancelCodexTurn } = await import("@/lib/agent-runtime");
+  const { cancelCodexTurn } = await import("@/lib/agents/agent-runtime");
   return cancelCodexTurn(workspaceId, codexSessionId, credentialId);
 }
 
 export async function failAgentSessionStep(sessionId: string, message: string) {
   "use step";
-  const { failAgentSession } = await import("@/lib/agent-runtime");
+  const { failAgentSession } = await import("@/lib/agents/agent-runtime");
   return failAgentSession(sessionId, message);
 }

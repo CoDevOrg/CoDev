@@ -1,9 +1,9 @@
-import { withWorkspace } from "@/lib/api-route";
+import { withWorkspace } from "@/lib/http/api-route";
 import {
   applyWorkspaceReviewAction,
   loadReviewSnapshot,
-} from "@/lib/review-checkpoint-server";
-import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
+} from "@/lib/agents/review-checkpoint-server";
+import { ensureWorkspaceRuntimeReady } from "@/lib/runtime/runtime-resume";
 
 export const maxDuration = 300;
 

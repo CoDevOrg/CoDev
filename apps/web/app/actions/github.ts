@@ -5,8 +5,11 @@ import { cookies } from "next/headers";
 import { isGitHubAuthConfigured } from "@codev/config";
 
 import { signIn } from "@/auth";
-import { getApiUser } from "@/lib/api";
-import { createGithubLinkState, GITHUB_LINK_COOKIE } from "@/lib/github-link";
+import { getApiUser } from "@/lib/http/api";
+import {
+  createGithubLinkState,
+  GITHUB_LINK_COOKIE,
+} from "@/lib/github/github-link";
 
 function safeReturnTo(value: string) {
   return value.startsWith("/") && !value.startsWith("//")

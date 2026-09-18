@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, MessageSquareText, Plus } from "lucide-react";
 
-import { AppChrome } from "@/components/app-chrome";
-import { requireUser } from "@/lib/session";
-import { listSharedChatsForUser } from "@/lib/shared-chat";
+import { AppChrome } from "@/components/shell/app-chrome";
+import { requireUser } from "@/lib/auth/session";
+import { listSharedChatsForUser } from "@/lib/chat/shared-chat";
 
 import styles from "./rooms.module.css";
 

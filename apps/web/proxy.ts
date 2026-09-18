@@ -6,8 +6,11 @@ import {
 } from "next/server";
 
 import { auth as nextAuth } from "@/auth";
-import { apiEdgeLimiter, retryAfterSeconds } from "@/lib/upstash-rate-limit";
-import { isAdminHostname } from "@/lib/site-hosts";
+import {
+  apiEdgeLimiter,
+  retryAfterSeconds,
+} from "@/lib/platform/upstash-rate-limit";
+import { isAdminHostname } from "@/lib/platform/site-hosts";
 
 const clerkConfigured = Boolean(
   process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY,

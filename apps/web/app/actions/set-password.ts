@@ -5,10 +5,10 @@ import { redirect } from "next/navigation";
 
 import { schema } from "@codev/db";
 
-import { hashPassword } from "@/lib/crypto";
-import { getDatabase } from "@/lib/database";
-import { getNewAccountPasswordError } from "@/lib/password-policy";
-import { requireUser } from "@/lib/session";
+import { hashPassword } from "@/lib/platform/crypto";
+import { getDatabase } from "@/lib/platform/database";
+import { getNewAccountPasswordError } from "@/lib/auth/password-policy";
+import { requireUser } from "@/lib/auth/session";
 
 /**
  * Lets an already-signed-in user (typically OAuth-only, no password yet) add

@@ -10,7 +10,7 @@ find: `git ls-files 'packages/ide/**/[Cc]odev*'`.
 
 ## Embedding contract
 
-`apps/web/components/orca-workspace.tsx` boots this client in a same-origin
+`apps/web/components/workspace/orca-workspace.tsx` boots this client in a same-origin
 iframe and passes everything through the URL **fragment** — so the pairing
 credential and bootstrap data never appear in HTTP requests, proxy logs, or
 referrers:
@@ -39,7 +39,7 @@ crafted fragment cannot point the client at an arbitrary directory.
 
 `src/renderer/src/web/codev-bridge.ts` talks to the parent page over
 same-origin `postMessage`. The parent
-(`apps/web/components/codev-parent-bridge.ts`) verifies both the message origin
+(`apps/web/components/workspace/codev-parent-bridge.ts`) verifies both the message origin
 and the exact iframe window, then proxies each request to the matching
 `/api/workspaces/:id/...` endpoint. GitHub and provider credentials stay
 server-side and never cross the bridge.
@@ -196,11 +196,11 @@ script or a setter intercepting `window.api`. GitHub operations still use the
 authenticated CoDev control plane; this preflight display adaptation grants no
 runtime permissions. The normal browser API already disables the GitHub star nag.
 
-`apps/web/components/orca-workspace.tsx` also renders a first-party
+`apps/web/components/workspace/orca-workspace.tsx` also renders a first-party
 `workspace-topbar` above the iframe with a persistent "← CoDev" link back to
 `/dashboard`. That is parent-page chrome, not part of this tree.
 
-`apps/web/components/orca-project-tree.ts` predates the folded sidebar and
+`apps/web/components/workspace/orca-project-tree.ts` predates the folded sidebar and
 targeted authored class names (`.sidebar-header`, `.worktree-list`) that no
 longer exist; `watchOrcaProjectTree` is now a no-op and should be deleted.
 

@@ -1,8 +1,14 @@
-import { apiError } from "@/lib/api";
-import { withWorkspace } from "@/lib/api-route";
-import { getWorkspaceSnapshot, readSnapshotFile } from "@/lib/hibernation";
-import { getSandboxGitOutput, readSandboxHeadFile } from "@/lib/orchestrator";
-import { getWorkspaceRuntime } from "@/lib/workspaces";
+import { apiError } from "@/lib/http/api";
+import { withWorkspace } from "@/lib/http/api-route";
+import {
+  getWorkspaceSnapshot,
+  readSnapshotFile,
+} from "@/lib/runtime/hibernation";
+import {
+  getSandboxGitOutput,
+  readSandboxHeadFile,
+} from "@/lib/runtime/orchestrator";
+import { getWorkspaceRuntime } from "@/lib/workspaces/workspaces";
 
 export const GET = withWorkspace("view", async ({ request, workspaceId }) => {
   const operation = new URL(request.url).searchParams.get("operation");

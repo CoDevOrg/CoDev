@@ -1,8 +1,8 @@
 import {
   createCoordinationMessage,
   listCoordinationMessages,
-} from "@/lib/agent-coordination";
-import { withWorkspace } from "@/lib/api-route";
+} from "@/lib/coordination/agent-coordination";
+import { withWorkspace } from "@/lib/http/api-route";
 
 type Params = { workspaceId: string; sessionId: string };
 

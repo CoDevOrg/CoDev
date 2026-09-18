@@ -1,8 +1,8 @@
-import { apiError } from "@/lib/api";
-import { withWorkspace } from "@/lib/api-route";
-import { executeInSandbox } from "@/lib/orchestrator";
-import { getWorkspaceForMember } from "@/lib/workspaces";
-import { githubRequest } from "@/lib/github";
+import { apiError } from "@/lib/http/api";
+import { withWorkspace } from "@/lib/http/api-route";
+import { executeInSandbox } from "@/lib/runtime/orchestrator";
+import { getWorkspaceForMember } from "@/lib/workspaces/workspaces";
+import { githubRequest } from "@/lib/github/github";
 
 export const maxDuration = 60;
 

@@ -1,5 +1,5 @@
-import { reconcileLifecycle } from "@/lib/lifecycle";
-import { logEvent, requestId } from "@/lib/observability";
+import { reconcileLifecycle } from "@/lib/runtime/lifecycle";
+import { logEvent, requestId } from "@/lib/platform/observability";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;

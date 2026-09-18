@@ -18,7 +18,7 @@ Two Azure-hosted contexts. **No shared filesystem.**
 2. **Orca IDE session** — one `orca serve` per workspace, embedded as a
    same-origin iframe. It has **no separate `/ide` route family** in
    `apps/web`. It talks to the parent over `postMessage`
-   (`codev-bridge.ts` ↔ `components/codev-parent-bridge.ts`), which proxies to
+   (`codev-bridge.ts` ↔ `components/workspace/codev-parent-bridge.ts`), which proxies to
    ordinary `/api/workspaces/{id}/...` endpoints (`presence`,
    `collaboration/conflicts`, `agents/{sessionId}/...`). The only literal
    `/ide` path is the orchestrator's `POST/GET /v1/sandboxes/{workspaceId}/ide`

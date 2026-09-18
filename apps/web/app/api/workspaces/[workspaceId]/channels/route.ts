@@ -1,7 +1,10 @@
 import { createChannelSchema } from "@codev/contracts";
 
-import { withWorkspace } from "@/lib/api-route";
-import { createWorkspaceChannel, listWorkspaceChannels } from "@/lib/team-chat";
+import { withWorkspace } from "@/lib/http/api-route";
+import {
+  createWorkspaceChannel,
+  listWorkspaceChannels,
+} from "@/lib/chat/team-chat";
 
 export const GET = withWorkspace("view", async ({ user, workspaceId }) =>
   Response.json({

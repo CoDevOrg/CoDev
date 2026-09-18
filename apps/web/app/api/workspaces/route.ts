@@ -1,6 +1,9 @@
-import { withUser } from "@/lib/api-route";
-import { createWorkspace, listWorkspacesForUser } from "@/lib/workspaces";
-import { workspaceCreateRequestSchema } from "@/lib/workspace-creation";
+import { withUser } from "@/lib/http/api-route";
+import {
+  createWorkspace,
+  listWorkspacesForUser,
+} from "@/lib/workspaces/workspaces";
+import { workspaceCreateRequestSchema } from "@/lib/workspaces/workspace-creation";
 
 export const GET = withUser(
   async ({ user }) =>

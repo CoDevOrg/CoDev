@@ -1,13 +1,13 @@
 import { z } from "zod";
 
-import { apiError, getApiUser } from "@/lib/api";
+import { apiError, getApiUser } from "@/lib/http/api";
 import {
   loadProviderConnectionSnapshot,
   revokePersonalProviderConnection,
   savePersonalProviderConnection,
   setPersonalCredentialSurface,
-} from "@/lib/provider-connection-server";
-import { publicProviderConnectionPayload } from "@/lib/provider-connection-view";
+} from "@/lib/providers/provider-connection-server";
+import { publicProviderConnectionPayload } from "@/lib/providers/provider-connection-view";
 
 const providerSchema = z.enum(["openai", "anthropic", "cursor"]);
 const surfaceSchema = z.enum(["rooms", "workspace"]);

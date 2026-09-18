@@ -12,9 +12,9 @@ import {
   OrcaSubsectionHeader,
 } from "@/components/settings/orca-style";
 import { SetPasswordForm } from "@/components/settings/set-password-form";
-import { getConnectedAccounts } from "@/lib/identity";
-import { requireUser } from "@/lib/session";
-import { cn } from "@/lib/utils";
+import { getConnectedAccounts } from "@/lib/auth/identity";
+import { requireUser } from "@/lib/auth/session";
+import { cn } from "@/lib/platform/utils";
 
 const passwordErrorCopy: Record<string, string> = {
   match: "Those passwords did not match. Try again.",

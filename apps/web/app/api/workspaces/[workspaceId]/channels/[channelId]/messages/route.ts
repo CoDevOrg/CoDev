@@ -1,12 +1,12 @@
 import { postChannelMessageSchema } from "@codev/contracts";
 
-import { withWorkspace } from "@/lib/api-route";
-import { dispatchAgentMention } from "@/lib/team-chat-agent";
+import { withWorkspace } from "@/lib/http/api-route";
+import { dispatchAgentMention } from "@/lib/chat/team-chat-agent";
 import {
   listChannelMessages,
   markChannelRead,
   postChannelMessage,
-} from "@/lib/team-chat";
+} from "@/lib/chat/team-chat";
 
 type Params = { workspaceId: string; channelId: string };
 

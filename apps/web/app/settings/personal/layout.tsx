@@ -1,8 +1,8 @@
 import "../orca-theme.css";
 
-import { AppChrome } from "@/components/app-chrome";
+import { AppChrome } from "@/components/shell/app-chrome";
 import { SettingsSidebar } from "@/components/settings/SettingsSidebar";
-import { requireUser } from "@/lib/session";
+import { requireUser } from "@/lib/auth/session";
 
 export default async function PersonalSettingsLayout({
   children,

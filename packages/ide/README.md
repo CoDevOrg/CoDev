@@ -4,7 +4,7 @@ The editor and agent runtime behind every CoDev workspace. It ships as two
 artifacts built from this one source tree:
 
 - **The browser client** — built by `pnpm orca:web` into `apps/web/public/orca/`
-  and served at `/orca/web-index.html`. `apps/web/components/orca-workspace.tsx`
+  and served at `/orca/web-index.html`. `apps/web/components/workspace/orca-workspace.tsx`
   boots it in an iframe on the workspace page.
 - **`orca serve`** — the Electron main process that backs it. Built by
   `infra/runtime/scripts/build-orca-serve.sh`; the orchestrator

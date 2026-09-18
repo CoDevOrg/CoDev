@@ -3,15 +3,15 @@ import { z } from "zod";
 
 import { schema } from "@codev/db";
 
-import { kickAgentSession } from "@/lib/agent-service";
+import { kickAgentSession } from "@/lib/agents/agent-service";
 import {
   canStartFreshChat,
   deriveFreshChatSessionName,
-} from "@/lib/agent-fresh-chat";
-import { apiError } from "@/lib/api";
-import { withWorkspace } from "@/lib/api-route";
-import { getDatabase } from "@/lib/database";
-import { getWorkspaceForMember } from "@/lib/workspaces";
+} from "@/lib/agents/agent-fresh-chat";
+import { apiError } from "@/lib/http/api";
+import { withWorkspace } from "@/lib/http/api-route";
+import { getDatabase } from "@/lib/platform/database";
+import { getWorkspaceForMember } from "@/lib/workspaces/workspaces";
 
 /**
  * Start a fresh chat on an agent that is already running.

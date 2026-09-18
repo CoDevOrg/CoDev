@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { WorkspaceActivityFeed } from "@/components/workspace-activity-feed";
-import { getWorkspaceAccess } from "@/lib/access";
-import { loadActivityAuditSnapshot } from "@/lib/activity-audit-server";
-import { requireUser } from "@/lib/session";
-import { getWorkspaceForMember } from "@/lib/workspaces";
+import { WorkspaceActivityFeed } from "@/components/workspace/workspace-activity-feed";
+import { getWorkspaceAccess } from "@/lib/auth/access";
+import { loadActivityAuditSnapshot } from "@/lib/workspaces/activity-audit-server";
+import { requireUser } from "@/lib/auth/session";
+import { getWorkspaceForMember } from "@/lib/workspaces/workspaces";
 
 export const metadata: Metadata = { title: "Workspace activity" };
 

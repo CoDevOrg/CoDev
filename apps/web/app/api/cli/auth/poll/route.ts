@@ -1,7 +1,7 @@
 import {
   cliAuthErrorResponse,
   exchangeCliDeviceAuthorization,
-} from "@/lib/cli-auth";
+} from "@/lib/auth/cli-auth";
 
 export const runtime = "nodejs";
 

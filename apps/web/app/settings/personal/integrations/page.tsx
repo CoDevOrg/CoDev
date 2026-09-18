@@ -13,8 +13,8 @@ import {
   OrcaPageHeader,
   OrcaPageShell,
 } from "@/components/settings/orca-style";
-import { getConnectedAccounts } from "@/lib/identity";
-import { requireUser } from "@/lib/session";
+import { getConnectedAccounts } from "@/lib/auth/identity";
+import { requireUser } from "@/lib/auth/session";
 
 export default async function PersonalIntegrationsPage() {
   const user = await requireUser();

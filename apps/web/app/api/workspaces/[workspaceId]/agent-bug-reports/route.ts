@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-import { withWorkspace } from "@/lib/api-route";
-import { submitAgentBugReport } from "@/lib/agent-bug-report";
-import { consumeRateLimit } from "@/lib/rate-limit";
+import { withWorkspace } from "@/lib/http/api-route";
+import { submitAgentBugReport } from "@/lib/agents/agent-bug-report";
+import { consumeRateLimit } from "@/lib/platform/rate-limit";
 
 const inputSchema = z.object({
   userAgent: z.string().max(512),

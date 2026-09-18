@@ -1,12 +1,12 @@
 import { z } from "zod";
 
-import { ApiError, withUser } from "@/lib/api-route";
+import { ApiError, withUser } from "@/lib/http/api-route";
 import {
   leaveWorkspace,
   listWorkspaceMembers,
   updateMemberAccessRole,
   updateMemberCapabilities,
-} from "@/lib/workspaces";
+} from "@/lib/workspaces/workspaces";
 
 const requestSchema = z.object({
   accessRole: z.enum(["co_steer", "reviewer", "viewer"]).optional(),

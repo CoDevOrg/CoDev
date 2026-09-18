@@ -256,7 +256,7 @@ resource vault 'Microsoft.KeyVault/vaults@2024-11-01' = {
 }
 
 // Envelope-encryption key for provider credentials. The AWS side wraps a
-// per-secret AES-256 data key with KMS; apps/web/lib/azure-kms.ts does the
+// per-secret AES-256 data key with KMS; apps/web/lib/platform/azure-kms.ts does the
 // same wrap/unwrap against this key, so the envelope format and the
 // per-secret data key both survive the move.
 resource credentialKey 'Microsoft.KeyVault/vaults/keys@2024-11-01' = {

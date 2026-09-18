@@ -1,5 +1,5 @@
-import { releasePathClaim } from "@/lib/agent-coordination";
-import { withWorkspace } from "@/lib/api-route";
+import { releasePathClaim } from "@/lib/coordination/agent-coordination";
+import { withWorkspace } from "@/lib/http/api-route";
 
 export const DELETE = withWorkspace<{
   workspaceId: string;

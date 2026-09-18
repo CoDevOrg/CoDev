@@ -33,7 +33,7 @@ Run from the repository root. Node.js 24+. pnpm only.
 The full suites are expensive. Run them once, at the end — not per edit.
 
 - Iterate with targeted runs. `apps/web`:
-  `pnpm --filter @codev/web exec vitest run lib/<file>.test.ts`. `packages/ide`:
+  `pnpm --filter @codev/web exec vitest run lib/<area>/<file>.test.ts`. `packages/ide`:
   `pnpm run ide:test:web` or `vitest run --config config/vitest.config.ts <path>`
   from that directory.
 - Run `pnpm typecheck` and a full `pnpm test` **once**, when the change is
@@ -53,6 +53,32 @@ The full suites are expensive. Run them once, at the end — not per edit.
   reached 5.4 GB here. Delete it when the tree feels slow; `pnpm dev` rebuilds
   it, and `.next/cache` (the production build cache) is worth keeping.
 
+## Where code lives in `apps/web`
+
+`lib/` and `components/` are grouped by feature. Files keep descriptive names,
+so searching a file name still finds it; list a folder to see everything in
+that area before adding a new file.
+
+| `lib/<area>`    | What belongs there                                                                 |
+| --------------- | ---------------------------------------------------------------------------------- |
+| `http/`         | `api.ts` and `api-route.ts`: route auth, permission checks, error responses        |
+| `platform/`     | Database, crypto/KMS envelopes, rate limiting, observability, shared utilities     |
+| `auth/`         | Sign-in, sessions, identity, CLI tokens, passwords, workspace access (`access.ts`) |
+| `admin/`        | Admin console, access requests, organization settings, feature access              |
+| `providers/`    | Model providers: Claude/Codex connections, credentials, OAuth, BYOK, preflight     |
+| `agents/`       | Agent sessions, runtime, branching, capacity, review checkpoints                   |
+| `coordination/` | Path claims, coordination MCP, workspace brain, workboard, Mission Control         |
+| `runtime/`      | Azure host, orchestrator, Orca host/pairing, hibernation, lifecycle, quotas        |
+| `workspaces/`   | Workspace records, creation, state, restore, collaboration, presence, audit        |
+| `chat/`         | Shared chat, shared sessions, team chat, chat coordination, conversation import    |
+| `github/`       | GitHub client, export, publication, pull requests                                  |
+
+`components/` follows the same idea: `landing/`, `auth/`, `shell/` (app chrome
+and navigation), `admin/`, `settings/`, `workspace/` (the Orca workspace and
+its panels), `chat/`, `fixtures/` (verification fixtures) and `ui/`
+(primitives). Put a new file in the area it serves rather than at the root of
+`lib/` or `components/`.
+
 ## Container Policy
 
 Use Apple's open-source [container](https://github.com/apple/container) tool whenever local container execution is needed. Do not add Dockerfiles, Docker Compose configuration, or commands that require Docker.
@@ -62,7 +88,7 @@ Use Apple's open-source [container](https://github.com/apple/container) tool whe
 Firecracker sandboxes and per-workspace Orca IDE sessions do **not** share a filesystem.
 
 - Backend-driven work (agent execution, worktrees, publication exports) uses **sandbox API routes**.
-- Anything an interactive IDE session must see (terminals, Git, `codex resume`) lives only in that session. The embedded IDE reaches `apps/web` through the `postMessage` bridge (`packages/ide` `codev-bridge.ts` ↔ `components/codev-parent-bridge.ts`), which proxies to ordinary `/api/workspaces/{id}/...` routes; there is no separate `/ide` route family.
+- Anything an interactive IDE session must see (terminals, Git, `codex resume`) lives only in that session. The embedded IDE reaches `apps/web` through the `postMessage` bridge (`packages/ide` `codev-bridge.ts` ↔ `apps/web/components/workspace/codev-parent-bridge.ts`), which proxies to ordinary `/api/workspaces/{id}/...` routes; there is no separate `/ide` route family.
 
 Preserve the split between the Vercel-hosted web control plane and the
 Azure-hosted Firecracker/Orca infrastructure. The runtime is Azure only: the
@@ -87,7 +113,7 @@ Azure stack itself is `infra/azure/`.
 - Keep secrets server-only and never use `NEXT_PUBLIC_` for credentials.
 - Add or update tests with every behavior change.
 - `apps/web` API routes are built with `withUser` / `withWorkspace` from
-  `apps/web/lib/api-route.ts`: they handle sign-in (401), the workspace
+  `apps/web/lib/http/api-route.ts`: they handle sign-in (401), the workspace
   permission check (404/403), body parsing (`readJson`), and turning a thrown
   error into a response. Throw an error that carries a `status` (or `ApiError`)
   instead of building an error response by hand, and give an error class a

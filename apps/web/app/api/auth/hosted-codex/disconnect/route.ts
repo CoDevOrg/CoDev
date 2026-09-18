@@ -1,4 +1,4 @@
-import { disconnectHostedCodexConnection } from "@/lib/hosted-codex-subscription-route";
+import { disconnectHostedCodexConnection } from "@/lib/providers/hosted-codex-subscription-route";
 
 export const runtime = "nodejs";
 

@@ -3,18 +3,18 @@ import { notFound } from "next/navigation";
 
 import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
 
-import { InviteLifecycleFixture } from "@/components/invite-lifecycle-fixture";
-import { AgentCapacityFixture } from "@/components/agent-capacity-fixture";
-import { AgentPathClaimFixture } from "@/components/agent-path-claim-fixture";
-import { AgentReviewCheckpointFixture } from "@/components/agent-review-checkpoint-fixture";
-import { MemberRoleManagementFixture } from "@/components/member-role-management-fixture";
-import { PresenceEventsFixture } from "@/components/presence-events-fixture";
-import { SharedIdePresenceFixture } from "@/components/shared-ide-presence-fixture";
-import { SharedSessionQueueFixture } from "@/components/shared-session-queue-fixture";
+import { InviteLifecycleFixture } from "@/components/fixtures/invite-lifecycle-fixture";
+import { AgentCapacityFixture } from "@/components/fixtures/agent-capacity-fixture";
+import { AgentPathClaimFixture } from "@/components/fixtures/agent-path-claim-fixture";
+import { AgentReviewCheckpointFixture } from "@/components/fixtures/agent-review-checkpoint-fixture";
+import { MemberRoleManagementFixture } from "@/components/fixtures/member-role-management-fixture";
+import { PresenceEventsFixture } from "@/components/fixtures/presence-events-fixture";
+import { SharedIdePresenceFixture } from "@/components/fixtures/shared-ide-presence-fixture";
+import { SharedSessionQueueFixture } from "@/components/fixtures/shared-session-queue-fixture";
 import {
   isVerificationFixtureEnabled,
   verificationFixture,
-} from "@/lib/verification-fixture";
+} from "@/lib/admin/verification-fixture";
 
 import styles from "./fixture.module.css";
 

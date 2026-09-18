@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   recordOrcaCursor: vi.fn(),
 }));
 
-vi.mock("@/lib/api", () => ({
+vi.mock("@/lib/http/api", () => ({
   apiError: (error: unknown, status = 400) =>
     Response.json(
       { error: error instanceof Error ? error.message : "request failed" },
@@ -17,11 +17,13 @@ vi.mock("@/lib/api", () => ({
     ),
   getApiUser: mocks.getApiUser,
 }));
-vi.mock("@/lib/access", () => ({
+vi.mock("@/lib/auth/access", () => ({
   requireWorkspacePermission: mocks.requireWorkspacePermission,
 }));
-vi.mock("@/lib/database", () => ({ getDatabase: () => mocks.database }));
-vi.mock("@/lib/collaboration-server", () => ({
+vi.mock("@/lib/platform/database", () => ({
+  getDatabase: () => mocks.database,
+}));
+vi.mock("@/lib/workspaces/collaboration-server", () => ({
   listWorkspacePresenceEntries: mocks.listWorkspacePresenceEntries,
   recordOrcaActiveFile: mocks.recordOrcaActiveFile,
   recordOrcaCursor: mocks.recordOrcaCursor,

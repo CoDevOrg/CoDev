@@ -1,21 +1,21 @@
-import { BedrockRoleForm } from "@/components/bedrock-role-form";
-import { ClaudeCliSubscriptionCard } from "@/components/claude-cli-subscription-card";
-import { CursorConnectCard } from "@/components/cursor-connect-card";
-import { HostedCodexSubscriptionCard } from "@/components/hosted-codex-subscription-card";
+import { BedrockRoleForm } from "@/components/settings/bedrock-role-form";
+import { ClaudeCliSubscriptionCard } from "@/components/settings/claude-cli-subscription-card";
+import { CursorConnectCard } from "@/components/settings/cursor-connect-card";
+import { HostedCodexSubscriptionCard } from "@/components/settings/hosted-codex-subscription-card";
 import {
   OrganizationSettingsCard,
   OrganizationSettingsPage,
   SettingsCard,
 } from "@/components/settings/settings-content";
-import { WorkspaceCredentialForm } from "@/components/workspace-credential-form";
+import { WorkspaceCredentialForm } from "@/components/settings/workspace-credential-form";
 import {
   getClaudeCliTokenPublicStatus,
   getProviderCredentialStatus,
-} from "@/lib/credentials";
-import { getHostedCodexPublicStatus } from "@/lib/hosted-codex-subscription-credentials";
-import { getActiveOrganizationSettingsContext } from "@/lib/organization-settings";
-import { requireUser } from "@/lib/session";
-import { parseHostedCodexNotice } from "@/lib/settings-notices";
+} from "@/lib/providers/credentials";
+import { getHostedCodexPublicStatus } from "@/lib/providers/hosted-codex-subscription-credentials";
+import { getActiveOrganizationSettingsContext } from "@/lib/admin/organization-settings";
+import { requireUser } from "@/lib/auth/session";
+import { parseHostedCodexNotice } from "@/lib/admin/settings-notices";
 
 export default async function OrganizationAgentsPage({
   searchParams,

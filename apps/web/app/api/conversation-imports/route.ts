@@ -1,12 +1,12 @@
 import { conversationImportPreviewInputSchema } from "@codev/contracts";
 
-import { apiError, getApiUser } from "@/lib/api";
+import { apiError, getApiUser } from "@/lib/http/api";
 import {
   ChatGptShareFetchError,
   previewChatGptShare,
-} from "@/lib/conversation-import/chatgpt-share-fetch";
-import { consumeRateLimit } from "@/lib/rate-limit";
-import { createSharedChatFromImportedConversation } from "@/lib/shared-chat";
+} from "@/lib/chat/conversation-import/chatgpt-share-fetch";
+import { consumeRateLimit } from "@/lib/platform/rate-limit";
+import { createSharedChatFromImportedConversation } from "@/lib/chat/shared-chat";
 
 function importErrorResponse(error: ChatGptShareFetchError) {
   const status =

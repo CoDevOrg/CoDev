@@ -1,12 +1,12 @@
 import { createPublicationSchema } from "@codev/contracts";
 
-import { readJson, withUser, withWorkspace } from "@/lib/api-route";
+import { readJson, withUser, withWorkspace } from "@/lib/http/api-route";
 import {
   listWorkspacePublications,
   publishWorkspaceBranch,
-} from "@/lib/github-publication";
-import { requestId } from "@/lib/observability";
-import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
+} from "@/lib/github/github-publication";
+import { requestId } from "@/lib/platform/observability";
+import { ensureWorkspaceRuntimeReady } from "@/lib/runtime/runtime-resume";
 
 // PublicationError carries its own status; anything else is an upstream failure.
 export const GET = withWorkspace(

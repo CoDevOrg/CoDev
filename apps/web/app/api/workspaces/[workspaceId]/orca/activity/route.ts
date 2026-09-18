@@ -1,6 +1,6 @@
-import { apiError, getApiUserAnyAuth } from "@/lib/api";
-import { requireWorkspacePermission } from "@/lib/access";
-import { recordOrcaActivity } from "@/lib/orca-host";
+import { apiError, getApiUserAnyAuth } from "@/lib/http/api";
+import { requireWorkspacePermission } from "@/lib/auth/access";
+import { recordOrcaActivity } from "@/lib/runtime/orca-host";
 
 /**
  * Keepalive for an open Orca IDE. The browser connects directly to the host's
