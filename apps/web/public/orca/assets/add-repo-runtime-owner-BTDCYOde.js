@@ -1,1 +1,0 @@
-import{Rf as e,kf as t}from"./web-index-THu9F6D2.js";function n(n){return n===void 0?void 0:n?e(n):t}function r(e){let t=n(e);return{requireAuthoritative:!0,...t?{executionHostId:t}:{}}}export{r as t};

@@ -145,6 +145,20 @@ Durable Yjs snapshots, state vectors, filesystem revisions, reconciliation
 metadata, and conflicts are stored in PostgreSQL. Redis distributes realtime
 events and coordinates document locks across server instances.
 
+Workspace projection updates use a separate authenticated SSE feed; the Yjs
+socket is reserved for collaborative file documents:
+
+`GET /api/workspaces/:workspaceId/events/stream?after=<redis-stream-id>`
+
+The feed sends `id`-stamped JSON `WorkspaceRealtimeEvent` invalidations such as
+`agents.changed`, `team.changed`, `coordination.changed`,
+`presence.changed`, and `activity.changed`. These notifications intentionally
+contain only the projection name and small identifying metadata. The frontend
+should hydrate the affected snapshot through the normal workspace API, retain
+the last cursor for reconnects, and keep a slower REST refresh as a fallback
+when the SSE connection is unavailable. A missing `REDIS_URL` returns `503` so
+the fallback can activate immediately.
+
 Resolve a reported conflict with:
 
 `POST /api/workspaces/:workspaceId/collaboration/conflicts/resolve`
@@ -165,6 +179,7 @@ tokens, and `mergedContents` only for the merged strategy.
 | `DELETE` | `/api/workspaces/:workspaceId/agents/:sessionId`           | Delete a session and its worktree.                                                     |
 | `POST`   | `/api/workspaces/:workspaceId/agents/stream`               | Stream an agent turn as server-sent events for a direct conversational surface.        |
 | `GET`    | `/api/workspaces/:workspaceId/events`                      | Read canonical durable workspace events.                                               |
+| `GET`    | `/api/workspaces/:workspaceId/events/stream?after=...`     | Stream workspace projection invalidations; resume with the last SSE cursor.            |
 
 The backend supports OpenAI/Codex, Anthropic/Claude, Cursor, Amazon Bedrock,
 Azure Foundry, and configured custom providers. The authoritative provider

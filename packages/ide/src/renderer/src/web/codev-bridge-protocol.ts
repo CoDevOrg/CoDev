@@ -17,6 +17,28 @@ export type CodevBridgeSnapshot = {
   detail: string
 }
 
+export type CodevWorkspaceRealtimeEvent = {
+  workspaceId: string
+  type: string
+  payload: Record<string, unknown>
+  createdAt: string
+}
+
+export type CodevWorkspaceStreamStatus = 'connected' | 'reconnecting' | 'unavailable'
+
+export type CodevWorkspaceEventMessage = {
+  type: 'codev:workspace-event'
+  generation: number
+  cursor: string
+  event: CodevWorkspaceRealtimeEvent
+}
+
+export type CodevWorkspaceStreamStatusMessage = {
+  type: 'codev:workspace-stream-status'
+  generation: number
+  status: CodevWorkspaceStreamStatus
+}
+
 /**
  * A parent-initiated action, distinct from `CodevBridgeRequestMethod`
  * (IDE-initiated requests the parent replies to). `terminal-run` opens a
@@ -60,6 +82,8 @@ export type CodevBridgeParentMessage =
   | { type: 'codev:bridge-hello-ack'; generation: number; workspaceBound: true }
   | { type: 'codev:bridge-pong'; generation: number }
   | CodevBridgeCommandMessage
+  | CodevWorkspaceEventMessage
+  | CodevWorkspaceStreamStatusMessage
   | CodevBridgeResponseMessage
 
 export type CodevBridgeRequestMethod =
@@ -136,6 +160,9 @@ export function isParentMessage(
     requestId?: unknown
     ok?: unknown
     command?: unknown
+    cursor?: unknown
+    event?: unknown
+    status?: unknown
   }
   if (message.generation !== generation) {
     return false
@@ -149,7 +176,39 @@ export function isParentMessage(
   if (message.type === 'codev:bridge-command') {
     return isCodevBridgeCommand(message.command)
   }
+  if (message.type === 'codev:workspace-event') {
+    return typeof message.cursor === 'string' && isCodevWorkspaceRealtimeEvent(message.event)
+  }
+  if (message.type === 'codev:workspace-stream-status') {
+    return (
+      message.status === 'connected' ||
+      message.status === 'reconnecting' ||
+      message.status === 'unavailable'
+    )
+  }
   return message.type === 'codev:bridge-pong'
+}
+
+function isCodevWorkspaceRealtimeEvent(value: unknown): value is CodevWorkspaceRealtimeEvent {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+  const event = value as {
+    workspaceId?: unknown
+    type?: unknown
+    payload?: unknown
+    createdAt?: unknown
+  }
+  return (
+    typeof event.workspaceId === 'string' &&
+    event.workspaceId.length > 0 &&
+    typeof event.type === 'string' &&
+    event.type.length > 0 &&
+    Boolean(event.payload) &&
+    typeof event.payload === 'object' &&
+    !Array.isArray(event.payload) &&
+    typeof event.createdAt === 'string'
+  )
 }
 
 function isCodevBridgeCommand(value: unknown): value is CodevBridgeCommand {

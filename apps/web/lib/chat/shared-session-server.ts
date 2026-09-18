@@ -10,6 +10,7 @@ import { listAgentSessions } from "../agents/agent-runtime";
 import { kickAgentSession } from "../agents/agent-service";
 import { lockAgentSession } from "../agents/agent-session-lock";
 import { getDatabase } from "../platform/database";
+import { publishWorkspaceRealtimeEvent } from "../workspaces/workspace-realtime";
 import {
   PROVIDER_BOUNDARY_EVENT_TYPE,
   PROVIDER_SWITCH_DURING_TURN_EXPLANATION,
@@ -169,7 +170,7 @@ async function recordSharedEvent(input: {
   payload: Record<string, unknown>;
   idempotencyKey?: string;
 }) {
-  await getDatabase()
+  const [inserted] = await getDatabase()
     .insert(schema.agentEvents)
     .values({
       workspaceId: input.workspaceId,
@@ -183,7 +184,15 @@ async function recordSharedEvent(input: {
     })
     .onConflictDoNothing({
       target: schema.agentEvents.idempotencyKey,
+    })
+    .returning({ id: schema.agentEvents.id });
+  if (inserted) {
+    void publishWorkspaceRealtimeEvent(input.workspaceId, "agents.changed", {
+      sessionId: input.sessionId,
+      turnId: input.turnId,
+      sourceType: input.type,
     });
+  }
 }
 
 export async function startControlledSharedSessionTurn(

@@ -4,9 +4,13 @@ import { Check, Hash, Lock, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   getCodevBridgeSnapshot,
+  getCodevWorkspaceStreamStatus,
   requestCodevBridge,
-  subscribeCodevBridge
+  subscribeCodevBridge,
+  subscribeCodevWorkspaceEvent,
+  subscribeCodevWorkspaceStream
 } from '@/web/codev-bridge-singleton'
+import type { CodevWorkspaceStreamStatus } from '@/web/codev-bridge-singleton'
 import { openCodevChannel, useCodevChannelId } from '@/web/codev-channel-view'
 import {
   canCreateChannelFor,
@@ -35,7 +39,7 @@ import {
  */
 
 const AGENT_MENTION = '@agent'
-const ROSTER_POLL_MS = 5_000
+const ROSTER_FALLBACK_REFRESH_MS = 15_000
 const STATUS_EMOJI = [
   '\u{1F6E0}\uFE0F',
   '\u{1F50D}',
@@ -192,6 +196,9 @@ function useCodevTeam(active: boolean): {
   const [channels, setChannels] = useState<ChannelSummary[]>([])
   const [error, setError] = useState<string | null>(null)
   const [bridgeStatus, setBridgeStatus] = useState(() => getCodevBridgeSnapshot().status)
+  const [workspaceStreamStatus, setWorkspaceStreamStatus] = useState<CodevWorkspaceStreamStatus>(
+    () => (typeof window === 'undefined' ? 'unavailable' : getCodevWorkspaceStreamStatus())
+  )
   const refreshInFlightRef = useRef(false)
 
   // The bridge needs a hello/ack round trip first; asking through that window
@@ -225,6 +232,23 @@ function useCodevTeam(active: boolean): {
   }, [])
 
   useEffect(() => {
+    const unsubscribeEvent = subscribeCodevWorkspaceEvent((event) => {
+      if (
+        event.type === 'team.changed' ||
+        event.type === 'presence.changed' ||
+        event.type === 'agents.changed'
+      ) {
+        void refresh()
+      }
+    })
+    const unsubscribeStream = subscribeCodevWorkspaceStream(setWorkspaceStreamStatus)
+    return () => {
+      unsubscribeEvent()
+      unsubscribeStream()
+    }
+  }, [refresh])
+
+  useEffect(() => {
     if (!active || bridgeStatus !== 'connected') {
       return
     }
@@ -235,12 +259,15 @@ function useCodevTeam(active: boolean): {
       }
     }
     tick()
-    const timer = setInterval(tick, ROSTER_POLL_MS)
+    if (workspaceStreamStatus === 'connected') {
+      return
+    }
+    const timer = setInterval(tick, ROSTER_FALLBACK_REFRESH_MS)
     return () => {
       cancelled = true
       clearInterval(timer)
     }
-  }, [active, bridgeStatus, refresh])
+  }, [active, bridgeStatus, refresh, workspaceStreamStatus])
 
   // Opening a channel clears its badge here immediately; the next roster poll
   // confirms it from the server rather than leaving a stale count on screen.

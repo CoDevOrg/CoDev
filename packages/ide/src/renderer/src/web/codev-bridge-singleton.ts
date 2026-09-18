@@ -3,10 +3,18 @@ import {
   type CodevBridgeCommand,
   type CodevBridgeHost,
   type CodevBridgeRequestMethod,
-  type CodevBridgeSnapshot
+  type CodevBridgeSnapshot,
+  type CodevWorkspaceRealtimeEvent,
+  type CodevWorkspaceStreamStatus
 } from './codev-bridge'
 
-export type { CodevBridgeCommand, CodevBridgeRequestMethod, CodevBridgeSnapshot }
+export type {
+  CodevBridgeCommand,
+  CodevBridgeRequestMethod,
+  CodevBridgeSnapshot,
+  CodevWorkspaceRealtimeEvent,
+  CodevWorkspaceStreamStatus
+}
 
 let singleton: ReturnType<typeof createCodevBridge> | null = null
 
@@ -35,6 +43,22 @@ export function subscribeCodevBridgeCommand(
   listener: (command: CodevBridgeCommand) => void
 ): () => void {
   return ensureCodevBridge().subscribeCommand(listener)
+}
+
+export function getCodevWorkspaceStreamStatus(): CodevWorkspaceStreamStatus {
+  return ensureCodevBridge().getWorkspaceStreamStatus()
+}
+
+export function subscribeCodevWorkspaceEvent(
+  listener: (event: CodevWorkspaceRealtimeEvent) => void
+): () => void {
+  return ensureCodevBridge().subscribeWorkspaceEvent(listener)
+}
+
+export function subscribeCodevWorkspaceStream(
+  listener: (status: CodevWorkspaceStreamStatus) => void
+): () => void {
+  return ensureCodevBridge().subscribeWorkspaceStream(listener)
 }
 
 export function interruptCodevBridge(): void {

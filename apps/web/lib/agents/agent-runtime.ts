@@ -65,6 +65,7 @@ import {
 } from "./agent-github";
 import { lockAgentSession } from "./agent-session-lock";
 import { appendWorkspaceStateEvent } from "../workspaces/workspace-state";
+import { publishWorkspaceRealtimeEvent } from "../workspaces/workspace-realtime";
 import {
   findChannelBySlug,
   postChannelMessage,
@@ -597,7 +598,14 @@ async function addEvent(
     })
     .onConflictDoNothing({ target: schema.agentEvents.idempotencyKey })
     .returning({ id: schema.agentEvents.id });
-  if (inserted) await appendWorkspaceStateEvent(agentEvent);
+  if (inserted) {
+    await appendWorkspaceStateEvent(agentEvent);
+    void publishWorkspaceRealtimeEvent(context.workspaceId, "agents.changed", {
+      sessionId: context.sessionId,
+      turnId: context.turnId,
+      sourceType: type,
+    });
+  }
 }
 
 export async function claimNextAgentTurn(sessionId: string) {

@@ -1,1 +1,0 @@
-import{Om as e,km as t,tf as n,xf as r}from"./web-index-THu9F6D2.js";function i(t,i){if(!t)return[];let a=new Set(e(i)),o=[];for(let e of r){if(a.has(e))continue;let r=n(e);(t[r]??[]).length>0&&o.push({agent:e,actionId:r})}return o}function a(e){return t(e.defaultTuiAgent===`blank`?null:e.defaultTuiAgent,e.detectedAgentIds??[],e.disabledTuiAgents)}export{a as n,i as t};

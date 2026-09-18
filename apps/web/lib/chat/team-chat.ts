@@ -11,6 +11,7 @@ import { schema } from "@codev/db";
 import { and, asc, desc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 
 import { getDatabase } from "../platform/database";
+import { publishWorkspaceRealtimeEvent } from "../workspaces/workspace-realtime";
 import { TeamChatError } from "./team-chat-error";
 import { formatTeamChatDigest } from "./team-chat-view";
 
@@ -227,6 +228,10 @@ export async function createWorkspaceChannel(
       agentAccess: schema.workspaceChannels.agentAccess,
     });
   if (!created) throw new TeamChatError("The channel could not be created.");
+  void publishWorkspaceRealtimeEvent(workspaceId, "team.changed", {
+    channelId: created.id,
+    sourceType: "team.channel.created",
+  });
   return created;
 }
 
@@ -360,6 +365,11 @@ export async function postChannelMessage(input: {
     .where(eq(schema.workspaceChannelMessages.id, inserted.id))
     .limit(1);
   if (!row) throw new TeamChatError("The message could not be read back.");
+  void publishWorkspaceRealtimeEvent(input.workspaceId, "team.changed", {
+    channelId: channel.id,
+    messageId: inserted.id,
+    sourceType: "team.message.created",
+  });
   return { channel, message: toChannelMessage(row) };
 }
 

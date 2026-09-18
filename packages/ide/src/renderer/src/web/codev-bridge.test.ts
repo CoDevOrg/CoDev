@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createCodevBridge } from './codev-bridge'
 
-type Posted = { data: Record<string, unknown> & { type: string; generation: number }; origin: string }
+type Posted = {
+  data: Record<string, unknown> & { type: string; generation: number }
+  origin: string
+}
 
 function createHost() {
   const listeners = new Set<(event: MessageEvent) => void>()
@@ -254,6 +257,53 @@ describe('createCodevBridge', () => {
     })
 
     expect(received).toEqual([])
+    bridge.dispose()
+  })
+
+  it('delivers validated workspace events and stream status updates', () => {
+    const { host, ack, respond } = createHost()
+    const bridge = createCodevBridge(host)
+    bridge.start()
+    ack()
+
+    const events: unknown[] = []
+    const statuses: string[] = []
+    bridge.subscribeWorkspaceEvent((event) => events.push(event))
+    bridge.subscribeWorkspaceStream((status) => statuses.push(status))
+
+    respond({
+      type: 'codev:workspace-stream-status',
+      generation: 1,
+      status: 'connected'
+    })
+    respond({
+      type: 'codev:workspace-event',
+      generation: 1,
+      cursor: '1710000000000-0',
+      event: {
+        workspaceId: 'workspace-1',
+        type: 'agents.changed',
+        payload: { sourceType: 'turn.started' },
+        createdAt: '2026-09-18T12:00:00.000Z'
+      }
+    })
+    respond({
+      type: 'codev:workspace-event',
+      generation: 1,
+      cursor: '1710000000000-1',
+      event: { workspaceId: 'workspace-1', type: 'agents.changed' }
+    })
+
+    expect(bridge.getWorkspaceStreamStatus()).toBe('connected')
+    expect(statuses).toEqual(['connected'])
+    expect(events).toEqual([
+      {
+        workspaceId: 'workspace-1',
+        type: 'agents.changed',
+        payload: { sourceType: 'turn.started' },
+        createdAt: '2026-09-18T12:00:00.000Z'
+      }
+    ])
     bridge.dispose()
   })
 })

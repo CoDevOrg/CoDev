@@ -170,6 +170,25 @@ export const workspaceEventSchema = z.discriminatedUnion("type", [
   }),
 ]);
 
+/**
+ * Ephemeral notifications used by the workspace UI's SSE transport.
+ *
+ * These are deliberately invalidations rather than a second copy of every
+ * workspace projection. The durable REST endpoints remain the source of truth
+ * and the payload only tells a client which projection should be refreshed.
+ */
+export const workspaceRealtimeEventSchema = z
+  .object({
+    workspaceId: identifierSchema,
+    type: z.string().trim().min(1).max(128),
+    payload: z.record(z.string(), z.unknown()),
+    createdAt: timestampSchema,
+  })
+  .strict();
+
 export type WorkspaceEvent = z.infer<typeof workspaceEventSchema>;
 export type PresenceEvent = z.infer<typeof presenceEventSchema>;
 export type SharedSessionEvent = z.infer<typeof sharedSessionEventSchema>;
+export type WorkspaceRealtimeEvent = z.infer<
+  typeof workspaceRealtimeEventSchema
+>;
