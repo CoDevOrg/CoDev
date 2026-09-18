@@ -11,7 +11,7 @@ packages:
   - "!packages/ide"
 blockExoticSubdeps: false
 allowBuilds:
-  '@clerk/shared': set this to true or false
+  "@clerk/shared": set this to true or false
   "@parcel/watcher": true
   "@swc/core": true
   cbor-extract: true
