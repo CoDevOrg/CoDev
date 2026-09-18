@@ -7,6 +7,7 @@ import {
   History,
   ListChecks,
   PanelRight,
+  TerminalSquare,
   Workflow,
   Radio
 } from 'lucide-react'
@@ -52,8 +53,10 @@ import {
   computeMaxRightSidebarPanelWidth
 } from './right-sidebar-width'
 import { isCodevEmbedded } from '@/web/codev-embedded'
+import { codevChatTabIdInState } from '@/web/codev-center-chat-tab'
 import { translate } from '@/i18n/i18n'
 import { codevBranchLabel } from '../codev/codev-branches-model'
+import { requestCodevTerminalDrawerOpen } from '../native-chat/codev-terminal-drawer-event'
 import { RightSidebarPanelContent } from './right-sidebar-panel-content'
 import { useMeasuredWidth } from './right-sidebar-measured-width'
 import { normalizeRightSidebarRoute } from '@/store/right-sidebar-route'
@@ -92,6 +95,10 @@ function RightSidebarInner(): React.JSX.Element {
   const setActivityBarPosition = useAppStore((s) => s.setActivityBarPosition)
   const [topActivityStripWidth, setTopActivityStripWidth] = useState<number | null>(null)
   const activeWorktreeId = useAppStore((s) => (rightSidebarOpen ? s.activeWorktreeId : null))
+  const activeChatTabId = useAppStore((s) => {
+    const worktreeId = s.activeWorktreeId
+    return worktreeId ? codevChatTabIdInState(worktreeId, s) : null
+  })
   // Why: source control and checks are meaningless for non-git folders.
   // Hide those tabs so the activity bar only shows relevant actions.
   const activeWorktree = useAppStore((s) =>
@@ -365,6 +372,27 @@ function RightSidebarInner(): React.JSX.Element {
     />
   ))
 
+  const terminalActivityButton =
+    isCodevEmbedded() && activeWorktreeId ? (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className="relative flex h-10 w-10 shrink-0 items-center justify-center text-muted-foreground/60 transition-colors hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
+            onClick={() => requestCodevTerminalDrawerOpen(activeWorktreeId, activeChatTabId)}
+            disabled={activeChatTabId === null}
+            aria-label="Terminal"
+            title="Terminal"
+          >
+            <TerminalSquare size={18} aria-hidden="true" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="left" sideOffset={6}>
+          Terminal
+        </TooltipContent>
+      </Tooltip>
+    ) : null
+
   const closeButton = rightSidebarOpen ? (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -563,7 +591,14 @@ function RightSidebarInner(): React.JSX.Element {
         <ContextMenu>
           <ContextMenuTrigger asChild>
             <div className="flex flex-col items-center w-10 min-w-[40px] bg-sidebar border-l border-border side-activity-bar-windows-inset">
-              <TooltipProvider delayDuration={400}>{sideActivityBarIcons}</TooltipProvider>
+              <TooltipProvider delayDuration={400}>
+                <div className="flex h-full flex-col items-center">
+                  <div className="flex flex-col items-center">{sideActivityBarIcons}</div>
+                  {terminalActivityButton ? (
+                    <div className="mt-auto pb-2">{terminalActivityButton}</div>
+                  ) : null}
+                </div>
+              </TooltipProvider>
             </div>
           </ContextMenuTrigger>
           <ActivityBarPositionMenu

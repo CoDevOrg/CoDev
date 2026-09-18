@@ -6,27 +6,19 @@ import {
   CircleCheck,
   CirclePause,
   CircleStop,
-  Files,
   GitBranch,
-  History,
   LoaderCircle,
-  Radio,
   RefreshCw,
-  TerminalSquare,
   TriangleAlert,
   UserRound,
   Users,
   WifiOff
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
-import type { ActiveRightSidebarTab } from '@/store/slices/editor'
 import { useActiveWorktree } from '@/store/selectors'
 import { isCodevEmbedded } from '@/web/codev-embedded'
-import { codevChatTabIdInState } from '@/web/codev-center-chat-tab'
-import { requestCodevTerminalDrawerOpen } from '../native-chat/codev-terminal-drawer-event'
 import { openCodevBranches } from './codev-branches-view'
 import { codevBranchLabel, type CodevBranchState } from './codev-branches-model'
 import { useCodevBranchRows } from './use-codev-branch-rows'
@@ -62,48 +54,11 @@ function fallbackBranchLabel(activeWorktree: ReturnType<typeof useActiveWorktree
   return codevBranchLabel(activeWorktree, null)
 }
 
-function HeaderAction({
-  label,
-  icon: Icon,
-  onClick,
-  disabled = false
-}: {
-  label: string
-  icon: LucideIcon
-  onClick: () => void
-  disabled?: boolean
-}): JSX.Element {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          onClick={onClick}
-          disabled={disabled}
-          aria-label={label}
-          title={label}
-          className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg border border-transparent px-2 text-muted-foreground transition-colors hover:border-border/70 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Icon className="size-4 shrink-0" aria-hidden="true" />
-          <span className="hidden text-xs font-medium lg:inline">{label}</span>
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="bottom" sideOffset={6}>
-        {label}
-      </TooltipContent>
-    </Tooltip>
-  )
-}
-
 /** The persistent context bar for the currently selected branch workspace. */
 export function CodevBranchWorkspaceHeader(): JSX.Element | null {
   const embedded = isCodevEmbedded()
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
-  const activeChatTabId = useAppStore((state) => {
-    const worktreeId = state.activeWorktreeId
-    return worktreeId ? codevChatTabIdInState(worktreeId, state) : null
-  })
   const activeWorktree = useActiveWorktree()
   const { rows } = useCodevBranchRows(embedded && Boolean(activeWorktreeId))
 
@@ -122,12 +77,6 @@ export function CodevBranchWorkspaceHeader(): JSX.Element | null {
   const state = row?.state ?? 'loading'
   const meta = STATE_META[state]
   const StateIcon = meta.icon
-
-  const openRightSidebarTab = (tab: ActiveRightSidebarTab): void => {
-    const store = useAppStore.getState()
-    store.setRightSidebarTab(tab)
-    store.setRightSidebarOpen(true)
-  }
 
   return (
     <header
@@ -183,39 +132,6 @@ export function CodevBranchWorkspaceHeader(): JSX.Element | null {
           <span className="sr-only">{`${label} · ${owner} · ${agents} · ${meta.label}`}</span>
         </div>
       </div>
-
-      <TooltipProvider delayDuration={400}>
-        <nav className="flex shrink-0 items-center gap-0.5" aria-label="Current branch tools">
-          <HeaderAction
-            label="Explorer"
-            icon={Files}
-            onClick={() => useAppStore.getState().showRightSidebarFiles()}
-          />
-          <HeaderAction
-            label="Source Control"
-            icon={GitBranch}
-            onClick={() => openRightSidebarTab('source-control')}
-          />
-          <HeaderAction
-            label="Agents"
-            icon={Radio}
-            onClick={() => openRightSidebarTab('codev-agents')}
-          />
-          <HeaderAction
-            label="Activity"
-            icon={History}
-            onClick={() => openRightSidebarTab('activity')}
-          />
-          <HeaderAction
-            label="Terminal"
-            icon={TerminalSquare}
-            disabled={activeChatTabId === null}
-            onClick={() => {
-              requestCodevTerminalDrawerOpen(activeWorktreeId, activeChatTabId)
-            }}
-          />
-        </nav>
-      </TooltipProvider>
     </header>
   )
 }

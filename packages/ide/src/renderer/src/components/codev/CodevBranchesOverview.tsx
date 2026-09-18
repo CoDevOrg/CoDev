@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react'
 import {
-  ArrowRight,
   CircleAlert,
   GitBranch,
   LoaderCircle,
@@ -12,7 +11,6 @@ import {
 } from 'lucide-react'
 import { useNow } from '@/components/dashboard/useNow'
 import { activateWorktreeFromSidebar } from '@/lib/sidebar-worktree-activation'
-import { useActiveWorktree } from '@/store/selectors'
 import { isCodevEmbedded } from '@/web/codev-embedded'
 import { CodevBranchCard } from './CodevBranchCard'
 import {
@@ -37,7 +35,6 @@ export function CodevBranchesOverview(): JSX.Element | null {
   const embedded = isCodevEmbedded()
   const open = useCodevBranchesOpen()
   const initialBranch = typeof window !== 'undefined' ? (window.__CODEV_BRANCH__?.trim() ?? '') : ''
-  const activeWorktree = useActiveWorktree()
   const {
     rows,
     activeWorktreeId,
@@ -56,14 +53,6 @@ export function CodevBranchesOverview(): JSX.Element | null {
   const initialBranchAttemptedRef = useRef(false)
   const [openingId, setOpeningId] = useState<string | null>(null)
   const [routeError, setRouteError] = useState<string | null>(null)
-  const returnToChat = useCallback(() => {
-    const branch = activeWorktree?.branch.trim()
-    if (branch) {
-      setCodevBranchSelection(branch)
-    }
-    closeCodevBranches()
-  }, [activeWorktree?.branch])
-
   useEffect(() => {
     if (
       !embedded ||
@@ -164,16 +153,6 @@ export function CodevBranchesOverview(): JSX.Element | null {
             />
             Refresh
           </button>
-          {activeWorktreeId ? (
-            <button
-              type="button"
-              onClick={returnToChat}
-              className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            >
-              Back to chat
-              <ArrowRight className="size-4 rotate-180" aria-hidden="true" />
-            </button>
-          ) : null}
         </div>
       </header>
 

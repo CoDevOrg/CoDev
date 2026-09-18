@@ -2,10 +2,6 @@
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  CODEV_OPEN_TERMINAL_DRAWER_EVENT,
-  type CodevTerminalDrawerRequest
-} from '../native-chat/codev-terminal-drawer-event'
 
 const mocks = vi.hoisted(() => {
   const state = {
@@ -84,7 +80,7 @@ afterEach(() => {
 })
 
 describe('CodevBranchWorkspaceHeader', () => {
-  it('identifies the selected branch and exposes every branch-aware surface', () => {
+  it('identifies the selected branch and keeps the header focused on branch context', () => {
     render(<CodevBranchWorkspaceHeader />)
 
     expect(
@@ -94,32 +90,16 @@ describe('CodevBranchWorkspaceHeader', () => {
     expect(screen.getByText('Yousef')).toBeTruthy()
     expect(screen.getByText('1 agent')).toBeTruthy()
     expect(screen.getByText('Active')).toBeTruthy()
-    expect(screen.getByRole('navigation', { name: 'Current branch tools' })).toBeTruthy()
+    expect(screen.queryByRole('navigation', { name: 'Current branch tools' })).toBeNull()
   })
 
-  it('routes branch actions to the existing store and chat drawer', () => {
-    const terminalListener = vi.fn<(event: Event) => void>()
-    window.addEventListener(CODEV_OPEN_TERMINAL_DRAWER_EVENT, terminalListener)
+  it('keeps branch navigation in the workspace header', () => {
     render(<CodevBranchWorkspaceHeader />)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Explorer' }))
-    expect(mocks.state.showRightSidebarFiles).toHaveBeenCalledOnce()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Source Control' }))
-    expect(mocks.state.setRightSidebarTab).toHaveBeenCalledWith('source-control')
-    expect(mocks.state.setRightSidebarOpen).toHaveBeenCalledWith(true)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Terminal' }))
-    expect(terminalListener).toHaveBeenCalledOnce()
-    const terminalEvent = terminalListener.mock.calls[0]?.[0]
-    expect(terminalEvent).toBeDefined()
-    expect((terminalEvent as CustomEvent<CodevTerminalDrawerRequest>).detail).toEqual({
-      worktreeId: 'worktree-1',
-      terminalTabId: 'chat-1'
-    })
 
     fireEvent.click(screen.getByRole('button', { name: 'Back to all branches' }))
     expect(mocks.openBranches).toHaveBeenCalledOnce()
-    window.removeEventListener(CODEV_OPEN_TERMINAL_DRAWER_EVENT, terminalListener)
+    expect(screen.queryByRole('navigation', { name: 'Current branch tools' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Explorer' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Terminal' })).toBeNull()
   })
 })
