@@ -13,6 +13,7 @@ import { schema } from "@codev/db";
 import { getDatabase } from "../platform/database";
 import { decryptSecret, encryptSecret } from "../platform/kms";
 import { appendWorkspaceEvent } from "../workspaces/audit";
+import { assertSessionImportTransition } from "./session-import-lifecycle";
 
 export const SESSION_CAPSULE_ARTIFACT_MEDIA_TYPE =
   "application/vnd.codev.session-capsule.v0";
@@ -593,7 +594,10 @@ export async function deleteSessionImport(
     dependencies.artifactStore ??
     new PostgresSessionImportArtifactStore(database);
   const [record] = await database
-    .select({ id: schema.agentSessionImports.id })
+    .select({
+      id: schema.agentSessionImports.id,
+      status: schema.agentSessionImports.status,
+    })
     .from(schema.agentSessionImports)
     .where(
       and(
@@ -606,6 +610,8 @@ export async function deleteSessionImport(
     )
     .limit(1);
   if (!record) return false;
+
+  assertSessionImportTransition(record.status, "deleted");
 
   await artifactStore.delete(scope);
   const now = new Date();

@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
   bigint,
@@ -1123,6 +1124,11 @@ export const agentSessionImports = pgTable(
       table.externalSessionId,
     ),
     index("agent_session_imports_parent_idx").on(table.parentImportId),
+    uniqueIndex("agent_session_imports_active_writer_idx")
+      .on(table.importedBy, table.sourceProvider, table.externalSessionId)
+      .where(
+        sql`${table.continuationMode} = 'native_resume' and ${table.status} in ('launching', 'active') and ${table.deletedAt} is null`,
+      ),
   ],
 );
 

@@ -85,8 +85,33 @@ Reusing a key for different capsule bytes or lineage is rejected. A retry may
 repair an import in `storing` or `failed`, but cannot move a later lifecycle
 state backward.
 
+## Lifecycle and native-writer ownership
+
+Lifecycle changes use compare-and-set updates: the expected current state must
+still be present when PostgreSQL applies the update. This prevents two workers
+from both advancing a stale import. Repeating the current state is an idempotent
+no-op; skipping required stages or leaving `failed` or `deleted` is rejected.
+
+The normal import path is `stored` → `restoring` → `ready` → `launching` →
+`active`. An active or launching continuation can return to `ready` when its
+writer is released. An import cannot become ready until repository handling has
+finished as `matched`, `restored`, or `transcript_only`, and it cannot launch
+until a continuation mode has been selected.
+
+Repository results have their own guarded transitions and may change only while
+the import is `restoring`. A missing or conflicted repository can explicitly
+fall back to `transcript_only`; completed `restored` and `transcript_only`
+results are immutable.
+
+PostgreSQL enforces one launching or active exact native resume for each
+importing-member, source-provider, and external-session tuple. This constraint
+does not apply to fresh managed CoDev continuations, because those create a new
+provider session rather than writing the imported native transcript. Forked
+imports retain lineage but must receive their own native provider session before
+they can run concurrently as native writers.
+
 ## Deliberately deferred
 
 Archive/upload transport, the public import API, repository restoration, runtime
-rehydration after IDE-home recreation, active-writer enforcement, and user-facing
+rehydration after IDE-home recreation, provider launching, and user-facing
 continuation selection are not implemented by this milestone.
