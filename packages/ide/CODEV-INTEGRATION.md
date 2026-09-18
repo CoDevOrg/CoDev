@@ -47,6 +47,13 @@ server-side and never cross the bridge.
 It backs the CoDev panels: the team rail, path claims, the workboard, review
 checkpoints, shared sessions, the activity audit, and the presence indicator.
 
+Every message both sides exchange is defined once, in
+`src/renderer/src/web/codev-bridge-protocol.ts`. The parent imports those
+types with `import type` (erased at build time), and its runtime list of
+accepted methods is checked against `CodevBridgeRequestMethod`, so adding,
+renaming or removing a message here fails `apps/web`'s typecheck until the
+parent handles it. Change the protocol in that file, never in a copy.
+
 ## One left sidebar
 
 A CoDev workspace is exactly one repository, so upstream's "Projects" header

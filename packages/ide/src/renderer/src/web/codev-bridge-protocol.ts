@@ -1,3 +1,14 @@
+/**
+ * The wire protocol between the embedded IDE (this package) and the CoDev
+ * parent page (`apps/web/components/workspace/codev-parent-bridge.ts`).
+ *
+ * This file is the single definition of every message both sides exchange.
+ * `apps/web` imports these types with `import type`, which is erased at
+ * compile time, so nothing from this package is bundled into the web app but
+ * `apps/web`'s typecheck fails the moment the two sides disagree. Keep it
+ * free of imports so it type-checks under both packages' compiler settings.
+ */
+
 export type CodevBridgeStatus = 'connected' | 'reconnecting' | 'disconnected'
 
 export type CodevBridgeSnapshot = {
@@ -28,18 +39,28 @@ export type CodevBridgeCommand = {
   agent?: string
 }
 
+export type CodevBridgeCommandMessage = {
+  type: 'codev:bridge-command'
+  generation: number
+  command: CodevBridgeCommand
+}
+
+/** The parent's reply to one `CodevBridgeRequestMessage`. */
+export type CodevBridgeResponseMessage = {
+  type: 'codev:bridge-response'
+  generation: number
+  requestId: string
+  ok: boolean
+  result?: unknown
+  error?: string
+}
+
+/** Everything the parent page posts into the IDE iframe. */
 export type CodevBridgeParentMessage =
   | { type: 'codev:bridge-hello-ack'; generation: number; workspaceBound: true }
   | { type: 'codev:bridge-pong'; generation: number }
-  | { type: 'codev:bridge-command'; generation: number; command: CodevBridgeCommand }
-  | {
-      type: 'codev:bridge-response'
-      generation: number
-      requestId: string
-      ok: boolean
-      result?: unknown
-      error?: string
-    }
+  | CodevBridgeCommandMessage
+  | CodevBridgeResponseMessage
 
 export type CodevBridgeRequestMethod =
   | 'invites.list'
@@ -84,6 +105,22 @@ export type CodevBridgeRequestMethod =
   | 'team.send'
   | 'team.createChannel'
   | 'team.saveStatus'
+
+/** An IDE-initiated request the parent answers with a `CodevBridgeResponseMessage`. */
+export type CodevBridgeRequestMessage = {
+  type: 'codev:bridge-request'
+  generation: number
+  requestId: string
+  method: CodevBridgeRequestMethod
+  params?: Record<string, unknown>
+}
+
+/** Everything the IDE iframe posts to the parent page. */
+export type CodevBridgeClientMessage =
+  | { type: 'codev:bridge-hello'; generation: number }
+  | { type: 'codev:bridge-ping'; generation: number }
+  | { type: 'codev:bridge-interrupt'; generation: number }
+  | CodevBridgeRequestMessage
 
 export function isParentMessage(
   data: unknown,

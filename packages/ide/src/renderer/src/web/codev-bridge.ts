@@ -1,5 +1,6 @@
 import {
   isParentMessage,
+  type CodevBridgeClientMessage,
   type CodevBridgeCommand,
   type CodevBridgeRequestMethod,
   type CodevBridgeSnapshot,
@@ -100,7 +101,7 @@ export function createCodevBridge(host: CodevBridgeHost): {
     pending.clear()
   }
 
-  const post = (data: Record<string, unknown> & { type: string; generation: number }): void => {
+  const post = (data: CodevBridgeClientMessage): void => {
     host.parent.postMessage(data, host.location.origin)
   }
 
@@ -267,4 +268,3 @@ export function createCodevBridge(host: CodevBridgeHost): {
     }
   }
 }
-

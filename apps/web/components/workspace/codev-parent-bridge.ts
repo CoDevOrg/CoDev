@@ -1,103 +1,40 @@
+import type {
+  CodevBridgeClientMessage as IdeClientMessage,
+  CodevBridgeCommand,
+  CodevBridgeCommandMessage,
+  CodevBridgeParentMessage as IdeParentMessage,
+  CodevBridgeRequestMessage,
+  CodevBridgeRequestMethod as CodevBridgeMethod,
+  CodevBridgeResponseMessage,
+} from "../../../../packages/ide/src/renderer/src/web/codev-bridge-protocol";
+
 export type CodevParentBridgeSession = {
   open: boolean;
   generation: number | null;
 };
 
-export type CodevBridgeClientMessage =
-  | { type: "codev:bridge-hello"; generation: number }
-  | { type: "codev:bridge-ping"; generation: number }
-  | { type: "codev:bridge-interrupt"; generation: number };
+// The wire protocol is defined once, on the IDE side, and imported here as
+// types only (erased at build time, so nothing from packages/ide is bundled).
+// If the two sides ever disagree, this app's typecheck fails.
+export type {
+  CodevBridgeCommand,
+  CodevBridgeCommandMessage,
+  CodevBridgeRequestMessage,
+  CodevBridgeResponseMessage,
+  CodevBridgeRequestMethod as CodevBridgeMethod,
+} from "../../../../packages/ide/src/renderer/src/web/codev-bridge-protocol";
 
-/**
- * A parent-initiated action, distinct from `CodevBridgeMethod` (iframe-
- * initiated requests this side replies to). `terminal-run` opens a terminal
- * tab in the embedded IDE and queues `command` as its startup text,
- * bypassing agent/session-option composition so the exact text sent is what
- * runs.
- *
- * `agent`, when it names a native-chat-supported agent (claude, codex,
- * grok, cursor), opens that tab in chat view instead of a plain terminal —
- * the IDE never wants to hand the member a raw TUI for an agent chat can
- * render, even for a resume/continue command rather than a normal launch.
- */
-export type CodevBridgeCommand = {
-  kind: "terminal-run";
-  command: string;
-  label?: string;
-  agent?: string;
-};
+/** The handshake and keepalive messages the IDE posts; requests are separate. */
+export type CodevBridgeClientMessage = Exclude<
+  IdeClientMessage,
+  { type: "codev:bridge-request" }
+>;
 
-export type CodevBridgeCommandMessage = {
-  type: "codev:bridge-command";
-  generation: number;
-  command: CodevBridgeCommand;
-};
-
-export type CodevBridgeParentMessage =
-  | { type: "codev:bridge-hello-ack"; generation: number; workspaceBound: true }
-  | { type: "codev:bridge-pong"; generation: number }
-  | CodevBridgeCommandMessage;
-
-export type CodevBridgeMethod =
-  | "invites.list"
-  | "invites.create"
-  | "invites.revoke"
-  | "members.update"
-  | "presence.list"
-  | "presence.update"
-  | "presence.cursor.update"
-  | "conflicts.list"
-  | "conflicts.report"
-  | "conflicts.resolve"
-  | "agents.list"
-  | "agents.enqueue"
-  | "agents.interrupt"
-  | "agents.discard"
-  | "agents.startControlled"
-  | "agents.newChat"
-  | "agents.selectProvider"
-  | "workboard.list"
-  | "workboard.create"
-  | "claims.list"
-  | "coordination.list"
-  | "claims.create"
-  | "claims.reassign"
-  | "claims.cancel"
-  | "review.list"
-  | "review.prepare"
-  | "review.advance"
-  | "review.merge"
-  | "activity.list"
-  | "connections.list"
-  | "connections.put"
-  | "connections.revoke"
-  | "claudeConnect.start"
-  | "claudeConnect.submitCode"
-  | "claudeConnect.status"
-  | "profile.get"
-  | "team.roster"
-  | "team.channels"
-  | "team.messages"
-  | "team.send"
-  | "team.createChannel"
-  | "team.saveStatus";
-
-export type CodevBridgeRequestMessage = {
-  type: "codev:bridge-request";
-  generation: number;
-  requestId: string;
-  method: CodevBridgeMethod;
-  params?: Record<string, unknown>;
-};
-
-export type CodevBridgeResponseMessage = {
-  type: "codev:bridge-response";
-  generation: number;
-  requestId: string;
-  ok: boolean;
-  result?: unknown;
-  error?: string;
-};
+/** What this page posts into the iframe, other than request responses. */
+export type CodevBridgeParentMessage = Exclude<
+  IdeParentMessage,
+  { type: "codev:bridge-response" }
+>;
 
 export const EMPTY_CODEV_PARENT_BRIDGE_SESSION: CodevParentBridgeSession = {
   open: false,
@@ -127,7 +64,11 @@ export function buildCodevBridgeCommandMessage(
 const INVITE_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ACCESS_ROLES = ["co_steer", "reviewer", "viewer"] as const;
-const BRIDGE_METHODS = new Set<CodevBridgeMethod>([
+// Listed at runtime because the parent validates untrusted iframe messages.
+// `satisfies` plus the exhaustiveness check below keep it equal to the
+// protocol's method union: a method added on the IDE side and not handled
+// here fails this app's typecheck instead of being silently rejected.
+const BRIDGE_METHOD_LIST = [
   "invites.list",
   "invites.create",
   "invites.revoke",
@@ -170,7 +111,14 @@ const BRIDGE_METHODS = new Set<CodevBridgeMethod>([
   "team.send",
   "team.createChannel",
   "team.saveStatus",
-]);
+] as const satisfies readonly CodevBridgeMethod[];
+const BRIDGE_METHODS = new Set<CodevBridgeMethod>(BRIDGE_METHOD_LIST);
+const bridgeMethodsAreExhaustive: [
+  Exclude<CodevBridgeMethod, (typeof BRIDGE_METHOD_LIST)[number]>,
+] extends [never]
+  ? true
+  : never = true;
+void bridgeMethodsAreExhaustive;
 const CREDENTIAL_KEYS = new Set([
   "token",
   "password",
