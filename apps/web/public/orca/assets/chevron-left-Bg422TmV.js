@@ -1,0 +1,1 @@
+import{ug as e}from"./web-index-THu9F6D2.js";var t=e(`chevron-left`,[[`path`,{d:`m15 18-6-6 6-6`,key:`1wnfg3`}]]);export{t};

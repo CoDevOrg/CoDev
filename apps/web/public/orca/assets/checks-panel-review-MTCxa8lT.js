@@ -1,0 +1,1 @@
+import{sn as e}from"./web-index-THu9F6D2.js";function t(t){return e(t)}function n({pr:e}){return e?t(e):null}export{n,t};
