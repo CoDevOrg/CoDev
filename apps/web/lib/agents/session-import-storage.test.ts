@@ -22,6 +22,7 @@ import {
   storeSessionImport,
   type SessionImportArtifactScope,
 } from "./session-import-storage";
+import { encodeSessionCapsuleTransport } from "./session-capsule-transport";
 
 const scope: SessionImportArtifactScope = {
   organizationId: "org-1",
@@ -31,6 +32,7 @@ const scope: SessionImportArtifactScope = {
 };
 
 function capsule(): SessionCapsuleV0 {
+  const payload = new TextEncoder().encode("payload");
   return {
     schemaVersion: 0,
     source: {
@@ -67,8 +69,8 @@ function capsule(): SessionCapsuleV0 {
         path: "provider/session.payload",
         role: "provider_payload",
         mediaType: "application/octet-stream",
-        bytes: 7,
-        sha256: "a".repeat(64),
+        bytes: payload.byteLength,
+        sha256: digest(payload),
         mode: "100644",
       },
     ],
@@ -188,8 +190,14 @@ describe("session import idempotency", () => {
     expect(resolveStoredImportStatus("deleted")).toBe("deleted");
   });
 
-  it("returns an existing semantic capsule without replacing its artifact bytes", async () => {
+  it("returns an existing capsule without replacing its artifact bytes", async () => {
     const value = capsule();
+    const artifact = encodeSessionCapsuleTransport({
+      capsule: value,
+      files: new Map([
+        ["provider/session.payload", new TextEncoder().encode("payload")],
+      ]),
+    });
     const firstSelect = {
       from: vi.fn(() => ({
         innerJoin: vi.fn(() => ({
@@ -244,8 +252,7 @@ describe("session import idempotency", () => {
           workspaceId: "workspace-1",
           importedBy: "user-1",
           idempotencyKey: "same-capsule",
-          capsule: value,
-          artifact: new TextEncoder().encode("different transport framing"),
+          artifact,
         },
         {
           database: database as never,

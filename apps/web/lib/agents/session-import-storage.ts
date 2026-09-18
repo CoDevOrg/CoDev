@@ -14,11 +14,16 @@ import { schema } from "@codev/db";
 import { getDatabase } from "../platform/database";
 import { decryptSecret, encryptSecret } from "../platform/kms";
 import { appendWorkspaceEvent } from "../workspaces/audit";
+import {
+  decodeSessionCapsuleTransport,
+  MAX_SESSION_CAPSULE_TRANSPORT_BYTES,
+  SESSION_CAPSULE_ARTIFACT_MEDIA_TYPE,
+} from "./session-capsule-transport";
 import { assertSessionImportTransition } from "./session-import-lifecycle";
 
-export const SESSION_CAPSULE_ARTIFACT_MEDIA_TYPE =
-  "application/vnd.codev.session-capsule.v0";
-export const MAX_STORED_SESSION_CAPSULE_BYTES = 32 * 1_024 * 1_024;
+export { SESSION_CAPSULE_ARTIFACT_MEDIA_TYPE };
+export const MAX_STORED_SESSION_CAPSULE_BYTES =
+  MAX_SESSION_CAPSULE_TRANSPORT_BYTES;
 
 type Database = ReturnType<typeof getDatabase>;
 
@@ -419,7 +424,6 @@ export async function storeSessionImport(
     workspaceId: string;
     importedBy: string;
     idempotencyKey: string;
-    capsule: SessionCapsuleV0;
     artifact: Uint8Array;
     parentImportId?: string;
   },
@@ -433,16 +437,16 @@ export async function storeSessionImport(
   const artifactStore =
     dependencies.artifactStore ??
     new PostgresSessionImportArtifactStore(database);
-  const capsule = sessionCapsuleV0Schema.parse(input.capsule);
-  validateArtifactPayload(input.artifact);
-  const capsuleDigest = sessionCapsuleSha256(capsule);
-  const artifactDigest = sha256(input.artifact);
   const idempotencyKey = validateIdempotencyKey(input.idempotencyKey);
   const { organizationId } = await resolveImportScope(
     database,
     input.workspaceId,
     input.importedBy,
   );
+  validateArtifactPayload(input.artifact);
+  const { capsule } = decodeSessionCapsuleTransport(input.artifact);
+  const capsuleDigest = sessionCapsuleSha256(capsule);
+  const artifactDigest = sha256(input.artifact);
   await validateParentImport(database, {
     parentImportId: input.parentImportId,
     organizationId,

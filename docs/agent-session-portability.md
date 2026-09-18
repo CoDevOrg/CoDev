@@ -41,8 +41,22 @@ configuration, or absolute host paths.
 
 The manifest permits regular files only and validates safe POSIX-relative paths,
 unique paths, file roles, SHA-256 digests, a 500-file count, a 5 MiB per-file
-limit, and a 25 MiB total plaintext limit. A future transport may package these
-files differently, but must validate against the same manifest before storage.
+limit, and a 25 MiB total plaintext limit.
+
+## Capsule transport v0
+
+The internal v0 transport has one unambiguous binary layout: an eight-byte
+`CODEVSC0` header, a four-byte big-endian manifest length, the canonical UTF-8
+manifest, then raw file bodies concatenated in manifest path order. It has no
+second set of entry names, modes, or sizes that could disagree with the
+manifest.
+
+Before storage, CoDev bounds the whole transport to 32 MiB and the manifest to
+6 MiB, validates Capsule v0, requires canonical manifest encoding, and verifies
+that every declared body has the expected size and SHA-256. Missing, extra,
+truncated, reordered, checksum-mismatched, or trailing content is rejected. The
+decoder returns only manifest-declared logical paths and copied byte arrays; it
+does not write to a filesystem.
 
 ## Adapter handoff
 
@@ -89,7 +103,7 @@ explicitly deleted; deleting an import physically removes its encrypted artifact
 and leaves a soft-deleted metadata record for lifecycle accounting.
 
 Storage is idempotent per workspace, importing member, and caller-supplied key.
-Reusing a key for different capsule bytes or lineage is rejected. A retry may
+Reusing a key for a different capsule identity or lineage is rejected. A retry may
 repair an import in `storing` or `failed`, but cannot move a later lifecycle
 state backward.
 
@@ -120,6 +134,6 @@ they can run concurrently as native writers.
 
 ## Deliberately deferred
 
-Archive/upload transport, the public import API, repository restoration, runtime
-rehydration after IDE-home recreation, provider launching, and user-facing
-continuation selection are not implemented by this milestone.
+The public upload API, repository restoration, runtime rehydration after IDE-home
+recreation, provider launching, and user-facing continuation selection are not
+implemented by this milestone.
