@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   EMPTY_CODEV_PARENT_BRIDGE_SESSION,
   buildCodevBridgeCommandMessage,
+  buildCodevWorkspaceEventMessage,
+  buildCodevWorkspaceStreamStatusMessage,
   executeCodevBridgeRequest,
   executePersonalCodevBridgeRequest,
   isCodevBridgeClientMessage,
@@ -1497,6 +1499,51 @@ describe("codev parent bridge", () => {
       ).toMatchObject({
         command: expect.objectContaining({ agent: "codex" }),
       });
+    });
+  });
+
+  describe("workspace realtime messages", () => {
+    const connected = replyToCodevBridgeMessage(
+      EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+      { type: "codev:bridge-hello", generation: 7 },
+    ).session;
+    const event = {
+      workspaceId: "workspace-1",
+      type: "team.changed",
+      payload: { channelId: "channel-1" },
+      createdAt: "2026-09-18T12:00:00.000Z",
+    };
+
+    it("stamps workspace events with the active bridge generation", () => {
+      expect(buildCodevWorkspaceEventMessage(connected, "1-0", event)).toEqual({
+        type: "codev:workspace-event",
+        generation: 7,
+        cursor: "1-0",
+        event,
+      });
+    });
+
+    it("forwards stream health and drops both messages before handshake", () => {
+      expect(
+        buildCodevWorkspaceStreamStatusMessage(connected, "connected"),
+      ).toEqual({
+        type: "codev:workspace-stream-status",
+        generation: 7,
+        status: "connected",
+      });
+      expect(
+        buildCodevWorkspaceEventMessage(
+          EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+          "1-0",
+          event,
+        ),
+      ).toBeNull();
+      expect(
+        buildCodevWorkspaceStreamStatusMessage(
+          EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+          "unavailable",
+        ),
+      ).toBeNull();
     });
   });
 });

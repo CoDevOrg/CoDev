@@ -12,6 +12,7 @@ import { and, asc, eq, gt, inArray, or, sql } from "drizzle-orm";
 
 import { claimPatternsOverlap } from "./claim-patterns";
 import { getDatabase } from "../platform/database";
+import { publishWorkspaceRealtimeEvent } from "../workspaces/workspace-realtime";
 
 type Database = ReturnType<typeof getDatabase>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -132,7 +133,7 @@ export async function createPathClaim(
   rawInput: unknown,
 ) {
   const input = createPathClaimSchema.parse(rawInput);
-  return getDatabase().transaction(async (transaction) => {
+  const claim = await getDatabase().transaction(async (transaction) => {
     await sessionContext(workspaceId, sessionId, transaction);
     await transaction.execute(
       sql`select pg_advisory_xact_lock(hashtext(${claimSerializationScope(workspaceId)}))`,
@@ -189,6 +190,12 @@ export async function createPathClaim(
     if (!claim) throw new Error("Could not create the path claim.");
     return claim;
   });
+  void publishWorkspaceRealtimeEvent(workspaceId, "coordination.changed", {
+    claimId: claim.id,
+    sessionId,
+    sourceType: "claim.created",
+  });
+  return claim;
 }
 
 export async function releasePathClaim(
@@ -209,6 +216,11 @@ export async function releasePathClaim(
     )
     .returning();
   if (!claim) throw new Error("Active path claim not found.");
+  void publishWorkspaceRealtimeEvent(workspaceId, "coordination.changed", {
+    claimId: claim.id,
+    sessionId,
+    sourceType: "claim.released",
+  });
   return claim;
 }
 
@@ -289,7 +301,7 @@ export async function reassignPathClaim(
   workspaceId: string,
   keepClaimId: string,
 ) {
-  return getDatabase().transaction(async (transaction) => {
+  const claim = await getDatabase().transaction(async (transaction) => {
     await transaction.execute(
       sql`select pg_advisory_xact_lock(hashtext(${claimSerializationScope(workspaceId)}))`,
     );
@@ -344,13 +356,18 @@ export async function reassignPathClaim(
     await restoreUncontestedClaims(sessionIds, transaction);
     return updated;
   });
+  void publishWorkspaceRealtimeEvent(workspaceId, "coordination.changed", {
+    claimId: claim.id,
+    sourceType: "claim.reassigned",
+  });
+  return claim;
 }
 
 export async function cancelOverlappingPathClaim(
   workspaceId: string,
   claimId: string,
 ) {
-  return getDatabase().transaction(async (transaction) => {
+  const claim = await getDatabase().transaction(async (transaction) => {
     await transaction.execute(
       sql`select pg_advisory_xact_lock(hashtext(${claimSerializationScope(workspaceId)}))`,
     );
@@ -373,6 +390,11 @@ export async function cancelOverlappingPathClaim(
     await restoreUncontestedClaims(sessionIds, transaction);
     return claim;
   });
+  void publishWorkspaceRealtimeEvent(workspaceId, "coordination.changed", {
+    claimId: claim.id,
+    sourceType: "claim.cancelled",
+  });
+  return claim;
 }
 
 export async function requireActivePathClaim(
@@ -502,6 +524,10 @@ export async function createCoordinationMessage(
     })
     .returning();
   if (!message) throw new Error("Could not create coordination message.");
+  void publishWorkspaceRealtimeEvent(workspaceId, "coordination.changed", {
+    messageId: message.id,
+    sourceType: "coordination.message.created",
+  });
   return message;
 }
 
@@ -524,5 +550,9 @@ export async function updateCoordinationMessageStatus(
     )
     .returning();
   if (!message) throw new Error("Coordination message not found.");
+  void publishWorkspaceRealtimeEvent(workspaceId, "coordination.changed", {
+    messageId: message.id,
+    sourceType: "coordination.message.updated",
+  });
   return message;
 }

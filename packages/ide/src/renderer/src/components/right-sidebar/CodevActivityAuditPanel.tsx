@@ -6,9 +6,13 @@ import { joinPath } from '@/lib/path'
 import { requestCodevSurfaceFocus } from '@/web/codev-surface-focus'
 import {
   getCodevBridgeSnapshot,
+  getCodevWorkspaceStreamStatus,
   requestCodevBridge,
-  subscribeCodevBridge
+  subscribeCodevBridge,
+  subscribeCodevWorkspaceEvent,
+  subscribeCodevWorkspaceStream
 } from '../../web/codev-bridge-singleton'
+import type { CodevWorkspaceStreamStatus } from '../../web/codev-bridge-singleton'
 import {
   CodevActivityAuditViewPanel,
   type CodevActivityEvent,
@@ -27,6 +31,9 @@ export function CodevActivityAuditPanel(): JSX.Element | null {
   const activeWorktree = useActiveWorktree()
   const [bridge, setBridge] = useState(() => getCodevBridgeSnapshot())
   const [snapshot, setSnapshot] = useState<CodevActivitySnapshot | null>(null)
+  const [workspaceStreamStatus, setWorkspaceStreamStatus] = useState<CodevWorkspaceStreamStatus>(
+    () => (typeof window === 'undefined' ? 'unavailable' : getCodevWorkspaceStreamStatus())
+  )
   const [kind, setKind] = useState<'all' | CodevActivityJumpKind>('all')
   const [query, setQuery] = useState('')
   const [busy, setBusy] = useState('')
@@ -56,7 +63,30 @@ export function CodevActivityAuditPanel(): JSX.Element | null {
 
   useEffect(() => {
     void refresh()
-  }, [refresh])
+    const unsubscribeEvent = subscribeCodevWorkspaceEvent((event) => {
+      if (
+        event.type === 'activity.changed' ||
+        event.type === 'agents.changed' ||
+        event.type === 'team.changed' ||
+        event.type === 'coordination.changed' ||
+        event.type === 'presence.changed'
+      ) {
+        void refresh()
+      }
+    })
+    const unsubscribeStream = subscribeCodevWorkspaceStream(setWorkspaceStreamStatus)
+    const timer =
+      workspaceStreamStatus === 'connected'
+        ? null
+        : window.setInterval(() => void refresh(), 15_000)
+    return () => {
+      unsubscribeEvent()
+      unsubscribeStream()
+      if (timer) {
+        window.clearInterval(timer)
+      }
+    }
+  }, [refresh, workspaceStreamStatus])
 
   if (!embedded) {
     return null

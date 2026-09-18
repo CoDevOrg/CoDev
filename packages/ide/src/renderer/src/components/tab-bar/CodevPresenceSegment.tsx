@@ -2,9 +2,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { Users } from 'lucide-react'
 import {
   getCodevBridgeSnapshot,
+  getCodevWorkspaceStreamStatus,
   requestCodevBridge,
-  subscribeCodevBridge
+  subscribeCodevBridge,
+  subscribeCodevWorkspaceEvent,
+  subscribeCodevWorkspaceStream
 } from '@/web/codev-bridge-singleton'
+import type { CodevWorkspaceStreamStatus } from '@/web/codev-bridge-singleton'
 
 export type CodevPresenceMember = {
   user: { id: string; login: string; name: string | null }
@@ -54,6 +58,9 @@ export function CodevPresenceSegment({
 }): React.JSX.Element | null {
   const [connected, setConnected] = useState(() => getCodevBridgeSnapshot().status === 'connected')
   const [members, setMembers] = useState<CodevPresenceMember[]>([])
+  const [workspaceStreamStatus, setWorkspaceStreamStatus] = useState<CodevWorkspaceStreamStatus>(
+    () => (typeof window === 'undefined' ? 'unavailable' : getCodevWorkspaceStreamStatus())
+  )
 
   useEffect(
     () => subscribeCodevBridge(() => setConnected(getCodevBridgeSnapshot().status === 'connected')),
@@ -61,27 +68,43 @@ export function CodevPresenceSegment({
   )
 
   useEffect(() => {
-    if (!connected || !activePath) return
+    if (!connected || !activePath) {
+      return
+    }
     let disposed = false
     const refresh = (): void => {
       void requestCodevBridge<PresencePayload>('presence.list')
         .then((payload) => {
-          if (!disposed) setMembers(Array.isArray(payload.members) ? payload.members : [])
+          if (!disposed) {
+            setMembers(Array.isArray(payload.members) ? payload.members : [])
+          }
         })
         .catch(() => {
-          if (!disposed) setMembers([])
+          if (!disposed) {
+            setMembers([])
+          }
         })
     }
     void requestCodevBridge('presence.update', { path: activePath })
       .then(refresh)
       .catch(() => undefined)
     refresh()
-    const timer = window.setInterval(refresh, 5_000)
+    const unsubscribeEvent = subscribeCodevWorkspaceEvent((event) => {
+      if (event.type === 'presence.changed' || event.type === 'team.changed') {
+        refresh()
+      }
+    })
+    const unsubscribeStream = subscribeCodevWorkspaceStream(setWorkspaceStreamStatus)
+    const timer = workspaceStreamStatus === 'connected' ? null : window.setInterval(refresh, 15_000)
     return () => {
       disposed = true
-      window.clearInterval(timer)
+      unsubscribeEvent()
+      unsubscribeStream()
+      if (timer) {
+        window.clearInterval(timer)
+      }
     }
-  }, [activePath, connected])
+  }, [activePath, connected, workspaceStreamStatus])
 
   const visibleMembers = useMemo(() => members.filter((member) => member.path), [members])
   return <CodevPresenceView activePath={activePath} members={visibleMembers} />

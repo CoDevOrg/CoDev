@@ -8,6 +8,7 @@ import { createAgentEvent } from "@codev/shared-types";
 import { getDatabase } from "../platform/database";
 import { getAgentModel, parseAgentProvider } from "../providers/ai-model";
 import { appendWorkspaceStateEvent } from "../workspaces/workspace-state";
+import { publishWorkspaceRealtimeEvent } from "../workspaces/workspace-realtime";
 
 export type AgentContext = {
   turnId: string;
@@ -176,7 +177,14 @@ export async function addEvent(
     })
     .onConflictDoNothing({ target: schema.agentEvents.idempotencyKey })
     .returning({ id: schema.agentEvents.id });
-  if (inserted) await appendWorkspaceStateEvent(agentEvent);
+  if (inserted) {
+    await appendWorkspaceStateEvent(agentEvent);
+    void publishWorkspaceRealtimeEvent(context.workspaceId, "agents.changed", {
+      sessionId: context.sessionId,
+      turnId: context.turnId,
+      sourceType: type,
+    });
+  }
 }
 
 export async function loadAgentContext(turnId: string): Promise<AgentContext> {

@@ -18,6 +18,7 @@ import {
   sharedSessionEventSchema,
   sharedSessionSchema,
   workspaceEventSchema,
+  workspaceRealtimeEventSchema,
   presenceEventSchema,
   workspaceRoleCapabilities,
   workspaceRoleCapabilitiesSchema,
@@ -70,6 +71,25 @@ describe("workspace contracts", () => {
         maxActiveSessions: 2,
         activeSessions: 0,
         availableSlots: 2,
+      }),
+    ).toThrow();
+  });
+
+  it("keeps realtime notifications as typed projection invalidations", () => {
+    expect(
+      workspaceRealtimeEventSchema.parse({
+        workspaceId: id,
+        type: "agents.changed",
+        payload: { sessionId: id, sourceType: "turn.started" },
+        createdAt: "2026-09-18T12:00:00.000Z",
+      }),
+    ).toMatchObject({ workspaceId: id, type: "agents.changed" });
+    expect(() =>
+      workspaceRealtimeEventSchema.parse({
+        workspaceId: id,
+        type: "agents.changed",
+        payload: {},
+        createdAt: "not-a-timestamp",
       }),
     ).toThrow();
   });

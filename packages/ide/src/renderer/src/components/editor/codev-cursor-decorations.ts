@@ -2,9 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import type { editor } from 'monaco-editor'
 import {
   getCodevBridgeSnapshot,
+  getCodevWorkspaceStreamStatus,
   requestCodevBridge,
-  subscribeCodevBridge
+  subscribeCodevBridge,
+  subscribeCodevWorkspaceEvent,
+  subscribeCodevWorkspaceStream
 } from '@/web/codev-bridge-singleton'
+import type { CodevWorkspaceStreamStatus } from '@/web/codev-bridge-singleton'
 
 export type CodevCursorMember = {
   user: { id: string; login: string; name: string | null }
@@ -42,11 +46,15 @@ function cursorDecorations(
   members: CodevCursorMember[]
 ): editor.IModelDeltaDecoration[] {
   const model = editorInstance.getModel()
-  if (!model) return []
+  if (!model) {
+    return []
+  }
   const maxOffset = model.getValueLength()
   return members.flatMap((member) => {
     const cursor = member.cursor
-    if (!cursor) return []
+    if (!cursor) {
+      return []
+    }
     const anchor = Math.min(cursor.anchor, maxOffset)
     const head = Math.min(cursor.head, maxOffset)
     const start = model.getPositionAt(Math.min(anchor, head))
@@ -92,11 +100,12 @@ export function useCodevCursorDecorations({
   editor: editor.IStandaloneCodeEditor | null
   relativePath: string
 }): void {
-  const [connected, setConnected] = useState(
-    () => getCodevBridgeSnapshot().status === 'connected'
-  )
+  const [connected, setConnected] = useState(() => getCodevBridgeSnapshot().status === 'connected')
   const [viewerId, setViewerId] = useState<string | null>(null)
   const [members, setMembers] = useState<CodevCursorMember[]>([])
+  const [workspaceStreamStatus, setWorkspaceStreamStatus] = useState<CodevWorkspaceStreamStatus>(
+    () => (typeof window === 'undefined' ? 'unavailable' : getCodevWorkspaceStreamStatus())
+  )
   const lastCursorRef = useRef('')
   const decorationIdsRef = useRef<string[]>([])
 
@@ -106,29 +115,39 @@ export function useCodevCursorDecorations({
   )
 
   useEffect(() => {
-    if (!editorInstance || !relativePath || !connected) return
+    if (!editorInstance || !relativePath || !connected) {
+      return
+    }
     let disposed = false
     const refresh = (): void => {
       void requestCodevBridge<PresencePayload>('presence.list')
         .then((payload) => {
-          if (disposed) return
+          if (disposed) {
+            return
+          }
           setViewerId(typeof payload.viewerId === 'string' ? payload.viewerId : null)
           setMembers(Array.isArray(payload.members) ? payload.members : [])
         })
         .catch(() => {
-          if (!disposed) setMembers([])
+          if (!disposed) {
+            setMembers([])
+          }
         })
     }
     const publishSelection = (force = false): void => {
       const model = editorInstance.getModel()
       const selection = editorInstance.getSelection()
-      if (!model || !selection) return
+      if (!model || !selection) {
+        return
+      }
       const cursor = {
         anchor: model.getOffsetAt(selection.getSelectionStart()),
         head: model.getOffsetAt(selection.getPosition())
       }
       const key = `${relativePath}:${cursor.anchor}:${cursor.head}`
-      if (!force && key === lastCursorRef.current) return
+      if (!force && key === lastCursorRef.current) {
+        return
+      }
       void requestCodevBridge('presence.cursor.update', { path: relativePath, cursor })
         .then(() => {
           lastCursorRef.current = key
@@ -137,19 +156,33 @@ export function useCodevCursorDecorations({
     }
     refresh()
     publishSelection()
-    const selectionSubscription = editorInstance.onDidChangeCursorSelection(() => publishSelection())
+    const selectionSubscription = editorInstance.onDidChangeCursorSelection(() =>
+      publishSelection()
+    )
     const cursorHeartbeat = window.setInterval(() => publishSelection(true), CURSOR_HEARTBEAT_MS)
-    const poll = window.setInterval(refresh, 1_000)
+    const unsubscribeEvent = subscribeCodevWorkspaceEvent((event) => {
+      if (event.type === 'presence.cursor.changed' || event.type === 'presence.changed') {
+        refresh()
+      }
+    })
+    const unsubscribeStream = subscribeCodevWorkspaceStream(setWorkspaceStreamStatus)
+    const poll = workspaceStreamStatus === 'connected' ? null : window.setInterval(refresh, 15_000)
     return () => {
       disposed = true
       selectionSubscription.dispose()
       window.clearInterval(cursorHeartbeat)
-      window.clearInterval(poll)
+      unsubscribeEvent()
+      unsubscribeStream()
+      if (poll) {
+        window.clearInterval(poll)
+      }
     }
-  }, [connected, editorInstance, relativePath])
+  }, [connected, editorInstance, relativePath, workspaceStreamStatus])
 
   useEffect(() => {
-    if (!editorInstance) return
+    if (!editorInstance) {
+      return
+    }
     const remote = selectRemoteCursors(members, viewerId, relativePath)
     decorationIdsRef.current = editorInstance.deltaDecorations(
       decorationIdsRef.current,
