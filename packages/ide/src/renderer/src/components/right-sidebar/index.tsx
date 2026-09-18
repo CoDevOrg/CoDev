@@ -7,9 +7,9 @@ import {
   History,
   ListChecks,
   PanelRight,
+  Radio,
   TerminalSquare,
-  Workflow,
-  Radio
+  Workflow
 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import type { ActiveRightSidebarTab, ActivityBarPosition } from '@/store/slices/editor'
@@ -55,7 +55,6 @@ import {
 import { isCodevEmbedded } from '@/web/codev-embedded'
 import { codevChatTabIdInState } from '@/web/codev-center-chat-tab'
 import { translate } from '@/i18n/i18n'
-import { codevBranchLabel } from '../codev/codev-branches-model'
 import { requestCodevTerminalDrawerOpen } from '../native-chat/codev-terminal-drawer-event'
 import { RightSidebarPanelContent } from './right-sidebar-panel-content'
 import { useMeasuredWidth } from './right-sidebar-measured-width'
@@ -81,6 +80,7 @@ function RightSidebarInner(): React.JSX.Element {
   const sourceControlShortcut = useShortcutLabel('sidebar.sourceControl.toggle')
   const checksShortcut = useShortcutLabel('sidebar.checks.toggle')
   const portsShortcut = useShortcutLabel('sidebar.ports.toggle')
+  const codevEmbedded = isCodevEmbedded()
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
   const setRightSidebarWidth = useAppStore((s) => s.setRightSidebarWidth)
@@ -104,7 +104,6 @@ function RightSidebarInner(): React.JSX.Element {
   const activeWorktree = useAppStore((s) =>
     activeWorktreeId ? (s.getKnownWorktreeById(activeWorktreeId) ?? null) : null
   )
-  const codevBranchContextLabel = activeWorktree ? codevBranchLabel(activeWorktree, null) : ''
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
   const activeWorkspaceScope = parseWorkspaceKey(activeWorktreeId ?? '')
   const isFolderWorkspace = activeWorkspaceScope?.type === 'folder'
@@ -126,11 +125,10 @@ function RightSidebarInner(): React.JSX.Element {
 
   const activityItems = useMemo<ActivityBarItem[]>(
     () => [
-      // CoDev: the single "Agents" tab — every agent in this workspace, always
-      // on screen. Listed first so it is the leftmost tab and the one a
-      // member lands on, and it stands in for the AI Vault session-history
-      // tab (hidden below).
-      ...(typeof window !== 'undefined' && window.__CODEV_EMBEDDED__
+      // CoDev keeps workspace history on the workspace page's top-right
+      // Activity button. The embedded sidebar stays focused on the workspace
+      // itself and live agent controls.
+      ...(codevEmbedded
         ? [
             {
               id: 'codev-agents' as const,
@@ -141,7 +139,7 @@ function RightSidebarInner(): React.JSX.Element {
             {
               id: 'codev-branches' as const,
               icon: GitBranch,
-              title: 'Branches',
+              title: 'Branches & PRs',
               shortcut: ''
             }
           ]
@@ -152,9 +150,9 @@ function RightSidebarInner(): React.JSX.Element {
         title: translate('auto.components.right.sidebar.index.8bc2bbc3a0', 'Explorer'),
         shortcut: explorerShortcut === 'Unassigned' ? '' : explorerShortcut
       },
-      // Stock Orca keeps the AI Vault session-history tab; CoDev folds it into
-      // the "Agents" tab above rather than showing a second agents tab.
-      ...(typeof window !== 'undefined' && window.__CODEV_EMBEDDED__
+      // Stock Orca keeps the AI Vault session-history tab; CoDev keeps live
+      // agent controls in the embedded workspace instead.
+      ...(codevEmbedded
         ? []
         : [
             {
@@ -184,13 +182,19 @@ function RightSidebarInner(): React.JSX.Element {
         shortcut: '',
         folderOnly: true
       },
-      {
-        id: 'source-control',
-        icon: GitBranch,
-        title: translate('auto.components.right.sidebar.index.0314901467', 'Source Control'),
-        shortcut: sourceControlShortcut === 'Unassigned' ? '' : sourceControlShortcut,
-        gitOnly: true
-      },
+      // CoDev folds Source Control into the single Branches & PRs workspace
+      // tab below. Keep the stock Source Control tab for the desktop client.
+      ...(codevEmbedded
+        ? []
+        : [
+            {
+              id: 'source-control' as const,
+              icon: GitBranch,
+              title: translate('auto.components.right.sidebar.index.0314901467', 'Source Control'),
+              shortcut: sourceControlShortcut === 'Unassigned' ? '' : sourceControlShortcut,
+              gitOnly: true
+            }
+          ]),
       {
         id: 'checks',
         icon: ListChecks,
@@ -199,7 +203,7 @@ function RightSidebarInner(): React.JSX.Element {
         gitOnly: true,
         // CoDev: no activity-bar button for now; still reachable from Source
         // Control / the review checkpoint banner, and re-enable by dropping this.
-        hidden: typeof window !== 'undefined' && Boolean(window.__CODEV_EMBEDDED__)
+        hidden: codevEmbedded
       },
       {
         id: 'ports',
@@ -211,7 +215,7 @@ function RightSidebarInner(): React.JSX.Element {
       // The durable workspace history lives at /workspaces/:id/activity in
       // the host app. Keep the stock desktop tab, but do not expose a second
       // activity destination inside the embedded CoDev sidebar.
-      ...(typeof window !== 'undefined' && window.__CODEV_EMBEDDED__
+      ...(codevEmbedded
         ? []
         : [
             {
@@ -231,7 +235,8 @@ function RightSidebarInner(): React.JSX.Element {
       pluginPanelErrors,
       visiblePluginPanels,
       portsShortcut,
-      sourceControlShortcut
+      sourceControlShortcut,
+      codevEmbedded
     ]
   )
 
@@ -241,9 +246,9 @@ function RightSidebarInner(): React.JSX.Element {
         isFolder,
         isFolderWorkspace,
         isSshRepo,
-        keepGitTabs: typeof window !== 'undefined' && Boolean(window.__CODEV_EMBEDDED__)
+        keepGitTabs: codevEmbedded
       }),
-    [activityItems, isFolder, isFolderWorkspace, isSshRepo]
+    [activityItems, codevEmbedded, isFolder, isFolderWorkspace, isSshRepo]
   )
   // Why separate from visibleItems: a `hidden` item stays a valid, reachable
   // route (deep links keep working) but gets no activity-bar button.
@@ -263,16 +268,24 @@ function RightSidebarInner(): React.JSX.Element {
     installedPluginTabKeys:
       pluginSystemEnabled && pluginFetchStatus === 'ready' ? installedPluginTabKeys : undefined
   }).rightSidebarTab
+  // CoDev keeps Source Control reachable for existing commands and deep links,
+  // but presents it as the Changes & PR view inside the single workspace tab.
+  const normalizedCodevTab =
+    codevEmbedded && normalizedActiveTab === 'source-control'
+      ? ('codev-branches' as const)
+      : codevEmbedded && normalizedActiveTab === 'activity'
+        ? ('explorer' as const)
+        : normalizedActiveTab
   const rememberedFolderTab = activeFolderWorkspaceKey
     ? rememberedFolderTabByWorkspaceKeyRef.current[activeFolderWorkspaceKey]
     : null
   const requestedFolderTab =
     activeFolderWorkspaceKey &&
     rightSidebarRouteRequestId !== lastRightSidebarRouteRequestIdRef.current
-      ? normalizedActiveTab
+      ? normalizedCodevTab
       : null
   const effectiveTab = resolveRightSidebarEffectiveTab({
-    normalizedActiveTab,
+    normalizedActiveTab: normalizedCodevTab,
     visibleItems,
     activeFolderWorkspaceKey,
     rememberedFolderTab: requestedFolderTab ?? rememberedFolderTab
@@ -290,7 +303,7 @@ function RightSidebarInner(): React.JSX.Element {
   // the chat-first center remains visible while the requested worktree loads.
   useEffect(() => {
     if (
-      !isCodevEmbedded() ||
+      !codevEmbedded ||
       window.__CODEV_SETTINGS_ONLY__ === true ||
       !window.__CODEV_BRANCH__?.trim()
     ) {
@@ -302,7 +315,7 @@ function RightSidebarInner(): React.JSX.Element {
     if (!rightSidebarOpen) {
       setRightSidebarOpen(true)
     }
-  }, [rightSidebarOpen, rightSidebarTab, setRightSidebarOpen, setRightSidebarTab])
+  }, [codevEmbedded, rightSidebarOpen, rightSidebarTab, setRightSidebarOpen, setRightSidebarTab])
 
   useEffect(() => {
     lastRightSidebarRouteRequestIdRef.current = rightSidebarRouteRequestId
@@ -569,20 +582,6 @@ function RightSidebarInner(): React.JSX.Element {
             </TooltipProvider>
           </div>
         )}
-
-        {isCodevEmbedded() && activeWorktreeId && activeWorktree ? (
-          <div
-            className="flex min-h-9 shrink-0 items-center gap-2 border-b border-border/70 bg-background/40 px-3 text-xs text-muted-foreground"
-            data-codev-current-branch={activeWorktreeId}
-            aria-label={`Current branch: ${codevBranchContextLabel}`}
-          >
-            <GitBranch className="size-3.5 shrink-0" aria-hidden="true" />
-            <span className="shrink-0 font-medium">Branch</span>
-            <span className="min-w-0 truncate text-foreground" title={codevBranchContextLabel}>
-              {codevBranchContextLabel}
-            </span>
-          </div>
-        ) : null}
 
         {panelContent}
 

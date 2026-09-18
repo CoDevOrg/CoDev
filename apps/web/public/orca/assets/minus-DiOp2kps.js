@@ -1,1 +1,0 @@
-import{ug as e}from"./web-index-D1A27ik1.js";var t=e(`minus`,[[`path`,{d:`M5 12h14`,key:`1ays0h`}]]);export{t};

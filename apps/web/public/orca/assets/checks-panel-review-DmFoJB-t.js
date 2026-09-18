@@ -1,1 +1,0 @@
-import{sn as e}from"./web-index-D1A27ik1.js";function t(t){return e(t)}function n({pr:e}){return e?t(e):null}export{n,t};

@@ -1,1 +1,0 @@
-import{ug as e}from"./web-index-D1A27ik1.js";var t=e(`circle`,[[`circle`,{cx:`12`,cy:`12`,r:`10`,key:`1mglay`}]]);export{t};

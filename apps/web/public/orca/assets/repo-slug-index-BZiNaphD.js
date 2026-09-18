@@ -1,1 +1,0 @@
-import{Og as e,dn as t,fn as n,un as r,wg as i}from"./web-index-D1A27ik1.js";i();var a=new Map,o=new Map;function s(e){a.delete(e),o.set(e,(o.get(e)??0)+1)}function c(e){let t=`:${e}`,i=new Set;for(let e of n.keys())e.endsWith(t)&&i.add(e);for(let e of a.keys())e.endsWith(t)&&i.add(e);for(let e of i)r(e),s(e)}export{c as clearRepoSlugCacheEntry};

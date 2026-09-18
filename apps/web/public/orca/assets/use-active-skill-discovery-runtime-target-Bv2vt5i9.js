@@ -1,0 +1,1 @@
+import{Og as e,Uu as t,Vc as n,d as r,wg as i}from"./web-index-DoRMZGI_.js";var a=e(i()),o=Symbol(`skill-discovery-runtime-unresolved`);function s(){let e=r(e=>e.runtimeEnvironmentCatalogSettled?n(e):o);return(0,a.useMemo)(()=>e===o?null:t({activeRuntimeEnvironmentId:e}),[e])}export{s as t};

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react'
 import {
   CircleAlert,
+  GitBranchPlus,
   GitBranch,
   LoaderCircle,
   RefreshCw,
@@ -31,7 +32,11 @@ function branchMatchesRoute(row: CodevBranchSummary, requestedBranch: string): b
   return normalize(row.gitBranch) === normalize(requestedBranch)
 }
 
-export function CodevBranchesOverview(): JSX.Element | null {
+export function CodevBranchesOverview({
+  onCreateBranch
+}: {
+  onCreateBranch?: () => void
+} = {}): JSX.Element | null {
   const embedded = isCodevEmbedded()
   const open = useCodevBranchesOpen()
   const initialBranch = typeof window !== 'undefined' ? (window.__CODEV_BRANCH__?.trim() ?? '') : ''
@@ -141,6 +146,16 @@ export function CodevBranchesOverview(): JSX.Element | null {
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
+          {onCreateBranch ? (
+            <button
+              type="button"
+              onClick={onCreateBranch}
+              className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border/70 px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              <GitBranchPlus className="size-4" aria-hidden="true" />
+              New branch
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => void refresh()}
