@@ -13,7 +13,10 @@ import {
 } from './codev-provider-connection-types'
 import { isCodevEmbedded } from './codev-personal-settings'
 import { CodevProviderSurfaceCards } from './CodevProviderSurfaceCards'
-import { codevWorkspaceReadyAgent } from './codev-provider-surface-capability'
+import {
+  codevProviderSurfaceCapability,
+  codevWorkspaceReadyAgent
+} from './codev-provider-surface-capability'
 import { CodevProviderSurfaceTabs } from './CodevProviderSurfaceTabs'
 
 export function publishCodevWorkspaceReadyFromSnapshot(
@@ -27,7 +30,11 @@ export function publishCodevWorkspaceReadyFromSnapshot(
     ready: true,
     agent,
     reason: null,
-    settingsHref: null
+    settingsHref: null,
+    providers: {
+      claude: codevProviderSurfaceCapability(snapshot, 'anthropic').workspace.ready,
+      codex: codevProviderSurfaceCapability(snapshot, 'openai').workspace.ready
+    }
   })
   requestCodevProviderReadinessRefresh()
 }

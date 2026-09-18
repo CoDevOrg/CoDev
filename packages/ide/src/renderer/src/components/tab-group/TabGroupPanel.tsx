@@ -3,6 +3,8 @@ import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
 import { Ellipsis, X } from 'lucide-react'
 import { useAppStore } from '../../store'
+import { isCodevEmbedded } from '@/web/codev-embedded'
+import { codevChatTabIdInState } from '@/web/codev-center-chat-tab'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,6 +58,9 @@ export default function TabGroupPanel({
 
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
   const { activeTab, browserItems, commands, editorItems, tabBarOrder, terminalTabs } = model
+  const codevChatActive =
+    isCodevEmbedded() &&
+    codevChatTabIdInState(worktreeId, useAppStore.getState()) === activeTab?.entityId
   const { setNodeRef: setBodyDropRef } = useDroppable({
     id: getTabPaneBodyDroppableId(groupId),
     data: {
@@ -205,7 +210,7 @@ export default function TabGroupPanel({
       {/* Why: each split group needs its own tab row because multiple groups can show at once but the titlebar has only one shared center slot. */}
       {/* Why: macOS hiddenInset titleBarStyle makes -webkit-app-region: drag the only way to move the window from this tab row. */}
       <div
-        className="h-[32px] shrink-0 border-b border-border bg-card"
+        className={`h-[32px] shrink-0 border-b border-border bg-card${codevChatActive ? ' codev-chat-tab-group-strip' : ''}`}
         data-tab-group-strip-id={groupId}
         data-terminal-focus-release-surface="true"
         data-worktree-id={worktreeId}

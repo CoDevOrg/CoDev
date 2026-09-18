@@ -15,6 +15,10 @@ export type CodevProviderReadiness = {
   reason: string | null
   /** Where the fix lives, for a link out of the iframe. */
   settingsHref: string | null
+  providers?: {
+    claude: boolean
+    codex: boolean
+  }
 }
 
 const CODEV_PROVIDER_READINESS_MESSAGE = 'codev:provider-readiness'
@@ -49,7 +53,17 @@ function parseReadiness(data: unknown): CodevProviderReadiness | null {
     ready: message.ready,
     agent: message.agent === 'claude' || message.agent === 'codex' ? message.agent : null,
     reason: optionalText(message.reason, 300),
-    settingsHref: optionalText(message.settingsHref, 300)
+    settingsHref: optionalText(message.settingsHref, 300),
+    providers: {
+      claude:
+        typeof (message.providers as Record<string, unknown> | undefined)?.claude === 'boolean'
+          ? Boolean((message.providers as Record<string, unknown>).claude)
+          : message.agent === 'claude',
+      codex:
+        typeof (message.providers as Record<string, unknown> | undefined)?.codex === 'boolean'
+          ? Boolean((message.providers as Record<string, unknown>).codex)
+          : message.agent === 'codex'
+    }
   }
 }
 
@@ -61,7 +75,11 @@ function sameReadiness(
     left?.ready === right.ready &&
     left.agent === right.agent &&
     left.reason === right.reason &&
-    left.settingsHref === right.settingsHref
+    left.settingsHref === right.settingsHref &&
+    (left.providers?.claude ?? left.agent === 'claude') ===
+      (right.providers?.claude ?? right.agent === 'claude') &&
+    (left.providers?.codex ?? left.agent === 'codex') ===
+      (right.providers?.codex ?? right.agent === 'codex')
   )
 }
 

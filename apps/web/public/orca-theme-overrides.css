@@ -369,6 +369,48 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   font-size: 12px;
 }
 
+.codev-mc-provider-mark {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  vertical-align: -2px;
+  margin-right: 2px;
+}
+
+.codev-mc-provider-badge {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border-radius: 7px;
+  background: rgba(237, 238, 240, 0.07);
+}
+
+.codev-mc-provider-mark.is-claude {
+  color: #d97757;
+}
+
+.codev-mc-provider-mark.is-codex {
+  color: #9fe1bf;
+}
+
+.codev-mc-provider-mark-fallback {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin: 0 5px 1px 2px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* CoDev's chat is the workspace surface. Its single implementation tab is
+ * not navigation, so the empty 32px strip only steals room from the chat. */
+.codev-chat-tab-group-strip {
+  display: none !important;
+}
+
 .codev-agents-head {
   display: flex;
   align-items: flex-start;
