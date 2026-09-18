@@ -3,7 +3,8 @@ description: Firecracker sandbox vs Orca IDE session isolation and which API rou
 globs:
   - apps/web/**
   - services/orchestrator/**
-  - infra/aws/**
+  - infra/azure/**
+  - infra/runtime/**
   - packages/ide/**
 alwaysApply: false
 ---
@@ -27,10 +28,6 @@ Do not write sandbox files expecting the IDE session to see them, or the
 reverse. Web app = Vercel control plane. Do not move control-plane work into
 the runtime host, or IDE-session work onto Vercel serverless, as a shortcut.
 
-The runtime runs on **Azure**; the EC2 migration is done. `CLOUD_PROVIDER`
-defaults to Azure, and the retired EC2 host is parked in
-`apps/web/lib/retired/`, outside the typecheck and test runs — so flipping that
-variable no longer moves the runtime by itself (`apps/web/lib/host.ts`
-documents what to restore). `@aws-sdk/client-kms` stays: `decryptSecret`
-dispatches on the stored envelope prefix and must keep reading legacy `kms-v1.`
-credentials. Do not describe the runtime as AWS-hosted.
+The runtime runs on **Azure** only (`infra/azure/`, with the cloud-neutral host
+bootstrap and Orca build in `infra/runtime/`). There is no cloud-selection
+branch; do not describe the runtime as AWS-hosted or reintroduce one.

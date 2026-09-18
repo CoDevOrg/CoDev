@@ -53,8 +53,8 @@ Vercel bill and the budget is small.
   filter mirrors [`scripts/vercel-ignore-build.sh`](scripts/vercel-ignore-build.sh),
   which is kept as the reference list — update both together if the web app's
   workspace dependencies change. A push touching only `services/`, `infra/`,
-  `docs/`, `.github/`, `packages/ide/` source (with no regenerated bundle), or
-  `packages/theia-extension/` builds no web deployment.
+  `docs/`, `.github/`, or `packages/ide/` source (with no regenerated bundle)
+  builds no web deployment.
 
 ## Shared working tree
 

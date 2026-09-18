@@ -11,5 +11,5 @@ alwaysApply: false
 - Validate untrusted input with Zod at boundaries.
 - **Never** expose credentials via `NEXT_PUBLIC_*`.
 - Private GitHub credentials must not appear in URLs, command arguments, logs, browser pairing data, or persisted remotes.
-- Production infra: **AWS Systems Manager**, not inbound SSH.
-- Be extra careful with workspace isolation, session lifecycle, and Vercel/AWS boundary changes.
+- Production infra is Azure (`infra/azure/`); see its README for host access.
+- Be extra careful with workspace isolation, session lifecycle, and Vercel/Azure boundary changes.

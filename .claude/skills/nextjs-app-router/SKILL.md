@@ -21,6 +21,3 @@ description: Use for apps/web Next.js App Router work — pages, layouts, Server
   file, `components` on `jsdom` with Testing Library. Put a pure-logic test under
   `lib/`. Do not restore a global `jsdom` environment — it cost this suite 4x its
   runtime.
-- `apps/web/lib/retired/` is excluded from `tsconfig.json` and from the vitest
-  `lib` project. Code there is unverified and must not be imported. Bringing a
-  module back means restoring its imports and dropping both excludes.

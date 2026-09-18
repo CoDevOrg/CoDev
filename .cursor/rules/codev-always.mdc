@@ -21,8 +21,8 @@ Do not add Dockerfiles or Docker Compose. Use Apple `container` if local contain
 ## Safety
 - Credentials stay server-only. Never put secrets in `NEXT_PUBLIC_*`.
 - Private GitHub credentials must not appear in URLs, argv, logs, browser pairing data, or persisted remotes.
-- Keep Vercel (web) vs AWS (Firecracker/Orca) separate.
-- Sandbox vs IDE filesystems are isolated. Use sandbox API vs `/ide` routes correctly.
+- Keep Vercel (web) vs Azure (Firecracker/Orca) separate.
+- Sandbox vs IDE filesystems are isolated. Backend work uses the sandbox API routes; the embedded IDE reaches `apps/web` only through its `postMessage` bridge.
 
 ## Git / Vercel
 Keep diffs scoped. Do not commit or push unless asked. Each branch push starts a Vercel preview; `main` is production. One coherent commit per change. Add or update tests when behavior changes.

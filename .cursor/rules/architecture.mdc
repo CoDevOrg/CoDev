@@ -22,10 +22,10 @@ Place changes in the owning package. Do not reach across packages with ad hoc im
 | `packages/contracts` | Shared validated API contracts. |
 | `packages/config` | Config schemas. |
 | `packages/shared-types` | Shared TS types. |
-| `packages/theia-extension` | Theia/IDE extension. |
 | `packages/ide` | Orca fork. Own package manager. Not in root workspace. |
 | `services/orchestrator` | Rust runtime control. |
-| `infra/aws` | Firecracker. |
+| `infra/azure` | Azure runtime stack (Firecracker/Orca hosts). |
+| `infra/runtime` | Cloud-neutral host bootstrap and Orca build scripts. |
 | `infra/openfga` | AuthZ. |
 
 Validate at service and persistence boundaries (typically Zod). Follow existing modules; do not add a parallel data layer.

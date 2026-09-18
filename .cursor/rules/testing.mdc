@@ -34,5 +34,3 @@ file, `components` on `jsdom` with Testing Library. Pure-logic tests go under
 `lib/`. Do not restore a global `jsdom` environment — booting a DOM for tests
 that never touch one cost this suite 4x its runtime (253s to 45s).
 
-`apps/web/lib/retired/` is excluded from both the typecheck and the vitest `lib`
-project. Code there is unverified and must not be imported.

@@ -34,6 +34,10 @@ The full suites are expensive. Run them once, at the end — not per edit.
 - Search with ripgrep (the `Grep` tool), never `grep -r` from the repo root.
   `node_modules` is ~4 GB across two trees; a recursive grep times out before it
   finishes, while ripgrep answers the same question in about a second.
+- The root `.ignore` keeps ripgrep out of generated and bulk files (the
+  embedded IDE bundle in `apps/web/public/orca`, lockfiles, dependency patches,
+  the ui-ux-pro-max dataset, the IDE task ledger). Git still tracks them; pass
+  `--no-ignore-dot` or read the file directly when you need one.
 - A `packages/ide` source change also needs `pnpm orca:web` (~90s) and the
   regenerated bundle committed with it. Batch IDE edits and rebuild once.
 - `apps/web/.next/dev` is a dev-server cache that grows without bound — it has
@@ -49,7 +53,7 @@ Use Apple's open-source [container](https://github.com/apple/container) tool whe
 Firecracker sandboxes and per-workspace Orca IDE sessions do **not** share a filesystem.
 
 - Backend-driven work (agent execution, worktrees, publication exports) uses **sandbox API routes**.
-- Anything an interactive IDE session must see (terminals, Git, `codex resume`) uses **`/ide` file and execution routes**.
+- Anything an interactive IDE session must see (terminals, Git, `codex resume`) lives only in that session. The embedded IDE reaches `apps/web` through the `postMessage` bridge (`packages/ide` `codev-bridge.ts` ↔ `components/codev-parent-bridge.ts`), which proxies to ordinary `/api/workspaces/{id}/...` routes; there is no separate `/ide` route family.
 
 Preserve the split between the Vercel-hosted web control plane and the
 Azure-hosted Firecracker/Orca infrastructure. The runtime is Azure only: the
@@ -115,7 +119,9 @@ per-agent: anyone working in this repo, human or agent, uses both.
   type scale, subtle depth and glass, and smooth, meaningful motion.
 
 Both are checked in under `.claude/skills/`, so they are available to every
-clone without any personal or global skill setup. Before delivering UI work,
+clone without any personal or global skill setup. `.claude/skills/` is the only
+copy of the repo's skills: `.cursor/skills` and `.agents/skills` are symlinks
+to it, so edit skills there and never add a second copy. Before delivering UI work,
 run the skills' pre-delivery checklists (contrast, focus states, touch targets,
 reduced motion, light **and** dark mode). Do not hand-roll design decisions in
 this repo when a skill already answers them.
@@ -147,8 +153,8 @@ keep builds proportional to real change.
   filter mirrors the Vercel Ignored Build Step (`scripts/vercel-ignore-build.sh`),
   kept as the reference list — update both together if the web app's workspace
   dependencies change. A commit that only touches `services/`, `infra/`,
-  `docs/`, `.github/`, `packages/ide/` source (without a regenerated bundle),
-  or `packages/theia-extension/` builds no web deployment.
+  `docs/`, `.github/`, or `packages/ide/` source (without a regenerated bundle)
+  builds no web deployment.
 
 ## Production Test Accounts
 

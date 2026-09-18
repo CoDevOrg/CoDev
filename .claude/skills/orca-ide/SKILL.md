@@ -21,3 +21,7 @@ description: Use when editing packages/ide (Orca fork), the embedded browser IDE
   a file you touch block your commit. `max-lines` disables are forbidden — if a
   file is already over the cap, put your change in a different seam rather than
   editing it.
+- Import heavy or side-effecting libraries lazily inside the branch that needs
+  them: a module-scope import in `components/native-chat` or
+  `components/terminal-pane` can shift listener-count baselines and break
+  unrelated retention tests.

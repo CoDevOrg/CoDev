@@ -19,6 +19,4 @@ alwaysApply: false
 `apps/web/.next/dev` is the dev-server cache and grows without bound; it is
 gitignored and regenerable, so delete it when the tree feels slow and keep
 `.next/cache`. `vitest.config.ts` splits `lib` (node, no setup) from
-`components` (jsdom) — put pure-logic tests under `lib/`. `lib/retired/` is
-excluded from both the typecheck and the tests: unverified, and nothing may
-import it.
+`components` (jsdom) — put pure-logic tests under `lib/`.
