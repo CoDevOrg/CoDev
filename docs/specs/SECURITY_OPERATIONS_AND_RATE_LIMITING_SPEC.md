@@ -1,5 +1,9 @@
 # SECURITY_OPERATIONS_AND_RATE_LIMITING_SPEC.md
 
+> **Status:** original design spec (written August 2026). It predates the move to an
+> Azure-only runtime and may name AWS services or flows that changed. Treat it
+> as design intent and confirm current behavior in the code before relying on it.
+
 > **Document Scope:** Comprehensive Specification for Rate Limiting, Cost Safety, Security Hardening, Telemetry, Beta Access Control, and Privacy Assurances for **CoDev**.
 
 ---

@@ -1,5 +1,9 @@
 # FLOW_AND_HIBERNATION_SPEC.md
 
+> **Status:** original design spec (written September 2026). It predates the move to an
+> Azure-only runtime and may name AWS services or flows that changed. Treat it
+> as design intent and confirm current behavior in the code before relying on it.
+
 > **Document Scope:** Full End-to-End User Experience, Google Docs-Style Sharing/Permissions Model, and Auto-Hibernation Architecture for **CoDev**.
 
 ---

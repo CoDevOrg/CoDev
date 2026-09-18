@@ -1,5 +1,9 @@
 # BYOK_AND_CREDENTIAL_HIERARCHY_SPEC.md
 
+> **Status:** original design spec (written July 2026). It predates the move to an
+> Azure-only runtime and may name AWS services or flows that changed. Treat it
+> as design intent and confirm current behavior in the code before relying on it.
+
 > **Document Scope:** Specification for Bring Your Own Key (BYOK), Credential Hierarchy Resolution, OAuth Integrations (Claude Code & Codex), and Key Storage Encryption for **CoDev**.
 
 ---

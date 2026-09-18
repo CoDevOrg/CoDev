@@ -59,6 +59,6 @@ These planned use cases describe the platform we are building toward:
 
 The long-term goal is a permission-aware intelligence layer across tasks, repositories, and the organization—helping every developer and agent benefit from work that is already happening or has happened before.
 
-Read the full [enterprise feature vision](./ENTERPRISE_FEATURES.md).
+Read the full [enterprise feature vision](./docs/product/ENTERPRISE_FEATURES.md).
 
 CoDev is hosted on the web at **[trycodev.com](https://trycodev.com)**. Domain email setup (Resend sending and ImprovMX receiving) is documented in [docs/EMAIL.md](./docs/EMAIL.md).

@@ -1,5 +1,8 @@
 # CoDev Delivery Plan
 
+> **Archived.** The original delivery plan from the AWS-hosted era (August
+> 2026). Kept for history only; it does not describe the current architecture.
+
 ## Product Direction
 
 CoDev is a hosted, browser-based development workspace. The GitHub repository contains the source code; users access the product through its Vercel-hosted website.

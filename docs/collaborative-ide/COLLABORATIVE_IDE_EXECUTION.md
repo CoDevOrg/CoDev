@@ -312,8 +312,9 @@ Use this as the recurring Codex automation prompt after B0.1 has established
 the baseline:
 
 ```text
-Work in /Users/yousefmaher/CoDev using COLLABORATIVE_IDE_FEATURES.md and
-COLLABORATIVE_IDE_EXECUTION.md. Read COLLABORATIVE_IDE_TASK_STATE.md; start with
+Work in /Users/yousefmaher/CoDev using docs/collaborative-ide/COLLABORATIVE_IDE_FEATURES.md
+and docs/collaborative-ide/COLLABORATIVE_IDE_EXECUTION.md. Read
+docs/collaborative-ide/COLLABORATIVE_IDE_TASK_STATE.md; start with
 its Current task. A run may complete at most two tasks sequentially. Do not
 inspect or plan task 2 until task 1 is fully verified, recorded, and pushed.
 Use the smallest available coding model and low reasoning effort. Read only the

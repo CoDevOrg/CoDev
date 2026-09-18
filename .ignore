@@ -14,4 +14,4 @@ packages/ide/config/patches/
 .claude/skills/ui-ux-pro-max/data/
 
 # 200 KB+ scheduler ledger; read it directly when you need it.
-COLLABORATIVE_IDE_TASK_STATE.md
+docs/collaborative-ide/COLLABORATIVE_IDE_TASK_STATE.md

@@ -206,7 +206,7 @@ agent without exposing their secret to teammates or the sandbox.
 - OAuth connections use PKCE, state validation, encrypted refresh tokens,
   narrow scopes, explicit disconnect, and the provider's documented flow.
   The first Orca connection is OpenAI Codex; see
-  [docs/provider-oauth-openai-codex.md](./docs/provider-oauth-openai-codex.md).
+  [docs/provider-oauth-openai-codex.md](../provider-oauth-openai-codex.md).
   F6.4 documents that flow. F6.5 enables Connect only through a
   mock/fixture callback that never opens ChatGPT consent.
 - The first supported providers are OpenAI/Codex-compatible and Anthropic;

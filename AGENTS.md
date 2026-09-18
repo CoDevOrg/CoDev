@@ -4,6 +4,15 @@
 
 CoDev is a hosted website deployed on Vercel. Do not describe it as a downloadable desktop application.
 
+## Documentation
+
+[`docs/README.md`](docs/README.md) indexes every design, operations, and
+planning document, with a status for each. Start there instead of listing or
+grepping `docs/`. Documents in `docs/archive/` describe past designs: do not
+act on them. The repository root holds only `README.md`, `AGENTS.md`,
+`CLAUDE.md`, and `PRD.md`; new documents go under `docs/` and get a row in the
+index.
+
 ## Required Commands
 
 Run from the repository root. Node.js 24+. pnpm only.

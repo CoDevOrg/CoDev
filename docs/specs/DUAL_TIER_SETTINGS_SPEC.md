@@ -1,5 +1,9 @@
 # DUAL_TIER_SETTINGS_SPEC.md
 
+> **Status:** original design spec (written July 2026). It predates the move to an
+> Azure-only runtime and may name AWS services or flows that changed. Treat it
+> as design intent and confirm current behavior in the code before relying on it.
+
 > **Document Scope:** Specification for the Dual-Tier Settings Architecture (Personal Scope vs. Organization/Workspace Scope), Navigation UI Component, OpenFGA Permission Controls, and Settings Routing for **CoDev**.
 
 ---
