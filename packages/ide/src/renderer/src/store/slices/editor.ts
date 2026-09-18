@@ -1528,9 +1528,13 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     })),
 
   // Right sidebar
-  rightSidebarOpen: false,
+  // Why open for CoDev: Branches is the workspace's landing surface and its
+  // panel renders only while its own tab is the open one. The pending shell
+  // mounts before the startup chain hydrates persisted UI, so this default is
+  // the layout a member actually sees on a cold open.
+  rightSidebarOpen: isCodevEmbedded(),
   rightSidebarWidth: 280,
-  rightSidebarTab: isCodevEmbedded() ? 'codev-agents' : 'explorer',
+  rightSidebarTab: isCodevEmbedded() ? 'codev-branches' : 'explorer',
   rightSidebarExplorerView: 'files',
   rightSidebarRouteRequestId: 0,
   rightSidebarTabByWorktree: {},

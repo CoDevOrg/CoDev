@@ -1,1 +1,0 @@
-import{sn as e}from"./web-index-Cy_ZOz7O.js";function t(t){return e(t)}function n({pr:e}){return e?t(e):null}export{n,t};

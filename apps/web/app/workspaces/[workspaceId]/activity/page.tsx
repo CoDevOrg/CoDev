@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { WorkspaceActivityFeed } from "@/components/workspace/workspace-activity-feed";
-import { getWorkspaceAccess } from "@/lib/auth/access";
 import { loadActivityAuditSnapshot } from "@/lib/workspaces/activity-audit-server";
 import { requireUser } from "@/lib/auth/session";
 import { getWorkspaceForMember } from "@/lib/workspaces/workspaces";
@@ -18,19 +17,16 @@ export default async function WorkspaceActivityPage({
 }) {
   const user = await requireUser();
   const { workspaceId } = await params;
-  const [workspace, access, snapshot] = await Promise.all([
+  const [workspace, snapshot] = await Promise.all([
     getWorkspaceForMember(workspaceId, user.id),
-    getWorkspaceAccess(workspaceId, user.id),
     loadActivityAuditSnapshot(workspaceId, user, { limit: PAGE_SIZE }),
   ]);
-  if (!workspace || !access) {
+  if (!workspace) {
     notFound();
   }
 
   return (
     <WorkspaceActivityFeed
-      canRestoreFiles={access.permissions.edit}
-      canRestoreWorkspace={access.permissions.merge}
       initialSnapshot={snapshot}
       repository={workspace.repository}
       workspaceId={workspaceId}

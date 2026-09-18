@@ -1786,6 +1786,12 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   border-top: 0;
 }
 
+/* Keep an empty history from stretching into a second full-height panel. Once
+   chats exist, the list owns the remaining rail height and scrolls normally. */
+.codev-chat-history.in-left-rail.is-empty {
+  flex: 0 0 auto;
+}
+
 .codev-chat-history.in-left-rail .codev-chat-history-list {
   flex: 1 1 0;
   min-height: 0;

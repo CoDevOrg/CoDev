@@ -17,7 +17,7 @@ function storage() {
 }
 
 describe('CoDev owned web preferences', () => {
-  it('retains the existing first-open defaults without resetting later choices', () => {
+  it('opens a first-run browser on the branches surface without resetting later choices', () => {
     const store = storage()
     seedCodevWebPreferences(store)
     expect(JSON.parse(store.getItem('orca.web.settings.v1')!)).toEqual({
@@ -25,8 +25,8 @@ describe('CoDev owned web preferences', () => {
       codevMobileDefaultApplied: true
     })
     expect(JSON.parse(store.getItem('orca.web.ui.v1')!)).toEqual({
-      rightSidebarTab: 'codev-agents',
-      rightSidebarOpen: false,
+      rightSidebarTab: 'codev-branches',
+      rightSidebarOpen: true,
       codevLiveAgentsDefaultApplied: true,
       codevLiveAgentsCollapsedDefaultApplied: true
     })
@@ -61,6 +61,18 @@ describe('CoDev owned web preferences', () => {
     seedCodevWebPreferences(store)
     expect(JSON.parse(store.getItem('orca.web.ui.v1')!)).toEqual({
       rightSidebarTab: 'codev-agents',
+      rightSidebarOpen: false,
+      codevLiveAgentsDefaultApplied: true,
+      codevLiveAgentsCollapsedDefaultApplied: true
+    })
+  })
+
+  it('never moves a member off a tab they already chose', () => {
+    const store = storage()
+    store.setItem('orca.web.ui.v1', JSON.stringify({ rightSidebarTab: 'explorer' }))
+    seedCodevWebPreferences(store)
+    expect(JSON.parse(store.getItem('orca.web.ui.v1')!)).toEqual({
+      rightSidebarTab: 'explorer',
       rightSidebarOpen: false,
       codevLiveAgentsDefaultApplied: true,
       codevLiveAgentsCollapsedDefaultApplied: true

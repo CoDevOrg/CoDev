@@ -77,7 +77,7 @@ jobs:
           cache: pnpm
 
       - name: Install Vercel CLI
-        run: npm install --global vercel@latest
+        run: npm install --global vercel@59.23.2
 
       - name: Check token
         run: |
@@ -109,8 +109,8 @@ jobs:
       - name: Deploy
         id: deploy
         run: |
-          url="$(vercel deploy --prebuilt --archive=tgz --scope="$VERCEL_SCOPE" ${{ steps.target.outputs.flag }})"
-          echo "Deployed to: ${url}"
+          url="$(vercel deploy --prebuilt --no-wait --archive=tgz --scope="$VERCEL_SCOPE" ${{ steps.target.outputs.flag }})"
+          echo "Deployment accepted by Vercel: ${url}"
           {
             echo "### Vercel ${{ steps.target.outputs.env }} deploy"
             echo ""

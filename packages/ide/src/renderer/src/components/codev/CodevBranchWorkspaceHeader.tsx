@@ -1,7 +1,6 @@
 import type { JSX } from 'react'
 import {
   Bot,
-  ChevronLeft,
   CircleAlert,
   CircleCheck,
   CirclePause,
@@ -19,7 +18,6 @@ import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
 import { isCodevEmbedded } from '@/web/codev-embedded'
-import { openCodevBranches } from './codev-branches-view'
 import { codevBranchLabel, type CodevBranchState } from './codev-branches-model'
 import { useCodevBranchRows } from './use-codev-branch-rows'
 
@@ -88,17 +86,6 @@ export function CodevBranchWorkspaceHeader(): JSX.Element | null {
       data-codev-branch-id={activeWorktreeId}
       aria-label={`Current branch workspace: ${label}`}
     >
-      <button
-        type="button"
-        onClick={openCodevBranches}
-        aria-label="Back to all branches"
-        title="Back to all branches"
-        className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-lg border border-border/70 px-2 text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:min-w-0"
-      >
-        <ChevronLeft className="size-4" aria-hidden="true" />
-        <span className="hidden sm:inline">Branches</span>
-      </button>
-
       <div className="min-w-0 flex-1 basis-[220px]">
         <div className="flex min-w-0 items-center gap-2">
           <GitBranch className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />

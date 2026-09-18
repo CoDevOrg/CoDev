@@ -3537,11 +3537,11 @@ function readLocalWebUIState(): PersistedUIState {
     worktreeCardProperties: getWorktreeCardModeProperties(
       storedSettings.compactWorktreeCards ? 'Compact' : 'Default'
     ),
-    // Why: a CoDev member should land on the always-current "Live agents" tab,
-    // not Explorer — a member never asked to browse files never touched
-    // `stored.rightSidebarTab`, so this only changes the default, not a
-    // deliberate switch back to Explorer made earlier in the session.
-    ...(isCodevEmbedded() ? { rightSidebarTab: 'codev-agents' as const } : {})
+    // Why: a CoDev member should land on Branches, the workspace's primary
+    // collaboration surface, not Explorer — a member who never asked to browse
+    // files never touched `stored.rightSidebarTab`, so this only changes the
+    // default, not a deliberate switch made earlier in the session.
+    ...(isCodevEmbedded() ? { rightSidebarTab: 'codev-branches' as const } : {})
   }
   if (typeof stored.rightSidebarOpen === 'boolean') {
     return mergeWebUIState(base, stored)
