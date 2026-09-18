@@ -1994,7 +1994,7 @@ describe('web UI preload API', () => {
     expect(ui.rightSidebarOpen).toBe(true)
   })
 
-  it('defaults a fresh CoDev-embedded workspace to the live agents tab, not Explorer', async () => {
+  it('defaults a fresh CoDev-embedded workspace to the branches tab, not Explorer', async () => {
     const globals = installBrowserGlobals('Linux')
     ;(globals.window as unknown as { __CODEV_EMBEDDED__: boolean }).__CODEV_EMBEDDED__ = true
     const { installWebPreloadApi } = await import('./web-preload-api')
@@ -2002,7 +2002,7 @@ describe('web UI preload API', () => {
 
     const ui = await globals.window.api.ui.get()
 
-    expect(ui.rightSidebarTab).toBe('codev-agents')
+    expect(ui.rightSidebarTab).toBe('codev-branches')
   })
 
   it('keeps Explorer as the default right sidebar tab outside CoDev embedding', async () => {

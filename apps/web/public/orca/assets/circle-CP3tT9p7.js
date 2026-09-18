@@ -1,1 +1,0 @@
-import{ug as e}from"./web-index-DoRMZGI_.js";var t=e(`circle`,[[`circle`,{cx:`12`,cy:`12`,r:`10`,key:`1mglay`}]]);export{t};
