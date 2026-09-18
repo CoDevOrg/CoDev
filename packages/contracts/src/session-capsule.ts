@@ -239,6 +239,56 @@ export const sessionCapsuleV0Schema = z
 
 export type SessionCapsuleV0 = z.infer<typeof sessionCapsuleV0Schema>;
 
+type CanonicalJsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | CanonicalJsonValue[]
+  | { [key: string]: CanonicalJsonValue };
+
+function canonicalJson(value: CanonicalJsonValue): string {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalJson).join(",")}]`;
+  }
+  return `{${Object.keys(value)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key]!)}`)
+    .join(",")}}`;
+}
+
+/**
+ * Deterministic semantic identity input for an immutable Capsule v0.
+ *
+ * Object keys and set-like path/file collections are normalized. Transcript
+ * order is intentionally retained because it is part of the session meaning.
+ * Transport framing and encryption are intentionally excluded.
+ */
+export function serializeSessionCapsuleV0Identity(
+  value: SessionCapsuleV0,
+): Uint8Array {
+  const capsule = sessionCapsuleV0Schema.parse(value);
+  const normalized = {
+    ...capsule,
+    repositoryState: {
+      ...capsule.repositoryState,
+      approvedUntrackedPaths: [
+        ...capsule.repositoryState.approvedUntrackedPaths,
+      ].sort(),
+    },
+    attachmentPaths: [...capsule.attachmentPaths].sort(),
+    files: [...capsule.files].sort((left, right) =>
+      left.path < right.path ? -1 : left.path > right.path ? 1 : 0,
+    ),
+  };
+  return new TextEncoder().encode(
+    canonicalJson(normalized as CanonicalJsonValue),
+  );
+}
+
 export const importedSessionNativeResumeAvailabilitySchema = z.enum([
   "unknown",
   "available",

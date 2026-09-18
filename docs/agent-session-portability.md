@@ -73,6 +73,14 @@ to 32 MiB, and refuses to read an artifact through a different scope. Local
 development uses the configured development key and embeds the same context
 fingerprint inside the encrypted envelope.
 
+Capsule identity and artifact integrity are deliberately separate. The capsule
+digest is computed from validated canonical manifest bytes: object keys are
+stable, file entries are ordered by logical path, set-like path collections are
+sorted, and transcript order is retained. The artifact digest covers the exact
+serialized bytes stored in PostgreSQL. Therefore a retry of the same semantic
+capsule can return the existing import even if a future transport frames those
+bytes differently, without replacing the immutable stored artifact.
+
 The normalized transcript and handoff will become workspace-visible when the
 import view is built. The serialized artifact, including opaque provider-native
 payload, remains importer-scoped. Audit events contain metadata only, never

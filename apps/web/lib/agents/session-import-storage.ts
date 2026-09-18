@@ -5,6 +5,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import {
+  serializeSessionCapsuleV0Identity,
   sessionCapsuleV0Schema,
   type SessionCapsuleV0,
 } from "@codev/contracts";
@@ -63,6 +64,12 @@ type AppendWorkspaceEvent = typeof appendWorkspaceEvent;
 
 function sha256(payload: Uint8Array) {
   return createHash("sha256").update(payload).digest("hex");
+}
+
+export function sessionCapsuleSha256(value: SessionCapsuleV0) {
+  return sha256(
+    serializeSessionCapsuleV0Identity(sessionCapsuleV0Schema.parse(value)),
+  );
 }
 
 function artifactEncryptionContext(scope: SessionImportArtifactScope) {
@@ -428,7 +435,8 @@ export async function storeSessionImport(
     new PostgresSessionImportArtifactStore(database);
   const capsule = sessionCapsuleV0Schema.parse(input.capsule);
   validateArtifactPayload(input.artifact);
-  const digest = sha256(input.artifact);
+  const capsuleDigest = sessionCapsuleSha256(capsule);
+  const artifactDigest = sha256(input.artifact);
   const idempotencyKey = validateIdempotencyKey(input.idempotencyKey);
   const { organizationId } = await resolveImportScope(
     database,
@@ -453,7 +461,7 @@ export async function storeSessionImport(
       sourceProvider: capsule.source.provider,
       externalSessionId: capsule.source.externalSessionId,
       capsuleSchemaVersion: capsule.schemaVersion,
-      capsuleSha256: digest,
+      capsuleSha256: capsuleDigest,
       idempotencyKey,
       status: "storing",
     })
@@ -497,7 +505,7 @@ export async function storeSessionImport(
       500,
     );
   }
-  assertMatchingIdempotentImport(record.capsuleSha256, digest);
+  assertMatchingIdempotentImport(record.capsuleSha256, capsuleDigest);
   if (record.parentImportId !== (input.parentImportId ?? null)) {
     throw new SessionImportStorageError(
       "This idempotency key was already used with different import lineage.",
@@ -516,17 +524,25 @@ export async function storeSessionImport(
     importedBy: input.importedBy,
   };
   try {
-    const artifact = await artifactStore.put({
-      scope,
-      payload: input.artifact,
-      mediaType: SESSION_CAPSULE_ARTIFACT_MEDIA_TYPE,
-      expectedSha256: digest,
-    });
+    const existingArtifact = created ? null : await artifactStore.get(scope);
+    const artifact = existingArtifact
+      ? {
+          created: false,
+          sha256: existingArtifact.sha256,
+          bytes: existingArtifact.bytes,
+        }
+      : await artifactStore.put({
+          scope,
+          payload: input.artifact,
+          mediaType: SESSION_CAPSULE_ARTIFACT_MEDIA_TYPE,
+          expectedSha256: artifactDigest,
+        });
     const storedStatus = resolveStoredImportStatus(record.status);
     const canAdvanceToStored =
       storedStatus === "stored" && record.status !== "stored";
+    let advancedToStored = false;
     if (canAdvanceToStored) {
-      await database
+      const [advanced] = await database
         .update(schema.agentSessionImports)
         .set({ status: "stored", lastError: null, updatedAt: new Date() })
         .where(
@@ -534,9 +550,11 @@ export async function storeSessionImport(
             eq(schema.agentSessionImports.id, record.id),
             inArray(schema.agentSessionImports.status, ["storing", "failed"]),
           ),
-        );
+        )
+        .returning({ id: schema.agentSessionImports.id });
+      advancedToStored = Boolean(advanced);
     }
-    if (artifact.created) {
+    if (artifact.created || advancedToStored) {
       await (dependencies.appendEvent ?? appendWorkspaceEvent)({
         workspaceId: input.workspaceId,
         actorId: input.importedBy,

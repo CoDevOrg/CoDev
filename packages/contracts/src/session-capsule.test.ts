@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   importedAgentSessionViewSchema,
   importedSessionContinuationSchema,
+  serializeSessionCapsuleV0Identity,
   sessionCapsuleV0Schema,
   type SessionCapsuleV0,
   type SessionProvider,
@@ -217,5 +218,38 @@ describe("session capsule contracts", () => {
         nativeResume: { provider: "claude", availability: "available" },
       }),
     ).toThrow();
+  });
+
+  it("produces stable identity bytes for set-like manifest ordering", () => {
+    const first = capsule();
+    const reordered = capsule();
+    reordered.files.reverse();
+    reordered.attachmentPaths.reverse();
+    reordered.repositoryState.approvedUntrackedPaths.reverse();
+
+    expect(serializeSessionCapsuleV0Identity(reordered)).toEqual(
+      serializeSessionCapsuleV0Identity(first),
+    );
+  });
+
+  it("changes identity when semantic capsule content changes", () => {
+    const first = capsule();
+    const changed = capsule();
+    const entry = changed.transcript[1];
+    if (!entry) throw new Error("Fixture is missing its second entry.");
+    changed.transcript[1] = { ...entry, text: "A different handoff result." };
+
+    expect(serializeSessionCapsuleV0Identity(changed)).not.toEqual(
+      serializeSessionCapsuleV0Identity(first),
+    );
+  });
+
+  it("does not mutate the capsule while canonicalizing it", () => {
+    const value = capsule();
+    const pathsBefore = value.files.map((file) => file.path);
+
+    serializeSessionCapsuleV0Identity(value);
+
+    expect(value.files.map((file) => file.path)).toEqual(pathsBefore);
   });
 });
