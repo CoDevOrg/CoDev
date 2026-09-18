@@ -27,6 +27,11 @@ export class SessionCapsuleTransportError extends Error {
   }
 }
 
+export type DecodedSessionCapsule = {
+  capsule: SessionCapsuleV0;
+  files: ReadonlyMap<string, Uint8Array>;
+};
+
 function sha256(payload: Uint8Array) {
   return createHash("sha256").update(payload).digest("hex");
 }
@@ -136,10 +141,9 @@ export function encodeSessionCapsuleTransport(input: {
   return transport;
 }
 
-export function decodeSessionCapsuleTransport(transport: Uint8Array): {
-  capsule: SessionCapsuleV0;
-  files: ReadonlyMap<string, Uint8Array>;
-} {
+export function decodeSessionCapsuleTransport(
+  transport: Uint8Array,
+): DecodedSessionCapsule {
   assertTransportBounds(transport);
   if (
     transport.byteLength < HEADER_BYTES ||

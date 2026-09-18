@@ -1,8 +1,8 @@
 # Provider-neutral agent session portability
 
-Status: Current for the Capsule v0 contract and durable import-storage
-foundation. Repository restoration, provider rehydration, and launch are future
-work.
+Status: Current for Capsule v0, durable storage, lifecycle, verified transport,
+and the provider-neutral repository restoration engine. Concrete sandbox
+materialization, provider rehydration, and launch are future work.
 
 ## Product model
 
@@ -132,8 +132,27 @@ provider session rather than writing the imported native transcript. Forked
 imports retain lineage but must receive their own native provider session before
 they can run concurrently as native writers.
 
+## Repository restoration boundary
+
+Repository restoration consumes only a verified decoded capsule. It first
+normalizes and compares the destination repository host and path, then confirms
+the capsule base commit exists before asking the runtime for an isolated
+worktree. A mismatch or missing commit performs no mutation and can be reported
+as `unavailable` or explicitly accepted as `transcript_only`.
+
+The provider-neutral restore engine passes only the declared Git patch and
+approved `untracked_file` entries to the runtime. Attachments and opaque provider
+payloads never cross that boundary. Patch or destination-file collisions return
+`conflicted` and discard the partial worktree; an unchanged base returns
+`matched`, while successfully materialized state returns `restored`.
+
+The runtime operations are expressed through `SessionRepositoryRuntime` so the
+same validation and outcome rules apply independently of how the Azure-hosted
+sandbox API materializes binary files. The concrete sandbox mutation adapter and
+public trigger remain separate delivery work.
+
 ## Deliberately deferred
 
-The public upload API, repository restoration, runtime rehydration after IDE-home
-recreation, provider launching, and user-facing continuation selection are not
-implemented by this milestone.
+The public upload API, concrete sandbox restoration adapter, runtime rehydration
+after IDE-home recreation, provider launching, and user-facing continuation
+selection are not implemented by this milestone.
