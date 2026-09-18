@@ -1,0 +1,1 @@
+import{Lt as e}from"./web-index-D1A27ik1.js";var t=Object.freeze([]);function n(t,n){if(n)return e(t.worktreesByRepo,n)?.diffComments}function r(e,r){return n(e,r)??t}export{r as n,n as t};

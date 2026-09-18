@@ -208,12 +208,19 @@ function RightSidebarInner(): React.JSX.Element {
         shortcut: portsShortcut === 'Unassigned' ? '' : portsShortcut,
         sshOnly: true
       },
-      {
-        id: 'activity',
-        icon: History,
-        title: translate('auto.components.right.sidebar.index.codevActivity', 'Activity'),
-        shortcut: ''
-      },
+      // The durable workspace history lives at /workspaces/:id/activity in
+      // the host app. Keep the stock desktop tab, but do not expose a second
+      // activity destination inside the embedded CoDev sidebar.
+      ...(typeof window !== 'undefined' && window.__CODEV_EMBEDDED__
+        ? []
+        : [
+            {
+              id: 'activity' as const,
+              icon: History,
+              title: translate('auto.components.right.sidebar.index.codevActivity', 'Activity'),
+              shortcut: ''
+            }
+          ]),
       // Why: plugin panels append after the built-in tabs so core navigation
       // keeps stable positions regardless of which plugins are installed.
       ...getPluginPanelActivityItems(visiblePluginPanels, pluginPanelErrors)
