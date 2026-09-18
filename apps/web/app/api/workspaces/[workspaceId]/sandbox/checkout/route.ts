@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import { apiError, getApiUser } from "@/lib/api";
-import { requireWorkspacePermission } from "@/lib/access";
+import { apiError } from "@/lib/api";
+import { withWorkspace } from "@/lib/api-route";
 import { executeInSandbox } from "@/lib/orchestrator";
 
 const bodySchema = z.object({
@@ -13,23 +13,7 @@ const bodySchema = z.object({
     .regex(/^[a-zA-Z0-9._\-/]+$/, "Branch name contains invalid characters."),
 });
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ workspaceId: string }> },
-) {
-  const user = await getApiUser();
-  if (!user) return apiError(new Error("Authentication required."), 401);
-
-  const { workspaceId } = await params;
-  try {
-    await requireWorkspacePermission(workspaceId, user.id, "edit");
-  } catch (error) {
-    return apiError(
-      error,
-      error instanceof Error && "status" in error ? Number(error.status) : 403,
-    );
-  }
-
+export const POST = withWorkspace("edit", async ({ request, workspaceId }) => {
   let body: z.infer<typeof bodySchema>;
   try {
     body = bodySchema.parse(await request.json());
@@ -61,4 +45,4 @@ export async function POST(
   } catch (error) {
     return apiError(error);
   }
-}
+});

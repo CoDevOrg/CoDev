@@ -21,6 +21,14 @@ export class OrchestratorError extends Error {
     super(message);
     this.name = "OrchestratorError";
   }
+
+  /** Used by `withUser`/`withWorkspace` in place of the plain error body. */
+  toResponse() {
+    return Response.json(
+      { error: this.message, conflictPaths: this.conflictPaths },
+      { status: this.status },
+    );
+  }
 }
 
 export interface ProvisionSandboxInput {

@@ -1,9 +1,8 @@
 import { z } from "zod";
 
 import { requireWorkspacePermission } from "@/lib/access";
-import { apiError, getApiUser } from "@/lib/api";
+import { withUser, withWorkspace } from "@/lib/api-route";
 import {
-  WorkspaceChatCoordinationError,
   acquireWorkspaceChatLease,
   heartbeatWorkspaceChat,
   leaveWorkspaceChat,
@@ -66,42 +65,21 @@ const actionSchema = z.discriminatedUnion("action", [
   }),
 ]);
 
-type Context = {
-  params: Promise<{ workspaceId: string }>;
-};
-
-function coordinationError(error: unknown) {
-  if (error instanceof WorkspaceChatCoordinationError) {
-    return Response.json(
-      { error: error.message, code: error.code },
-      { status: error.status },
-    );
-  }
-  return apiError(error);
-}
-
-export async function GET(request: Request, { params }: Context) {
-  const user = await getApiUser();
-  if (!user) return apiError(new Error("Authentication required."), 401);
-  const { workspaceId } = await params;
-  try {
-    await requireWorkspacePermission(workspaceId, user.id, "view");
+// WorkspaceChatCoordinationError answers with its own status and `code`.
+export const GET = withWorkspace(
+  "view",
+  async ({ request, user, workspaceId }) => {
     const url = new URL(request.url);
     const chatId = chatIdSchema.parse(url.searchParams.get("chatId"));
     return Response.json(
       await loadWorkspaceChatSnapshot(workspaceId, chatId, user.id),
     );
-  } catch (error) {
-    return coordinationError(error);
-  }
-}
+  },
+);
 
-export async function POST(request: Request, { params }: Context) {
-  const user = await getApiUser();
-  if (!user) return apiError(new Error("Authentication required."), 401);
-  const { workspaceId } = await params;
-
-  try {
+// The permission depends on the action, so it is checked after parsing.
+export const POST = withUser<{ workspaceId: string }>(
+  async ({ request, user, params: { workspaceId } }) => {
     const input = actionSchema.parse(await request.json());
     await requireWorkspacePermission(
       workspaceId,
@@ -189,7 +167,5 @@ export async function POST(request: Request, { params }: Context) {
       ...(await loadWorkspaceChatSnapshot(workspaceId, input.chatId, user.id)),
       receiptId: receipt.id,
     });
-  } catch (error) {
-    return coordinationError(error);
-  }
-}
+  },
+);

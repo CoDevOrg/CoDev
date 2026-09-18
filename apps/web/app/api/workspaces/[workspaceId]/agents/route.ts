@@ -7,14 +7,14 @@ import { schema } from "@codev/db";
 import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
 import { kickAgentSession } from "@/lib/agent-service";
 import { listAgentSessions } from "@/lib/agent-runtime";
-import { apiError, getApiUserAnyAuth } from "@/lib/api";
+import { apiError } from "@/lib/api";
+import { withWorkspace } from "@/lib/api-route";
 import {
   getAgentProvider,
   getSelectableAgentModels,
   parseAgentProvider,
   resolveSelectableAgentModel,
 } from "@/lib/ai-model";
-import { requireWorkspacePermission } from "@/lib/access";
 import { resolveAgentCredential } from "@/lib/credentials";
 import { getDatabase } from "@/lib/database";
 import { getGitHubUserToken } from "@/lib/github";
@@ -115,306 +115,279 @@ async function getExactGitHubIssue(
   return issue;
 }
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ workspaceId: string }> },
-) {
-  const user = await getApiUserAnyAuth(request);
-  if (!user) return apiError(new Error("Authentication required."), 401);
-  const { workspaceId } = await params;
-  try {
-    await requireWorkspacePermission(workspaceId, user.id, "view");
-  } catch (error) {
-    return apiError(
-      error,
-      error instanceof Error && "status" in error ? Number(error.status) : 403,
-    );
-  }
-  const [sessions, stateEvents] = await Promise.all([
-    listAgentSessions(workspaceId),
-    readWorkspaceStateEvents(workspaceId),
-  ]);
-  const capacity = summarizeAgentCapacity(sessions);
-  const includeModels =
-    new URL(request.url).searchParams.get("includeModels") === "true";
-  const requestedProvider = new URL(request.url).searchParams.get("provider");
-  const models = includeModels
-    ? await (async () => {
-        const provider = parseAgentProvider(
-          requestedProvider ?? undefined,
-          getAgentProvider(),
-        );
-        const credential = await resolveAgentCredential(
-          user.id,
-          workspaceId,
-          provider,
-        ).catch(() => undefined);
-        return getSelectableAgentModels(provider, credential);
-      })()
-    : undefined;
-  return Response.json({
-    sessions,
-    stateEvents,
-    capacity,
-    ...(models ? { models } : {}),
-  });
-}
-
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ workspaceId: string }> },
-) {
-  const user = await getApiUserAnyAuth(request);
-  if (!user) return apiError(new Error("Authentication required."), 401);
-  const { workspaceId } = await params;
-  let workspace;
-  try {
-    await requireWorkspacePermission(workspaceId, user.id, "coSteer");
-    workspace = await getWorkspaceForMember(workspaceId, user.id);
-  } catch (error) {
-    return apiError(
-      error,
-      error instanceof Error && "status" in error ? Number(error.status) : 403,
-    );
-  }
-  if (!workspace) return apiError(new Error("Workspace not found."), 404);
-
-  try {
-    const input = createSchema.parse(await request.json());
-    if (
-      !input.draft &&
-      (!workspace.repository || workspace.githubRepositoryId === null)
-    ) {
-      return apiError(
-        new Error("Connect a GitHub repository before creating an agent."),
-        409,
-      );
-    }
-    const provider = parseAgentProvider(input.provider, getAgentProvider());
-    const credential = input.draft
-      ? undefined
-      : await resolveAgentCredential(user.id, workspaceId, provider);
-    const model = await resolveSelectableAgentModel(
-      input.model,
-      provider,
-      credential,
-    );
-    if (!input.draft) {
-      await enforceAgentPromptRateLimit(user.id, workspaceId, provider);
-    }
-    const provisionSandboxWorktree =
-      Boolean(workspace.repository && workspace.githubRepositoryId) ||
-      !input.draft;
-    if (provisionSandboxWorktree) {
-      await ensureWorkspaceRuntimeReady(workspaceId, user.id);
-    }
-    const issue =
-      input.issueNumber && workspace.repository
-        ? await getExactGitHubIssue(
+export const GET = withWorkspace(
+  "view",
+  async ({ request, user, workspaceId }) => {
+    const [sessions, stateEvents] = await Promise.all([
+      listAgentSessions(workspaceId),
+      readWorkspaceStateEvents(workspaceId),
+    ]);
+    const capacity = summarizeAgentCapacity(sessions);
+    const includeModels =
+      new URL(request.url).searchParams.get("includeModels") === "true";
+    const requestedProvider = new URL(request.url).searchParams.get("provider");
+    const models = includeModels
+      ? await (async () => {
+          const provider = parseAgentProvider(
+            requestedProvider ?? undefined,
+            getAgentProvider(),
+          );
+          const credential = await resolveAgentCredential(
             user.id,
-            workspace.repository,
-            input.issueNumber,
-          )
-        : null;
-    let reservation;
+            workspaceId,
+            provider,
+          ).catch(() => undefined);
+          return getSelectableAgentModels(provider, credential);
+        })()
+      : undefined;
+    return Response.json({
+      sessions,
+      stateEvents,
+      capacity,
+      ...(models ? { models } : {}),
+    });
+  },
+  // This handler had no catch; unexpected failures stay 500s.
+  { anyAuth: true, errorStatus: 500 },
+);
+
+export const POST = withWorkspace(
+  "coSteer",
+  async ({ request, user, workspaceId }) => {
+    const workspace = await getWorkspaceForMember(workspaceId, user.id);
+    if (!workspace) return apiError(new Error("Workspace not found."), 404);
+
     try {
-      reservation = await getDatabase().transaction(async (transaction) => {
-        await transaction.execute(
-          sql`select pg_advisory_xact_lock(hashtext(${`agent-slot:${workspaceId}`}))`,
+      const input = createSchema.parse(await request.json());
+      if (
+        !input.draft &&
+        (!workspace.repository || workspace.githubRepositoryId === null)
+      ) {
+        return apiError(
+          new Error("Connect a GitHub repository before creating an agent."),
+          409,
         );
-        const [workspaceState] = await transaction
-          .select({ status: schema.workspaces.status })
-          .from(schema.workspaces)
-          .where(eq(schema.workspaces.id, workspaceId))
-          .limit(1)
-          .for("update");
-        if (
-          workspaceState?.status !== "ready" &&
-          !(input.draft && !workspace.githubRepositoryId)
-        ) {
-          throw new WorkspaceLifecycleError(
-            "The workspace is not ready for a new agent. Try again after it resumes.",
+      }
+      const provider = parseAgentProvider(input.provider, getAgentProvider());
+      const credential = input.draft
+        ? undefined
+        : await resolveAgentCredential(user.id, workspaceId, provider);
+      const model = await resolveSelectableAgentModel(
+        input.model,
+        provider,
+        credential,
+      );
+      if (!input.draft) {
+        await enforceAgentPromptRateLimit(user.id, workspaceId, provider);
+      }
+      const provisionSandboxWorktree =
+        Boolean(workspace.repository && workspace.githubRepositoryId) ||
+        !input.draft;
+      if (provisionSandboxWorktree) {
+        await ensureWorkspaceRuntimeReady(workspaceId, user.id);
+      }
+      const issue =
+        input.issueNumber && workspace.repository
+          ? await getExactGitHubIssue(
+              user.id,
+              workspace.repository,
+              input.issueNumber,
+            )
+          : null;
+      let reservation;
+      try {
+        reservation = await getDatabase().transaction(async (transaction) => {
+          await transaction.execute(
+            sql`select pg_advisory_xact_lock(hashtext(${`agent-slot:${workspaceId}`}))`,
           );
-        }
-        // A slot is a worktree, not a conversation. Several chat threads can
-        // share one worktree (a member starting a fresh context on the same
-        // branch), and those cost no extra checkout or running process, so
-        // they must not consume capacity.
-        const [worktreeCount] = await transaction
-          .select({ value: countDistinct(schema.worktrees.id) })
-          .from(schema.agentSessions)
-          .innerJoin(
-            schema.worktrees,
-            eq(schema.agentSessions.worktreeId, schema.worktrees.id),
-          )
-          .where(
-            and(
-              eq(schema.agentSessions.workspaceId, workspaceId),
-              inArray(schema.worktrees.status, ["active", "frozen"]),
-            ),
-          );
-        assertAgentCapacity(Number(worktreeCount?.value ?? 0));
-        const [repository] = await transaction
-          .select({ id: schema.workspaces.githubRepositoryId })
-          .from(schema.workspaces)
-          .where(eq(schema.workspaces.id, workspaceId))
-          .limit(1);
-        const githubRepositoryId = repository?.id ?? null;
-        if (issue) {
-          if (githubRepositoryId === null) {
-            throw new Error("Workspace repository not found.");
+          const [workspaceState] = await transaction
+            .select({ status: schema.workspaces.status })
+            .from(schema.workspaces)
+            .where(eq(schema.workspaces.id, workspaceId))
+            .limit(1)
+            .for("update");
+          if (
+            workspaceState?.status !== "ready" &&
+            !(input.draft && !workspace.githubRepositoryId)
+          ) {
+            throw new WorkspaceLifecycleError(
+              "The workspace is not ready for a new agent. Try again after it resumes.",
+            );
           }
-          const [existingAssignment] = await transaction
-            .select({ id: schema.githubIssueAssignments.id })
-            .from(schema.githubIssueAssignments)
+          // A slot is a worktree, not a conversation. Several chat threads can
+          // share one worktree (a member starting a fresh context on the same
+          // branch), and those cost no extra checkout or running process, so
+          // they must not consume capacity.
+          const [worktreeCount] = await transaction
+            .select({ value: countDistinct(schema.worktrees.id) })
+            .from(schema.agentSessions)
+            .innerJoin(
+              schema.worktrees,
+              eq(schema.agentSessions.worktreeId, schema.worktrees.id),
+            )
             .where(
               and(
-                eq(
-                  schema.githubIssueAssignments.githubRepositoryId,
-                  githubRepositoryId,
+                eq(schema.agentSessions.workspaceId, workspaceId),
+                inArray(schema.worktrees.status, ["active", "frozen"]),
+              ),
+            );
+          assertAgentCapacity(Number(worktreeCount?.value ?? 0));
+          const [repository] = await transaction
+            .select({ id: schema.workspaces.githubRepositoryId })
+            .from(schema.workspaces)
+            .where(eq(schema.workspaces.id, workspaceId))
+            .limit(1);
+          const githubRepositoryId = repository?.id ?? null;
+          if (issue) {
+            if (githubRepositoryId === null) {
+              throw new Error("Workspace repository not found.");
+            }
+            const [existingAssignment] = await transaction
+              .select({ id: schema.githubIssueAssignments.id })
+              .from(schema.githubIssueAssignments)
+              .where(
+                and(
+                  eq(
+                    schema.githubIssueAssignments.githubRepositoryId,
+                    githubRepositoryId,
+                  ),
+                  eq(schema.githubIssueAssignments.issueNumber, issue.number),
                 ),
-                eq(schema.githubIssueAssignments.issueNumber, issue.number),
+              )
+              .limit(1);
+            if (existingAssignment) {
+              throw new DuplicateIssueError(
+                "This exact GitHub issue already has an agent session.",
+              );
+            }
+          }
+          const [integration] = await transaction
+            .select({ headSha: schema.worktrees.headSha })
+            .from(schema.worktrees)
+            .where(
+              and(
+                eq(schema.worktrees.workspaceId, workspaceId),
+                eq(schema.worktrees.kind, "integration"),
               ),
             )
             .limit(1);
-          if (existingAssignment) {
-            throw new DuplicateIssueError(
-              "This exact GitHub issue already has an agent session.",
-            );
+          if (!integration) throw new Error("Integration worktree not found.");
+          const [worktree] = await transaction
+            .insert(schema.worktrees)
+            .values({
+              workspaceId,
+              kind: "agent",
+              name: `agent-${input.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${randomUUID().slice(0, 8)}`,
+              headSha: integration.headSha,
+            })
+            .returning({ id: schema.worktrees.id });
+          if (!worktree)
+            throw new Error("Could not reserve an agent worktree.");
+          const [session] = await transaction
+            .insert(schema.agentSessions)
+            .values({
+              workspaceId,
+              worktreeId: worktree.id,
+              createdBy: user.id,
+              issueNumber: issue?.number,
+              name: input.name,
+              model,
+              provider,
+            })
+            .returning({ id: schema.agentSessions.id });
+          if (!session) throw new Error("Could not create the agent session.");
+          if (issue) {
+            if (githubRepositoryId === null) {
+              throw new Error("Workspace repository not found.");
+            }
+            await transaction.insert(schema.githubIssueAssignments).values({
+              workspaceId,
+              sessionId: session.id,
+              githubRepositoryId,
+              issueNumber: issue.number,
+              githubIssueId: BigInt(issue.id),
+              title: issue.title,
+              url: issue.html_url,
+            });
           }
-        }
-        const [integration] = await transaction
-          .select({ headSha: schema.worktrees.headSha })
-          .from(schema.worktrees)
-          .where(
-            and(
-              eq(schema.worktrees.workspaceId, workspaceId),
-              eq(schema.worktrees.kind, "integration"),
-            ),
-          )
-          .limit(1);
-        if (!integration) throw new Error("Integration worktree not found.");
-        const [worktree] = await transaction
-          .insert(schema.worktrees)
-          .values({
-            workspaceId,
-            kind: "agent",
-            name: `agent-${input.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${randomUUID().slice(0, 8)}`,
+          if (!input.draft) {
+            await transaction.insert(schema.agentTurns).values({
+              sessionId: session.id,
+              authorId: user.id,
+              prompt: input.prompt!,
+              attachments: toStoredAgentAttachments(input.attachments),
+            });
+          }
+          const shortId = worktree.id.slice(0, 8);
+          const slug = input.name
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "")
+            .slice(0, 20);
+          const branchName = `agent/${slug || "session"}-${shortId}`;
+          return {
             headSha: integration.headSha,
-          })
-          .returning({ id: schema.worktrees.id });
-        if (!worktree) throw new Error("Could not reserve an agent worktree.");
-        const [session] = await transaction
-          .insert(schema.agentSessions)
-          .values({
-            workspaceId,
-            worktreeId: worktree.id,
-            createdBy: user.id,
-            issueNumber: issue?.number,
-            name: input.name,
-            model,
-            provider,
-          })
-          .returning({ id: schema.agentSessions.id });
-        if (!session) throw new Error("Could not create the agent session.");
-        if (issue) {
-          if (githubRepositoryId === null) {
-            throw new Error("Workspace repository not found.");
-          }
-          await transaction.insert(schema.githubIssueAssignments).values({
-            workspaceId,
             sessionId: session.id,
-            githubRepositoryId,
-            issueNumber: issue.number,
-            githubIssueId: BigInt(issue.id),
-            title: issue.title,
-            url: issue.html_url,
-          });
+            worktreeId: worktree.id,
+            branchName,
+          };
+        });
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          throw new DuplicateIssueError(
+            "This exact GitHub issue already has an agent session.",
+          );
+        }
+        throw error;
+      }
+
+      try {
+        if (provisionSandboxWorktree) {
+          await createSandboxWorktree(
+            workspaceId,
+            reservation.worktreeId,
+            reservation.headSha,
+            reservation.branchName,
+          );
         }
         if (!input.draft) {
-          await transaction.insert(schema.agentTurns).values({
-            sessionId: session.id,
-            authorId: user.id,
-            prompt: input.prompt!,
-            attachments: toStoredAgentAttachments(input.attachments),
-          });
+          await kickAgentSession(reservation.sessionId);
         }
-        const shortId = worktree.id.slice(0, 8);
-        const slug = input.name
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-+|-+$/g, "")
-          .slice(0, 20);
-        const branchName = `agent/${slug || "session"}-${shortId}`;
-        return {
-          headSha: integration.headSha,
-          sessionId: session.id,
-          worktreeId: worktree.id,
-          branchName,
-        };
-      });
+        return Response.json(
+          {
+            sessionId: reservation.sessionId,
+            worktreeId: reservation.worktreeId,
+          },
+          { status: 201 },
+        );
+      } catch (error) {
+        await deleteSandboxWorktree(workspaceId, reservation.worktreeId).catch(
+          () => undefined,
+        );
+        await getDatabase()
+          .delete(schema.worktrees)
+          .where(eq(schema.worktrees.id, reservation.worktreeId));
+        if (isUniqueViolation(error)) {
+          throw new DuplicateIssueError(
+            "This exact GitHub issue already has an agent session.",
+          );
+        }
+        throw error;
+      }
     } catch (error) {
-      if (isUniqueViolation(error)) {
-        throw new DuplicateIssueError(
-          "This exact GitHub issue already has an agent session.",
+      if (error instanceof AgentPromptRateLimitError) return error.toResponse();
+      if (error instanceof AgentCapacityError) {
+        return Response.json(
+          {
+            error: error.message,
+            code: "agent_capacity_exceeded",
+            maxActiveSessions: MAX_PARALLEL_AGENT_SESSIONS,
+          },
+          { status: 409 },
         );
       }
-      throw error;
+      return apiError(error, error instanceof DuplicateIssueError ? 409 : 400);
     }
-
-    try {
-      if (provisionSandboxWorktree) {
-        await createSandboxWorktree(
-          workspaceId,
-          reservation.worktreeId,
-          reservation.headSha,
-          reservation.branchName,
-        );
-      }
-      if (!input.draft) {
-        await kickAgentSession(reservation.sessionId);
-      }
-      return Response.json(
-        {
-          sessionId: reservation.sessionId,
-          worktreeId: reservation.worktreeId,
-        },
-        { status: 201 },
-      );
-    } catch (error) {
-      await deleteSandboxWorktree(workspaceId, reservation.worktreeId).catch(
-        () => undefined,
-      );
-      await getDatabase()
-        .delete(schema.worktrees)
-        .where(eq(schema.worktrees.id, reservation.worktreeId));
-      if (isUniqueViolation(error)) {
-        throw new DuplicateIssueError(
-          "This exact GitHub issue already has an agent session.",
-        );
-      }
-      throw error;
-    }
-  } catch (error) {
-    if (error instanceof AgentPromptRateLimitError) {
-      return Response.json(
-        { error: error.message, code: "agent_prompt_rate_limit" },
-        {
-          status: 429,
-          headers: { "Retry-After": String(error.retryAfterSeconds) },
-        },
-      );
-    }
-    if (error instanceof AgentCapacityError) {
-      return Response.json(
-        {
-          error: error.message,
-          code: "agent_capacity_exceeded",
-          maxActiveSessions: MAX_PARALLEL_AGENT_SESSIONS,
-        },
-        { status: 409 },
-      );
-    }
-    return apiError(error, error instanceof DuplicateIssueError ? 409 : 400);
-  }
-}
+  },
+  { anyAuth: true },
+);

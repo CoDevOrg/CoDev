@@ -2,8 +2,7 @@ import { z } from "zod";
 
 import { createAgentEvent } from "@codev/shared-types";
 
-import { apiError, getApiUser } from "@/lib/api";
-import { requireWorkspacePermission } from "@/lib/access";
+import { readJson, withWorkspace } from "@/lib/api-route";
 import { appendWorkspaceEvent } from "@/lib/audit";
 import { appendWorkspaceStateEvent } from "@/lib/workspace-state";
 
@@ -28,29 +27,20 @@ const commentSchema = z.object({
   turnId: z.uuid().nullable().optional(),
 });
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ workspaceId: string }> },
-) {
-  const user = await getApiUser();
-  if (!user) return apiError(new Error("Authentication required."), 401);
-
-  const parsed = commentSchema.safeParse(
-    await request.json().catch(() => null),
-  );
-  if (!parsed.success) {
-    return apiError(new Error("Invalid review comment."), 400);
-  }
-
-  const { workspaceId } = await params;
-  try {
-    await requireWorkspacePermission(workspaceId, user.id, "review");
+export const POST = withWorkspace(
+  "review",
+  async ({ request, user, workspaceId }) => {
+    const input = await readJson(
+      request,
+      commentSchema,
+      "Invalid review comment.",
+    );
     const avatar =
       user.image && z.url().safeParse(user.image).success ? user.image : null;
     const event = createAgentEvent({
       workspaceId,
-      sessionId: parsed.data.sessionId ?? null,
-      turnId: parsed.data.turnId ?? null,
+      sessionId: input.sessionId ?? null,
+      turnId: input.turnId ?? null,
       actor: {
         userId: user.id,
         userName: user.name?.trim() || user.email?.trim() || "CoDev reviewer",
@@ -60,10 +50,10 @@ export async function POST(
       modelName: "human-review",
       type: "COMMENT_ADDED",
       payload: {
-        commentText: parsed.data.body,
-        ...(parsed.data.filePath ? { filePath: parsed.data.filePath } : {}),
-        ...(parsed.data.lineNumber
-          ? { metadata: { lineNumber: parsed.data.lineNumber } }
+        commentText: input.body,
+        ...(input.filePath ? { filePath: input.filePath } : {}),
+        ...(input.lineNumber
+          ? { metadata: { lineNumber: input.lineNumber } }
           : {}),
       },
     });
@@ -82,10 +72,6 @@ export async function POST(
     }).catch(() => undefined);
 
     return Response.json({ comment: event }, { status: 201 });
-  } catch (error) {
-    return apiError(
-      error,
-      error instanceof Error && "status" in error ? Number(error.status) : 502,
-    );
-  }
-}
+  },
+  { errorStatus: 502 },
+);

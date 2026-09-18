@@ -1,26 +1,10 @@
-import { apiError, getApiUser } from "@/lib/api";
-import { requireWorkspacePermission } from "@/lib/access";
+import { apiError } from "@/lib/api";
+import { withWorkspace } from "@/lib/api-route";
 import { getWorkspaceSnapshot, readSnapshotFile } from "@/lib/hibernation";
 import { getSandboxGitOutput, readSandboxHeadFile } from "@/lib/orchestrator";
 import { getWorkspaceRuntime } from "@/lib/workspaces";
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ workspaceId: string }> },
-) {
-  const user = await getApiUser();
-  if (!user) return apiError(new Error("Authentication required."), 401);
-
-  const { workspaceId } = await params;
-  try {
-    await requireWorkspacePermission(workspaceId, user.id, "view");
-  } catch (error) {
-    return apiError(
-      error,
-      error instanceof Error && "status" in error ? Number(error.status) : 403,
-    );
-  }
-
+export const GET = withWorkspace("view", async ({ request, workspaceId }) => {
   const operation = new URL(request.url).searchParams.get("operation");
   if (operation !== "status" && operation !== "diff" && operation !== "show") {
     return apiError(new Error("operation must be status, diff, or show."), 400);
@@ -64,4 +48,4 @@ export async function GET(
   } catch (error) {
     return apiError(error);
   }
-}
+});

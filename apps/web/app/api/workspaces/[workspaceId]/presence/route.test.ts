@@ -123,3 +123,17 @@ describe("workspace presence route", () => {
     );
   });
 });
+
+describe("workspace presence route without a session", () => {
+  afterEach(() => vi.resetAllMocks());
+
+  it("answers 401, not 400, and never touches workspace access", async () => {
+    mocks.getApiUser.mockResolvedValue(null);
+    const response = await GET(
+      new Request(`http://localhost/api/workspaces/${workspaceId}/presence`),
+      { params: Promise.resolve({ workspaceId }) },
+    );
+    expect(response.status).toBe(401);
+    expect(mocks.requireWorkspacePermission).not.toHaveBeenCalled();
+  });
+});

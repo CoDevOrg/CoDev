@@ -1,7 +1,6 @@
 import { z } from "zod";
 
-import { apiError, getApiUser } from "@/lib/api";
-import { requireWorkspacePermission } from "@/lib/access";
+import { withUser, withWorkspace } from "@/lib/api-route";
 import { requireOrganizationSettingsWrite } from "@/lib/settings-access";
 import {
   deleteProviderCredential,
@@ -31,34 +30,21 @@ const providerParam = z.enum([
   "cursor",
 ]);
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ workspaceId: string }> },
-) {
-  const user = await getApiUser();
-  if (!user) return apiError(new Error("Authentication required."), 401);
-  const { workspaceId } = await params;
-  try {
-    await requireWorkspacePermission(workspaceId, user.id, "view");
-    const provider = providerParam.parse(
-      new URL(request.url).searchParams.get("provider"),
-    );
-    return Response.json(
-      await getProviderCredentialStatus("WORKSPACE", workspaceId, provider),
-    );
-  } catch (error) {
-    return apiError(error);
-  }
-}
+type Params = { workspaceId: string };
 
-export async function PUT(
-  request: Request,
-  { params }: { params: Promise<{ workspaceId: string }> },
-) {
-  const user = await getApiUser();
-  if (!user) return apiError(new Error("Authentication required."), 401);
-  const { workspaceId } = await params;
-  try {
+export const GET = withWorkspace("view", async ({ request, workspaceId }) => {
+  const provider = providerParam.parse(
+    new URL(request.url).searchParams.get("provider"),
+  );
+  return Response.json(
+    await getProviderCredentialStatus("WORKSPACE", workspaceId, provider),
+  );
+});
+
+// Writing workspace credentials is an organization-settings right, not a
+// workspace permission.
+export const PUT = withUser<Params>(
+  async ({ request, user, params: { workspaceId } }) => {
     await requireOrganizationSettingsWrite(user.id, workspaceId);
     const input = requestSchema.parse(await request.json());
     if (
@@ -80,26 +66,16 @@ export async function PUT(
       lastFour: input.apiKey?.trim().slice(-4),
     });
     return Response.json({ saved: true, provider: input.provider });
-  } catch (error) {
-    return apiError(error);
-  }
-}
+  },
+);
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ workspaceId: string }> },
-) {
-  const user = await getApiUser();
-  if (!user) return apiError(new Error("Authentication required."), 401);
-  const { workspaceId } = await params;
-  try {
+export const DELETE = withUser<Params>(
+  async ({ request, user, params: { workspaceId } }) => {
     await requireOrganizationSettingsWrite(user.id, workspaceId);
     const provider = providerParam.parse(
       new URL(request.url).searchParams.get("provider"),
     );
     await deleteProviderCredential("WORKSPACE", workspaceId, provider);
     return new Response(null, { status: 204 });
-  } catch (error) {
-    return apiError(error);
-  }
-}
+  },
+);

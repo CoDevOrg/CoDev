@@ -1,31 +1,18 @@
 import { postChannelMessageSchema } from "@codev/contracts";
 
-import { requireWorkspacePermission } from "@/lib/access";
-import { apiError, getApiUser } from "@/lib/api";
+import { withWorkspace } from "@/lib/api-route";
 import { dispatchAgentMention } from "@/lib/team-chat-agent";
 import {
   listChannelMessages,
   markChannelRead,
   postChannelMessage,
-  TeamChatError,
 } from "@/lib/team-chat";
 
-type Context = {
-  params: Promise<{ workspaceId: string; channelId: string }>;
-};
+type Params = { workspaceId: string; channelId: string };
 
-function statusFor(error: unknown, fallback = 400) {
-  return error instanceof Error && "status" in error
-    ? Number(error.status)
-    : fallback;
-}
-
-export async function GET(request: Request, { params }: Context) {
-  const user = await getApiUser();
-  if (!user) return apiError(new Error("Authentication required."), 401);
-  const { workspaceId, channelId } = await params;
-  try {
-    await requireWorkspacePermission(workspaceId, user.id, "view");
+export const GET = withWorkspace<Params>(
+  "view",
+  async ({ request, user, workspaceId, params: { channelId } }) => {
     const url = new URL(request.url);
     const before = url.searchParams.get("before");
     const limit = Number(url.searchParams.get("limit") ?? "");
@@ -41,18 +28,12 @@ export async function GET(request: Request, { params }: Context) {
     // not, so only a first page (no cursor) clears the badge.
     if (!before) await markChannelRead(channel.id, user.id);
     return Response.json({ channel, messages });
-  } catch (error) {
-    if (error instanceof TeamChatError) return apiError(error, error.status);
-    return apiError(error, statusFor(error));
-  }
-}
+  },
+);
 
-export async function POST(request: Request, { params }: Context) {
-  const user = await getApiUser();
-  if (!user) return apiError(new Error("Authentication required."), 401);
-  const { workspaceId, channelId } = await params;
-  try {
-    await requireWorkspacePermission(workspaceId, user.id, "view");
+export const POST = withWorkspace<Params>(
+  "view",
+  async ({ request, user, workspaceId, params: { channelId } }) => {
     const input = postChannelMessageSchema.parse(await request.json());
     const { channel, message } = await postChannelMessage({
       workspaceId,
@@ -75,8 +56,5 @@ export async function POST(request: Request, { params }: Context) {
       : null;
 
     return Response.json({ message, agentDispatch }, { status: 201 });
-  } catch (error) {
-    if (error instanceof TeamChatError) return apiError(error, error.status);
-    return apiError(error, statusFor(error));
-  }
-}
+  },
+);

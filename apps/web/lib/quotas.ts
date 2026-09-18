@@ -19,6 +19,11 @@ export class QuotaError extends Error {
     super(message);
     this.name = "QuotaError";
   }
+
+  /** Used by `withUser`/`withWorkspace` in place of the plain error body. */
+  toResponse() {
+    return quotaResponse(this);
+  }
 }
 
 export async function assertWorkspaceQuota(userId: string) {

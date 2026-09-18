@@ -1,36 +1,24 @@
-import { apiError, getApiUserAnyAuth } from "@/lib/api";
+import { withUser } from "@/lib/api-route";
 import { createWorkspace, listWorkspacesForUser } from "@/lib/workspaces";
-import { QuotaError, quotaResponse } from "@/lib/quotas";
 import { workspaceCreateRequestSchema } from "@/lib/workspace-creation";
 
-export async function GET(request: Request) {
-  const user = await getApiUserAnyAuth(request);
-  if (!user) return apiError(new Error("Authentication required."), 401);
-  const workspaces = await listWorkspacesForUser(user.id);
-  return Response.json({ workspaces });
-}
+export const GET = withUser(
+  async ({ user }) =>
+    Response.json({ workspaces: await listWorkspacesForUser(user.id) }),
+  // This handler had no catch; unexpected failures stay 500s.
+  { anyAuth: true, errorStatus: 500 },
+);
 
-export async function POST(request: Request) {
-  const user = await getApiUserAnyAuth(request);
-  if (!user) return apiError(new Error("Authentication required."), 401);
-
-  try {
+// QuotaError answers with its own 429.
+export const POST = withUser(
+  async ({ request, user }) => {
     const input = workspaceCreateRequestSchema.parse(await request.json());
     const workspace = await createWorkspace(
       user.id,
       input.installationId,
       input.repositoryId,
     );
-    return Response.json(
-      {
-        workspace: {
-          id: workspace.id,
-        },
-      },
-      { status: 201 },
-    );
-  } catch (error) {
-    if (error instanceof QuotaError) return quotaResponse(error);
-    return apiError(error);
-  }
-}
+    return Response.json({ workspace: { id: workspace.id } }, { status: 201 });
+  },
+  { anyAuth: true },
+);

@@ -1,7 +1,6 @@
 import { z } from "zod";
 
-import { apiError, getApiUser } from "@/lib/api";
-import { requireWorkspacePermission } from "@/lib/access";
+import { withWorkspace } from "@/lib/api-route";
 import { submitAgentBugReport } from "@/lib/agent-bug-report";
 import { consumeRateLimit } from "@/lib/rate-limit";
 
@@ -18,15 +17,9 @@ const inputSchema = z.object({
   terminalErrors: z.array(z.string().max(4_000)).max(20),
 });
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ workspaceId: string }> },
-) {
-  const user = await getApiUser();
-  if (!user) return apiError(new Error("Authentication required."), 401);
-  const { workspaceId } = await params;
-  try {
-    await requireWorkspacePermission(workspaceId, user.id, "coSteer");
+export const POST = withWorkspace(
+  "coSteer",
+  async ({ request, user, workspaceId }) => {
     const limit = await consumeRateLimit(
       user.id,
       "agent-bug-report",
@@ -51,7 +44,5 @@ export async function POST(
       ...input,
     });
     return Response.json({ reportId }, { status: 202 });
-  } catch (error) {
-    return apiError(error);
-  }
-}
+  },
+);

@@ -25,11 +25,6 @@ const mocks = vi.hoisted(() => ({
   appendWorkspaceStateEvent: vi.fn(),
   getWorkspaceForMember: vi.fn(),
   resolveAgentCredential: vi.fn(),
-  AgentPromptRateLimitError: class AgentPromptRateLimitError extends Error {
-    constructor(readonly retryAfterSeconds: number) {
-      super("Agent prompt limit reached.");
-    }
-  },
 }));
 
 vi.mock("ai", () => ({
@@ -53,8 +48,11 @@ vi.mock("@/lib/access", () => ({
 vi.mock("@/lib/credentials", () => ({
   resolveAgentCredential: mocks.resolveAgentCredential,
 }));
-vi.mock("@/lib/agent-rate-limit", () => ({
-  AgentPromptRateLimitError: mocks.AgentPromptRateLimitError,
+vi.mock("@/lib/agent-rate-limit", async (importOriginal) => ({
+  // The real class, so the test covers the 429 body it builds for itself.
+  AgentPromptRateLimitError: (
+    await importOriginal<typeof import("@/lib/agent-rate-limit")>()
+  ).AgentPromptRateLimitError,
   enforceAgentPromptRateLimit: mocks.enforceAgentPromptRateLimit,
 }));
 vi.mock("@/lib/runtime-resume", () => ({
@@ -72,6 +70,7 @@ vi.mock("@/lib/workspaces", () => ({
 }));
 
 import { POST } from "@/app/api/workspaces/[workspaceId]/agents/stream/route";
+import { AgentPromptRateLimitError } from "@/lib/agent-rate-limit";
 
 const workspaceId = "e010bd2c-a3c1-438f-acef-166287a3b1cb";
 
@@ -230,7 +229,7 @@ describe("agent stream route", () => {
 
   it("returns 429 and Retry-After when the prompt limit is exceeded", async () => {
     mocks.enforceAgentPromptRateLimit.mockRejectedValue(
-      new mocks.AgentPromptRateLimitError(73),
+      new AgentPromptRateLimitError(73),
     );
 
     const response = await POST(request({ prompt: "Inspect README.md." }), {

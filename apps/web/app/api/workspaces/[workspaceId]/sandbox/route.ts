@@ -1,5 +1,5 @@
-import { apiError, getApiUser } from "@/lib/api";
-import { requireWorkspacePermission } from "@/lib/access";
+import { apiError } from "@/lib/api";
+import { ApiError, withWorkspace } from "@/lib/api-route";
 import {
   clearWorkspaceSnapshot,
   E2B_LIFECYCLE_OPTIONS,
@@ -30,19 +30,11 @@ import {
 
 export const maxDuration = 60;
 
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ workspaceId: string }> },
-) {
-  const user = await getApiUser();
-  if (!user) return apiError(new Error("Authentication required."), 401);
-
-  const { workspaceId } = await params;
-  const workspace = await getWorkspaceForMember(workspaceId, user.id);
-  if (!workspace) return apiError(new Error("Workspace not found."), 404);
-
-  try {
-    await requireWorkspacePermission(workspaceId, user.id, "view");
+export const GET = withWorkspace(
+  "view",
+  async ({ user, workspaceId }) => {
+    const workspace = await getWorkspaceForMember(workspaceId, user.id);
+    if (!workspace) throw new ApiError("Workspace not found.", 404);
     const runtime = await getWorkspaceRuntime(workspaceId);
     if (runtime?.status !== "ready") {
       return Response.json({ runtime });
@@ -66,99 +58,81 @@ export async function GET(
       }
       throw error;
     }
-  } catch (error) {
-    return apiError(error, 502);
-  }
-}
+  },
+  { errorStatus: 502 },
+);
 
-export async function POST(
-  _request: Request,
-  { params }: { params: Promise<{ workspaceId: string }> },
-) {
-  const user = await getApiUser();
-  if (!user) return apiError(new Error("Authentication required."), 401);
-
-  const { workspaceId } = await params;
-  const workspace = await getWorkspaceForMember(workspaceId, user.id);
-  if (!workspace) return apiError(new Error("Workspace not found."), 404);
-  if (!workspace.repository || !workspace.baseSha) {
-    return apiError(
-      new Error("Connect a GitHub repository before this workspace can run."),
-      409,
-    );
-  }
-  let resumePermission: "coSteer" | "review";
-  try {
-    const access = await requireWorkspacePermission(
-      workspaceId,
-      user.id,
-      "view",
-    );
+export const POST = withWorkspace(
+  "view",
+  async ({ user, workspaceId, access }) => {
     if (!access.permissions.coSteer && !access.permissions.review) {
-      return apiError(
-        new Error(
-          "Only workspace editors or reviewers can start the workspace runtime.",
-        ),
+      throw new ApiError(
+        "Only workspace editors or reviewers can start the workspace runtime.",
         403,
       );
     }
-    resumePermission = access.permissions.coSteer ? "coSteer" : "review";
-  } catch (error) {
-    return apiError(
-      error,
-      error instanceof Error && "status" in error ? Number(error.status) : 403,
-    );
-  }
-
-  try {
-    const runtime = await getWorkspaceRuntime(workspaceId);
-    if (runtime?.status === "ready") {
-      return Response.json({ runtime });
+    const resumePermission = access.permissions.coSteer ? "coSteer" : "review";
+    const workspace = await getWorkspaceForMember(workspaceId, user.id);
+    if (!workspace) return apiError(new Error("Workspace not found."), 404);
+    if (!workspace.repository || !workspace.baseSha) {
+      return apiError(
+        new Error("Connect a GitHub repository before this workspace can run."),
+        409,
+      );
     }
-    if (runtime?.status === "provisioning" || runtime?.status === "stopping") {
-      return Response.json({ state: runtime.status }, { status: 202 });
+    try {
+      const runtime = await getWorkspaceRuntime(workspaceId);
+      if (runtime?.status === "ready") {
+        return Response.json({ runtime });
+      }
+      if (
+        runtime?.status === "provisioning" ||
+        runtime?.status === "stopping"
+      ) {
+        return Response.json({ state: runtime.status }, { status: 202 });
+      }
+      await assertWorkspaceCreditQuota(workspaceId, user.id);
+      const hostState = await requestHostWake();
+      if (hostState === "starting") {
+        return Response.json({ state: "starting" }, { status: 202 });
+      }
+      const expiresAt = await beginWorkspaceProvisioning(
+        workspaceId,
+        user.id,
+        resumePermission,
+      );
+      await waitForOrchestrator();
+      const persistedSnapshot = await getWorkspaceSnapshot(workspaceId);
+      const repositorySnapshot = persistedSnapshot?.snapshot
+        ? persistedSnapshot.snapshot
+        : workspace.repositoryVisibility === "private"
+          ? await getRepositorySnapshot(
+              user.id,
+              workspace.repository,
+              workspace.baseSha,
+            )
+          : undefined;
+      const sandbox = await provisionSandbox({
+        workspaceId,
+        repositoryUrl: repositorySnapshot
+          ? null
+          : `https://github.com/${workspace.repository}.git`,
+        ...(repositorySnapshot ? { repositorySnapshot } : {}),
+        baseSha: workspace.baseSha,
+        expiresAt: expiresAt.toISOString(),
+        resumeFromSnapshot: Boolean(persistedSnapshot),
+        lifecycle: E2B_LIFECYCLE_OPTIONS,
+      });
+      await markWorkspaceReady(workspaceId, sandbox.id, sandbox.headSha);
+      if (persistedSnapshot) await clearWorkspaceSnapshot(workspaceId);
+      return Response.json({ sandbox }, { status: 201 });
+    } catch (error) {
+      if (error instanceof QuotaError) return quotaResponse(error);
+      await markWorkspaceFailed(workspaceId, error).catch(() => undefined);
+      return apiError(
+        error,
+        error instanceof WorkspaceLifecycleError ? error.status : 502,
+      );
     }
-    await assertWorkspaceCreditQuota(workspaceId, user.id);
-    const hostState = await requestHostWake();
-    if (hostState === "starting") {
-      return Response.json({ state: "starting" }, { status: 202 });
-    }
-    const expiresAt = await beginWorkspaceProvisioning(
-      workspaceId,
-      user.id,
-      resumePermission,
-    );
-    await waitForOrchestrator();
-    const persistedSnapshot = await getWorkspaceSnapshot(workspaceId);
-    const repositorySnapshot = persistedSnapshot?.snapshot
-      ? persistedSnapshot.snapshot
-      : workspace.repositoryVisibility === "private"
-        ? await getRepositorySnapshot(
-            user.id,
-            workspace.repository,
-            workspace.baseSha,
-          )
-        : undefined;
-    const sandbox = await provisionSandbox({
-      workspaceId,
-      repositoryUrl: repositorySnapshot
-        ? null
-        : `https://github.com/${workspace.repository}.git`,
-      ...(repositorySnapshot ? { repositorySnapshot } : {}),
-      baseSha: workspace.baseSha,
-      expiresAt: expiresAt.toISOString(),
-      resumeFromSnapshot: Boolean(persistedSnapshot),
-      lifecycle: E2B_LIFECYCLE_OPTIONS,
-    });
-    await markWorkspaceReady(workspaceId, sandbox.id, sandbox.headSha);
-    if (persistedSnapshot) await clearWorkspaceSnapshot(workspaceId);
-    return Response.json({ sandbox }, { status: 201 });
-  } catch (error) {
-    if (error instanceof QuotaError) return quotaResponse(error);
-    await markWorkspaceFailed(workspaceId, error).catch(() => undefined);
-    return apiError(
-      error,
-      error instanceof WorkspaceLifecycleError ? error.status : 502,
-    );
-  }
-}
+  },
+);

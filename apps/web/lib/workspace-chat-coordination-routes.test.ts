@@ -25,16 +25,11 @@ vi.mock("@/lib/access", () => ({
   requireWorkspacePermission: mocks.requireWorkspacePermission,
 }));
 
-vi.mock("@/lib/workspace-chat-coordination", () => ({
-  WorkspaceChatCoordinationError: class WorkspaceChatCoordinationError extends Error {
-    constructor(
-      message: string,
-      readonly status: number,
-      readonly code: string,
-    ) {
-      super(message);
-    }
-  },
+vi.mock("@/lib/workspace-chat-coordination", async (importOriginal) => ({
+  // The real class, so the test covers the `{ error, code }` body it builds.
+  WorkspaceChatCoordinationError: (
+    await importOriginal<typeof import("@/lib/workspace-chat-coordination")>()
+  ).WorkspaceChatCoordinationError,
   heartbeatWorkspaceChat: mocks.heartbeatWorkspaceChat,
   leaveWorkspaceChat: mocks.leaveWorkspaceChat,
   acquireWorkspaceChatLease: mocks.acquireWorkspaceChatLease,

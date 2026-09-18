@@ -8,8 +8,8 @@ import {
   canStartFreshChat,
   deriveFreshChatSessionName,
 } from "@/lib/agent-fresh-chat";
-import { apiError, getApiUserAnyAuth } from "@/lib/api";
-import { requireWorkspacePermission } from "@/lib/access";
+import { apiError } from "@/lib/api";
+import { withWorkspace } from "@/lib/api-route";
 import { getDatabase } from "@/lib/database";
 import { getWorkspaceForMember } from "@/lib/workspaces";
 
@@ -27,31 +27,12 @@ const freshChatSchema = z.object({
   prompt: z.string().trim().min(1).max(20_000).optional(),
 });
 
-export async function POST(
-  request: Request,
-  {
-    params,
-  }: {
-    params: Promise<{ workspaceId: string; sessionId: string }>;
-  },
-) {
-  const user = await getApiUserAnyAuth(request);
-  if (!user) return apiError(new Error("Authentication required."), 401);
-  const { workspaceId, sessionId } = await params;
+export const POST = withWorkspace<{ workspaceId: string; sessionId: string }>(
+  "coSteer",
+  async ({ request, user, workspaceId, params: { sessionId } }) => {
+    const workspace = await getWorkspaceForMember(workspaceId, user.id);
+    if (!workspace) return apiError(new Error("Workspace not found."), 404);
 
-  let workspace;
-  try {
-    await requireWorkspacePermission(workspaceId, user.id, "coSteer");
-    workspace = await getWorkspaceForMember(workspaceId, user.id);
-  } catch (error) {
-    return apiError(
-      error,
-      error instanceof Error && "status" in error ? Number(error.status) : 403,
-    );
-  }
-  if (!workspace) return apiError(new Error("Workspace not found."), 404);
-
-  try {
     const input = freshChatSchema.parse(await request.json());
 
     const [source] = await getDatabase()
@@ -134,7 +115,6 @@ export async function POST(
       { sessionId: created.sessionId, worktreeId: source.worktreeId },
       { status: 201 },
     );
-  } catch (error) {
-    return apiError(error, 400);
-  }
-}
+  },
+  { anyAuth: true },
+);

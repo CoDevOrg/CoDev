@@ -1,9 +1,10 @@
-import { apiError, getApiUser } from "@/lib/api";
+import { z } from "zod";
+
+import { withUser } from "@/lib/api-route";
 import {
   createWorkspaceInvite,
   listWorkspaceInviteState,
 } from "@/lib/workspaces";
-import { z } from "zod";
 
 const inviteSchema = z.object({
   invitee: z.string().trim().max(320).optional(),
@@ -11,30 +12,14 @@ const inviteSchema = z.object({
   allowLink: z.boolean().default(false),
 });
 
-export async function GET(
-  _request: Request,
-  context: { params: Promise<{ workspaceId: string }> },
-) {
-  const user = await getApiUser();
-  if (!user) return apiError(new Error("Authentication required."), 401);
+type Params = { workspaceId: string };
 
-  try {
-    const { workspaceId } = await context.params;
-    return Response.json(await listWorkspaceInviteState(workspaceId, user.id));
-  } catch (error) {
-    return apiError(error);
-  }
-}
+export const GET = withUser<Params>(async ({ user, params: { workspaceId } }) =>
+  Response.json(await listWorkspaceInviteState(workspaceId, user.id)),
+);
 
-export async function POST(
-  request: Request,
-  context: { params: Promise<{ workspaceId: string }> },
-) {
-  const user = await getApiUser();
-  if (!user) return apiError(new Error("Authentication required."), 401);
-
-  try {
-    const { workspaceId } = await context.params;
+export const POST = withUser<Params>(
+  async ({ request, user, params: { workspaceId } }) => {
     const body = await request.json().catch(() => ({}));
     const input = inviteSchema.parse(body);
     const invitee = input.invitee?.trim() || null;
@@ -58,7 +43,5 @@ export async function POST(
       accessRole: invite.accessRole,
       ...state,
     });
-  } catch (error) {
-    return apiError(error);
-  }
-}
+  },
+);

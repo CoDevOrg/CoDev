@@ -1,28 +1,12 @@
-import { apiError, getApiUser } from "@/lib/api";
-import { requireWorkspacePermission } from "@/lib/access";
+import { apiError } from "@/lib/api";
+import { withWorkspace } from "@/lib/api-route";
 import { executeInSandbox } from "@/lib/orchestrator";
 import { getWorkspaceForMember } from "@/lib/workspaces";
 import { githubRequest } from "@/lib/github";
 
 export const maxDuration = 60;
 
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ workspaceId: string }> },
-) {
-  const user = await getApiUser();
-  if (!user) return apiError(new Error("Authentication required."), 401);
-
-  const { workspaceId } = await params;
-  try {
-    await requireWorkspacePermission(workspaceId, user.id, "view");
-  } catch (error) {
-    return apiError(
-      error,
-      error instanceof Error && "status" in error ? Number(error.status) : 403,
-    );
-  }
-
+export const GET = withWorkspace("view", async ({ user, workspaceId }) => {
   try {
     // 1. Fetch remote branches directly from GitHub if workspace is linked to a repository
     let remoteBranches: string[] = [];
@@ -86,4 +70,4 @@ export async function GET(
   } catch (error) {
     return apiError(error);
   }
-}
+});

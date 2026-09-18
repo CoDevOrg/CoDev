@@ -1,7 +1,6 @@
 import { z } from "zod";
 
-import { apiError, getApiUser } from "@/lib/api";
-import { requireWorkspacePermission } from "@/lib/access";
+import { withWorkspace } from "@/lib/api-route";
 import {
   mintCoordinationToken,
   registerCliAgentSession,
@@ -22,24 +21,9 @@ const bodySchema = z.object({
  * URL and a scoped bearer token for the IDE to drop into the agent's
  * `.mcp.json`.
  */
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ workspaceId: string }> },
-) {
-  const user = await getApiUser();
-  if (!user) return apiError(new Error("Authentication required."), 401);
-
-  const { workspaceId } = await params;
-  try {
-    await requireWorkspacePermission(workspaceId, user.id, "coSteer");
-  } catch (error) {
-    return apiError(
-      error,
-      error instanceof Error && "status" in error ? Number(error.status) : 403,
-    );
-  }
-
-  try {
+export const POST = withWorkspace(
+  "coSteer",
+  async ({ request, user, workspaceId }) => {
     const input = bodySchema.parse(await request.json());
     const { sessionId } = await registerCliAgentSession({
       workspaceId,
@@ -59,7 +43,5 @@ export async function POST(
       new URL(request.url).origin,
     ).toString();
     return Response.json({ sessionId, mcpUrl, mcpToken: token });
-  } catch (error) {
-    return apiError(error);
-  }
-}
+  },
+);

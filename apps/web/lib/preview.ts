@@ -1,7 +1,7 @@
 /**
  * Static sandbox preview helpers.
  *
- * Live port proxy (`PreviewSource` kind `"live"`) is deferred — see PLAN.md
+ * Live port proxy (`PreviewSource` kind `"live"`) is deferred — see docs/archive/PLAN.md
  * "Browser preview-port forwarding". Do not wire guest networking here.
  *
  * Follow-up: optional `?worktreeId=` so Preview can read an agent worktree

@@ -1,6 +1,5 @@
-import { apiError, getApiUser } from "@/lib/api";
+import { withWorkspace } from "@/lib/api-route";
 import { getWorkspaceSnapshot, readSnapshotFile } from "@/lib/hibernation";
-import { requireWorkspacePermission } from "@/lib/access";
 import { parseFileList } from "@/lib/ide";
 import {
   PREVIEW_CSP,
@@ -49,28 +48,11 @@ async function resolveRequestedPath(
   return assertPreviewPath(segments.join("/"));
 }
 
-export async function GET(
-  _request: Request,
-  {
-    params,
-  }: {
-    params: Promise<{ workspaceId: string; path?: string[] }>;
-  },
-) {
-  const user = await getApiUser();
-  if (!user) return apiError(new Error("Authentication required."), 401);
-
-  const { workspaceId, path: segments } = await params;
-  try {
-    await requireWorkspacePermission(workspaceId, user.id, "view");
-  } catch (error) {
-    return apiError(
-      error,
-      error instanceof Error && "status" in error ? Number(error.status) : 403,
-    );
-  }
-
-  try {
+// OrchestratorError (including the 404 below) carries its own status; a path
+// the preview refuses is a plain 400.
+export const GET = withWorkspace<{ workspaceId: string; path?: string[] }>(
+  "view",
+  async ({ workspaceId, params: { path: segments } }) => {
     const snapshot = await getWorkspaceSnapshot(workspaceId);
     const path = await resolveRequestedPath(workspaceId, segments, snapshot);
     const file = snapshot
@@ -96,13 +78,5 @@ export async function GET(
       status: 200,
       headers: previewHeaders(contentType),
     });
-  } catch (error) {
-    if (error instanceof OrchestratorError) {
-      return apiError(error, error.status);
-    }
-    if (error instanceof Error && /not allowed/i.test(error.message)) {
-      return apiError(error, 400);
-    }
-    return apiError(error);
-  }
-}
+  },
+);

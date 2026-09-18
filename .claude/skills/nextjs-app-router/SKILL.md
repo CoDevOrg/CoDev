@@ -6,7 +6,7 @@ description: Use for apps/web Next.js App Router work — pages, layouts, Server
 # Next.js App Router (`apps/web`)
 
 1. Prefer Server Components. `'use client'` only for state, effects, or event handlers.
-2. Before editing, open a sibling route in `apps/web` and match its data-fetch / mutation pattern.
+2. Before editing, open a sibling route in `apps/web` and match its data-fetch / mutation pattern. API route handlers are `export const GET = withWorkspace("view", async ({ request, user, workspaceId }) => ...)` (or `withUser`) from `lib/api-route.ts`; see AGENTS.md.
 3. Use Next DevTools MCP (`nextjs_docs`, `get_errors`, `get_routes`, `get_logs`). Do not guess App Router APIs from memory.
 4. Keep `pnpm dev` running while verifying UI.
 5. Secrets stay on the server. No credentials in `NEXT_PUBLIC_*`.

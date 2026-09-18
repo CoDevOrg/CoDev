@@ -21,6 +21,14 @@ export class ProviderConnectionRequiredError extends Error {
     );
     this.name = "ProviderConnectionRequiredError";
   }
+
+  /** Used by `withUser`/`withWorkspace` in place of the plain error body. */
+  toResponse() {
+    return Response.json(
+      { error: this.message, code: this.code },
+      { status: this.status },
+    );
+  }
 }
 
 export function isProviderConnectionBlockMessage(

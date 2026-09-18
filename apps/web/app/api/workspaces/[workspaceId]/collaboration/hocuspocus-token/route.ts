@@ -1,7 +1,6 @@
 import { createHmac } from "node:crypto";
 
-import { apiError, getApiUser } from "@/lib/api";
-import { requireWorkspacePermission } from "@/lib/access";
+import { withWorkspace } from "@/lib/api-route";
 import { recordWorkspaceHeartbeat } from "@/lib/heartbeat";
 import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
 import { getWorkspaceRuntime } from "@/lib/workspaces";
@@ -32,24 +31,9 @@ function signedWorkspaceToken(
   return { token: `${payload}.${signature}`, expiresAt };
 }
 
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ workspaceId: string }> },
-) {
-  const user = await getApiUser();
-  if (!user) return apiError(new Error("Authentication required."), 401);
-  const { workspaceId } = await params;
-  let access: Awaited<ReturnType<typeof requireWorkspacePermission>>;
-  try {
-    access = await requireWorkspacePermission(workspaceId, user.id, "view");
-  } catch (error) {
-    return apiError(
-      error,
-      error instanceof Error && "status" in error ? Number(error.status) : 403,
-    );
-  }
-
-  try {
+export const GET = withWorkspace(
+  "view",
+  async ({ user, workspaceId, access }) => {
     if (access.permissions.edit) {
       await ensureWorkspaceRuntimeReady(workspaceId, user.id);
     } else if ((await getWorkspaceRuntime(workspaceId))?.status === "ready") {
@@ -69,7 +53,6 @@ export async function GET(
         access.permissions.edit,
       ),
     );
-  } catch (error) {
-    return apiError(error, 503);
-  }
-}
+  },
+  { errorStatus: 503 },
+);

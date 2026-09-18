@@ -1,10 +1,7 @@
 import { z } from "zod";
 
-import { apiError, getApiUser } from "@/lib/api";
-import {
-  requireWorkspacePermission,
-  type WorkspacePermission,
-} from "@/lib/access";
+import { requireWorkspacePermission } from "@/lib/access";
+import { withUser, withWorkspace } from "@/lib/api-route";
 import {
   closeSandboxTerminal,
   pollSandboxTerminal,
@@ -38,51 +35,23 @@ const actionSchema = z.discriminatedUnion("action", [
   }),
 ]);
 
-async function authorizedWorkspace(
-  workspaceId: string,
-  permission: WorkspacePermission,
-) {
-  const user = await getApiUser();
-  if (!user)
-    return { response: apiError(new Error("Authentication required."), 401) };
-  try {
+// Typing into or resizing a terminal needs `terminalWrite`; starting and
+// polling one needs `terminal`. The action decides, so it is parsed first.
+export const POST = withUser<{ workspaceId: string }>(
+  async ({ request, user, params: { workspaceId } }) => {
+    const input = actionSchema.parse(await request.json());
     const access = await requireWorkspacePermission(
       workspaceId,
       user.id,
-      permission,
-    );
-    return { access, userId: user.id };
-  } catch (error) {
-    return {
-      response: apiError(
-        error,
-        error instanceof Error && "status" in error
-          ? Number(error.status)
-          : 403,
-      ),
-    };
-  }
-}
-
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ workspaceId: string }> },
-) {
-  try {
-    const input = actionSchema.parse(await request.json());
-    const { workspaceId } = await params;
-    const authorization = await authorizedWorkspace(
-      workspaceId,
       input.action === "input" || input.action === "resize"
         ? "terminalWrite"
         : "terminal",
     );
-    if ("response" in authorization) return authorization.response;
     if (input.action !== "poll") {
       await ensureWorkspaceRuntimeReady(
         workspaceId,
-        authorization.userId,
-        authorization.access.permissions.terminalWrite ? "coSteer" : "review",
+        user.id,
+        access.permissions.terminalWrite ? "coSteer" : "review",
       );
     }
     switch (input.action) {
@@ -109,26 +78,16 @@ export async function POST(
         return Response.json({ result });
       }
     }
-  } catch (error) {
-    return apiError(error);
-  }
-}
+  },
+);
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ workspaceId: string }> },
-) {
-  const { workspaceId } = await params;
-  const authorization = await authorizedWorkspace(workspaceId, "terminalWrite");
-  if ("response" in authorization) return authorization.response;
-
-  try {
+export const DELETE = withWorkspace(
+  "terminalWrite",
+  async ({ request, workspaceId }) => {
     const sessionId = sessionIdSchema.parse(
       new URL(request.url).searchParams.get("sessionId"),
     );
     await closeSandboxTerminal(workspaceId, sessionId);
     return new Response(null, { status: 204 });
-  } catch (error) {
-    return apiError(error);
-  }
-}
+  },
+);

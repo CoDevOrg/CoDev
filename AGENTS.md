@@ -86,8 +86,16 @@ Azure stack itself is `infra/azure/`.
 - Validate data crossing service or persistence boundaries (existing Zod/contracts). Do not add unchecked ad hoc types at those boundaries.
 - Keep secrets server-only and never use `NEXT_PUBLIC_` for credentials.
 - Add or update tests with every behavior change.
+- `apps/web` API routes are built with `withUser` / `withWorkspace` from
+  `apps/web/lib/api-route.ts`: they handle sign-in (401), the workspace
+  permission check (404/403), body parsing (`readJson`), and turning a thrown
+  error into a response. Throw an error that carries a `status` (or `ApiError`)
+  instead of building an error response by hand, and give an error class a
+  `toResponse()` when its body needs more than `{ error }`. Do not copy the old
+  `getApiUser()` + `try/catch` + `apiError` preamble into a new route.
 - New tests default to the `node` environment. `apps/web/vitest.config.ts` splits
-  `lib` (node, no setup file) from `components` (jsdom + Testing Library); a test
+  `lib` and `app` (node, no setup file) from `components` (jsdom + Testing
+  Library); route handler tests live next to the route as `route.test.ts`. A test
   that genuinely needs a DOM belongs under `components/`, or declares
   `// @vitest-environment jsdom` in its own docblock. Do not move the global
   default back — booting a DOM for pure-logic tests cost this suite 4x its

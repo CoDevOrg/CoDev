@@ -3,7 +3,8 @@ import { z } from "zod";
 
 import { createAgentEvent, type AgentEvent } from "@codev/shared-types";
 
-import { apiError, getApiUser } from "@/lib/api";
+import { apiError } from "@/lib/api";
+import { withWorkspace } from "@/lib/api-route";
 import {
   createAgentModel,
   getAgentModel,
@@ -11,16 +12,12 @@ import {
   parseAgentProvider,
   resolveSelectableAgentModel,
 } from "@/lib/ai-model";
-import { requireWorkspacePermission } from "@/lib/access";
 import { resolveAgentCredential } from "@/lib/credentials";
 import {
   requireCursorApiKey,
   runCursorCloudAgent,
 } from "@/lib/cursor-agent-runtime";
-import {
-  AgentPromptRateLimitError,
-  enforceAgentPromptRateLimit,
-} from "@/lib/agent-rate-limit";
+import { enforceAgentPromptRateLimit } from "@/lib/agent-rate-limit";
 import { readSandboxFile, searchSandboxFiles } from "@/lib/orchestrator";
 import { ensureWorkspaceRuntimeReady } from "@/lib/runtime-resume";
 import { getWorkspaceForMember } from "@/lib/workspaces";
@@ -118,24 +115,11 @@ function toWireLine(value: WireEvent) {
   return `${JSON.stringify(value)}\n`;
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ workspaceId: string }> },
-) {
-  const user = await getApiUser();
-  if (!user) return apiError(new Error("Authentication required."), 401);
-
-  const { workspaceId } = await params;
-  try {
-    await requireWorkspacePermission(workspaceId, user.id, "coSteer");
-  } catch (error) {
-    return apiError(
-      error,
-      error instanceof Error && "status" in error ? Number(error.status) : 403,
-    );
-  }
-
-  try {
+// Errors thrown before the stream starts become JSON responses; the prompt
+// rate limit carries its own 429.
+export const POST = withWorkspace(
+  "coSteer",
+  async ({ request, user, workspaceId }) => {
     const input = requestSchema.parse(await request.json());
     await ensureWorkspaceRuntimeReady(workspaceId, user.id);
     const workspace = await getWorkspaceForMember(workspaceId, user.id);
@@ -557,16 +541,5 @@ export async function POST(
         "content-type": "application/x-ndjson; charset=utf-8",
       },
     });
-  } catch (error) {
-    if (error instanceof AgentPromptRateLimitError) {
-      return Response.json(
-        { error: error.message, code: "agent_prompt_rate_limit" },
-        {
-          status: 429,
-          headers: { "Retry-After": String(error.retryAfterSeconds) },
-        },
-      );
-    }
-    return apiError(error);
-  }
-}
+  },
+);

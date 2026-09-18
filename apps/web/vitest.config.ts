@@ -38,6 +38,15 @@ export default defineConfig({
         plugins: [react()],
         resolve: { alias },
         test: {
+          name: "app",
+          environment: "node",
+          include: ["app/**/*.test.ts"],
+        },
+      },
+      {
+        plugins: [react()],
+        resolve: { alias },
+        test: {
           name: "components",
           environment: "jsdom",
           include: ["components/**/*.test.{ts,tsx}"],

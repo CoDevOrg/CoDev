@@ -1,13 +1,13 @@
 import { z } from "zod";
 
-import { requireWorkspacePermission } from "@/lib/access";
-import { apiError, getApiUser } from "@/lib/api";
+import { apiError } from "@/lib/api";
+import { ApiError, withWorkspace } from "@/lib/api-route";
 import {
   InvalidCodexRolloutError,
   codexRolloutSessionPath,
   parseCodexRolloutHeader,
 } from "@/lib/codex-session-import";
-import { OrcaHostError, ensureOrcaSession } from "@/lib/orca-host";
+import { ensureOrcaSession } from "@/lib/orca-host";
 import { writeIdeFile } from "@/lib/orchestrator";
 import { getWorkspaceForMember } from "@/lib/workspaces";
 
@@ -42,26 +42,11 @@ const bodySchema = z.object({
  * what actually keeps `codex resume` working, and the two stores are separate
  * trees where a spare copy costs nothing.
  */
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ workspaceId: string }> },
-) {
-  const user = await getApiUser();
-  if (!user) return apiError(new Error("Authentication required."), 401);
-
-  const { workspaceId } = await params;
-  try {
-    await requireWorkspacePermission(workspaceId, user.id, "edit");
-  } catch (error) {
-    return apiError(
-      error,
-      error instanceof Error && "status" in error ? Number(error.status) : 403,
-    );
-  }
-
-  try {
+export const POST = withWorkspace(
+  "edit",
+  async ({ request, user, workspaceId }) => {
     const { contents } = bodySchema.parse(await request.json());
-    const rollout = parseCodexRolloutHeader(contents);
+    const rollout = parseRollout(contents);
     const { relativePath } = codexRolloutSessionPath(rollout);
 
     const workspace = await getWorkspaceForMember(workspaceId, user.id);
@@ -93,13 +78,17 @@ export async function POST(
       sessionId: rollout.sessionId,
       resumeCommand: `codex resume ${rollout.sessionId}`,
     });
+  },
+);
+
+// OrcaHostError carries its own status; a malformed rollout is the caller's.
+function parseRollout(contents: string) {
+  try {
+    return parseCodexRolloutHeader(contents);
   } catch (error) {
     if (error instanceof InvalidCodexRolloutError) {
-      return apiError(error, 400);
+      throw new ApiError(error.message, 400);
     }
-    if (error instanceof OrcaHostError) {
-      return apiError(error, error.status);
-    }
-    return apiError(error);
+    throw error;
   }
 }

@@ -50,6 +50,14 @@ export class WorkspaceChatCoordinationError extends Error {
     super(message);
     this.name = "WorkspaceChatCoordinationError";
   }
+
+  /** Used by `withUser`/`withWorkspace` in place of the plain error body. */
+  toResponse() {
+    return Response.json(
+      { error: this.message, code: this.code },
+      { status: this.status },
+    );
+  }
 }
 
 function memberName(

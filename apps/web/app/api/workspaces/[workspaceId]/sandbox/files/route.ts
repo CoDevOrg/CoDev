@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import { apiError, getApiUser } from "@/lib/api";
-import { requireWorkspacePermission } from "@/lib/access";
+import { apiError } from "@/lib/api";
+import { withWorkspace } from "@/lib/api-route";
 import {
   getWorkspaceSnapshot,
   listSnapshotFiles,
@@ -26,23 +26,7 @@ const writeSchema = readSchema.extend({
   expectedRevision: z.string().min(1),
 });
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ workspaceId: string }> },
-) {
-  const user = await getApiUser();
-  if (!user) return apiError(new Error("Authentication required."), 401);
-
-  const { workspaceId } = await params;
-  try {
-    await requireWorkspacePermission(workspaceId, user.id, "view");
-  } catch (error) {
-    return apiError(
-      error,
-      error instanceof Error && "status" in error ? Number(error.status) : 403,
-    );
-  }
-
+export const GET = withWorkspace("view", async ({ request, workspaceId }) => {
   try {
     const runtime = await getWorkspaceRuntime(workspaceId);
     const snapshot =
@@ -86,25 +70,9 @@ export async function GET(
   } catch (error) {
     return apiError(error);
   }
-}
+});
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ workspaceId: string }> },
-) {
-  const user = await getApiUser();
-  if (!user) return apiError(new Error("Authentication required."), 401);
-
-  const { workspaceId } = await params;
-  try {
-    await requireWorkspacePermission(workspaceId, user.id, "view");
-  } catch (error) {
-    return apiError(
-      error,
-      error instanceof Error && "status" in error ? Number(error.status) : 403,
-    );
-  }
-
+export const POST = withWorkspace("view", async ({ request, workspaceId }) => {
   try {
     const input = readSchema.parse(await request.json());
     const runtime = await getWorkspaceRuntime(workspaceId);
@@ -119,31 +87,18 @@ export async function POST(
   } catch (error) {
     return apiError(error);
   }
-}
+});
 
-export async function PUT(
-  request: Request,
-  { params }: { params: Promise<{ workspaceId: string }> },
-) {
-  const user = await getApiUser();
-  if (!user) return apiError(new Error("Authentication required."), 401);
-
-  const { workspaceId } = await params;
-  try {
-    await requireWorkspacePermission(workspaceId, user.id, "edit");
-  } catch (error) {
-    return apiError(
-      error,
-      error instanceof Error && "status" in error ? Number(error.status) : 403,
-    );
-  }
-
-  try {
-    const input = writeSchema.parse(await request.json());
-    await ensureWorkspaceRuntimeReady(workspaceId, user.id);
-    const result = await writeSandboxFile(workspaceId, input);
-    return Response.json(result);
-  } catch (error) {
-    return apiError(error);
-  }
-}
+export const PUT = withWorkspace(
+  "edit",
+  async ({ request, user, workspaceId }) => {
+    try {
+      const input = writeSchema.parse(await request.json());
+      await ensureWorkspaceRuntimeReady(workspaceId, user.id);
+      const result = await writeSandboxFile(workspaceId, input);
+      return Response.json(result);
+    } catch (error) {
+      return apiError(error);
+    }
+  },
+);

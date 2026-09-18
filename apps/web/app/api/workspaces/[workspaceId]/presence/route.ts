@@ -4,8 +4,7 @@ import { z } from "zod";
 import { schema } from "@codev/db";
 import { collaborationPathSchema } from "@codev/contracts";
 
-import { requireWorkspacePermission } from "@/lib/access";
-import { apiError, getApiUser } from "@/lib/api";
+import { withWorkspace } from "@/lib/api-route";
 import {
   listWorkspacePresenceEntries,
   recordOrcaActiveFile,
@@ -21,10 +20,7 @@ const cursorSchema = activeFileSchema.extend({
   }),
 });
 
-async function getAuthorizedUser(workspaceId: string) {
-  const sessionUser = await getApiUser();
-  if (!sessionUser?.id) throw new Error("Authentication required.");
-  await requireWorkspacePermission(workspaceId, sessionUser.id, "view");
+async function getMember(userId: string) {
   const [user] = await getDatabase()
     .select({
       id: schema.users.id,
@@ -33,25 +29,16 @@ async function getAuthorizedUser(workspaceId: string) {
       avatarUrl: schema.users.avatarUrl,
     })
     .from(schema.users)
-    .where(eq(schema.users.id, sessionUser.id))
+    .where(eq(schema.users.id, userId))
     .limit(1);
   if (!user) throw new Error("Workspace member was not found.");
   return user;
 }
 
-function statusFor(error: unknown) {
-  return error instanceof Error && "status" in error
-    ? Number(error.status)
-    : 400;
-}
-
-export async function GET(
-  _request: Request,
-  context: { params: Promise<{ workspaceId: string }> },
-) {
-  try {
-    const { workspaceId } = await context.params;
-    const user = await getAuthorizedUser(workspaceId);
+export const GET = withWorkspace(
+  "view",
+  async ({ user: member, workspaceId }) => {
+    const user = await getMember(member.id);
     const presence = await listWorkspacePresenceEntries(workspaceId);
     return Response.json({
       viewerId: user.id,
@@ -67,18 +54,13 @@ export async function GET(
         cursor,
       })),
     });
-  } catch (error) {
-    return apiError(error, statusFor(error));
-  }
-}
+  },
+);
 
-export async function POST(
-  request: Request,
-  context: { params: Promise<{ workspaceId: string }> },
-) {
-  try {
-    const { workspaceId } = await context.params;
-    const user = await getAuthorizedUser(workspaceId);
+export const POST = withWorkspace(
+  "view",
+  async ({ request, user: member, workspaceId }) => {
+    const user = await getMember(member.id);
     const payload = await request.json();
     const cursor = cursorSchema.safeParse(payload);
     if (cursor.success) {
@@ -93,7 +75,5 @@ export async function POST(
       await recordOrcaActiveFile(workspaceId, user, path);
     }
     return Response.json({ ok: true });
-  } catch (error) {
-    return apiError(error, statusFor(error));
-  }
-}
+  },
+);

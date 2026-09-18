@@ -1,23 +1,11 @@
-import { apiError, getApiUser } from "@/lib/api";
-import {
-  syncWorkspaceToDefaultBranch,
-  WorkspaceLifecycleError,
-} from "@/lib/workspaces";
+import { withUser } from "@/lib/api-route";
+import { syncWorkspaceToDefaultBranch } from "@/lib/workspaces";
 
-export async function POST(
-  _request: Request,
-  { params }: { params: Promise<{ workspaceId: string }> },
-) {
-  const user = await getApiUser();
-  if (!user) return apiError(new Error("Authentication required."), 401);
-  const { workspaceId } = await params;
-  try {
-    const sync = await syncWorkspaceToDefaultBranch(workspaceId, user.id);
-    return Response.json({ sync });
-  } catch (error) {
-    return apiError(
-      error,
-      error instanceof WorkspaceLifecycleError ? error.status : 502,
-    );
-  }
-}
+// WorkspaceLifecycleError carries its own status; anything else is upstream.
+export const POST = withUser<{ workspaceId: string }>(
+  async ({ user, params: { workspaceId } }) =>
+    Response.json({
+      sync: await syncWorkspaceToDefaultBranch(workspaceId, user.id),
+    }),
+  { errorStatus: 502 },
+);

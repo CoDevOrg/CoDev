@@ -13,6 +13,17 @@ export class AgentPromptRateLimitError extends Error {
     super("Agent prompt limit reached. Wait briefly and try again.");
     this.name = "AgentPromptRateLimitError";
   }
+
+  /** Used by `withUser`/`withWorkspace` in place of the plain error body. */
+  toResponse() {
+    return Response.json(
+      { error: this.message, code: "agent_prompt_rate_limit" },
+      {
+        status: 429,
+        headers: { "Retry-After": String(this.retryAfterSeconds) },
+      },
+    );
+  }
 }
 
 export type AgentKeySource = "byok";
