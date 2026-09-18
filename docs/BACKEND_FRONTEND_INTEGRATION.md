@@ -227,13 +227,13 @@ returns only safe status metadata, never plaintext secrets.
 
 Personal and organization credential/environment settings remain implemented.
 Do not add secrets to client state, browser storage, logs, URLs, or
-`NEXT_PUBLIC_*` variables. `NEXT_PUBLIC_HOCUSPOCUS_URL` and Clerk's publishable
-key are intentionally public configuration; all other credential material is
+`NEXT_PUBLIC_*` variables. `NEXT_PUBLIC_HOCUSPOCUS_URL` is intentionally
+public configuration; all other credential material is
 server-only.
 
 The existing `.env.local` files and deployment environment were not modified.
 `.env.example` is the non-secret inventory for local setup. Important backend
-groups include PostgreSQL/Supabase, Clerk, OpenFGA, Redis/Hocuspocus, GitHub App,
+groups include PostgreSQL/Supabase, Auth.js (NextAuth), OpenFGA, Redis/Hocuspocus, GitHub App,
 credential encryption/KMS, provider OAuth, AWS/Vercel OIDC, the orchestrator,
 and lifecycle cron authentication.
 

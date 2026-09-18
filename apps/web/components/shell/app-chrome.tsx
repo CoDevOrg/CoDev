@@ -8,7 +8,6 @@ import { AppSidebarNav } from "@/components/shell/app-sidebar-nav";
 import { FeedbackWidget } from "@/components/shell/feedback-widget";
 import { ProfileMenu } from "@/components/shell/profile-menu";
 import { isUserAdmin } from "@/lib/admin/admin";
-import { clerkAuthConfigured } from "@/lib/auth/identity";
 import { isAdminHostname, publicAppHref } from "@/lib/platform/site-hosts";
 
 export function Brand({ isAdminHost = false }: { isAdminHost?: boolean }) {
@@ -49,7 +48,6 @@ export async function AppChrome({
   const requestHeaders = await headers();
   const isAdminHost = isAdminHostname(requestHeaders.get("host"));
   const showConnectGitHub = !user.githubLogin && isGitHubAuthConfigured();
-  const useClerkAuth = clerkAuthConfigured();
   const showAdmin = user.id ? await isUserAdmin(user.id) : false;
 
   if (sidebar) {
@@ -64,7 +62,6 @@ export async function AppChrome({
             <ProfileMenu
               user={user}
               showConnectGitHub={showConnectGitHub}
-              useClerkAuth={useClerkAuth}
               isAdminHost={isAdminHost}
             />
           </div>
@@ -90,7 +87,6 @@ export async function AppChrome({
           <ProfileMenu
             user={user}
             showConnectGitHub={showConnectGitHub}
-            useClerkAuth={useClerkAuth}
             isAdminHost={isAdminHost}
           />
         </div>

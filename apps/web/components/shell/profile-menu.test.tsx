@@ -31,10 +31,6 @@ vi.mock("@/app/actions/github", () => ({
   connectGitHubAccount: vi.fn(),
 }));
 
-vi.mock("@/components/auth/clerk-sign-out", () => ({
-  ClerkSignOut: () => <button type="button">Sign out</button>,
-}));
-
 import { ProfileMenu } from "./profile-menu";
 
 describe("ProfileMenu", () => {
@@ -42,7 +38,6 @@ describe("ProfileMenu", () => {
     const { container } = render(
       <ProfileMenu
         compact
-        useClerkAuth={false}
         user={{ name: "Ada", githubLogin: "ada", image: null }}
       />,
     );
@@ -65,7 +60,6 @@ describe("ProfileMenu", () => {
   it("shows the member's real name over their GitHub login when both are known", () => {
     const { container } = render(
       <ProfileMenu
-        useClerkAuth={false}
         user={{ name: "Ada Lovelace", githubLogin: "ada", image: null }}
       />,
     );
@@ -78,10 +72,7 @@ describe("ProfileMenu", () => {
 
   it("falls back to the GitHub login when no name is set", () => {
     const { container } = render(
-      <ProfileMenu
-        useClerkAuth={false}
-        user={{ githubLogin: "ada", image: null }}
-      />,
+      <ProfileMenu user={{ githubLogin: "ada", image: null }} />,
     );
 
     expect(container.querySelector(".profile-menu-name")).toHaveTextContent(
@@ -90,13 +81,7 @@ describe("ProfileMenu", () => {
   });
 
   it("sends settings to the public host from the admin host", () => {
-    render(
-      <ProfileMenu
-        isAdminHost
-        useClerkAuth={false}
-        user={{ name: "Ada", image: null }}
-      />,
-    );
+    render(<ProfileMenu isAdminHost user={{ name: "Ada", image: null }} />);
 
     expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute(
       "href",

@@ -15,8 +15,6 @@ export const serverEnvironmentSchema = z.object({
   SUPABASE_URL: optionalUrl,
   NEXT_PUBLIC_SUPABASE_URL: optionalUrl,
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1).optional(),
-  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().min(1).optional(),
-  CLERK_SECRET_KEY: z.string().min(1).optional(),
   OPENFGA_API_URL: optionalUrl,
   OPENFGA_STORE_ID: z.string().min(1).optional(),
   OPENFGA_AUTHORIZATION_MODEL_ID: z.string().min(1).optional(),

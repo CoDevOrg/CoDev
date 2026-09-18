@@ -1,6 +1,6 @@
-import { clerkMiddleware } from "@clerk/nextjs/server";
 import {
   type NextFetchEvent,
+  type NextMiddleware,
   type NextRequest,
   NextResponse,
 } from "next/server";
@@ -12,11 +12,12 @@ import {
 } from "@/lib/platform/upstash-rate-limit";
 import { isAdminHostname } from "@/lib/platform/site-hosts";
 
-const clerkConfigured = Boolean(
-  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY,
-);
+// NextAuth's `auth` is the documented middleware (`export { auth as
+// middleware }`); its overloads just do not spell out the middleware call
+// signature, so name it here. This is the same call production has always
+// made on these paths.
+const authenticationProxy = nextAuth as unknown as NextMiddleware;
 
-const authenticationProxy = clerkConfigured ? clerkMiddleware() : nextAuth;
 function shouldAuthenticate(pathname: string): boolean {
   return (
     pathname.startsWith("/dashboard/") ||

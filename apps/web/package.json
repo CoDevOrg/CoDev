@@ -22,7 +22,6 @@
     "@azure/arm-compute": "^25.1.1",
     "@azure/identity": "^4.13.2",
     "@azure/keyvault-keys": "^4.10.2",
-    "@clerk/nextjs": "7.6.3",
     "@codev/config": "workspace:*",
     "@codev/contracts": "workspace:*",
     "@codev/db": "workspace:*",

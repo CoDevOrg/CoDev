@@ -7,8 +7,6 @@ import "./globals.css";
 import "./app-theme.css";
 import "./team-chat.css";
 
-import { clerkAuthConfigured } from "@/lib/auth/identity";
-import { AppClerkProvider } from "@/components/auth/clerk-provider";
 import { VisitTracker } from "@/components/landing/visit-tracker";
 
 const geistSans = Geist({
@@ -35,7 +33,7 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const content = (
+  return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
         {children}
@@ -45,10 +43,5 @@ export default function RootLayout({
         </Suspense>
       </body>
     </html>
-  );
-  return clerkAuthConfigured() ? (
-    <AppClerkProvider>{content}</AppClerkProvider>
-  ) : (
-    content
   );
 }

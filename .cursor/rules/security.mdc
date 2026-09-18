@@ -6,7 +6,7 @@ alwaysApply: false
 
 # Security
 
-- Auth in `apps/web` is primarily **Clerk**. Follow existing Clerk server/client patterns.
+- Auth in `apps/web` is **Auth.js / NextAuth** (`apps/web/auth.ts`); Clerk was removed. Follow the `auth` skill and existing patterns.
 - Authorization infrastructure lives in **OpenFGA** (`infra/openfga`). Do not invent a second ACL.
 - Validate untrusted input with Zod at boundaries.
 - **Never** expose credentials via `NEXT_PUBLIC_*`.

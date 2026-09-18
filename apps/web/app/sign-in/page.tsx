@@ -8,9 +8,7 @@ import { isGitHubAuthConfigured, isGoogleAuthConfigured } from "@codev/config";
 
 import { auth, signIn } from "@/auth";
 import { Brand } from "@/components/shell/app-chrome";
-import { ClerkSignIn } from "@/components/auth/clerk-sign-in";
 import { CredentialsSignInForm } from "@/components/auth/credentials-sign-in-form";
-import { clerkAuthConfigured } from "@/lib/auth/identity";
 import {
   assertCanRegister,
   readInviteGrant,
@@ -94,18 +92,15 @@ export default async function SignInPage({
     callbackUrl?.startsWith("/") && !callbackUrl.startsWith("//")
       ? callbackUrl
       : "/dashboard";
-  const clerkEnabled = clerkAuthConfigured();
   let session: Session | null = null;
   let sessionCheckUnavailable = false;
-  if (!clerkEnabled) {
-    try {
-      session = await auth();
-    } catch (sessionError) {
-      // Rendering sign-in must remain available even if session verification
-      // has a transient infrastructure failure.
-      console.error("Unable to check the CoDev sign-in session.", sessionError);
-      sessionCheckUnavailable = true;
-    }
+  try {
+    session = await auth();
+  } catch (sessionError) {
+    // Rendering sign-in must remain available even if session verification
+    // has a transient infrastructure failure.
+    console.error("Unable to check the CoDev sign-in session.", sessionError);
+    sessionCheckUnavailable = true;
   }
   if (session?.user) redirect(safeCallback);
 
@@ -161,93 +156,88 @@ export default async function SignInPage({
           </div>
         ) : null}
 
-        {clerkEnabled ? (
-          <ClerkSignIn redirectUrl={safeCallback} />
-        ) : (
-          <div className="auth-provider-stack">
-            <div className="auth-oauth-buttons">
-              <form
-                action={async () => {
-                  "use server";
-                  await signIn("google", { redirectTo: safeCallback });
-                }}
-              >
-                <button
-                  className="google-button"
-                  type="submit"
-                  disabled={!googleConfigured}
-                >
-                  <GoogleMark />
-                  Continue with Google
-                </button>
-              </form>
-
-              <form
-                action={async () => {
-                  "use server";
-                  await signIn("github", { redirectTo: safeCallback });
-                }}
-              >
-                <button
-                  className="github-button"
-                  type="submit"
-                  disabled={!githubConfigured}
-                >
-                  <GitHubMark />
-                  Continue with GitHub
-                </button>
-              </form>
-            </div>
-
-            <div className="auth-divider" aria-hidden="true">
-              <span>or use email</span>
-            </div>
-
-            <CredentialsSignInForm
-              initialMode={startInSignUp ? "sign-up" : "sign-in"}
-              defaultEmail={inviteGrant?.email}
-              action={async (formData) => {
+        <div className="auth-provider-stack">
+          <div className="auth-oauth-buttons">
+            <form
+              action={async () => {
                 "use server";
-                const intent = String(formData.get("intent") ?? "sign-in");
-                const email = String(formData.get("email") ?? "");
-                if (intent === "sign-up") {
-                  try {
-                    await assertCanRegister({ email });
-                  } catch (guardError) {
-                    if (guardError instanceof RegistrationError) {
-                      redirect(
-                        `/sign-in?error=${guardError.code === "invite_expired" ? "InviteExpired" : guardError.code === "invite_used" ? "InviteUsed" : "InviteOnly"}&mode=sign-up`,
-                      );
-                    }
-                    throw guardError;
-                  }
-                }
+                await signIn("google", { redirectTo: safeCallback });
+              }}
+            >
+              <button
+                className="google-button"
+                type="submit"
+                disabled={!googleConfigured}
+              >
+                <GoogleMark />
+                Continue with Google
+              </button>
+            </form>
+
+            <form
+              action={async () => {
+                "use server";
+                await signIn("github", { redirectTo: safeCallback });
+              }}
+            >
+              <button
+                className="github-button"
+                type="submit"
+                disabled={!githubConfigured}
+              >
+                <GitHubMark />
+                Continue with GitHub
+              </button>
+            </form>
+          </div>
+
+          <div className="auth-divider" aria-hidden="true">
+            <span>or use email</span>
+          </div>
+
+          <CredentialsSignInForm
+            initialMode={startInSignUp ? "sign-up" : "sign-in"}
+            defaultEmail={inviteGrant?.email}
+            action={async (formData) => {
+              "use server";
+              const intent = String(formData.get("intent") ?? "sign-in");
+              const email = String(formData.get("email") ?? "");
+              if (intent === "sign-up") {
                 try {
-                  await signIn("credentials", {
-                    intent,
-                    name: String(formData.get("name") ?? ""),
-                    email,
-                    password: String(formData.get("password") ?? ""),
-                    redirectTo: safeCallback,
-                  });
-                } catch (signInError) {
-                  if (
-                    signInError instanceof AuthError &&
-                    signInError.type === "CredentialsSignin"
-                  ) {
-                    const nextMode =
-                      intent === "sign-up" ? "sign-up" : "sign-in";
+                  await assertCanRegister({ email });
+                } catch (guardError) {
+                  if (guardError instanceof RegistrationError) {
                     redirect(
-                      `/sign-in?error=CredentialsSignin&mode=${nextMode}&callbackUrl=${encodeURIComponent(safeCallback)}`,
+                      `/sign-in?error=${guardError.code === "invite_expired" ? "InviteExpired" : guardError.code === "invite_used" ? "InviteUsed" : "InviteOnly"}&mode=sign-up`,
                     );
                   }
-
-                  throw signInError;
+                  throw guardError;
                 }
-              }}
-            />
-          </div>
-        )}
+              }
+              try {
+                await signIn("credentials", {
+                  intent,
+                  name: String(formData.get("name") ?? ""),
+                  email,
+                  password: String(formData.get("password") ?? ""),
+                  redirectTo: safeCallback,
+                });
+              } catch (signInError) {
+                if (
+                  signInError instanceof AuthError &&
+                  signInError.type === "CredentialsSignin"
+                ) {
+                  const nextMode = intent === "sign-up" ? "sign-up" : "sign-in";
+                  redirect(
+                    `/sign-in?error=CredentialsSignin&mode=${nextMode}&callbackUrl=${encodeURIComponent(safeCallback)}`,
+                  );
+                }
+
+                throw signInError;
+              }
+            }}
+          />
+        </div>
 
         <small>
           GitHub repository access can be connected after you sign in.
