@@ -47,7 +47,8 @@ const STATIC_RIGHT_SIDEBAR_TABS = [
   'checks',
   'ports',
   'activity',
-  'codev-agents'
+  'codev-agents',
+  'codev-branches'
 ] as const
 // Plugin panels are open-ended `plugin:<publisher>.<id>/<panel>` keys, so the
 // schema validates their shape rather than enumerating them.

@@ -36,10 +36,16 @@ export function seedCodevWebPreferences(storage: PreferenceStorage): void {
   }
   const ui = read(storage, 'orca.web.ui.v1')
   if (!ui.codevLiveAgentsCollapsedDefaultApplied) {
+    // Branches is the workspace's landing surface, and its panel renders only
+    // while its own tab is the open one — so landing there is a layout
+    // decision, not just a tab choice. A browser that already stored a tab
+    // picked it deliberately: keep it, and keep the sidebar collapsed as the
+    // live-agents default did.
+    const hasStoredTab = ui.rightSidebarTab !== undefined
     write(storage, 'orca.web.ui.v1', {
       ...ui,
-      rightSidebarTab: ui.rightSidebarTab ?? 'codev-agents',
-      rightSidebarOpen: false,
+      rightSidebarTab: ui.rightSidebarTab ?? 'codev-branches',
+      rightSidebarOpen: !hasStoredTab,
       codevLiveAgentsDefaultApplied: true,
       codevLiveAgentsCollapsedDefaultApplied: true
     })
