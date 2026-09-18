@@ -10,6 +10,14 @@ const alias = {
 };
 
 /**
+ * next-auth's ESM build imports `next/server` without an extension, which
+ * Node's own resolver rejects ("Did you mean next/server.js?"). Left
+ * external, any node-environment test whose imports reach `lib/identity`
+ * fails to load; inlining it lets Vite resolve the import instead.
+ */
+const server = { deps: { inline: ["next-auth"] } };
+
+/**
  * Two projects, because a DOM is expensive and most of these tests do not want
  * one. `lib` is pure logic — not one of its files touches `document`, `window`
  * or Testing Library — but a single global `environment: "jsdom"` was booting a
@@ -31,6 +39,7 @@ export default defineConfig({
         test: {
           name: "lib",
           environment: "node",
+          server,
           include: ["lib/**/*.test.ts"],
         },
       },
@@ -40,6 +49,7 @@ export default defineConfig({
         test: {
           name: "app",
           environment: "node",
+          server,
           include: ["app/**/*.test.ts"],
         },
       },
