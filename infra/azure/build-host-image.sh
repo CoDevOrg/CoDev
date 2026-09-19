@@ -34,10 +34,11 @@ trap 'rm -f "${rendered_provision_script}"' EXIT
 # build VM can download the exact immutable artifacts without exposing a SAS
 # token or relying on ambient environment variables.
 {
+  head -n 1 "${provision_script}"
   printf 'export CODEV_RELEASE_VERSION=%q\n' "${release_version}"
   printf 'export CODEV_ARTIFACT_ACCOUNT=%q\n' "${artifact_account}"
   printf 'export CODEV_HOST_ARCH=%q\n' "${host_arch}"
-  cat "${provision_script}"
+  tail -n +2 "${provision_script}"
 } >"${rendered_provision_script}"
 readonly provision_sha256="$(sha256sum "${rendered_provision_script}" | cut -d' ' -f1)"
 
