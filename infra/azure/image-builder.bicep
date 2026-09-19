@@ -37,6 +37,7 @@ var tags = {
   ReleaseVersion: releaseVersion
   ImageVersion: imageVersion
 }
+var galleryName = '${replace(namePrefix, '-', '')}gallery'
 
 resource artifactStorage 'Microsoft.Storage/storageAccounts@2024-01-01' existing = {
   name: artifactStorageName
@@ -49,7 +50,7 @@ resource imageBuilderIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@
 }
 
 resource gallery 'Microsoft.Compute/galleries@2022-03-03' = {
-  name: '${namePrefix}-gallery'
+  name: galleryName
   location: location
   tags: tags
   properties: {
