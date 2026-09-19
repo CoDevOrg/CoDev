@@ -52,6 +52,27 @@ export interface StartIdeInput {
   coordinationMcpToken?: string;
 }
 
+export interface PrepareIdeInput {
+  projectRoot: string;
+  clone?: {
+    repository: string;
+    defaultBranch: string;
+    token?: string;
+  };
+}
+
+export async function prepareIde(
+  workspaceId: string,
+  input: PrepareIdeInput,
+): Promise<void> {
+  await orchestratorRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/ide/prepare`,
+    input,
+    110_000,
+  );
+}
+
 /**
  * Start (or idempotently return) this workspace's dedicated per-workspace
  * Orca IDE process. Replaces the previous SSM RunCommand flow entirely: the

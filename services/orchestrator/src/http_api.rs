@@ -22,11 +22,11 @@ use crate::{
     model::{
         ClaudeSetupCodeRequest, ClaudeSetupPollRequest, ClaudeSetupStartRequest,
         CodexExecPollRequest, CodexExecStartRequest, CreateRequest, ExecRequest,
-        IDE_EXEC_MAX_ARGUMENTS, IDE_EXEC_MAX_TIMEOUT_SECONDS, IdeExecRequest, IdeStartRequest,
-        IdeWriteFileRequest, MAX_IDE_FILE_BYTES, PublicationExportRequest, Result, RuntimeError,
-        TerminalInputRequest, TerminalPollRequest, TerminalResizeRequest, TerminalStartRequest,
-        WorktreeCheckpointRequest, WorktreeCreateRequest, WorktreeMergeRequest,
-        WorktreeRebaseRequest, WriteFileRequest,
+        IDE_EXEC_MAX_ARGUMENTS, IDE_EXEC_MAX_TIMEOUT_SECONDS, IdeExecRequest, IdePrepareRequest,
+        IdeStartRequest, IdeWriteFileRequest, MAX_IDE_FILE_BYTES, PublicationExportRequest, Result,
+        RuntimeError, TerminalInputRequest, TerminalPollRequest, TerminalResizeRequest,
+        TerminalStartRequest, WorktreeCheckpointRequest, WorktreeCreateRequest,
+        WorktreeMergeRequest, WorktreeRebaseRequest, WriteFileRequest,
     },
 };
 
@@ -64,6 +64,10 @@ pub fn router(backend: SharedBackend, ide: IdeBackend) -> Router {
         .route(
             "/v1/sandboxes/{workspace_id}/ide",
             post(start_ide).get(get_ide).delete(stop_ide),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/ide/prepare",
+            post(prepare_ide),
         )
         .route("/v1/sandboxes/{workspace_id}/ide/activity", post(touch_ide))
         .route(
@@ -685,17 +689,7 @@ async fn start_ide(
     if request.project_root.is_empty() || request.project_root.len() > 4_096 {
         return Err(RuntimeError::BadRequest("invalid project root".into()));
     }
-    if let Some(clone) = &request.clone {
-        if clone.repository.is_empty() || clone.repository.len() > 256 {
-            return Err(RuntimeError::BadRequest("invalid repository".into()));
-        }
-        if clone.default_branch.is_empty() || clone.default_branch.len() > 256 {
-            return Err(RuntimeError::BadRequest("invalid default branch".into()));
-        }
-        if clone.token.as_ref().is_some_and(|token| token.len() > 512) {
-            return Err(RuntimeError::BadRequest("invalid token".into()));
-        }
-    }
+    validate_ide_clone(request.clone.as_ref())?;
     if let Some(codex_auth_cache_json) = &request.codex_auth_cache_json
         && (codex_auth_cache_json.len() > (128 << 10)
             || !serde_json::from_str::<serde_json::Value>(codex_auth_cache_json)
@@ -729,6 +723,35 @@ async fn start_ide(
         StatusCode::CREATED,
         Json(serde_json::json!({ "ide": session })),
     ))
+}
+
+async fn prepare_ide(
+    Extension(ide): Extension<IdeBackend>,
+    Path(workspace_id): Path<String>,
+    Json(request): Json<IdePrepareRequest>,
+) -> Result<StatusCode> {
+    validate_workspace_id(&workspace_id)?;
+    if request.project_root.is_empty() || request.project_root.len() > 4_096 {
+        return Err(RuntimeError::BadRequest("invalid project root".into()));
+    }
+    validate_ide_clone(request.clone.as_ref())?;
+    ide.prepare(&workspace_id, request).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+fn validate_ide_clone(clone: Option<&crate::model::IdeCloneRequest>) -> Result<()> {
+    if let Some(clone) = clone {
+        if clone.repository.is_empty() || clone.repository.len() > 256 {
+            return Err(RuntimeError::BadRequest("invalid repository".into()));
+        }
+        if clone.default_branch.is_empty() || clone.default_branch.len() > 256 {
+            return Err(RuntimeError::BadRequest("invalid default branch".into()));
+        }
+        if clone.token.as_ref().is_some_and(|token| token.len() > 512) {
+            return Err(RuntimeError::BadRequest("invalid token".into()));
+        }
+    }
+    Ok(())
 }
 
 async fn get_ide(

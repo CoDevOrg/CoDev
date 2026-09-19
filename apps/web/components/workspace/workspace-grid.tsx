@@ -103,13 +103,12 @@ export function WorkspaceGrid({
 
   const greeting = useMemo(() => getGreeting(), []);
 
-  // Prewarm: nudge a workspace's Orca host awake on hover/focus intent so the
-  // ~10s cold start overlaps navigation instead of starting only once the
-  // workspace page has downloaded and hydrated. The wake is idempotent and
-  // cheap (a DescribeInstances plus at most one StartInstances), fired once per
-  // workspace per session, and its result is intentionally ignored — the
-  // workspace page still runs the real connect.
+  // Prewarm: nudge only the shared Orca host awake on hover/focus intent so
+  // host startup overlaps navigation. The wake route does not start an Orca
+  // process, clone a repository, or resolve member credentials; the workspace
+  // page still runs the real connect after navigation.
   const prewarmedRef = useRef<Set<string>>(new Set());
+  const preparedRef = useRef<Set<string>>(new Set());
   const hoverIntentRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
     new Map(),
   );
@@ -118,9 +117,21 @@ export function WorkspaceGrid({
       return;
     }
     prewarmedRef.current.add(workspaceId);
-    void fetch(`/api/workspaces/${workspaceId}/orca`, {
+    void fetch(`/api/workspaces/${workspaceId}/wake`, {
       method: "POST",
       keepalive: true,
+      cache: "no-store",
+    }).catch(() => {});
+  }, []);
+  const prepareWorkspace = useCallback((workspaceId: string) => {
+    if (preparedRef.current.has(workspaceId)) {
+      return;
+    }
+    preparedRef.current.add(workspaceId);
+    void fetch(`/api/workspaces/${workspaceId}/prepare`, {
+      method: "POST",
+      keepalive: true,
+      cache: "no-store",
     }).catch(() => {});
   }, []);
   const armPrewarm = useCallback(
@@ -364,7 +375,7 @@ export function WorkspaceGrid({
                 onPointerEnter={() => armPrewarm(workspace.id)}
                 onPointerLeave={() => disarmPrewarm(workspace.id)}
                 onFocus={() => prewarmWorkspace(workspace.id)}
-                onPointerDown={() => prewarmWorkspace(workspace.id)}
+                onPointerDown={() => prepareWorkspace(workspace.id)}
               >
                 <article className="workspace-card">
                   <div

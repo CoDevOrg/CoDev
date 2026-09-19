@@ -22,6 +22,7 @@ import {
 import {
   OrchestratorError,
   getIde,
+  prepareIde,
   startIde,
   stopIde,
   touchIde,
@@ -79,6 +80,13 @@ const TRANSIENT_ORCHESTRATOR_STATUSES = new Set([408, 409, 500, 502, 503, 504]);
  * status carries orchestrator-internal text and is reported generically.
  */
 const MEMBER_ACTIONABLE_ORCHESTRATOR_STATUSES = new Set([402, 429]);
+
+type OrcaWorkspace = {
+  id: string;
+  repository: string | null;
+  repositoryVisibility: string | null;
+  defaultBranch: string | null;
+};
 
 function orcaHostErrorFor(error: OrchestratorError): OrcaHostError {
   return MEMBER_ACTIONABLE_ORCHESTRATOR_STATUSES.has(error.status)
@@ -295,6 +303,23 @@ async function resolveClaudeEnvForIde(
   }
 }
 
+async function resolveOrcaClone(
+  workspace: OrcaWorkspace,
+  userId: string,
+): Promise<StartIdeInput["clone"]> {
+  const token =
+    workspace.repositoryVisibility === "private"
+      ? await getGitHubUserToken(userId)
+      : undefined;
+  return workspace.repository && workspace.defaultBranch
+    ? {
+        repository: workspace.repository,
+        defaultBranch: workspace.defaultBranch,
+        ...(token ? { token } : {}),
+      }
+    : undefined;
+}
+
 /**
  * Mark this workspace's IDE session as still in use, and report whether the
  * session is still there at all.
@@ -328,12 +353,7 @@ export async function recordOrcaActivity(
  * client can poll.
  */
 export async function ensureOrcaSession(
-  workspace: {
-    id: string;
-    repository: string | null;
-    repositoryVisibility: string | null;
-    defaultBranch: string | null;
-  },
+  workspace: OrcaWorkspace,
   userId: string,
   timing = new WorkspaceOpenTiming(),
 ): Promise<OrcaRuntimeState> {
@@ -394,18 +414,7 @@ export async function ensureOrcaSession(
   }
 
   const workspacePath = orcaWorkspacePath(workspace.id);
-  const token =
-    workspace.repositoryVisibility === "private"
-      ? await getGitHubUserToken(userId)
-      : undefined;
-  const clone =
-    workspace.repository && workspace.defaultBranch
-      ? {
-          repository: workspace.repository,
-          defaultBranch: workspace.defaultBranch,
-          ...(token ? { token } : {}),
-        }
-      : undefined;
+  const clone = await resolveOrcaClone(workspace, userId);
   const [
     codexAuthCacheJson,
     cursorAuthJson,
@@ -457,6 +466,59 @@ export async function ensureOrcaSession(
       if (TRANSIENT_ORCHESTRATOR_STATUSES.has(error.status)) {
         return { state: "host-starting" };
       }
+      throw orcaHostErrorFor(error);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Prepare the repository directory without starting an Orca process. This is
+ * the work done after a strong dashboard navigation intent, so cloning can
+ * overlap the page navigation and the later `/orca` request only has to start
+ * the already-prepared session.
+ */
+export async function prepareOrcaWorkspace(
+  workspace: OrcaWorkspace,
+  userId: string,
+): Promise<"prepared" | "host-starting"> {
+  try {
+    await assertWorkspaceCreditQuota(workspace.id, userId);
+  } catch (error) {
+    if (error instanceof QuotaError) {
+      throw new OrcaHostError(error.message, 429);
+    }
+    throw error;
+  }
+
+  try {
+    if ((await requestHostWake(1)) !== "running") {
+      return "host-starting";
+    }
+    await waitForOrchestrator(OPEN_PATH_ORCHESTRATOR_WAIT_MS);
+  } catch (error) {
+    const unavailable = classifyRuntimeFailure(error);
+    if (unavailable) {
+      throw new OrcaHostError(unavailable.message, 503, unavailable.detail);
+    }
+    return "host-starting";
+  }
+
+  const clone = await resolveOrcaClone(workspace, userId);
+  try {
+    await prepareIde(workspace.id, {
+      projectRoot: orcaWorkspacePath(workspace.id),
+      ...(clone ? { clone } : {}),
+    });
+    return "prepared";
+  } catch (error) {
+    if (
+      error instanceof OrchestratorError &&
+      TRANSIENT_ORCHESTRATOR_STATUSES.has(error.status)
+    ) {
+      return "host-starting";
+    }
+    if (error instanceof OrchestratorError) {
       throw orcaHostErrorFor(error);
     }
     throw error;

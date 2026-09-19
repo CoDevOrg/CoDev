@@ -8,8 +8,8 @@ use chrono::{Duration, Utc};
 use crate::model::{
     ClaudeSetupCodeRequest, ClaudeSetupPollRequest, ClaudeSetupPollResponse,
     ClaudeSetupStartRequest, CodexExecPollRequest, CodexExecPollResponse, CodexExecStartRequest,
-    CreateRequest, ExecRequest, ExecResponse, FileResponse, IdeExecRequest, IdeSession,
-    IdeStartRequest, IdeWriteFileRequest, Instance, PublicationExportRequest,
+    CreateRequest, ExecRequest, ExecResponse, FileResponse, IdeExecRequest, IdePrepareRequest,
+    IdeSession, IdeStartRequest, IdeWriteFileRequest, Instance, PublicationExportRequest,
     PublicationExportResponse, Result, RuntimeError, TerminalInputRequest, TerminalPollRequest,
     TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
     WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse,
@@ -39,6 +39,18 @@ pub enum IdeBackend {
 }
 
 impl IdeBackend {
+    pub async fn prepare(&self, workspace_id: &str, request: IdePrepareRequest) -> Result<()> {
+        #[cfg(not(target_os = "linux"))]
+        let _ = (&workspace_id, &request);
+        match self {
+            #[cfg(target_os = "linux")]
+            Self::Orca(backend) => backend.prepare(workspace_id, request).await,
+            Self::Disabled => Err(RuntimeError::Unavailable(
+                "the Orca IDE backend is not configured on this host".into(),
+            )),
+        }
+    }
+
     pub async fn start(&self, workspace_id: &str, request: IdeStartRequest) -> Result<IdeSession> {
         #[cfg(not(target_os = "linux"))]
         let _ = (&workspace_id, &request);

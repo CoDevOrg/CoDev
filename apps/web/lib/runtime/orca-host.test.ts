@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => {
     OrchestratorError,
     getHostState: vi.fn(),
     getIde: vi.fn(),
+    prepareIde: vi.fn(),
     requestHostWake: vi.fn(),
     waitForOrchestrator: vi.fn().mockResolvedValue(undefined),
     startIde: vi.fn(),
@@ -48,6 +49,7 @@ vi.mock("../providers/hosted-codex-subscription-credentials", () => ({
 vi.mock("./orchestrator", () => ({
   OrchestratorError: mocks.OrchestratorError,
   startIde: mocks.startIde,
+  prepareIde: mocks.prepareIde,
   getIde: mocks.getIde,
   stopIde: mocks.stopIde,
   waitForOrchestrator: mocks.waitForOrchestrator,
@@ -60,7 +62,11 @@ vi.mock("./compute-credits", () => ({
   openOrcaInterval: mocks.openOrcaInterval,
 }));
 
-import { ensureOrcaSession, OrcaHostError } from "./orca-host";
+import {
+  ensureOrcaSession,
+  OrcaHostError,
+  prepareOrcaWorkspace,
+} from "./orca-host";
 import { RUNTIME_UNAVAILABLE_MESSAGE } from "./runtime-availability";
 
 const workspaceId = "c1f9fe13-6881-44a6-adbd-96bc5a946afa";
@@ -102,6 +108,7 @@ describe("ensureOrcaSession", () => {
     // before it reaches what it is actually asserting.
     vi.stubEnv("AUTH_SECRET", "o".repeat(40));
     mocks.getHostState.mockResolvedValue("running");
+    mocks.requestHostWake.mockResolvedValue("running");
     mocks.getIde.mockRejectedValue(
       new mocks.OrchestratorError("not found", 404),
     );
@@ -114,6 +121,41 @@ describe("ensureOrcaSession", () => {
     mocks.resolveCursorCliAuth.mockResolvedValue(null);
     mocks.resolveClaudeCliTokenForIde.mockResolvedValue(null);
     mocks.resolveHostedCodexSubscription.mockResolvedValue(null);
+    mocks.prepareIde.mockResolvedValue(undefined);
+  });
+
+  it("prepares a repository without resolving member agent credentials", async () => {
+    const repositoryWorkspace = {
+      ...workspace,
+      repository: "CoDevOrg/CoDev",
+      repositoryVisibility: "public",
+      defaultBranch: "main",
+    };
+
+    await expect(
+      prepareOrcaWorkspace(repositoryWorkspace, userId),
+    ).resolves.toBe("prepared");
+
+    expect(mocks.prepareIde).toHaveBeenCalledWith(workspaceId, {
+      projectRoot: `/srv/codev/workspaces/${workspaceId}`,
+      clone: {
+        repository: "CoDevOrg/CoDev",
+        defaultBranch: "main",
+      },
+    });
+    expect(mocks.resolveWorkspaceApiKey).not.toHaveBeenCalled();
+    expect(mocks.resolveCursorCliAuth).not.toHaveBeenCalled();
+    expect(mocks.resolveClaudeCliTokenForIde).not.toHaveBeenCalled();
+    expect(mocks.resolveHostedCodexSubscription).not.toHaveBeenCalled();
+  });
+
+  it("does not start repository preparation while the host is starting", async () => {
+    mocks.requestHostWake.mockResolvedValueOnce("starting");
+
+    await expect(prepareOrcaWorkspace(workspace, userId)).resolves.toBe(
+      "host-starting",
+    );
+    expect(mocks.prepareIde).not.toHaveBeenCalled();
   });
 
   it("reconnects a live workspace without EC2 discovery while refreshing member credentials and metering", async () => {

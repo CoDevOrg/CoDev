@@ -389,6 +389,16 @@ pub enum ClaudeSetupPollResponse {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct IdePrepareRequest {
+    pub project_root: String,
+    /// Present only when the workspace's clone directory may not exist yet on
+    /// the host. Preparation is deliberately separate from starting Orca so a
+    /// navigation intent can clone the repository without launching Electron.
+    pub clone: Option<IdeCloneRequest>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct IdeStartRequest {
     pub project_root: String,
     /// Present only when the workspace's clone directory may not exist yet

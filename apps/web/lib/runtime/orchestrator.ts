@@ -35,7 +35,9 @@ export {
 } from "./orchestrator-health";
 export {
   type IdeSession,
+  type PrepareIdeInput,
   type StartIdeInput,
+  prepareIde,
   startIde,
   getIde,
   touchIde,

@@ -168,7 +168,15 @@ export async function getHostState(): Promise<HostState> {
  */
 const DEFAULT_STOPPING_ATTEMPTS = 30;
 
-export async function requestHostWake(
+// A dashboard can send wake intent from hover, focus, and pointer-down at
+// nearly the same time, and several members can open workspaces together.
+// Collapse those calls inside one warm web process so Azure sees one power
+// operation instead of a burst of identical ARM requests. The host remains
+// the source of truth, so a new process or a different Vercel isolate simply
+// converges through Azure's normal operation-conflict handling.
+let wakeInFlight: Promise<"running" | "starting"> | undefined;
+
+async function wakeHost(
   stoppingAttempts = DEFAULT_STOPPING_ATTEMPTS,
 ): Promise<"running" | "starting"> {
   const resolved = await resolveHost();
@@ -214,6 +222,17 @@ export async function requestHostWake(
     return "starting";
   }
   return "starting";
+}
+
+export function requestHostWake(
+  stoppingAttempts = DEFAULT_STOPPING_ATTEMPTS,
+): Promise<"running" | "starting"> {
+  if (wakeInFlight) return wakeInFlight;
+  const operation = wakeHost(stoppingAttempts);
+  wakeInFlight = operation.finally(() => {
+    wakeInFlight = undefined;
+  });
+  return wakeInFlight;
 }
 
 /**

@@ -135,7 +135,7 @@ describe("WorkspaceGrid", () => {
     expect(screen.getByText("No one is active right now")).toBeVisible();
   });
 
-  it("prewarms the workspace host once when a card is pressed", () => {
+  it("prepares the workspace once when a card is pressed", () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(new Response(null, { status: 202 }));
@@ -153,8 +153,8 @@ describe("WorkspaceGrid", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/workspaces/workspace-1/orca",
-      expect.objectContaining({ method: "POST" }),
+      "/api/workspaces/workspace-1/prepare",
+      expect.objectContaining({ method: "POST", cache: "no-store" }),
     );
   });
 

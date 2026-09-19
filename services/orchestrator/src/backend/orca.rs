@@ -42,8 +42,8 @@ use tracing::{info, warn};
 
 use crate::model::{
     ExecResponse, IDE_EXEC_MAX_ARGUMENTS, IDE_EXEC_MAX_TIMEOUT_SECONDS, IdeCloneRequest,
-    IdeExecRequest, IdeRoot, IdeSession, IdeStartRequest, IdeWriteFileRequest, Result,
-    RuntimeError,
+    IdeExecRequest, IdePrepareRequest, IdeRoot, IdeSession, IdeStartRequest, IdeWriteFileRequest,
+    Result, RuntimeError,
 };
 
 const READY_TIMEOUT: Duration = Duration::from_secs(45);
@@ -296,6 +296,32 @@ impl OrcaBackend {
         self.reload_caddy_routes().await?;
         info!(workspace_id, port, "started per-workspace Orca IDE session");
         Ok(session.to_model(workspace_id))
+    }
+
+    /// Prepare the workspace directory and repository without starting Orca.
+    /// This is used by the web dashboard after a strong navigation intent so
+    /// repository work can overlap the page's navigation and shell startup.
+    pub async fn prepare(&self, workspace_id: &str, request: IdePrepareRequest) -> Result<()> {
+        let expected_root = self.config.workspaces_root.join(workspace_id);
+        if Path::new(&request.project_root) != expected_root {
+            return Err(RuntimeError::BadRequest(
+                "project root must be this workspace's clone directory".into(),
+            ));
+        }
+
+        // Preparation does not consume an Orca process slot. It still shares
+        // the provisioning lock with starts so a clone cannot race a session
+        // launch or another preparation for the same host tree.
+        let _guard = self.provision.lock().await;
+        tokio::fs::create_dir_all(&expected_root)
+            .await
+            .map_err(RuntimeError::internal)?;
+        let linux_user = linux_user_for(workspace_id);
+        ensure_linux_user(&linux_user).await?;
+        if let Some(clone) = &request.clone {
+            ensure_workspace_clone(&expected_root, clone).await?;
+        }
+        Ok(())
     }
 
     async fn reconnect(
