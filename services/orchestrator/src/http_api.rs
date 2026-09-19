@@ -69,6 +69,10 @@ pub fn router(backend: SharedBackend, ide: IdeBackend) -> Router {
             "/v1/sandboxes/{workspace_id}/ide/prepare",
             post(prepare_ide),
         )
+        .route(
+            "/v1/sandboxes/{workspace_id}/ide/credentials",
+            post(refresh_ide_credentials),
+        )
         .route("/v1/sandboxes/{workspace_id}/ide/activity", post(touch_ide))
         .route(
             "/v1/sandboxes/{workspace_id}/ide/files/write",
@@ -690,34 +694,7 @@ async fn start_ide(
         return Err(RuntimeError::BadRequest("invalid project root".into()));
     }
     validate_ide_clone(request.clone.as_ref())?;
-    if let Some(codex_auth_cache_json) = &request.codex_auth_cache_json
-        && (codex_auth_cache_json.len() > (128 << 10)
-            || !serde_json::from_str::<serde_json::Value>(codex_auth_cache_json)
-                .is_ok_and(|value| value.is_object()))
-    {
-        return Err(RuntimeError::BadRequest(
-            "Codex auth cache is invalid or too large".into(),
-        ));
-    }
-    // A Claude OAuth token here is only the long-lived `claude setup-token`
-    // uploaded through the CLI and explicitly enabled for workspace use. The
-    // web control plane never forwards a browser subscription token. The Orca
-    // backend maps this field to CLAUDE_CODE_OAUTH_TOKEN for the member's
-    // isolated workspace user, so rejecting it here would make the supported
-    // CLI flow fail with a misleading 400.
-    if request
-        .anthropic_api_key
-        .as_ref()
-        .is_some_and(|value| value.is_empty() || value.len() > 512)
-        || request
-            .claude_code_oauth_token
-            .as_ref()
-            .is_some_and(|value| value.is_empty() || value.len() > 512)
-    {
-        return Err(RuntimeError::BadRequest(
-            "invalid Anthropic credential".into(),
-        ));
-    }
+    validate_ide_credentials(&request)?;
     let session = ide.start(&workspace_id, request).await?;
     Ok((
         StatusCode::CREATED,
@@ -737,6 +714,49 @@ async fn prepare_ide(
     validate_ide_clone(request.clone.as_ref())?;
     ide.prepare(&workspace_id, request).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+async fn refresh_ide_credentials(
+    Extension(ide): Extension<IdeBackend>,
+    Path(workspace_id): Path<String>,
+    Json(request): Json<IdeStartRequest>,
+) -> Result<StatusCode> {
+    validate_workspace_id(&workspace_id)?;
+    if request.project_root.is_empty() || request.project_root.len() > 4_096 {
+        return Err(RuntimeError::BadRequest("invalid project root".into()));
+    }
+    validate_ide_credentials(&request)?;
+    ide.refresh_credentials(&workspace_id, request).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+fn validate_ide_credentials(request: &IdeStartRequest) -> Result<()> {
+    if let Some(codex_auth_cache_json) = &request.codex_auth_cache_json
+        && (codex_auth_cache_json.len() > (128 << 10)
+            || !serde_json::from_str::<serde_json::Value>(codex_auth_cache_json)
+                .is_ok_and(|value| value.is_object()))
+    {
+        return Err(RuntimeError::BadRequest(
+            "Codex auth cache is invalid or too large".into(),
+        ));
+    }
+    // A Claude OAuth token here is only the long-lived `claude setup-token`
+    // uploaded through the CLI and explicitly enabled for workspace use. The
+    // web control plane never forwards a browser subscription token.
+    if request
+        .anthropic_api_key
+        .as_ref()
+        .is_some_and(|value| value.is_empty() || value.len() > 512)
+        || request
+            .claude_code_oauth_token
+            .as_ref()
+            .is_some_and(|value| value.is_empty() || value.len() > 512)
+    {
+        return Err(RuntimeError::BadRequest(
+            "invalid Anthropic credential".into(),
+        ));
+    }
+    Ok(())
 }
 
 fn validate_ide_clone(clone: Option<&crate::model::IdeCloneRequest>) -> Result<()> {

@@ -23,6 +23,7 @@ import {
   OrchestratorError,
   getIde,
   prepareIde,
+  refreshIdeCredentials,
   startIde,
   stopIde,
   touchIde,
@@ -303,6 +304,61 @@ async function resolveClaudeEnvForIde(
   }
 }
 
+type OrcaMemberCredentials = Pick<
+  StartIdeInput,
+  | "codexAuthCacheJson"
+  | "cursorAuthJson"
+  | "cursorApiKey"
+  | "openaiApiKey"
+  | "anthropicApiKey"
+  | "claudeCodeOauthToken"
+>;
+
+async function resolveOrcaMemberCredentials(
+  userId: string,
+  workspaceId: string,
+): Promise<OrcaMemberCredentials> {
+  const [
+    codexAuthCacheJson,
+    cursorAuthJson,
+    cursorApiKey,
+    openaiApiKey,
+    claudeEnv,
+  ] = await Promise.all([
+    resolveCodexAuthCacheForIde(userId, workspaceId),
+    resolveCursorAuthJsonForIde(userId, workspaceId),
+    resolveCursorApiKeyForIde(userId, workspaceId),
+    resolveOpenAiApiKeyForIde(userId, workspaceId),
+    resolveClaudeEnvForIde(userId, workspaceId),
+  ]);
+  return {
+    ...(codexAuthCacheJson ? { codexAuthCacheJson } : {}),
+    ...(cursorAuthJson ? { cursorAuthJson } : {}),
+    ...(cursorApiKey ? { cursorApiKey } : {}),
+    ...(openaiApiKey ? { openaiApiKey } : {}),
+    ...claudeEnv,
+  };
+}
+
+async function hydrateOrcaMemberCredentials(
+  workspaceId: string,
+  userId: string,
+  baseInput: StartIdeInput,
+): Promise<void> {
+  const credentials = await resolveOrcaMemberCredentials(userId, workspaceId);
+  await refreshIdeCredentials(workspaceId, {
+    projectRoot: baseInput.projectRoot,
+    ...(baseInput.memberId ? { memberId: baseInput.memberId } : {}),
+    ...(baseInput.coordinationMcpUrl
+      ? { coordinationMcpUrl: baseInput.coordinationMcpUrl }
+      : {}),
+    ...(baseInput.coordinationMcpToken
+      ? { coordinationMcpToken: baseInput.coordinationMcpToken }
+      : {}),
+    ...credentials,
+  });
+}
+
 async function resolveOrcaClone(
   workspace: OrcaWorkspace,
   userId: string,
@@ -415,47 +471,31 @@ export async function ensureOrcaSession(
 
   const workspacePath = orcaWorkspacePath(workspace.id);
   const clone = await resolveOrcaClone(workspace, userId);
-  const [
-    codexAuthCacheJson,
-    cursorAuthJson,
-    cursorApiKey,
-    openaiApiKey,
-    claudeEnv,
-  ] = await timing.measure("credentials", () =>
-    Promise.all([
-      resolveCodexAuthCacheForIde(userId, workspace.id),
-      resolveCursorAuthJsonForIde(userId, workspace.id),
-      resolveCursorApiKeyForIde(userId, workspace.id),
-      resolveOpenAiApiKeyForIde(userId, workspace.id),
-      resolveClaudeEnvForIde(userId, workspace.id),
-    ]),
-  );
 
   const coordinationMcpUrl = new URL(
     `/api/workspaces/${workspace.id}/mcp/coordination`,
     getPublicAppOrigin(),
   ).toString();
+  const baseInput: StartIdeInput = {
+    projectRoot: workspacePath,
+    memberId: userId,
+    coordinationMcpUrl,
+    coordinationMcpToken: mintWorkspaceCoordinationToken(workspace.id),
+    ...(clone ? { clone } : {}),
+  };
 
   try {
     const session = await timing.measure("connect", () =>
-      startIdeRecoveringStaleProcess(workspace.id, {
-        projectRoot: workspacePath,
-        memberId: userId,
-        coordinationMcpUrl,
-        coordinationMcpToken: mintWorkspaceCoordinationToken(workspace.id),
-        ...(clone ? { clone } : {}),
-        ...(codexAuthCacheJson ? { codexAuthCacheJson } : {}),
-        ...(cursorAuthJson ? { cursorAuthJson } : {}),
-        ...(cursorApiKey ? { cursorApiKey } : {}),
-        ...(openaiApiKey ? { openaiApiKey } : {}),
-        ...claudeEnv,
-      }),
+      startIdeRecoveringStaleProcess(workspace.id, baseInput),
     );
     const pairing = parseOrcaReady(session.ready, workspace.id);
-    // Best-effort: a metering hiccup must never block the IDE from opening.
-    await timing.measure("metering", () =>
-      openOrcaInterval(userId, workspace.id).catch(() => {}),
+    // Provider resolution and credential filing are best-effort follow-up
+    // work. The editor is already usable and must not wait on either path.
+    void hydrateOrcaMemberCredentials(workspace.id, userId, baseInput).catch(
+      () => {},
     );
+    // Best-effort: a metering hiccup must never block the IDE from opening.
+    void openOrcaInterval(userId, workspace.id).catch(() => {});
     return { state: "ready", pairing, workspacePath };
   } catch (error) {
     if (error instanceof OrchestratorError) {

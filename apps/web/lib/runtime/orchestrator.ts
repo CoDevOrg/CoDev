@@ -38,6 +38,7 @@ export {
   type PrepareIdeInput,
   type StartIdeInput,
   prepareIde,
+  refreshIdeCredentials,
   startIde,
   getIde,
   touchIde,

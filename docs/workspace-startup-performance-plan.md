@@ -1,6 +1,6 @@
 # Workspace startup performance plan
 
-Status: Phase 1 in progress. The implemented slice is called out below; the
+Status: Phase 2 in progress. The implemented slices are called out below; the
 remaining phases are still design work.
 
 ## Objective
@@ -264,6 +264,30 @@ Exit criterion: dashboard intent can start host work before navigation without
 starting a workspace process, and concurrent opens converge on one operation.
 
 ## Phase 2: remove synchronous per-open work
+
+### Implemented slice
+
+The first Phase 2 slice now includes:
+
+- existing repository starts check the workspace root's ownership and skip the
+  repository-wide `chown -R` when the root already has the workspace user's
+  UID/GID;
+- small credential/configuration directories use targeted ownership changes,
+  so creating or refreshing a member bundle does not walk the repository or
+  every older member bundle;
+- the start request no longer resolves or materializes provider credentials
+  before Orca readiness;
+- a narrow orchestrator credentials endpoint hydrates the member's agent
+  bundle after the editor is ready, using the existing per-member agent env
+  path; and
+- compute-credit metering is fire-and-forget from the open path.
+
+The clone remains full-depth and is still root-launched with a one-time
+ownership migration. Running `git clone` directly as the workspace user is
+deferred until the host image and credential-handling design can make that
+change without exposing the short-lived GitHub token through `sudo` or a
+process environment. This slice therefore removes the repeated cost on the
+normal existing-repository path without changing clone semantics.
 
 ### Eliminate normal recursive ownership repair
 

@@ -92,6 +92,23 @@ export async function startIde(
   return z.object({ ide: ideSessionSchema }).parse(await response.json()).ide;
 }
 
+/**
+ * Refresh the member-scoped agent credential bundle after the IDE is ready.
+ * This is intentionally separate from `startIde` so provider lookups and
+ * host-side file writes cannot delay workspace readiness.
+ */
+export async function refreshIdeCredentials(
+  workspaceId: string,
+  input: StartIdeInput,
+): Promise<void> {
+  await orchestratorRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/ide/credentials`,
+    input,
+    30_000,
+  );
+}
+
 export async function getIde(
   workspaceId: string,
   timeoutMs = 70_000,

@@ -63,6 +63,25 @@ impl IdeBackend {
         }
     }
 
+    /// Refresh the per-member agent credentials after the IDE is already
+    /// reachable. Provider lookup and credential filing are intentionally not
+    /// part of the workspace readiness path.
+    pub async fn refresh_credentials(
+        &self,
+        workspace_id: &str,
+        request: IdeStartRequest,
+    ) -> Result<()> {
+        #[cfg(not(target_os = "linux"))]
+        let _ = (&workspace_id, &request);
+        match self {
+            #[cfg(target_os = "linux")]
+            Self::Orca(backend) => backend.refresh_credentials(workspace_id, request).await,
+            Self::Disabled => Err(RuntimeError::Unavailable(
+                "the Orca IDE backend is not configured on this host".into(),
+            )),
+        }
+    }
+
     /// When any IDE session was last used. `Disabled` reports `None` so a host
     /// without the Orca backend configured still idles down normally.
     pub async fn last_activity_at(&self) -> Option<chrono::DateTime<chrono::Utc>> {
