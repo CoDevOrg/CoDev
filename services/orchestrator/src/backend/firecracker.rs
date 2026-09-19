@@ -34,8 +34,8 @@ use crate::{
         SessionRestoreFinalizeResponse, TerminalInputRequest, TerminalPollRequest,
         TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
         WorktreeCheckpointRequest, WorktreeCheckpointResponse, WorktreeCreateRequest,
-        WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest,
-        WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
+        WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest, WorktreeRebaseResponse,
+        WorktreeReviewResponse, WriteFileRequest,
     },
 };
 
@@ -727,10 +727,7 @@ impl FirecrackerBackend {
         operation_id: &str,
     ) -> Result<SessionRestoreFinalizeResponse> {
         let machine = self.machine(workspace_id).await?;
-        let response = machine
-            .guest
-            .finalize_session_restore(operation_id)
-            .await?;
+        let response = machine.guest.finalize_session_restore(operation_id).await?;
         self.mark_activity(&machine);
         Ok(response)
     }

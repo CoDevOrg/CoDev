@@ -24,14 +24,13 @@ use crate::model::{
     ClaudeSetupCodeRequest, ClaudeSetupPollRequest, ClaudeSetupPollResponse,
     ClaudeSetupStartRequest, CodexExecChunk, CodexExecPollRequest, CodexExecPollResponse,
     CodexExecStartRequest, ExecRequest, ExecResponse, FileResponse, PublicationExportRequest,
-    PublicationExportResponse, PublicationFile, RuntimeError, TerminalChunk, TerminalInputRequest,
-    TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
-    SESSION_RESTORE_CHUNK_BYTES, SESSION_RESTORE_FILE_BYTES, SESSION_RESTORE_TOTAL_BYTES,
-    SessionRestoreBeginRequest, SessionRestoreChunkRequest, SessionRestoreFileKind,
-    SessionRestoreFinalizeResponse, SessionRestoreStatus,
-    WorktreeCheckpointRequest, WorktreeCheckpointResponse, WorktreeCreateRequest,
-    WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest, WorktreeRebaseResponse,
-    WorktreeReviewResponse, WriteFileRequest,
+    PublicationExportResponse, PublicationFile, RuntimeError, SESSION_RESTORE_CHUNK_BYTES,
+    SESSION_RESTORE_FILE_BYTES, SESSION_RESTORE_TOTAL_BYTES, SessionRestoreBeginRequest,
+    SessionRestoreChunkRequest, SessionRestoreFileKind, SessionRestoreFinalizeResponse,
+    SessionRestoreStatus, TerminalChunk, TerminalInputRequest, TerminalPollRequest,
+    TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
+    WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse,
+    WorktreeRebaseRequest, WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
 };
 
 const MAX_BODY_BYTES: usize = 2 << 20;
@@ -185,7 +184,9 @@ impl GuestService {
                         ("POST", "chunks") => self.append_session_restore_chunk(operation_id, body),
                         ("POST", "finalize") => self.finalize_session_restore(operation_id),
                         ("DELETE", "") => self.abort_session_restore(operation_id),
-                        _ => Err(RuntimeError::BadRequest("invalid session restore action".into())),
+                        _ => Err(RuntimeError::BadRequest(
+                            "invalid session restore action".into(),
+                        )),
                     }
                 } else if let Some((git_path, worktree_id)) = git_route(path) {
                     self.target_root(worktree_id)
@@ -706,10 +707,9 @@ impl GuestService {
         let operation_root = self.session_restore_operation_root(&request.operation_id)?;
         let manifest_path = operation_root.join("manifest.json");
         if manifest_path.exists() {
-            let existing: SessionRestoreBeginRequest = serde_json::from_slice(
-                &fs::read(&manifest_path).map_err(RuntimeError::internal)?,
-            )
-            .map_err(RuntimeError::internal)?;
+            let existing: SessionRestoreBeginRequest =
+                serde_json::from_slice(&fs::read(&manifest_path).map_err(RuntimeError::internal)?)
+                    .map_err(RuntimeError::internal)?;
             if existing != request {
                 return Err(RuntimeError::Conflict(
                     "restore operation already exists with different metadata".into(),
@@ -780,7 +780,9 @@ impl GuestService {
             return Ok(serde_json::json!({ "nextOffset": requested_end }));
         }
         let part_path = operation_root.join(format!("{}.part", request.file_index));
-        let current_bytes = fs::metadata(&part_path).map(|value| value.len()).unwrap_or(0);
+        let current_bytes = fs::metadata(&part_path)
+            .map(|value| value.len())
+            .unwrap_or(0);
         if request.offset < current_bytes && requested_end <= current_bytes {
             let existing = fs::read(&part_path).map_err(RuntimeError::internal)?;
             let start = request.offset as usize;
@@ -823,10 +825,8 @@ impl GuestService {
         let result_path = operation_root.join("result.json");
         if result_path.exists() {
             Self::cleanup_session_restore_parts(&operation_root)?;
-            return serde_json::from_slice(
-                &fs::read(result_path).map_err(RuntimeError::internal)?,
-            )
-            .map_err(RuntimeError::internal);
+            return serde_json::from_slice(&fs::read(result_path).map_err(RuntimeError::internal)?)
+                .map_err(RuntimeError::internal);
         }
         let manifest = read_restore_manifest(&operation_root)?;
         let worktree = self.target_root(Some(&manifest.worktree_id))?;
@@ -834,13 +834,14 @@ impl GuestService {
         self.require_clean(&worktree, "restore worktree must be clean")?;
 
         for (index, file) in manifest.files.iter().enumerate() {
-            let contents = fs::read(operation_root.join(format!("{index}.part"))).map_err(|error| {
-                if error.kind() == std::io::ErrorKind::NotFound {
-                    RuntimeError::Conflict(format!("restore file {index} is incomplete"))
-                } else {
-                    RuntimeError::internal(error)
-                }
-            })?;
+            let contents =
+                fs::read(operation_root.join(format!("{index}.part"))).map_err(|error| {
+                    if error.kind() == std::io::ErrorKind::NotFound {
+                        RuntimeError::Conflict(format!("restore file {index} is incomplete"))
+                    } else {
+                        RuntimeError::internal(error)
+                    }
+                })?;
             if contents.len() as u64 != file.bytes || revision(&contents) != file.sha256 {
                 return Err(RuntimeError::Conflict(format!(
                     "restore file {index} failed size or checksum verification"
@@ -879,7 +880,13 @@ impl GuestService {
                 .ok_or_else(|| RuntimeError::Internal("invalid restore staging path".into()))?;
             let check = self.git_output(
                 &worktree,
-                &["apply", "--check", "--binary", "--whitespace=nowarn", patch_arg],
+                &[
+                    "apply",
+                    "--check",
+                    "--binary",
+                    "--whitespace=nowarn",
+                    patch_arg,
+                ],
             )?;
             if !check.status.success() {
                 conflicts.extend(patch_paths.iter().cloned());
@@ -910,9 +917,12 @@ impl GuestService {
                 &["apply", "--binary", "--whitespace=nowarn", patch_arg],
             )?;
         }
-        for (index, file) in manifest.files.iter().enumerate().filter(|(_, file)| {
-            file.kind == SessionRestoreFileKind::Untracked
-        }) {
+        for (index, file) in manifest
+            .files
+            .iter()
+            .enumerate()
+            .filter(|(_, file)| file.kind == SessionRestoreFileKind::Untracked)
+        {
             let destination = self.restore_destination(&worktree, &file.path)?;
             let parent = destination
                 .parent()
@@ -933,10 +943,7 @@ impl GuestService {
         )
     }
 
-    fn abort_session_restore(
-        &self,
-        operation_id: &str,
-    ) -> crate::model::Result<serde_json::Value> {
+    fn abort_session_restore(&self, operation_id: &str) -> crate::model::Result<serde_json::Value> {
         validate_restore_operation_id(operation_id)?;
         let _mutation = self.mutations.lock().expect("mutation lock");
         self.wait_for_codex_idle();
@@ -947,10 +954,7 @@ impl GuestService {
         Ok(serde_json::json!({ "aborted": true }))
     }
 
-    fn session_restore_operation_root(
-        &self,
-        operation_id: &str,
-    ) -> crate::model::Result<PathBuf> {
+    fn session_restore_operation_root(&self, operation_id: &str) -> crate::model::Result<PathBuf> {
         validate_restore_operation_id(operation_id)?;
         let root = self.session_restore_root()?;
         let operation_root = root.join(operation_id);
@@ -2604,9 +2608,8 @@ fn validate_worktree_id(worktree_id: &str) -> crate::model::Result<()> {
 }
 
 fn validate_restore_operation_id(operation_id: &str) -> crate::model::Result<()> {
-    validate_worktree_id(operation_id).map_err(|_| {
-        RuntimeError::BadRequest("invalid session restore operation ID".into())
-    })
+    validate_worktree_id(operation_id)
+        .map_err(|_| RuntimeError::BadRequest("invalid session restore operation ID".into()))
 }
 
 fn validate_restore_path(path: &str) -> crate::model::Result<()> {
@@ -2644,9 +2647,9 @@ fn validate_restore_manifest(request: &SessionRestoreBeginRequest) -> crate::mod
                 "session restore file exceeds five MiB".into(),
             ));
         }
-        total_bytes = total_bytes.checked_add(file.bytes).ok_or_else(|| {
-            RuntimeError::BadRequest("session restore size is invalid".into())
-        })?;
+        total_bytes = total_bytes
+            .checked_add(file.bytes)
+            .ok_or_else(|| RuntimeError::BadRequest("session restore size is invalid".into()))?;
         if total_bytes > SESSION_RESTORE_TOTAL_BYTES {
             return Err(RuntimeError::BadRequest(
                 "session restore exceeds 25 MiB".into(),
@@ -2683,7 +2686,9 @@ fn validate_restore_manifest(request: &SessionRestoreBeginRequest) -> crate::mod
     Ok(())
 }
 
-fn read_restore_manifest(operation_root: &Path) -> crate::model::Result<SessionRestoreBeginRequest> {
+fn read_restore_manifest(
+    operation_root: &Path,
+) -> crate::model::Result<SessionRestoreBeginRequest> {
     let bytes = fs::read(operation_root.join("manifest.json")).map_err(|error| {
         if error.kind() == std::io::ErrorKind::NotFound {
             RuntimeError::BadRequest("session restore operation not found".into())
@@ -3357,7 +3362,10 @@ mod tests {
     fn session_restore_verifies_chunks_and_applies_repository_state_once() {
         let directory = tempdir().expect("tempdir");
         git(directory.path(), &["init", "--quiet"]);
-        git(directory.path(), &["config", "user.email", "codev@example.com"]);
+        git(
+            directory.path(),
+            &["config", "user.email", "codev@example.com"],
+        );
         git(directory.path(), &["config", "user.name", "CoDev Test"]);
         fs::write(directory.path().join("hello.txt"), "base\n").expect("seed");
         git(directory.path(), &["add", "hello.txt"]);
@@ -3403,8 +3411,18 @@ mod tests {
             ],
         };
         let begin_body = serde_json::to_vec(&begin_request).expect("begin");
-        assert_eq!(service.handle("POST", "/v1/session-restores", &begin_body).status, 200);
-        assert_eq!(service.handle("POST", "/v1/session-restores", &begin_body).status, 200);
+        assert_eq!(
+            service
+                .handle("POST", "/v1/session-restores", &begin_body)
+                .status,
+            200
+        );
+        assert_eq!(
+            service
+                .handle("POST", "/v1/session-restores", &begin_body)
+                .status,
+            200
+        );
 
         for (file_index, contents) in [(0, patch.as_slice()), (1, binary.as_slice())] {
             let body = serde_json::to_vec(&SessionRestoreChunkRequest {
@@ -3420,11 +3438,18 @@ mod tests {
 
         let finalize_path = format!("/v1/session-restores/{operation_id}/finalize");
         let finalized = service.handle("POST", &finalize_path, b"");
-        assert_eq!(finalized.status, 200, "{}", String::from_utf8_lossy(&finalized.body));
+        assert_eq!(
+            finalized.status,
+            200,
+            "{}",
+            String::from_utf8_lossy(&finalized.body)
+        );
         let repeated = service.handle("POST", &finalize_path, b"");
         assert_eq!(repeated.body, finalized.body);
         assert_eq!(
-            service.handle("POST", "/v1/session-restores", &begin_body).status,
+            service
+                .handle("POST", "/v1/session-restores", &begin_body)
+                .status,
             200
         );
         let retry_chunk = serde_json::to_vec(&SessionRestoreChunkRequest {
@@ -3443,9 +3468,18 @@ mod tests {
                 .status,
             200
         );
-        let worktree = directory.path().join(".git/codev-agent-worktrees").join(worktree_id);
-        assert_eq!(fs::read_to_string(worktree.join("hello.txt")).expect("patched"), "restored\n");
-        assert_eq!(fs::read(worktree.join("notes/context.bin")).expect("binary"), binary);
+        let worktree = directory
+            .path()
+            .join(".git/codev-agent-worktrees")
+            .join(worktree_id);
+        assert_eq!(
+            fs::read_to_string(worktree.join("hello.txt")).expect("patched"),
+            "restored\n"
+        );
+        assert_eq!(
+            fs::read(worktree.join("notes/context.bin")).expect("binary"),
+            binary
+        );
         assert_eq!(
             fs::metadata(worktree.join("notes/context.bin"))
                 .expect("metadata")

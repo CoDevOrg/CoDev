@@ -401,7 +401,9 @@ async fn begin_session_restore(
     validate_worktree_id(&request.operation_id)?;
     validate_worktree_id(&request.worktree_id)?;
     validate_sha(&request.base_commit_sha, "restore base commit SHA")?;
-    backend.begin_session_restore(&workspace_id, request).await?;
+    backend
+        .begin_session_restore(&workspace_id, request)
+        .await?;
     Ok(StatusCode::ACCEPTED)
 }
 

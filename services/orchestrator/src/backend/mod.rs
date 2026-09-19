@@ -493,7 +493,9 @@ impl Backend {
             Self::Fake(backend) => backend.abort_session_restore(workspace_id, operation_id),
             #[cfg(target_os = "linux")]
             Self::Firecracker(backend) => {
-                backend.abort_session_restore(workspace_id, operation_id).await
+                backend
+                    .abort_session_restore(workspace_id, operation_id)
+                    .await
             }
         }
     }
