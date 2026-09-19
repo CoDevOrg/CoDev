@@ -98,8 +98,7 @@ function runtime(
       .mockResolvedValue({ host: "GITHUB.COM", path: "codev/example" }),
     hasCommit: vi.fn().mockResolvedValue(true),
     createIsolatedWorktree: vi.fn().mockResolvedValue({ worktreeId: "wt-1" }),
-    applyPatch: vi.fn().mockResolvedValue({ applied: true }),
-    restoreUntrackedFile: vi.fn().mockResolvedValue({ restored: true }),
+    restoreRepositoryState: vi.fn().mockResolvedValue({ restored: true }),
     discardWorktree: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
@@ -149,20 +148,34 @@ describe("session repository restoration", () => {
       }),
     ).resolves.toEqual({ status: "restored", worktreeId: "wt-1" });
 
-    expect(target.applyPatch).toHaveBeenCalledWith({
+    expect(target.restoreRepositoryState).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
+      importId: "import-1",
       worktreeId: "wt-1",
-      patch,
+      baseCommitSha: "b".repeat(40),
+      files: [
+        {
+          path: "changes.patch",
+          kind: "patch",
+          contents: patch,
+          sha256: digest(patch),
+          mode: "100644",
+        },
+        {
+          path: "notes/context.bin",
+          kind: "untracked",
+          contents: untracked,
+          sha256: digest(untracked),
+          mode: "100755",
+        },
+      ],
     });
-    expect(target.restoreUntrackedFile).toHaveBeenCalledWith({
-      workspaceId: "workspace-1",
-      worktreeId: "wt-1",
-      path: "notes/context.bin",
-      contents: untracked,
-      mode: "100755",
-    });
-    expect(target.restoreUntrackedFile).not.toHaveBeenCalledWith(
-      expect.objectContaining({ path: "provider/session.payload" }),
+    expect(target.restoreRepositoryState).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        files: expect.arrayContaining([
+          expect.objectContaining({ path: "provider/session.payload" }),
+        ]),
+      }),
     );
   });
 
@@ -216,9 +229,9 @@ describe("session repository restoration", () => {
 
   it("reports conflicts and discards the partial isolated worktree", async () => {
     const target = runtime({
-      applyPatch: vi
+      restoreRepositoryState: vi
         .fn()
-        .mockResolvedValue({ applied: false, conflictPaths: ["src/app.ts"] }),
+        .mockResolvedValue({ restored: false, conflictPaths: ["src/app.ts"] }),
     });
     await expect(
       restoreSessionRepository({
@@ -232,6 +245,6 @@ describe("session repository restoration", () => {
       conflictPaths: ["src/app.ts"],
     });
     expect(target.discardWorktree).toHaveBeenCalledWith("workspace-1", "wt-1");
-    expect(target.restoreUntrackedFile).not.toHaveBeenCalled();
+    expect(target.restoreRepositoryState).toHaveBeenCalledTimes(1);
   });
 });

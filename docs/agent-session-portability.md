@@ -1,8 +1,8 @@
 # Provider-neutral agent session portability
 
 Status: Current for Capsule v0, durable storage, lifecycle, verified transport,
-and the provider-neutral repository restoration engine. Concrete sandbox
-materialization, provider rehydration, and launch are future work.
+the provider-neutral repository restoration engine, and Azure sandbox
+materialization. Provider rehydration and launch are future work.
 
 ## Product model
 
@@ -146,13 +146,26 @@ payloads never cross that boundary. Patch or destination-file collisions return
 `conflicted` and discard the partial worktree; an unchanged base returns
 `matched`, while successfully materialized state returns `restored`.
 
-The runtime operations are expressed through `SessionRepositoryRuntime` so the
-same validation and outcome rules apply independently of how the Azure-hosted
-sandbox API materializes binary files. The concrete sandbox mutation adapter and
-public trigger remain separate delivery work.
+The concrete Azure sandbox adapter reserves the import worktree in PostgreSQL
+before materializing that exact worktree ID at the capsule base commit. It uses a
+purpose-built restore protocol rather than the general text-file API: `begin`
+binds an idempotent operation to the import, worktree, base commit, and declared
+file metadata; ordered `chunk` calls transfer at most 512 KiB; `finalize`
+rechecks every size, SHA-256, mode, path, worktree HEAD, and cleanliness; and
+`abort` removes incomplete staging.
+
+Staging lives outside the worktree under the guest-owned Git area. Finalization
+holds the guest's workspace mutation lock from preflight through application,
+runs `git apply --check` before `git apply`, rejects existing destinations and
+symbolic-link path components, and moves only approved regular files into the
+worktree. Begin, chunks, and finalize tolerate safe retries, including a lost
+response after successful finalization. Completed or conflicted operations keep
+a small result receipt while staged payload bytes are removed. Any failed or
+conflicted restore discards the isolated worktree; repository payloads,
+attachments, and provider-native state never enter the protocol.
 
 ## Deliberately deferred
 
-The public upload API, concrete sandbox restoration adapter, runtime rehydration
-after IDE-home recreation, provider launching, and user-facing continuation
-selection are not implemented by this milestone.
+The public upload/restore trigger, runtime rehydration after IDE-home recreation,
+provider launching, and user-facing continuation selection are not implemented
+by this milestone.

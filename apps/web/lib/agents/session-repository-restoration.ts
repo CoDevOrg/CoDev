@@ -25,18 +25,21 @@ export interface SessionRepositoryRuntime {
     importId: string;
     baseCommitSha: string;
   }): Promise<{ worktreeId: string }>;
-  applyPatch(input: {
+  restoreRepositoryState(input: {
     workspaceId: string;
+    importId: string;
     worktreeId: string;
-    patch: Uint8Array;
-  }): Promise<{ applied: true } | { applied: false; conflictPaths: string[] }>;
-  restoreUntrackedFile(input: {
-    workspaceId: string;
-    worktreeId: string;
-    path: string;
-    contents: Uint8Array;
-    mode: "100644" | "100755";
-  }): Promise<{ restored: true } | { restored: false; conflictPath: string }>;
+    baseCommitSha: string;
+    files: Array<{
+      path: string;
+      kind: "patch" | "untracked";
+      contents: Uint8Array;
+      sha256: string;
+      mode: "100644" | "100755";
+    }>;
+  }): Promise<
+    { restored: true } | { restored: false; conflictPaths: string[] }
+  >;
   discardWorktree(workspaceId: string, worktreeId: string): Promise<void>;
 }
 
@@ -133,18 +136,26 @@ export async function restoreSessionRepository(input: {
     baseCommitSha: capsule.repository.baseCommitSha,
   });
   try {
+    const files: Parameters<
+      SessionRepositoryRuntime["restoreRepositoryState"]
+    >[0]["files"] = [];
     if (capsule.repositoryState.patchPath) {
-      const result = await input.runtime.applyPatch({
-        workspaceId: input.workspaceId,
-        worktreeId,
-        patch: requiredFile(input.decoded, capsule.repositoryState.patchPath),
-      });
-      if (!result.applied) {
-        await input.runtime.discardWorktree(input.workspaceId, worktreeId);
-        return { status: "conflicted", conflictPaths: result.conflictPaths };
+      const path = capsule.repositoryState.patchPath;
+      const file = capsule.files.find((candidate) => candidate.path === path);
+      if (!file || file.role !== "git_patch") {
+        throw new SessionRepositoryRestoreError(
+          `The verified capsule has invalid patch metadata for ${path}.`,
+          "session_repository_missing_file",
+        );
       }
+      files.push({
+        path,
+        kind: "patch",
+        contents: requiredFile(input.decoded, path),
+        sha256: file.sha256,
+        mode: "100644",
+      });
     }
-
     for (const path of capsule.repositoryState.approvedUntrackedPaths) {
       const file = capsule.files.find((candidate) => candidate.path === path);
       if (!file || file.role !== "untracked_file") {
@@ -153,22 +164,28 @@ export async function restoreSessionRepository(input: {
           "session_repository_missing_file",
         );
       }
-      const result = await input.runtime.restoreUntrackedFile({
-        workspaceId: input.workspaceId,
-        worktreeId,
+      files.push({
         path,
+        kind: "untracked",
         contents: requiredFile(input.decoded, path),
+        sha256: file.sha256,
         mode: file.mode,
       });
-      if (!result.restored) {
-        await input.runtime.discardWorktree(input.workspaceId, worktreeId);
-        return { status: "conflicted", conflictPaths: [result.conflictPath] };
-      }
     }
 
-    const changed =
-      Boolean(capsule.repositoryState.patchPath) ||
-      capsule.repositoryState.approvedUntrackedPaths.length > 0;
+    const result = await input.runtime.restoreRepositoryState({
+      workspaceId: input.workspaceId,
+      importId: input.importId,
+      worktreeId,
+      baseCommitSha: capsule.repository.baseCommitSha,
+      files,
+    });
+    if (!result.restored) {
+      await input.runtime.discardWorktree(input.workspaceId, worktreeId);
+      return { status: "conflicted", conflictPaths: result.conflictPaths };
+    }
+
+    const changed = files.length > 0;
     return { status: changed ? "restored" : "matched", worktreeId };
   } catch (error) {
     await input.runtime

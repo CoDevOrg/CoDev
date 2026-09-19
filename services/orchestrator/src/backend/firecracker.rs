@@ -30,11 +30,12 @@ use crate::{
         ClaudeSetupStartRequest, CodexExecPollRequest, CodexExecPollResponse,
         CodexExecStartRequest, CreateRequest, ExecRequest, ExecResponse, FileResponse, Instance,
         PublicationExportRequest, PublicationExportResponse, RepositorySnapshot, Result,
-        RuntimeError, TerminalInputRequest, TerminalPollRequest, TerminalPollResponse,
-        TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
-        WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest,
-        WorktreeMergeResponse, WorktreeRebaseRequest, WorktreeRebaseResponse,
-        WorktreeReviewResponse, WriteFileRequest,
+        RuntimeError, SessionRestoreBeginRequest, SessionRestoreChunkRequest,
+        SessionRestoreFinalizeResponse, TerminalInputRequest, TerminalPollRequest,
+        TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
+        WorktreeCheckpointRequest, WorktreeCheckpointResponse, WorktreeCreateRequest,
+        WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest,
+        WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
     },
 };
 
@@ -690,6 +691,57 @@ impl FirecrackerBackend {
     ) -> Result<()> {
         let machine = self.machine(workspace_id).await?;
         machine.guest.create_worktree(&request).await?;
+        self.mark_activity(&machine);
+        Ok(())
+    }
+
+    pub async fn begin_session_restore(
+        &self,
+        workspace_id: &str,
+        request: SessionRestoreBeginRequest,
+    ) -> Result<()> {
+        let machine = self.machine(workspace_id).await?;
+        machine.guest.begin_session_restore(&request).await?;
+        self.mark_activity(&machine);
+        Ok(())
+    }
+
+    pub async fn append_session_restore_chunk(
+        &self,
+        workspace_id: &str,
+        operation_id: &str,
+        request: SessionRestoreChunkRequest,
+    ) -> Result<u64> {
+        let machine = self.machine(workspace_id).await?;
+        let offset = machine
+            .guest
+            .append_session_restore_chunk(operation_id, &request)
+            .await?;
+        self.mark_activity(&machine);
+        Ok(offset)
+    }
+
+    pub async fn finalize_session_restore(
+        &self,
+        workspace_id: &str,
+        operation_id: &str,
+    ) -> Result<SessionRestoreFinalizeResponse> {
+        let machine = self.machine(workspace_id).await?;
+        let response = machine
+            .guest
+            .finalize_session_restore(operation_id)
+            .await?;
+        self.mark_activity(&machine);
+        Ok(response)
+    }
+
+    pub async fn abort_session_restore(
+        &self,
+        workspace_id: &str,
+        operation_id: &str,
+    ) -> Result<()> {
+        let machine = self.machine(workspace_id).await?;
+        machine.guest.abort_session_restore(operation_id).await?;
         self.mark_activity(&machine);
         Ok(())
     }

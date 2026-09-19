@@ -3,6 +3,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use chrono::{Duration, Utc};
 
 use crate::model::{
@@ -10,10 +11,12 @@ use crate::model::{
     ClaudeSetupStartRequest, CodexExecPollRequest, CodexExecPollResponse, CodexExecStartRequest,
     CreateRequest, ExecRequest, ExecResponse, FileResponse, IdeExecRequest, IdeSession,
     IdeStartRequest, IdeWriteFileRequest, Instance, PublicationExportRequest,
-    PublicationExportResponse, Result, RuntimeError, TerminalInputRequest, TerminalPollRequest,
-    TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
-    WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse,
-    WorktreeRebaseRequest, WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
+    PublicationExportResponse, Result, RuntimeError, SessionRestoreBeginRequest,
+    SessionRestoreChunkRequest, SessionRestoreFinalizeResponse, SessionRestoreStatus,
+    TerminalInputRequest, TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest,
+    TerminalStartRequest, WorktreeCheckpointRequest, WorktreeCheckpointResponse,
+    WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest,
+    WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
 };
 
 const MAX_ACTIVE_SESSIONS: usize = 3;
@@ -432,6 +435,69 @@ impl Backend {
         }
     }
 
+    pub async fn begin_session_restore(
+        &self,
+        workspace_id: &str,
+        request: SessionRestoreBeginRequest,
+    ) -> Result<()> {
+        match self {
+            Self::Fake(backend) => backend.begin_session_restore(workspace_id, request),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => {
+                backend.begin_session_restore(workspace_id, request).await
+            }
+        }
+    }
+
+    pub async fn append_session_restore_chunk(
+        &self,
+        workspace_id: &str,
+        operation_id: &str,
+        request: SessionRestoreChunkRequest,
+    ) -> Result<u64> {
+        match self {
+            Self::Fake(backend) => {
+                backend.append_session_restore_chunk(workspace_id, operation_id, request)
+            }
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => {
+                backend
+                    .append_session_restore_chunk(workspace_id, operation_id, request)
+                    .await
+            }
+        }
+    }
+
+    pub async fn finalize_session_restore(
+        &self,
+        workspace_id: &str,
+        operation_id: &str,
+    ) -> Result<SessionRestoreFinalizeResponse> {
+        match self {
+            Self::Fake(backend) => backend.finalize_session_restore(workspace_id, operation_id),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => {
+                backend
+                    .finalize_session_restore(workspace_id, operation_id)
+                    .await
+            }
+        }
+    }
+
+    pub async fn abort_session_restore(
+        &self,
+        workspace_id: &str,
+        operation_id: &str,
+    ) -> Result<()> {
+        match self {
+            Self::Fake(backend) => backend.abort_session_restore(workspace_id, operation_id),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => {
+                backend.abort_session_restore(workspace_id, operation_id).await
+            }
+        }
+    }
+
     pub async fn delete_worktree(&self, workspace_id: &str, worktree_id: &str) -> Result<()> {
         match self {
             Self::Fake(backend) => backend.delete_worktree(workspace_id, worktree_id),
@@ -781,6 +847,48 @@ impl FakeBackend {
     }
 
     fn create_worktree(&self, workspace_id: &str, _request: WorktreeCreateRequest) -> Result<()> {
+        self.get(workspace_id)?;
+        Ok(())
+    }
+
+    fn begin_session_restore(
+        &self,
+        workspace_id: &str,
+        _request: SessionRestoreBeginRequest,
+    ) -> Result<()> {
+        self.get(workspace_id)?;
+        Ok(())
+    }
+
+    fn append_session_restore_chunk(
+        &self,
+        workspace_id: &str,
+        _operation_id: &str,
+        request: SessionRestoreChunkRequest,
+    ) -> Result<u64> {
+        self.get(workspace_id)?;
+        let decoded = BASE64
+            .decode(request.content_base64)
+            .map_err(|_| RuntimeError::BadRequest("invalid restore chunk".into()))?;
+        request
+            .offset
+            .checked_add(decoded.len() as u64)
+            .ok_or_else(|| RuntimeError::BadRequest("restore chunk offset is invalid".into()))
+    }
+
+    fn finalize_session_restore(
+        &self,
+        workspace_id: &str,
+        _operation_id: &str,
+    ) -> Result<SessionRestoreFinalizeResponse> {
+        self.get(workspace_id)?;
+        Ok(SessionRestoreFinalizeResponse {
+            status: SessionRestoreStatus::Restored,
+            conflict_paths: Vec::new(),
+        })
+    }
+
+    fn abort_session_restore(&self, workspace_id: &str, _operation_id: &str) -> Result<()> {
         self.get(workspace_id)?;
         Ok(())
     }
