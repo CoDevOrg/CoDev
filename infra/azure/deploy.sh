@@ -22,6 +22,7 @@ readonly subscription_id="${AZURE_SUBSCRIPTION_ID:-$(az account show --query id 
 # derived from it, so a mismatch silently targets a host that does not exist.
 readonly name_prefix="${CODEV_NAME_PREFIX:-codev-runtime}"
 readonly vm_size="${CODEV_AZURE_VM_SIZE:-Standard_D2s_v7}"
+readonly host_image_id="${CODEV_HOST_IMAGE_ID:-}"
 readonly host_arch="${CODEV_HOST_ARCH:-x86_64}"
 readonly host_volume_size_gib="${CODEV_HOST_VOLUME_SIZE_GIB:-64}"
 readonly jailer_volume_size_gib="${CODEV_JAILER_VOLUME_SIZE_GIB:-128}"
@@ -133,6 +134,7 @@ az deployment group create \
     namePrefix="${name_prefix}" \
     location="${location}" \
     hostVmSize="${vm_size}" \
+    hostImageId="${host_image_id}" \
     hostVolumeSizeGiB="${host_volume_size_gib}" \
     jailerVolumeSizeGiB="${jailer_volume_size_gib}" \
     adminSshPublicKey="${ssh_public_key}" \

@@ -28,8 +28,11 @@ const between = (source, startMarker, endMarker) => {
 const bootstrap = read("./scripts/bootstrap-host.sh");
 const buildOrca = read("./scripts/build-orca-serve.sh");
 const buildOrcaWeb = read("./scripts/build-orca-web.sh");
+const imageProvision = read("./scripts/provision-host-image.sh");
 const azureTemplate = read("../azure/main.bicep");
 const azureDeploy = read("../azure/deploy.sh");
+const azureImageBuilder = read("../azure/image-builder.bicep");
+const azureImageBuild = read("../azure/build-host-image.sh");
 
 // Firecracker needs /dev/kvm, and not every Azure size exposes it: a size
 // without nested virtualization provisions perfectly and then cannot start a
@@ -69,6 +72,39 @@ test("builds and bootstraps architecture-specific runtime artifacts", () => {
   assert.match(buildOrca, /TARGET_ARCH=\$\{electron_arch\}/);
   assert.match(buildOrcaWeb, /corepack pnpm@10\.24\.0/);
   assert.match(buildOrcaWeb, /rsync -a --delete/);
+});
+
+test("the golden host image is versioned, validated, and optional to promote", () => {
+  assert.match(azureTemplate, /param hostImageId string = ''/);
+  assert.match(azureTemplate, /imageReference: empty\(hostImageId\)/);
+  assert.match(azureDeploy, /hostImageId="\$\{host_image_id\}"/);
+  assert.match(
+    azureImageBuilder,
+    /Microsoft\.VirtualMachineImages\/imageTemplates@2023-07-01/,
+  );
+  assert.match(
+    azureImageBuilder,
+    /scriptUri: '\$\{artifactStorage\.properties\.primaryEndpoints\.blob\}/,
+  );
+  assert.match(azureImageBuilder, /sha256Checksum: provisionScriptSha256/);
+  assert.match(azureImageBuilder, /type: 'SharedImage'/);
+  assert.match(azureImageBuilder, /f1a07417-d97a-45cb-824c-7a7467783830/);
+  assert.match(
+    azureImageBuilder,
+    /galleryImageId: '\$\{imageDefinition\.id\}\/versions\/\$\{imageVersion\}'/,
+  );
+  assert.match(azureImageBuilder, /inVMValidations:/);
+  assert.match(azureTemplate, /if \[\[ -f \/etc\/codev\/image-release \]\]/);
+  assert.match(azureTemplate, /packages: \[\]/);
+  assert.match(azureImageBuild, /az resource invoke-action/);
+  assert.match(azureImageBuild, /CODEV_HOST_IMAGE_ID=\$\{image_version_id\}/);
+  assert.match(imageProvision, /codev-orchestrator-linux-\$\{artifact_arch\}/);
+  assert.match(imageProvision, /codev-guestd-linux-\$\{artifact_arch\}/);
+  assert.match(imageProvision, /rootfs\.ext4/);
+  assert.doesNotMatch(imageProvision, /CODEV_DIRECT_SECRET/);
+  assert.doesNotMatch(imageProvision, /orchestrator-direct-secret/);
+  assert.doesNotMatch(imageProvision, /git clone/);
+  assert.doesNotMatch(imageProvision, /caddy-data/);
 });
 
 // The IDE is first-party (packages/ide), not a vendored upstream checkout, so
@@ -242,7 +278,9 @@ test("deployment shell scripts parse", () => {
     "scripts/bootstrap-host.sh",
     "scripts/build-orca-serve.sh",
     "scripts/build-orca-web.sh",
+    "scripts/provision-host-image.sh",
     "../azure/deploy.sh",
+    "../azure/build-host-image.sh",
   ]) {
     execFileSync("bash", ["-n", new URL(script, import.meta.url).pathname]);
   }

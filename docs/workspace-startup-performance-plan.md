@@ -1,6 +1,6 @@
 # Workspace startup performance plan
 
-Status: Phase 2 in progress. The implemented slices are called out below; the
+Status: Phase 3 complete. The implemented slices are called out below; the
 remaining phases are still design work.
 
 ## Objective
@@ -331,6 +331,29 @@ ownership walk and no provider credential resolution.
 
 ## Phase 3: build a preconfigured Azure image
 
+### Implemented slice
+
+The first Phase 3 slice now includes:
+
+- a credential-free host-image provisioner that bakes the host packages,
+  Node/agent CLIs, Caddy, Orca, Firecracker, the guest kernel, the prepared
+  Firecracker guest rootfs, and stable service scaffolding;
+- an Azure Image Builder Bicep template that reads the provisioner and release
+  artifacts through a user-assigned managed identity, validates the resulting
+  image in the build VM, and publishes an explicit version to an Azure Compute
+  Gallery;
+- a manually triggered GitHub Actions workflow and polling deployment script
+  for building/promoting an image without making every runtime release pay the
+  image-build cost; and
+- an optional `hostImageId` in the runtime deployment. Stock Ubuntu remains the
+  fallback until a validated gallery version is explicitly promoted, and the
+  exact version ID can be retained for rollback.
+
+The image intentionally excludes credentials, Caddy certificates, workspace
+repositories, workspace users, host-specific public names, and runtime bearer
+secrets. `bootstrap-host.sh` remains the first-boot owner of those concerns and
+of the host's mutable release/service configuration.
+
 Create an Azure Compute Gallery image through an automated image-build
 pipeline. Bake stable host dependencies into the image:
 
@@ -366,7 +389,7 @@ rollback image.
 Microsoft documents Azure Compute Gallery custom images as the supported way to
 preload applications and configuration, with Azure VM Image Builder available
 to automate image creation:
-[Azure custom VM images](https://learn.microsoft.com/en-us/azure/virtual-machines/linux/tutorial-custom-images).
+[Azure VM Image Builder](https://learn.microsoft.com/en-us/azure/virtual-machines/linux/image-builder-json).
 
 Exit criterion: replacing a host does not run package installation, build the
 guest rootfs, or download and extract the full runtime during its readiness

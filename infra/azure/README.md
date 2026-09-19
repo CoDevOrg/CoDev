@@ -128,6 +128,40 @@ Note that the public IP, Key Vault, storage account and the user-assigned
 identity all survive a host replacement, so it costs a few minutes rather
 than a reconfiguration.
 
+## Building and promoting a golden host image
+
+Phase 3 adds an explicit Azure Image Builder path. It is intentionally separate
+from the normal runtime deploy: image creation is expensive, so a runtime
+release can continue using stock Ubuntu until the image has passed its smoke
+validation.
+
+After the runtime release has been uploaded, run the **Build runtime image
+(Azure)** workflow manually, or run the script locally:
+
+```bash
+AZURE_RESOURCE_GROUP=codev-runtime-migration \
+AZURE_SUBSCRIPTION_ID=<subscription-id> \
+CODEV_RELEASE_VERSION=<uploaded-release-prefix> \
+CODEV_IMAGE_VERSION=1.0.1 \
+./infra/azure/build-host-image.sh
+```
+
+The script uploads the credential-free image provisioner, deploys
+`image-builder.bicep`, starts the Image Builder run, waits for the gallery
+version and prints its exact `CODEV_HOST_IMAGE_ID`. Promote that immutable
+version on a later runtime deployment:
+
+```bash
+CODEV_HOST_IMAGE_ID=<gallery-image-version-resource-id> \
+./infra/azure/deploy.sh
+```
+
+Keep the previous version ID for rollback. The gallery image contains stable
+host dependencies, Orca, Firecracker, the guest kernel, and the prepared guest
+rootfs. It does not contain credentials, certificates, repositories, member
+state, or the deployment's public hostname. The mutable bootstrap still
+installs release-specific services and configures the host after boot.
+
 ## Deploying
 
 ```bash
