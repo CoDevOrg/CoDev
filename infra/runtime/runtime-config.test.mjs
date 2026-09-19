@@ -94,8 +94,12 @@ test("the golden host image is versioned, validated, and optional to promote", (
     /galleryImageId: '\$\{imageDefinition\.id\}\/versions\/\$\{imageVersion\}'/,
   );
   assert.match(azureImageBuilder, /inVMValidations:/);
-  assert.match(azureTemplate, /if \[\[ -f \/etc\/codev\/image-release \]\]/);
-  assert.match(azureTemplate, /packages: \[\]/);
+  assert.match(
+    azureTemplate,
+    /var selectedCloudInitTemplate = empty\(hostImageId\)/,
+  );
+  assert.match(azureTemplate, /package_update: false/);
+  assert.match(azureTemplate, /command -v az >\/dev\/null/);
   assert.match(azureImageBuild, /az resource invoke-action/);
   assert.match(azureImageBuild, /CODEV_HOST_IMAGE_ID=\$\{image_version_id\}/);
   assert.match(imageProvision, /codev-orchestrator-linux-\$\{artifact_arch\}/);

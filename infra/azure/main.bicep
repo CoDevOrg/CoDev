@@ -495,8 +495,13 @@ resource orchestratorLogRule 'Microsoft.Insights/dataCollectionRules@2023-03-11'
 // which is mutable, and the boot script reads it back through IMDS. The only
 // substitutions below are values fixed for the life of the stack.
 var cloudInitTemplate = '''#cloud-config
-package_update: __PACKAGE_UPDATE__
-__BOOT_PACKAGES__
+package_update: true
+packages:
+  - ca-certificates
+  - curl
+  - chrony
+  - xfsprogs
+  - jq
 write_files:
   - path: /etc/codev/bootstrap.env
     permissions: '0600'
@@ -520,19 +525,12 @@ write_files:
       chronyc -a makestep
       chronyc waitsync 60 1.0 0.0 2
       export DEBIAN_FRONTEND=noninteractive
+      # Belt and braces on top of the unit ordering: wait for cloud-init to
+      # report done, then repair dpkg if anything left it half-configured.
       cloud-init status --wait || true
-      # A golden image already contains the Azure CLI and all stable host
-      # dependencies. Keep the image-backed boot path off apt entirely; the
-      # stock-Ubuntu fallback retains the repair/install path for new stacks.
-      if [[ -f /etc/codev/image-release ]]; then
-        command -v az >/dev/null
-      else
-        # Belt and braces on top of the unit ordering: wait for cloud-init to
-        # report done, then repair dpkg if anything left it half-configured.
-        dpkg --configure -a || true
-        apt-get -o DPkg::Lock::Timeout=300 update
-        command -v az >/dev/null || curl -sL https://aka.ms/InstallAzureCLIDeb | bash
-      fi
+      dpkg --configure -a || true
+      apt-get -o DPkg::Lock::Timeout=300 update
+      command -v az >/dev/null || curl -sL https://aka.ms/InstallAzureCLIDeb | bash
       # --client-id is required: the VM carries a user-assigned identity, and
       # a bare `az login --identity` does not know which one to present.
       until az login --identity --client-id "$CODEV_IDENTITY_CLIENT_ID" >/dev/null 2>&1; do sleep 5; done
@@ -587,13 +585,40 @@ runcmd:
   - [ systemctl, start, --no-block, codev-bootstrap.service ]
 '''
 
-var cloudInitPackages = empty(hostImageId) ? '''packages:
+// Keep the stock path byte-for-byte compatible with the already deployed VM:
+// Azure rejects any update that changes osProfile.customData. Image-backed
+// hosts opt into this derived variant, which contains the same fixed values
+// but skips cloud-init package setup and apt repair on boot.
+var imageCloudInitTemplate = replace(
+  replace(
+    cloudInitTemplate,
+    '''package_update: true
+packages:
   - ca-certificates
   - curl
   - chrony
   - xfsprogs
   - jq
-''' : 'packages: []'
+''',
+    '''package_update: false
+packages: []
+'''
+  ),
+  '''      # Belt and braces on top of the unit ordering: wait for cloud-init to
+      # report done, then repair dpkg if anything left it half-configured.
+      cloud-init status --wait || true
+      dpkg --configure -a || true
+      apt-get -o DPkg::Lock::Timeout=300 update
+      command -v az >/dev/null || curl -sL https://aka.ms/InstallAzureCLIDeb | bash
+''',
+  '''      cloud-init status --wait || true
+      # The golden image already contains the Azure CLI and all stable host
+      # dependencies, so image-backed boots stay off apt entirely.
+      command -v az >/dev/null
+'''
+)
+
+var selectedCloudInitTemplate = empty(hostImageId) ? cloudInitTemplate : imageCloudInitTemplate
 
 // A boot-time service rather than a bare runcmd, because cloud-init's runcmd
 // fires only on a VM's very first boot. Rolling a release works by updating
@@ -601,23 +626,18 @@ var cloudInitPackages = empty(hostImageId) ? '''packages:
 var cloudInitWithIdentity = replace(
   replace(
     replace(
-      replace(cloudInitTemplate, '__PACKAGE_UPDATE__', empty(hostImageId) ? 'true' : 'false'),
-      '__BOOT_PACKAGES__',
-      cloudInitPackages
+      selectedCloudInitTemplate,
+      '__ARTIFACT_ACCOUNT__',
+      artifactStorageName
     ),
-    '__ARTIFACT_ACCOUNT__',
-    artifactStorageName
+    '__KEY_VAULT_NAME__',
+    '${namePrefix}-kv'
   ),
-  '__KEY_VAULT_NAME__',
-  '${namePrefix}-kv'
-)
-var cloudInitWithIdentityAndClient = replace(
-  cloudInitWithIdentity,
   '__IDENTITY_CLIENT_ID__',
   hostIdentity.properties.clientId
 )
 
-var cloudInit = replace(cloudInitWithIdentityAndClient, '__PUBLIC_HOST__', publicHost)
+var cloudInit = replace(cloudInitWithIdentity, '__PUBLIC_HOST__', publicHost)
 
 resource host 'Microsoft.Compute/virtualMachines@2024-07-01' = {
   name: '${namePrefix}-host'
