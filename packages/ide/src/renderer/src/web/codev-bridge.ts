@@ -1,13 +1,24 @@
+/* eslint-disable max-lines -- The bridge keeps handshake, request, command, and workspace event transport in one audited protocol boundary. */
+
 import {
   isParentMessage,
   type CodevBridgeClientMessage,
   type CodevBridgeCommand,
   type CodevBridgeRequestMethod,
   type CodevBridgeSnapshot,
-  type CodevBridgeStatus
+  type CodevBridgeStatus,
+  type CodevWorkspaceRealtimeEvent,
+  type CodevWorkspaceStreamStatus
 } from './codev-bridge-protocol'
 
-export type { CodevBridgeCommand, CodevBridgeRequestMethod, CodevBridgeSnapshot, CodevBridgeStatus }
+export type {
+  CodevBridgeCommand,
+  CodevBridgeRequestMethod,
+  CodevBridgeSnapshot,
+  CodevBridgeStatus,
+  CodevWorkspaceRealtimeEvent,
+  CodevWorkspaceStreamStatus
+}
 
 export type CodevBridgeHost = Pick<Window, 'addEventListener' | 'removeEventListener'> & {
   __CODEV_EMBEDDED__?: boolean
@@ -39,8 +50,11 @@ function snapshotFor(status: CodevBridgeStatus): CodevBridgeSnapshot {
 
 export function createCodevBridge(host: CodevBridgeHost): {
   getSnapshot: () => CodevBridgeSnapshot
+  getWorkspaceStreamStatus: () => CodevWorkspaceStreamStatus
   subscribe: (listener: () => void) => () => void
   subscribeCommand: (listener: (command: CodevBridgeCommand) => void) => () => void
+  subscribeWorkspaceEvent: (listener: (event: CodevWorkspaceRealtimeEvent) => void) => () => void
+  subscribeWorkspaceStream: (listener: (status: CodevWorkspaceStreamStatus) => void) => () => void
   start: () => void
   request: (method: CodevBridgeRequestMethod, params?: Record<string, unknown>) => Promise<unknown>
   interrupt: () => void
@@ -55,6 +69,9 @@ export function createCodevBridge(host: CodevBridgeHost): {
   let started = false
   const listeners = new Set<() => void>()
   const commandListeners = new Set<(command: CodevBridgeCommand) => void>()
+  const workspaceEventListeners = new Set<(event: CodevWorkspaceRealtimeEvent) => void>()
+  const workspaceStreamListeners = new Set<(status: CodevWorkspaceStreamStatus) => void>()
+  let workspaceStreamStatus: CodevWorkspaceStreamStatus = 'unavailable'
   const pending = new Map<
     string,
     {
@@ -76,6 +93,16 @@ export function createCodevBridge(host: CodevBridgeHost): {
     }
     status = next
     emit()
+  }
+
+  const setWorkspaceStreamStatus = (next: CodevWorkspaceStreamStatus): void => {
+    if (workspaceStreamStatus === next) {
+      return
+    }
+    workspaceStreamStatus = next
+    for (const listener of workspaceStreamListeners) {
+      listener(next)
+    }
   }
 
   const clearTimers = (): void => {
@@ -176,6 +203,16 @@ export function createCodevBridge(host: CodevBridgeHost): {
       )
       return
     }
+    if (message.data.type === 'codev:workspace-event') {
+      for (const listener of workspaceEventListeners) {
+        listener(message.data.event)
+      }
+      return
+    }
+    if (message.data.type === 'codev:workspace-stream-status') {
+      setWorkspaceStreamStatus(message.data.status)
+      return
+    }
     if (message.data.type === 'codev:bridge-command') {
       for (const listener of commandListeners) {
         listener(message.data.command)
@@ -190,6 +227,7 @@ export function createCodevBridge(host: CodevBridgeHost): {
 
   return {
     getSnapshot: () => snapshotFor(status),
+    getWorkspaceStreamStatus: () => workspaceStreamStatus,
     subscribe(listener) {
       listeners.add(listener)
       return () => {
@@ -200,6 +238,18 @@ export function createCodevBridge(host: CodevBridgeHost): {
       commandListeners.add(listener)
       return () => {
         commandListeners.delete(listener)
+      }
+    },
+    subscribeWorkspaceEvent(listener) {
+      workspaceEventListeners.add(listener)
+      return () => {
+        workspaceEventListeners.delete(listener)
+      }
+    },
+    subscribeWorkspaceStream(listener) {
+      workspaceStreamListeners.add(listener)
+      return () => {
+        workspaceStreamListeners.delete(listener)
       }
     },
     start() {
@@ -265,6 +315,7 @@ export function createCodevBridge(host: CodevBridgeHost): {
       host.removeEventListener('message', onMessage)
       started = false
       status = 'disconnected'
+      setWorkspaceStreamStatus('unavailable')
     }
   }
 }

@@ -74,14 +74,18 @@ export function CodevMissionControlView({
   onPause: (key: string) => void
   onStop: (key: string) => void
 }): JSX.Element {
-  const open = agents.find((agent) => agent.key === openKey) ?? null
+  // Feeds can briefly overlap while the local tab mirror catches up with the
+  // managed-session poll. Render one card per stable identity during that
+  // hand-off so Mission Control never shows the same agent twice.
+  const uniqueAgents = Array.from(new Map(agents.map((agent) => [agent.key, agent])).values())
+  const open = uniqueAgents.find((agent) => agent.key === openKey) ?? null
   const live = coordination ?? EMPTY_MISSION_CONTROL_COORDINATION
   const contestNotice = missionControlContestNotice(live)
   const overlapNotice = missionControlOverlapNotice(live)
-  const working = agents.filter((agent) => agent.phase === 'working').length
-  const blocked = agents.filter((agent) => agent.phase === 'blocked').length
+  const working = uniqueAgents.filter((agent) => agent.phase === 'working').length
+  const blocked = uniqueAgents.filter((agent) => agent.phase === 'blocked').length
   const owners: { name: string; hue: number }[] = []
-  for (const agent of agents) {
+  for (const agent of uniqueAgents) {
     if (!owners.some((owner) => owner.name === agent.ownerName)) {
       owners.push({ name: agent.ownerName, hue: agent.ownerHue })
     }
@@ -103,8 +107,8 @@ export function CodevMissionControlView({
         </div>
         <span className="codev-mc-counts">
           <span className="codev-agents-count" title="Agents operating on this branch">
-            <strong>{agents.length}</strong>
-            <span>{agents.length === 1 ? 'agent' : 'agents'}</span>
+            <strong>{uniqueAgents.length}</strong>
+            <span>{uniqueAgents.length === 1 ? 'agent' : 'agents'}</span>
           </span>
           {slots?.state === 'reconciling' ? (
             <span
@@ -182,14 +186,14 @@ export function CodevMissionControlView({
         </p>
       ) : null}
 
-      {agents.length === 0 ? (
+      {uniqueAgents.length === 0 ? (
         <p className="codev-agents-empty">
           No agents are attached to this branch yet. Open another branch from the branch list to see
           its agents, or start a chat here to create one.
         </p>
       ) : (
         <ul className="codev-mc-list">
-          {agents.map((agent) => (
+          {uniqueAgents.map((agent) => (
             <AgentCard
               key={agent.key}
               agent={agent}

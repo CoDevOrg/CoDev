@@ -6,6 +6,8 @@ import type {
   CodevBridgeRequestMessage,
   CodevBridgeRequestMethod as CodevBridgeMethod,
   CodevBridgeResponseMessage,
+  CodevWorkspaceRealtimeEvent,
+  CodevWorkspaceStreamStatus,
 } from "../../../../packages/ide/src/renderer/src/web/codev-bridge-protocol";
 
 export type CodevParentBridgeSession = {
@@ -22,6 +24,8 @@ export type {
   CodevBridgeRequestMessage,
   CodevBridgeResponseMessage,
   CodevBridgeRequestMethod as CodevBridgeMethod,
+  CodevWorkspaceRealtimeEvent,
+  CodevWorkspaceStreamStatus,
 } from "../../../../packages/ide/src/renderer/src/web/codev-bridge-protocol";
 
 /** The handshake and keepalive messages the IDE posts; requests are separate. */
@@ -58,6 +62,36 @@ export function buildCodevBridgeCommandMessage(
     type: "codev:bridge-command",
     generation: session.generation,
     command,
+  };
+}
+
+export function buildCodevWorkspaceEventMessage(
+  session: CodevParentBridgeSession,
+  cursor: string,
+  event: CodevWorkspaceRealtimeEvent,
+): CodevBridgeParentMessage | null {
+  if (!session.open || session.generation === null) {
+    return null;
+  }
+  return {
+    type: "codev:workspace-event",
+    generation: session.generation,
+    cursor,
+    event,
+  };
+}
+
+export function buildCodevWorkspaceStreamStatusMessage(
+  session: CodevParentBridgeSession,
+  status: CodevWorkspaceStreamStatus,
+): CodevBridgeParentMessage | null {
+  if (!session.open || session.generation === null) {
+    return null;
+  }
+  return {
+    type: "codev:workspace-stream-status",
+    generation: session.generation,
+    status,
   };
 }
 

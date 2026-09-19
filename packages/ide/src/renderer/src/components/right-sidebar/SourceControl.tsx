@@ -794,7 +794,11 @@ export function clearRemoteActionErrorsForCompletedConflictOperations({
   return next ?? remoteActionErrors
 }
 
-function SourceControlInner(): React.JSX.Element {
+function SourceControlInner({
+  codevWorkspaceSurface = false
+}: {
+  codevWorkspaceSurface?: boolean
+}): React.JSX.Element {
   const sourceControlRef = useRef<HTMLDivElement | null>(null)
   // Why: virtualize against the panel's shared scroller; use state (not a ref) so lists re-render and start observing once the element attaches.
   const [fileListScrollElement, setFileListScrollElement] = useState<HTMLDivElement | null>(null)
@@ -1260,7 +1264,8 @@ function SourceControlInner(): React.JSX.Element {
   })
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   // Why: the sidebar stays mounted when closed, so gate polling on tab AND open or branchCompare/PR fetch would run with no visible consumer.
-  const isBranchVisible = rightSidebarTab === 'source-control' && rightSidebarOpen
+  const isBranchVisible =
+    (rightSidebarTab === 'source-control' || codevWorkspaceSurface) && rightSidebarOpen
 
   // Why: the merge base IS the request gate — no OID on the status request means
   // the host runs no ranged diff, so a hidden chip costs a background worktree nothing.
@@ -1642,7 +1647,7 @@ function SourceControlInner(): React.JSX.Element {
   ])
   const hasHostedReviewLink = hasPositiveHostedReviewNumberLink({
     linkedGitHubPR,
-    fallbackGitHubPR: fallbackGitHubPRNumber,
+    fallbackGitHubPR: fallbackGitHubPRNumber
   })
   // Why: SSH-backed (connectionId) repos never fetch hostedReview, so skip the loading state or it would permanently block Publish Branch.
   const isHostedReviewStateLoading =
@@ -1729,7 +1734,7 @@ function SourceControlInner(): React.JSX.Element {
     isBranchVisible,
     isFolder,
     linkedGitHubPR,
-    fallbackGitHubPRNumber,
+    fallbackGitHubPRNumber
   ])
 
   // Why: eligibility is recomputed later to pause refetches during an in-flight PR flow, since AI gen's fetch+rebase would flip canCreate off and cancel generation.
@@ -3670,12 +3675,7 @@ function SourceControlInner(): React.JSX.Element {
       })
       return result
     },
-    [
-      activeRepo,
-      fallbackGitHubPRNumber,
-      getHostedReviewCreationEligibility,
-      linkedGitHubPR,
-    ]
+    [activeRepo, fallbackGitHubPRNumber, getHostedReviewCreationEligibility, linkedGitHubPR]
   )
 
   const refreshGitStatusForCreatePrIntent = useCallback(

@@ -5,6 +5,35 @@ import { and, desc, eq, lt, sql } from "drizzle-orm";
 import { schema } from "@codev/db";
 
 import { getDatabase } from "../platform/database";
+import { publishWorkspaceRealtimeEvent } from "./workspace-realtime";
+
+function realtimeTypeForAuditEvent(type: string): string {
+  const normalized = type.toLowerCase();
+  if (normalized === "presence.cursor.changed") {
+    return "presence.cursor.changed";
+  }
+  if (normalized.startsWith("presence.")) return "presence.changed";
+  if (
+    normalized.startsWith("agent.") ||
+    normalized.startsWith("shared_session.")
+  ) {
+    return "agents.changed";
+  }
+  if (
+    normalized.startsWith("claim.") ||
+    normalized.startsWith("coordination.") ||
+    normalized.startsWith("brain.")
+  ) {
+    return "coordination.changed";
+  }
+  if (
+    normalized.startsWith("workspace.member.") ||
+    normalized.startsWith("workspace_member_")
+  ) {
+    return "team.changed";
+  }
+  return "activity.changed";
+}
 
 export async function appendWorkspaceEvent(input: {
   workspaceId: string;
@@ -12,7 +41,7 @@ export async function appendWorkspaceEvent(input: {
   type: string;
   payload?: Record<string, unknown>;
 }) {
-  return getDatabase().transaction(async (transaction) => {
+  const event = await getDatabase().transaction(async (transaction) => {
     await transaction.execute(
       sql`select pg_advisory_xact_lock(hashtext(${input.workspaceId}))`,
     );
@@ -34,6 +63,13 @@ export async function appendWorkspaceEvent(input: {
       .returning();
     return event;
   });
+  if (!event) throw new Error("Workspace event was not persisted.");
+  void publishWorkspaceRealtimeEvent(
+    input.workspaceId,
+    realtimeTypeForAuditEvent(input.type),
+    { sequence: event.sequence, sourceType: input.type },
+  );
+  return event;
 }
 
 export async function listWorkspaceEvents(

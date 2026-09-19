@@ -78,7 +78,8 @@ describe('installCodevProviderReadinessListener', () => {
       ready: false,
       agent: null,
       reason: 'No coding agent is set up for this workspace yet.',
-      settingsHref: '/settings/personal/providers#coding-workspaces'
+      settingsHref: '/settings/personal/providers#coding-workspaces',
+      providers: { claude: false, codex: false }
     })
   })
 

@@ -229,7 +229,10 @@ export function CodevChatHistorySection({
   )
 
   return (
-    <section className={cn('codev-chat-history', className)} aria-label="Recent chats">
+    <section
+      className={cn('codev-chat-history', className, entries.length === 0 && 'is-empty')}
+      aria-label="Recent chats"
+    >
       <header className="codev-chat-history-header">
         <div className="codev-chat-history-title">
           <History className="size-3.5 opacity-70" aria-hidden="true" />

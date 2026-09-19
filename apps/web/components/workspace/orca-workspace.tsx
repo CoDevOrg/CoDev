@@ -14,13 +14,17 @@ import { track } from "@vercel/analytics";
 
 import {
   EMPTY_CODEV_PARENT_BRIDGE_SESSION,
+  buildCodevWorkspaceEventMessage,
+  buildCodevWorkspaceStreamStatusMessage,
   executeCodevBridgeRequest,
   isCodevBridgeClientMessage,
   isCodevBridgeRequestMessage,
   replyToCodevBridgeMessage,
   type CodevParentBridgeSession,
+  type CodevWorkspaceRealtimeEvent,
+  type CodevWorkspaceStreamStatus,
 } from "@/components/workspace/codev-parent-bridge";
-import { useLiveAgentActivity } from "@/components/workspace/workspace-agent-activity";
+import { useWorkspaceRealtimeStream } from "@/components/workspace/workspace-realtime-stream";
 import { watchOrcaProjectTree } from "@/components/workspace/orca-project-tree";
 import { WorkspaceRepositoryDialog } from "@/components/workspace/workspace-repository-dialog";
 import { WorkspaceShareDialog } from "@/components/workspace/workspace-share-dialog";
@@ -757,8 +761,6 @@ function WorkspaceChrome({
   isStarting?: boolean;
   children: ReactNode;
 }) {
-  const activity = useLiveAgentActivity(workspaceId);
-
   return (
     <div className="workspace-page">
       <WorkspaceTopBar
@@ -769,7 +771,7 @@ function WorkspaceChrome({
         // — so the old fallback printed a slot count as an agent count, and
         // then printed the very same number again as the slot count.
         agents={embeddedAgents}
-        slotsUsed={embeddedSlots?.used ?? activity?.occupied ?? null}
+        slotsUsed={embeddedSlots?.used ?? null}
         slotsTotal={embeddedSlots?.total ?? MAX_PARALLEL_AGENT_SESSIONS}
         isStarting={isStarting}
         isAdmin={isAdmin}
@@ -868,6 +870,48 @@ export function OrcaWorkspace({
   const codevBridgeSessionRef = useRef<CodevParentBridgeSession>(
     EMPTY_CODEV_PARENT_BRIDGE_SESSION,
   );
+  const workspaceStreamStatusRef =
+    useRef<CodevWorkspaceStreamStatus>("reconnecting");
+
+  const postWorkspaceStreamStatus = useCallback(
+    (status: CodevWorkspaceStreamStatus) => {
+      workspaceStreamStatusRef.current = status;
+      const message = buildCodevWorkspaceStreamStatusMessage(
+        codevBridgeSessionRef.current,
+        status,
+      );
+      if (message) {
+        iframeRef.current?.contentWindow?.postMessage(
+          message,
+          window.location.origin,
+        );
+      }
+    },
+    [],
+  );
+
+  const postWorkspaceEvent = useCallback(
+    (event: CodevWorkspaceRealtimeEvent, cursor: string) => {
+      const message = buildCodevWorkspaceEventMessage(
+        codevBridgeSessionRef.current,
+        cursor,
+        event,
+      );
+      if (message) {
+        iframeRef.current?.contentWindow?.postMessage(
+          message,
+          window.location.origin,
+        );
+      }
+    },
+    [],
+  );
+
+  useWorkspaceRealtimeStream({
+    workspaceId,
+    onEvent: postWorkspaceEvent,
+    onStatus: postWorkspaceStreamStatus,
+  });
 
   // The iframe src never changes across a connect: it boots from the static
   // bundle immediately with `codevPending=1`, and the pairing arrives later
@@ -1003,6 +1047,9 @@ export function OrcaWorkspace({
             reply,
             window.location.origin,
           );
+        }
+        if (session.open) {
+          postWorkspaceStreamStatus(workspaceStreamStatusRef.current);
         }
         return;
       }
@@ -1170,6 +1217,7 @@ export function OrcaWorkspace({
     reportHostState,
     reportProviderReadiness,
     refreshProviderPreflight,
+    postWorkspaceStreamStatus,
   ]);
 
   // Fallback reveal: if the iframe never sends `codev:shell-ready` (older

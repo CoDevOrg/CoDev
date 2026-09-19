@@ -195,17 +195,27 @@ export type WorkspaceProviderReadiness = {
   agent: WorkspaceAgent | null;
   reason: string | null;
   settingsHref: string;
+  /** Provider-specific availability for the workspace agent picker. */
+  providers: {
+    claude: boolean;
+    codex: boolean;
+  };
 };
 
 export function workspaceProviderReadiness(
   preflight: WorkspaceProviderPreflight,
 ): WorkspaceProviderReadiness {
+  const unavailable = new Set(preflight.notReady.map((entry) => entry.agent));
   if (preflight.starting !== null) {
     return {
       ready: true,
       agent: preflight.starting,
       reason: null,
       settingsHref: WORKSPACE_PROVIDER_SETTINGS_HREF,
+      providers: {
+        claude: !unavailable.has("claude"),
+        codex: !unavailable.has("codex"),
+      },
     };
   }
   // Naming the rooms-only case specifically matters: the member *has*
@@ -226,5 +236,9 @@ export function workspaceProviderReadiness(
     agent: null,
     reason,
     settingsHref: WORKSPACE_PROVIDER_SETTINGS_HREF,
+    providers: {
+      claude: !unavailable.has("claude"),
+      codex: !unavailable.has("codex"),
+    },
   };
 }

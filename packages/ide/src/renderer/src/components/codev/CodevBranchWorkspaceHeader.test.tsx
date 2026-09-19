@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => {
@@ -35,8 +35,7 @@ const mocks = vi.hoisted(() => {
       changedFiles: 2,
       lastActivityAt: 10,
       state: 'active' as const
-    },
-    openBranches: vi.fn()
+    }
   }
 })
 
@@ -54,11 +53,6 @@ vi.mock('@/store/selectors', () => ({
 
 vi.mock('@/web/codev-embedded', () => ({
   isCodevEmbedded: () => true
-}))
-
-vi.mock('./codev-branches-view', () => ({
-  openCodevBranches: mocks.openBranches,
-  useCodevBranchesOpen: () => false
 }))
 
 vi.mock('./use-codev-branch-rows', () => ({
@@ -93,11 +87,10 @@ describe('CodevBranchWorkspaceHeader', () => {
     expect(screen.queryByRole('navigation', { name: 'Current branch tools' })).toBeNull()
   })
 
-  it('keeps branch navigation in the workspace header', () => {
+  it('leaves branch navigation to the right-side rail', () => {
     render(<CodevBranchWorkspaceHeader />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Back to all branches' }))
-    expect(mocks.openBranches).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('button', { name: 'Back to all branches' })).toBeNull()
     expect(screen.queryByRole('navigation', { name: 'Current branch tools' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Explorer' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Terminal' })).toBeNull()

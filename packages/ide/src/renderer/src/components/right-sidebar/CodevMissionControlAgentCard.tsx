@@ -1,4 +1,5 @@
 import type { JSX } from 'react'
+import { ClaudeMark, OpenAIMark } from '../settings/CodevProviderLogos'
 import {
   MISSION_CONTROL_PHASE_LABEL,
   missionControlFaceBackground,
@@ -68,6 +69,17 @@ export function PhasePill({
   )
 }
 
+function ProviderMark({ provider }: { provider: string }): JSX.Element {
+  const normalized = provider.toLowerCase()
+  if (normalized.includes('claude') || normalized.includes('anthropic')) {
+    return <ClaudeMark className="codev-mc-provider-mark is-claude" />
+  }
+  if (normalized.includes('codex') || normalized.includes('openai')) {
+    return <OpenAIMark className="codev-mc-provider-mark is-codex" />
+  }
+  return <span className="codev-mc-provider-mark-fallback" aria-hidden="true" />
+}
+
 export function AgentCard({
   agent,
   now,
@@ -97,6 +109,13 @@ export function AgentCard({
         aria-label={`Open ${agent.agentName} owned by ${agent.ownerName}`}
       >
         <div className="codev-mc-card-head">
+          <span
+            className="codev-mc-provider-badge"
+            title={`${agent.providerLabel} provider`}
+            aria-label={`${agent.providerLabel} provider`}
+          >
+            <ProviderMark provider={agent.providerLabel} />
+          </span>
           <Face
             name={agent.ownerName}
             hue={agent.ownerHue}
@@ -105,7 +124,8 @@ export function AgentCard({
           <div className="codev-mc-card-who">
             <span className="codev-mc-owner">Owner · {agent.ownerName}</span>
             <span className="codev-mc-sub">
-              Agent · {agent.agentName} · {agent.providerLabel}
+              Agent · {agent.agentName} · <ProviderMark provider={agent.providerLabel} />{' '}
+              {agent.providerLabel}
               {agent.model ? ` · ${agent.model}` : ''}
             </span>
           </div>

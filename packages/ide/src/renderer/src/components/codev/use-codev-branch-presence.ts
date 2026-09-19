@@ -7,13 +7,17 @@ import type {
 import { publishCodevWorkboard } from '../sidebar/codev-workboard-store'
 import {
   getCodevBridgeSnapshot,
+  getCodevWorkspaceStreamStatus,
   reconnectCodevBridge,
   requestCodevBridge,
-  subscribeCodevBridge
+  subscribeCodevBridge,
+  subscribeCodevWorkspaceEvent,
+  subscribeCodevWorkspaceStream
 } from '@/web/codev-bridge-singleton'
+import type { CodevWorkspaceStreamStatus } from '@/web/codev-bridge-singleton'
 import type { TeamRoster } from './codev-team-shared'
 
-const BRANCH_REFRESH_MS = 5_000
+const BRANCH_FALLBACK_REFRESH_MS = 15_000
 const DISCONNECTED_BRIDGE = {
   status: 'disconnected' as const,
   label: 'CoDev · Disconnected',
@@ -50,6 +54,9 @@ export function useCodevBranchPresence(active: boolean): {
   const [sharedSessionsErrorAt, setSharedSessionsErrorAt] = useState<number | null>(null)
   const [rosterError, setRosterError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [workspaceStreamStatus, setWorkspaceStreamStatus] = useState<CodevWorkspaceStreamStatus>(
+    () => (typeof window === 'undefined' ? 'unavailable' : getCodevWorkspaceStreamStatus())
+  )
   const inFlightRef = useRef(false)
 
   useEffect(() => subscribeCodevBridge(() => setBridge(getCodevBridgeSnapshot())), [])
@@ -94,13 +101,34 @@ export function useCodevBranchPresence(active: boolean): {
   }, [active])
 
   useEffect(() => {
+    const unsubscribeEvent = subscribeCodevWorkspaceEvent((event) => {
+      if (
+        event.type === 'agents.changed' ||
+        event.type === 'coordination.changed' ||
+        event.type === 'team.changed' ||
+        event.type === 'presence.changed'
+      ) {
+        void refresh()
+      }
+    })
+    const unsubscribeStream = subscribeCodevWorkspaceStream(setWorkspaceStreamStatus)
+    return () => {
+      unsubscribeEvent()
+      unsubscribeStream()
+    }
+  }, [refresh])
+
+  useEffect(() => {
     if (!active || bridge.status !== 'connected') {
       return
     }
     void refresh()
-    const timer = window.setInterval(() => void refresh(), BRANCH_REFRESH_MS)
+    if (workspaceStreamStatus === 'connected') {
+      return
+    }
+    const timer = window.setInterval(() => void refresh(), BRANCH_FALLBACK_REFRESH_MS)
     return () => window.clearInterval(timer)
-  }, [active, bridge.status, refresh])
+  }, [active, bridge.status, refresh, workspaceStreamStatus])
 
   const retry = useCallback(() => {
     if (getCodevBridgeSnapshot().status !== 'connected') {

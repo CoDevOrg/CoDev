@@ -6,6 +6,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 
 import { listWorkspacePresenceEntries } from "../workspaces/collaboration-server";
 import { getDatabase } from "../platform/database";
+import { publishWorkspaceRealtimeEvent } from "../workspaces/workspace-realtime";
 import { mergeTeamRoster, type RosterAgentRow } from "./team-chat-view";
 
 /** Sessions in these states are things someone is actively working on. */
@@ -156,5 +157,9 @@ export async function setMemberStatus(
       ],
       set: { headline, emoji, updatedAt: new Date() },
     });
+  void publishWorkspaceRealtimeEvent(workspaceId, "team.changed", {
+    userId,
+    sourceType: "team.member.status.changed",
+  });
   return { headline, emoji };
 }

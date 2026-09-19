@@ -139,7 +139,7 @@ function Sidebar({
             <CodevChatsSection />
             {codevEmbedded ? <CodevChatHistorySection className="in-left-rail" /> : null}
 
-            <div className="relative shrink-0">
+            <div className="relative mt-auto shrink-0">
               <SetupScriptPromptCard />
 
               {/* Fixed bottom toolbar */}

@@ -9,7 +9,13 @@ import {
 } from 'react'
 import { ArrowDown, ArrowLeft, Hash, Lock, Send, Sparkles } from 'lucide-react'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
-import { requestCodevBridge } from '@/web/codev-bridge-singleton'
+import {
+  getCodevWorkspaceStreamStatus,
+  requestCodevBridge,
+  subscribeCodevWorkspaceEvent,
+  subscribeCodevWorkspaceStream
+} from '@/web/codev-bridge-singleton'
+import type { CodevWorkspaceStreamStatus } from '@/web/codev-bridge-singleton'
 import {
   CHANNEL_PAGE_SIZE,
   countNewMessages,
@@ -31,7 +37,7 @@ import {
 } from './codev-team-shared'
 import { ChannelTranscriptLog, type ChannelTranscriptState } from './CodevChannelTranscriptLog'
 
-const MESSAGE_POLL_MS = 3_000
+const MESSAGE_FALLBACK_REFRESH_MS = 15_000
 /** How close to the bottom still counts as "following" new messages. */
 const FOLLOW_THRESHOLD_PX = 48
 
@@ -82,6 +88,9 @@ function ChannelPaneBody({ channelId }: { channelId: string }): JSX.Element {
   // Older history: a full first page means there may be more before it.
   const [mayHaveOlder, setMayHaveOlder] = useState(false)
   const [loadingOlder, setLoadingOlder] = useState<'idle' | 'loading' | 'failed'>('idle')
+  const [workspaceStreamStatus, setWorkspaceStreamStatus] = useState<CodevWorkspaceStreamStatus>(
+    () => (typeof window === 'undefined' ? 'unavailable' : getCodevWorkspaceStreamStatus())
+  )
   // New-message handling for a reader who has scrolled up: the log stays put
   // and a pill counts what arrived below, instead of yanking them down.
   const [unseen, setUnseen] = useState(0)
@@ -176,12 +185,25 @@ function ChannelPaneBody({ channelId }: { channelId: string }): JSX.Element {
       }
     }
     void load()
-    const timer = setInterval(() => void load(), MESSAGE_POLL_MS)
+    const unsubscribeEvent = subscribeCodevWorkspaceEvent((event) => {
+      if (event.type === 'team.changed') {
+        void load()
+      }
+    })
+    const unsubscribeStream = subscribeCodevWorkspaceStream(setWorkspaceStreamStatus)
+    const timer =
+      workspaceStreamStatus === 'connected'
+        ? null
+        : setInterval(() => void load(), MESSAGE_FALLBACK_REFRESH_MS)
     return () => {
       cancelled = true
-      clearInterval(timer)
+      unsubscribeEvent()
+      unsubscribeStream()
+      if (timer) {
+        clearInterval(timer)
+      }
     }
-  }, [applyMessages, channelId, transcriptAttempt])
+  }, [applyMessages, channelId, transcriptAttempt, workspaceStreamStatus])
 
   const loadOlder = useCallback(async (): Promise<void> => {
     const before = olderPageCursor(messages)

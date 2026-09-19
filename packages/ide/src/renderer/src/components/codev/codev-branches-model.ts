@@ -164,7 +164,7 @@ export function codevBranchLabel(
     return meaningfulAssignment(slot?.assignment) ?? 'Preparing branch'
   }
 
-  const branch = worktree.branch?.trim() ?? ''
+  const branch = (worktree.branch?.trim() ?? '').replace(/^refs\/heads\//, '')
   if (worktree.isMainWorktree) {
     return branch || 'main'
   }

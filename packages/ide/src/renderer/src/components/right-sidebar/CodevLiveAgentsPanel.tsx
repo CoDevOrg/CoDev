@@ -6,9 +6,13 @@ import { useActiveWorktree, useAllWorktrees } from '@/store/selectors'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import {
   getCodevBridgeSnapshot,
+  getCodevWorkspaceStreamStatus,
   requestCodevBridge,
-  subscribeCodevBridge
+  subscribeCodevBridge,
+  subscribeCodevWorkspaceEvent,
+  subscribeCodevWorkspaceStream
 } from '../../web/codev-bridge-singleton'
+import type { CodevWorkspaceStreamStatus } from '../../web/codev-bridge-singleton'
 import { describeAgentStopPlan, planAgentStop } from '../../web/codev-agent-stop-plan'
 import { consumeCodevSurfaceFocus, useCodevSurfaceFocus } from '../../web/codev-surface-focus'
 import { setCodevAgentSelection, setCodevBranchSelection } from '../codev/codev-branches-view'
@@ -59,7 +63,7 @@ import {
  *    actually write.
  */
 
-const REFRESH_MS = 5_000
+const FALLBACK_REFRESH_MS = 15_000
 const TICK_MS = 1_000
 
 type SharedSessionSnapshot = {
@@ -389,6 +393,9 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
   const [bridgeStatus, setBridgeStatus] = useState<string>(() =>
     typeof window === 'undefined' ? 'disconnected' : getCodevBridgeSnapshot().status
   )
+  const [workspaceStreamStatus, setWorkspaceStreamStatus] = useState<CodevWorkspaceStreamStatus>(
+    () => (typeof window === 'undefined' ? 'unavailable' : getCodevWorkspaceStreamStatus())
+  )
   const [sharedSessions, setSharedSessions] = useState<CodevSharedSessionView[]>([])
   const [workboardSnapshot, setWorkboardSnapshot] = useState<CodevWorkboardSnapshot | null>(null)
   const [coordination, setCoordination] = useState<MissionControlCoordination>(
@@ -509,6 +516,21 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
     }
   }, [bridgeStatus])
 
+  useEffect(() => {
+    const unsubscribeEvent = subscribeCodevWorkspaceEvent((event) => {
+      if (event.type === 'agents.changed') {
+        void refreshManaged()
+      } else if (event.type === 'coordination.changed') {
+        void refreshCoordination()
+      }
+    })
+    const unsubscribeStream = subscribeCodevWorkspaceStream(setWorkspaceStreamStatus)
+    return () => {
+      unsubscribeEvent()
+      unsubscribeStream()
+    }
+  }, [refreshCoordination, refreshManaged])
+
   const reconciled = useMemo(
     () =>
       reconcileCodevStatus({
@@ -576,12 +598,15 @@ export function CodevLiveAgentsPanel(): JSX.Element | null {
     }
     void refreshManaged()
     void refreshCoordination()
+    if (workspaceStreamStatus === 'connected') {
+      return
+    }
     const timer = setInterval(() => {
       void refreshManaged()
       void refreshCoordination()
-    }, REFRESH_MS)
+    }, FALLBACK_REFRESH_MS)
     return () => clearInterval(timer)
-  }, [embedded, refreshManaged, refreshCoordination])
+  }, [embedded, refreshManaged, refreshCoordination, workspaceStreamStatus])
 
   const canCoSteer = workboardCanCoSteer || sharedCanCoSteer
 
