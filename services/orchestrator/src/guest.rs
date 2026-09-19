@@ -1,8 +1,8 @@
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     fs::{self, OpenOptions},
     io::{Read, Write},
-    os::unix::fs::PermissionsExt,
+    os::unix::fs::{OpenOptionsExt, PermissionsExt},
     path::{Component, Path, PathBuf},
     process::{Command, Stdio},
     sync::{
@@ -24,11 +24,13 @@ use crate::model::{
     ClaudeSetupCodeRequest, ClaudeSetupPollRequest, ClaudeSetupPollResponse,
     ClaudeSetupStartRequest, CodexExecChunk, CodexExecPollRequest, CodexExecPollResponse,
     CodexExecStartRequest, ExecRequest, ExecResponse, FileResponse, PublicationExportRequest,
-    PublicationExportResponse, PublicationFile, RuntimeError, TerminalChunk, TerminalInputRequest,
-    TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
-    WorktreeCheckpointRequest, WorktreeCheckpointResponse, WorktreeCreateRequest,
-    WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest, WorktreeRebaseResponse,
-    WorktreeReviewResponse, WriteFileRequest,
+    PublicationExportResponse, PublicationFile, RuntimeError, SESSION_RESTORE_CHUNK_BYTES,
+    SESSION_RESTORE_FILE_BYTES, SESSION_RESTORE_TOTAL_BYTES, SessionRestoreBeginRequest,
+    SessionRestoreChunkRequest, SessionRestoreFileKind, SessionRestoreFinalizeResponse,
+    SessionRestoreStatus, TerminalChunk, TerminalInputRequest, TerminalPollRequest,
+    TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
+    WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse,
+    WorktreeRebaseRequest, WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
 };
 
 const MAX_BODY_BYTES: usize = 2 << 20;
@@ -44,6 +46,7 @@ const MAX_LIVE_TERMINALS: usize = 4;
 const CODEX_EXEC_TIMEOUT: Duration = Duration::from_secs(900);
 const CLAUDE_SETUP_TIMEOUT: Duration = Duration::from_secs(600);
 const CLAUDE_SETUP_START_TIMEOUT: Duration = Duration::from_secs(30);
+const SESSION_RESTORE_STAGING_TTL: Duration = Duration::from_secs(24 * 60 * 60);
 const GUEST_PATH: &str = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 static TERMINAL_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 static CODEX_AUTH_SEQUENCE: AtomicU64 = AtomicU64::new(1);
@@ -158,6 +161,7 @@ impl GuestService {
             ("POST", "/v1/codex-execs") => self.start_codex_exec(body),
             ("POST", "/v1/claude-auth-login") => self.start_claude_setup(body),
             ("POST", "/v1/worktrees") => self.create_worktree(body),
+            ("POST", "/v1/session-restores") => self.begin_session_restore(body),
             ("POST", "/v1/publication/export") => self.export_publication(body),
             ("POST", "/v1/workspace/snapshot") => self.snapshot_workspace(body),
             _ => {
@@ -174,6 +178,15 @@ impl GuestService {
                         ("POST", "rebase") => self.rebase_worktree(worktree_id, body),
                         ("POST", "merge") => self.merge_worktree(worktree_id, body),
                         _ => Err(RuntimeError::BadRequest("invalid worktree action".into())),
+                    }
+                } else if let Some((operation_id, action)) = session_restore_route(path) {
+                    match (method, action) {
+                        ("POST", "chunks") => self.append_session_restore_chunk(operation_id, body),
+                        ("POST", "finalize") => self.finalize_session_restore(operation_id),
+                        ("DELETE", "") => self.abort_session_restore(operation_id),
+                        _ => Err(RuntimeError::BadRequest(
+                            "invalid session restore action".into(),
+                        )),
                     }
                 } else if let Some((git_path, worktree_id)) = git_route(path) {
                     self.target_root(worktree_id)
@@ -681,6 +694,373 @@ impl GuestService {
             .ok_or_else(|| RuntimeError::BadRequest("terminal session not found".into()))
     }
 
+    fn begin_session_restore(&self, body: &[u8]) -> crate::model::Result<serde_json::Value> {
+        let request: SessionRestoreBeginRequest = decode(body)?;
+        validate_restore_operation_id(&request.operation_id)?;
+        validate_worktree_id(&request.worktree_id)?;
+        validate_commit_sha(&request.base_commit_sha)?;
+        validate_restore_manifest(&request)?;
+
+        let _mutation = self.mutations.lock().expect("mutation lock");
+        self.wait_for_codex_idle();
+        self.cleanup_abandoned_session_restores()?;
+        let operation_root = self.session_restore_operation_root(&request.operation_id)?;
+        let manifest_path = operation_root.join("manifest.json");
+        if manifest_path.exists() {
+            let existing: SessionRestoreBeginRequest =
+                serde_json::from_slice(&fs::read(&manifest_path).map_err(RuntimeError::internal)?)
+                    .map_err(RuntimeError::internal)?;
+            if existing != request {
+                return Err(RuntimeError::Conflict(
+                    "restore operation already exists with different metadata".into(),
+                ));
+            }
+            return Ok(serde_json::json!({ "accepted": true }));
+        }
+
+        let worktree = self.target_root(Some(&request.worktree_id))?;
+        self.require_head(&worktree, &request.base_commit_sha, "restore worktree")?;
+        self.require_clean(&worktree, "restore worktree must be clean")?;
+
+        fs::create_dir_all(&operation_root).map_err(RuntimeError::internal)?;
+        fs::set_permissions(
+            self.session_restore_root()?,
+            fs::Permissions::from_mode(0o700),
+        )
+        .map_err(RuntimeError::internal)?;
+        fs::set_permissions(&operation_root, fs::Permissions::from_mode(0o700))
+            .map_err(RuntimeError::internal)?;
+        atomic_write(
+            &manifest_path,
+            &serde_json::to_vec(&request).map_err(RuntimeError::internal)?,
+        )?;
+        for (index, file) in request.files.iter().enumerate() {
+            if file.bytes == 0 {
+                let empty_path = operation_root.join(format!("{index}.part"));
+                fs::write(&empty_path, []).map_err(RuntimeError::internal)?;
+                fs::set_permissions(empty_path, fs::Permissions::from_mode(0o600))
+                    .map_err(RuntimeError::internal)?;
+            }
+        }
+        Ok(serde_json::json!({ "accepted": true }))
+    }
+
+    fn append_session_restore_chunk(
+        &self,
+        operation_id: &str,
+        body: &[u8],
+    ) -> crate::model::Result<serde_json::Value> {
+        validate_restore_operation_id(operation_id)?;
+        let request: SessionRestoreChunkRequest = decode(body)?;
+        let _mutation = self.mutations.lock().expect("mutation lock");
+        self.wait_for_codex_idle();
+        let operation_root = self.session_restore_operation_root(operation_id)?;
+        let manifest = read_restore_manifest(&operation_root)?;
+        let declared = manifest.files.get(request.file_index).ok_or_else(|| {
+            RuntimeError::BadRequest("restore chunk references an unknown file".into())
+        })?;
+        let contents = BASE64
+            .decode(request.content_base64.as_bytes())
+            .map_err(|_| RuntimeError::BadRequest("restore chunk is not valid base64".into()))?;
+        if contents.is_empty() || contents.len() > SESSION_RESTORE_CHUNK_BYTES {
+            return Err(RuntimeError::BadRequest(
+                "restore chunk must contain between one byte and 512 KiB".into(),
+            ));
+        }
+        let requested_end = request
+            .offset
+            .checked_add(contents.len() as u64)
+            .ok_or_else(|| RuntimeError::BadRequest("restore chunk offset is invalid".into()))?;
+        if operation_root.join("result.json").exists() {
+            if requested_end > declared.bytes {
+                return Err(RuntimeError::BadRequest(
+                    "restore chunk exceeds the declared file size".into(),
+                ));
+            }
+            return Ok(serde_json::json!({ "nextOffset": requested_end }));
+        }
+        let part_path = operation_root.join(format!("{}.part", request.file_index));
+        let current_bytes = fs::metadata(&part_path)
+            .map(|value| value.len())
+            .unwrap_or(0);
+        if request.offset < current_bytes && requested_end <= current_bytes {
+            let existing = fs::read(&part_path).map_err(RuntimeError::internal)?;
+            let start = request.offset as usize;
+            let end = requested_end as usize;
+            if existing.get(start..end) == Some(contents.as_slice()) {
+                return Ok(serde_json::json!({ "nextOffset": requested_end }));
+            }
+        }
+        if request.offset != current_bytes {
+            return Err(RuntimeError::Conflict(format!(
+                "restore chunk offset mismatch: expected {current_bytes}"
+            )));
+        }
+        if requested_end > declared.bytes {
+            return Err(RuntimeError::BadRequest(
+                "restore chunk exceeds the declared file size".into(),
+            ));
+        }
+        let mut staged = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .mode(0o600)
+            .open(part_path)
+            .map_err(RuntimeError::internal)?;
+        if let Err(error) = staged.write_all(&contents) {
+            let _ = staged.set_len(current_bytes);
+            return Err(RuntimeError::internal(error));
+        }
+        Ok(serde_json::json!({ "nextOffset": requested_end }))
+    }
+
+    fn finalize_session_restore(
+        &self,
+        operation_id: &str,
+    ) -> crate::model::Result<serde_json::Value> {
+        validate_restore_operation_id(operation_id)?;
+        let _mutation = self.mutations.lock().expect("mutation lock");
+        self.wait_for_codex_idle();
+        let operation_root = self.session_restore_operation_root(operation_id)?;
+        let result_path = operation_root.join("result.json");
+        if result_path.exists() {
+            Self::cleanup_session_restore_parts(&operation_root)?;
+            return serde_json::from_slice(&fs::read(result_path).map_err(RuntimeError::internal)?)
+                .map_err(RuntimeError::internal);
+        }
+        let manifest = read_restore_manifest(&operation_root)?;
+        let worktree = self.target_root(Some(&manifest.worktree_id))?;
+        self.require_head(&worktree, &manifest.base_commit_sha, "restore worktree")?;
+        self.require_clean(&worktree, "restore worktree must be clean")?;
+
+        for (index, file) in manifest.files.iter().enumerate() {
+            let contents =
+                fs::read(operation_root.join(format!("{index}.part"))).map_err(|error| {
+                    if error.kind() == std::io::ErrorKind::NotFound {
+                        RuntimeError::Conflict(format!("restore file {index} is incomplete"))
+                    } else {
+                        RuntimeError::internal(error)
+                    }
+                })?;
+            if contents.len() as u64 != file.bytes || revision(&contents) != file.sha256 {
+                return Err(RuntimeError::Conflict(format!(
+                    "restore file {index} failed size or checksum verification"
+                )));
+            }
+        }
+
+        let patch = manifest
+            .files
+            .iter()
+            .enumerate()
+            .find(|(_, file)| file.kind == SessionRestoreFileKind::Patch);
+        let patch_paths = patch
+            .map(|(index, _)| {
+                fs::read(operation_root.join(format!("{index}.part")))
+                    .map(|contents| restore_patch_paths(&contents))
+                    .map_err(RuntimeError::internal)
+            })
+            .transpose()?
+            .unwrap_or_default();
+        let mut conflicts = Vec::new();
+        for file in manifest
+            .files
+            .iter()
+            .filter(|file| file.kind == SessionRestoreFileKind::Untracked)
+        {
+            let destination = self.restore_destination(&worktree, &file.path)?;
+            if destination.exists() || patch_paths.contains(&file.path) {
+                conflicts.push(file.path.clone());
+            }
+        }
+        if let Some((index, patch_file)) = patch {
+            let patch_path = operation_root.join(format!("{index}.part"));
+            let patch_arg = patch_path
+                .to_str()
+                .ok_or_else(|| RuntimeError::Internal("invalid restore staging path".into()))?;
+            let check = self.git_output(
+                &worktree,
+                &[
+                    "apply",
+                    "--check",
+                    "--binary",
+                    "--whitespace=nowarn",
+                    patch_arg,
+                ],
+            )?;
+            if !check.status.success() {
+                conflicts.extend(patch_paths.iter().cloned());
+                if patch_paths.is_empty() {
+                    conflicts.push(patch_file.path.clone());
+                }
+            }
+        }
+        conflicts.sort();
+        conflicts.dedup();
+        if !conflicts.is_empty() {
+            return self.complete_session_restore(
+                &operation_root,
+                SessionRestoreFinalizeResponse {
+                    status: SessionRestoreStatus::Conflicted,
+                    conflict_paths: conflicts,
+                },
+            );
+        }
+
+        if let Some((index, _)) = patch {
+            let patch_path = operation_root.join(format!("{index}.part"));
+            let patch_arg = patch_path
+                .to_str()
+                .ok_or_else(|| RuntimeError::Internal("invalid restore staging path".into()))?;
+            self.git(
+                &worktree,
+                &["apply", "--binary", "--whitespace=nowarn", patch_arg],
+            )?;
+        }
+        for (index, file) in manifest
+            .files
+            .iter()
+            .enumerate()
+            .filter(|(_, file)| file.kind == SessionRestoreFileKind::Untracked)
+        {
+            let destination = self.restore_destination(&worktree, &file.path)?;
+            let parent = destination
+                .parent()
+                .ok_or_else(|| RuntimeError::BadRequest("restore path has no parent".into()))?;
+            Self::create_parents_within(&worktree, parent)?;
+            fs::rename(operation_root.join(format!("{index}.part")), &destination)
+                .map_err(RuntimeError::internal)?;
+            let mode = if file.mode == "100755" { 0o755 } else { 0o644 };
+            fs::set_permissions(&destination, fs::Permissions::from_mode(mode))
+                .map_err(RuntimeError::internal)?;
+        }
+        self.complete_session_restore(
+            &operation_root,
+            SessionRestoreFinalizeResponse {
+                status: SessionRestoreStatus::Restored,
+                conflict_paths: Vec::new(),
+            },
+        )
+    }
+
+    fn abort_session_restore(&self, operation_id: &str) -> crate::model::Result<serde_json::Value> {
+        validate_restore_operation_id(operation_id)?;
+        let _mutation = self.mutations.lock().expect("mutation lock");
+        self.wait_for_codex_idle();
+        let operation_root = self.session_restore_operation_root(operation_id)?;
+        if operation_root.exists() && !operation_root.join("result.json").exists() {
+            fs::remove_dir_all(operation_root).map_err(RuntimeError::internal)?;
+        }
+        Ok(serde_json::json!({ "aborted": true }))
+    }
+
+    fn session_restore_operation_root(&self, operation_id: &str) -> crate::model::Result<PathBuf> {
+        validate_restore_operation_id(operation_id)?;
+        let root = self.session_restore_root()?;
+        let operation_root = root.join(operation_id);
+        if operation_root.exists() {
+            let metadata = fs::symlink_metadata(&operation_root).map_err(RuntimeError::internal)?;
+            if metadata.file_type().is_symlink() || !metadata.is_dir() {
+                return Err(RuntimeError::BadRequest(
+                    "session restore staging path is unsafe".into(),
+                ));
+            }
+            let resolved = fs::canonicalize(&operation_root).map_err(RuntimeError::internal)?;
+            let resolved_root = fs::canonicalize(&root).map_err(RuntimeError::internal)?;
+            if !resolved.starts_with(resolved_root) {
+                return Err(RuntimeError::BadRequest(
+                    "session restore staging path escapes the workspace".into(),
+                ));
+            }
+        }
+        Ok(operation_root)
+    }
+
+    fn session_restore_root(&self) -> crate::model::Result<PathBuf> {
+        let root = self
+            .worktrees_root()?
+            .parent()
+            .ok_or_else(|| RuntimeError::Internal("Git directory has no parent".into()))?
+            .join("codev-session-restores");
+        if root.exists() {
+            let metadata = fs::symlink_metadata(&root).map_err(RuntimeError::internal)?;
+            if metadata.file_type().is_symlink() || !metadata.is_dir() {
+                return Err(RuntimeError::BadRequest(
+                    "session restore staging root is unsafe".into(),
+                ));
+            }
+        }
+        Ok(root)
+    }
+
+    fn cleanup_abandoned_session_restores(&self) -> crate::model::Result<()> {
+        let root = self.session_restore_root()?;
+        let Ok(entries) = fs::read_dir(root) else {
+            return Ok(());
+        };
+        for entry in entries {
+            let entry = entry.map_err(RuntimeError::internal)?;
+            let path = entry.path();
+            if !path.is_dir() || path.join("result.json").exists() {
+                continue;
+            }
+            let stale = entry
+                .metadata()
+                .and_then(|metadata| metadata.modified())
+                .and_then(|modified| modified.elapsed().map_err(std::io::Error::other))
+                .is_ok_and(|age| age >= SESSION_RESTORE_STAGING_TTL);
+            if stale {
+                fs::remove_dir_all(path).map_err(RuntimeError::internal)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn restore_destination(
+        &self,
+        worktree: &Path,
+        relative: &str,
+    ) -> crate::model::Result<PathBuf> {
+        validate_restore_path(relative)?;
+        let mut cursor = worktree.to_path_buf();
+        let components = Path::new(relative).components().collect::<Vec<_>>();
+        for component in components.iter().take(components.len().saturating_sub(1)) {
+            cursor.push(component.as_os_str());
+            if let Ok(metadata) = fs::symlink_metadata(&cursor) {
+                if metadata.file_type().is_symlink() || !metadata.is_dir() {
+                    return Err(RuntimeError::BadRequest(
+                        "restore path contains a non-directory or symbolic link".into(),
+                    ));
+                }
+            }
+        }
+        Ok(worktree.join(relative))
+    }
+
+    fn complete_session_restore(
+        &self,
+        operation_root: &Path,
+        response: SessionRestoreFinalizeResponse,
+    ) -> crate::model::Result<serde_json::Value> {
+        let value = serde_json::to_value(response).map_err(RuntimeError::internal)?;
+        atomic_write(
+            &operation_root.join("result.json"),
+            &serde_json::to_vec(&value).map_err(RuntimeError::internal)?,
+        )?;
+        Self::cleanup_session_restore_parts(operation_root)?;
+        Ok(value)
+    }
+
+    fn cleanup_session_restore_parts(operation_root: &Path) -> crate::model::Result<()> {
+        for entry in fs::read_dir(operation_root).map_err(RuntimeError::internal)? {
+            let path = entry.map_err(RuntimeError::internal)?.path();
+            if path.extension().and_then(|value| value.to_str()) == Some("part") {
+                fs::remove_file(path).map_err(RuntimeError::internal)?;
+            }
+        }
+        Ok(())
+    }
+
     fn create_worktree(&self, body: &[u8]) -> crate::model::Result<serde_json::Value> {
         let request: WorktreeCreateRequest = decode(body)?;
         let _mutation = self.mutations.lock().expect("mutation lock");
@@ -694,6 +1074,14 @@ impl GuestService {
         fs::create_dir_all(&worktrees_root).map_err(RuntimeError::internal)?;
         let target = worktrees_root.join(&request.worktree_id);
         if target.exists() {
+            let existing = self.target_root(Some(&request.worktree_id))?;
+            if request.branch_name.is_none() && self.head_sha(&existing)? == request.head_sha {
+                return Ok(serde_json::json!({
+                    "worktreeId": request.worktree_id,
+                    "headSha": request.head_sha,
+                    "branchName": request.branch_name,
+                }));
+            }
             return Err(RuntimeError::Conflict("worktree already exists".into()));
         }
         let target_path = target
@@ -2189,6 +2577,12 @@ fn codex_exec_route(path: &str) -> Option<(&str, &str)> {
     (!session_id.is_empty()).then_some((session_id, action))
 }
 
+fn session_restore_route(path: &str) -> Option<(&str, &str)> {
+    let suffix = path.strip_prefix("/v1/session-restores/")?;
+    let (operation_id, action) = suffix.split_once('/').unwrap_or((suffix, ""));
+    (!operation_id.is_empty()).then_some((operation_id, action))
+}
+
 fn git_route(path: &str) -> Option<(&str, Option<&str>)> {
     let suffix = path.strip_prefix("/v1/git/")?;
     let (action, query) = suffix.split_once('?').unwrap_or((suffix, ""));
@@ -2211,6 +2605,107 @@ fn validate_worktree_id(worktree_id: &str) -> crate::model::Result<()> {
     } else {
         Err(RuntimeError::BadRequest("invalid worktree ID".into()))
     }
+}
+
+fn validate_restore_operation_id(operation_id: &str) -> crate::model::Result<()> {
+    validate_worktree_id(operation_id)
+        .map_err(|_| RuntimeError::BadRequest("invalid session restore operation ID".into()))
+}
+
+fn validate_restore_path(path: &str) -> crate::model::Result<()> {
+    if path.is_empty()
+        || path.len() > 4_096
+        || path.starts_with('/')
+        || path.contains('\\')
+        || path.chars().any(char::is_control)
+        || path
+            .split('/')
+            .any(|segment| segment.is_empty() || segment == "." || segment == "..")
+    {
+        Err(RuntimeError::BadRequest(
+            "session restore contains an unsafe path".into(),
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_restore_manifest(request: &SessionRestoreBeginRequest) -> crate::model::Result<()> {
+    if request.files.len() > 500 {
+        return Err(RuntimeError::BadRequest(
+            "session restore declares too many files".into(),
+        ));
+    }
+    let mut total_bytes = 0_u64;
+    let mut patch_count = 0_usize;
+    let mut paths = HashSet::new();
+    for file in &request.files {
+        validate_restore_path(&file.path)?;
+        validate_digest(&file.sha256)?;
+        if file.bytes > SESSION_RESTORE_FILE_BYTES {
+            return Err(RuntimeError::BadRequest(
+                "session restore file exceeds five MiB".into(),
+            ));
+        }
+        total_bytes = total_bytes
+            .checked_add(file.bytes)
+            .ok_or_else(|| RuntimeError::BadRequest("session restore size is invalid".into()))?;
+        if total_bytes > SESSION_RESTORE_TOTAL_BYTES {
+            return Err(RuntimeError::BadRequest(
+                "session restore exceeds 25 MiB".into(),
+            ));
+        }
+        if !paths.insert(file.path.as_str()) {
+            return Err(RuntimeError::BadRequest(
+                "session restore declares a duplicate path".into(),
+            ));
+        }
+        match file.kind {
+            SessionRestoreFileKind::Patch => {
+                patch_count += 1;
+                if file.mode != "100644" {
+                    return Err(RuntimeError::BadRequest(
+                        "session restore patch has an invalid mode".into(),
+                    ));
+                }
+            }
+            SessionRestoreFileKind::Untracked => {
+                if file.mode != "100644" && file.mode != "100755" {
+                    return Err(RuntimeError::BadRequest(
+                        "session restore file has an invalid mode".into(),
+                    ));
+                }
+            }
+        }
+    }
+    if patch_count > 1 {
+        return Err(RuntimeError::BadRequest(
+            "session restore declares more than one patch".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn read_restore_manifest(
+    operation_root: &Path,
+) -> crate::model::Result<SessionRestoreBeginRequest> {
+    let bytes = fs::read(operation_root.join("manifest.json")).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            RuntimeError::BadRequest("session restore operation not found".into())
+        } else {
+            RuntimeError::internal(error)
+        }
+    })?;
+    serde_json::from_slice(&bytes).map_err(RuntimeError::internal)
+}
+
+fn restore_patch_paths(contents: &[u8]) -> HashSet<String> {
+    String::from_utf8_lossy(contents)
+        .lines()
+        .filter_map(|line| line.strip_prefix("+++ b/"))
+        .filter(|path| path != &"/dev/null")
+        .map(str::to_owned)
+        .collect()
 }
 
 fn validate_branch_name(branch_name: &str) -> crate::model::Result<()> {
@@ -2860,6 +3355,138 @@ mod tests {
         );
         assert!(
             git_stdout(&roots.join("agent-conflict"), &["status", "--porcelain=v1"]).is_empty()
+        );
+    }
+
+    #[test]
+    fn session_restore_verifies_chunks_and_applies_repository_state_once() {
+        let directory = tempdir().expect("tempdir");
+        git(directory.path(), &["init", "--quiet"]);
+        git(
+            directory.path(),
+            &["config", "user.email", "codev@example.com"],
+        );
+        git(directory.path(), &["config", "user.name", "CoDev Test"]);
+        fs::write(directory.path().join("hello.txt"), "base\n").expect("seed");
+        git(directory.path(), &["add", "hello.txt"]);
+        git(directory.path(), &["commit", "--quiet", "-m", "seed"]);
+        let head_sha = git_stdout(directory.path(), &["rev-parse", "HEAD"]);
+        let service = GuestService::new(directory.path()).expect("service");
+        let worktree_id = "11111111-1111-4111-8111-111111111111";
+        let operation_id = "22222222-2222-4222-8222-222222222222";
+        let create = service.handle(
+            "POST",
+            "/v1/worktrees",
+            serde_json::to_string(&WorktreeCreateRequest {
+                worktree_id: worktree_id.into(),
+                branch_name: None,
+                head_sha: head_sha.clone(),
+            })
+            .expect("create")
+            .as_bytes(),
+        );
+        assert_eq!(create.status, 200);
+
+        let patch = b"diff --git a/hello.txt b/hello.txt\nindex df967b9..466b0cc 100644\n--- a/hello.txt\n+++ b/hello.txt\n@@ -1 +1 @@\n-base\n+restored\n";
+        let binary = [0_u8, 1, 2, 255];
+        let begin_request = SessionRestoreBeginRequest {
+            operation_id: operation_id.into(),
+            worktree_id: worktree_id.into(),
+            base_commit_sha: head_sha,
+            files: vec![
+                crate::model::SessionRestoreFile {
+                    path: "changes.patch".into(),
+                    kind: SessionRestoreFileKind::Patch,
+                    bytes: patch.len() as u64,
+                    sha256: revision(patch),
+                    mode: "100644".into(),
+                },
+                crate::model::SessionRestoreFile {
+                    path: "notes/context.bin".into(),
+                    kind: SessionRestoreFileKind::Untracked,
+                    bytes: binary.len() as u64,
+                    sha256: revision(&binary),
+                    mode: "100755".into(),
+                },
+            ],
+        };
+        let begin_body = serde_json::to_vec(&begin_request).expect("begin");
+        assert_eq!(
+            service
+                .handle("POST", "/v1/session-restores", &begin_body)
+                .status,
+            200
+        );
+        assert_eq!(
+            service
+                .handle("POST", "/v1/session-restores", &begin_body)
+                .status,
+            200
+        );
+
+        for (file_index, contents) in [(0, patch.as_slice()), (1, binary.as_slice())] {
+            let body = serde_json::to_vec(&SessionRestoreChunkRequest {
+                file_index,
+                offset: 0,
+                content_base64: BASE64.encode(contents),
+            })
+            .expect("chunk");
+            let path = format!("/v1/session-restores/{operation_id}/chunks");
+            assert_eq!(service.handle("POST", &path, &body).status, 200);
+            assert_eq!(service.handle("POST", &path, &body).status, 200);
+        }
+
+        let finalize_path = format!("/v1/session-restores/{operation_id}/finalize");
+        let finalized = service.handle("POST", &finalize_path, b"");
+        assert_eq!(
+            finalized.status,
+            200,
+            "{}",
+            String::from_utf8_lossy(&finalized.body)
+        );
+        let repeated = service.handle("POST", &finalize_path, b"");
+        assert_eq!(repeated.body, finalized.body);
+        assert_eq!(
+            service
+                .handle("POST", "/v1/session-restores", &begin_body)
+                .status,
+            200
+        );
+        let retry_chunk = serde_json::to_vec(&SessionRestoreChunkRequest {
+            file_index: 0,
+            offset: 0,
+            content_base64: BASE64.encode(patch),
+        })
+        .expect("retry chunk");
+        assert_eq!(
+            service
+                .handle(
+                    "POST",
+                    &format!("/v1/session-restores/{operation_id}/chunks"),
+                    &retry_chunk,
+                )
+                .status,
+            200
+        );
+        let worktree = directory
+            .path()
+            .join(".git/codev-agent-worktrees")
+            .join(worktree_id);
+        assert_eq!(
+            fs::read_to_string(worktree.join("hello.txt")).expect("patched"),
+            "restored\n"
+        );
+        assert_eq!(
+            fs::read(worktree.join("notes/context.bin")).expect("binary"),
+            binary
+        );
+        assert_eq!(
+            fs::metadata(worktree.join("notes/context.bin"))
+                .expect("metadata")
+                .permissions()
+                .mode()
+                & 0o777,
+            0o755
         );
     }
 

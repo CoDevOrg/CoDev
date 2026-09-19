@@ -5,6 +5,7 @@ export * from "./events";
 export * from "./entitlements";
 export * from "./providers";
 export * from "./shared-session";
+export * from "./session-capsule";
 export * from "./team-chat";
 export * from "./terminal";
 export * from "./workspace-brain";
