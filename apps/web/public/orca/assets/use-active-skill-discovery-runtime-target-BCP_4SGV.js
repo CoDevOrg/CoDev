@@ -1,0 +1,1 @@
+import{Hc as e,Tg as t,Wu as n,f as r,kg as i}from"./web-index-w1wyIjPI.js";var a=i(t()),o=Symbol(`skill-discovery-runtime-unresolved`);function s(){let t=r(t=>t.runtimeEnvironmentCatalogSettled?e(t):o);return(0,a.useMemo)(()=>t===o?null:n({activeRuntimeEnvironmentId:t}),[t])}export{s as t};

@@ -1,12 +1,21 @@
 import { createHmac } from "node:crypto";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const databaseMocks = vi.hoisted(() => ({ getDatabase: vi.fn() }));
+
+vi.mock("../platform/database", () => ({
+  getDatabase: databaseMocks.getDatabase,
+}));
 
 import {
+  closeCliAgentSession,
+  CLI_SESSION_STALE_AFTER_MS,
   mintCoordinationToken,
   mintWorkspaceCoordinationToken,
   openCoordinationToken,
   openWorkspaceCoordinationToken,
+  touchCliAgentSession,
 } from "./cli-agent-session";
 
 const INPUT = {
@@ -112,5 +121,111 @@ describe("workspace coordination token", () => {
       "utf8",
     ).toString("base64url");
     expect(openWorkspaceCoordinationToken(`${forged}.${signature}`)).toBeNull();
+  });
+});
+
+function updateQuery(returned: unknown[] = []) {
+  const query = {
+    set: vi.fn(),
+    where: vi.fn(),
+    returning: vi.fn(),
+  };
+  query.set.mockReturnValue(query);
+  query.where.mockReturnValue(query);
+  query.returning.mockResolvedValue(returned);
+  return query;
+}
+
+describe("CLI session lifecycle", () => {
+  beforeEach(() => {
+    databaseMocks.getDatabase.mockReset();
+  });
+
+  it("touches only an active CLI session and its worktree", async () => {
+    const sessionUpdate = updateQuery([
+      { id: "session-1", worktreeId: "worktree-1" },
+    ]);
+    const worktreeUpdate = updateQuery();
+    const transaction = {
+      execute: vi.fn().mockResolvedValue(undefined),
+      update: vi
+        .fn()
+        .mockReturnValueOnce(sessionUpdate)
+        .mockReturnValueOnce(worktreeUpdate),
+    };
+    databaseMocks.getDatabase.mockReturnValue({
+      transaction: vi.fn(async (callback) => callback(transaction)),
+    });
+
+    await expect(
+      touchCliAgentSession({
+        workspaceId: "workspace-1",
+        sessionId: "session-1",
+      }),
+    ).resolves.toEqual({ id: "session-1", worktreeId: "worktree-1" });
+    expect(sessionUpdate.set).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "running" }),
+    );
+    expect(worktreeUpdate.set).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "active" }),
+    );
+  });
+
+  it("closes a CLI session and discards an otherwise unused worktree", async () => {
+    const sessionQuery = {
+      from: vi.fn(),
+      where: vi.fn(),
+      limit: vi
+        .fn()
+        .mockResolvedValue([{ id: "session-1", worktreeId: "worktree-1" }]),
+    };
+    sessionQuery.from.mockReturnValue(sessionQuery);
+    sessionQuery.where.mockReturnValue(sessionQuery);
+    const siblingQuery = {
+      from: vi.fn(),
+      where: vi.fn(),
+      limit: vi.fn().mockResolvedValue([]),
+    };
+    siblingQuery.from.mockReturnValue(siblingQuery);
+    siblingQuery.where.mockReturnValue(siblingQuery);
+    const claimsUpdate = updateQuery();
+    const sessionUpdate = updateQuery();
+    const worktreeUpdate = updateQuery([{ id: "worktree-1" }]);
+    const transaction = {
+      execute: vi.fn().mockResolvedValue(undefined),
+      select: vi
+        .fn()
+        .mockReturnValueOnce(sessionQuery)
+        .mockReturnValueOnce(siblingQuery),
+      update: vi
+        .fn()
+        .mockReturnValueOnce(claimsUpdate)
+        .mockReturnValueOnce(sessionUpdate)
+        .mockReturnValueOnce(worktreeUpdate),
+    };
+    databaseMocks.getDatabase.mockReturnValue({
+      transaction: vi.fn(async (callback) => callback(transaction)),
+    });
+
+    await expect(
+      closeCliAgentSession({
+        workspaceId: "workspace-1",
+        sessionId: "session-1",
+      }),
+    ).resolves.toEqual({ status: "closed", worktreeDiscarded: true });
+    expect(claimsUpdate.set).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "released" }),
+    );
+    expect(sessionUpdate.set).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "completed" }),
+    );
+    expect(worktreeUpdate.set).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "discarded" }),
+    );
+  });
+
+  it("uses a finite lease for stale-session cleanup", () => {
+    expect(CLI_SESSION_STALE_AFTER_MS).toBeGreaterThan(0);
+    expect(CLI_SESSION_STALE_AFTER_MS).toBeLessThanOrEqual(2 * 60 * 60 * 1000);
   });
 });

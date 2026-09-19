@@ -68,9 +68,7 @@ export async function startCodevManagedAgent(
   const provider =
     options.provider ?? (options.agent ? codevProviderForAgent(options.agent) : undefined)
   if (options.agent && !provider) {
-    throw new Error(
-      'This provider is not available for the CoDev agent. Choose Claude or Codex.'
-    )
+    throw new Error('This provider is not available for the CoDev agent. Choose Claude or Codex.')
   }
 
   const requestParams = {
@@ -89,18 +87,11 @@ export async function startCodevManagedAgent(
   const store = useAppStore.getState()
   const sourceWorktreeId = options.baseWorktreeId ?? store.activeWorktreeId
   const repoId = options.repoId ?? repoIdForWorktree(sourceWorktreeId, store.worktreesByRepo)
-  const orcaWorktreeId = await openCodevManagedAgentWorktree(result.created.worktreeId, {
-    repoId,
-    createWorktree: (
-      nextRepoId,
-      name,
-      baseBranch,
-      setupDecision,
-      sparseCheckout,
-      telemetrySource,
-      displayName
-    ) =>
-      store.createWorktree(
+  let orcaWorktreeId: string
+  try {
+    orcaWorktreeId = await openCodevManagedAgentWorktree(result.created.worktreeId, {
+      repoId,
+      createWorktree: (
         nextRepoId,
         name,
         baseBranch,
@@ -108,11 +99,29 @@ export async function startCodevManagedAgent(
         sparseCheckout,
         telemetrySource,
         displayName
-      ),
-    updateComment: async (id, comment) => {
-      await store.updateWorktreeMeta(id, { comment })
-    }
-  })
+      ) =>
+        store.createWorktree(
+          nextRepoId,
+          name,
+          baseBranch,
+          setupDecision,
+          sparseCheckout,
+          telemetrySource,
+          displayName
+        ),
+      updateComment: async (id, comment) => {
+        await store.updateWorktreeMeta(id, { comment })
+      }
+    })
+  } catch (error: unknown) {
+    // The server reservation is created before Orca can create/tag its local
+    // representation. Release it through the normal audited stop lifecycle
+    // so a local failure cannot strand an active managed slot.
+    await requestCodevBridge('agents.discard', {
+      sessionId: result.created.sessionId
+    }).catch(() => undefined)
+    throw error
+  }
 
   activateAndRevealWorktree(orcaWorktreeId, { sidebarRevealBehavior: 'auto' })
   store.setRightSidebarTab('codev-agents')

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { and, countDistinct, eq, inArray, sql } from "drizzle-orm";
+import { and, countDistinct, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { schema } from "@codev/db";
@@ -27,10 +27,12 @@ import {
   WorkspaceLifecycleError,
 } from "@/lib/workspaces/workspaces";
 import { ensureWorkspaceRuntimeReady } from "@/lib/runtime/runtime-resume";
+import { appendWorkspaceEvent } from "@/lib/workspaces/audit";
 import { readWorkspaceStateEvents } from "@/lib/workspaces/workspace-state";
 import {
   AgentCapacityError,
   assertAgentCapacity,
+  managedLiveAgentWorktreePredicate,
   summarizeAgentCapacity,
 } from "@/lib/agents/agent-capacity";
 import {
@@ -225,12 +227,7 @@ export const POST = withWorkspace(
               schema.worktrees,
               eq(schema.agentSessions.worktreeId, schema.worktrees.id),
             )
-            .where(
-              and(
-                eq(schema.agentSessions.workspaceId, workspaceId),
-                inArray(schema.worktrees.status, ["active", "frozen"]),
-              ),
-            );
+            .where(managedLiveAgentWorktreePredicate(workspaceId));
           assertAgentCapacity(Number(worktreeCount?.value ?? 0));
           const [repository] = await transaction
             .select({ id: schema.workspaces.githubRepositoryId })
@@ -353,6 +350,20 @@ export const POST = withWorkspace(
         if (!input.draft) {
           await kickAgentSession(reservation.sessionId);
         }
+        // The row is now durable and any initial turn has been kicked. Realtime
+        // is an invalidation only; a failed notification must not roll back a
+        // successful agent reservation.
+        await appendWorkspaceEvent({
+          workspaceId,
+          actorId: user.id,
+          type: "agent.session_created",
+          payload: {
+            sessionId: reservation.sessionId,
+            worktreeId: reservation.worktreeId,
+            provider,
+            draft: Boolean(input.draft),
+          },
+        }).catch(() => undefined);
         return Response.json(
           {
             sessionId: reservation.sessionId,

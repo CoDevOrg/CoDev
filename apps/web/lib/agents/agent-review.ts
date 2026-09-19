@@ -1,12 +1,13 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, gt, inArray, ne, or } from "drizzle-orm";
 import { getRun } from "workflow/api";
 
 import { schema } from "@codev/db";
 
 import { getDatabase } from "../platform/database";
+import { CLI_SESSION_STALE_AFTER_MS } from "./cli-agent-session";
 import { appendWorkspaceEvent } from "../workspaces/audit";
 import {
   requireWorkspacePermission,
@@ -79,6 +80,7 @@ async function requireReviewTarget(
       and(
         eq(schema.agentSessions.id, sessionId),
         eq(schema.agentSessions.workspaceId, workspaceId),
+        eq(schema.agentSessions.kind, "managed"),
       ),
     )
     .limit(1);
@@ -611,6 +613,7 @@ export async function mergeAgentReview(
  * longer exists.
  */
 async function hasLiveSiblingSessions(worktreeId: string, sessionId: string) {
+  const cliCutoff = new Date(Date.now() - CLI_SESSION_STALE_AFTER_MS);
   const siblings = await getDatabase()
     .select({ id: schema.agentSessions.id })
     .from(schema.agentSessions)
@@ -619,6 +622,10 @@ async function hasLiveSiblingSessions(worktreeId: string, sessionId: string) {
         eq(schema.agentSessions.worktreeId, worktreeId),
         ne(schema.agentSessions.id, sessionId),
         inArray(schema.agentSessions.status, ["idle", "running", "waiting"]),
+        or(
+          ne(schema.agentSessions.kind, "cli"),
+          gt(schema.agentSessions.updatedAt, cliCutoff),
+        ),
       ),
     )
     .limit(1);

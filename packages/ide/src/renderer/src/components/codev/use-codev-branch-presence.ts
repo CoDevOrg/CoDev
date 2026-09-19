@@ -58,46 +58,68 @@ export function useCodevBranchPresence(active: boolean): {
     () => (typeof window === 'undefined' ? 'unavailable' : getCodevWorkspaceStreamStatus())
   )
   const inFlightRef = useRef(false)
+  const queuedRefreshRef = useRef(false)
+  const activeRef = useRef(active)
+
+  useEffect(() => {
+    activeRef.current = active
+  }, [active])
 
   useEffect(() => subscribeCodevBridge(() => setBridge(getCodevBridgeSnapshot())), [])
 
   const refresh = useCallback(async () => {
-    if (!active || getCodevBridgeSnapshot().status !== 'connected' || inFlightRef.current) {
+    if (!active || getCodevBridgeSnapshot().status !== 'connected') {
+      return
+    }
+    if (inFlightRef.current) {
+      // Realtime events are invalidations, not durable payloads. If one lands
+      // during a refresh, remember it so the latest snapshot is fetched after
+      // the current request completes instead of silently losing the update.
+      queuedRefreshRef.current = true
       return
     }
     inFlightRef.current = true
     setRefreshing(true)
-    const [workboardResult, sessionsResult, rosterResult] = await Promise.allSettled([
-      requestCodevBridge<CodevWorkboardSnapshot>('workboard.list'),
-      requestCodevBridge<CodevSharedSessionSnapshot>('agents.list'),
-      requestCodevBridge<TeamRoster>('team.roster')
-    ])
+    try {
+      const [workboardResult, sessionsResult, rosterResult] = await Promise.allSettled([
+        requestCodevBridge<CodevWorkboardSnapshot>('workboard.list'),
+        requestCodevBridge<CodevSharedSessionSnapshot>('agents.list'),
+        requestCodevBridge<TeamRoster>('team.roster')
+      ])
 
-    if (workboardResult.status === 'fulfilled') {
-      setWorkboard(workboardResult.value)
-      setWorkboardError(null)
-      setWorkboardErrorAt(null)
-      publishCodevWorkboard(workboardResult.value)
-    } else {
-      setWorkboardError(errorMessage(workboardResult.reason, 'Branch status is unavailable.'))
-      setWorkboardErrorAt((current) => current ?? Date.now())
+      if (workboardResult.status === 'fulfilled') {
+        setWorkboard(workboardResult.value)
+        setWorkboardError(null)
+        setWorkboardErrorAt(null)
+        publishCodevWorkboard(workboardResult.value)
+      } else {
+        setWorkboardError(errorMessage(workboardResult.reason, 'Branch status is unavailable.'))
+        setWorkboardErrorAt((current) => current ?? Date.now())
+      }
+      if (sessionsResult.status === 'fulfilled') {
+        setSharedSessions(sessionsResult.value.sharedSessions ?? [])
+        setSharedSessionsError(null)
+        setSharedSessionsErrorAt(null)
+      } else {
+        setSharedSessionsError(errorMessage(sessionsResult.reason, 'Agent status is unavailable.'))
+        setSharedSessionsErrorAt((current) => current ?? Date.now())
+      }
+      if (rosterResult.status === 'fulfilled') {
+        setRoster(rosterResult.value)
+        setRosterError(null)
+      } else {
+        setRosterError(errorMessage(rosterResult.reason, 'Branch ownership is unavailable.'))
+      }
+    } finally {
+      inFlightRef.current = false
+      setRefreshing(false)
+      if (queuedRefreshRef.current) {
+        queuedRefreshRef.current = false
+        if (activeRef.current && getCodevBridgeSnapshot().status === 'connected') {
+          window.setTimeout(() => void refresh(), 0)
+        }
+      }
     }
-    if (sessionsResult.status === 'fulfilled') {
-      setSharedSessions(sessionsResult.value.sharedSessions ?? [])
-      setSharedSessionsError(null)
-      setSharedSessionsErrorAt(null)
-    } else {
-      setSharedSessionsError(errorMessage(sessionsResult.reason, 'Agent status is unavailable.'))
-      setSharedSessionsErrorAt((current) => current ?? Date.now())
-    }
-    if (rosterResult.status === 'fulfilled') {
-      setRoster(rosterResult.value)
-      setRosterError(null)
-    } else {
-      setRosterError(errorMessage(rosterResult.reason, 'Branch ownership is unavailable.'))
-    }
-    inFlightRef.current = false
-    setRefreshing(false)
   }, [active])
 
   useEffect(() => {

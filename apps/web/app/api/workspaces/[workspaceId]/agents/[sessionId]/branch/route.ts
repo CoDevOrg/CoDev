@@ -1,10 +1,9 @@
 import { randomUUID } from "node:crypto";
 
-import { and, asc, countDistinct, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, countDistinct, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { schema } from "@codev/db";
-import { MAX_PARALLEL_AGENT_SESSIONS } from "@codev/contracts";
 
 import { kickAgentSession } from "@/lib/agents/agent-service";
 import {
@@ -12,6 +11,11 @@ import {
   deriveBranchSessionName,
   selectTurnsThroughReply,
 } from "@/lib/agents/agent-branch";
+import {
+  AgentCapacityError,
+  assertAgentCapacity,
+  managedLiveAgentWorktreePredicate,
+} from "@/lib/agents/agent-capacity";
 import { apiError } from "@/lib/http/api";
 import { withWorkspace } from "@/lib/http/api-route";
 import {
@@ -20,6 +24,7 @@ import {
   deleteSandboxWorktree,
 } from "@/lib/runtime/orchestrator";
 import { getDatabase } from "@/lib/platform/database";
+import { appendWorkspaceEvent } from "@/lib/workspaces/audit";
 import {
   getWorkspaceForMember,
   WorkspaceLifecycleError,
@@ -31,8 +36,6 @@ const branchSchema = z.object({
   prompt: z.string().trim().min(1).max(20_000).optional(),
   fromTurnId: z.string().uuid(),
 });
-
-class AgentCapacityError extends Error {}
 
 export const POST = withWorkspace<{ workspaceId: string; sessionId: string }>(
   "coSteer",
@@ -69,6 +72,7 @@ export const POST = withWorkspace<{ workspaceId: string; sessionId: string }>(
           and(
             eq(schema.agentSessions.id, sessionId),
             eq(schema.agentSessions.workspaceId, workspaceId),
+            eq(schema.agentSessions.kind, "managed"),
           ),
         )
         .limit(1);
@@ -151,19 +155,8 @@ export const POST = withWorkspace<{ workspaceId: string; sessionId: string }>(
               schema.worktrees,
               eq(schema.agentSessions.worktreeId, schema.worktrees.id),
             )
-            .where(
-              and(
-                eq(schema.agentSessions.workspaceId, workspaceId),
-                inArray(schema.worktrees.status, ["active", "frozen"]),
-              ),
-            );
-          if (
-            Number(worktreeCount?.value ?? 0) >= MAX_PARALLEL_AGENT_SESSIONS
-          ) {
-            throw new AgentCapacityError(
-              `A workspace supports at most ${MAX_PARALLEL_AGENT_SESSIONS} agent worktrees.`,
-            );
-          }
+            .where(managedLiveAgentWorktreePredicate(workspaceId));
+          assertAgentCapacity(Number(worktreeCount?.value ?? 0));
 
           const [worktree] = await transaction
             .insert(schema.worktrees)
@@ -247,6 +240,19 @@ export const POST = withWorkspace<{ workspaceId: string; sessionId: string }>(
         if (reservation.kick) {
           await kickAgentSession(reservation.sessionId);
         }
+        // Notify other workspace surfaces only after the new checkout and
+        // optional first turn are ready. A lost invalidation is recoverable by
+        // the REST refresh; it must never delete a successful branch.
+        await appendWorkspaceEvent({
+          workspaceId,
+          actorId: user.id,
+          type: "agent.session_branched",
+          payload: {
+            sessionId: reservation.sessionId,
+            worktreeId: reservation.worktreeId,
+            sourceSessionId: sessionId,
+          },
+        }).catch(() => undefined);
         return Response.json(
           { sessionId: reservation.sessionId },
           { status: 201 },

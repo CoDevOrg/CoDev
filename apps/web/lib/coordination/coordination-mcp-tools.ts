@@ -9,7 +9,10 @@ import {
   releasePathClaim,
   updateCoordinationMessageStatus,
 } from "./agent-coordination";
-import { agentSessionChatLabel } from "../agents/cli-agent-session";
+import {
+  agentSessionChatLabel,
+  closeCliAgentSession,
+} from "../agents/cli-agent-session";
 import {
   findChannelBySlug,
   postChannelMessage,
@@ -325,6 +328,12 @@ const RAW_COORDINATION_TOOLS: readonly CoordinationToolDefinition[] = [
         body: { type: "string" },
       },
     },
+  },
+  {
+    name: "close_session",
+    description:
+      "Close your CLI coordination session when you are finished. This releases your path claims and lets the workspace reclaim your CLI worktree.",
+    inputSchema: { type: "object", properties: {} },
   },
 ];
 
@@ -669,6 +678,18 @@ export async function callCoordinationTool(
           },
         });
         return ok(`Posted to #${slug} (${message.id}).`);
+      }
+
+      case "close_session": {
+        const result = await closeCliAgentSession({
+          workspaceId,
+          sessionId,
+        });
+        return ok(
+          result.worktreeDiscarded
+            ? "CLI coordination session closed and its worktree released."
+            : "CLI coordination session closed; a sibling session still owns the worktree.",
+        );
       }
 
       default:

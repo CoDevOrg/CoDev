@@ -1,7 +1,8 @@
 import { z } from "zod";
 
-import { withWorkspace } from "@/lib/http/api-route";
+import { readJson, withWorkspace } from "@/lib/http/api-route";
 import {
+  closeCliAgentSession,
   mintCoordinationToken,
   registerCliAgentSession,
 } from "@/lib/agents/cli-agent-session";
@@ -14,6 +15,8 @@ const bodySchema = z.object({
   headSha: z.string().trim().min(1).max(255),
   agentKind: z.string().trim().min(1).max(64),
 });
+
+const closeSchema = z.object({ sessionId: z.uuid() });
 
 /**
  * The embedded IDE calls this when it creates an agent's isolated worktree, to
@@ -43,5 +46,19 @@ export const POST = withWorkspace(
       new URL(request.url).origin,
     ).toString();
     return Response.json({ sessionId, mcpUrl, mcpToken: token });
+  },
+);
+
+/** Explicit shutdown for an IDE/CLI launcher that knows its session id. */
+export const DELETE = withWorkspace(
+  "coSteer",
+  async ({ request, workspaceId }) => {
+    const input = await readJson(request, closeSchema);
+    return Response.json(
+      await closeCliAgentSession({
+        workspaceId,
+        sessionId: input.sessionId,
+      }),
+    );
   },
 );

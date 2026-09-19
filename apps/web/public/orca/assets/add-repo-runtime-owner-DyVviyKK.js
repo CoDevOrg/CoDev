@@ -1,1 +1,0 @@
-import{Af as e,zf as t}from"./web-index-6wj_-NXs.js";function n(n){return n===void 0?void 0:n?t(n):e}function r(e){let t=n(e);return{requireAuthoritative:!0,...t?{executionHostId:t}:{}}}export{r as t};

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 
@@ -10,6 +10,7 @@ import {
 } from "../coordination/agent-coordination";
 import { getDatabase } from "../platform/database";
 import { publicAttachmentMetadata } from "./agent-turn-context";
+import { managedAgentSessionPredicate } from "./agent-capacity";
 
 export async function listAgentSessions(workspaceId: string) {
   const sessions = await getDatabase()
@@ -52,12 +53,7 @@ export async function listAgentSessions(workspaceId: string) {
     // Only managed workflow sessions: `cli` sessions stand in for agent CLIs in
     // the embedded IDE and take part in coordination only, not turns/reviews/
     // workboard, and must not consume a managed parallel-agent slot.
-    .where(
-      and(
-        eq(schema.agentSessions.workspaceId, workspaceId),
-        eq(schema.agentSessions.kind, "managed"),
-      ),
-    )
+    .where(managedAgentSessionPredicate(workspaceId))
     .orderBy(asc(schema.agentSessions.createdAt));
   return Promise.all(
     sessions.map(async (session) => {
