@@ -1026,12 +1026,12 @@ impl GuestService {
         let components = Path::new(relative).components().collect::<Vec<_>>();
         for component in components.iter().take(components.len().saturating_sub(1)) {
             cursor.push(component.as_os_str());
-            if let Ok(metadata) = fs::symlink_metadata(&cursor) {
-                if metadata.file_type().is_symlink() || !metadata.is_dir() {
-                    return Err(RuntimeError::BadRequest(
-                        "restore path contains a non-directory or symbolic link".into(),
-                    ));
-                }
+            if let Ok(metadata) = fs::symlink_metadata(&cursor)
+                && (metadata.file_type().is_symlink() || !metadata.is_dir())
+            {
+                return Err(RuntimeError::BadRequest(
+                    "restore path contains a non-directory or symbolic link".into(),
+                ));
             }
         }
         Ok(worktree.join(relative))
