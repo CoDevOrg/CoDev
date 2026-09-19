@@ -26,14 +26,27 @@ fi
 az account set --subscription "${subscription_id}"
 
 readonly provision_script="${repo_root}/infra/runtime/scripts/provision-host-image.sh"
-readonly provision_sha256="$(sha256sum "${provision_script}" | cut -d' ' -f1)"
+readonly rendered_provision_script="$(mktemp)"
+trap 'rm -f "${rendered_provision_script}"' EXIT
+
+# Azure Image Builder invokes Shell customizers without the caller's shell
+# environment. Render the release coordinates into the uploaded script so the
+# build VM can download the exact immutable artifacts without exposing a SAS
+# token or relying on ambient environment variables.
+{
+  printf 'export CODEV_RELEASE_VERSION=%q\n' "${release_version}"
+  printf 'export CODEV_ARTIFACT_ACCOUNT=%q\n' "${artifact_account}"
+  printf 'export CODEV_HOST_ARCH=%q\n' "${host_arch}"
+  cat "${provision_script}"
+} >"${rendered_provision_script}"
+readonly provision_sha256="$(sha256sum "${rendered_provision_script}" | cut -d' ' -f1)"
 
 echo "==> Uploading image provisioner to ${release_version}"
 az storage blob upload \
   --account-name "${artifact_account}" \
   --container-name releases \
   --name "${release_version}/provision-host-image.sh" \
-  --file "${provision_script}" \
+  --file "${rendered_provision_script}" \
   --overwrite --auth-mode login --only-show-errors --no-progress >/dev/null
 
 echo "==> Deploying Azure Image Builder template ${template_name}"
