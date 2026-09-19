@@ -1,5 +1,7 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
+
 import { and, eq, isNull } from "drizzle-orm";
 
 import { schema } from "@codev/db";
@@ -67,6 +69,7 @@ export class SandboxSessionRepositoryRuntime implements SessionRepositoryRuntime
           .select({
             id: schema.worktrees.id,
             headSha: schema.worktrees.headSha,
+            status: schema.worktrees.status,
           })
           .from(schema.worktrees)
           .where(eq(schema.worktrees.id, existingImport.worktreeId))
@@ -79,15 +82,16 @@ export class SandboxSessionRepositoryRuntime implements SessionRepositoryRuntime
             "Reserved import worktree does not match the capsule base commit.",
           );
         }
-        return existingWorktree;
+        if (existingWorktree.status !== "discarded") return existingWorktree;
       }
 
+      const previousWorktreeId = existingImport.worktreeId;
       const [created] = await transaction
         .insert(schema.worktrees)
         .values({
           workspaceId: input.workspaceId,
           kind: "agent",
-          name: `import-${input.importId}`,
+          name: `import-${input.importId}-${randomUUID()}`,
           headSha: input.baseCommitSha,
           status: "active",
         })
@@ -96,6 +100,9 @@ export class SandboxSessionRepositoryRuntime implements SessionRepositoryRuntime
           headSha: schema.worktrees.headSha,
         });
       if (!created) throw new Error("Unable to reserve an import worktree.");
+      const currentPointer = previousWorktreeId
+        ? eq(schema.agentSessionImports.worktreeId, previousWorktreeId)
+        : isNull(schema.agentSessionImports.worktreeId);
       const linked = await transaction
         .update(schema.agentSessionImports)
         .set({ worktreeId: created.id, updatedAt: new Date() })
@@ -103,7 +110,7 @@ export class SandboxSessionRepositoryRuntime implements SessionRepositoryRuntime
           and(
             eq(schema.agentSessionImports.id, input.importId),
             eq(schema.agentSessionImports.workspaceId, input.workspaceId),
-            isNull(schema.agentSessionImports.worktreeId),
+            currentPointer,
           ),
         )
         .returning({ id: schema.agentSessionImports.id });
@@ -128,7 +135,7 @@ export class SandboxSessionRepositoryRuntime implements SessionRepositoryRuntime
   ) {
     const result = await restoreSandboxSession({
       workspaceId: input.workspaceId,
-      operationId: input.importId,
+      operationId: input.worktreeId,
       worktreeId: input.worktreeId,
       baseCommitSha: input.baseCommitSha,
       files: input.files,

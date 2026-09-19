@@ -1,8 +1,9 @@
 # Provider-neutral agent session portability
 
 Status: Current for Capsule v0, durable storage, lifecycle, verified transport,
-the provider-neutral repository restoration engine, and Azure sandbox
-materialization. Provider rehydration and launch are future work.
+the provider-neutral repository restoration engine, Azure sandbox
+materialization, and the scoped restore trigger. Provider rehydration and
+launch are future work.
 
 ## Product model
 
@@ -164,8 +165,21 @@ a small result receipt while staged payload bytes are removed. Any failed or
 conflicted restore discards the isolated worktree; repository payloads,
 attachments, and provider-native state never enter the protocol.
 
+The importer can call `POST /api/workspaces/{workspaceId}/session-imports/{importId}/restore`
+with workspace co-steering permission. The route checks that the import belongs
+to that member and workspace, advances `stored` to `restoring`, decrypts and
+re-verifies the stored capsule, wakes the sandbox, and runs repository restore.
+It records `matched`, `restored`, `conflicted`, or `unavailable` through guarded
+lifecycle transitions. Only the first two become `ready` automatically. A
+separate call with `{ "transcriptOnly": true }` accepts a previously recorded
+conflict or unavailability and then makes the import ready without a restored
+repository. Transient runtime errors leave the import in `restoring` for retry;
+after a conflict, retry reserves a new worktree and restore operation. An
+`unavailable` repository can also be retried if its base commit later becomes
+available; neither case silently selects transcript-only continuation.
+
 ## Deliberately deferred
 
-The public upload/restore trigger, runtime rehydration after IDE-home recreation,
+The public capsule upload route, runtime rehydration after IDE-home recreation,
 provider launching, and user-facing continuation selection are not implemented
 by this milestone.

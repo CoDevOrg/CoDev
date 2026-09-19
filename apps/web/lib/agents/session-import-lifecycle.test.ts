@@ -84,6 +84,9 @@ describe("repository restoration transitions", () => {
       assertRepositoryRestoreTransition("unavailable", "transcript_only"),
     ).not.toThrow();
     expect(() =>
+      assertRepositoryRestoreTransition("unavailable", "restored"),
+    ).not.toThrow();
+    expect(() =>
       assertRepositoryRestoreTransition("conflicted", "transcript_only"),
     ).not.toThrow();
   });

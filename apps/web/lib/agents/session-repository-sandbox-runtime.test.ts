@@ -45,7 +45,7 @@ describe("sandbox session repository runtime", () => {
     });
     expect(mocks.restoreSandboxSession).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
-      operationId: "import-1",
+      operationId: "worktree-1",
       worktreeId: "worktree-1",
       baseCommitSha: "a".repeat(40),
       files: [
@@ -121,6 +121,56 @@ describe("sandbox session repository runtime", () => {
     expect(mocks.createSandboxWorktree).toHaveBeenCalledWith(
       "workspace-1",
       "reserved-worktree",
+      "a".repeat(40),
+    );
+  });
+
+  it("allocates a new worktree after a discarded conflict", async () => {
+    const query = { from: vi.fn(), where: vi.fn(), limit: vi.fn() };
+    query.from.mockReturnValue(query);
+    query.where.mockReturnValue(query);
+    query.limit
+      .mockResolvedValueOnce([{ worktreeId: "old-worktree" }])
+      .mockResolvedValueOnce([
+        { id: "old-worktree", headSha: "a".repeat(40), status: "discarded" },
+      ]);
+    const insert = {
+      values: vi.fn(() => ({
+        returning: vi
+          .fn()
+          .mockResolvedValue([{ id: "new-worktree", headSha: "a".repeat(40) }]),
+      })),
+    };
+    const update = {
+      set: vi.fn(() => ({
+        where: vi.fn(() => ({
+          returning: vi.fn().mockResolvedValue([{ id: "import-1" }]),
+        })),
+      })),
+    };
+    const transaction = {
+      select: vi.fn(() => query),
+      insert: vi.fn(() => insert),
+      update: vi.fn(() => update),
+    };
+    const database = {
+      transaction: vi.fn(async (fn: (tx: typeof transaction) => unknown) =>
+        fn(transaction),
+      ),
+    };
+    mocks.createSandboxWorktree.mockResolvedValue(undefined);
+    const runtime = new SandboxSessionRepositoryRuntime(database as never);
+
+    await expect(
+      runtime.createIsolatedWorktree({
+        workspaceId: "workspace-1",
+        importId: "import-1",
+        baseCommitSha: "a".repeat(40),
+      }),
+    ).resolves.toEqual({ worktreeId: "new-worktree" });
+    expect(mocks.createSandboxWorktree).toHaveBeenCalledWith(
+      "workspace-1",
+      "new-worktree",
       "a".repeat(40),
     );
   });

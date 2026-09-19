@@ -63,7 +63,7 @@ const repositoryTransitions: Record<
   matched: ["restored", "conflicted", "unavailable", "transcript_only"],
   restored: [],
   conflicted: ["restored", "unavailable", "transcript_only"],
-  unavailable: ["transcript_only"],
+  unavailable: ["matched", "restored", "conflicted", "transcript_only"],
   transcript_only: [],
 };
 
