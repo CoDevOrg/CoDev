@@ -167,7 +167,7 @@ resource imageTemplate 'Microsoft.VirtualMachineImages/imageTemplates@2023-07-01
           type: 'Shell'
           name: 'validate-codev-host'
           inline: [
-            'set -euxo pipefail'
+            'set -eux'
             'test -x /usr/local/bin/codev-orchestrator'
             'test -x /usr/local/bin/codev-guestd'
             'test -x /usr/local/bin/firecracker'
