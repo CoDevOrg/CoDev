@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, gt, inArray, lt, ne, or, sql } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 
@@ -27,6 +27,26 @@ import { getDatabase } from "../platform/database";
 
 const TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
 const TOKEN_DOMAIN = "codev-coordination-mcp-v1";
+const CLI_SESSION_LOCK_PREFIX = "codev-cli-session:";
+const LIVE_CLI_SESSION_STATUSES = ["idle", "running", "waiting"] as const;
+
+// Coordination calls refresh the session's updatedAt timestamp. A CLI that
+// has not contacted the coordination server for this long is no longer
+// trusted to keep a shared worktree alive; a later call can safely resurrect
+// the same row through resolve/register.
+export const CLI_SESSION_STALE_AFTER_MS = 2 * 60 * 60 * 1000;
+
+type Database = ReturnType<typeof getDatabase>;
+type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
+
+async function lockCliSessionWorkspace(
+  transaction: Transaction,
+  workspaceId: string,
+) {
+  await transaction.execute(
+    sql`select pg_advisory_xact_lock(hashtext(${`${CLI_SESSION_LOCK_PREFIX}${workspaceId}`}))`,
+  );
+}
 
 export type CoordinationToken = {
   workspaceId: string;
@@ -230,6 +250,7 @@ export async function registerCliAgentSession(
     `${input.agentKind.trim() || "agent"} · ${input.branch}`.slice(0, 200);
 
   return database.transaction(async (transaction) => {
+    await lockCliSessionWorkspace(transaction, input.workspaceId);
     const [existingWorktree] = await transaction
       .select({ id: schema.worktrees.id })
       .from(schema.worktrees)
@@ -237,6 +258,7 @@ export async function registerCliAgentSession(
         and(
           eq(schema.worktrees.workspaceId, input.workspaceId),
           eq(schema.worktrees.name, input.worktreeName),
+          eq(schema.worktrees.kind, "agent"),
         ),
       )
       .limit(1);
@@ -325,6 +347,7 @@ export async function resolveCliAgentSessionForBranch(input: {
   const database = getDatabase();
 
   return database.transaction(async (transaction) => {
+    await lockCliSessionWorkspace(transaction, input.workspaceId);
     const [owner] = await transaction
       .select({ ownerId: schema.workspaces.ownerId })
       .from(schema.workspaces)
@@ -350,6 +373,27 @@ export async function resolveCliAgentSessionForBranch(input: {
       )
       .limit(1);
     if (existingSession) {
+      const now = new Date();
+      await transaction
+        .update(schema.agentSessions)
+        .set({
+          status: "running",
+          workflowRunId: null,
+          interruptedAt: null,
+          lastError: null,
+          updatedAt: now,
+        })
+        .where(eq(schema.agentSessions.id, existingSession.id));
+      await transaction
+        .update(schema.worktrees)
+        .set({ status: "active", updatedAt: now })
+        .where(
+          and(
+            eq(schema.worktrees.workspaceId, input.workspaceId),
+            eq(schema.worktrees.name, worktreeName),
+            eq(schema.worktrees.kind, "agent"),
+          ),
+        );
       return { sessionId: existingSession.id, ownerId: owner.ownerId };
     }
 
@@ -360,6 +404,7 @@ export async function resolveCliAgentSessionForBranch(input: {
         and(
           eq(schema.worktrees.workspaceId, input.workspaceId),
           eq(schema.worktrees.name, worktreeName),
+          eq(schema.worktrees.kind, "agent"),
         ),
       )
       .limit(1);
@@ -394,6 +439,255 @@ export async function resolveCliAgentSessionForBranch(input: {
       .returning({ id: schema.agentSessions.id });
     return { sessionId: session!.id, ownerId: owner.ownerId };
   });
+}
+
+/**
+ * Refresh a session-scoped CLI token's lease. A closed or non-CLI session is
+ * rejected instead of being silently resurrected by a token that should no
+ * longer be usable.
+ */
+export async function touchCliAgentSession(input: {
+  workspaceId: string;
+  sessionId: string;
+}) {
+  const now = new Date();
+  return getDatabase().transaction(async (transaction) => {
+    await lockCliSessionWorkspace(transaction, input.workspaceId);
+    const [session] = await transaction
+      .update(schema.agentSessions)
+      .set({ status: "running", updatedAt: now })
+      .where(
+        and(
+          eq(schema.agentSessions.id, input.sessionId),
+          eq(schema.agentSessions.workspaceId, input.workspaceId),
+          eq(schema.agentSessions.kind, "cli"),
+          inArray(schema.agentSessions.status, LIVE_CLI_SESSION_STATUSES),
+        ),
+      )
+      .returning({
+        id: schema.agentSessions.id,
+        worktreeId: schema.agentSessions.worktreeId,
+      });
+    if (!session) {
+      throw new Error("CLI coordination session is closed or not found.");
+    }
+    await transaction
+      .update(schema.worktrees)
+      .set({ status: "active", updatedAt: now })
+      .where(
+        and(
+          eq(schema.worktrees.id, session.worktreeId),
+          eq(schema.worktrees.workspaceId, input.workspaceId),
+          eq(schema.worktrees.kind, "agent"),
+        ),
+      );
+    return session;
+  });
+}
+
+/**
+ * Explicitly close one CLI coordination session and release its claims. The
+ * worktree is discarded only when no managed or CLI session still uses it.
+ */
+export async function closeCliAgentSession(input: {
+  workspaceId: string;
+  sessionId: string;
+}) {
+  const now = new Date();
+  const cliCutoff = new Date(now.getTime() - CLI_SESSION_STALE_AFTER_MS);
+  return getDatabase().transaction(async (transaction) => {
+    await lockCliSessionWorkspace(transaction, input.workspaceId);
+    const [session] = await transaction
+      .select({
+        id: schema.agentSessions.id,
+        worktreeId: schema.agentSessions.worktreeId,
+      })
+      .from(schema.agentSessions)
+      .where(
+        and(
+          eq(schema.agentSessions.id, input.sessionId),
+          eq(schema.agentSessions.workspaceId, input.workspaceId),
+          eq(schema.agentSessions.kind, "cli"),
+        ),
+      )
+      .limit(1);
+    if (!session) {
+      throw new Error("CLI coordination session not found.");
+    }
+
+    await transaction
+      .update(schema.pathClaims)
+      .set({ status: "released", updatedAt: now })
+      .where(
+        and(
+          eq(schema.pathClaims.sessionId, session.id),
+          inArray(schema.pathClaims.status, ["active", "contested"]),
+        ),
+      );
+    await transaction
+      .update(schema.agentSessions)
+      .set({
+        status: "completed",
+        workflowRunId: null,
+        interruptedAt: now,
+        lastError: null,
+        updatedAt: now,
+      })
+      .where(eq(schema.agentSessions.id, session.id));
+
+    const [liveSibling] = await transaction
+      .select({ id: schema.agentSessions.id })
+      .from(schema.agentSessions)
+      .where(
+        and(
+          eq(schema.agentSessions.workspaceId, input.workspaceId),
+          eq(schema.agentSessions.worktreeId, session.worktreeId),
+          ne(schema.agentSessions.id, session.id),
+          inArray(schema.agentSessions.status, LIVE_CLI_SESSION_STATUSES),
+          or(
+            ne(schema.agentSessions.kind, "cli"),
+            gt(schema.agentSessions.updatedAt, cliCutoff),
+          ),
+        ),
+      )
+      .limit(1);
+    const [discardedWorktree] = liveSibling
+      ? []
+      : await transaction
+          .update(schema.worktrees)
+          .set({ status: "discarded", discardedAt: now, updatedAt: now })
+          .where(
+            and(
+              eq(schema.worktrees.id, session.worktreeId),
+              eq(schema.worktrees.workspaceId, input.workspaceId),
+              eq(schema.worktrees.kind, "agent"),
+              inArray(schema.worktrees.status, ["active", "frozen"]),
+            ),
+          )
+          .returning({ id: schema.worktrees.id });
+
+    return {
+      status: "closed" as const,
+      worktreeDiscarded: Boolean(discardedWorktree),
+    };
+  });
+}
+
+/**
+ * Reap CLI rows that stopped refreshing their lease. This runs from the
+ * existing lifecycle cron, and is also safe against a concurrent reconnect:
+ * registration, touch, close, and reaping all serialize per workspace.
+ */
+export async function reapStaleCliAgentSessions(now = new Date()) {
+  const cutoff = new Date(now.getTime() - CLI_SESSION_STALE_AFTER_MS);
+  const candidates = await getDatabase()
+    .select({
+      id: schema.agentSessions.id,
+      workspaceId: schema.agentSessions.workspaceId,
+    })
+    .from(schema.agentSessions)
+    .where(
+      and(
+        eq(schema.agentSessions.kind, "cli"),
+        inArray(schema.agentSessions.status, LIVE_CLI_SESSION_STATUSES),
+        lt(schema.agentSessions.updatedAt, cutoff),
+      ),
+    )
+    .limit(200);
+
+  const byWorkspace = new Map<string, string[]>();
+  for (const candidate of candidates) {
+    const ids = byWorkspace.get(candidate.workspaceId) ?? [];
+    ids.push(candidate.id);
+    byWorkspace.set(candidate.workspaceId, ids);
+  }
+
+  let cleaned = 0;
+  for (const [workspaceId, sessionIds] of byWorkspace) {
+    cleaned += await getDatabase().transaction(async (transaction) => {
+      await lockCliSessionWorkspace(transaction, workspaceId);
+      const stale = await transaction
+        .select({
+          id: schema.agentSessions.id,
+          worktreeId: schema.agentSessions.worktreeId,
+        })
+        .from(schema.agentSessions)
+        .where(
+          and(
+            eq(schema.agentSessions.workspaceId, workspaceId),
+            eq(schema.agentSessions.kind, "cli"),
+            inArray(schema.agentSessions.id, sessionIds),
+            inArray(schema.agentSessions.status, LIVE_CLI_SESSION_STATUSES),
+            lt(schema.agentSessions.updatedAt, cutoff),
+          ),
+        );
+      if (!stale.length) return 0;
+
+      const now = new Date();
+      await transaction
+        .update(schema.pathClaims)
+        .set({ status: "expired", updatedAt: now })
+        .where(
+          and(
+            inArray(
+              schema.pathClaims.sessionId,
+              stale.map((session) => session.id),
+            ),
+            inArray(schema.pathClaims.status, ["active", "contested"]),
+          ),
+        );
+      await transaction
+        .update(schema.agentSessions)
+        .set({
+          status: "completed",
+          workflowRunId: null,
+          interruptedAt: now,
+          lastError: "CLI coordination heartbeat expired.",
+          updatedAt: now,
+        })
+        .where(
+          and(
+            inArray(
+              schema.agentSessions.id,
+              stale.map((session) => session.id),
+            ),
+            eq(schema.agentSessions.kind, "cli"),
+            inArray(schema.agentSessions.status, LIVE_CLI_SESSION_STATUSES),
+            lt(schema.agentSessions.updatedAt, cutoff),
+          ),
+        );
+
+      for (const worktreeId of new Set(
+        stale.map((session) => session.worktreeId),
+      )) {
+        const [liveSibling] = await transaction
+          .select({ id: schema.agentSessions.id })
+          .from(schema.agentSessions)
+          .where(
+            and(
+              eq(schema.agentSessions.workspaceId, workspaceId),
+              eq(schema.agentSessions.worktreeId, worktreeId),
+              inArray(schema.agentSessions.status, LIVE_CLI_SESSION_STATUSES),
+            ),
+          )
+          .limit(1);
+        if (liveSibling) continue;
+        await transaction
+          .update(schema.worktrees)
+          .set({ status: "discarded", discardedAt: now, updatedAt: now })
+          .where(
+            and(
+              eq(schema.worktrees.id, worktreeId),
+              eq(schema.worktrees.workspaceId, workspaceId),
+              eq(schema.worktrees.kind, "agent"),
+              inArray(schema.worktrees.status, ["active", "frozen"]),
+            ),
+          );
+      }
+      return stale.length;
+    });
+  }
+  return cleaned;
 }
 
 /**

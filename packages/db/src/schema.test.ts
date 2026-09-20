@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   agentEvents,
+  agentSessionImportArtifacts,
+  agentSessionImports,
+  agentSessionImportStatus,
   agentSessions,
   collaborationConflictResolutions,
   conversationArtifacts,
@@ -23,11 +26,13 @@ import {
   plans,
   subscriptionPlan,
   publishedBranches,
+  repositoryRestoreStatus,
   providerCredentialEvents,
   providerCredentials,
   cliAccessTokens,
   cliDeviceAuthorizations,
   sandboxRuntimeIntervals,
+  sessionContinuationMode,
   sharedChatMembers,
   sharedChatInvites,
   sharedChats,
@@ -117,6 +122,36 @@ describe("database schema", () => {
     expect(getTableName(designPartnerFeedback)).toBe("design_partner_feedback");
     expect(getTableName(workspaceMembers)).toBe("workspace_members");
     expect(getTableName(agentSessions)).toBe("agent_sessions");
+    expect(getTableName(agentSessionImports)).toBe("agent_session_imports");
+    expect(getTableName(agentSessionImportArtifacts)).toBe(
+      "agent_session_import_artifacts",
+    );
+    expect(agentSessionImportStatus.enumValues).toEqual([
+      "storing",
+      "stored",
+      "restoring",
+      "ready",
+      "launching",
+      "active",
+      "failed",
+      "deleted",
+    ]);
+    expect(repositoryRestoreStatus.enumValues).toEqual([
+      "pending",
+      "matched",
+      "restored",
+      "conflicted",
+      "unavailable",
+      "transcript_only",
+    ]);
+    expect(sessionContinuationMode.enumValues).toEqual([
+      "managed",
+      "native_resume",
+    ]);
+    expect(agentSessionImports.capsuleSha256.name).toBe("capsule_sha256");
+    expect(agentSessionImportArtifacts.encryptedPayload.name).toBe(
+      "encrypted_payload",
+    );
     expect(getTableName(agentEvents)).toBe("agent_events");
     expect(agentSessions.workflowRunId.name).toBe("workflow_run_id");
     expect(agentSessions.provider.name).toBe("provider");

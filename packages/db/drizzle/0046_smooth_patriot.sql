@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "agent_session_imports_active_writer_idx" ON "agent_session_imports" USING btree ("imported_by","source_provider","external_session_id") WHERE "agent_session_imports"."continuation_mode" = 'native_resume' and "agent_session_imports"."status" in ('launching', 'active') and "agent_session_imports"."deleted_at" is null;

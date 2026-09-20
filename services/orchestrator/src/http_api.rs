@@ -24,9 +24,10 @@ use crate::{
         CodexExecPollRequest, CodexExecStartRequest, CreateRequest, ExecRequest,
         IDE_EXEC_MAX_ARGUMENTS, IDE_EXEC_MAX_TIMEOUT_SECONDS, IdeExecRequest, IdePrepareRequest,
         IdeStartRequest, IdeWriteFileRequest, MAX_IDE_FILE_BYTES, PublicationExportRequest, Result,
-        RuntimeError, TerminalInputRequest, TerminalPollRequest, TerminalResizeRequest,
-        TerminalStartRequest, WorktreeCheckpointRequest, WorktreeCreateRequest,
-        WorktreeMergeRequest, WorktreeRebaseRequest, WriteFileRequest,
+        RuntimeError, SESSION_RESTORE_CHUNK_BYTES, SessionRestoreBeginRequest,
+        SessionRestoreChunkRequest, TerminalInputRequest, TerminalPollRequest,
+        TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
+        WorktreeCreateRequest, WorktreeMergeRequest, WorktreeRebaseRequest, WriteFileRequest,
     },
 };
 
@@ -85,6 +86,22 @@ pub fn router(backend: SharedBackend, ide: IdeBackend) -> Router {
         .route(
             "/v1/sandboxes/{workspace_id}/worktrees",
             post(create_worktree),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/session-restores",
+            post(begin_session_restore),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/session-restores/{operation_id}/chunks",
+            post(append_session_restore_chunk),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/session-restores/{operation_id}/finalize",
+            post(finalize_session_restore),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/session-restores/{operation_id}",
+            delete(abort_session_restore),
         )
         .route(
             "/v1/sandboxes/{workspace_id}/worktrees/{worktree_id}",
@@ -381,6 +398,68 @@ async fn create_worktree(
         StatusCode::CREATED,
         Json(serde_json::json!({ "created": true })),
     ))
+}
+
+async fn begin_session_restore(
+    State(backend): State<SharedBackend>,
+    Path(workspace_id): Path<String>,
+    Json(request): Json<SessionRestoreBeginRequest>,
+) -> Result<StatusCode> {
+    validate_workspace_id(&workspace_id)?;
+    validate_worktree_id(&request.operation_id)?;
+    validate_worktree_id(&request.worktree_id)?;
+    validate_sha(&request.base_commit_sha, "restore base commit SHA")?;
+    backend
+        .begin_session_restore(&workspace_id, request)
+        .await?;
+    Ok(StatusCode::ACCEPTED)
+}
+
+async fn append_session_restore_chunk(
+    State(backend): State<SharedBackend>,
+    Path((workspace_id, operation_id)): Path<(String, String)>,
+    Json(request): Json<SessionRestoreChunkRequest>,
+) -> Result<Json<serde_json::Value>> {
+    validate_workspace_id(&workspace_id)?;
+    validate_worktree_id(&operation_id)?;
+    let decoded_bytes = BASE64
+        .decode(request.content_base64.as_bytes())
+        .map_err(|_| RuntimeError::BadRequest("restore chunk is not valid base64".into()))?;
+    if decoded_bytes.is_empty() || decoded_bytes.len() > SESSION_RESTORE_CHUNK_BYTES {
+        return Err(RuntimeError::BadRequest(
+            "restore chunk must contain between one byte and 512 KiB".into(),
+        ));
+    }
+    let next_offset = backend
+        .append_session_restore_chunk(&workspace_id, &operation_id, request)
+        .await?;
+    Ok(Json(serde_json::json!({ "nextOffset": next_offset })))
+}
+
+async fn finalize_session_restore(
+    State(backend): State<SharedBackend>,
+    Path((workspace_id, operation_id)): Path<(String, String)>,
+) -> Result<Json<serde_json::Value>> {
+    validate_workspace_id(&workspace_id)?;
+    validate_worktree_id(&operation_id)?;
+    let response = backend
+        .finalize_session_restore(&workspace_id, &operation_id)
+        .await?;
+    Ok(Json(
+        serde_json::to_value(response).map_err(RuntimeError::internal)?,
+    ))
+}
+
+async fn abort_session_restore(
+    State(backend): State<SharedBackend>,
+    Path((workspace_id, operation_id)): Path<(String, String)>,
+) -> Result<StatusCode> {
+    validate_workspace_id(&workspace_id)?;
+    validate_worktree_id(&operation_id)?;
+    backend
+        .abort_session_restore(&workspace_id, &operation_id)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn delete_worktree(

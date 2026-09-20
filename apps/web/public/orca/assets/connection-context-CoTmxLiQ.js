@@ -1,1 +1,0 @@
-import{Ft as e,Pt as t,f as n,tl as r}from"./web-index-6wj_-NXs.js";function i(t){return e(n.getState(),t)}function a(e){return!e||r(e)?.type===`folder`?!0:i(e)!==void 0}function o(e,r){return t(n.getState(),e,r)}export{o as n,a as r,i as t};

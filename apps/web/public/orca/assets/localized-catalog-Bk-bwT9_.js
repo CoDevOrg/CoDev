@@ -1,1 +1,0 @@
-import{Vh as e}from"./web-index-6wj_-NXs.js";function t(t){let n,r;return()=>((n!==e.language||r===void 0)&&(n=e.language,r=t()),r)}export{t};

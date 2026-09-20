@@ -71,8 +71,10 @@ export {
 } from "./orchestrator-terminals";
 export {
   type SandboxWorktreeReview,
+  type SandboxSessionRestoreFile,
   createSandboxWorktree,
   deleteSandboxWorktree,
+  restoreSandboxSession,
   checkpointSandboxWorktree,
   reviewSandboxWorktree,
   rebaseSandboxWorktree,

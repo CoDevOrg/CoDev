@@ -181,6 +181,59 @@ pub struct WorktreeCreateRequest {
     pub branch_name: Option<String>,
 }
 
+pub const SESSION_RESTORE_CHUNK_BYTES: usize = 512 << 10;
+pub const SESSION_RESTORE_FILE_BYTES: u64 = 5 << 20;
+pub const SESSION_RESTORE_TOTAL_BYTES: u64 = 25 << 20;
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionRestoreFileKind {
+    Patch,
+    Untracked,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionRestoreFile {
+    pub path: String,
+    pub kind: SessionRestoreFileKind,
+    pub bytes: u64,
+    pub sha256: String,
+    pub mode: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionRestoreBeginRequest {
+    pub operation_id: String,
+    pub worktree_id: String,
+    pub base_commit_sha: String,
+    pub files: Vec<SessionRestoreFile>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionRestoreChunkRequest {
+    pub file_index: usize,
+    pub offset: u64,
+    pub content_base64: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionRestoreFinalizeResponse {
+    pub status: SessionRestoreStatus,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub conflict_paths: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionRestoreStatus {
+    Restored,
+    Conflicted,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorktreeCheckpointRequest {

@@ -1,5 +1,5 @@
 {
-  "id": "c3ea373e-0de8-4d91-af25-bbaa96b26fc9",
+  "id": "6a57cdc7-566c-470c-8b00-20c8cf8306b9",
   "prevId": "a759076a-58e3-482e-9baf-1446789705ff",
   "version": "7",
   "dialect": "postgresql",
@@ -476,6 +476,418 @@
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.agent_session_import_artifacts": {
+      "name": "agent_session_import_artifacts",
+      "schema": "",
+      "columns": {
+        "import_id": {
+          "name": "import_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "media_type": {
+          "name": "media_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "plaintext_sha256": {
+          "name": "plaintext_sha256",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "plaintext_bytes": {
+          "name": "plaintext_bytes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "encrypted_payload": {
+          "name": "encrypted_payload",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "agent_session_import_artifacts_created_idx": {
+          "name": "agent_session_import_artifacts_created_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "agent_session_import_artifacts_import_id_agent_session_imports_id_fk": {
+          "name": "agent_session_import_artifacts_import_id_agent_session_imports_id_fk",
+          "tableFrom": "agent_session_import_artifacts",
+          "tableTo": "agent_session_imports",
+          "columnsFrom": [
+            "import_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.agent_session_imports": {
+      "name": "agent_session_imports",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "imported_by": {
+          "name": "imported_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "parent_import_id": {
+          "name": "parent_import_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "worktree_id": {
+          "name": "worktree_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "agent_session_id": {
+          "name": "agent_session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_provider": {
+          "name": "source_provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "external_session_id": {
+          "name": "external_session_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "capsule_schema_version": {
+          "name": "capsule_schema_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "capsule_sha256": {
+          "name": "capsule_sha256",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "agent_session_import_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'storing'"
+        },
+        "repository_status": {
+          "name": "repository_status",
+          "type": "repository_restore_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "continuation_mode": {
+          "name": "continuation_mode",
+          "type": "session_continuation_mode",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error": {
+          "name": "last_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "agent_session_imports_idempotency_idx": {
+          "name": "agent_session_imports_idempotency_idx",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "imported_by",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "idempotency_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "agent_session_imports_workspace_status_idx": {
+          "name": "agent_session_imports_workspace_status_idx",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "updated_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "agent_session_imports_importer_idx": {
+          "name": "agent_session_imports_importer_idx",
+          "columns": [
+            {
+              "expression": "imported_by",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "agent_session_imports_source_idx": {
+          "name": "agent_session_imports_source_idx",
+          "columns": [
+            {
+              "expression": "imported_by",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "source_provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "external_session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "agent_session_imports_parent_idx": {
+          "name": "agent_session_imports_parent_idx",
+          "columns": [
+            {
+              "expression": "parent_import_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "agent_session_imports_organization_id_organizations_id_fk": {
+          "name": "agent_session_imports_organization_id_organizations_id_fk",
+          "tableFrom": "agent_session_imports",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "agent_session_imports_workspace_id_workspaces_id_fk": {
+          "name": "agent_session_imports_workspace_id_workspaces_id_fk",
+          "tableFrom": "agent_session_imports",
+          "tableTo": "workspaces",
+          "columnsFrom": [
+            "workspace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "agent_session_imports_imported_by_users_id_fk": {
+          "name": "agent_session_imports_imported_by_users_id_fk",
+          "tableFrom": "agent_session_imports",
+          "tableTo": "users",
+          "columnsFrom": [
+            "imported_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "agent_session_imports_parent_import_id_agent_session_imports_id_fk": {
+          "name": "agent_session_imports_parent_import_id_agent_session_imports_id_fk",
+          "tableFrom": "agent_session_imports",
+          "tableTo": "agent_session_imports",
+          "columnsFrom": [
+            "parent_import_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "agent_session_imports_worktree_id_worktrees_id_fk": {
+          "name": "agent_session_imports_worktree_id_worktrees_id_fk",
+          "tableFrom": "agent_session_imports",
+          "tableTo": "worktrees",
+          "columnsFrom": [
+            "worktree_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "agent_session_imports_agent_session_id_agent_sessions_id_fk": {
+          "name": "agent_session_imports_agent_session_id_agent_sessions_id_fk",
+          "tableFrom": "agent_session_imports",
+          "tableTo": "agent_sessions",
+          "columnsFrom": [
+            "agent_session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -4433,150 +4845,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.runtime_hosts": {
-      "name": "runtime_hosts",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "provider_id": {
-          "name": "provider_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "runtime_address": {
-          "name": "runtime_address",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "lifecycle_state": {
-          "name": "lifecycle_state",
-          "type": "runtime_host_lifecycle",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'provisioning'"
-        },
-        "max_workspace_slots": {
-          "name": "max_workspace_slots",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 4
-        },
-        "free_workspace_slots": {
-          "name": "free_workspace_slots",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 4
-        },
-        "image_version": {
-          "name": "image_version",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "last_heartbeat_at": {
-          "name": "last_heartbeat_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "draining_at": {
-          "name": "draining_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "last_error": {
-          "name": "last_error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "runtime_hosts_provider_id_idx": {
-          "name": "runtime_hosts_provider_id_idx",
-          "columns": [
-            {
-              "expression": "provider_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "runtime_hosts_runtime_address_idx": {
-          "name": "runtime_hosts_runtime_address_idx",
-          "columns": [
-            {
-              "expression": "runtime_address",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "runtime_hosts_capacity_idx": {
-          "name": "runtime_hosts_capacity_idx",
-          "columns": [
-            {
-              "expression": "lifecycle_state",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "free_workspace_slots",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.sandbox_runtime_intervals": {
       "name": "sandbox_runtime_intervals",
       "schema": "",
@@ -6772,150 +7040,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.workspace_runtime_assignments": {
-      "name": "workspace_runtime_assignments",
-      "schema": "",
-      "columns": {
-        "workspace_id": {
-          "name": "workspace_id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "host_id": {
-          "name": "host_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "generation": {
-          "name": "generation",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "fencing_token": {
-          "name": "fencing_token",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "disk_id": {
-          "name": "disk_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "runtime_state": {
-          "name": "runtime_state",
-          "type": "workspace_runtime_assignment_state",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'assigned'"
-        },
-        "last_used_at": {
-          "name": "last_used_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "workspace_runtime_assignments_host_state_idx": {
-          "name": "workspace_runtime_assignments_host_state_idx",
-          "columns": [
-            {
-              "expression": "host_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "runtime_state",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "workspace_runtime_assignments_state_updated_idx": {
-          "name": "workspace_runtime_assignments_state_updated_idx",
-          "columns": [
-            {
-              "expression": "runtime_state",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "updated_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "workspace_runtime_assignments_workspace_id_workspaces_id_fk": {
-          "name": "workspace_runtime_assignments_workspace_id_workspaces_id_fk",
-          "tableFrom": "workspace_runtime_assignments",
-          "tableTo": "workspaces",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "workspace_runtime_assignments_host_id_runtime_hosts_id_fk": {
-          "name": "workspace_runtime_assignments_host_id_runtime_hosts_id_fk",
-          "tableFrom": "workspace_runtime_assignments",
-          "tableTo": "runtime_hosts",
-          "columnsFrom": [
-            "host_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.workspace_runtimes": {
       "name": "workspace_runtimes",
       "schema": "",
@@ -7801,6 +7925,20 @@
         "done"
       ]
     },
+    "public.agent_session_import_status": {
+      "name": "agent_session_import_status",
+      "schema": "public",
+      "values": [
+        "storing",
+        "stored",
+        "restoring",
+        "ready",
+        "launching",
+        "active",
+        "failed",
+        "deleted"
+      ]
+    },
     "public.agent_session_kind": {
       "name": "agent_session_kind",
       "schema": "public",
@@ -8030,15 +8168,16 @@
         "failed"
       ]
     },
-    "public.runtime_host_lifecycle": {
-      "name": "runtime_host_lifecycle",
+    "public.repository_restore_status": {
+      "name": "repository_restore_status",
       "schema": "public",
       "values": [
-        "provisioning",
-        "ready",
-        "draining",
-        "stopped",
-        "failed"
+        "pending",
+        "matched",
+        "restored",
+        "conflicted",
+        "unavailable",
+        "transcript_only"
       ]
     },
     "public.sandbox_runtime_status": {
@@ -8051,6 +8190,14 @@
         "stopping",
         "stopped",
         "failed"
+      ]
+    },
+    "public.session_continuation_mode": {
+      "name": "session_continuation_mode",
+      "schema": "public",
+      "values": [
+        "managed",
+        "native_resume"
       ]
     },
     "public.subscription_plan": {
@@ -8071,17 +8218,6 @@
         "co_steer",
         "reviewer",
         "viewer"
-      ]
-    },
-    "public.workspace_runtime_assignment_state": {
-      "name": "workspace_runtime_assignment_state",
-      "schema": "public",
-      "values": [
-        "assigned",
-        "starting",
-        "ready",
-        "draining",
-        "lost"
       ]
     },
     "public.workspace_status": {

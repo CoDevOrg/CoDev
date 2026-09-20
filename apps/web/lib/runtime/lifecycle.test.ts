@@ -32,6 +32,9 @@ const mocks = vi.hoisted(() => {
 
 vi.mock("workflow/api", () => ({ getRun: vi.fn() }));
 vi.mock("../platform/database", () => ({ getDatabase: () => mocks.database }));
+vi.mock("../agents/cli-agent-session", () => ({
+  reapStaleCliAgentSessions: vi.fn().mockResolvedValue(0),
+}));
 vi.mock("./host", () => ({
   getHostState: mocks.getHostState,
 }));
@@ -86,6 +89,16 @@ describe("reconcileLifecycle", () => {
     await expect(reconcileLifecycle()).resolves.toMatchObject({
       expiredClaudeConnectionsCleaned: 2,
       expiredClaudeConnectionCleanupFailures: 0,
+    });
+  });
+
+  it("reaps stale CLI coordination sessions as part of lifecycle housekeeping", async () => {
+    const { reapStaleCliAgentSessions } =
+      await import("../agents/cli-agent-session");
+    vi.mocked(reapStaleCliAgentSessions).mockResolvedValueOnce(3);
+
+    await expect(reconcileLifecycle()).resolves.toMatchObject({
+      staleCliSessionsCleaned: 3,
     });
   });
 

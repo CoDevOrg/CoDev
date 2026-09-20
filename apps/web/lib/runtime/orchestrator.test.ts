@@ -20,7 +20,10 @@ vi.mock("./runtime-host-pool", () => runtimeHostPool);
 const fetchMock = vi.fn();
 vi.stubGlobal("fetch", fetchMock);
 
-import { checkOrchestratorConnection } from "./orchestrator";
+import {
+  checkOrchestratorConnection,
+  restoreSandboxSession,
+} from "./orchestrator";
 import { orchestratorRequest } from "./orchestrator-request";
 
 const healthy = () =>
@@ -101,5 +104,58 @@ describe("orchestrator transport", () => {
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
       "https://runtime-3.example.test/v1/sandboxes",
     );
+  });
+
+  it("uploads session repository state in bounded chunks before finalizing", async () => {
+    const contents = new Uint8Array(512 * 1_024 + 7).fill(42);
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
+      if (url.endsWith("/finalize")) {
+        return Response.json({ status: "restored", conflictPaths: [] });
+      }
+      if (url.endsWith("/chunks")) {
+        const body = JSON.parse(String(init.body));
+        return Response.json({
+          nextOffset:
+            body.offset + Buffer.from(body.contentBase64, "base64").byteLength,
+        });
+      }
+      return Response.json({ accepted: true }, { status: 202 });
+    });
+
+    await expect(
+      restoreSandboxSession({
+        workspaceId: "workspace-1",
+        operationId: "import-1",
+        worktreeId: "worktree-1",
+        baseCommitSha: "a".repeat(40),
+        files: [
+          {
+            path: "notes/context.bin",
+            kind: "untracked",
+            contents,
+            sha256: "b".repeat(64),
+            mode: "100644",
+          },
+        ],
+      }),
+    ).resolves.toEqual({ status: "restored", conflictPaths: [] });
+
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    const begin = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(begin.files[0]).toEqual({
+      path: "notes/context.bin",
+      kind: "untracked",
+      bytes: contents.byteLength,
+      sha256: "b".repeat(64),
+      mode: "100644",
+    });
+    const firstChunk = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    const secondChunk = JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body));
+    expect(firstChunk.offset).toBe(0);
+    expect(Buffer.from(firstChunk.contentBase64, "base64")).toHaveLength(
+      512 * 1_024,
+    );
+    expect(secondChunk.offset).toBe(512 * 1_024);
+    expect(Buffer.from(secondChunk.contentBase64, "base64")).toHaveLength(7);
   });
 });

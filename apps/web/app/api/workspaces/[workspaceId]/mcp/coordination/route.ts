@@ -1,6 +1,7 @@
 import { apiError } from "@/lib/http/api";
 import {
   COORDINATION_BEARER_PREFIX,
+  touchCliAgentSession,
   openCoordinationToken,
   openWorkspaceCoordinationToken,
   resolveCliAgentSessionForBranch,
@@ -75,6 +76,10 @@ export async function POST(
         : {};
 
     if (sessionClaims) {
+      await touchCliAgentSession({
+        workspaceId,
+        sessionId: sessionClaims.sessionId,
+      });
       return callCoordinationTool(
         {
           workspaceId,

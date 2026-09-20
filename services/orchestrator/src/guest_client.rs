@@ -11,8 +11,9 @@ use crate::model::{
     ClaudeSetupCodeRequest, ClaudeSetupPollRequest, ClaudeSetupPollResponse,
     ClaudeSetupStartRequest, CodexExecPollRequest, CodexExecPollResponse, CodexExecStartRequest,
     ExecRequest, ExecResponse, FileResponse, PublicationExportRequest, PublicationExportResponse,
-    Result, RuntimeError, TerminalInputRequest, TerminalPollRequest, TerminalPollResponse,
-    TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
+    Result, RuntimeError, SessionRestoreBeginRequest, SessionRestoreChunkRequest,
+    SessionRestoreFinalizeResponse, TerminalInputRequest, TerminalPollRequest,
+    TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
     WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse,
     WorktreeRebaseRequest, WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
 };
@@ -226,6 +227,52 @@ impl GuestClient {
         self.request::<_, serde_json::Value>("POST", "/v1/worktrees", Some(request))
             .await
             .map(|_| ())
+    }
+
+    pub async fn begin_session_restore(&self, request: &SessionRestoreBeginRequest) -> Result<()> {
+        self.request::<_, serde_json::Value>("POST", "/v1/session-restores", Some(request))
+            .await
+            .map(|_| ())
+    }
+
+    pub async fn append_session_restore_chunk(
+        &self,
+        operation_id: &str,
+        request: &SessionRestoreChunkRequest,
+    ) -> Result<u64> {
+        let response: serde_json::Value = self
+            .request(
+                "POST",
+                &format!("/v1/session-restores/{operation_id}/chunks"),
+                Some(request),
+            )
+            .await?;
+        response
+            .get("nextOffset")
+            .and_then(serde_json::Value::as_u64)
+            .ok_or_else(|| RuntimeError::GuestUnavailable("missing restore chunk offset".into()))
+    }
+
+    pub async fn finalize_session_restore(
+        &self,
+        operation_id: &str,
+    ) -> Result<SessionRestoreFinalizeResponse> {
+        self.request::<(), _>(
+            "POST",
+            &format!("/v1/session-restores/{operation_id}/finalize"),
+            None,
+        )
+        .await
+    }
+
+    pub async fn abort_session_restore(&self, operation_id: &str) -> Result<()> {
+        self.request::<(), serde_json::Value>(
+            "DELETE",
+            &format!("/v1/session-restores/{operation_id}"),
+            None,
+        )
+        .await
+        .map(|_| ())
     }
 
     pub async fn delete_worktree(&self, worktree_id: &str) -> Result<()> {

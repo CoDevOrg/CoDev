@@ -1,4 +1,6 @@
+import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   bigint,
   boolean,
   customType,
@@ -114,6 +116,28 @@ export const agentTurnStatus = pgEnum("agent_turn_status", [
   "completed",
   "interrupted",
   "failed",
+]);
+export const agentSessionImportStatus = pgEnum("agent_session_import_status", [
+  "storing",
+  "stored",
+  "restoring",
+  "ready",
+  "launching",
+  "active",
+  "failed",
+  "deleted",
+]);
+export const repositoryRestoreStatus = pgEnum("repository_restore_status", [
+  "pending",
+  "matched",
+  "restored",
+  "conflicted",
+  "unavailable",
+  "transcript_only",
+]);
+export const sessionContinuationMode = pgEnum("session_continuation_mode", [
+  "managed",
+  "native_resume",
 ]);
 export const claimStatus = pgEnum("claim_status", [
   "active",
@@ -1119,6 +1143,94 @@ export const agentSessions = pgTable(
       table.workspaceId,
       table.status,
     ),
+  ],
+);
+
+/** Durable control-plane record for one immutable imported agent session. */
+export const agentSessionImports = pgTable(
+  "agent_session_imports",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .references(() => organizations.id, { onDelete: "restrict" })
+      .notNull(),
+    workspaceId: uuid("workspace_id")
+      .references(() => workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    importedBy: uuid("imported_by")
+      .references(() => users.id, { onDelete: "restrict" })
+      .notNull(),
+    parentImportId: uuid("parent_import_id").references(
+      (): AnyPgColumn => agentSessionImports.id,
+      { onDelete: "set null" },
+    ),
+    worktreeId: uuid("worktree_id").references(() => worktrees.id, {
+      onDelete: "set null",
+    }),
+    agentSessionId: uuid("agent_session_id").references(
+      () => agentSessions.id,
+      { onDelete: "set null" },
+    ),
+    sourceProvider: text("source_provider").notNull(),
+    externalSessionId: text("external_session_id").notNull(),
+    capsuleSchemaVersion: integer("capsule_schema_version").notNull(),
+    capsuleSha256: text("capsule_sha256").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    status: agentSessionImportStatus("status").default("storing").notNull(),
+    repositoryStatus: repositoryRestoreStatus("repository_status")
+      .default("pending")
+      .notNull(),
+    continuationMode: sessionContinuationMode("continuation_mode"),
+    lastError: text("last_error"),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("agent_session_imports_idempotency_idx").on(
+      table.workspaceId,
+      table.importedBy,
+      table.idempotencyKey,
+    ),
+    index("agent_session_imports_workspace_status_idx").on(
+      table.workspaceId,
+      table.status,
+      table.updatedAt,
+    ),
+    index("agent_session_imports_importer_idx").on(
+      table.importedBy,
+      table.createdAt,
+    ),
+    index("agent_session_imports_source_idx").on(
+      table.importedBy,
+      table.sourceProvider,
+      table.externalSessionId,
+    ),
+    index("agent_session_imports_parent_idx").on(table.parentImportId),
+    uniqueIndex("agent_session_imports_active_writer_idx")
+      .on(table.importedBy, table.sourceProvider, table.externalSessionId)
+      .where(
+        sql`${table.continuationMode} = 'native_resume' and ${table.status} in ('launching', 'active') and ${table.deletedAt} is null`,
+      ),
+  ],
+);
+
+/** Encrypted capsule bytes; kept separate from queryable import metadata. */
+export const agentSessionImportArtifacts = pgTable(
+  "agent_session_import_artifacts",
+  {
+    importId: uuid("import_id")
+      .primaryKey()
+      .references(() => agentSessionImports.id, { onDelete: "cascade" }),
+    mediaType: text("media_type").notNull(),
+    plaintextSha256: text("plaintext_sha256").notNull(),
+    plaintextBytes: integer("plaintext_bytes").notNull(),
+    encryptedPayload: text("encrypted_payload").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("agent_session_import_artifacts_created_idx").on(table.createdAt),
   ],
 );
 

@@ -2,6 +2,38 @@ import {
   agentCapacitySchema,
   MAX_PARALLEL_AGENT_SESSIONS,
 } from "@codev/contracts";
+import { and, eq, inArray, type SQL } from "drizzle-orm";
+
+import { schema } from "@codev/db";
+
+/**
+ * Managed sessions are the only sessions represented in Mission Control and
+ * the only sessions that own a managed parallel-agent slot. CLI sessions use
+ * the same worktree tables for coordination, but must not enter this
+ * population.
+ */
+export function managedAgentSessionPredicate(
+  workspaceId: string,
+): SQL<unknown> {
+  return and(
+    eq(schema.agentSessions.workspaceId, workspaceId),
+    eq(schema.agentSessions.kind, "managed"),
+  )!;
+}
+
+/**
+ * Capacity is measured in distinct live managed worktrees, not conversations.
+ * Keep this predicate next to the capacity rules so reservation queries and
+ * read-side projections cannot silently disagree about which rows count.
+ */
+export function managedLiveAgentWorktreePredicate(
+  workspaceId: string,
+): SQL<unknown> {
+  return and(
+    managedAgentSessionPredicate(workspaceId),
+    inArray(schema.worktrees.status, ["active", "frozen"]),
+  )!;
+}
 
 /**
  * A capacity slot is a worktree, not a conversation.
