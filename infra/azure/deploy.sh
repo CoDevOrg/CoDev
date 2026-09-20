@@ -22,7 +22,7 @@ readonly subscription_id="${AZURE_SUBSCRIPTION_ID:-$(az account show --query id 
 # derived from it, so a mismatch silently targets a host that does not exist.
 readonly name_prefix="${CODEV_NAME_PREFIX:-codev-runtime}"
 readonly vm_size="${CODEV_AZURE_VM_SIZE:-Standard_D2s_v7}"
-readonly host_image_id="${CODEV_HOST_IMAGE_ID:-}"
+host_image_id="${CODEV_HOST_IMAGE_ID:-}"
 readonly host_arch="${CODEV_HOST_ARCH:-x86_64}"
 readonly host_volume_size_gib="${CODEV_HOST_VOLUME_SIZE_GIB:-64}"
 readonly jailer_volume_size_gib="${CODEV_JAILER_VOLUME_SIZE_GIB:-128}"
@@ -123,7 +123,33 @@ if az vm show --resource-group "${resource_group}" --name "${name_prefix}-host" 
   --query id -o tsv >/dev/null 2>&1; then
   host_existed=true
 fi
-readonly host_existed
+
+# Azure does not allow imageReference to change on an existing VM. A normal
+# runtime release does not choose an image, so preserve the host's current
+# gallery version instead of accidentally asking ARM to switch it back to the
+# stock Ubuntu reference. An explicit CODEV_HOST_IMAGE_ID is a promotion
+# request; replace only when that requested version differs, leaving dynamic
+# workspace disks intact because they are attached with deleteOption=Detach.
+if [[ "${host_existed}" == "true" ]]; then
+  current_host_image_id="$(az vm show \
+    --resource-group "${resource_group}" \
+    --name "${name_prefix}-host" \
+    --query 'storageProfile.imageReference.id' \
+    -o tsv 2>/dev/null || true)"
+
+  if [[ -z "${host_image_id}" && -n "${current_host_image_id}" ]]; then
+    host_image_id="${current_host_image_id}"
+    echo "==> Preserving the existing host image ${host_image_id}"
+  elif [[ -n "${host_image_id}" && "${host_image_id}" != "${current_host_image_id}" ]]; then
+    echo "==> Replacing the host to promote image ${host_image_id}"
+    az vm delete \
+      --resource-group "${resource_group}" \
+      --name "${name_prefix}-host" \
+      --yes --only-show-errors --output none
+    host_existed=false
+  fi
+fi
+readonly host_existed host_image_id
 
 echo "==> Applying infra/azure/main.bicep to ${resource_group}"
 az deployment group create \

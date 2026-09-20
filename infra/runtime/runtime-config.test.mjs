@@ -104,6 +104,10 @@ test("the golden host image is versioned, validated, and optional to promote", (
   assert.match(azureTemplate, /command -v az >\/dev\/null/);
   assert.match(azureImageBuild, /az resource invoke-action/);
   assert.match(azureImageBuild, /CODEV_HOST_IMAGE_ID=\$\{image_version_id\}/);
+  assert.match(azureDeploy, /storageProfile\.imageReference\.id/);
+  assert.match(azureDeploy, /Preserving the existing host image/);
+  assert.match(azureDeploy, /az vm delete/);
+  assert.match(azureDeploy, /deleteOption=Detach/);
   assert.match(imageProvision, /codev-orchestrator-linux-\$\{artifact_arch\}/);
   assert.match(imageProvision, /codev-guestd-linux-\$\{artifact_arch\}/);
   assert.match(imageProvision, /rootfs\.ext4/);
