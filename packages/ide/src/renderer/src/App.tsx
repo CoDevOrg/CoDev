@@ -453,7 +453,6 @@ function App(): React.JSX.Element {
   const activeCodevChatLaunching = useCodevAgentLaunching(activeWorktreeId ?? '')
   const codevBootstrapStartedRef = useRef(false)
   const [codevBootstrapAttempt, setCodevBootstrapAttempt] = useState(0)
-  const [codevChatLaunchAttempt, setCodevChatLaunchAttempt] = useState(0)
   const [codevChatLaunchError, setCodevChatLaunchError] = useState<string | null>(null)
   const codevChatLaunchWorktreeRef = useRef<string | null>(null)
   // Why: the awaiting-workspace cover is the only way back when the handoff
@@ -515,41 +514,28 @@ function App(): React.JSX.Element {
       })
   }, [startupWorktreeRefreshCompleted, workspaceSessionReady, codevBootstrapAttempt])
   useEffect(() => {
+    codevChatLaunchWorktreeRef.current = null
+    setCodevChatLaunchError(null)
+  }, [activeWorktreeId])
+  const startCodevChat = useCallback(() => {
+    const worktreeId = activeWorktreeId
     if (
       !isCodevEmbedded() ||
-      !activeWorktreeId ||
-      activeCodevChatTabId ||
-      isCodevPendingShell() ||
-      codevChatLaunchWorktreeRef.current === activeWorktreeId
+      !worktreeId ||
+      !activeCodevPrimaryChat ||
+      codevChatLaunchWorktreeRef.current === worktreeId
     ) {
       return
     }
 
-    // Managed CoDev control worktrees are review surfaces, not the workspace's
-    // primary chat. Only the checkout opened by the workspace bootstrap gets a
-    // default native chat, so creating an agent cannot recursively launch more
-    // local sessions in its control worktree.
-    const activeWorktree = useAppStore.getState().getKnownWorktreeById(activeWorktreeId)
-    const requestedBranch = window.__CODEV_BRANCH__?.trim()
-    const activeBranch = activeWorktree?.branch.trim().replace(/^refs\/heads\//, '')
-    const selectedRouteBranch = requestedBranch?.replace(/^refs\/heads\//, '')
-    // A direct branch URL must not briefly start chat in the bootstrap's main
-    // checkout before the branch overview activates the requested worktree.
-    if (selectedRouteBranch && activeBranch !== selectedRouteBranch) {
-      return
-    }
-    if (
-      activeWorktree &&
-      activeWorktree.path !== window.__CODEV_PROJECT_PATH__ &&
-      !activeWorktree.isMainWorktree
-    ) {
-      return
-    }
-
-    codevChatLaunchWorktreeRef.current = activeWorktreeId
+    codevChatLaunchWorktreeRef.current = worktreeId
     setCodevChatLaunchError(null)
-    void ensureCodevDefaultChat(activeWorktreeId)
+    void ensureCodevDefaultChat(worktreeId)
       .then((ready) => {
+        if (codevChatLaunchWorktreeRef.current !== worktreeId) {
+          return
+        }
+        codevChatLaunchWorktreeRef.current = null
         if (!ready) {
           setCodevChatLaunchError(
             'CoDev could not open the workspace chat. Check the connection and try again.'
@@ -557,19 +543,17 @@ function App(): React.JSX.Element {
         }
       })
       .catch((error: unknown) => {
+        if (codevChatLaunchWorktreeRef.current !== worktreeId) {
+          return
+        }
+        codevChatLaunchWorktreeRef.current = null
         setCodevChatLaunchError(
           error instanceof Error
             ? `CoDev could not open the workspace chat: ${error.message}`
             : 'CoDev could not open the workspace chat. Check the connection and try again.'
         )
       })
-  }, [
-    activeCodevChatLaunching,
-    activeCodevChatTabId,
-    activeWorktreeId,
-    codevBootstrapAttempt,
-    codevChatLaunchAttempt
-  ])
+  }, [activeCodevPrimaryChat, activeWorktreeId])
   const backgroundTerminalMountRequested = useSyncExternalStore(
     subscribeBackgroundTerminalWorktreeMountRequests,
     hasRequestedBackgroundTerminalWorktreeMount,
@@ -2199,16 +2183,9 @@ function App(): React.JSX.Element {
                             activeCodevChatTabId === null ? (
                               <CodevChatFirstCover
                                 managed={!activeCodevPrimaryChat}
-                                error={
-                                  activeCodevPrimaryChat && activeCodevChatLaunching
-                                    ? null
-                                    : codevChatLaunchError
-                                }
-                                onRetry={() => {
-                                  codevChatLaunchWorktreeRef.current = null
-                                  setCodevChatLaunchError(null)
-                                  setCodevChatLaunchAttempt((attempt) => attempt + 1)
-                                }}
+                                launching={activeCodevChatLaunching}
+                                error={codevChatLaunchError}
+                                onStart={startCodevChat}
                               />
                             ) : null}
                             <Suspense fallback={null}>

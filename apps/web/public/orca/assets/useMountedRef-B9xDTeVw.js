@@ -1,1 +1,0 @@
-import{Tg as e,kg as t}from"./web-index-w1wyIjPI.js";var n=t(e());function r(){let e=(0,n.useRef)(!0);return(0,n.useEffect)(()=>(e.current=!0,()=>{e.current=!1}),[]),e}export{r as t};

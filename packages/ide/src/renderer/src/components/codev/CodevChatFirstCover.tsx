@@ -9,13 +9,16 @@ import { Button } from '@/components/ui/button'
 export function CodevChatFirstCover({
   error,
   managed = false,
-  onRetry
+  launching = false,
+  onStart
 }: {
   error?: string | null
   managed?: boolean
-  onRetry?: () => void
+  launching?: boolean
+  onStart?: () => void
 }): React.JSX.Element {
   const failed = Boolean(error) && !managed
+  const opening = launching && !managed && !failed
   return (
     <div
       className="flex h-full w-full flex-col items-center justify-center gap-3 bg-background p-6 text-center"
@@ -38,18 +41,22 @@ export function CodevChatFirstCover({
           ? 'Managed agent workspace'
           : failed
             ? 'Chat could not start'
-            : 'Opening your chat…'}
+            : opening
+              ? 'Opening your chat…'
+              : 'Start a workspace chat'}
       </h2>
       <p className="max-w-sm text-balance text-xs text-muted-foreground">
         {managed
           ? 'This agent is controlled from Mission Control. Open Agents on the right to view its shared conversation and send instructions.'
           : failed
             ? error
-            : 'Your workspace opens in chat. The terminal stays hidden until you open it from the chat toolbar.'}
+            : opening
+              ? 'Your workspace opens in chat. The terminal stays hidden until you open it from the chat toolbar.'
+              : 'No agent will start until you choose to begin. You can start a chat whenever you are ready.'}
       </p>
-      {failed && onRetry ? (
-        <Button type="button" variant="outline" size="sm" onClick={onRetry}>
-          Try again
+      {!managed && !opening && onStart ? (
+        <Button className="min-h-11 px-6" type="button" onClick={onStart}>
+          {failed ? 'Try again' : 'Start chat'}
         </Button>
       ) : null}
     </div>
