@@ -60,21 +60,23 @@ environment file. Nothing reads it. It stays because `osProfile.customData` is
 immutable on an existing VM (see below), so removing that line would force a
 host replacement to delete a variable that costs nothing.
 
-## Changing cloud-init means replacing the VM
+## Changing cloud-init or the host image means replacing the VM
 
-`osProfile.customData` is immutable on an existing Azure VM — a deployment
-carrying a different value is rejected with `PropertyChangeNotAllowed`, where
-EC2 UserData can simply be updated in place. So any edit to the cloud-init
-block in `main.bicep` requires deleting the host first:
+`osProfile.customData` and `storageProfile.imageReference` are immutable on an
+existing Azure VM — a deployment carrying a different value is rejected with
+`PropertyChangeNotAllowed`, where EC2 UserData and AMIs can be updated in
+place. A normal deployment preserves the host's current gallery image when
+`CODEV_HOST_IMAGE_ID` is unset. To promote a different image, set that
+variable; `deploy.sh` replaces the host before applying the template:
 
 ```bash
-az vm delete -g <rg> -n codev-runtime-host --yes
+CODEV_HOST_IMAGE_ID=<gallery-image-version-resource-id> \
 ./infra/azure/deploy.sh
 ```
 
-Both disks carry `deleteOption: Delete`, so they go with the VM. This is why
-cloud-init here does as little as possible and carries nothing that varies
-between deploys. The release version travels as a VM tag instead, read back
+The VM's OS and bootstrap-owned jailer disk carry `deleteOption: Delete`, but
+workspace disks are attached with `deleteOption: Detach` and survive host
+replacement. The release version travels as a VM tag instead, read back
 through IMDS, so rolling a new release forward is just a tag update and a
 restart. Treat cloud-init as the bootstrap-of-the-bootstrap: if a change can
 go in `bootstrap-host.sh`, put it there, because that one ships as a blob and
