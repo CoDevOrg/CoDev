@@ -68,6 +68,15 @@ resource imageDefinition 'Microsoft.Compute/galleries/images@2022-03-03' = {
     osState: 'Generalized'
     hyperVGeneration: 'V2'
     architecture: hostArchitecture == 'aarch64' || hostArchitecture == 'arm64' ? 'Arm64' : 'x64'
+    // D/E v7 host sizes use NVMe by default. Gallery images must explicitly
+    // advertise that controller before Azure will allow them to boot there.
+    // Retain SCSI compatibility for older or alternate host sizes.
+    features: [
+      {
+        name: 'DiskControllerTypes'
+        value: 'SCSI,NVMe'
+      }
+    ]
     identifier: {
       publisher: 'CoDev'
       offer: 'codev-runtime'

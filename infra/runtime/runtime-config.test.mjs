@@ -88,6 +88,8 @@ test("the golden host image is versioned, validated, and optional to promote", (
   );
   assert.match(azureImageBuilder, /sha256Checksum: provisionScriptSha256/);
   assert.match(azureImageBuilder, /type: 'SharedImage'/);
+  assert.match(azureImageBuilder, /name: 'DiskControllerTypes'/);
+  assert.match(azureImageBuilder, /value: 'SCSI,NVMe'/);
   assert.match(azureImageBuilder, /f1a07417-d97a-45cb-824c-7a7467783830/);
   assert.match(
     azureImageBuilder,
