@@ -43,9 +43,15 @@ describe("session import failure diagnostics", () => {
     [
       Object.assign(new Error("private vault path and caller IDs"), {
         name: "RestError",
-        statusCode: 403,
+        statusCode: "403",
       }),
       "key_vault_access_denied",
+    ],
+    [
+      Object.assign(new Error("private Azure SDK details"), {
+        name: "RestError",
+      }),
+      "key_vault_error",
     ],
     [new Error("private session transcript"), "unexpected_storage_error"],
   ])("logs a safe category for a storage failure", (error, expectedKind) => {

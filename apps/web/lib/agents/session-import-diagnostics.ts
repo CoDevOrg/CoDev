@@ -21,8 +21,13 @@ function failureKind(error: unknown): string {
     };
     if (details.code === "42P01") return "database_migration_missing";
     if (details.code === "42501") return "database_permission_denied";
-    if (current.name === "RestError" && details.statusCode === 403)
+    const statusCode = Number(details.statusCode);
+    if (
+      current.name === "RestError" &&
+      (statusCode === 401 || statusCode === 403)
+    )
       return "key_vault_access_denied";
+    if (current.name === "RestError") return "key_vault_error";
     current = details.cause;
   }
   return "unexpected_storage_error";
