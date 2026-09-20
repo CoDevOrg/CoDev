@@ -186,6 +186,25 @@
   background: var(--teal-soft);
 }
 
+@media (max-width: 640px) {
+  .workspace-topbar-repo,
+  .workspace-topbar-capacity,
+  .workspace-topbar-action-label {
+    display: none;
+  }
+
+  .workspace-topbar-actions {
+    gap: 4px;
+  }
+
+  .workspace-topbar-share {
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+  }
+}
+
 .workspace-status {
   display: flex;
   flex: 1;
