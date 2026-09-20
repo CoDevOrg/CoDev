@@ -3,7 +3,11 @@ import "server-only";
 import { z } from "zod";
 
 import { requestHostWake } from "./host";
-import { OrchestratorError, orchestratorRequest } from "./orchestrator-request";
+import {
+  OrchestratorError,
+  orchestratorRequest,
+  orchestratorRequestAt,
+} from "./orchestrator-request";
 
 const HOST_START_TIMEOUT_MS = 4 * 60 * 1_000;
 
@@ -14,6 +18,24 @@ export async function checkOrchestratorConnection(timeoutMs = 4_000) {
     undefined,
     timeoutMs,
   );
+  return parseHealth(response);
+}
+
+export async function checkOrchestratorConnectionAt(
+  endpoint: string,
+  timeoutMs = 4_000,
+) {
+  const response = await orchestratorRequestAt(
+    endpoint,
+    "GET",
+    "/healthz",
+    undefined,
+    timeoutMs,
+  );
+  return parseHealth(response);
+}
+
+async function parseHealth(response: Response) {
   return z
     .object({
       status: z.literal("ok"),
@@ -60,12 +82,24 @@ export async function ensureHostReady(timeoutMs = HOST_START_TIMEOUT_MS) {
 }
 
 export async function waitForOrchestrator(timeoutMs = 45_000) {
+  return waitForOrchestratorAt(undefined, timeoutMs);
+}
+
+export async function waitForOrchestratorAt(
+  endpoint: string | undefined,
+  timeoutMs = 45_000,
+) {
   const deadline = Date.now() + timeoutMs;
   let lastError: unknown;
 
   while (Date.now() < deadline) {
     try {
-      await checkOrchestratorConnection();
+      const remaining = Math.min(4_000, deadline - Date.now());
+      if (endpoint) {
+        await checkOrchestratorConnectionAt(endpoint, remaining);
+      } else {
+        await checkOrchestratorConnection(remaining);
+      }
       return;
     } catch (error) {
       lastError = error;

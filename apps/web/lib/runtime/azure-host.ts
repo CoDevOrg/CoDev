@@ -122,6 +122,10 @@ async function describeHost(name: string) {
   return toHostState(power);
 }
 
+export async function getHostStateFor(name: string): Promise<HostState> {
+  return describeHost(name);
+}
+
 /**
  * Resolve the host the same way the EC2 path does: prefer an explicitly
  * configured name, otherwise find it by the tags the stack applies. Tag
@@ -174,13 +178,13 @@ const DEFAULT_STOPPING_ATTEMPTS = 30;
 // operation instead of a burst of identical ARM requests. The host remains
 // the source of truth, so a new process or a different Vercel isolate simply
 // converges through Azure's normal operation-conflict handling.
-let wakeInFlight: Promise<"running" | "starting"> | undefined;
+const wakeInFlightByHost = new Map<string, Promise<"running" | "starting">>();
 
-async function wakeHost(
+async function wakeNamedHost(
+  name: string,
   stoppingAttempts = DEFAULT_STOPPING_ATTEMPTS,
 ): Promise<"running" | "starting"> {
-  const resolved = await resolveHost();
-  const { name } = resolved;
+  const resolved = { name, state: await describeHost(name) };
 
   for (let attempt = 0; attempt < Math.max(1, stoppingAttempts); attempt++) {
     const state = attempt === 0 ? resolved.state : await describeHost(name);
@@ -224,15 +228,36 @@ async function wakeHost(
   return "starting";
 }
 
-export function requestHostWake(
+export async function requestHostWake(
   stoppingAttempts = DEFAULT_STOPPING_ATTEMPTS,
 ): Promise<"running" | "starting"> {
-  if (wakeInFlight) return wakeInFlight;
-  const operation = wakeHost(stoppingAttempts);
-  wakeInFlight = operation.finally(() => {
-    wakeInFlight = undefined;
+  const configured = readServerEnvironment().AZURE_HOST_VM_NAME;
+  const name = configured ?? (await resolveHostNameForWake());
+  return requestHostWakeFor(name, stoppingAttempts);
+}
+
+/** Wake a specific registered Azure VM without re-running tag discovery. */
+export function requestHostWakeFor(
+  name: string,
+  stoppingAttempts = DEFAULT_STOPPING_ATTEMPTS,
+): Promise<"running" | "starting"> {
+  const existing = wakeInFlightByHost.get(name);
+  if (existing) return existing;
+  const operation = wakeNamedHost(name, stoppingAttempts);
+  const tracked = operation.finally(() => {
+    wakeInFlightByHost.delete(name);
   });
-  return wakeInFlight;
+  wakeInFlightByHost.set(name, tracked);
+  return tracked;
+}
+
+/**
+ * Preserve the legacy tag-discovery behavior for callers that do not have a
+ * scheduler assignment. The actual wake still resolves the current host once
+ * before starting it, so a replaced tagged VM remains supported.
+ */
+async function resolveHostNameForWake() {
+  return (await resolveHost()).name;
 }
 
 /**

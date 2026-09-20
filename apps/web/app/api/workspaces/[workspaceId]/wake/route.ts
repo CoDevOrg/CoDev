@@ -1,5 +1,9 @@
 import { withWorkspace } from "@/lib/http/api-route";
-import { requestHostWake } from "@/lib/runtime/host";
+import { requestHostWake, requestHostWakeFor } from "@/lib/runtime/host";
+import {
+  ensureRuntimeHostAssignment,
+  isRuntimeHostPoolEnabled,
+} from "@/lib/runtime/runtime-host-pool";
 
 /**
  * Wake only the shared Azure runtime host. This route intentionally does not
@@ -13,7 +17,28 @@ import { requestHostWake } from "@/lib/runtime/host";
  */
 export const POST = withWorkspace(
   "view",
-  async () => {
+  async ({ workspaceId }) => {
+    if (isRuntimeHostPoolEnabled()) {
+      const assignment = await ensureRuntimeHostAssignment(workspaceId);
+      if (!assignment) {
+        return Response.json(
+          { state: "starting" },
+          {
+            status: 202,
+            headers: { "Cache-Control": "no-store" },
+          },
+        );
+      }
+      const state = await requestHostWakeFor(assignment.providerId, 1);
+      return Response.json(
+        { state },
+        {
+          status: state === "running" ? 200 : 202,
+          headers: { "Cache-Control": "no-store" },
+        },
+      );
+    }
+
     const state = await requestHostWake(1);
     return Response.json(
       { state },

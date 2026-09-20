@@ -23,10 +23,21 @@ export function getHostState(): Promise<HostState> {
   return azureHost.getHostState();
 }
 
+export function getHostStateFor(name: string): Promise<HostState> {
+  return azureHost.getHostStateFor(name);
+}
+
 export function requestHostWake(
   stoppingAttempts?: number,
 ): Promise<"running" | "starting"> {
   return azureHost.requestHostWake(stoppingAttempts);
+}
+
+export function requestHostWakeFor(
+  name: string,
+  stoppingAttempts?: number,
+): Promise<"running" | "starting"> {
+  return azureHost.requestHostWakeFor(name, stoppingAttempts);
 }
 
 /**

@@ -13,7 +13,12 @@ import {
   resolveHostedCodexSubscription,
 } from "../providers/hosted-codex-subscription-credentials";
 import { getGitHubUserToken } from "../github/github";
-import { getHostState, requestHostWake } from "./host";
+import {
+  getHostState,
+  getHostStateFor,
+  requestHostWake,
+  requestHostWakeFor,
+} from "./host";
 import {
   orcaWorkspacePath,
   parseOrcaReady,
@@ -28,6 +33,7 @@ import {
   stopIde,
   touchIde,
   waitForOrchestrator,
+  waitForOrchestratorAt,
   type IdeSession,
   type StartIdeInput,
 } from "./orchestrator";
@@ -38,6 +44,11 @@ import {
   type RuntimeUnavailable,
 } from "./runtime-availability";
 import { WorkspaceOpenTiming } from "../workspaces/workspace-open-timing";
+import {
+  ensureRuntimeHostAssignment,
+  isRuntimeHostPoolEnabled,
+  type RuntimeHostLease,
+} from "./runtime-host-pool";
 
 const STALE_IDE_PROCESS_MESSAGE =
   "Orca IDE process exited before reporting readiness";
@@ -424,6 +435,14 @@ export async function ensureOrcaSession(
     throw error;
   }
 
+  const runtimeHostPoolEnabled = isRuntimeHostPoolEnabled();
+  const runtimeHost: RuntimeHostLease | null = runtimeHostPoolEnabled
+    ? await ensureRuntimeHostAssignment(workspace.id)
+    : null;
+  if (runtimeHostPoolEnabled && !runtimeHost) {
+    return { state: "host-starting" };
+  }
+
   // Everything between here and a healthy orchestrator is infrastructure the
   // person opening the workspace can do nothing about: a stopped instance, a
   // capacity refusal, a host still booting its services. None of it is an
@@ -451,14 +470,28 @@ export async function ensureOrcaSession(
   if (!running) {
     try {
       const available = await timing.measure("host", async () => {
-        const hostState = await getHostState();
+        const hostState = runtimeHost
+          ? await getHostStateFor(runtimeHost.providerId)
+          : await getHostState();
         if (
           hostState !== "running" &&
-          (await requestHostWake(OPEN_PATH_STOPPING_ATTEMPTS)) !== "running"
+          (await (runtimeHost
+            ? requestHostWakeFor(
+                runtimeHost.providerId,
+                OPEN_PATH_STOPPING_ATTEMPTS,
+              )
+            : requestHostWake(OPEN_PATH_STOPPING_ATTEMPTS))) !== "running"
         ) {
           return false;
         }
-        await waitForOrchestrator(OPEN_PATH_ORCHESTRATOR_WAIT_MS);
+        if (runtimeHost) {
+          await waitForOrchestratorAt(
+            runtimeHost.runtimeAddress,
+            OPEN_PATH_ORCHESTRATOR_WAIT_MS,
+          );
+        } else {
+          await waitForOrchestrator(OPEN_PATH_ORCHESTRATOR_WAIT_MS);
+        }
         return true;
       });
       if (!available) return { state: "host-starting" };
@@ -531,11 +564,34 @@ export async function prepareOrcaWorkspace(
     throw error;
   }
 
+  const runtimeHostPoolEnabled = isRuntimeHostPoolEnabled();
+  const runtimeHost: RuntimeHostLease | null = runtimeHostPoolEnabled
+    ? await ensureRuntimeHostAssignment(workspace.id)
+    : null;
+  if (runtimeHostPoolEnabled && !runtimeHost) {
+    return "host-starting";
+  }
+
   try {
-    if ((await requestHostWake(1)) !== "running") {
+    if (runtimeHost) {
+      const hostState = await getHostStateFor(runtimeHost.providerId);
+      if (
+        hostState !== "running" &&
+        (await requestHostWakeFor(runtimeHost.providerId, 1)) !== "running"
+      ) {
+        return "host-starting";
+      }
+    } else if ((await requestHostWake(1)) !== "running") {
       return "host-starting";
     }
-    await waitForOrchestrator(OPEN_PATH_ORCHESTRATOR_WAIT_MS);
+    if (runtimeHost) {
+      await waitForOrchestratorAt(
+        runtimeHost.runtimeAddress,
+        OPEN_PATH_ORCHESTRATOR_WAIT_MS,
+      );
+    } else {
+      await waitForOrchestrator(OPEN_PATH_ORCHESTRATOR_WAIT_MS);
+    }
   } catch (error) {
     const unavailable = classifyRuntimeFailure(error);
     if (unavailable) {

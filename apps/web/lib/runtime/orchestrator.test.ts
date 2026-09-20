@@ -4,6 +4,9 @@ const environment = vi.hoisted(() => ({
   ORCHESTRATOR_DIRECT_URL: "https://host.example.test",
   ORCHESTRATOR_DIRECT_SECRET: "0123456789abcdef0123456789abcdef",
 }));
+const runtimeHostPool = vi.hoisted(() => ({
+  resolveRuntimeHostForWorkspace: vi.fn().mockResolvedValue(null),
+}));
 
 vi.mock("@codev/config", () => ({
   readServerEnvironment: () => environment,
@@ -12,11 +15,13 @@ vi.mock("@codev/config", () => ({
 vi.mock("./host", () => ({
   requestHostWake: vi.fn(),
 }));
+vi.mock("./runtime-host-pool", () => runtimeHostPool);
 
 const fetchMock = vi.fn();
 vi.stubGlobal("fetch", fetchMock);
 
 import { checkOrchestratorConnection } from "./orchestrator";
+import { orchestratorRequest } from "./orchestrator-request";
 
 const healthy = () =>
   new Response(
@@ -31,6 +36,7 @@ describe("orchestrator transport", () => {
   beforeEach(() => {
     fetchMock.mockReset();
     fetchMock.mockResolvedValue(healthy());
+    runtimeHostPool.resolveRuntimeHostForWorkspace.mockResolvedValue(null);
   });
 
   /**
@@ -61,5 +67,39 @@ describe("orchestrator transport", () => {
     );
     environment.ORCHESTRATOR_DIRECT_URL = "https://host.example.test";
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("routes workspace requests to their fenced runtime host", async () => {
+    runtimeHostPool.resolveRuntimeHostForWorkspace.mockResolvedValueOnce({
+      runtimeAddress: "https://runtime-2.example.test",
+    });
+
+    await orchestratorRequest(
+      "GET",
+      "/v1/sandboxes/11111111-1111-4111-8111-111111111111/ide",
+    );
+
+    expect(runtimeHostPool.resolveRuntimeHostForWorkspace).toHaveBeenCalledWith(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "https://runtime-2.example.test/v1/sandboxes/11111111-1111-4111-8111-111111111111/ide",
+    );
+  });
+
+  it("routes sandbox creation from its workspace id in the body", async () => {
+    runtimeHostPool.resolveRuntimeHostForWorkspace.mockResolvedValueOnce({
+      runtimeAddress: "https://runtime-3.example.test",
+    });
+    const body = { workspaceId: "22222222-2222-4222-8222-222222222222" };
+
+    await orchestratorRequest("POST", "/v1/sandboxes", body);
+
+    expect(runtimeHostPool.resolveRuntimeHostForWorkspace).toHaveBeenCalledWith(
+      body.workspaceId,
+    );
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "https://runtime-3.example.test/v1/sandboxes",
+    );
   });
 });

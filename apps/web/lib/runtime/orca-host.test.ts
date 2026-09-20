@@ -14,10 +14,12 @@ const mocks = vi.hoisted(() => {
   return {
     OrchestratorError,
     getHostState: vi.fn(),
+    getHostStateFor: vi.fn(),
     getIde: vi.fn(),
     prepareIde: vi.fn(),
     refreshIdeCredentials: vi.fn().mockResolvedValue(undefined),
     requestHostWake: vi.fn(),
+    requestHostWakeFor: vi.fn(),
     waitForOrchestrator: vi.fn().mockResolvedValue(undefined),
     startIde: vi.fn(),
     stopIde: vi.fn().mockResolvedValue(undefined),
@@ -34,7 +36,13 @@ const mocks = vi.hoisted(() => {
 
 vi.mock("./host", () => ({
   getHostState: mocks.getHostState,
+  getHostStateFor: mocks.getHostStateFor,
   requestHostWake: mocks.requestHostWake,
+  requestHostWakeFor: mocks.requestHostWakeFor,
+}));
+vi.mock("./runtime-host-pool", () => ({
+  ensureRuntimeHostAssignment: vi.fn(),
+  isRuntimeHostPoolEnabled: vi.fn().mockReturnValue(false),
 }));
 vi.mock("../github/github", () => ({ getGitHubUserToken: vi.fn() }));
 vi.mock("../providers/credentials", () => ({

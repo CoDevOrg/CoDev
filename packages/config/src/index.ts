@@ -93,6 +93,8 @@ export const serverEnvironmentSchema = z.object({
   AZURE_RESOURCE_GROUP: z.string().min(1).optional(),
   /** Pins host resolution to one VM; unset resolves through the stack tags. */
   AZURE_HOST_VM_NAME: z.string().min(1).optional(),
+  /** Enables durable multi-host placement; unset keeps the single-host path. */
+  CODEV_RUNTIME_HOST_POOL_ENABLED: z.enum(["true", "false"]).optional(),
   /**
    * HTTPS path to the Firecracker host's orchestrator: a Caddy route on the
    * host, gated by ORCHESTRATOR_DIRECT_SECRET since the orchestrator performs
