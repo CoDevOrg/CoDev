@@ -7,6 +7,7 @@ import {
   WorkspaceSessionImportUpload,
   WorkspaceSessionRestoreActions,
 } from "@/components/workspace/workspace-session-import-controls";
+import { SessionImportMarkdown } from "@/components/workspace/session-import-markdown";
 import {
   OrcaCard,
   OrcaPageHeader,
@@ -170,23 +171,30 @@ export default async function WorkspaceSessionImportsPage({
                     <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
                       {selected.source.provider} import
                     </p>
-                    <h4
-                      className="text-lg font-semibold text-foreground"
-                      style={{ overflowWrap: "anywhere" }}
-                    >
-                      {selected.handoff.currentObjective}
+                    <h4 className="text-lg font-semibold text-foreground">
+                      Imported {selected.source.provider} session
                     </h4>
                   </div>
                   <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium capitalize text-foreground">
                     {statusLabel(selected.status)}
                   </span>
                 </div>
-                <p
-                  className="whitespace-pre-wrap text-sm leading-6 text-foreground"
-                  style={{ overflowWrap: "anywhere" }}
-                >
-                  {selected.handoff.summary}
-                </p>
+                <div className="space-y-2">
+                  <h5 className="text-sm font-semibold text-foreground">
+                    Current objective
+                  </h5>
+                  <SessionImportMarkdown
+                    text={selected.handoff.currentObjective}
+                  />
+                </div>
+                <details className="rounded-lg border border-border/60 bg-muted/30 px-4 py-3">
+                  <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                    Read handoff summary
+                  </summary>
+                  <div className="pt-4">
+                    <SessionImportMarkdown text={selected.handoff.summary} />
+                  </div>
+                </details>
                 <div className="grid gap-3 border-t border-border/60 pt-4 text-sm sm:grid-cols-2">
                   <div>
                     <p className="text-xs text-muted-foreground">Repository</p>
@@ -243,21 +251,31 @@ export default async function WorkspaceSessionImportsPage({
                     {selected.transcript.totalEntries} entries.
                   </p>
                 </div>
-                <ol className="space-y-4">
+                <ol className="space-y-4" aria-label="Session messages">
                   {selected.transcript.entries.map((entry) => (
                     <li
                       key={entry.sequence}
-                      className="border-t border-border/60 pt-4 first:border-0 first:pt-0"
+                      className={`min-w-0 rounded-xl border p-4 sm:p-5 ${entry.role === "user" ? "border-primary/20 bg-primary/5" : "border-border/60 bg-background/50"}`}
                     >
-                      <p className="text-xs font-semibold capitalize text-muted-foreground">
-                        {entry.authorName || entry.role}
-                      </p>
-                      <p
-                        className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground"
-                        style={{ overflowWrap: "anywhere" }}
-                      >
-                        {entry.text}
-                      </p>
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-3">
+                        <span className="text-xs font-semibold capitalize text-foreground">
+                          {entry.authorName ||
+                            (entry.role === "user"
+                              ? "You"
+                              : entry.role === "assistant"
+                                ? selected.source.provider
+                                : entry.role)}
+                        </span>
+                        {entry.createdAt ? (
+                          <time
+                            className="text-xs text-muted-foreground"
+                            dateTime={entry.createdAt}
+                          >
+                            {formatDate(new Date(entry.createdAt))}
+                          </time>
+                        ) : null}
+                      </div>
+                      <SessionImportMarkdown text={entry.text} />
                     </li>
                   ))}
                 </ol>
