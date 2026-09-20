@@ -3,7 +3,8 @@
 Status: Current for Capsule v0, durable storage, lifecycle, verified transport,
 the provider-neutral repository restoration engine, Azure sandbox
 materialization, and the scoped restore trigger. Provider rehydration and
-launch are future work.
+launch are future work. The authenticated capsule intake route and importer
+view are available.
 
 ## Product model
 
@@ -96,17 +97,46 @@ serialized bytes stored in PostgreSQL. Therefore a retry of the same semantic
 capsule can return the existing import even if a future transport frames those
 bytes differently, without replacing the immutable stored artifact.
 
-The normalized transcript and handoff will become workspace-visible when the
-import view is built. The serialized artifact, including opaque provider-native
-payload, remains importer-scoped. Audit events contain metadata only, never
-capsule contents. Imports are retained until the import or owning workspace is
-explicitly deleted; deleting an import physically removes its encrypted artifact
-and leaves a soft-deleted metadata record for lifecycle accounting.
+The importer view displays the normalized transcript and handoff. Sharing that
+view with other workspace members remains future work. The serialized artifact,
+including opaque provider-native payload, remains importer-scoped. Audit events
+contain metadata only, never capsule contents. Imports are retained until the
+import or owning workspace is explicitly deleted; deleting an import physically
+removes its encrypted artifact and leaves a soft-deleted metadata record for
+lifecycle accounting.
 
 Storage is idempotent per workspace, importing member, and caller-supplied key.
 Reusing a key for a different capsule identity or lineage is rejected. A retry may
 repair an import in `storing` or `failed`, but cannot move a later lifecycle
 state backward.
+
+## Capsule intake
+
+An importer with workspace co-steering permission sends the complete Capsule
+v0 transport as the raw body of
+`POST /api/workspaces/{workspaceId}/session-imports`. The request uses
+`Content-Type: application/vnd.codev.session-capsule.v0` and a caller-chosen
+`Idempotency-Key` header. The route reads at most 32 MiB, checks the declared
+content length when present, and decodes the transport before asking the
+storage service to create the import. The storage service independently
+verifies and encrypts the capsule. A repeat with the same key and capsule
+identity returns the existing import; key reuse with different content is a
+conflict.
+
+The response contains the import ID and current lifecycle state, source
+provider and session ID, transcript entry count, normalized handoff,
+credential-free repository identity and restore status, and the restore actions
+currently available. It never returns attachment bytes or provider-native
+payload. Creation returns HTTP 201; an idempotent retry returns HTTP 200.
+
+The importer opens `/workspaces/{workspaceId}/session-imports` to upload a
+capsule or reopen one of their recent imports. The view decrypts and verifies
+the stored capsule on the server, then presents its normalized handoff,
+repository state, and the latest 50 transcript entries. Provider payload and
+attachment bytes stay out of the page. Workspace members other than the
+importer do not yet have a shared import view. Restoration can be retried from
+this page, and transcript-only can be explicitly selected after a recorded
+conflict or unavailable repository.
 
 ## Lifecycle and native-writer ownership
 
@@ -180,6 +210,6 @@ available; neither case silently selects transcript-only continuation.
 
 ## Deliberately deferred
 
-The public capsule upload route, runtime rehydration after IDE-home recreation,
-provider launching, and user-facing continuation selection are not implemented
-by this milestone.
+Runtime rehydration after IDE-home recreation, provider launching, and the
+managed or exact-native continuation choice are not implemented by this
+milestone.

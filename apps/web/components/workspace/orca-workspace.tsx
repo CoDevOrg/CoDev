@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { History, Share2 } from "lucide-react";
+import { FileDown, History, Share2 } from "lucide-react";
 import { track } from "@vercel/analytics";
 
 import {
@@ -712,17 +712,27 @@ export function WorkspaceTopBar({
         <Link
           className="workspace-topbar-share"
           href={`/workspaces/${workspaceId}/activity`}
+          aria-label="Workspace activity"
         >
           <History aria-hidden size={13} />
-          Activity
+          <span className="workspace-topbar-action-label">Activity</span>
+        </Link>
+        <Link
+          className="workspace-topbar-share"
+          href={`/workspaces/${workspaceId}/session-imports`}
+          aria-label="Imported sessions"
+        >
+          <FileDown aria-hidden size={13} />
+          <span className="workspace-topbar-action-label">Imports</span>
         </Link>
         <button
           className="workspace-topbar-share"
           type="button"
+          aria-label="Share workspace"
           onClick={() => setShareOpen(true)}
         >
           <Share2 aria-hidden size={13} />
-          Share
+          <span className="workspace-topbar-action-label">Share</span>
         </button>
       </div>
       <WorkspaceShareDialog
