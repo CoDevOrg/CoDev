@@ -39,6 +39,12 @@ impl GuestClient {
             .map(|_| ())
     }
 
+    pub async fn flush_workspace(&self) -> Result<()> {
+        self.request::<(), serde_json::Value>("POST", "/v1/workspace/flush", None)
+            .await
+            .map(|_| ())
+    }
+
     pub async fn read_file(&self, path: String, worktree_id: Option<&str>) -> Result<FileResponse> {
         self.request(
             "POST",

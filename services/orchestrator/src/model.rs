@@ -80,6 +80,11 @@ pub struct CreateRequest {
     pub expires_at: DateTime<Utc>,
     #[serde(default)]
     pub resume_from_snapshot: bool,
+    /// LUN of an Azure managed disk carrying the durable workspace.ext4 image.
+    /// The host attaches the disk before sending this request; the orchestrator
+    /// mounts it and binds the image into the Firecracker jail.
+    #[serde(default)]
+    pub persistent_disk_lun: Option<u32>,
     pub lifecycle: SandboxLifecycleOptions,
 }
 

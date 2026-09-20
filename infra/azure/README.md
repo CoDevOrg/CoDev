@@ -262,6 +262,16 @@ az role assignment create \
 The three GUIDs are the built-in role definition ids of Key Vault Secrets
 User, Storage Blob Data Reader and Virtual Machine Contributor.
 
+### Persistent workspace disk canary permissions
+
+Phase 5 canary storage is created and attached by the `apps/web` Azure
+identity (`AZURE_CLIENT_ID`), not by the host identity. Before setting
+`CODEV_WORKSPACE_PERSISTENT_STORAGE_ENABLED=true`, grant that principal
+**Virtual Machine Contributor** on the runtime resource group. It needs to
+create managed disks and attach/detach them from the assigned host. Also set
+`AZURE_RUNTIME_LOCATION` to the resource group's region and leave the canary
+disabled until a host-replacement test has verified the workspace state.
+
 ## Credential envelopes
 
 Every stored provider credential is wrapped by the Key Vault key above and

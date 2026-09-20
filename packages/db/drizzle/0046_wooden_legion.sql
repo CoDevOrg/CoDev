@@ -1,0 +1,1 @@
+ALTER TABLE "workspace_runtime_assignments" ADD COLUMN "disk_lun" integer;

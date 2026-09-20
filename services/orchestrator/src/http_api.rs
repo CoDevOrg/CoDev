@@ -1069,6 +1069,7 @@ mod tests {
             base_sha: "fc1ba2947ffdaf8c1961e5342387e1079afface6".into(),
             expires_at: Utc::now() + Duration::hours(1),
             resume_from_snapshot: false,
+            persistent_disk_lun: None,
             lifecycle: SandboxLifecycleOptions {
                 timeout_ms: 14_400_000,
                 lifecycle: SandboxLifecycleHooks {

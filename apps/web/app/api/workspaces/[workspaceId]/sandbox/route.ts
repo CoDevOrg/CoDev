@@ -23,6 +23,7 @@ import {
   ensureRuntimeHostAssignment,
   isRuntimeHostPoolEnabled,
 } from "@/lib/runtime/runtime-host-pool";
+import { isWorkspacePersistentStorageEnabled } from "@/lib/runtime/workspace-storage";
 import {
   assertWorkspaceCreditQuota,
   QuotaError,
@@ -50,7 +51,7 @@ export const GET = withWorkspace(
       return Response.json({ runtime });
     }
     const runtimeHost = isRuntimeHostPoolEnabled()
-      ? await ensureRuntimeHostAssignment(workspaceId)
+      ? await ensureRuntimeHostAssignment(workspaceId, { ensureStorage: true })
       : null;
     if (isRuntimeHostPoolEnabled() && !runtimeHost) {
       return Response.json({ state: "starting" }, { status: 202 });
@@ -111,7 +112,9 @@ export const POST = withWorkspace(
       }
       await assertWorkspaceCreditQuota(workspaceId, user.id);
       const runtimeHost = isRuntimeHostPoolEnabled()
-        ? await ensureRuntimeHostAssignment(workspaceId)
+        ? await ensureRuntimeHostAssignment(workspaceId, {
+            ensureStorage: true,
+          })
         : null;
       if (isRuntimeHostPoolEnabled() && !runtimeHost) {
         return Response.json({ state: "starting" }, { status: 202 });
@@ -133,6 +136,8 @@ export const POST = withWorkspace(
         await waitForOrchestrator();
       }
       const persistedSnapshot = await getWorkspaceSnapshot(workspaceId);
+      const persistentStorage =
+        isWorkspacePersistentStorageEnabled() && runtimeHost?.diskLun != null;
       const repositorySnapshot = persistedSnapshot?.snapshot
         ? persistedSnapshot.snapshot
         : workspace.repositoryVisibility === "private"
@@ -150,7 +155,10 @@ export const POST = withWorkspace(
         ...(repositorySnapshot ? { repositorySnapshot } : {}),
         baseSha: workspace.baseSha,
         expiresAt: expiresAt.toISOString(),
-        resumeFromSnapshot: Boolean(persistedSnapshot),
+        resumeFromSnapshot: Boolean(persistedSnapshot) && !persistentStorage,
+        ...(persistentStorage
+          ? { persistentDiskLun: runtimeHost.diskLun! }
+          : {}),
         lifecycle: E2B_LIFECYCLE_OPTIONS,
       });
       await markWorkspaceReady(workspaceId, sandbox.id, sandbox.headSha);

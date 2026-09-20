@@ -980,6 +980,7 @@ export const workspaceRuntimeAssignments = pgTable(
     generation: integer("generation").default(1).notNull(),
     fencingToken: uuid("fencing_token").defaultRandom().notNull(),
     diskId: text("disk_id"),
+    diskLun: integer("disk_lun"),
     runtimeState: workspaceRuntimeAssignmentState("runtime_state")
       .default("assigned")
       .notNull(),

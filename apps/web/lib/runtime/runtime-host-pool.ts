@@ -6,6 +6,10 @@ import { readServerEnvironment } from "@codev/config";
 import { z } from "zod";
 
 import { getDatabase } from "../platform/database";
+import {
+  detachWorkspaceRuntimeStorage,
+  ensureWorkspaceRuntimeStorage,
+} from "./workspace-storage";
 
 const workspaceIdSchema = z.string().uuid();
 
@@ -25,6 +29,7 @@ export type RuntimeHostLease = {
   generation: number;
   fencingToken: string;
   diskId: string | null;
+  diskLun: number | null;
   imageVersion: string | null;
 };
 
@@ -75,6 +80,7 @@ function toLease(row: {
   generation: number;
   fencingToken: string;
   diskId: string | null;
+  diskLun: number | null;
   imageVersion: string | null;
 }): RuntimeHostLease {
   return row;
@@ -99,6 +105,7 @@ export async function resolveRuntimeHostForWorkspace(
       generation: schema.workspaceRuntimeAssignments.generation,
       fencingToken: schema.workspaceRuntimeAssignments.fencingToken,
       diskId: schema.workspaceRuntimeAssignments.diskId,
+      diskLun: schema.workspaceRuntimeAssignments.diskLun,
       imageVersion: schema.runtimeHosts.imageVersion,
     })
     .from(schema.workspaceRuntimeAssignments)
@@ -128,13 +135,14 @@ export async function resolveRuntimeHostForWorkspace(
  */
 export async function ensureRuntimeHostAssignment(
   workspaceId: string,
+  options: { ensureStorage?: boolean } = {},
 ): Promise<RuntimeHostLease | null> {
   if (!isRuntimeHostPoolEnabled()) return null;
   const id = workspaceIdSchema.parse(workspaceId);
   await ensureConfiguredRuntimeHost();
   const now = new Date();
 
-  return getDatabase().transaction(async (transaction) => {
+  const lease = await getDatabase().transaction(async (transaction) => {
     const [workspace] = await transaction
       .select({ id: schema.workspaces.id })
       .from(schema.workspaces)
@@ -152,6 +160,7 @@ export async function ensureRuntimeHostAssignment(
         generation: schema.workspaceRuntimeAssignments.generation,
         fencingToken: schema.workspaceRuntimeAssignments.fencingToken,
         diskId: schema.workspaceRuntimeAssignments.diskId,
+        diskLun: schema.workspaceRuntimeAssignments.diskLun,
         imageVersion: schema.runtimeHosts.imageVersion,
         assignmentState: schema.workspaceRuntimeAssignments.runtimeState,
       })
@@ -174,7 +183,7 @@ export async function ensureRuntimeHostAssignment(
         .update(schema.workspaceRuntimeAssignments)
         .set({ lastUsedAt: now, updatedAt: now })
         .where(eq(schema.workspaceRuntimeAssignments.workspaceId, id));
-      return toLease(existing);
+      return { lease: toLease(existing), placementChanged: false };
     }
 
     // A stopped or failed host invalidates the old placement. Keep the row so
@@ -250,16 +259,33 @@ export async function ensureRuntimeHostAssignment(
     }
 
     return {
-      hostId: host.id,
-      providerId: host.providerId,
-      runtimeAddress: host.runtimeAddress,
-      lifecycleState: host.lifecycleState,
-      generation,
-      fencingToken,
-      diskId: existing?.diskId ?? null,
-      imageVersion: host.imageVersion,
-    } satisfies RuntimeHostLease;
+      lease: {
+        hostId: host.id,
+        providerId: host.providerId,
+        runtimeAddress: host.runtimeAddress,
+        lifecycleState: host.lifecycleState,
+        generation,
+        fencingToken,
+        diskId: existing?.diskId ?? null,
+        diskLun: existing?.diskLun ?? null,
+        imageVersion: host.imageVersion,
+      } satisfies RuntimeHostLease,
+      placementChanged: true,
+    };
   });
+  if (!lease) return null;
+  if (!options.ensureStorage) return lease.lease;
+  try {
+    return await ensureWorkspaceRuntimeStorage(id, lease.lease);
+  } catch (error) {
+    // Do not invalidate an already-running placement on a transient Azure
+    // control-plane failure. A newly selected placement can be rolled back;
+    // an existing one must remain fenced until storage reconciliation retries.
+    if (lease.placementChanged) {
+      await releaseRuntimeHostAssignment(id).catch(() => undefined);
+    }
+    throw error;
+  }
 }
 
 /** Register or refresh a prepared host in the scheduler inventory. */
@@ -311,17 +337,24 @@ export async function releaseRuntimeHostAssignment(workspaceId: string) {
   const id = workspaceIdSchema.parse(workspaceId);
   const now = new Date();
 
-  await getDatabase().transaction(async (transaction) => {
+  const released = await getDatabase().transaction(async (transaction) => {
     const [assignment] = await transaction
       .select({
         hostId: schema.workspaceRuntimeAssignments.hostId,
         runtimeState: schema.workspaceRuntimeAssignments.runtimeState,
+        diskId: schema.workspaceRuntimeAssignments.diskId,
       })
       .from(schema.workspaceRuntimeAssignments)
       .where(eq(schema.workspaceRuntimeAssignments.workspaceId, id))
       .limit(1)
       .for("update");
-    if (!assignment || assignment.runtimeState === "lost") return;
+    if (!assignment || assignment.runtimeState === "lost") return null;
+
+    const [host] = await transaction
+      .select({ providerId: schema.runtimeHosts.providerId })
+      .from(schema.runtimeHosts)
+      .where(eq(schema.runtimeHosts.id, assignment.hostId))
+      .limit(1);
 
     await transaction
       .update(schema.runtimeHosts)
@@ -339,7 +372,12 @@ export async function releaseRuntimeHostAssignment(workspaceId: string) {
       .update(schema.workspaceRuntimeAssignments)
       .set({ runtimeState: "lost", updatedAt: now })
       .where(eq(schema.workspaceRuntimeAssignments.workspaceId, id));
+    return { providerId: host?.providerId ?? null, diskId: assignment.diskId };
   });
+
+  if (released?.providerId) {
+    await detachWorkspaceRuntimeStorage(released.providerId, released.diskId);
+  }
 }
 
 /** Mark a host as draining so new workspaces avoid it while current ones stay put. */
@@ -359,14 +397,19 @@ export async function drainRuntimeHost(providerId: string) {
 export async function markRuntimeHostLost(providerId: string) {
   const id = z.string().min(1).parse(providerId);
   const now = new Date();
-  await getDatabase().transaction(async (transaction) => {
+  const assignments = await getDatabase().transaction(async (transaction) => {
     const [host] = await transaction
       .select({ id: schema.runtimeHosts.id })
       .from(schema.runtimeHosts)
       .where(eq(schema.runtimeHosts.providerId, id))
       .limit(1)
       .for("update");
-    if (!host) return;
+    if (!host) return [];
+
+    const affected = await transaction
+      .select({ diskId: schema.workspaceRuntimeAssignments.diskId })
+      .from(schema.workspaceRuntimeAssignments)
+      .where(eq(schema.workspaceRuntimeAssignments.hostId, host.id));
 
     await transaction
       .update(schema.runtimeHosts)
@@ -376,5 +419,13 @@ export async function markRuntimeHostLost(providerId: string) {
       .update(schema.workspaceRuntimeAssignments)
       .set({ runtimeState: "lost", updatedAt: now })
       .where(eq(schema.workspaceRuntimeAssignments.hostId, host.id));
+    return affected;
   });
+  await Promise.all(
+    assignments.map((assignment) =>
+      detachWorkspaceRuntimeStorage(providerId, assignment.diskId).catch(
+        () => undefined,
+      ),
+    ),
+  );
 }

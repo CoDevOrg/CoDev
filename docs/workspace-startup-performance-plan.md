@@ -1,7 +1,8 @@
 # Workspace startup performance plan
 
-Status: Phase 3 complete. The implemented slices are called out below; the
-remaining phases are still design work.
+Status: Phase 5 first slice complete. The implemented slices are called out
+below; the remaining rollout, benchmark, and gateway phases are still design
+work.
 
 ## Objective
 
@@ -450,6 +451,30 @@ Exit criterion: one host can be drained or lost without making every workspace
 unavailable, and queued demand can cause additional prepared capacity to join.
 
 ## Phase 5: preserve workspace state outside disposable hosts
+
+### Implemented first slice
+
+The first durable-storage slice now includes:
+
+- an optional per-workspace Azure Premium managed disk, created lazily and
+  tagged to its workspace;
+- exclusive attachment of that disk to the workspace's fenced runtime host,
+  with a persisted disk ID and LUN in the assignment row;
+- automatic LUN selection when a workspace moves to a host whose existing
+  data-disk layout differs;
+- a host-side mount that survives Firecracker replacement and a bind-mounted
+  workspace image for the guest;
+- an explicit guest flush endpoint that waits for the mutation lock and runs
+  `sync` before the microVM is stopped and its disk is detached; and
+- cleanup and fencing paths for normal release, failed hosts, and assignment
+  rollback.
+
+The feature is disabled by default with
+`CODEV_WORKSPACE_PERSISTENT_STORAGE_ENABLED=false`. PostgreSQL hibernation
+snapshots remain the fallback while this is canaried. This first slice
+persists the Firecracker workspace image; the current host-side Orca clone is
+still a separate filesystem and will be converged in Phase 7 after the
+headless gateway and shared-filesystem design are proven.
 
 Benchmark two storage designs before selecting one:
 
