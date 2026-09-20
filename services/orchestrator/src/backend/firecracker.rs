@@ -1071,6 +1071,7 @@ impl FirecrackerBackend {
             OpenOptions::new()
                 .create(true)
                 .write(true)
+                .truncate(false)
                 .open(&bind_path)
                 .map_err(RuntimeError::internal)?;
             let mut bind = Command::new("mount");
