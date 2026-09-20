@@ -1,5 +1,6 @@
 import {
   readStoredSessionImportState,
+  SessionImportStorageError,
   storeSessionImport,
 } from "@/lib/agents/session-import-storage";
 import {
@@ -74,18 +75,28 @@ export const POST = withWorkspace(
 
     const artifact = await readCapsuleBody(request);
     const { capsule } = decodeSessionCapsuleTransport(artifact);
-    const stored = await storeSessionImport({
-      workspaceId,
-      importedBy: user.id,
-      idempotencyKey,
-      artifact,
-    });
-    const state = await readStoredSessionImportState({
-      workspaceId,
-      importId: stored.importId,
-      importedBy: user.id,
-    });
-
+    let stored: Awaited<ReturnType<typeof storeSessionImport>>;
+    let state: Awaited<ReturnType<typeof readStoredSessionImportState>>;
+    try {
+      stored = await storeSessionImport({
+        workspaceId,
+        importedBy: user.id,
+        idempotencyKey,
+        artifact,
+      });
+      state = await readStoredSessionImportState({
+        workspaceId,
+        importId: stored.importId,
+        importedBy: user.id,
+      });
+    } catch (error) {
+      if (error instanceof SessionImportStorageError && error.status < 500)
+        throw error;
+      throw new ApiError(
+        "The session could not be saved. Please try again or contact your workspace administrator.",
+        503,
+      );
+    }
     return Response.json(
       {
         importId: stored.importId,

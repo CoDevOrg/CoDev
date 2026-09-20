@@ -3,8 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
-const CAPSULE_MEDIA_TYPE = "application/vnd.codev.session-capsule.v0";
-const MAX_CAPSULE_BYTES = 32 * 1_024 * 1_024;
+const MAX_SOURCE_BYTES = 5 * 1_024 * 1_024;
 
 async function responseError(response: Response) {
   const body = (await response.json().catch(() => null)) as {
@@ -27,6 +26,9 @@ export function WorkspaceSessionImportUpload({
   } | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const [provider, setProvider] = useState<"codex" | "claude" | "cursor">(
+    "codex",
+  );
 
   async function upload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -35,11 +37,12 @@ export function WorkspaceSessionImportUpload({
     setError("");
     try {
       const response = await fetch(
-        `/api/workspaces/${workspaceId}/session-imports`,
+        `/api/workspaces/${workspaceId}/session-imports/source`,
         {
           method: "POST",
           headers: {
-            "content-type": CAPSULE_MEDIA_TYPE,
+            "content-type": "application/x-ndjson",
+            "x-session-provider": provider,
             "idempotency-key": selection.idempotencyKey,
           },
           body: selection.file,
@@ -74,18 +77,45 @@ export function WorkspaceSessionImportUpload({
       <div className="space-y-2">
         <label
           className="block text-sm font-medium text-foreground"
-          htmlFor="capsule-file"
+          htmlFor="session-provider"
         >
-          Capsule file
+          Provider
+        </label>
+        <select
+          id="session-provider"
+          className="min-h-11 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          value={provider}
+          disabled={pending}
+          onChange={(event) => {
+            setProvider(event.target.value as typeof provider);
+            setSelection(null);
+            setError("");
+          }}
+        >
+          <option value="codex">Codex</option>
+          <option value="claude" disabled>
+            Claude (coming soon)
+          </option>
+          <option value="cursor" disabled>
+            Cursor (coming soon)
+          </option>
+        </select>
+      </div>
+      <div className="space-y-2">
+        <label
+          className="block text-sm font-medium text-foreground"
+          htmlFor="source-session-file"
+        >
+          Codex session file
         </label>
         <input
-          accept=".codevsc,application/vnd.codev.session-capsule.v0"
+          accept=".jsonl,application/x-ndjson"
           className="block min-h-11 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1 file:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          id="capsule-file"
+          id="source-session-file"
           type="file"
           disabled={pending}
           aria-describedby={
-            error ? "capsule-file-hint capsule-file-error" : "capsule-file-hint"
+            error ? "source-file-hint source-file-error" : "source-file-hint"
           }
           aria-invalid={Boolean(error)}
           onChange={(event) => {
@@ -93,25 +123,48 @@ export function WorkspaceSessionImportUpload({
             setError("");
             if (!file) {
               setSelection(null);
-            } else if (file.size > MAX_CAPSULE_BYTES) {
+            } else if (file.size > MAX_SOURCE_BYTES) {
               setSelection(null);
-              setError("Choose a capsule smaller than 32 MiB.");
+              setError("Choose a session file smaller than 5 MiB.");
             } else {
               setSelection({ file, idempotencyKey: crypto.randomUUID() });
             }
           }}
         />
         <p
-          id="capsule-file-hint"
+          id="source-file-hint"
           className="text-sm leading-6 text-muted-foreground"
         >
-          Choose a CoDev Capsule v0 file, up to 32 MiB. Its provider data stays
-          private to you.
+          Choose a Codex rollout file named <code>rollout-*.jsonl</code>, up to
+          5 MiB. CoDev converts it and opens the imported session for review.
         </p>
+        <details className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+          <summary className="min-h-11 cursor-pointer content-center font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            Where is my Codex session file?
+          </summary>
+          <div className="space-y-2 pb-1 leading-6">
+            <p>
+              On Windows, paste <code>%USERPROFILE%\.codex\sessions</code> into
+              the file picker&apos;s address bar. On macOS or Linux, open{" "}
+              <code>~/.codex/sessions</code>; on macOS, press Command–Shift–G in
+              the picker to enter the folder path.
+            </p>
+            <p>
+              Open the year, month, and day folders for the session, then choose
+              its <code>rollout-*.jsonl</code> file. If you set{" "}
+              <code>CODEX_HOME</code>, look in its <code>sessions</code> folder
+              instead. <code>history.jsonl</code> is not a session rollout.
+            </p>
+            <p>
+              This first import supports rollouts recorded in a Git repository.
+              Review the file for sensitive information before uploading it.
+            </p>
+          </div>
+        </details>
       </div>
       {error ? (
         <p
-          id="capsule-file-error"
+          id="source-file-error"
           role="alert"
           className="text-sm text-destructive"
         >
@@ -120,7 +173,7 @@ export function WorkspaceSessionImportUpload({
       ) : null}
       {pending ? (
         <p role="status" className="text-sm text-muted-foreground">
-          Importing the capsule…
+          Importing the session…
         </p>
       ) : null}
       <button
@@ -140,12 +193,14 @@ export function WorkspaceSessionRestoreActions({
   status,
   repositoryStatus,
   canRestore,
+  sourceProvider,
 }: {
   workspaceId: string;
   importId: string;
   status: string;
   repositoryStatus: string;
   canRestore: boolean;
+  sourceProvider?: string;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -182,8 +237,10 @@ export function WorkspaceSessionRestoreActions({
   if (status === "ready") {
     return (
       <p className="text-sm leading-6 text-muted-foreground">
-        Repository handling is complete. Continuing the session will be
-        available in a later step.
+        Repository handling is complete. You will be able to start a fresh CoDev
+        continuation or resume the original {sourceProvider ?? "provider"}{" "}
+        session with the same provider when native resume is supported. Launch
+        controls are coming in a later step.
       </p>
     );
   }

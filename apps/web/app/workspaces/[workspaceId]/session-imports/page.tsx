@@ -98,11 +98,11 @@ export default async function WorkspaceSessionImportsPage({
       <OrcaCard className="space-y-4 p-5 sm:p-6">
         <div className="space-y-1">
           <h3 className="text-base font-semibold text-foreground">
-            Import a capsule
+            Import a session
           </h3>
           <p className="text-sm leading-6 text-muted-foreground">
-            The import creates a private provider payload and a normalized
-            session view for this workspace.
+            Choose a provider and a local session file. CoDev creates a private
+            provider payload and a normalized view for this workspace.
           </p>
         </div>
         <WorkspaceSessionImportUpload
@@ -121,7 +121,8 @@ export default async function WorkspaceSessionImportsPage({
           </h3>
           {imports.length === 0 ? (
             <OrcaCard className="p-5 text-sm leading-6 text-muted-foreground">
-              No imported sessions yet. Choose a capsule above to get started.
+              No imported sessions yet. Choose a session file above to get
+              started.
             </OrcaCard>
           ) : (
             <ul className="space-y-2">
@@ -228,6 +229,7 @@ export default async function WorkspaceSessionImportsPage({
                   status={selected.status}
                   repositoryStatus={selected.repositoryStatus}
                   canRestore={canRestore}
+                  sourceProvider={selected.source.provider}
                 />
               </OrcaCard>
 

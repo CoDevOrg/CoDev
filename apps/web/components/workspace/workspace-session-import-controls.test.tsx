@@ -27,7 +27,17 @@ afterEach(() => {
 });
 
 describe("session import controls", () => {
-  it("uploads the selected capsule with a stable idempotency key", async () => {
+  it("shows where to find a Codex rollout", () => {
+    render(
+      <WorkspaceSessionImportUpload workspaceId="workspace-1" canUpload />,
+    );
+    fireEvent.click(screen.getByText("Where is my Codex session file?"));
+    expect(screen.getByText(/%USERPROFILE%/)).toBeTruthy();
+    expect(screen.getByText(/CODEX_HOME/)).toBeTruthy();
+    expect(screen.getByText(/history.jsonl/)).toBeTruthy();
+  });
+
+  it("uploads the selected Codex source with a stable idempotency key", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(
@@ -38,22 +48,23 @@ describe("session import controls", () => {
       <WorkspaceSessionImportUpload workspaceId="workspace-1" canUpload />,
     );
 
-    const file = new File(["capsule"], "session.codevsc", {
-      type: "application/vnd.codev.session-capsule.v0",
+    const file = new File(["rollout"], "session.jsonl", {
+      type: "application/x-ndjson",
     });
-    fireEvent.change(screen.getByLabelText("Capsule file"), {
+    fireEvent.change(screen.getByLabelText("Codex session file"), {
       target: { files: [file] },
     });
     fireEvent.click(screen.getByRole("button", { name: "Import session" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/workspaces/workspace-1/session-imports",
+      "/api/workspaces/workspace-1/session-imports/source",
       expect.objectContaining({
         method: "POST",
         body: file,
         headers: expect.objectContaining({
-          "content-type": "application/vnd.codev.session-capsule.v0",
+          "content-type": "application/x-ndjson",
+          "x-session-provider": "codex",
           "idempotency-key": expect.any(String),
         }),
       }),
