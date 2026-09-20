@@ -37,6 +37,10 @@ describe("session import failure diagnostics", () => {
       "database_migration_missing",
     ],
     [
+      new Error("A PostgreSQL connection URL is not configured."),
+      "database_not_configured",
+    ],
+    [
       Object.assign(new Error("private vault path and caller IDs"), {
         name: "RestError",
         statusCode: 403,
