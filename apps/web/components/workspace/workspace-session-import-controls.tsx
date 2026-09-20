@@ -187,20 +187,30 @@ export function WorkspaceSessionImportUpload({
   );
 }
 
+// Plain-language status for each repository lifecycle state — the UI never
+// exposes the raw enum (matched/conflicted/transcript_only/…) to the user.
+const REPOSITORY_STATUS_COPY: Record<string, string> = {
+  pending: "Repository changes are available to restore.",
+  matched: "No repository changes were detected.",
+  restored: "Repository matched. No action needed.",
+  conflicted: "Repository could not be matched to the current workspace.",
+  unavailable: "Repository could not be matched — the source was unreachable.",
+  transcript_only:
+    "Continuing with the transcript only. Repository changes were not restored.",
+};
+
 export function WorkspaceSessionRestoreActions({
   workspaceId,
   importId,
   status,
   repositoryStatus,
   canRestore,
-  sourceProvider,
 }: {
   workspaceId: string;
   importId: string;
   status: string;
   repositoryStatus: string;
   canRestore: boolean;
-  sourceProvider?: string;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -209,6 +219,18 @@ export function WorkspaceSessionRestoreActions({
   const canAcceptTranscriptOnly =
     status === "restoring" &&
     (repositoryStatus === "conflicted" || repositoryStatus === "unavailable");
+  const needsAction =
+    canRestore &&
+    canAttempt &&
+    (repositoryStatus === "pending" ||
+      repositoryStatus === "conflicted" ||
+      repositoryStatus === "unavailable");
+
+  // Repository handling is only relevant while an import is being reviewed
+  // or restored; once it has failed or been deleted there is nothing to say.
+  if (status !== "stored" && status !== "restoring" && status !== "ready") {
+    return null;
+  }
 
   async function restore(transcriptOnly: boolean) {
     setPending(true);
@@ -234,60 +256,53 @@ export function WorkspaceSessionRestoreActions({
     }
   }
 
-  if (status === "ready") {
-    return (
-      <p className="text-sm leading-6 text-muted-foreground">
-        Repository handling is complete. You will be able to start a fresh CoDev
-        continuation or resume the original {sourceProvider ?? "provider"}{" "}
-        session with the same provider when native resume is supported. Launch
-        controls are coming in a later step.
-      </p>
-    );
-  }
-  if (!canAttempt || !canRestore) return null;
+  const message =
+    REPOSITORY_STATUS_COPY[repositoryStatus] ??
+    repositoryStatus.replaceAll("_", " ");
 
   return (
-    <div className="space-y-4">
-      {pending ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          Updating repository status…
+    <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border/60 p-4">
+      <div className="space-y-1">
+        <p className="text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
+          Repository state
         </p>
-      ) : null}
-      {error ? (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      ) : null}
-      <div className="flex flex-wrap gap-3">
-        <button
-          className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-lg bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition-colors motion-reduce:transition-none hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={pending}
-          onClick={() => void restore(false)}
-          type="button"
-        >
-          {pending
-            ? "Working…"
-            : repositoryStatus === "pending"
-              ? "Restore repository"
-              : "Retry restoration"}
-        </button>
-        {canAcceptTranscriptOnly ? (
-          <button
-            className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-lg border border-border bg-background px-5 py-2 text-sm font-medium text-foreground transition-colors motion-reduce:transition-none hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={pending}
-            onClick={() => void restore(true)}
-            type="button"
-          >
-            Continue with transcript only
-          </button>
+        <p className="text-sm text-foreground">{message}</p>
+        {pending ? (
+          <p role="status" className="text-xs text-muted-foreground">
+            Updating repository status…
+          </p>
+        ) : null}
+        {error ? (
+          <p role="alert" className="text-xs text-destructive">
+            {error}
+          </p>
         ) : null}
       </div>
-      {canAcceptTranscriptOnly ? (
-        <p className="text-sm leading-6 text-muted-foreground">
-          Transcript-only skips repository changes from this import. You can
-          review the handoff and transcript, but the original files will not be
-          restored.
-        </p>
+      {needsAction ? (
+        <div className="flex flex-wrap gap-2">
+          {canAcceptTranscriptOnly ? (
+            <button
+              className="inline-flex min-h-9 cursor-pointer items-center justify-center rounded-lg border border-border bg-background px-3.5 text-sm font-medium text-foreground transition-colors motion-reduce:transition-none hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={pending}
+              onClick={() => void restore(true)}
+              type="button"
+            >
+              Continue with transcript only
+            </button>
+          ) : null}
+          <button
+            className="inline-flex min-h-9 cursor-pointer items-center justify-center rounded-lg border border-border bg-background px-3.5 text-sm font-medium text-foreground transition-colors motion-reduce:transition-none hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={pending}
+            onClick={() => void restore(false)}
+            type="button"
+          >
+            {pending
+              ? "Working…"
+              : repositoryStatus === "pending"
+                ? "Restore repository"
+                : "Retry restoration"}
+          </button>
+        </div>
       ) : null}
     </div>
   );

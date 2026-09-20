@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CoDev · Imported session review — redesign mockup</title>
+    <style>
+      :root {
+        /* CoDev palette: warm near-black + coral, from apps/web/app/globals.css */
+        color-scheme: dark;
+        --page: #121417;
+        --surface: #1a1d21;
+        --border: rgba(237, 238, 240, 0.1);
+        --border-soft: #20242a;
+        --text: #edeef0;
+        --muted: #9ba1ab;
+        --muted-2: #6b7280;
+        --coral: #f2604a;
+        --coral-bright: #ff7c63;
+        --violet: #8b7cd8;
+        --radius: 10px;
+      }
+
+      /* CoDev forces dark regardless of OS theme (see app/globals.css) —
+         no light-mode branch here to match. */
+
+      * { box-sizing: border-box; }
+
+      body {
+        min-width: 320px;
+        margin: 0;
+        background: var(--page);
+        color: var(--text);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 14px;
+        line-height: 1.55;
+      }
+
+      a { color: inherit; }
+      button { font: inherit; }
+
+      .page {
+        width: min(100% - 48px, 1180px);
+        margin: 0 auto;
+        padding: 22px 0 64px;
+      }
+
+      /* ---- top bar ---- */
+      .topbar {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding-bottom: 18px;
+        margin-bottom: 20px;
+        border-bottom: 1px solid var(--border);
+      }
+      .back {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 600;
+        text-decoration: none;
+      }
+      .back:hover { color: var(--text); }
+      .back svg { width: 14px; height: 14px; }
+
+      .topbar h1 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+        flex: 1;
+        min-width: 0;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 32px;
+        padding: 0 14px;
+        border-radius: 7px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn:hover { border-color: var(--muted-2); }
+      .btn-primary {
+        border-color: transparent;
+        background: var(--coral);
+        color: #fff;
+      }
+      .btn-primary:hover { filter: brightness(1.06); }
+
+      /* ---- two-zone layout ---- */
+      .layout {
+        display: grid;
+        grid-template-columns: 240px minmax(0, 1fr);
+        gap: 32px;
+        align-items: start;
+      }
+
+      /* ---- sidebar ---- */
+      .sidebar { position: sticky; top: 20px; }
+      .sidebar-label {
+        margin: 0 0 8px 10px;
+        color: var(--muted-2);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .import-row {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        height: 48px;
+        justify-content: center;
+        padding: 0 10px;
+        border-radius: 7px;
+        text-decoration: none;
+        color: var(--text);
+        border-left: 2px solid transparent;
+      }
+      .import-row:hover { background: var(--border-soft); }
+      .import-row.active {
+        background: var(--border-soft);
+        border-left-color: var(--coral);
+      }
+      .import-row-top {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        font-weight: 600;
+        text-transform: capitalize;
+      }
+      .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 999px;
+        background: var(--muted-2);
+        flex: 0 0 auto;
+      }
+      .dot.ready { background: var(--violet); }
+      .dot.pending { background: var(--muted); }
+      .import-row-time {
+        margin-left: 12px;
+        color: var(--muted);
+        font-size: 11.5px;
+      }
+
+      /* ---- session-ready header ---- */
+      .handoff { padding-bottom: 22px; margin-bottom: 22px; border-bottom: 1px solid var(--border); }
+      .handoff h2 {
+        margin: 0;
+        font-size: 17px;
+        font-weight: 650;
+      }
+      .meta-row {
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 12.5px;
+        overflow-wrap: anywhere;
+      }
+      .meta-row b { color: var(--text); font-weight: 600; }
+      .meta-sep { margin: 0 8px; color: var(--muted-2); }
+
+      .objective {
+        margin-top: 14px;
+        max-width: 72ch;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.6;
+      }
+
+      /* ---- continue actions: this is the primary decision ---- */
+      .continue-options {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 20px;
+      }
+      .option-card {
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 14px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .option-card.primary {
+        border-color: color-mix(in srgb, var(--coral) 45%, var(--border));
+        background: color-mix(in srgb, var(--coral) 7%, var(--surface));
+      }
+      .option-title { font-size: 13.5px; font-weight: 650; }
+      .option-desc { color: var(--muted); font-size: 12.5px; line-height: 1.5; flex: 1; }
+      .btn-full { width: 100%; justify-content: center; height: 34px; }
+      .btn[disabled] {
+        opacity: 0.5;
+        cursor: default;
+        pointer-events: none;
+      }
+      .btn-note { color: var(--muted-2); font-size: 11px; text-align: center; }
+
+      .completion-note {
+        margin-top: 14px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .completion-note b { color: var(--text); font-weight: 600; }
+
+      /* ---- repository state: separate, secondary card ---- */
+      .repo-card {
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 14px 16px;
+        margin-top: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      .repo-card-label {
+        color: var(--muted-2);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        margin: 0 0 4px;
+      }
+      .repo-card-status { font-size: 13px; color: var(--text); }
+      .repo-card-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+      .btn-ghost {
+        background: transparent;
+        border-color: transparent;
+        color: var(--muted);
+      }
+      .btn-ghost:hover { color: var(--text); border-color: var(--border); }
+
+      /* ---- transcript ---- */
+      .transcript-header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 6px;
+      }
+      .transcript-header h3 {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+      .transcript-count { color: var(--muted); font-size: 12px; }
+      .readonly-tag {
+        color: var(--muted-2);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .row {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 12px 0;
+        border-top: 1px solid var(--border-soft);
+      }
+      .row:first-child { border-top: none; padding-top: 4px; }
+
+      .row-meta {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+      }
+      .row-role {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+      .row-role.user { color: var(--coral); }
+      .row-role.assistant { color: var(--violet); }
+      .row-role.system { color: var(--muted); }
+      .row-time {
+        margin-left: auto;
+        color: var(--muted-2);
+        font-size: 11.5px;
+      }
+      .row-body {
+        max-width: 72ch;
+        color: var(--text);
+        font-size: 13.5px;
+        line-height: 1.65;
+      }
+      .row-body p { margin: 0 0 0.6em; }
+      .row-body p:last-child { margin-bottom: 0; }
+      .row-body code {
+        background: var(--border-soft);
+        border-radius: 4px;
+        padding: 0.1em 0.35em;
+        font-size: 0.9em;
+      }
+
+      /* collapsed context bundle */
+      .context-row {
+        border-left: 2px solid var(--coral);
+        padding-left: 12px;
+        margin-left: -14px;
+      }
+      .context-toggle {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 44px;
+        cursor: pointer;
+        color: var(--muted);
+        font-size: 12.5px;
+      }
+      .context-toggle b { color: var(--text); font-weight: 600; }
+      .context-toggle .chev { margin-left: auto; color: var(--muted-2); font-size: 11px; }
+      details[open] .context-toggle .chev::before { content: "▾"; }
+      .context-toggle .chev::before { content: "▸"; }
+      details .row-body { padding: 4px 0 8px; }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="topbar">
+        <a class="back" href="#">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13 5 8l5-5"/></svg>
+          Workspace
+        </a>
+        <h1>Imported sessions</h1>
+        <button class="btn btn-primary">+ Import session</button>
+      </div>
+
+      <div class="layout">
+        <div class="sidebar">
+          <p class="sidebar-label">Recent imports</p>
+          <a class="import-row active" href="#">
+            <span class="import-row-top"><span class="dot ready"></span> Claude Code</span>
+            <span class="import-row-time">Restored · 2h ago</span>
+          </a>
+          <a class="import-row" href="#">
+            <span class="import-row-top"><span class="dot pending"></span> Codex</span>
+            <span class="import-row-time">Pending restore · yesterday</span>
+          </a>
+          <a class="import-row" href="#">
+            <span class="import-row-top"><span class="dot"></span> Cursor</span>
+            <span class="import-row-time">Reviewed · 3 days ago</span>
+          </a>
+          <a class="import-row" href="#">
+            <span class="import-row-top"><span class="dot ready"></span> Claude Code</span>
+            <span class="import-row-time">Restored · last week</span>
+          </a>
+        </div>
+
+        <div class="content">
+          <div class="handoff">
+            <h2>Session imported</h2>
+            <div class="meta-row">
+              <b>Claude Code</b> · 42 messages · <b>codev-app</b> · feat/session-import-ui
+              <span class="meta-sep">·</span>
+              Imported Sep 20, 2026, 9:14 AM
+            </div>
+            <div class="objective">
+              Review the imported conversation below, then choose how to
+              continue. Your original session isn't modified — CoDev keeps a
+              private copy for this workspace.
+            </div>
+
+            <div class="continue-options">
+              <div class="option-card primary">
+                <p class="option-title">Continue in CoDev</p>
+                <p class="option-desc">Start a new CoDev session using this conversation as context.</p>
+                <button class="btn btn-primary btn-full">Continue in CoDev</button>
+              </div>
+              <div class="option-card">
+                <p class="option-title">Resume in Claude Code</p>
+                <p class="option-desc">Reopen the original session with its native history.</p>
+                <button class="btn btn-full" disabled>Available soon</button>
+              </div>
+            </div>
+
+            <p class="completion-note">
+              Your session is ready. Choose <b>Continue in CoDev</b> to start
+              working from this imported conversation.
+            </p>
+          </div>
+
+          <div class="repo-card">
+            <div>
+              <p class="repo-card-label">Repository state</p>
+              <p class="repo-card-status">Changes available to restore.</p>
+            </div>
+            <div class="repo-card-actions">
+              <button class="btn">Continue with transcript only</button>
+              <button class="btn">Restore repository</button>
+            </div>
+          </div>
+
+          <div class="transcript-header">
+            <h3>Conversation</h3>
+            <span class="transcript-count">6 of 41 messages</span>
+            <span class="readonly-tag">Read-only</span>
+          </div>
+
+          <ol style="list-style:none;margin:0;padding:0;">
+            <li class="row">
+              <div class="row-meta">
+                <span class="row-role user">You</span>
+                <span class="row-time">9:02 AM</span>
+              </div>
+              <div class="row-body"><p>Can you redesign the session-imports page? I don't like the layout or spacing.</p></div>
+            </li>
+            <li class="row">
+              <div class="row-meta">
+                <span class="row-role assistant">Claude Code</span>
+                <span class="row-time">9:03 AM</span>
+              </div>
+              <div class="row-body"><p>Sure — I'll look at the page and transcript components first, then propose a layout before touching code.</p></div>
+            </li>
+            <li class="row context-row">
+              <details>
+                <summary class="context-toggle">
+                  <b>Imported context</b> · Source prompt · 6,204 characters
+                  <span class="chev"></span>
+                </summary>
+                <div class="row-body">
+                  <p>Full pasted mockup HTML and design system notes from the original session, preserved for reference…</p>
+                </div>
+              </details>
+            </li>
+            <li class="row">
+              <div class="row-meta">
+                <span class="row-role assistant">Claude Code</span>
+                <span class="row-time">9:11 AM</span>
+              </div>
+              <div class="row-body"><p>Here's the plan: a compact top bar, a 240px sidebar for recent imports, and a flat transcript with hairline dividers instead of message bubbles.</p></div>
+            </li>
+            <li class="row">
+              <div class="row-meta">
+                <span class="row-role user">You</span>
+                <span class="row-time">9:15 AM</span>
+              </div>
+              <div class="row-body"><p>Go ahead with that.</p></div>
+            </li>
+            <li class="row">
+              <div class="row-meta">
+                <span class="row-role system">System</span>
+                <span class="row-time">9:15 AM</span>
+              </div>
+              <div class="row-body"><p>Restore completed for branch <code>feat/session-import-ui</code>.</p></div>
+            </li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
