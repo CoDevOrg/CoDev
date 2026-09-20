@@ -3,7 +3,7 @@
 Status: Current for Capsule v0, durable storage, lifecycle, verified transport,
 the provider-neutral repository restoration engine, Azure sandbox
 materialization, and the scoped restore trigger. Provider rehydration and
-launch are future work.
+launch are future work. The authenticated capsule intake route is available.
 
 ## Product model
 
@@ -108,6 +108,25 @@ Reusing a key for a different capsule identity or lineage is rejected. A retry m
 repair an import in `storing` or `failed`, but cannot move a later lifecycle
 state backward.
 
+## Capsule intake
+
+An importer with workspace co-steering permission sends the complete Capsule
+v0 transport as the raw body of
+`POST /api/workspaces/{workspaceId}/session-imports`. The request uses
+`Content-Type: application/vnd.codev.session-capsule.v0` and a caller-chosen
+`Idempotency-Key` header. The route reads at most 32 MiB, checks the declared
+content length when present, and decodes the transport before asking the
+storage service to create the import. The storage service independently
+verifies and encrypts the capsule. A repeat with the same key and capsule
+identity returns the existing import; key reuse with different content is a
+conflict.
+
+The response contains the import ID and current lifecycle state, source
+provider and session ID, transcript entry count, normalized handoff,
+credential-free repository identity and restore status, and the restore actions
+currently available. It never returns attachment bytes or provider-native
+payload. Creation returns HTTP 201; an idempotent retry returns HTTP 200.
+
 ## Lifecycle and native-writer ownership
 
 Lifecycle changes use compare-and-set updates: the expected current state must
@@ -180,6 +199,5 @@ available; neither case silently selects transcript-only continuation.
 
 ## Deliberately deferred
 
-The public capsule upload route, runtime rehydration after IDE-home recreation,
-provider launching, and user-facing continuation selection are not implemented
-by this milestone.
+Runtime rehydration after IDE-home recreation, provider launching, and
+user-facing continuation selection are not implemented by this milestone.

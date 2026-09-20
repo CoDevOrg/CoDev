@@ -603,6 +603,36 @@ export async function readSessionImportArtifact(
   return store.get(scope);
 }
 
+export async function readStoredSessionImportState(
+  input: { workspaceId: string; importId: string; importedBy: string },
+  database: Database = getDatabase(),
+) {
+  const [record] = await database
+    .select({
+      status: schema.agentSessionImports.status,
+      repositoryStatus: schema.agentSessionImports.repositoryStatus,
+      worktreeId: schema.agentSessionImports.worktreeId,
+    })
+    .from(schema.agentSessionImports)
+    .where(
+      and(
+        eq(schema.agentSessionImports.id, input.importId),
+        eq(schema.agentSessionImports.workspaceId, input.workspaceId),
+        eq(schema.agentSessionImports.importedBy, input.importedBy),
+        isNull(schema.agentSessionImports.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!record) {
+    throw new SessionImportStorageError(
+      "The session import was not found.",
+      404,
+      "session_import_not_found",
+    );
+  }
+  return record;
+}
+
 export async function deleteSessionImport(
   scope: SessionImportArtifactScope,
   dependencies: {
