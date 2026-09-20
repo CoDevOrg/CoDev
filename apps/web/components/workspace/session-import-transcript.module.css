@@ -1,0 +1,118 @@
+.list {
+  display: block;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.message {
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
+
+.message + .message {
+  margin-top: 1rem;
+}
+
+.user {
+  background: color-mix(in srgb, var(--color-primary) 5%, var(--color-card));
+}
+
+.other {
+  background: color-mix(
+    in srgb,
+    var(--color-background) 50%,
+    var(--color-card)
+  );
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 0.75rem;
+}
+
+.role {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.55rem;
+  color: var(--color-foreground);
+  font-size: 0.8125rem;
+  font-weight: 650;
+}
+
+.sequence,
+.time {
+  color: var(--color-muted-foreground);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.disclosure summary {
+  display: list-item;
+  min-height: 2.75rem;
+  cursor: pointer;
+  color: var(--color-foreground);
+}
+
+.disclosure summary:focus-visible {
+  border-radius: 0.25rem;
+  outline: 2px solid var(--color-ring);
+  outline-offset: 3px;
+}
+
+.disclosureLabel,
+.preview,
+.expandHint {
+  display: block;
+  margin-left: 0.5rem;
+}
+
+.disclosureLabel {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.preview {
+  display: -webkit-box;
+  overflow: hidden;
+  margin-top: 0.4rem;
+  color: var(--color-muted-foreground);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.expandHint {
+  margin-top: 0.5rem;
+  color: var(--color-primary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.disclosure[open] .preview,
+.disclosure[open] .expandHint {
+  display: none;
+}
+
+.fullText {
+  margin-top: 1rem;
+  border-top: 1px solid var(--color-border);
+  padding-top: 1rem;
+}
+
+@media (min-width: 640px) {
+  .message {
+    padding: 1.25rem;
+  }
+}

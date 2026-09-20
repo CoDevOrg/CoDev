@@ -68,4 +68,24 @@ describe("Codex source adapter", () => {
       "not available yet",
     );
   });
+
+  it("keeps interleaved Codex messages in rollout order", () => {
+    const additionalTurns = [
+      { type: "user_message", message: "One more question" },
+      { type: "agent_message", message: "One more answer" },
+    ].map((payload) => JSON.stringify({ type: "event_msg", payload }));
+    const source = new TextEncoder().encode(
+      `${new TextDecoder().decode(rollout())}\n${additionalTurns.join("\n")}`,
+    );
+    const { capsule } = decodeSessionCapsuleTransport(
+      importSessionSource("codex", source),
+    );
+
+    expect(capsule.transcript.map(({ role }) => role)).toEqual([
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+    ]);
+  });
 });

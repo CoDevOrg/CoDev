@@ -9,6 +9,11 @@ import {
 } from "@/components/workspace/workspace-session-import-controls";
 import { SessionImportMarkdown } from "@/components/workspace/session-import-markdown";
 import {
+  LONG_MESSAGE_LENGTH,
+  SessionImportTranscript,
+  sessionMessagePreview,
+} from "@/components/workspace/session-import-transcript";
+import {
   OrcaCard,
   OrcaPageHeader,
   OrcaPageShell,
@@ -183,9 +188,30 @@ export default async function WorkspaceSessionImportsPage({
                   <h5 className="text-sm font-semibold text-foreground">
                     Current objective
                   </h5>
-                  <SessionImportMarkdown
-                    text={selected.handoff.currentObjective}
-                  />
+                  {selected.handoff.currentObjective.length >
+                  LONG_MESSAGE_LENGTH ? (
+                    <details className="rounded-lg border border-border/60 bg-muted/30 px-4 py-3">
+                      <summary className="min-h-11 cursor-pointer py-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                        <span className="block font-medium">
+                          Read full objective
+                        </span>
+                        <span className="mt-1 block text-muted-foreground">
+                          {sessionMessagePreview(
+                            selected.handoff.currentObjective,
+                          )}
+                        </span>
+                      </summary>
+                      <div className="pt-4">
+                        <SessionImportMarkdown
+                          text={selected.handoff.currentObjective}
+                        />
+                      </div>
+                    </details>
+                  ) : (
+                    <SessionImportMarkdown
+                      text={selected.handoff.currentObjective}
+                    />
+                  )}
                 </div>
                 <details className="rounded-lg border border-border/60 bg-muted/30 px-4 py-3">
                   <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
@@ -250,35 +276,19 @@ export default async function WorkspaceSessionImportsPage({
                     Showing the latest {selected.transcript.entries.length} of{" "}
                     {selected.transcript.totalEntries} entries.
                   </p>
+                  {selected.transcript.entries.some(
+                    (entry) => entry.text.length > LONG_MESSAGE_LENGTH,
+                  ) ? (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Some Codex messages include extensive prompt context. Long
+                      messages are collapsed so each reply stays in view.
+                    </p>
+                  ) : null}
                 </div>
-                <ol className="space-y-4" aria-label="Session messages">
-                  {selected.transcript.entries.map((entry) => (
-                    <li
-                      key={entry.sequence}
-                      className={`min-w-0 rounded-xl border p-4 sm:p-5 ${entry.role === "user" ? "border-primary/20 bg-primary/5" : "border-border/60 bg-background/50"}`}
-                    >
-                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-3">
-                        <span className="text-xs font-semibold capitalize text-foreground">
-                          {entry.authorName ||
-                            (entry.role === "user"
-                              ? "You"
-                              : entry.role === "assistant"
-                                ? selected.source.provider
-                                : entry.role)}
-                        </span>
-                        {entry.createdAt ? (
-                          <time
-                            className="text-xs text-muted-foreground"
-                            dateTime={entry.createdAt}
-                          >
-                            {formatDate(new Date(entry.createdAt))}
-                          </time>
-                        ) : null}
-                      </div>
-                      <SessionImportMarkdown text={entry.text} />
-                    </li>
-                  ))}
-                </ol>
+                <SessionImportTranscript
+                  entries={selected.transcript.entries}
+                  provider={selected.source.provider}
+                />
               </OrcaCard>
             </>
           ) : (
