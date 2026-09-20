@@ -330,6 +330,13 @@
       "when": 1789710149790,
       "tag": "0046_smooth_patriot",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1789874062062,
+      "tag": "0047_kind_ozymandias",
+      "breakpoints": true
     }
   ]
 }

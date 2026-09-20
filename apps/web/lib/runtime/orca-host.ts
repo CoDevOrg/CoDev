@@ -13,7 +13,12 @@ import {
   resolveHostedCodexSubscription,
 } from "../providers/hosted-codex-subscription-credentials";
 import { getGitHubUserToken } from "../github/github";
-import { getHostState, requestHostWake } from "./host";
+import {
+  getHostState,
+  getHostStateFor,
+  requestHostWake,
+  requestHostWakeFor,
+} from "./host";
 import {
   orcaWorkspacePath,
   parseOrcaReady,
@@ -22,10 +27,13 @@ import {
 import {
   OrchestratorError,
   getIde,
+  prepareIde,
+  refreshIdeCredentials,
   startIde,
   stopIde,
   touchIde,
   waitForOrchestrator,
+  waitForOrchestratorAt,
   type IdeSession,
   type StartIdeInput,
 } from "./orchestrator";
@@ -36,6 +44,11 @@ import {
   type RuntimeUnavailable,
 } from "./runtime-availability";
 import { WorkspaceOpenTiming } from "../workspaces/workspace-open-timing";
+import {
+  ensureRuntimeHostAssignment,
+  isRuntimeHostPoolEnabled,
+  type RuntimeHostLease,
+} from "./runtime-host-pool";
 
 const STALE_IDE_PROCESS_MESSAGE =
   "Orca IDE process exited before reporting readiness";
@@ -79,6 +92,13 @@ const TRANSIENT_ORCHESTRATOR_STATUSES = new Set([408, 409, 500, 502, 503, 504]);
  * status carries orchestrator-internal text and is reported generically.
  */
 const MEMBER_ACTIONABLE_ORCHESTRATOR_STATUSES = new Set([402, 429]);
+
+type OrcaWorkspace = {
+  id: string;
+  repository: string | null;
+  repositoryVisibility: string | null;
+  defaultBranch: string | null;
+};
 
 function orcaHostErrorFor(error: OrchestratorError): OrcaHostError {
   return MEMBER_ACTIONABLE_ORCHESTRATOR_STATUSES.has(error.status)
@@ -295,6 +315,78 @@ async function resolveClaudeEnvForIde(
   }
 }
 
+type OrcaMemberCredentials = Pick<
+  StartIdeInput,
+  | "codexAuthCacheJson"
+  | "cursorAuthJson"
+  | "cursorApiKey"
+  | "openaiApiKey"
+  | "anthropicApiKey"
+  | "claudeCodeOauthToken"
+>;
+
+async function resolveOrcaMemberCredentials(
+  userId: string,
+  workspaceId: string,
+): Promise<OrcaMemberCredentials> {
+  const [
+    codexAuthCacheJson,
+    cursorAuthJson,
+    cursorApiKey,
+    openaiApiKey,
+    claudeEnv,
+  ] = await Promise.all([
+    resolveCodexAuthCacheForIde(userId, workspaceId),
+    resolveCursorAuthJsonForIde(userId, workspaceId),
+    resolveCursorApiKeyForIde(userId, workspaceId),
+    resolveOpenAiApiKeyForIde(userId, workspaceId),
+    resolveClaudeEnvForIde(userId, workspaceId),
+  ]);
+  return {
+    ...(codexAuthCacheJson ? { codexAuthCacheJson } : {}),
+    ...(cursorAuthJson ? { cursorAuthJson } : {}),
+    ...(cursorApiKey ? { cursorApiKey } : {}),
+    ...(openaiApiKey ? { openaiApiKey } : {}),
+    ...claudeEnv,
+  };
+}
+
+async function hydrateOrcaMemberCredentials(
+  workspaceId: string,
+  userId: string,
+  baseInput: StartIdeInput,
+): Promise<void> {
+  const credentials = await resolveOrcaMemberCredentials(userId, workspaceId);
+  await refreshIdeCredentials(workspaceId, {
+    projectRoot: baseInput.projectRoot,
+    ...(baseInput.memberId ? { memberId: baseInput.memberId } : {}),
+    ...(baseInput.coordinationMcpUrl
+      ? { coordinationMcpUrl: baseInput.coordinationMcpUrl }
+      : {}),
+    ...(baseInput.coordinationMcpToken
+      ? { coordinationMcpToken: baseInput.coordinationMcpToken }
+      : {}),
+    ...credentials,
+  });
+}
+
+async function resolveOrcaClone(
+  workspace: OrcaWorkspace,
+  userId: string,
+): Promise<StartIdeInput["clone"]> {
+  const token =
+    workspace.repositoryVisibility === "private"
+      ? await getGitHubUserToken(userId)
+      : undefined;
+  return workspace.repository && workspace.defaultBranch
+    ? {
+        repository: workspace.repository,
+        defaultBranch: workspace.defaultBranch,
+        ...(token ? { token } : {}),
+      }
+    : undefined;
+}
+
 /**
  * Mark this workspace's IDE session as still in use, and report whether the
  * session is still there at all.
@@ -328,12 +420,7 @@ export async function recordOrcaActivity(
  * client can poll.
  */
 export async function ensureOrcaSession(
-  workspace: {
-    id: string;
-    repository: string | null;
-    repositoryVisibility: string | null;
-    defaultBranch: string | null;
-  },
+  workspace: OrcaWorkspace,
   userId: string,
   timing = new WorkspaceOpenTiming(),
 ): Promise<OrcaRuntimeState> {
@@ -346,6 +433,14 @@ export async function ensureOrcaSession(
       throw new OrcaHostError(error.message, 429);
     }
     throw error;
+  }
+
+  const runtimeHostPoolEnabled = isRuntimeHostPoolEnabled();
+  const runtimeHost: RuntimeHostLease | null = runtimeHostPoolEnabled
+    ? await ensureRuntimeHostAssignment(workspace.id)
+    : null;
+  if (runtimeHostPoolEnabled && !runtimeHost) {
+    return { state: "host-starting" };
   }
 
   // Everything between here and a healthy orchestrator is infrastructure the
@@ -375,14 +470,28 @@ export async function ensureOrcaSession(
   if (!running) {
     try {
       const available = await timing.measure("host", async () => {
-        const hostState = await getHostState();
+        const hostState = runtimeHost
+          ? await getHostStateFor(runtimeHost.providerId)
+          : await getHostState();
         if (
           hostState !== "running" &&
-          (await requestHostWake(OPEN_PATH_STOPPING_ATTEMPTS)) !== "running"
+          (await (runtimeHost
+            ? requestHostWakeFor(
+                runtimeHost.providerId,
+                OPEN_PATH_STOPPING_ATTEMPTS,
+              )
+            : requestHostWake(OPEN_PATH_STOPPING_ATTEMPTS))) !== "running"
         ) {
           return false;
         }
-        await waitForOrchestrator(OPEN_PATH_ORCHESTRATOR_WAIT_MS);
+        if (runtimeHost) {
+          await waitForOrchestratorAt(
+            runtimeHost.runtimeAddress,
+            OPEN_PATH_ORCHESTRATOR_WAIT_MS,
+          );
+        } else {
+          await waitForOrchestrator(OPEN_PATH_ORCHESTRATOR_WAIT_MS);
+        }
         return true;
       });
       if (!available) return { state: "host-starting" };
@@ -394,59 +503,32 @@ export async function ensureOrcaSession(
   }
 
   const workspacePath = orcaWorkspacePath(workspace.id);
-  const token =
-    workspace.repositoryVisibility === "private"
-      ? await getGitHubUserToken(userId)
-      : undefined;
-  const clone =
-    workspace.repository && workspace.defaultBranch
-      ? {
-          repository: workspace.repository,
-          defaultBranch: workspace.defaultBranch,
-          ...(token ? { token } : {}),
-        }
-      : undefined;
-  const [
-    codexAuthCacheJson,
-    cursorAuthJson,
-    cursorApiKey,
-    openaiApiKey,
-    claudeEnv,
-  ] = await timing.measure("credentials", () =>
-    Promise.all([
-      resolveCodexAuthCacheForIde(userId, workspace.id),
-      resolveCursorAuthJsonForIde(userId, workspace.id),
-      resolveCursorApiKeyForIde(userId, workspace.id),
-      resolveOpenAiApiKeyForIde(userId, workspace.id),
-      resolveClaudeEnvForIde(userId, workspace.id),
-    ]),
-  );
+  const clone = await resolveOrcaClone(workspace, userId);
 
   const coordinationMcpUrl = new URL(
     `/api/workspaces/${workspace.id}/mcp/coordination`,
     getPublicAppOrigin(),
   ).toString();
+  const baseInput: StartIdeInput = {
+    projectRoot: workspacePath,
+    memberId: userId,
+    coordinationMcpUrl,
+    coordinationMcpToken: mintWorkspaceCoordinationToken(workspace.id),
+    ...(clone ? { clone } : {}),
+  };
 
   try {
     const session = await timing.measure("connect", () =>
-      startIdeRecoveringStaleProcess(workspace.id, {
-        projectRoot: workspacePath,
-        memberId: userId,
-        coordinationMcpUrl,
-        coordinationMcpToken: mintWorkspaceCoordinationToken(workspace.id),
-        ...(clone ? { clone } : {}),
-        ...(codexAuthCacheJson ? { codexAuthCacheJson } : {}),
-        ...(cursorAuthJson ? { cursorAuthJson } : {}),
-        ...(cursorApiKey ? { cursorApiKey } : {}),
-        ...(openaiApiKey ? { openaiApiKey } : {}),
-        ...claudeEnv,
-      }),
+      startIdeRecoveringStaleProcess(workspace.id, baseInput),
     );
     const pairing = parseOrcaReady(session.ready, workspace.id);
-    // Best-effort: a metering hiccup must never block the IDE from opening.
-    await timing.measure("metering", () =>
-      openOrcaInterval(userId, workspace.id).catch(() => {}),
+    // Provider resolution and credential filing are best-effort follow-up
+    // work. The editor is already usable and must not wait on either path.
+    void hydrateOrcaMemberCredentials(workspace.id, userId, baseInput).catch(
+      () => {},
     );
+    // Best-effort: a metering hiccup must never block the IDE from opening.
+    void openOrcaInterval(userId, workspace.id).catch(() => {});
     return { state: "ready", pairing, workspacePath };
   } catch (error) {
     if (error instanceof OrchestratorError) {
@@ -457,6 +539,82 @@ export async function ensureOrcaSession(
       if (TRANSIENT_ORCHESTRATOR_STATUSES.has(error.status)) {
         return { state: "host-starting" };
       }
+      throw orcaHostErrorFor(error);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Prepare the repository directory without starting an Orca process. This is
+ * the work done after a strong dashboard navigation intent, so cloning can
+ * overlap the page navigation and the later `/orca` request only has to start
+ * the already-prepared session.
+ */
+export async function prepareOrcaWorkspace(
+  workspace: OrcaWorkspace,
+  userId: string,
+): Promise<"prepared" | "host-starting"> {
+  try {
+    await assertWorkspaceCreditQuota(workspace.id, userId);
+  } catch (error) {
+    if (error instanceof QuotaError) {
+      throw new OrcaHostError(error.message, 429);
+    }
+    throw error;
+  }
+
+  const runtimeHostPoolEnabled = isRuntimeHostPoolEnabled();
+  const runtimeHost: RuntimeHostLease | null = runtimeHostPoolEnabled
+    ? await ensureRuntimeHostAssignment(workspace.id)
+    : null;
+  if (runtimeHostPoolEnabled && !runtimeHost) {
+    return "host-starting";
+  }
+
+  try {
+    if (runtimeHost) {
+      const hostState = await getHostStateFor(runtimeHost.providerId);
+      if (
+        hostState !== "running" &&
+        (await requestHostWakeFor(runtimeHost.providerId, 1)) !== "running"
+      ) {
+        return "host-starting";
+      }
+    } else if ((await requestHostWake(1)) !== "running") {
+      return "host-starting";
+    }
+    if (runtimeHost) {
+      await waitForOrchestratorAt(
+        runtimeHost.runtimeAddress,
+        OPEN_PATH_ORCHESTRATOR_WAIT_MS,
+      );
+    } else {
+      await waitForOrchestrator(OPEN_PATH_ORCHESTRATOR_WAIT_MS);
+    }
+  } catch (error) {
+    const unavailable = classifyRuntimeFailure(error);
+    if (unavailable) {
+      throw new OrcaHostError(unavailable.message, 503, unavailable.detail);
+    }
+    return "host-starting";
+  }
+
+  const clone = await resolveOrcaClone(workspace, userId);
+  try {
+    await prepareIde(workspace.id, {
+      projectRoot: orcaWorkspacePath(workspace.id),
+      ...(clone ? { clone } : {}),
+    });
+    return "prepared";
+  } catch (error) {
+    if (
+      error instanceof OrchestratorError &&
+      TRANSIENT_ORCHESTRATOR_STATUSES.has(error.status)
+    ) {
+      return "host-starting";
+    }
+    if (error instanceof OrchestratorError) {
       throw orcaHostErrorFor(error);
     }
     throw error;

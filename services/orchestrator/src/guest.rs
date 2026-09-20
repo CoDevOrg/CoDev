@@ -154,6 +154,7 @@ impl GuestService {
         }
         let result = match (method, path) {
             ("GET", "/healthz") => self.health(),
+            ("POST", "/v1/workspace/flush") => self.flush_workspace(),
             ("POST", "/v1/files/read") => self.read_file(body),
             ("POST", "/v1/files/write") => self.write_file(body),
             ("POST", "/v1/pty/exec") => self.exec(body),
@@ -257,6 +258,20 @@ impl GuestService {
             "status": "ok",
             "service": "codev-guest"
         }))
+    }
+
+    fn flush_workspace(&self) -> crate::model::Result<serde_json::Value> {
+        let _mutation = self.mutations.lock().expect("mutation lock");
+        self.wait_for_codex_idle();
+        let status = Command::new("sync")
+            .status()
+            .map_err(RuntimeError::internal)?;
+        if !status.success() {
+            return Err(RuntimeError::Internal(
+                "workspace sync failed before shutdown".into(),
+            ));
+        }
+        Ok(serde_json::json!({ "status": "flushed" }))
     }
 
     fn read_file(&self, body: &[u8]) -> crate::model::Result<serde_json::Value> {

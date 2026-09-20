@@ -19,7 +19,7 @@
 //! pairing-payload rewriting on our side.
 use std::{
     collections::HashMap,
-    os::unix::fs::PermissionsExt,
+    os::unix::fs::{MetadataExt, PermissionsExt},
     path::{Path, PathBuf},
     process::Stdio,
     sync::{Arc, OnceLock},
@@ -42,8 +42,8 @@ use tracing::{info, warn};
 
 use crate::model::{
     ExecResponse, IDE_EXEC_MAX_ARGUMENTS, IDE_EXEC_MAX_TIMEOUT_SECONDS, IdeCloneRequest,
-    IdeExecRequest, IdeRoot, IdeSession, IdeStartRequest, IdeWriteFileRequest, Result,
-    RuntimeError,
+    IdeExecRequest, IdePrepareRequest, IdeRoot, IdeSession, IdeStartRequest, IdeWriteFileRequest,
+    Result, RuntimeError,
 };
 
 const READY_TIMEOUT: Duration = Duration::from_secs(45);
@@ -182,12 +182,12 @@ impl OrcaBackend {
             ));
         }
 
-        if let Some(session) = self.reconnect(workspace_id, &request).await? {
+        if let Some(session) = self.reconnect(workspace_id).await? {
             return Ok(session);
         }
         // Only provisioning and routing changes need the global capacity lock.
         let _guard = self.provision.lock().await;
-        if let Some(session) = self.reconnect(workspace_id, &request).await? {
+        if let Some(session) = self.reconnect(workspace_id).await? {
             return Ok(session);
         }
         // Either absent or the process died since the last check; drop any
@@ -216,10 +216,12 @@ impl OrcaBackend {
         // stop must not leave Electron's per-user single-instance lock held,
         // otherwise the replacement serve process exits before readiness.
         terminate_linux_user_processes(&linux_user).await?;
-        chown_recursive(&expected_root, &linux_user).await?;
-        if let Some(codex_auth_cache_json) = &request.codex_auth_cache_json {
-            write_codex_credential(&linux_user, codex_auth_cache_json).await?;
-        }
+        // A repository cloned by the root orchestrator needs one ownership
+        // migration. Once its top-level ownership is correct, subsequent
+        // opens can skip the repository-wide walk entirely; all new files the
+        // orchestrator creates outside the repository are handed over
+        // explicitly below.
+        chown_recursive_if_needed(&expected_root, &linux_user).await?;
         seed_claude_config(
             &linux_user,
             &expected_root,
@@ -239,26 +241,6 @@ impl OrcaBackend {
             )
             .await?;
         }
-        // Also file them per-member, so the member who starts the session gets
-        // the same per-subscription treatment as everyone who joins later.
-        if let Err(error) = write_member_agent_credentials(&linux_user, &request).await {
-            warn!(workspace_id, %error, "could not file this member's agent credentials");
-        }
-        // Claude Code reads its credential from the environment; at most one
-        // form is present, and a plain key wins. The OAuth token is the
-        // member's `claude setup-token` uploaded with `codev claude-auth`; the
-        // web layer only sends it for a CLI-connected, workspace-enabled
-        // credential, never a browser subscription.
-        let claude_env = request
-            .anthropic_api_key
-            .as_deref()
-            .map(|api_key| ("ANTHROPIC_API_KEY", api_key))
-            .or_else(|| {
-                request
-                    .claude_code_oauth_token
-                    .as_deref()
-                    .map(|token| ("CLAUDE_CODE_OAUTH_TOKEN", token))
-            });
         let port = self.allocate_port().await?;
         let pairing_address = format!("https://{}/w/{workspace_id}", self.config.public_host);
 
@@ -269,7 +251,7 @@ impl OrcaBackend {
             port,
             &pairing_address,
             &expected_root,
-            claude_env,
+            None,
         )
         .await?;
         let ready = match wait_for_ready_line(&mut child).await {
@@ -298,12 +280,33 @@ impl OrcaBackend {
         Ok(session.to_model(workspace_id))
     }
 
-    async fn reconnect(
-        &self,
-        workspace_id: &str,
-        request: &IdeStartRequest,
-    ) -> Result<Option<IdeSession>> {
-        // Keep stop from removing the session while member credentials are refreshed.
+    /// Prepare the workspace directory and repository without starting Orca.
+    /// This is used by the web dashboard after a strong navigation intent so
+    /// repository work can overlap the page's navigation and shell startup.
+    pub async fn prepare(&self, workspace_id: &str, request: IdePrepareRequest) -> Result<()> {
+        let expected_root = self.config.workspaces_root.join(workspace_id);
+        if Path::new(&request.project_root) != expected_root {
+            return Err(RuntimeError::BadRequest(
+                "project root must be this workspace's clone directory".into(),
+            ));
+        }
+
+        // Preparation does not consume an Orca process slot. It still shares
+        // the provisioning lock with starts so a clone cannot race a session
+        // launch or another preparation for the same host tree.
+        let _guard = self.provision.lock().await;
+        tokio::fs::create_dir_all(&expected_root)
+            .await
+            .map_err(RuntimeError::internal)?;
+        let linux_user = linux_user_for(workspace_id);
+        ensure_linux_user(&linux_user).await?;
+        if let Some(clone) = &request.clone {
+            ensure_workspace_clone(&expected_root, clone).await?;
+        }
+        Ok(())
+    }
+
+    async fn reconnect(&self, workspace_id: &str) -> Result<Option<IdeSession>> {
         let sessions = self.sessions.read().await;
         let Some(session) = sessions.get(workspace_id) else {
             return Ok(None);
@@ -312,10 +315,31 @@ impl OrcaBackend {
             return Ok(None);
         }
         session.touch();
-        if let Err(error) = write_member_agent_credentials(&session.linux_user, request).await {
-            warn!(workspace_id, %error, "could not file this member's agent credentials");
-        }
         Ok(Some(session.to_model(workspace_id)))
+    }
+
+    /// File one member's agent credentials after the Orca process is already
+    /// serving. This endpoint is deliberately separate from `start`: a slow
+    /// provider lookup or a credential write must not hold back editor
+    /// readiness.
+    pub async fn refresh_credentials(
+        &self,
+        workspace_id: &str,
+        request: IdeStartRequest,
+    ) -> Result<()> {
+        let session = self
+            .sessions
+            .read()
+            .await
+            .get(workspace_id)
+            .cloned()
+            .ok_or(RuntimeError::SandboxNotFound)?;
+        if !session.is_running().await {
+            return Err(RuntimeError::SandboxNotFound);
+        }
+        write_member_agent_credentials(&session.linux_user, &request).await?;
+        session.touch();
+        Ok(())
     }
 
     pub async fn status(&self, workspace_id: &str) -> Result<IdeSession> {
@@ -893,26 +917,49 @@ async fn chown_recursive(path: &Path, user: &str) -> Result<()> {
     Ok(())
 }
 
-/// Writes a linked hosted-Codex-subscription credential to the Codex CLI's
-/// standard config location for a per-workspace Linux user, so the CLI Orca
-/// launches interactively is already signed in. Re-written on every start
-/// (not just first-run) since the underlying OAuth material can rotate.
-async fn write_codex_credential(user: &str, codex_auth_cache_json: &str) -> Result<()> {
-    let codex_home = PathBuf::from(format!("/home/{user}/.codex"));
-    fs::create_dir_all(&codex_home)
+async fn chown_path(path: &Path, user: &str) -> Result<()> {
+    let output = Command::new("chown")
+        .arg(format!("{user}:{user}"))
+        .arg(path)
+        .output()
         .await
         .map_err(RuntimeError::internal)?;
-    let auth_path = codex_home.join("auth.json");
-    fs::write(&auth_path, codex_auth_cache_json)
+    if !output.status.success() {
+        return Err(RuntimeError::internal(format!(
+            "chown {} failed: {}",
+            path.display(),
+            String::from_utf8_lossy(&output.stderr)
+        )));
+    }
+    Ok(())
+}
+
+async fn linux_user_id(user: &str, flag: &str) -> Result<u32> {
+    let output = Command::new("id")
+        .args([flag, user])
+        .output()
         .await
         .map_err(RuntimeError::internal)?;
-    fs::set_permissions(&codex_home, std::fs::Permissions::from_mode(0o700))
-        .await
-        .map_err(RuntimeError::internal)?;
-    fs::set_permissions(&auth_path, std::fs::Permissions::from_mode(0o600))
-        .await
-        .map_err(RuntimeError::internal)?;
-    chown_recursive(&codex_home, user).await
+    if !output.status.success() {
+        return Err(RuntimeError::internal(format!(
+            "id {flag} {user} failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )));
+    }
+    String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .parse()
+        .map_err(|error| RuntimeError::internal(format!("invalid id output for {user}: {error}")))
+}
+
+async fn chown_recursive_if_needed(path: &Path, user: &str) -> Result<()> {
+    let metadata = fs::metadata(path).await.map_err(RuntimeError::internal)?;
+    let uid = linux_user_id(user, "-u").await?;
+    let gid = linux_user_id(user, "-g").await?;
+    if metadata.uid() == uid && metadata.gid() == gid {
+        return Ok(());
+    }
+    chown_recursive(path, user).await
 }
 
 fn member_agent_root_dir(linux_user: &str) -> PathBuf {
@@ -1083,8 +1130,9 @@ async fn repair_codev_dir_ownership(linux_user: &str) -> Result<()> {
         fs::set_permissions(&agents_dir, std::fs::Permissions::from_mode(0o700))
             .await
             .map_err(RuntimeError::internal)?;
+        chown_path(&agents_dir, linux_user).await?;
     }
-    chown_recursive(&codev_dir, linux_user).await
+    chown_path(&codev_dir, linux_user).await
 }
 
 async fn file_member_agent_credentials(linux_user: &str, request: &IdeStartRequest) -> Result<()> {
@@ -1123,6 +1171,7 @@ async fn file_member_agent_credentials(linux_user: &str, request: &IdeStartReque
         fs::set_permissions(&auth_path, std::fs::Permissions::from_mode(0o600))
             .await
             .map_err(RuntimeError::internal)?;
+        chown_path(&auth_path, linux_user).await?;
         // This member's agents run with CODEX_HOME pointed here, so the
         // per-workspace `~/.codex/config.toml` is never read for them.
         if let Some(url) = request.coordination_mcp_url.as_deref()
@@ -1130,6 +1179,7 @@ async fn file_member_agent_credentials(linux_user: &str, request: &IdeStartReque
         {
             seed_codex_coordination_mcp(&home, url, linux_user).await?;
         }
+        chown_path(&home, linux_user).await?;
         codex_home = Some(home);
     }
 
@@ -1148,6 +1198,8 @@ async fn file_member_agent_credentials(linux_user: &str, request: &IdeStartReque
         fs::set_permissions(&auth_path, std::fs::Permissions::from_mode(0o600))
             .await
             .map_err(RuntimeError::internal)?;
+        chown_path(&auth_path, linux_user).await?;
+        chown_path(&cursor_dir, linux_user).await?;
         cursor_xdg_config_home = Some(&member_dir);
     }
 
@@ -1174,11 +1226,13 @@ async fn file_member_agent_credentials(linux_user: &str, request: &IdeStartReque
         fs::set_permissions(&env_path, std::fs::Permissions::from_mode(0o600))
             .await
             .map_err(RuntimeError::internal)?;
+        chown_path(&env_path, linux_user).await?;
     }
 
     fs::set_permissions(&member_dir, std::fs::Permissions::from_mode(0o700))
         .await
         .map_err(RuntimeError::internal)?;
+    chown_path(&member_dir, linux_user).await?;
     Ok(())
 }
 
@@ -1233,7 +1287,7 @@ async fn seed_claude_config(
     let settings_path = settings_dir.join("settings.json");
     let settings = claude_settings_with_theme(read_optional_json_object(&settings_path).await?);
     write_private_json(&settings_path, &settings, user).await?;
-    chown_recursive(&settings_dir, user).await
+    chown_path(&settings_dir, user).await
 }
 
 /// Reads a JSON object from `path`, treating both "absent" and "not valid JSON
@@ -1257,7 +1311,7 @@ async fn write_private_json(path: &Path, value: &Value, user: &str) -> Result<()
     fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
         .await
         .map_err(RuntimeError::internal)?;
-    chown_recursive(path, user).await
+    chown_path(path, user).await
 }
 
 /// Merges the first-run-skipping keys onto an existing `~/.claude.json` (or a
@@ -1456,6 +1510,7 @@ async fn seed_codex_coordination_mcp(codex_home: &Path, url: &str, user: &str) -
     fs::set_permissions(&config_path, std::fs::Permissions::from_mode(0o600))
         .await
         .map_err(RuntimeError::internal)?;
+    chown_path(&config_path, user).await?;
     // The *directory*, not just the file. The orchestrator runs as root, so a
     // `~/.codex` this call created is root-owned 0755 until it is handed over,
     // and Codex — running as the workspace user — would read `config.toml`
@@ -1466,7 +1521,7 @@ async fn seed_codex_coordination_mcp(codex_home: &Path, url: &str, user: &str) -
     fs::set_permissions(codex_home, std::fs::Permissions::from_mode(0o700))
         .await
         .map_err(RuntimeError::internal)?;
-    chown_recursive(codex_home, user).await
+    chown_path(codex_home, user).await
 }
 
 /// Merges CoDev's default theme onto an existing `~/.claude/settings.json`.

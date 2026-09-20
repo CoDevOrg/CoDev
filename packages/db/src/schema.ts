@@ -47,6 +47,17 @@ export const sandboxRuntimeStatus = pgEnum("sandbox_runtime_status", [
   "stopped",
   "failed",
 ]);
+export const runtimeHostLifecycle = pgEnum("runtime_host_lifecycle", [
+  "provisioning",
+  "ready",
+  "draining",
+  "stopped",
+  "failed",
+]);
+export const workspaceRuntimeAssignmentState = pgEnum(
+  "workspace_runtime_assignment_state",
+  ["assigned", "starting", "ready", "draining", "lost"],
+);
 export const memberRole = pgEnum("member_role", ["owner", "member"]);
 export const organizationRole = pgEnum("organization_role", [
   "owner",
@@ -938,6 +949,77 @@ export const workspaceRuntimes = pgTable(
   (table) => [
     index("workspace_runtimes_status_updated_idx").on(
       table.status,
+      table.updatedAt,
+    ),
+  ],
+);
+
+/**
+ * Durable inventory for the prepared Azure hosts that can run workspace
+ * runtimes. `providerId` is the Azure VM/VMSS instance name; the database id
+ * is deliberately separate so a replacement instance can be registered
+ * without changing workspace-facing records.
+ */
+export const runtimeHosts = pgTable(
+  "runtime_hosts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    providerId: text("provider_id").notNull(),
+    runtimeAddress: text("runtime_address").notNull(),
+    lifecycleState: runtimeHostLifecycle("lifecycle_state")
+      .default("provisioning")
+      .notNull(),
+    maxWorkspaceSlots: integer("max_workspace_slots").default(4).notNull(),
+    freeWorkspaceSlots: integer("free_workspace_slots").default(4).notNull(),
+    imageVersion: text("image_version"),
+    lastHeartbeatAt: timestamp("last_heartbeat_at", { withTimezone: true }),
+    drainingAt: timestamp("draining_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("runtime_hosts_provider_id_idx").on(table.providerId),
+    uniqueIndex("runtime_hosts_runtime_address_idx").on(table.runtimeAddress),
+    index("runtime_hosts_capacity_idx").on(
+      table.lifecycleState,
+      table.freeWorkspaceSlots,
+    ),
+  ],
+);
+
+/**
+ * Fenced placement for a workspace's writable runtime. The generation and
+ * fencing token prevent a delayed request from an old host from mutating a
+ * workspace after it has been reassigned to a replacement host.
+ */
+export const workspaceRuntimeAssignments = pgTable(
+  "workspace_runtime_assignments",
+  {
+    workspaceId: uuid("workspace_id")
+      .primaryKey()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    hostId: uuid("host_id")
+      .references(() => runtimeHosts.id, { onDelete: "restrict" })
+      .notNull(),
+    generation: integer("generation").default(1).notNull(),
+    fencingToken: uuid("fencing_token").defaultRandom().notNull(),
+    diskId: text("disk_id"),
+    diskLun: integer("disk_lun"),
+    runtimeState: workspaceRuntimeAssignmentState("runtime_state")
+      .default("assigned")
+      .notNull(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    index("workspace_runtime_assignments_host_state_idx").on(
+      table.hostId,
+      table.runtimeState,
+    ),
+    index("workspace_runtime_assignments_state_updated_idx").on(
+      table.runtimeState,
       table.updatedAt,
     ),
   ],

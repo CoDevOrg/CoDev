@@ -9,7 +9,12 @@ import {
   getRepositorySnapshot,
   type RepositorySnapshot,
 } from "../github/github";
-import { getHostState, requestHostWake } from "./host";
+import {
+  getHostState,
+  getHostStateFor,
+  requestHostWake,
+  requestHostWakeFor,
+} from "./host";
 import { recordWorkspaceHeartbeat } from "./heartbeat";
 import { requireWorkspacePermission } from "../auth/access";
 import {
@@ -19,8 +24,14 @@ import {
   OrchestratorError,
   provisionSandbox,
   waitForOrchestrator,
+  waitForOrchestratorAt,
 } from "./orchestrator";
 import { assertWorkspaceCreditQuota } from "./quotas";
+import {
+  ensureRuntimeHostAssignment,
+  isRuntimeHostPoolEnabled,
+} from "./runtime-host-pool";
+import { isWorkspacePersistentStorageEnabled } from "./workspace-storage";
 import {
   beginWorkspaceProvisioning,
   getWorkspaceForMember,
@@ -113,7 +124,18 @@ export async function ensureWorkspaceRuntimeReady(
     if (runtime?.status === "ready") {
       // The host may have stopped, restarted, or been replaced while the database
       // still says the runtime is ready. Wake host if stopped and treat missing runtime as stopped.
-      await Promise.resolve(requestHostWake()).catch(() => undefined);
+      const runtimeHost = isRuntimeHostPoolEnabled()
+        ? await ensureRuntimeHostAssignment(workspaceId, {
+            ensureStorage: true,
+          })
+        : null;
+      if (runtimeHost) {
+        await Promise.resolve(requestHostWakeFor(runtimeHost.providerId)).catch(
+          () => undefined,
+        );
+      } else {
+        await Promise.resolve(requestHostWake()).catch(() => undefined);
+      }
       await markWorkspaceStopped(workspaceId);
     }
   }
@@ -131,12 +153,35 @@ export async function ensureWorkspaceRuntimeReady(
   );
 
   try {
-    if ((await getHostState()) !== "running") {
-      await waitForHostAndOrchestrator();
+    const runtimeHost = isRuntimeHostPoolEnabled()
+      ? await ensureRuntimeHostAssignment(workspaceId, { ensureStorage: true })
+      : null;
+    if (isRuntimeHostPoolEnabled() && !runtimeHost) {
+      throw new WorkspaceLifecycleError(
+        "Your workspace is still waiting for a prepared runtime host.",
+        503,
+      );
+    }
+    const hostState = runtimeHost
+      ? await getHostStateFor(runtimeHost.providerId)
+      : await getHostState();
+    if (hostState !== "running") {
+      if (runtimeHost) {
+        await requestHostWakeFor(runtimeHost.providerId);
+        await waitForOrchestratorAt(runtimeHost.runtimeAddress);
+      } else {
+        await waitForHostAndOrchestrator();
+      }
     } else {
-      await waitForOrchestrator();
+      if (runtimeHost) {
+        await waitForOrchestratorAt(runtimeHost.runtimeAddress);
+      } else {
+        await waitForOrchestrator();
+      }
     }
     const persistedSnapshot = await getWorkspaceSnapshot(workspaceId);
+    const persistentStorage =
+      isWorkspacePersistentStorageEnabled() && runtimeHost?.diskLun != null;
     const repositorySnapshot = persistedSnapshot?.snapshot
       ? persistedSnapshot.snapshot
       : githubConnected && workspace.repositoryVisibility === "private"
@@ -160,7 +205,8 @@ export async function ensureWorkspaceRuntimeReady(
           ? workspace.baseSha
           : EMPTY_COMMIT_SHA,
       expiresAt: expiresAt.toISOString(),
-      resumeFromSnapshot: Boolean(persistedSnapshot),
+      resumeFromSnapshot: Boolean(persistedSnapshot) && !persistentStorage,
+      ...(persistentStorage ? { persistentDiskLun: runtimeHost.diskLun! } : {}),
       lifecycle: E2B_LIFECYCLE_OPTIONS,
     });
     await markWorkspaceReady(workspaceId, sandbox.id, sandbox.headSha);

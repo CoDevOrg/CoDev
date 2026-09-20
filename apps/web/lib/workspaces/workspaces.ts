@@ -18,6 +18,7 @@ import { getRepository } from "../github/github";
 import { ensurePersonalOrganization } from "../admin/organization-bootstrap";
 import { requireOrganizationSettingsWrite } from "../auth/settings-access";
 import { assertWorkspaceQuota } from "../runtime/quotas";
+import { releaseRuntimeHostAssignment } from "../runtime/runtime-host-pool";
 import { closeSandboxInterval, openSandboxInterval } from "../runtime/vm-usage";
 import {
   hasUnpublishedRuntimeChanges,
@@ -489,6 +490,7 @@ export async function markWorkspaceFailed(workspaceId: string, error: unknown) {
       .set({ status: "failed", updatedAt: now })
       .where(eq(schema.workspaces.id, workspaceId));
   });
+  await releaseRuntimeHostAssignment(workspaceId);
 }
 
 export async function markWorkspaceStopped(workspaceId: string) {
@@ -584,6 +586,7 @@ export async function markWorkspaceStopped(workspaceId: string) {
       .set({ status: "stopped", updatedAt: now })
       .where(eq(schema.workspaces.id, workspaceId));
   });
+  await releaseRuntimeHostAssignment(workspaceId);
 }
 
 export async function listWorkspaceMembers(workspaceId: string) {
@@ -877,6 +880,7 @@ export async function deleteWorkspace(workspaceId: string, userId: string) {
   // access to any workspace with deletedAt set, so this alone makes it
   // unreachable through the rest of the app. Members, invites, and agent
   // history are deliberately left in place rather than deleted.
+  await releaseRuntimeHostAssignment(workspaceId);
   await db
     .update(schema.workspaces)
     .set({ deletedAt: now, status: "stopped", updatedAt: now })

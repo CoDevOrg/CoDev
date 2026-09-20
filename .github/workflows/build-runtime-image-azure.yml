@@ -1,0 +1,68 @@
+name: Build runtime image (Azure)
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: "Uploaded runtime release prefix to bake"
+        required: true
+        type: string
+      image_version:
+        description: "Azure Compute Gallery version, for example 1.0.12"
+        required: true
+        type: string
+      host_arch:
+        description: "Architecture for the host image (x86_64 is currently supported)"
+        required: true
+        default: x86_64
+        type: choice
+        options:
+          - x86_64
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: build-runtime-image-azure
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    environment: production
+    steps:
+      - name: Require the Azure identity to be configured
+        env:
+          CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          missing=""
+          [ -z "${CLIENT_ID}" ] && missing="${missing} AZURE_CLIENT_ID"
+          [ -z "${TENANT_ID}" ] && missing="${missing} AZURE_TENANT_ID"
+          [ -z "${SUBSCRIPTION_ID}" ] && missing="${missing} AZURE_SUBSCRIPTION_ID"
+          if [ -n "${missing}" ]; then
+            echo "::error::Set the repository variables:${missing}." >&2
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build and publish the validated host image
+        env:
+          AZURE_LOCATION: ${{ vars.AZURE_LOCATION || 'westus2' }}
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          CODEV_ARTIFACT_ACCOUNT: ${{ vars.CODEV_ARTIFACT_ACCOUNT }}
+          CODEV_RELEASE_VERSION: ${{ inputs.release_version }}
+          CODEV_IMAGE_VERSION: ${{ inputs.image_version }}
+          CODEV_HOST_ARCH: ${{ inputs.host_arch }}
+        run: ./infra/azure/build-host-image.sh

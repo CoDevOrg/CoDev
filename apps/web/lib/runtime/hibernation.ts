@@ -16,6 +16,7 @@ import {
 import { getDatabase } from "../platform/database";
 import { hasLiveWorkspaceHeartbeat } from "./heartbeat";
 import { closeSandboxInterval } from "./vm-usage";
+import { releaseRuntimeHostAssignment } from "./runtime-host-pool";
 import { workspaceRuntimeTtlMs } from "../workspaces/workspaces";
 
 // The orchestrator's sandbox-create validation requires exactly a four-hour
@@ -312,5 +313,6 @@ export async function hibernateWorkspace(workspaceId: string) {
       .set({ status: "hibernated", hibernateAt: null, updatedAt: now })
       .where(eq(schema.workspaces.id, workspaceId));
   });
+  await releaseRuntimeHostAssignment(workspaceId);
   return true;
 }

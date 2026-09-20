@@ -6,13 +6,24 @@ import {
   getWorkspaceSnapshot,
 } from "@/lib/runtime/hibernation";
 import { getRepositorySnapshot } from "@/lib/github/github";
-import { getHostState, requestHostWake } from "@/lib/runtime/host";
+import {
+  getHostState,
+  getHostStateFor,
+  requestHostWake,
+  requestHostWakeFor,
+} from "@/lib/runtime/host";
 import {
   getSandbox,
   OrchestratorError,
   provisionSandbox,
   waitForOrchestrator,
+  waitForOrchestratorAt,
 } from "@/lib/runtime/orchestrator";
+import {
+  ensureRuntimeHostAssignment,
+  isRuntimeHostPoolEnabled,
+} from "@/lib/runtime/runtime-host-pool";
+import { isWorkspacePersistentStorageEnabled } from "@/lib/runtime/workspace-storage";
 import {
   assertWorkspaceCreditQuota,
   QuotaError,
@@ -39,7 +50,15 @@ export const GET = withWorkspace(
     if (runtime?.status !== "ready") {
       return Response.json({ runtime });
     }
-    const hostState = await getHostState();
+    const runtimeHost = isRuntimeHostPoolEnabled()
+      ? await ensureRuntimeHostAssignment(workspaceId, { ensureStorage: true })
+      : null;
+    if (isRuntimeHostPoolEnabled() && !runtimeHost) {
+      return Response.json({ state: "starting" }, { status: 202 });
+    }
+    const hostState = runtimeHost
+      ? await getHostStateFor(runtimeHost.providerId)
+      : await getHostState();
     if (hostState !== "running") {
       await markWorkspaceStopped(workspaceId);
       return Response.json({
@@ -92,7 +111,17 @@ export const POST = withWorkspace(
         return Response.json({ state: runtime.status }, { status: 202 });
       }
       await assertWorkspaceCreditQuota(workspaceId, user.id);
-      const hostState = await requestHostWake();
+      const runtimeHost = isRuntimeHostPoolEnabled()
+        ? await ensureRuntimeHostAssignment(workspaceId, {
+            ensureStorage: true,
+          })
+        : null;
+      if (isRuntimeHostPoolEnabled() && !runtimeHost) {
+        return Response.json({ state: "starting" }, { status: 202 });
+      }
+      const hostState = runtimeHost
+        ? await requestHostWakeFor(runtimeHost.providerId)
+        : await requestHostWake();
       if (hostState === "starting") {
         return Response.json({ state: "starting" }, { status: 202 });
       }
@@ -101,8 +130,14 @@ export const POST = withWorkspace(
         user.id,
         resumePermission,
       );
-      await waitForOrchestrator();
+      if (runtimeHost) {
+        await waitForOrchestratorAt(runtimeHost.runtimeAddress);
+      } else {
+        await waitForOrchestrator();
+      }
       const persistedSnapshot = await getWorkspaceSnapshot(workspaceId);
+      const persistentStorage =
+        isWorkspacePersistentStorageEnabled() && runtimeHost?.diskLun != null;
       const repositorySnapshot = persistedSnapshot?.snapshot
         ? persistedSnapshot.snapshot
         : workspace.repositoryVisibility === "private"
@@ -120,7 +155,10 @@ export const POST = withWorkspace(
         ...(repositorySnapshot ? { repositorySnapshot } : {}),
         baseSha: workspace.baseSha,
         expiresAt: expiresAt.toISOString(),
-        resumeFromSnapshot: Boolean(persistedSnapshot),
+        resumeFromSnapshot: Boolean(persistedSnapshot) && !persistentStorage,
+        ...(persistentStorage
+          ? { persistentDiskLun: runtimeHost.diskLun! }
+          : {}),
         lifecycle: E2B_LIFECYCLE_OPTIONS,
       });
       await markWorkspaceReady(workspaceId, sandbox.id, sandbox.headSha);

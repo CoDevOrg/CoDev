@@ -30,12 +30,17 @@ export {
 } from "./orchestrator-files";
 export {
   checkOrchestratorConnection,
+  checkOrchestratorConnectionAt,
   ensureHostReady,
   waitForOrchestrator,
+  waitForOrchestratorAt,
 } from "./orchestrator-health";
 export {
   type IdeSession,
+  type PrepareIdeInput,
   type StartIdeInput,
+  prepareIde,
+  refreshIdeCredentials,
   startIde,
   getIde,
   touchIde,

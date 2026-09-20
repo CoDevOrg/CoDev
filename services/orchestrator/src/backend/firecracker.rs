@@ -189,6 +189,8 @@ struct RunningMachine {
     guest: GuestClient,
     api_socket: PathBuf,
     workspace_dir: PathBuf,
+    persistent_mount_dir: Option<PathBuf>,
+    persistent_bind_path: Option<PathBuf>,
     jail_dir: PathBuf,
     slot: u32,
     reap_on_expiry: bool,
@@ -966,11 +968,12 @@ impl FirecrackerBackend {
     }
 
     async fn prepare_and_start(&self, request: &CreateRequest) -> Result<RunningMachine> {
-        let snapshot_metadata = if request.resume_from_snapshot {
-            self.snapshot_metadata(&request.workspace_id).await?
-        } else {
-            None
-        };
+        let snapshot_metadata =
+            if request.resume_from_snapshot && request.persistent_disk_lun.is_none() {
+                self.snapshot_metadata(&request.workspace_id).await?
+            } else {
+                None
+            };
         let restore_snapshot = snapshot_metadata.is_some();
         let slot = {
             let machines = self.machines.read().await;
@@ -990,6 +993,13 @@ impl FirecrackerBackend {
                 )
                 .ok_or(RuntimeError::CapacityExceeded)?
             }
+        };
+        let persistent_storage = match request.persistent_disk_lun {
+            Some(lun) => Some(
+                self.prepare_persistent_storage(&request.workspace_id, lun)
+                    .await?,
+            ),
+            None => None,
         };
         let uid = 20_000 + slot;
         let guest_cid = GUEST_CID_BASE + slot;
@@ -1034,15 +1044,47 @@ impl FirecrackerBackend {
                     .clone()
             })
         } else {
-            self.prepare_resources(request, &workspace_dir, &jail_root, guest_cid)
-                .await
+            self.prepare_resources(
+                request,
+                &workspace_dir,
+                &jail_root,
+                guest_cid,
+                persistent_storage
+                    .as_ref()
+                    .map(|(_, workspace_image)| workspace_image.as_path()),
+            )
+            .await
         } {
             Ok(head_sha) => head_sha,
             Err(error) => {
                 let _ = remove_directory_if_present(&workspace_dir).await;
                 let _ = remove_directory_if_present(&jail_dir).await;
+                if let Some((mount_dir, _)) = persistent_storage.as_ref() {
+                    let _ = unmount_path(mount_dir).await;
+                }
                 return Err(error);
             }
+        };
+
+        let persistent_bind_path = if let Some((_, workspace_image)) = persistent_storage.as_ref() {
+            let bind_path = jail_root.join("workspace.ext4");
+            OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(false)
+                .open(&bind_path)
+                .map_err(RuntimeError::internal)?;
+            let mut bind = Command::new("mount");
+            bind.arg("--bind").arg(workspace_image).arg(&bind_path);
+            if let Err(error) = run_command(bind, "bind persistent workspace disk").await {
+                let _ = remove_directory_if_present(&workspace_dir).await;
+                let _ = remove_directory_if_present(&jail_dir).await;
+                let _ = unmount_path(&persistent_storage.as_ref().unwrap().0).await;
+                return Err(error);
+            }
+            Some(bind_path)
+        } else {
+            None
         };
 
         let mut paths = vec![
@@ -1121,6 +1163,8 @@ impl FirecrackerBackend {
             guest,
             api_socket,
             workspace_dir,
+            persistent_mount_dir: persistent_storage.map(|(mount_dir, _)| mount_dir),
+            persistent_bind_path,
             jail_dir,
             slot,
             reap_on_expiry: request.ephemeral,
@@ -1220,58 +1264,68 @@ impl FirecrackerBackend {
         workspace_dir: &Path,
         jail_root: &Path,
         guest_cid: u32,
+        persistent_workspace_image: Option<&Path>,
     ) -> Result<String> {
-        let repository = workspace_dir.join("repository");
-        let mut init = Command::new("git");
-        init.arg("init").arg("--quiet").arg(&repository);
-        run_command(init, "initialize repository").await?;
-        let head_sha = if let Some(repository_url) = &request.repository_url {
-            let mut remote = Command::new("git");
-            remote
-                .arg("-C")
-                .arg(&repository)
-                .args(["remote", "add", "origin"])
-                .arg(repository_url);
-            run_command(remote, "configure repository remote").await?;
-            let mut fetch = Command::new("git");
-            fetch
-                .arg("-C")
-                .arg(&repository)
-                .args(["fetch", "--quiet", "--depth=1", "origin"])
-                .arg(&request.base_sha);
-            run_command(fetch, "fetch repository revision").await?;
-            let mut checkout = Command::new("git");
-            checkout.arg("-C").arg(&repository).args([
-                "checkout",
-                "--quiet",
-                "--detach",
-                "FETCH_HEAD",
-            ]);
-            run_command(checkout, "checkout repository revision").await?;
+        let workspace_disk = persistent_workspace_image
+            .map(PathBuf::from)
+            .unwrap_or_else(|| jail_root.join("workspace.ext4"));
+        let existing_persistent_disk =
+            persistent_workspace_image.is_some() && workspace_disk.is_file();
+        let head_sha = if existing_persistent_disk {
             request.base_sha.clone()
         } else {
-            let snapshot = request.repository_snapshot.as_ref().ok_or_else(|| {
-                RuntimeError::BadRequest("repository snapshot is required".into())
-            })?;
-            materialize_snapshot(&repository, snapshot).await?
-        };
+            let repository = workspace_dir.join("repository");
+            let mut init = Command::new("git");
+            init.arg("init").arg("--quiet").arg(&repository);
+            run_command(init, "initialize repository").await?;
+            let head_sha = if let Some(repository_url) = &request.repository_url {
+                let mut remote = Command::new("git");
+                remote
+                    .arg("-C")
+                    .arg(&repository)
+                    .args(["remote", "add", "origin"])
+                    .arg(repository_url);
+                run_command(remote, "configure repository remote").await?;
+                let mut fetch = Command::new("git");
+                fetch
+                    .arg("-C")
+                    .arg(&repository)
+                    .args(["fetch", "--quiet", "--depth=1", "origin"])
+                    .arg(&request.base_sha);
+                run_command(fetch, "fetch repository revision").await?;
+                let mut checkout = Command::new("git");
+                checkout.arg("-C").arg(&repository).args([
+                    "checkout",
+                    "--quiet",
+                    "--detach",
+                    "FETCH_HEAD",
+                ]);
+                run_command(checkout, "checkout repository revision").await?;
+                request.base_sha.clone()
+            } else {
+                let snapshot = request.repository_snapshot.as_ref().ok_or_else(|| {
+                    RuntimeError::BadRequest("repository snapshot is required".into())
+                })?;
+                materialize_snapshot(&repository, snapshot).await?
+            };
 
-        let workspace_disk = jail_root.join("workspace.ext4");
-        let mut truncate = Command::new("truncate");
-        truncate
-            .arg("-s")
-            .arg(format!("{}G", self.config.workspace_disk_gib))
-            .arg(&workspace_disk);
-        run_command(truncate, "allocate workspace disk").await?;
-        let mut mkfs = Command::new("mkfs.ext4");
-        mkfs.args(["-q", "-F", "-d"])
-            .arg(&repository)
-            .args(["-L", "CODEV_WORKSPACE"])
-            .arg(&workspace_disk);
-        run_command(mkfs, "format workspace disk").await?;
-        fs::remove_dir_all(&repository)
-            .await
-            .map_err(RuntimeError::internal)?;
+            let mut truncate = Command::new("truncate");
+            truncate
+                .arg("-s")
+                .arg(format!("{}G", self.config.workspace_disk_gib))
+                .arg(&workspace_disk);
+            run_command(truncate, "allocate workspace disk").await?;
+            let mut mkfs = Command::new("mkfs.ext4");
+            mkfs.args(["-q", "-F", "-d"])
+                .arg(&repository)
+                .args(["-L", "CODEV_WORKSPACE"])
+                .arg(&workspace_disk);
+            run_command(mkfs, "format workspace disk").await?;
+            fs::remove_dir_all(&repository)
+                .await
+                .map_err(RuntimeError::internal)?;
+            head_sha
+        };
 
         let mut copy = Command::new("cp");
         copy.args(["--reflink=auto", "--sparse=always"])
@@ -1373,17 +1427,73 @@ impl FirecrackerBackend {
         run_command(chown, "chown snapshot resources").await
     }
 
+    async fn prepare_persistent_storage(
+        &self,
+        workspace_id: &str,
+        lun: u32,
+    ) -> Result<(PathBuf, PathBuf)> {
+        if lun == 0 || lun > MAX_DATA_DISK_LUN {
+            return Err(RuntimeError::BadRequest(
+                "persistent workspace disk LUN is outside the Azure data-disk range".into(),
+            ));
+        }
+        let device = PathBuf::from(format!("/dev/disk/azure/scsi1/lun{lun}"));
+        if !device.exists() {
+            return Err(RuntimeError::Unavailable(format!(
+                "persistent workspace disk is not attached at {}",
+                device.display()
+            )));
+        }
+        let mount_dir = self
+            .config
+            .runtime_dir
+            .join("persistent-workspaces")
+            .join(workspace_id);
+        fs::create_dir_all(&mount_dir)
+            .await
+            .map_err(RuntimeError::internal)?;
+        let mut mountpoint = Command::new("mountpoint");
+        mountpoint.arg("-q").arg(&mount_dir);
+        let mounted =
+            command_succeeded(&mut mountpoint, "check persistent workspace mount").await?;
+        if !mounted {
+            let mut blkid = Command::new("blkid");
+            blkid.args(["-o", "value", "-s", "TYPE"]).arg(&device);
+            let has_filesystem =
+                command_succeeded(&mut blkid, "inspect persistent workspace disk").await?;
+            if !has_filesystem {
+                let mut mkfs = Command::new("mkfs.ext4");
+                mkfs.args(["-q", "-F", "-L", "CODEV_WORKSPACE_DATA"])
+                    .arg(&device);
+                run_command(mkfs, "format persistent workspace disk").await?;
+            }
+            let mut mount = Command::new("mount");
+            mount.arg(&device).arg(&mount_dir);
+            run_command(mount, "mount persistent workspace disk").await?;
+        }
+        Ok((mount_dir.clone(), mount_dir.join("workspace.ext4")))
+    }
+
     async fn cleanup_failed_machine(&self, machine: &RunningMachine) {
         let _ = machine.child.lock().await.kill().await;
         let _ = machine.child.lock().await.wait().await;
         if self.config.guest_network {
             remove_tap(machine.slot as usize).await;
         }
+        if let Some(path) = machine.persistent_bind_path.as_ref() {
+            let _ = unmount_path(path).await;
+        }
         let _ = remove_directory_if_present(&machine.jail_dir).await;
+        if let Some(path) = machine.persistent_mount_dir.as_ref() {
+            let _ = unmount_path(path).await;
+        }
         let _ = remove_directory_if_present(&machine.workspace_dir).await;
     }
 
     async fn stop_machine(&self, machine: Arc<RunningMachine>) -> Result<()> {
+        if machine.persistent_mount_dir.is_some() {
+            machine.guest.flush_workspace().await?;
+        }
         {
             let mut child = machine.child.lock().await;
             let _ = child.kill().await;
@@ -1392,9 +1502,31 @@ impl FirecrackerBackend {
         if self.config.guest_network {
             remove_tap(machine.slot as usize).await;
         }
+        if let Some(path) = machine.persistent_bind_path.as_ref() {
+            unmount_path(path).await?;
+        }
         remove_directory_if_present(&machine.jail_dir).await?;
+        if let Some(path) = machine.persistent_mount_dir.as_ref() {
+            unmount_path(path).await?;
+        }
         remove_directory_if_present(&machine.workspace_dir).await
     }
+}
+
+const MAX_DATA_DISK_LUN: u32 = 63;
+
+async fn command_succeeded(command: &mut Command, description: &str) -> Result<bool> {
+    let output = timeout(Duration::from_secs(30), command.output())
+        .await
+        .map_err(|_| RuntimeError::Timeout(format!("{description} timed out")))?
+        .map_err(RuntimeError::internal)?;
+    Ok(output.status.success())
+}
+
+async fn unmount_path(path: &Path) -> Result<()> {
+    let mut umount = Command::new("umount");
+    umount.arg(path);
+    run_command(umount, "unmount workspace storage").await
 }
 
 async fn run_command(mut command: Command, description: &str) -> Result<()> {

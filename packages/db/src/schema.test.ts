@@ -42,7 +42,9 @@ import {
   featureKey,
   users,
   workspaceMembers,
+  workspaceRuntimeAssignments,
   workspaceRuntimes,
+  runtimeHosts,
   workspaces,
   worktrees,
   yjsSnapshots,
@@ -111,6 +113,12 @@ describe("database schema", () => {
     expect(workspaceRuntimes.provisionedHeadSha.name).toBe(
       "provisioned_head_sha",
     );
+    expect(getTableName(runtimeHosts)).toBe("runtime_hosts");
+    expect(runtimeHosts.freeWorkspaceSlots.name).toBe("free_workspace_slots");
+    expect(getTableName(workspaceRuntimeAssignments)).toBe(
+      "workspace_runtime_assignments",
+    );
+    expect(workspaceRuntimeAssignments.fencingToken.name).toBe("fencing_token");
     expect(getTableName(designPartnerFeedback)).toBe("design_partner_feedback");
     expect(getTableName(workspaceMembers)).toBe("workspace_members");
     expect(getTableName(agentSessions)).toBe("agent_sessions");

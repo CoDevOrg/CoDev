@@ -80,6 +80,11 @@ pub struct CreateRequest {
     pub expires_at: DateTime<Utc>,
     #[serde(default)]
     pub resume_from_snapshot: bool,
+    /// LUN of an Azure managed disk carrying the durable workspace.ext4 image.
+    /// The host attaches the disk before sending this request; the orchestrator
+    /// mounts it and binds the image into the Firecracker jail.
+    #[serde(default)]
+    pub persistent_disk_lun: Option<u32>,
     pub lifecycle: SandboxLifecycleOptions,
 }
 
@@ -438,6 +443,16 @@ pub enum ClaudeSetupPollResponse {
     Pending,
     Ready,
     Failed { reason: String },
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IdePrepareRequest {
+    pub project_root: String,
+    /// Present only when the workspace's clone directory may not exist yet on
+    /// the host. Preparation is deliberately separate from starting Orca so a
+    /// navigation intent can clone the repository without launching Electron.
+    pub clone: Option<IdeCloneRequest>,
 }
 
 #[derive(Clone, Debug, Deserialize)]

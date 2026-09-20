@@ -14,6 +14,8 @@ export interface ProvisionSandboxInput {
   baseSha: string;
   expiresAt: string;
   resumeFromSnapshot: boolean;
+  /** Azure managed-disk LUN carrying the workspace.ext4 image, when enabled. */
+  persistentDiskLun?: number;
   lifecycle: {
     timeoutMs: number;
     lifecycle: { onTimeout: "pause"; autoResume: true };

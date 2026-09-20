@@ -23,6 +23,9 @@ param location string = resourceGroup().location
 @description('VM size for the Firecracker host. MUST support nested virtualization: Firecracker needs /dev/kvm. Verified on Standard_D2s_v7 (Intel, vmx exposed). AMD sizes and the B-family are not safe defaults.')
 param hostVmSize string = 'Standard_D2s_v7'
 
+@description('Optional Azure Compute Gallery image version resource ID. When empty, the host uses the stock Ubuntu image and the existing bootstrap fallback.')
+param hostImageId string = ''
+
 @description('OS disk size in GiB.')
 param hostVolumeSizeGiB int = 64
 
@@ -582,12 +585,51 @@ runcmd:
   - [ systemctl, start, --no-block, codev-bootstrap.service ]
 '''
 
+// Keep the stock path byte-for-byte compatible with the already deployed VM:
+// Azure rejects any update that changes osProfile.customData. Image-backed
+// hosts opt into this derived variant, which contains the same fixed values
+// but skips cloud-init package setup and apt repair on boot.
+var imageCloudInitTemplate = replace(
+  replace(
+    cloudInitTemplate,
+    '''package_update: true
+packages:
+  - ca-certificates
+  - curl
+  - chrony
+  - xfsprogs
+  - jq
+''',
+    '''package_update: false
+packages: []
+'''
+  ),
+  '''      # Belt and braces on top of the unit ordering: wait for cloud-init to
+      # report done, then repair dpkg if anything left it half-configured.
+      cloud-init status --wait || true
+      dpkg --configure -a || true
+      apt-get -o DPkg::Lock::Timeout=300 update
+      command -v az >/dev/null || curl -sL https://aka.ms/InstallAzureCLIDeb | bash
+''',
+  '''      cloud-init status --wait || true
+      # The golden image already contains the Azure CLI and all stable host
+      # dependencies, so image-backed boots stay off apt entirely.
+      command -v az >/dev/null
+'''
+)
+
+var selectedCloudInitTemplate = empty(hostImageId) ? cloudInitTemplate : imageCloudInitTemplate
+
 // A boot-time service rather than a bare runcmd, because cloud-init's runcmd
 // fires only on a VM's very first boot. Rolling a release works by updating
 // the tag and restarting the host, so the bootstrap has to run every boot.
 var cloudInitWithIdentity = replace(
   replace(
-    replace(cloudInitTemplate, '__ARTIFACT_ACCOUNT__', artifactStorageName),
+    replace(
+      selectedCloudInitTemplate,
+      '__ARTIFACT_ACCOUNT__',
+      artifactStorageName
+    ),
     '__KEY_VAULT_NAME__',
     '${namePrefix}-kv'
   ),
@@ -634,11 +676,17 @@ resource host 'Microsoft.Compute/virtualMachines@2024-07-01' = {
       }
     }
     storageProfile: {
-      imageReference: {
+      // Gallery images use `id`; the empty case keeps the current stock Ubuntu
+      // path so image promotion can be staged independently of the runtime
+      // deployment. Bicep accepts the two image-reference shapes because they
+      // are mutually exclusive ARM properties.
+      imageReference: empty(hostImageId) ? {
         publisher: 'Canonical'
         offer: 'ubuntu-24_04-lts'
         sku: 'server'
         version: 'latest'
+      } : {
+        id: hostImageId
       }
       osDisk: {
         createOption: 'FromImage'

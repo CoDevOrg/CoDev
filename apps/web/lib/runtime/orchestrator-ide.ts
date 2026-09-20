@@ -52,6 +52,27 @@ export interface StartIdeInput {
   coordinationMcpToken?: string;
 }
 
+export interface PrepareIdeInput {
+  projectRoot: string;
+  clone?: {
+    repository: string;
+    defaultBranch: string;
+    token?: string;
+  };
+}
+
+export async function prepareIde(
+  workspaceId: string,
+  input: PrepareIdeInput,
+): Promise<void> {
+  await orchestratorRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/ide/prepare`,
+    input,
+    110_000,
+  );
+}
+
 /**
  * Start (or idempotently return) this workspace's dedicated per-workspace
  * Orca IDE process. Replaces the previous SSM RunCommand flow entirely: the
@@ -69,6 +90,23 @@ export async function startIde(
     110_000,
   );
   return z.object({ ide: ideSessionSchema }).parse(await response.json()).ide;
+}
+
+/**
+ * Refresh the member-scoped agent credential bundle after the IDE is ready.
+ * This is intentionally separate from `startIde` so provider lookups and
+ * host-side file writes cannot delay workspace readiness.
+ */
+export async function refreshIdeCredentials(
+  workspaceId: string,
+  input: StartIdeInput,
+): Promise<void> {
+  await orchestratorRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/ide/credentials`,
+    input,
+    30_000,
+  );
 }
 
 export async function getIde(
