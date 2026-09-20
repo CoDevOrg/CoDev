@@ -8,6 +8,7 @@ import {
   SessionImportStorageError,
   storeSessionImport,
 } from "@/lib/agents/session-import-storage";
+import { logSessionImportStorageFailure } from "@/lib/agents/session-import-diagnostics";
 import { ApiError, withWorkspace } from "@/lib/http/api-route";
 
 export const runtime = "nodejs";
@@ -92,6 +93,7 @@ export const POST = withWorkspace(
     } catch (error) {
       if (error instanceof SessionImportStorageError && error.status < 500)
         throw error;
+      logSessionImportStorageFailure(request, "provider_source", error);
       throw new ApiError(
         "The session could not be saved. Please try again or contact your workspace administrator.",
         503,
