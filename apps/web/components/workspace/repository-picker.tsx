@@ -8,6 +8,7 @@ import { connectGitHubAccount } from "@/app/actions/github";
 import type { GitHubInstallation, GitHubRepository } from "@/lib/github/github";
 
 type LoadState = "loading" | "ready" | "empty" | "error";
+type GenerationStep = "choose" | "gen1";
 
 type RepositoryChoice = GitHubRepository & {
   installationId: number;
@@ -96,9 +97,17 @@ export function RepositoryPicker({
   const [message, setMessage] = useState("");
   const [creating, setCreating] = useState(false);
   const [open, setOpen] = useState(false);
+  const [generation, setGeneration] = useState<GenerationStep>("choose");
+
+  function close() {
+    setOpen(false);
+    setGeneration("choose");
+    setCreating(false);
+    setMessage("");
+  }
 
   useEffect(() => {
-    if (!open || !githubConnected) return;
+    if (!open || !githubConnected || generation !== "gen1") return;
     let active = true;
     fetch("/api/github/installations")
       .then((response) =>
@@ -121,7 +130,7 @@ export function RepositoryPicker({
     return () => {
       active = false;
     };
-  }, [open, githubConnected]);
+  }, [open, githubConnected, generation]);
 
   const accountOptions = useMemo(
     () => partitionInstallations(installations, viewerLogin).owned,
@@ -207,6 +216,25 @@ export function RepositoryPicker({
     }
   }
 
+  async function createGen2Workspace() {
+    setCreating(true);
+    setMessage("");
+    try {
+      const payload = await readJson<{ workspace: { id: string } }>(
+        await fetch("/api/gen2/workspaces", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        }),
+      );
+      router.push(`/gen2/${payload.workspace.id}`);
+      router.refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Creation failed.");
+      setCreating(false);
+    }
+  }
+
   const installUrl = appSlug
     ? `https://github.com/apps/${appSlug}/installations/new`
     : "https://github.com/settings/installations";
@@ -223,14 +251,16 @@ export function RepositoryPicker({
           +
         </span>
         <strong>New workspace</strong>
-        <span>Start with a blank document or a GitHub repository.</span>
+        <span>
+          Start a current workspace or a shareable Firecracker instance.
+        </span>
       </button>
       {open ? (
         <div
           className="workspace-create-overlay"
           role="presentation"
           onMouseDown={(event) => {
-            if (event.currentTarget === event.target) setOpen(false);
+            if (event.currentTarget === event.target) close();
           }}
         >
           <section
@@ -242,157 +272,234 @@ export function RepositoryPicker({
             <div className="workspace-create-heading">
               <div>
                 <p className="eyebrow">New workspace</p>
-                <h2 id="workspace-create-title">Choose how to begin.</h2>
+                <h2 id="workspace-create-title">
+                  {generation === "choose"
+                    ? "Which workspace?"
+                    : "Choose how to begin."}
+                </h2>
                 <p>
-                  Start with a blank workspace for planning, or connect a
-                  repository when you are ready to build.
+                  {generation === "choose"
+                    ? "Gen 1 is the current CoDev workspace. Gen 2 is the new Firecracker instance you can share."
+                    : "Start with a blank workspace for planning, or connect a repository when you are ready to build."}
                 </p>
               </div>
               <button
                 className="modal-close-button"
                 type="button"
                 aria-label="Close workspace creation"
-                onClick={() => setOpen(false)}
+                onClick={close}
               >
                 <X aria-hidden="true" />
               </button>
             </div>
-            <div className="workspace-create-options">
-              <button
-                className="workspace-create-blank"
-                type="button"
-                disabled={creating}
-                onClick={() => void createWorkspace()}
-              >
-                <span
-                  className="workspace-create-option-icon"
-                  aria-hidden="true"
+            {generation === "choose" ? (
+              <div className="workspace-create-options">
+                <button
+                  className="workspace-create-blank"
+                  type="button"
+                  disabled={creating}
+                  onClick={() => setGeneration("gen1")}
                 >
-                  +
-                </span>
-                <span>
-                  <strong>{creating ? "Creating…" : "Blank workspace"}</strong>
-                  <small>Create a document now and connect GitHub later.</small>
-                </span>
-              </button>
-            </div>
-            <div className="workspace-create-divider">
-              <span>or connect GitHub</span>
-            </div>
-            {!githubConnected ? (
-              <div className="workspace-create-connect">
-                <p>
-                  Connect your GitHub account to open one of your repositories
-                  in a new workspace.
-                </p>
-                {githubAuthConfigured ? (
-                  <form action={connectGitHubAccount.bind(null, "/dashboard")}>
-                    <button
-                      className="primary-button picker-submit"
-                      type="submit"
-                    >
-                      Connect GitHub
-                    </button>
-                  </form>
-                ) : (
-                  <p className="panel-status">
-                    GitHub account linking is not configured.
-                  </p>
-                )}
-              </div>
-            ) : (
-              <>
-                <div className="picker-grid">
-                  <label>
-                    <span>Installation</span>
-                    <select
-                      value={installationId}
-                      onChange={(event) =>
-                        void loadRepositories(event.target.value)
-                      }
-                      disabled={
-                        state === "loading" && installations.length === 0
-                      }
-                    >
-                      <option value="">Select an account</option>
-                      {accountOptions.map((installation) => (
-                        <option key={installation.id} value={installation.id}>
-                          {accountLabel(installation, viewerLogin)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    <span>Repository</span>
-                    <select
-                      value={repositoryId}
-                      onChange={(event) => setRepositoryId(event.target.value)}
-                      disabled={!installationId || state === "loading"}
-                    >
-                      <option value="">Select a repository</option>
-                      {repositories.map((repository) => (
-                        <option
-                          key={`${repository.installationId}:${repository.id}`}
-                          value={`${repository.installationId}:${repository.id}`}
-                        >
-                          {repositoryLabel(repository)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <button
-                    className="primary-button picker-submit"
-                    type="button"
-                    disabled={!repositoryId || creating}
-                    onClick={() => {
-                      const [selectedInstallation, selectedRepository] =
-                        repositoryId.split(":");
-                      void createWorkspace({
-                        installationId: Number(selectedInstallation),
-                        repositoryId: Number(selectedRepository),
-                      });
-                    }}
+                  <span
+                    className="workspace-create-option-icon"
+                    aria-hidden="true"
                   >
-                    {creating ? "Creating…" : "Create workspace"}
-                  </button>
-                </div>
-                {state === "loading" ? (
-                  <p className="panel-status">Loading GitHub access…</p>
-                ) : null}
-                {state === "empty" && !message ? (
-                  <p className="panel-status">
-                    Install CoDev on a GitHub account to make repositories
-                    available.
-                  </p>
-                ) : null}
+                    1
+                  </span>
+                  <span>
+                    <strong>Gen 1</strong>
+                    <small>
+                      Current workspace — repository, IDE, and agents.
+                    </small>
+                  </span>
+                </button>
+                <button
+                  className="workspace-create-blank"
+                  type="button"
+                  disabled={creating}
+                  onClick={() => void createGen2Workspace()}
+                >
+                  <span
+                    className="workspace-create-option-icon"
+                    aria-hidden="true"
+                  >
+                    2
+                  </span>
+                  <span>
+                    <strong>{creating ? "Creating…" : "Gen 2"}</strong>
+                    <small>
+                      New Firecracker instance you can share with a link.
+                    </small>
+                  </span>
+                </button>
                 {message ? (
-                  <p
-                    className={`panel-status ${state === "error" ? "error-copy" : ""}`}
-                  >
+                  <p className="panel-status error-copy" role="alert">
                     {message}
                   </p>
                 ) : null}
-                <div className="workspace-create-footer">
-                  <div className="workspace-create-github-help">
-                    <strong>Need to change repository access?</strong>
-                    <span>
-                      This opens your existing CoDev installation settings on
-                      GitHub.
-                    </span>
-                  </div>
-                  <a
-                    className="secondary-button"
-                    href={installUrl}
-                    target="_blank"
-                    rel="noreferrer"
+              </div>
+            ) : (
+              <>
+                <button
+                  className="workspace-create-back"
+                  type="button"
+                  onClick={() => {
+                    setGeneration("choose");
+                    setMessage("");
+                  }}
+                >
+                  Back to generation
+                </button>
+                <div className="workspace-create-options">
+                  <button
+                    className="workspace-create-blank"
+                    type="button"
+                    disabled={creating}
+                    onClick={() => void createWorkspace()}
                   >
-                    Manage repository access ↗
-                  </a>
-                  <p className="security-note">
-                    Private source is transferred as a bounded, credential-free
-                    snapshot. GitHub tokens never enter the sandbox.
-                  </p>
+                    <span
+                      className="workspace-create-option-icon"
+                      aria-hidden="true"
+                    >
+                      +
+                    </span>
+                    <span>
+                      <strong>
+                        {creating ? "Creating…" : "Blank workspace"}
+                      </strong>
+                      <small>
+                        Create a document now and connect GitHub later.
+                      </small>
+                    </span>
+                  </button>
                 </div>
+                <div className="workspace-create-divider">
+                  <span>or connect GitHub</span>
+                </div>
+                {!githubConnected ? (
+                  <div className="workspace-create-connect">
+                    <p>
+                      Connect your GitHub account to open one of your
+                      repositories in a new workspace.
+                    </p>
+                    {githubAuthConfigured ? (
+                      <form
+                        action={connectGitHubAccount.bind(null, "/dashboard")}
+                      >
+                        <button
+                          className="primary-button picker-submit"
+                          type="submit"
+                        >
+                          Connect GitHub
+                        </button>
+                      </form>
+                    ) : (
+                      <p className="panel-status">
+                        GitHub account linking is not configured.
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <div className="picker-grid">
+                      <label>
+                        <span>Installation</span>
+                        <select
+                          value={installationId}
+                          onChange={(event) =>
+                            void loadRepositories(event.target.value)
+                          }
+                          disabled={
+                            state === "loading" && installations.length === 0
+                          }
+                        >
+                          <option value="">Select an account</option>
+                          {accountOptions.map((installation) => (
+                            <option
+                              key={installation.id}
+                              value={installation.id}
+                            >
+                              {accountLabel(installation, viewerLogin)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        <span>Repository</span>
+                        <select
+                          value={repositoryId}
+                          onChange={(event) =>
+                            setRepositoryId(event.target.value)
+                          }
+                          disabled={!installationId || state === "loading"}
+                        >
+                          <option value="">Select a repository</option>
+                          {repositories.map((repository) => (
+                            <option
+                              key={`${repository.installationId}:${repository.id}`}
+                              value={`${repository.installationId}:${repository.id}`}
+                            >
+                              {repositoryLabel(repository)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <button
+                        className="primary-button picker-submit"
+                        type="button"
+                        disabled={!repositoryId || creating}
+                        onClick={() => {
+                          const [selectedInstallation, selectedRepository] =
+                            repositoryId.split(":");
+                          void createWorkspace({
+                            installationId: Number(selectedInstallation),
+                            repositoryId: Number(selectedRepository),
+                          });
+                        }}
+                      >
+                        {creating ? "Creating…" : "Create workspace"}
+                      </button>
+                    </div>
+                    {state === "loading" ? (
+                      <p className="panel-status">Loading GitHub access…</p>
+                    ) : null}
+                    {state === "empty" && !message ? (
+                      <p className="panel-status">
+                        Install CoDev on a GitHub account to make repositories
+                        available.
+                      </p>
+                    ) : null}
+                    {message ? (
+                      <p
+                        className={`panel-status ${state === "error" ? "error-copy" : ""}`}
+                      >
+                        {message}
+                      </p>
+                    ) : null}
+                    <div className="workspace-create-footer">
+                      <div className="workspace-create-github-help">
+                        <strong>Need to change repository access?</strong>
+                        <span>
+                          This opens your existing CoDev installation settings
+                          on GitHub.
+                        </span>
+                      </div>
+                      <a
+                        className="secondary-button"
+                        href={installUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Manage repository access ↗
+                      </a>
+                      <p className="security-note">
+                        Private source is transferred as a bounded,
+                        credential-free snapshot. GitHub tokens never enter the
+                        sandbox.
+                      </p>
+                    </div>
+                  </>
+                )}
               </>
             )}
           </section>

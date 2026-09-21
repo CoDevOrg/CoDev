@@ -1,6 +1,7 @@
 export * from "./collaboration";
 export * from "./conversation-import";
 export * from "./domain";
+export * from "./gen2";
 export * from "./events";
 export * from "./entitlements";
 export * from "./providers";

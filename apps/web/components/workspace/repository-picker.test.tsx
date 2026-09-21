@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { RepositoryPicker } from "./repository-picker";
@@ -63,6 +69,12 @@ function stubGitHub() {
           { status: 201 },
         );
       }
+      if (url === "/api/gen2/workspaces" && init?.method === "POST") {
+        return Response.json(
+          { workspace: { id: "gen2-workspace-1" } },
+          { status: 201 },
+        );
+      }
       return Response.json({ error: "Unexpected request" }, { status: 500 });
     },
   );
@@ -75,6 +87,9 @@ async function openAccountList() {
     <RepositoryPicker appSlug="codev" githubAuthConfigured githubConnected />,
   );
   fireEvent.click(screen.getByRole("button", { name: /New workspace/ }));
+  fireEvent.click(
+    within(screen.getByRole("dialog")).getByRole("button", { name: /Gen 1/ }),
+  );
   return await screen.findByRole("combobox", { name: /Installation/ });
 }
 
@@ -112,5 +127,39 @@ describe("RepositoryPicker", () => {
       expect(push).toHaveBeenCalledWith("/workspaces/workspace-1"),
     );
     expect(shared).toBeTruthy();
+  });
+
+  it("asks which generation to create before the GitHub flow", () => {
+    stubGitHub();
+    render(
+      <RepositoryPicker appSlug="codev" githubAuthConfigured githubConnected />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /New workspace/ }));
+    const dialog = screen.getByRole("dialog");
+
+    expect(
+      within(dialog).getByRole("button", { name: /Gen 1/ }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("button", { name: /Gen 2/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("combobox", { name: /Installation/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("creates a gen 2 workspace and opens it", async () => {
+    stubGitHub();
+    render(
+      <RepositoryPicker appSlug="codev" githubAuthConfigured githubConnected />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /New workspace/ }));
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: /Gen 2/ }),
+    );
+
+    await waitFor(() =>
+      expect(push).toHaveBeenCalledWith("/gen2/gen2-workspace-1"),
+    );
   });
 });

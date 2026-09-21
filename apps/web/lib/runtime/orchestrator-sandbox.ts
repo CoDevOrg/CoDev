@@ -24,8 +24,14 @@ export interface ProvisionSandboxInput {
 
 export async function provisionSandbox(
   input: ProvisionSandboxInput,
+  timeoutMs = 70_000,
 ): Promise<SandboxInstance> {
-  const response = await orchestratorRequest("POST", "/v1/sandboxes", input);
+  const response = await orchestratorRequest(
+    "POST",
+    "/v1/sandboxes",
+    input,
+    timeoutMs,
+  );
   const payload = z
     .object({ sandbox: sandboxInstanceSchema })
     .parse(await response.json());

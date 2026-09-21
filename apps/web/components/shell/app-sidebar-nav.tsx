@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Cloud,
   LayoutGrid,
-  MessagesSquare,
   MessageSquarePlus,
+  MessagesSquare,
   Settings,
   ShieldCheck,
 } from "lucide-react";
@@ -16,6 +17,7 @@ const ADMIN_CONSOLE_URL = "https://admins.trycodev.com";
 
 const navItems = [
   { href: "/dashboard", icon: LayoutGrid, label: "Workspaces" },
+  { href: "/gen2", icon: Cloud, label: "Gen 2" },
   { href: "/rooms", icon: MessagesSquare, label: "Rooms" },
   { href: "/import", icon: MessageSquarePlus, label: "Import chat" },
   { href: "/settings", icon: Settings, label: "Settings" },

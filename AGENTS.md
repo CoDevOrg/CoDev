@@ -70,14 +70,15 @@ that area before adding a new file.
 | `coordination/` | Path claims, coordination MCP, workspace brain, workboard, Mission Control         |
 | `runtime/`      | Azure host, orchestrator, Orca host/pairing, hibernation, lifecycle, quotas        |
 | `workspaces/`   | Workspace records, creation, state, restore, collaboration, presence, audit        |
+| `gen2/`         | Gen 2 workspace: Firecracker instance + shareable membership                       |
 | `chat/`         | Shared chat, shared sessions, team chat, chat coordination, conversation import    |
 | `github/`       | GitHub client, export, publication, pull requests                                  |
 
 `components/` follows the same idea: `landing/`, `auth/`, `shell/` (app chrome
 and navigation), `admin/`, `settings/`, `workspace/` (the Orca workspace and
-its panels), `chat/`, `fixtures/` (verification fixtures) and `ui/`
-(primitives). Put a new file in the area it serves rather than at the root of
-`lib/` or `components/`.
+its panels), `gen2/` (Gen 2 workspace), `chat/`, `fixtures/` (verification
+fixtures) and `ui/` (primitives). Put a new file in the area it serves rather
+than at the root of `lib/` or `components/`.
 
 ## Container Policy
 

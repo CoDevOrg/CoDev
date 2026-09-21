@@ -1986,3 +1986,97 @@ export const claudeConnectionSessions = pgTable(
     index("claude_connection_sessions_expiry_idx").on(table.expiresAt),
   ],
 );
+
+/**
+ * Gen 2 workspace: a shareable Firecracker instance. Isolated from the
+ * original `workspaces` aggregate so this surface can grow without inheriting
+ * agents, worktrees, or the IDE bridge.
+ */
+export const gen2WorkspaceStatus = pgEnum("gen2_workspace_status", [
+  "pending",
+  "provisioning",
+  "ready",
+  "failed",
+  "stopped",
+]);
+
+export const gen2Workspaces = pgTable(
+  "gen2_workspaces",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerId: uuid("owner_id")
+      .references(() => users.id, { onDelete: "restrict" })
+      .notNull(),
+    name: text("name").notNull(),
+    status: gen2WorkspaceStatus("status").default("pending").notNull(),
+    sandboxId: text("sandbox_id"),
+    lastError: text("last_error"),
+    shareTokenHash: text("share_token_hash"),
+    ...timestamps,
+  },
+  (table) => [
+    index("gen2_workspaces_owner_idx").on(table.ownerId),
+    uniqueIndex("gen2_workspaces_share_token_hash_idx").on(
+      table.shareTokenHash,
+    ),
+  ],
+);
+
+export const gen2WorkspaceMembers = pgTable(
+  "gen2_workspace_members",
+  {
+    workspaceId: uuid("workspace_id")
+      .references(() => gen2Workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    userId: uuid("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    role: memberRole("role").default("member").notNull(),
+    joinedAt: timestamp("joined_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.workspaceId, table.userId] }),
+    index("gen2_workspace_members_user_idx").on(table.userId),
+  ],
+);
+
+export const gen2Chats = pgTable(
+  "gen2_chats",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .references(() => gen2Workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    createdByUserId: uuid("created_by_user_id")
+      .references(() => users.id, { onDelete: "restrict" })
+      .notNull(),
+    title: text("title").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    index("gen2_chats_workspace_updated_idx").on(
+      table.workspaceId,
+      table.updatedAt,
+    ),
+  ],
+);
+
+export const gen2ChatMessages = pgTable(
+  "gen2_chat_messages",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    chatId: uuid("chat_id")
+      .references(() => gen2Chats.id, { onDelete: "cascade" })
+      .notNull(),
+    role: text("role").notNull(),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("gen2_chat_messages_chat_idx").on(table.chatId, table.createdAt),
+  ],
+);

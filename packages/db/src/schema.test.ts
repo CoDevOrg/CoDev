@@ -46,6 +46,10 @@ import {
   workspaceRuntimes,
   runtimeHosts,
   workspaces,
+  gen2Workspaces,
+  gen2WorkspaceMembers,
+  gen2Chats,
+  gen2ChatMessages,
   worktrees,
   yjsSnapshots,
 } from "./schema";
@@ -75,6 +79,10 @@ describe("database schema", () => {
 
   it("defines the core workspace tables", () => {
     expect(getTableName(workspaces)).toBe("workspaces");
+    expect(getTableName(gen2Workspaces)).toBe("gen2_workspaces");
+    expect(getTableName(gen2WorkspaceMembers)).toBe("gen2_workspace_members");
+    expect(getTableName(gen2Chats)).toBe("gen2_chats");
+    expect(getTableName(gen2ChatMessages)).toBe("gen2_chat_messages");
     expect(getTableName(organizations)).toBe("organizations");
     expect(getTableName(organizationMembers)).toBe("organization_members");
     expect(getTableName(plans)).toBe("plans");
