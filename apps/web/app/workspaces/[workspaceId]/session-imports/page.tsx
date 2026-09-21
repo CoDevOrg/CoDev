@@ -5,13 +5,16 @@ import { ArrowLeft } from "lucide-react";
 
 import {
   WorkspaceSessionImportUpload,
+  WorkspaceSessionContinueAction,
   WorkspaceSessionRestoreActions,
 } from "@/components/workspace/workspace-session-import-controls";
+import { SessionImportMarkdown } from "@/components/workspace/session-import-markdown";
 import {
-  OrcaCard,
-  OrcaPageHeader,
-  OrcaPageShell,
-} from "@/components/settings/orca-style";
+  LONG_MESSAGE_LENGTH,
+  SessionImportTranscript,
+  sessionMessagePreview,
+} from "@/components/workspace/session-import-transcript";
+import { OrcaCard, OrcaPageShell } from "@/components/settings/orca-style";
 import {
   listStoredSessionImports,
   readStoredSessionImportView,
@@ -82,66 +85,74 @@ export default async function WorkspaceSessionImportsPage({
 
   const basePath = `/workspaces/${workspaceId}/session-imports`;
   return (
-    <OrcaPageShell>
-      <Link
-        className="inline-flex min-h-11 w-fit items-center gap-2 text-sm text-muted-foreground transition-colors motion-reduce:transition-none hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        href={`/workspaces/${workspaceId}`}
-      >
-        <ArrowLeft aria-hidden size={16} />
-        Back to workspace
-      </Link>
-      <OrcaPageHeader
-        title="Imported sessions"
-        description="Bring a coding-agent session into this workspace, inspect its handoff, and choose how to handle its repository state."
-      />
-
-      <OrcaCard className="space-y-4 p-5 sm:p-6">
-        <div className="space-y-1">
-          <h3 className="text-base font-semibold text-foreground">
-            Import a capsule
-          </h3>
-          <p className="text-sm leading-6 text-muted-foreground">
-            The import creates a private provider payload and a normalized
-            session view for this workspace.
-          </p>
-        </div>
-        <WorkspaceSessionImportUpload
-          workspaceId={workspaceId}
-          canUpload={canRestore}
-        />
-      </OrcaCard>
-
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)]">
-        <section aria-labelledby="import-list-heading" className="space-y-3">
-          <h3
-            id="import-list-heading"
-            className="text-sm font-semibold text-foreground"
+    <OrcaPageShell className="max-w-[74rem] gap-6 px-5 py-6 sm:px-8 sm:py-7">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/60 pb-4">
+        <div className="flex min-w-0 items-center gap-4">
+          <Link
+            className="inline-flex min-h-9 w-fit shrink-0 items-center gap-1.5 text-sm text-muted-foreground transition-colors motion-reduce:transition-none hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            href={`/workspaces/${workspaceId}`}
           >
-            Your recent imports
-          </h3>
+            <ArrowLeft aria-hidden size={15} />
+            Workspace
+          </Link>
+          <h1 className="truncate text-xl font-semibold tracking-tight text-foreground">
+            Imported sessions
+          </h1>
+        </div>
+        <details className="relative">
+          <summary className="inline-flex min-h-9 cursor-pointer list-none items-center gap-1.5 rounded-lg border border-border/60 bg-card/60 px-3.5 py-1.5 text-sm font-semibold text-foreground transition-colors motion-reduce:transition-none hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [&::-webkit-details-marker]:hidden">
+            + Import session
+          </summary>
+          <div className="absolute right-0 z-10 mt-2 w-[22rem] max-w-[calc(100vw-2.5rem)] space-y-4 rounded-xl border border-border/60 bg-card p-4 shadow-lg">
+            <p className="text-sm leading-6 text-muted-foreground">
+              Choose a provider and a local session file. CoDev keeps the source
+              private and creates a reviewable copy for this workspace.
+            </p>
+            <WorkspaceSessionImportUpload
+              workspaceId={workspaceId}
+              canUpload={canRestore}
+            />
+          </div>
+        </details>
+      </div>
+
+      <div className="grid items-start gap-8 lg:grid-cols-[15rem_minmax(0,1fr)]">
+        <section aria-labelledby="import-list-heading" className="space-y-1">
+          <p
+            id="import-list-heading"
+            className="mb-2 px-2 text-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase"
+          >
+            Recent imports
+          </p>
           {imports.length === 0 ? (
             <OrcaCard className="p-5 text-sm leading-6 text-muted-foreground">
-              No imported sessions yet. Choose a capsule above to get started.
+              No imported sessions yet. Choose a session file above to get
+              started.
             </OrcaCard>
           ) : (
-            <ul className="space-y-2">
+            <ul className="space-y-0.5 lg:sticky lg:top-6">
               {imports.map((item) => (
                 <li key={item.id}>
                   <Link
                     aria-current={item.id === importId ? "page" : undefined}
-                    className={`block min-h-11 rounded-xl border p-4 transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${item.id === importId ? "border-primary/50 bg-primary/5" : "border-border/60 bg-card/50 hover:bg-muted/60"}`}
+                    className={`flex min-h-12 flex-col justify-center gap-0.5 rounded-lg border-l-2 px-2.5 py-1.5 transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${item.id === importId ? "border-l-primary bg-muted/60" : "border-l-transparent hover:bg-muted/30"}`}
                     href={`${basePath}?import=${item.id}`}
                   >
-                    <span className="block text-sm font-medium capitalize text-foreground">
+                    <span className="flex items-center gap-1.5 text-sm font-semibold capitalize text-foreground">
+                      <span
+                        aria-hidden
+                        className={`size-1.5 shrink-0 rounded-full ${
+                          item.status === "ready" || item.status === "active"
+                            ? "bg-primary"
+                            : "bg-muted-foreground/50"
+                        }`}
+                      />
                       {item.sourceProvider}
                     </span>
                     <span
-                      className="mt-1 block truncate text-xs text-muted-foreground"
+                      className="truncate pl-3 text-xs text-muted-foreground"
                       title={item.externalSessionId}
                     >
-                      {item.externalSessionId}
-                    </span>
-                    <span className="mt-2 block text-xs text-muted-foreground">
                       {statusLabel(item.status)} · {formatDate(item.createdAt)}
                     </span>
                   </Link>
@@ -153,117 +164,165 @@ export default async function WorkspaceSessionImportsPage({
 
         <section
           aria-labelledby="import-detail-heading"
-          className="min-w-0 space-y-4"
+          className="min-w-0 space-y-8"
         >
-          <h3
-            id="import-detail-heading"
-            className="text-sm font-semibold text-foreground"
-          >
+          <h3 id="import-detail-heading" className="sr-only">
             Session view
           </h3>
           {selected ? (
             <>
-              <OrcaCard className="space-y-5 p-5 sm:p-6">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0 space-y-1">
-                    <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                      {selected.source.provider} import
-                    </p>
-                    <h4
-                      className="text-lg font-semibold text-foreground"
-                      style={{ overflowWrap: "anywhere" }}
-                    >
-                      {selected.handoff.currentObjective}
-                    </h4>
-                  </div>
-                  <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium capitalize text-foreground">
-                    {statusLabel(selected.status)}
-                  </span>
-                </div>
-                <p
-                  className="whitespace-pre-wrap text-sm leading-6 text-foreground"
-                  style={{ overflowWrap: "anywhere" }}
-                >
-                  {selected.handoff.summary}
-                </p>
-                <div className="grid gap-3 border-t border-border/60 pt-4 text-sm sm:grid-cols-2">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Repository</p>
-                    <p
-                      className="mt-1 text-foreground"
-                      style={{ overflowWrap: "anywhere" }}
-                    >
-                      {selected.repository.host}/{selected.repository.path}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Repository state
-                    </p>
-                    <p className="mt-1 capitalize text-foreground">
-                      {statusLabel(selected.repositoryStatus)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Source branch
-                    </p>
-                    <p
-                      className="mt-1 text-foreground"
-                      style={{ overflowWrap: "anywhere" }}
-                    >
-                      {selected.repository.sourceBranch}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Imported</p>
-                    <p className="mt-1 text-foreground">
-                      {formatDate(selected.createdAt)}
-                    </p>
-                  </div>
-                </div>
-                <WorkspaceSessionRestoreActions
-                  workspaceId={workspaceId}
-                  importId={selected.id}
-                  status={selected.status}
-                  repositoryStatus={selected.repositoryStatus}
-                  canRestore={canRestore}
-                />
-              </OrcaCard>
-
-              <OrcaCard className="space-y-4 p-5 sm:p-6">
+              <div className="space-y-4 border-b border-border/60 pb-6">
                 <div>
-                  <h4 className="text-base font-semibold text-foreground">
-                    Transcript
+                  <h4 className="text-[17px] font-semibold text-foreground">
+                    Session imported
                   </h4>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Showing the latest {selected.transcript.entries.length} of{" "}
-                    {selected.transcript.totalEntries} entries.
+                  <p
+                    className="mt-1 text-sm text-muted-foreground"
+                    style={{ overflowWrap: "anywhere" }}
+                  >
+                    <span className="capitalize">
+                      {selected.source.provider}
+                    </span>{" "}
+                    · {selected.transcript.totalEntries} messages ·{" "}
+                    {selected.repository.host}/{selected.repository.path} ·{" "}
+                    {selected.repository.sourceBranch}
+                    <span className="mx-2 text-muted-foreground/50">·</span>
+                    Imported {formatDate(selected.createdAt)}
                   </p>
                 </div>
-                <ol className="space-y-4">
-                  {selected.transcript.entries.map((entry) => (
-                    <li
-                      key={entry.sequence}
-                      className="border-t border-border/60 pt-4 first:border-0 first:pt-0"
+
+                <div className="max-w-[72ch] space-y-2">
+                  <h5 className="text-sm font-semibold text-foreground">
+                    Latest objective
+                  </h5>
+                  {selected.handoff.currentObjective.length >
+                  LONG_MESSAGE_LENGTH ? (
+                    <details className="rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
+                      <summary className="min-h-11 cursor-pointer py-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                        <span className="block font-medium">
+                          Read full objective
+                        </span>
+                        <span className="mt-1 block text-sm text-muted-foreground">
+                          {sessionMessagePreview(
+                            selected.handoff.currentObjective,
+                          )}
+                        </span>
+                      </summary>
+                      <div className="pt-4">
+                        <SessionImportMarkdown
+                          text={selected.handoff.currentObjective}
+                        />
+                      </div>
+                    </details>
+                  ) : (
+                    <SessionImportMarkdown
+                      text={selected.handoff.currentObjective}
+                    />
+                  )}
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="flex flex-col gap-2 rounded-xl border border-primary/40 bg-primary/[0.07] p-4">
+                    <p className="text-sm font-semibold text-foreground">
+                      Continue in CoDev
+                    </p>
+                    <p className="flex-1 text-xs leading-5 text-muted-foreground">
+                      Open a new agent with the full conversation and an
+                      isolated repository copy. CoDev prepares it automatically;
+                      the original stays unchanged.
+                    </p>
+                    <WorkspaceSessionContinueAction
+                      workspaceId={workspaceId}
+                      importId={selected.id}
+                      status={selected.status}
+                      repositoryStatus={selected.repositoryStatus}
+                      agentSessionId={selected.agentSessionId}
+                      canContinue={canRestore}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2 rounded-xl border border-border/60 p-4">
+                    <p className="text-sm font-semibold text-foreground">
+                      Continue chat only
+                    </p>
+                    <p className="flex-1 text-xs leading-5 text-muted-foreground">
+                      Carry over the conversation into CoDev Agents without
+                      restoring the imported repository changes.
+                    </p>
+                    <WorkspaceSessionContinueAction
+                      workspaceId={workspaceId}
+                      importId={selected.id}
+                      status={selected.status}
+                      repositoryStatus={selected.repositoryStatus}
+                      agentSessionId={selected.agentSessionId}
+                      canContinue={canRestore}
+                      chatOnly
+                    />
+                  </div>
+                </div>
+
+                {selected.status === "restoring" &&
+                (selected.repositoryStatus === "conflicted" ||
+                  selected.repositoryStatus === "unavailable") ? (
+                  <section
+                    aria-labelledby="restore-repository-heading"
+                    className="rounded-xl border border-border/60 bg-muted/20 p-4"
+                  >
+                    <h5
+                      id="restore-repository-heading"
+                      className="text-sm font-semibold text-foreground"
                     >
-                      <p className="text-xs font-semibold capitalize text-muted-foreground">
-                        {entry.authorName || entry.role}
-                      </p>
-                      <p
-                        className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground"
-                        style={{ overflowWrap: "anywhere" }}
-                      >
-                        {entry.text}
-                      </p>
-                    </li>
-                  ))}
-                </ol>
-              </OrcaCard>
+                      Repository needs attention
+                    </h5>
+                    <p className="mt-1 max-w-[72ch] text-sm leading-6 text-muted-foreground">
+                      CoDev could not prepare the isolated repository
+                      automatically. Your original session, main branch, and
+                      remote repository were not changed. You can retry or keep
+                      this import as a read-only transcript.
+                    </p>
+                    <div className="mt-4">
+                      <WorkspaceSessionRestoreActions
+                        workspaceId={workspaceId}
+                        importId={selected.id}
+                        status={selected.status}
+                        repositoryStatus={selected.repositoryStatus}
+                        canRestore={canRestore}
+                      />
+                    </div>
+                  </section>
+                ) : null}
+              </div>
+
+              <section>
+                <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                  <h4 className="text-[13px] font-bold tracking-wide text-foreground">
+                    Conversation
+                  </h4>
+                  <span className="text-xs text-muted-foreground">
+                    {selected.transcript.entries.length} of{" "}
+                    {selected.transcript.totalEntries} messages · read-only
+                  </span>
+                  {selected.transcript.entries.some(
+                    (entry) => entry.text.length > LONG_MESSAGE_LENGTH,
+                  ) ? (
+                    <p className="basis-full text-xs leading-5 text-muted-foreground">
+                      Large source prompts are marked as{" "}
+                      <strong className="font-medium text-foreground">
+                        imported context
+                      </strong>{" "}
+                      and collapsed, so they are not mistaken for ordinary
+                      messages.
+                    </p>
+                  ) : null}
+                </div>
+                <SessionImportTranscript
+                  entries={selected.transcript.entries}
+                  provider={selected.source.provider}
+                />
+              </section>
             </>
           ) : (
             <OrcaCard className="p-5 text-sm leading-6 text-muted-foreground">
-              Select an import to review its handoff and repository status.
+              Select an import to review its conversation and continue from it.
             </OrcaCard>
           )}
         </section>

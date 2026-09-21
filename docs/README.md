@@ -36,9 +36,10 @@ kept for the record only.
 
 ## Product
 
-| Document                                                           | Status | Covers                                                    |
-| ------------------------------------------------------------------ | ------ | --------------------------------------------------------- |
-| [product/ENTERPRISE_FEATURES.md](./product/ENTERPRISE_FEATURES.md) | Design | Long-range product vision; not a list of shipped features |
+| Document                                                                     | Status | Covers                                                                         |
+| ---------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------ |
+| [product/ENTERPRISE_FEATURES.md](./product/ENTERPRISE_FEATURES.md)           | Design | Long-range product vision; not a list of shipped features                      |
+| [session-imports-current-mockup.html](./session-imports-current-mockup.html) | Design | Standalone current-state mockup and redesign brief for imported-session review |
 
 ## Original specs (`specs/`)
 

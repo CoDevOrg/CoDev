@@ -1,0 +1,131 @@
+.list {
+  display: block;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.message {
+  min-width: 0;
+  max-width: 72ch;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.message:first-child {
+  padding-top: 0.25rem;
+  border-top: none;
+}
+
+.user .role {
+  color: var(--color-primary);
+}
+
+.other .role {
+  color: color-mix(
+    in srgb,
+    var(--color-foreground) 55%,
+    var(--color-primary) 15%
+  );
+}
+
+.context {
+  max-width: 100%;
+  padding-left: 0.75rem;
+  margin-left: -0.875rem;
+  border-top: none;
+  border-left: 2px solid var(--color-primary);
+}
+
+.meta {
+  display: flex;
+  align-items: baseline;
+  gap: 0.625rem;
+  margin-bottom: 0.375rem;
+}
+
+.role {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.avatar {
+  display: none;
+}
+
+.sequence {
+  color: var(--color-muted-foreground);
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.time {
+  margin-left: auto;
+  color: var(--color-muted-foreground);
+  font-size: 0.75rem;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.disclosure summary {
+  display: list-item;
+  min-height: 2.5rem;
+  cursor: pointer;
+  color: var(--color-foreground);
+}
+
+.disclosure summary:focus-visible {
+  border-radius: 0.25rem;
+  outline: 2px solid var(--color-ring);
+  outline-offset: 3px;
+}
+
+.disclosureLabel,
+.preview,
+.expandHint {
+  display: block;
+  margin-left: 0.5rem;
+}
+
+.disclosureLabel {
+  color: var(--color-foreground);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.preview {
+  display: -webkit-box;
+  overflow: hidden;
+  margin-top: 0.35rem;
+  color: var(--color-muted-foreground);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.expandHint {
+  margin-top: 0.4rem;
+  color: var(--color-primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.disclosure[open] .preview,
+.disclosure[open] .expandHint {
+  display: none;
+}
+
+.fullText {
+  margin-top: 0.875rem;
+  padding-top: 0.875rem;
+  border-top: 1px solid var(--color-border);
+}

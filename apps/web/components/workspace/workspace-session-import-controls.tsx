@@ -3,8 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
-const CAPSULE_MEDIA_TYPE = "application/vnd.codev.session-capsule.v0";
-const MAX_CAPSULE_BYTES = 32 * 1_024 * 1_024;
+const MAX_SOURCE_BYTES = 5 * 1_024 * 1_024;
 
 async function responseError(response: Response) {
   const body = (await response.json().catch(() => null)) as {
@@ -27,6 +26,9 @@ export function WorkspaceSessionImportUpload({
   } | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const [provider, setProvider] = useState<"codex" | "claude" | "cursor">(
+    "codex",
+  );
 
   async function upload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -35,11 +37,12 @@ export function WorkspaceSessionImportUpload({
     setError("");
     try {
       const response = await fetch(
-        `/api/workspaces/${workspaceId}/session-imports`,
+        `/api/workspaces/${workspaceId}/session-imports/source`,
         {
           method: "POST",
           headers: {
-            "content-type": CAPSULE_MEDIA_TYPE,
+            "content-type": "application/x-ndjson",
+            "x-session-provider": provider,
             "idempotency-key": selection.idempotencyKey,
           },
           body: selection.file,
@@ -74,18 +77,45 @@ export function WorkspaceSessionImportUpload({
       <div className="space-y-2">
         <label
           className="block text-sm font-medium text-foreground"
-          htmlFor="capsule-file"
+          htmlFor="session-provider"
         >
-          Capsule file
+          Provider
+        </label>
+        <select
+          id="session-provider"
+          className="min-h-11 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          value={provider}
+          disabled={pending}
+          onChange={(event) => {
+            setProvider(event.target.value as typeof provider);
+            setSelection(null);
+            setError("");
+          }}
+        >
+          <option value="codex">Codex</option>
+          <option value="claude" disabled>
+            Claude (coming soon)
+          </option>
+          <option value="cursor" disabled>
+            Cursor (coming soon)
+          </option>
+        </select>
+      </div>
+      <div className="space-y-2">
+        <label
+          className="block text-sm font-medium text-foreground"
+          htmlFor="source-session-file"
+        >
+          Codex session file
         </label>
         <input
-          accept=".codevsc,application/vnd.codev.session-capsule.v0"
+          accept=".jsonl,application/x-ndjson"
           className="block min-h-11 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1 file:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          id="capsule-file"
+          id="source-session-file"
           type="file"
           disabled={pending}
           aria-describedby={
-            error ? "capsule-file-hint capsule-file-error" : "capsule-file-hint"
+            error ? "source-file-hint source-file-error" : "source-file-hint"
           }
           aria-invalid={Boolean(error)}
           onChange={(event) => {
@@ -93,25 +123,48 @@ export function WorkspaceSessionImportUpload({
             setError("");
             if (!file) {
               setSelection(null);
-            } else if (file.size > MAX_CAPSULE_BYTES) {
+            } else if (file.size > MAX_SOURCE_BYTES) {
               setSelection(null);
-              setError("Choose a capsule smaller than 32 MiB.");
+              setError("Choose a session file smaller than 5 MiB.");
             } else {
               setSelection({ file, idempotencyKey: crypto.randomUUID() });
             }
           }}
         />
         <p
-          id="capsule-file-hint"
+          id="source-file-hint"
           className="text-sm leading-6 text-muted-foreground"
         >
-          Choose a CoDev Capsule v0 file, up to 32 MiB. Its provider data stays
-          private to you.
+          Choose a Codex rollout file named <code>rollout-*.jsonl</code>, up to
+          5 MiB. CoDev converts it and opens the imported session for review.
         </p>
+        <details className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+          <summary className="min-h-11 cursor-pointer content-center font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            Where is my Codex session file?
+          </summary>
+          <div className="space-y-2 pb-1 leading-6">
+            <p>
+              On Windows, paste <code>%USERPROFILE%\.codex\sessions</code> into
+              the file picker&apos;s address bar. On macOS or Linux, open{" "}
+              <code>~/.codex/sessions</code>; on macOS, press Command–Shift–G in
+              the picker to enter the folder path.
+            </p>
+            <p>
+              Open the year, month, and day folders for the session, then choose
+              its <code>rollout-*.jsonl</code> file. If you set{" "}
+              <code>CODEX_HOME</code>, look in its <code>sessions</code> folder
+              instead. <code>history.jsonl</code> is not a session rollout.
+            </p>
+            <p>
+              This first import supports rollouts recorded in a Git repository.
+              Review the file for sensitive information before uploading it.
+            </p>
+          </div>
+        </details>
       </div>
       {error ? (
         <p
-          id="capsule-file-error"
+          id="source-file-error"
           role="alert"
           className="text-sm text-destructive"
         >
@@ -120,7 +173,7 @@ export function WorkspaceSessionImportUpload({
       ) : null}
       {pending ? (
         <p role="status" className="text-sm text-muted-foreground">
-          Importing the capsule…
+          Importing the session…
         </p>
       ) : null}
       <button
@@ -133,6 +186,18 @@ export function WorkspaceSessionImportUpload({
     </form>
   );
 }
+
+// Plain-language status for each repository lifecycle state — the UI never
+// exposes the raw enum (matched/conflicted/transcript_only/…) to the user.
+const REPOSITORY_STATUS_COPY: Record<string, string> = {
+  pending: "Repository changes are available to restore.",
+  matched: "No repository changes were detected.",
+  restored: "Repository matched. No action needed.",
+  conflicted: "Repository could not be matched to the current workspace.",
+  unavailable: "Repository could not be matched — the source was unreachable.",
+  transcript_only:
+    "Continuing with the transcript only. Repository changes were not restored.",
+};
 
 export function WorkspaceSessionRestoreActions({
   workspaceId,
@@ -154,6 +219,18 @@ export function WorkspaceSessionRestoreActions({
   const canAcceptTranscriptOnly =
     status === "restoring" &&
     (repositoryStatus === "conflicted" || repositoryStatus === "unavailable");
+  const needsAction =
+    canRestore &&
+    canAttempt &&
+    (repositoryStatus === "pending" ||
+      repositoryStatus === "conflicted" ||
+      repositoryStatus === "unavailable");
+
+  // Repository handling is only relevant while an import is being reviewed
+  // or restored; once it has failed or been deleted there is nothing to say.
+  if (status !== "stored" && status !== "restoring" && status !== "ready") {
+    return null;
+  }
 
   async function restore(transcriptOnly: boolean) {
     setPending(true);
@@ -179,57 +256,174 @@ export function WorkspaceSessionRestoreActions({
     }
   }
 
-  if (status === "ready") {
-    return (
-      <p className="text-sm leading-6 text-muted-foreground">
-        Repository handling is complete. Continuing the session will be
-        available in a later step.
-      </p>
-    );
-  }
-  if (!canAttempt || !canRestore) return null;
+  const message =
+    REPOSITORY_STATUS_COPY[repositoryStatus] ??
+    repositoryStatus.replaceAll("_", " ");
 
   return (
-    <div className="space-y-4">
-      {pending ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          Updating repository status…
+    <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border/60 p-4">
+      <div className="space-y-1">
+        <p className="text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
+          Repository state
         </p>
-      ) : null}
-      {error ? (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      ) : null}
-      <div className="flex flex-wrap gap-3">
-        <button
-          className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-lg bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition-colors motion-reduce:transition-none hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={pending}
-          onClick={() => void restore(false)}
-          type="button"
-        >
-          {pending
-            ? "Working…"
-            : repositoryStatus === "pending"
-              ? "Restore repository"
-              : "Retry restoration"}
-        </button>
-        {canAcceptTranscriptOnly ? (
-          <button
-            className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-lg border border-border bg-background px-5 py-2 text-sm font-medium text-foreground transition-colors motion-reduce:transition-none hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={pending}
-            onClick={() => void restore(true)}
-            type="button"
-          >
-            Continue with transcript only
-          </button>
+        <p className="text-sm text-foreground">{message}</p>
+        {pending ? (
+          <p role="status" className="text-xs text-muted-foreground">
+            Preparing the repository…
+          </p>
+        ) : null}
+        {error ? (
+          <p role="alert" className="text-xs text-destructive">
+            {error}
+          </p>
         ) : null}
       </div>
-      {canAcceptTranscriptOnly ? (
-        <p className="text-sm leading-6 text-muted-foreground">
-          Transcript-only skips repository changes from this import. You can
-          review the handoff and transcript, but the original files will not be
-          restored.
+      {needsAction ? (
+        <div className="flex flex-wrap gap-2">
+          {canAcceptTranscriptOnly ? (
+            <button
+              className="inline-flex min-h-9 cursor-pointer items-center justify-center rounded-lg border border-border bg-background px-3.5 text-sm font-medium text-foreground transition-colors motion-reduce:transition-none hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={pending}
+              onClick={() => void restore(true)}
+              type="button"
+            >
+              Continue with transcript only
+            </button>
+          ) : null}
+          <button
+            className="inline-flex min-h-9 cursor-pointer items-center justify-center rounded-lg border border-border bg-background px-3.5 text-sm font-medium text-foreground transition-colors motion-reduce:transition-none hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={pending}
+            onClick={() => void restore(false)}
+            type="button"
+          >
+            {pending
+              ? "Working…"
+              : repositoryStatus === "pending"
+                ? "Restore repository"
+                : "Retry preparation"}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function WorkspaceSessionContinueAction({
+  workspaceId,
+  importId,
+  status,
+  repositoryStatus,
+  agentSessionId,
+  canContinue,
+  chatOnly = false,
+}: {
+  workspaceId: string;
+  importId: string;
+  status: string;
+  repositoryStatus: string;
+  agentSessionId: string | null;
+  canContinue: boolean;
+  chatOnly?: boolean;
+}) {
+  const router = useRouter();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  const existing = status === "active" && Boolean(agentSessionId);
+  const repositoryReady =
+    repositoryStatus === "matched" || repositoryStatus === "restored";
+  const repositoryNeedsAttention =
+    repositoryStatus === "conflicted" || repositoryStatus === "unavailable";
+  const canPrepare =
+    (status === "stored" || status === "restoring") &&
+    repositoryStatus === "pending";
+  const enabled =
+    canContinue &&
+    (existing ||
+      (chatOnly &&
+        (status === "stored" ||
+          status === "restoring" ||
+          status === "ready")) ||
+      (!chatOnly && (canPrepare || (status === "ready" && repositoryReady))));
+
+  async function continueSession() {
+    if (!enabled || pending) return;
+    if (agentSessionId) {
+      router.push(`/workspaces/${workspaceId}?agent=${agentSessionId}`);
+      return;
+    }
+    setPending(true);
+    setError("");
+    try {
+      const response = await fetch(
+        `/api/workspaces/${workspaceId}/session-imports/${importId}/continue`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(chatOnly ? { chatOnly: true } : {}),
+        },
+      );
+      if (!response.ok) {
+        setError(await responseError(response));
+        router.refresh();
+        return;
+      }
+      const result = (await response.json()) as { sessionId: string };
+      router.push(`/workspaces/${workspaceId}?agent=${result.sessionId}`);
+    } catch {
+      setError("Could not reach the workspace. Try again.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  const hint = !canContinue
+    ? "Workspace editing permission is required."
+    : chatOnly
+      ? "Carries over the conversation only. Imported repository changes are not applied."
+      : repositoryStatus === "transcript_only"
+        ? "This import has no restored repository, so it can’t start a CoDev session."
+        : repositoryNeedsAttention
+          ? "The repository needs attention below before you can continue."
+          : status !== "ready" && !existing
+            ? canPrepare
+              ? "CoDev will prepare an isolated copy of the repository automatically."
+              : "This import is not ready to continue."
+            : null;
+
+  return (
+    <div className="space-y-2">
+      <button
+        className={`inline-flex min-h-11 w-full cursor-pointer items-center justify-center rounded-lg px-4 text-sm font-medium transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${chatOnly ? "border border-border/70 bg-background text-foreground hover:bg-muted/60" : "bg-primary text-primary-foreground hover:bg-primary/90"}`}
+        disabled={!enabled || pending}
+        onClick={() => void continueSession()}
+        type="button"
+      >
+        {pending
+          ? chatOnly
+            ? "Creating chat session…"
+            : repositoryReady
+              ? "Creating session…"
+              : "Preparing workspace…"
+          : existing
+            ? "Open in CoDev"
+            : chatOnly
+              ? "Continue chat only"
+              : "Continue in CoDev"}
+      </button>
+      {pending ? (
+        <p role="status" className="text-center text-xs text-muted-foreground">
+          {chatOnly
+            ? "Copying the conversation into a new CoDev Agent session…"
+            : repositoryReady
+              ? "Copying the conversation into a new session…"
+              : "Preparing the repository, then creating your session…"}
+        </p>
+      ) : hint ? (
+        <p className="text-center text-xs text-muted-foreground">{hint}</p>
+      ) : null}
+      {error ? (
+        <p role="alert" className="text-center text-xs text-destructive">
+          {error}
         </p>
       ) : null}
     </div>

@@ -4,7 +4,8 @@ Status: Current for Capsule v0, durable storage, lifecycle, verified transport,
 the provider-neutral repository restoration engine, Azure sandbox
 materialization, and the scoped restore trigger. Provider rehydration and
 launch are future work. The authenticated capsule intake route and importer
-view are available.
+view are available. Codex rollout source intake is available; Claude and Cursor
+source adapters remain future work.
 
 ## Product model
 
@@ -112,6 +113,27 @@ state backward.
 
 ## Capsule intake
 
+The user-facing import form accepts a selected local Codex `.jsonl` rollout.
+`POST /api/workspaces/{workspaceId}/session-imports/source` validates the Codex
+header and Git identity, normalizes user and assistant messages, creates Capsule
+v0 internally, and stores it through the same encrypted import path. The source
+is limited to 5 MiB. The rollout is retained as importer-scoped provider payload;
+it is never sent to the repository restore runtime. Rollouts without Git identity
+or conversation messages are rejected. The form displays Claude and Cursor as
+future sources; each will supply its own adapter to the shared capsule boundary.
+The rollout alone does not contain a complete working-tree snapshot, so this
+source path records no Git patch or untracked files.
+
+The importer can create a managed CoDev continuation with one action. CoDev
+automatically prepares an isolated worktree at the imported base commit,
+reapplies any captured changes, converts the full normalized transcript into
+completed historical turns, and opens a new idle agent session. The operation
+is idempotent: reopening an active import returns the already-linked agent
+session rather than creating another. This is a fresh CoDev session and never
+writes to or resumes the provider-native session. Manual repository controls
+appear only when automatic preparation reports a conflict or cannot find the
+required repository state.
+
 An importer with workspace co-steering permission sends the complete Capsule
 v0 transport as the raw body of
 `POST /api/workspaces/{workspaceId}/session-imports`. The request uses
@@ -129,8 +151,8 @@ credential-free repository identity and restore status, and the restore actions
 currently available. It never returns attachment bytes or provider-native
 payload. Creation returns HTTP 201; an idempotent retry returns HTTP 200.
 
-The importer opens `/workspaces/{workspaceId}/session-imports` to upload a
-capsule or reopen one of their recent imports. The view decrypts and verifies
+The importer opens `/workspaces/{workspaceId}/session-imports` to select a
+provider source file or reopen one of their recent imports. The view decrypts and verifies
 the stored capsule on the server, then presents its normalized handoff,
 repository state, and the latest 50 transcript entries. Provider payload and
 attachment bytes stay out of the page. Workspace members other than the
@@ -208,8 +230,18 @@ after a conflict, retry reserves a new worktree and restore operation. An
 `unavailable` repository can also be retried if its base commit later becomes
 available; neither case silently selects transcript-only continuation.
 
+`POST /api/workspaces/{workspaceId}/session-imports/{importId}/continue`
+provides the normal one-action path. It first returns an existing linked
+session when present, otherwise runs repository restoration when the import is
+not yet ready and then creates the managed continuation. A conflict or missing
+repository state returns a recoverable conflict response; the page refreshes
+to reveal the manual retry and transcript-only controls.
+
 ## Deliberately deferred
 
-Runtime rehydration after IDE-home recreation, provider launching, and the
-managed or exact-native continuation choice are not implemented by this
-milestone.
+Runtime rehydration after IDE-home recreation and exact-native provider resume
+remain deferred. Managed CoDev continuation is implemented only for imports
+with a matched or restored repository; transcript-only imports remain
+reviewable but cannot launch a managed session through the repository-aware
+path. A separate chat-only continuation can launch from the workspace's
+current integration baseline without applying imported repository changes.

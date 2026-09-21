@@ -31,6 +31,14 @@ vi.mock("@/lib/auth/access", () => ({
 vi.mock("@/lib/agents/session-import-storage", () => ({
   storeSessionImport: mocks.storeSessionImport,
   readStoredSessionImportState: mocks.readStoredSessionImportState,
+  SessionImportStorageError: class extends Error {
+    constructor(
+      message: string,
+      readonly status = 400,
+    ) {
+      super(message);
+    }
+  },
 }));
 
 import { POST } from "./route";
@@ -254,6 +262,18 @@ describe("session import intake", () => {
       status: "restoring",
       repository: { status: "conflicted" },
       actions: { restoreRepository: true, acceptTranscriptOnly: true },
+    });
+  });
+
+  it("does not expose infrastructure details from storage failures", async () => {
+    mocks.storeSessionImport.mockRejectedValue(
+      new Error("Key Vault denied caller oid=private-id for key secret-name"),
+    );
+    const response = await invoke(request(artifact()));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      error:
+        "The session could not be saved. Please try again or contact your workspace administrator.",
     });
   });
 });

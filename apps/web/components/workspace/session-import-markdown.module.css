@@ -1,0 +1,137 @@
+.markdown {
+  max-width: 75ch;
+  color: var(--color-foreground);
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.markdown > :first-child {
+  margin-top: 0;
+}
+
+.markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown :is(p, ul, ol, blockquote, pre, .tableScroll) {
+  margin-block: 0.75rem;
+}
+
+.markdown :is(h1, h2, h3, h4, h5, h6) {
+  margin-block: 1.25rem 0.5rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.markdown h1 {
+  font-size: 1.3rem;
+}
+
+.markdown h2 {
+  font-size: 1.18rem;
+}
+
+.markdown h3 {
+  font-size: 1.06rem;
+}
+
+.markdown :is(ul, ol) {
+  padding-left: 1.5rem;
+}
+
+.markdown ul {
+  list-style: disc;
+}
+
+.markdown ol {
+  list-style: decimal;
+}
+
+.markdown li + li {
+  margin-top: 0.35rem;
+}
+
+.markdown li > :is(p, ul, ol) {
+  margin-block: 0.35rem;
+}
+
+.markdown blockquote {
+  border-left: 3px solid var(--color-border);
+  padding-left: 1rem;
+  color: var(--color-muted-foreground);
+}
+
+.markdown a {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.markdown a:focus-visible {
+  border-radius: 2px;
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+.markdown :not(pre) > code {
+  border-radius: 0.3rem;
+  background: var(--color-muted);
+  padding: 0.1rem 0.3rem;
+  font-size: 0.88em;
+}
+
+.markdown pre {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 0.65rem;
+  background: var(--color-muted);
+  padding: 0.9rem 1rem;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  overflow-wrap: normal;
+}
+
+.markdown pre code {
+  font-size: inherit;
+}
+
+.tableScroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.tableScroll table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.tableScroll :is(th, td) {
+  border: 1px solid var(--color-border);
+  padding: 0.5rem 0.7rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.tableScroll th {
+  background: var(--color-muted);
+  font-weight: 600;
+}
+
+.markdown hr {
+  margin-block: 1.25rem;
+  border: 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.markdown input[type="checkbox"] {
+  margin-right: 0.4rem;
+  accent-color: var(--color-primary);
+}
+
+.imagePlaceholder {
+  color: var(--color-muted-foreground);
+  font-style: italic;
+}

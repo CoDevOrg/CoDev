@@ -47,6 +47,7 @@ const record = {
   status: "restoring",
   repositoryStatus: "conflicted",
   worktreeId: null,
+  agentSessionId: null,
   capsuleSha256: "expected-digest",
   createdAt: new Date("2026-09-18T12:00:00.000Z"),
 };
