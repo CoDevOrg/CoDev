@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => {
     status: "pending" as string,
     sandboxId: null as string | null,
     lastError: null as string | null,
-    role: "owner" as const,
+    role: "owner" as "owner" | "member",
     createdAt: new Date("2026-09-20T20:00:00.000Z"),
     updatedAt: new Date("2026-09-20T20:00:00.000Z"),
   };
@@ -18,24 +18,50 @@ const mocks = vi.hoisted(() => {
     where: vi.fn(),
     limit: vi.fn(),
   };
+  // Drizzle's update builder is chainable and awaitable, and the claim adds
+  // `.returning()`. `claimed` says whether the compare-and-set matched a row;
+  // when it does not, the write must not land -- that is the whole point of
+  // the claim, and modelling it is how the race test means anything.
+  const state = { claimed: true };
+  let pending: Record<string, unknown> | null = null;
+
+  function apply() {
+    if (!pending) return;
+    const values = pending;
+    pending = null;
+    updates.push(values);
+    if (typeof values.status === "string") member.status = values.status;
+    if ("sandboxId" in values) {
+      member.sandboxId = values.sandboxId as string | null;
+    }
+    if ("lastError" in values) {
+      member.lastError = values.lastError as string | null;
+    }
+  }
+
   const updateQuery = {
     set: vi.fn((values: Record<string, unknown>) => {
-      updates.push(values);
-      if (typeof values.status === "string") {
-        member.status = values.status;
-      }
-      if ("sandboxId" in values) {
-        member.sandboxId = values.sandboxId as string | null;
-      }
-      if ("lastError" in values) {
-        member.lastError = values.lastError as string | null;
-      }
+      pending = values;
       return updateQuery;
     }),
-    where: vi.fn().mockResolvedValue(undefined),
+    where: vi.fn(() => updateQuery),
+    returning: vi.fn(async () => {
+      if (!state.claimed) {
+        pending = null;
+        return [];
+      }
+      apply();
+      return [{ id: member.id }];
+    }),
+    then: (resolve: (value: undefined) => unknown) => {
+      apply();
+      return resolve(undefined);
+    },
   };
+
   return {
     updates,
+    state,
     member,
     selectQuery,
     updateQuery,
@@ -67,7 +93,7 @@ vi.mock("../runtime/orchestrator-health", () => ({
 }));
 
 import { Gen2LifecycleError } from "./errors";
-import { startGen2Instance, stopGen2Instance } from "./instance";
+import { ensureGen2Instance, stopGen2Instance } from "./instance";
 
 describe("gen2 instance lifecycle", () => {
   beforeEach(() => {
@@ -76,6 +102,7 @@ describe("gen2 instance lifecycle", () => {
     mocks.member.sandboxId = null;
     mocks.member.lastError = null;
     mocks.member.role = "owner";
+    mocks.state.claimed = true;
     for (const method of ["from", "innerJoin", "where"] as const) {
       mocks.selectQuery[method].mockReturnValue(mocks.selectQuery);
     }
@@ -89,7 +116,7 @@ describe("gen2 instance lifecycle", () => {
   });
 
   it("provisions a Firecracker sandbox and marks the workspace ready", async () => {
-    const workspace = await startGen2Instance(mocks.member.id, "user-1", {
+    const workspace = await ensureGen2Instance(mocks.member.id, "user-1", {
       provision: mocks.provision,
       destroy: mocks.destroy,
     });
@@ -108,7 +135,7 @@ describe("gen2 instance lifecycle", () => {
 
   it("reattaches when the Firecracker machine is already on the host", async () => {
     const current = vi.fn().mockResolvedValue({ id: "sandbox-1" });
-    const workspace = await startGen2Instance(mocks.member.id, "user-1", {
+    const workspace = await ensureGen2Instance(mocks.member.id, "user-1", {
       provision: mocks.provision,
       destroy: mocks.destroy,
       current,
@@ -122,7 +149,7 @@ describe("gen2 instance lifecycle", () => {
   it("does not mark the workspace failed when the host is still waking", async () => {
     mocks.ensureHostReady.mockRejectedValue(new TypeError("fetch failed"));
     await expect(
-      startGen2Instance(mocks.member.id, "user-1", {
+      ensureGen2Instance(mocks.member.id, "user-1", {
         provision: mocks.provision,
         destroy: mocks.destroy,
       }),
@@ -141,7 +168,7 @@ describe("gen2 instance lifecycle", () => {
   it("does not surface a raw fetch failure when the host is unreachable", async () => {
     mocks.provision.mockRejectedValue(new TypeError("fetch failed"));
     await expect(
-      startGen2Instance(mocks.member.id, "user-1", {
+      ensureGen2Instance(mocks.member.id, "user-1", {
         provision: mocks.provision,
         destroy: mocks.destroy,
       }),
@@ -158,7 +185,7 @@ describe("gen2 instance lifecycle", () => {
   it("marks the workspace failed when provisioning throws", async () => {
     mocks.provision.mockRejectedValue(new Error("host unavailable"));
     await expect(
-      startGen2Instance(mocks.member.id, "user-1", {
+      ensureGen2Instance(mocks.member.id, "user-1", {
         provision: mocks.provision,
         destroy: mocks.destroy,
       }),
@@ -167,6 +194,40 @@ describe("gen2 instance lifecycle", () => {
       status: "failed",
       lastError: "host unavailable",
     });
+  });
+
+  it("does nothing when the machine is already running", async () => {
+    mocks.member.status = "ready";
+    mocks.member.sandboxId = "sandbox-1";
+    const workspace = await ensureGen2Instance(mocks.member.id, "user-1", {
+      provision: mocks.provision,
+      destroy: mocks.destroy,
+    });
+    expect(workspace.status).toBe("ready");
+    expect(mocks.provision).not.toHaveBeenCalled();
+    expect(mocks.updates).toEqual([]);
+  });
+
+  it("lets any member bring the machine up, not just the owner", async () => {
+    // Whoever opens the share link first should not have to wait for the
+    // owner to press something.
+    mocks.member.role = "member";
+    const workspace = await ensureGen2Instance(mocks.member.id, "user-2", {
+      provision: mocks.provision,
+      destroy: mocks.destroy,
+    });
+    expect(workspace.status).toBe("ready");
+    expect(mocks.provision).toHaveBeenCalledOnce();
+  });
+
+  it("steps aside when another member already claimed provisioning", async () => {
+    mocks.state.claimed = false;
+    const workspace = await ensureGen2Instance(mocks.member.id, "user-2", {
+      provision: mocks.provision,
+      destroy: mocks.destroy,
+    });
+    expect(mocks.provision).not.toHaveBeenCalled();
+    expect(workspace.status).toBe("pending");
   });
 
   it("destroys the sandbox when the owner stops it", async () => {

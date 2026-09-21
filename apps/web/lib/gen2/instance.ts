@@ -1,6 +1,6 @@
 import "server-only";
 
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 import type { Gen2WorkspaceStatus } from "@codev/contracts";
@@ -48,16 +48,12 @@ export function buildBlankSandboxSource() {
   };
 }
 
-export function canStartInstance(status: Gen2WorkspaceStatus) {
-  return status === "pending" || status === "failed" || status === "stopped";
-}
-
 export function canStopInstance(status: Gen2WorkspaceStatus) {
   return status === "ready" || status === "provisioning";
 }
 
 const HOST_UNREACHABLE_MESSAGE =
-  "The Firecracker host could not be reached. Wait a few seconds and try Start instance again.";
+  "The Firecracker host could not be reached. Wait a few seconds and reload.";
 
 /** Firecracker create can outlast the default 70s orchestrator timeout. */
 const GEN2_PROVISION_TIMEOUT_MS = 120_000;
@@ -138,27 +134,49 @@ async function writeGen2Instance(
     .where(eq(schema.gen2Workspaces.id, workspaceId));
 }
 
-export async function startGen2Instance(
+/**
+ * Claims the right to provision, atomically.
+ *
+ * Two members opening the same workspace at once would otherwise both see
+ * `pending` and both provision. The compare-and-set means exactly one wins;
+ * the loser gets `null` and simply waits for the winner's VM.
+ */
+async function claimProvisioning(workspaceId: string) {
+  const claimed = await getDatabase()
+    .update(schema.gen2Workspaces)
+    .set({ status: "provisioning", lastError: null, updatedAt: new Date() })
+    .where(
+      and(
+        eq(schema.gen2Workspaces.id, workspaceId),
+        inArray(schema.gen2Workspaces.status, ["pending", "stopped", "failed"]),
+      ),
+    )
+    .returning({ id: schema.gen2Workspaces.id });
+  return claimed.length > 0;
+}
+
+/**
+ * Makes sure this workspace has a machine, and returns once it does.
+ *
+ * There is no "start" button: opening a workspace is the intent to use it, so
+ * this runs on open and on create. It is idempotent and safe to call from any
+ * member -- a workspace nobody can start is a workspace nobody can use, and
+ * the owner is not always the person who opens the share link first.
+ */
+export async function ensureGen2Instance(
   workspaceId: string,
   userId: string,
   runtime: Gen2SandboxRuntime = createFirecrackerRuntime(),
 ) {
   const membership = await requireGen2Member(workspaceId, userId);
-  if (membership.role !== "owner") {
-    throw new Gen2AccessError("Only the owner can start this instance.", 403);
-  }
-  if (!canStartInstance(membership.status)) {
-    throw new Gen2LifecycleError(
-      "This instance is already starting or running.",
-    );
+  if (membership.status === "ready") return membership;
+  if (!(await claimProvisioning(workspaceId))) {
+    // Someone else is already bringing it up; report the live status rather
+    // than racing them for the same guest.
+    return requireGen2Member(workspaceId, userId);
   }
 
   const previousStatus = membership.status;
-  await writeGen2Instance(workspaceId, {
-    status: "provisioning",
-    lastError: null,
-  });
-
   try {
     await ensureHostReady();
   } catch (error) {

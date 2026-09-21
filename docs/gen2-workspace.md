@@ -18,13 +18,24 @@ the file the agent just edited.
 ## Shipped
 
 - Create a gen 2 workspace (control-plane record + owner membership)
-- Start / stop a Firecracker microVM through the existing Azure orchestrator
+- A Firecracker microVM that comes up when someone opens the workspace --
+  there is no start button, the request is idempotent, and concurrent opens
+  are resolved by a compare-and-set so only one of them provisions
 - Share a link; a signed-in person who opens it becomes a member
 - Prompt Codex in multiple chats on the live instance, with the turn rendered
   as it happens: reasoning, commands and their exit codes, file changes, and
   the plan, parsed from the `codex exec --json` item stream
 - A workbench beside the chat — file tree with Git status, a CodeMirror 6
   editor with revision-checked saves, a shell, and a live Git status/diff
+
+## No start button
+
+Opening a workspace is the intent to use it, so `ensureGen2Instance` runs on
+open and is safe for any member to call -- the person who follows a share link
+should not have to wait for the owner to press something. The composer is
+never disabled either: type into a cold workspace and the machine is brought
+up as part of sending. The orchestrator pauses an idle guest after four hours
+on its own, so nothing needs stopping by hand.
 
 ## Interface
 

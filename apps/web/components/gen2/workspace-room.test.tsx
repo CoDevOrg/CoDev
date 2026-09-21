@@ -2,19 +2,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Gen2WorkspaceDetail } from "@codev/contracts";
 
-const mocks = vi.hoisted(() => ({
-  refresh: vi.fn(),
-}));
-
 vi.mock("./workbench", () => ({
   Gen2Workbench: () => <div data-testid="gen2-workbench" />,
-}));
-
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({
-    push: vi.fn(),
-    refresh: mocks.refresh,
-  }),
 }));
 
 import { Gen2WorkspaceRoom } from "./workspace-room";
@@ -38,142 +27,108 @@ const workspace: Gen2WorkspaceDetail = {
   ],
 };
 
+function stubFetch(instance: () => Response) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      const path = String(url);
+      if (path.endsWith("/instance")) return instance();
+      if (path.endsWith("/share")) {
+        return new Response(
+          JSON.stringify({ inviteUrl: "https://codev.test/gen2/join/tok" }),
+          { status: 200 },
+        );
+      }
+      return new Response(JSON.stringify({ chats: [] }), { status: 200 });
+    }),
+  );
+}
+
+const ready = () =>
+  new Response(
+    JSON.stringify({ workspace: { ...workspace, status: "ready" } }),
+    { status: 200 },
+  );
+
 describe("Gen2WorkspaceRoom", () => {
   beforeEach(() => {
     sessionStorage.clear();
-    mocks.refresh.mockReset();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({ workspace: { ...workspace, status: "ready" } }),
-      }),
-    );
+    vi.stubGlobal("navigator", {
+      ...navigator,
+      clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
+    });
   });
 
-  it("starts the instance for the owner", async () => {
+  it("brings the machine up on open, with nothing to press", async () => {
+    stubFetch(ready);
     render(<Gen2WorkspaceRoom workspace={workspace} />);
-    fireEvent.click(screen.getByRole("button", { name: "Start instance" }));
+
     await waitFor(() =>
       expect(fetch).toHaveBeenCalledWith(
         `/api/gen2/workspaces/${workspace.id}/instance`,
         expect.objectContaining({ method: "POST" }),
       ),
     );
+    expect(await screen.findByText("Ready")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Start/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Stop/ })).toBeNull();
   });
 
-  it("shows host-wake progress while start is in flight", async () => {
-    let finishStart:
-      | ((value: { ok: boolean; json: () => Promise<unknown> }) => void)
-      | undefined;
-    const pendingStart = new Promise<{
-      ok: boolean;
-      json: () => Promise<unknown>;
-    }>((resolve) => {
-      finishStart = resolve;
-    });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
-        if (init?.method === "POST") return pendingStart;
-        return {
-          ok: true,
-          json: async () => ({ workspace }),
-        };
-      }),
-    );
-    render(<Gen2WorkspaceRoom workspace={workspace} />);
-    fireEvent.click(screen.getByRole("button", { name: "Start instance" }));
+  it("does not ask for a machine that is already running", async () => {
+    stubFetch(ready);
+    render(<Gen2WorkspaceRoom workspace={{ ...workspace, status: "ready" }} />);
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
     expect(
-      await screen.findByText(/Waking the Firecracker host/),
-    ).toBeInTheDocument();
-    finishStart?.({
-      ok: true,
-      json: async () => ({ workspace: { ...workspace, status: "ready" } }),
-    });
-    await waitFor(() =>
-      expect(
-        screen.queryByText(/Waking the Firecracker host/),
-      ).not.toBeInTheDocument(),
-    );
+      (fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.filter(
+        (call) => String(call[0]).endsWith("/instance"),
+      ),
+    ).toHaveLength(0);
   });
 
-  it("does not let a member start the instance", () => {
-    render(
-      <Gen2WorkspaceRoom
-        workspace={{ ...workspace, role: "member", status: "pending" }}
-      />,
-    );
-    expect(
-      screen.queryByRole("button", { name: "Start instance" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByText("Waiting for the owner to start the instance."),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Codex" })).toBeInTheDocument();
-  });
-
-  it("shows a start failure without leaving the page stuck", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockImplementation(async (url: string) => {
-        if (String(url).includes("/chats")) {
-          return { ok: true, json: async () => ({ chats: [] }) };
-        }
-        return {
-          ok: false,
-          json: async () => ({
-            error:
-              "The Firecracker host could not be reached. Wait a few seconds and try Start instance again.",
-          }),
-        };
-      }),
-    );
-    render(<Gen2WorkspaceRoom workspace={workspace} />);
-    fireEvent.click(screen.getByRole("button", { name: "Start instance" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      /Firecracker host could not be reached/,
-    );
-    expect(mocks.refresh).toHaveBeenCalled();
-  });
-
-  it("stays on the page after stop even if the response omits members", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
-        if (String(url).includes("/chats")) {
-          return { ok: true, json: async () => ({ chats: [] }) };
-        }
-        if (init?.method === "DELETE") {
-          return {
-            ok: true,
-            json: async () => ({
-              workspace: {
-                id: workspace.id,
-                name: workspace.name,
-                status: "stopped",
-                sandboxId: null,
-                lastError: null,
-                role: "owner",
-                createdAt: workspace.createdAt,
-                updatedAt: workspace.updatedAt,
-              },
+  it("offers a retry when the machine could not start", async () => {
+    let attempt = 0;
+    stubFetch(() => {
+      attempt += 1;
+      return attempt === 1
+        ? new Response(
+            JSON.stringify({
+              error: "The Firecracker host could not be reached.",
             }),
-          };
-        }
-        return { ok: true, json: async () => ({}) };
-      }),
+            { status: 502 },
+          )
+        : ready();
+    });
+    render(<Gen2WorkspaceRoom workspace={workspace} />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /could not be reached/,
     );
-    render(
-      <Gen2WorkspaceRoom
-        workspace={{ ...workspace, status: "ready", sandboxId: "sandbox-1" }}
-      />,
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByText("Ready")).toBeInTheDocument();
+  });
+
+  it("copies the invite link straight to the clipboard", async () => {
+    stubFetch(ready);
+    render(<Gen2WorkspaceRoom workspace={{ ...workspace, status: "ready" }} />);
+    fireEvent.click(screen.getByRole("button", { name: /Share/ }));
+
+    await waitFor(() =>
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+        "https://codev.test/gen2/join/tok",
+      ),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
-    expect(
-      await screen.findByRole("button", { name: "Start instance" }),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Link copied")).toBeInTheDocument();
+    expect(screen.getByLabelText("Invite link")).toHaveValue(
+      "https://codev.test/gen2/join/tok",
+    );
+  });
+
+  it("shows who else is in the workspace", async () => {
+    stubFetch(ready);
+    render(<Gen2WorkspaceRoom workspace={{ ...workspace, status: "ready" }} />);
     expect(screen.getByText("Ada")).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Codex" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("region", { name: "Codex" }),
+    ).toBeInTheDocument();
   });
 });

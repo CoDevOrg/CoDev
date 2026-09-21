@@ -8,12 +8,14 @@ import { listGen2WorkspacesForUser } from "@/lib/gen2/workspaces";
 
 export const metadata: Metadata = { title: "Gen 2 workspaces" };
 
+// A workspace nobody has opened has no machine, which is the cheap and
+// correct state -- not a failure to start. Opening one brings it up.
 const STATUS_LABEL = {
-  pending: "Not started",
+  pending: "Idle",
   provisioning: "Starting",
-  ready: "Running",
+  ready: "Ready",
   failed: "Failed",
-  stopped: "Stopped",
+  stopped: "Idle",
 } as const;
 
 export default async function Gen2WorkspacesPage() {
@@ -26,8 +28,9 @@ export default async function Gen2WorkspacesPage() {
         <p className="eyebrow">Gen 2</p>
         <h1>Cloud workspaces</h1>
         <p className="gen2-lede">
-          A workspace is a Firecracker instance you can share. Start one, send
-          the link, and anyone you invite can join the same machine.
+          A workspace is a Firecracker instance you can share. Open one and its
+          machine comes up; send the link and anyone you invite works on that
+          same machine, alongside Codex.
         </p>
         <CreateGen2WorkspaceForm />
         {workspaces.length === 0 ? (

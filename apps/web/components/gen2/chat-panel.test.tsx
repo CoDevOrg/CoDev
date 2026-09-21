@@ -131,6 +131,7 @@ describe("Gen2ChatPanel", () => {
         onRunningChange={vi.fn()}
         onFilesChanged={vi.fn()}
         onOpenFile={vi.fn()}
+        onNeedsMachine={async () => true}
       />,
     );
 
@@ -171,6 +172,7 @@ describe("Gen2ChatPanel", () => {
         onRunningChange={vi.fn()}
         onFilesChanged={onFilesChanged}
         onOpenFile={vi.fn()}
+        onNeedsMachine={async () => true}
       />,
     );
     fireEvent.change(screen.getByLabelText("Prompt"), {
@@ -197,6 +199,7 @@ describe("Gen2ChatPanel", () => {
         onRunningChange={onRunningChange}
         onFilesChanged={vi.fn()}
         onOpenFile={vi.fn()}
+        onNeedsMachine={async () => true}
       />,
     );
     fireEvent.change(screen.getByLabelText("Prompt"), {
@@ -211,19 +214,49 @@ describe("Gen2ChatPanel", () => {
     );
   });
 
-  it("will not take a prompt until the instance is running", () => {
+  it("wakes the machine instead of refusing the prompt", async () => {
+    // The composer is never disabled. A member who opens a cold workspace and
+    // types straight away should get a turn, not a dead text box.
+    const onNeedsMachine = vi.fn().mockResolvedValue(true);
     stubFetch({});
     render(
       <Gen2ChatPanel
-        workspace={{ ...workspace, status: "stopped" }}
+        workspace={{ ...workspace, status: "pending" }}
         onRunningChange={vi.fn()}
         onFilesChanged={vi.fn()}
         onOpenFile={vi.fn()}
+        onNeedsMachine={onNeedsMachine}
       />,
     );
-    expect(screen.getByLabelText("Prompt")).toBeDisabled();
-    expect(
-      screen.getByPlaceholderText("Start the instance first"),
-    ).toBeInTheDocument();
+    const prompt = screen.getByLabelText("Prompt");
+    expect(prompt).not.toBeDisabled();
+
+    fireEvent.change(prompt, { target: { value: "go" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(onNeedsMachine).toHaveBeenCalled());
+  });
+
+  it("keeps the prompt when the machine will not come up", async () => {
+    stubFetch({});
+    render(
+      <Gen2ChatPanel
+        workspace={{ ...workspace, status: "failed" }}
+        onRunningChange={vi.fn()}
+        onFilesChanged={vi.fn()}
+        onOpenFile={vi.fn()}
+        onNeedsMachine={async () => false}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Prompt"), {
+      target: { value: "do the thing" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /could not start/,
+    );
+    // Their words are not thrown away.
+    expect(screen.getByLabelText("Prompt")).toHaveValue("do the thing");
   });
 });

@@ -40,15 +40,44 @@
   letter-spacing: -0.01em;
 }
 
-.gen2-ws-bar .primary-button,
-.gen2-ws-bar .secondary-button {
-  min-height: 32px;
-  padding: 0 12px;
-  font-size: 0.8125rem;
-}
-
 .gen2-ws-bar .gen2-status {
   margin: 0;
+}
+
+.gen2-ws-back {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  color: var(--muted);
+}
+
+.gen2-ws-back:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.gen2-ws-back:focus-visible,
+.gen2-ws-retry:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+
+.gen2-ws-bar .gen2-wb-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+}
+
+.gen2-ws-retry {
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
 }
 
 .gen2-ws-members {
@@ -79,6 +108,14 @@
   border-bottom: 1px solid var(--line);
 }
 
+/* The status pill reads "Starting" for every pre-ready state, so the three
+   colours collapse to two: working on it, or broken. */
+.gen2-ws .gen2-status-pending .gen2-status-dot,
+.gen2-ws .gen2-status-stopped .gen2-status-dot,
+.gen2-ws .gen2-status-provisioning .gen2-status-dot {
+  animation: gen2-pulse 1.4s ease-in-out infinite;
+}
+
 .gen2-ws-invite input {
   flex: 1;
   min-height: 32px;
@@ -94,7 +131,7 @@
 
 .gen2-chat {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   border-right: 1px solid var(--line);
@@ -106,22 +143,138 @@
   gap: 8px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--line);
+  overflow: hidden;
 }
 
-.gen2-chat-select {
-  flex: 1;
-  min-height: 30px;
-  padding: 0 8px;
+.gen2-chat-new {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 10px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78125rem;
+}
+
+.gen2-chat-new:hover {
+  border-color: var(--gold);
+  color: var(--ink);
+}
+
+.gen2-chat-tabs {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.gen2-chat-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.gen2-chat-tab {
+  max-width: 13rem;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78125rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gen2-chat-tab:hover {
+  background: var(--surface-2);
+}
+
+.gen2-chat-tab[aria-current="true"] {
   background: var(--surface-2);
   color: var(--ink);
-  font-size: 0.8125rem;
+}
+
+.gen2-chat-new:focus-visible,
+.gen2-chat-tab:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+
+/* The first-run surface: one centred question, nothing else competing. */
+.gen2-chat-hero {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  padding: 24px;
+  overflow: auto;
+}
+
+.gen2-chat-hero-inner {
+  width: min(44rem, 100%);
+}
+
+.gen2-chat-hero h2 {
+  margin: 0 0 8px;
+  font-size: clamp(1.35rem, 2.4vw, 1.75rem);
+  font-weight: 620;
+  letter-spacing: -0.022em;
+}
+
+.gen2-chat-hero > div > p {
+  margin: 0 0 20px;
+  max-width: 34rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.gen2-chat-hero .gen2-composer {
+  padding: 0;
+  border: 0;
+}
+
+.gen2-chat-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gen2-chat-suggestions button {
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78125rem;
+}
+
+.gen2-chat-suggestions button:hover {
+  border-color: var(--gold);
+  color: var(--ink);
+}
+
+.gen2-chat-suggestions button:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
 }
 
 .gen2-chat-scroll {
   min-height: 0;
-  padding: 16px;
+  padding: 20px 16px;
   overflow: auto;
 }
 
@@ -129,15 +282,16 @@
   display: flex;
   flex-direction: column;
   gap: 18px;
-  margin: 0;
+  margin: 0 auto;
   padding: 0;
+  max-width: 44rem;
   list-style: none;
 }
 
 .gen2-thread > li[data-role="user"] .gen2-message {
   padding: 10px 12px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--surface-2);
 }
 
@@ -153,31 +307,87 @@
   color: var(--muted);
 }
 
+/* One rounded field holding the textarea and its controls, so the composer
+   reads as a single object rather than a form. */
 .gen2-composer {
-  display: flex;
-  gap: 8px;
-  align-items: flex-end;
-  padding: 12px;
-  border-top: 1px solid var(--line);
+  margin: 0 auto;
+  padding: 12px 16px 16px;
+  width: min(44rem, 100%);
 }
 
 .gen2-composer textarea {
-  flex: 1;
-  padding: 10px 12px;
+  display: block;
+  width: 100%;
+  padding: 14px 16px 6px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-bottom: 0;
+  border-radius: 14px 14px 0 0;
   background: var(--surface-2);
   color: var(--ink);
   font: inherit;
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
+  line-height: 1.55;
   resize: none;
 }
 
-.gen2-composer textarea:focus-visible,
-.gen2-chat-select:focus-visible,
-.gen2-ws-invite input:focus-visible {
+.gen2-composer textarea::placeholder {
+  color: color-mix(in srgb, var(--muted) 80%, transparent);
+}
+
+.gen2-composer textarea:focus-visible {
+  outline: none;
+}
+
+.gen2-composer:focus-within textarea,
+.gen2-composer:focus-within .gen2-composer-row {
+  border-color: color-mix(in srgb, var(--gold) 55%, var(--line));
+}
+
+.gen2-composer-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 8px 16px;
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 14px 14px;
+  background: var(--surface-2);
+}
+
+.gen2-composer-hint {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.gen2-composer-send,
+.gen2-composer-stop {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin-left: auto;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--surface);
+  cursor: pointer;
+}
+
+.gen2-composer-send:disabled {
+  background: color-mix(in srgb, var(--ink) 22%, transparent);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.gen2-composer-stop {
+  background: var(--gold);
+  color: #1a1204;
+}
+
+.gen2-composer-send:focus-visible,
+.gen2-composer-stop:focus-visible {
   outline: 2px solid var(--gold);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 
 /* ------------------------------------------------------- activity cards */
@@ -834,4 +1044,10 @@
   clip-path: inset(50%);
   overflow: hidden;
   white-space: nowrap;
+}
+
+.gen2-chat-error {
+  margin: 12px 0 0;
+  color: #ffb3a6;
+  font-size: 0.8125rem;
 }

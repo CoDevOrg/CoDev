@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Plus, Square } from "lucide-react";
+import { ArrowUp, Plus, Square } from "lucide-react";
 import type {
   Gen2Chat,
   Gen2ChatDetail,
@@ -11,10 +11,6 @@ import type {
 } from "@codev/contracts";
 
 import { canRunGen2Agent } from "@/lib/gen2/agent-policy";
-import {
-  GEN2_NEW_CHAT_TITLE,
-  gen2ChatTitleFromPrompt,
-} from "@/lib/gen2/chats-format";
 import {
   decodeCodexExecOutput,
   mergeCodexExecChunks,
@@ -26,6 +22,12 @@ import { Gen2TurnActivity } from "./turn-activity";
 type Thread = { messages: Gen2ChatMessage[] };
 
 const STORAGE_PREFIX = "codev-gen2-turn:";
+
+const SUGGESTIONS = [
+  "Scaffold a small Next.js app",
+  "Set up a Python project with tests",
+  "Show me what's on this machine",
+];
 
 function storedTurn(workspaceId: string) {
   try {
@@ -65,11 +67,14 @@ export function Gen2ChatPanel({
   onRunningChange,
   onFilesChanged,
   onOpenFile,
+  onNeedsMachine,
 }: {
   workspace: Gen2WorkspaceDetail;
   onRunningChange: (running: boolean) => void;
   onFilesChanged: () => void;
   onOpenFile: (path: string) => void;
+  /** Brings the machine up; resolves false if it could not. */
+  onNeedsMachine: () => Promise<boolean>;
 }) {
   const [chats, setChats] = useState<Gen2Chat[]>([]);
   const [chatId, setChatId] = useState<string | null>(null);
@@ -82,6 +87,7 @@ export function Gen2ChatPanel({
   const abortRef = useRef<AbortController | null>(null);
   const sessionRef = useRef<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const [waking, setWaking] = useState(false);
   const ready = canRunGen2Agent(workspace.status);
 
   useEffect(() => onRunningChange(running), [running, onRunningChange]);
@@ -227,9 +233,22 @@ export function Gen2ChatPanel({
 
   async function send() {
     const text = prompt.trim();
-    if (!text || running || !ready) return;
+    if (!text || running) return;
     setError("");
     setPrompt("");
+
+    // The composer is never disabled. If the machine is not up yet, say so
+    // and bring it up rather than making the member find a button.
+    if (!ready) {
+      setWaking(true);
+      const started = await onNeedsMachine();
+      setWaking(false);
+      if (!started) {
+        setError("The machine could not start. Try again in a moment.");
+        setPrompt(text);
+        return;
+      }
+    }
 
     let target = chatId;
     if (!target) {
@@ -307,112 +326,158 @@ export function Gen2ChatPanel({
     setChatId(chat.id);
   }
 
-  return (
-    <section className="gen2-chat" aria-label="Codex">
-      <header className="gen2-chat-bar">
-        <select
-          className="gen2-chat-select"
-          aria-label="Chat"
-          value={chatId ?? ""}
-          onChange={(event) => setChatId(event.target.value || null)}
-        >
-          {chats.length === 0 ? <option value="">New chat</option> : null}
-          {chats.map((chat) => (
-            <option key={chat.id} value={chat.id}>
-              {chat.title === GEN2_NEW_CHAT_TITLE
-                ? gen2ChatTitleFromPrompt(chat.title)
-                : chat.title}
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          className="gen2-wb-icon-button"
-          onClick={() => void newChat()}
-          aria-label="New chat"
-        >
-          <Plus aria-hidden="true" size={14} />
-        </button>
-      </header>
+  const empty = thread.messages.length === 0 && !running;
 
-      <div className="gen2-chat-scroll">
-        <ol className="gen2-thread">
-          {thread.messages.map((message) => (
-            <li key={message.id} data-role={message.role}>
-              {message.items?.length ? (
-                <Gen2TurnActivity
-                  items={message.items}
-                  onOpenFile={onOpenFile}
-                />
-              ) : null}
-              <p className="gen2-message">{message.body}</p>
-            </li>
-          ))}
-          {running ? (
-            <li data-role="assistant">
-              <Gen2TurnActivity items={items} onOpenFile={onOpenFile} />
-              {liveReply ? (
-                <p className="gen2-message">{liveReply}</p>
-              ) : items.length === 0 ? (
-                <p className="gen2-message gen2-message-waiting" role="status">
-                  Codex is starting…
-                </p>
-              ) : null}
-            </li>
-          ) : null}
-        </ol>
-        <div ref={bottomRef} />
-      </div>
-
-      {error ? (
-        <p className="gen2-wb-banner gen2-wb-banner-error" role="alert">
-          {error}
-        </p>
-      ) : null}
-
-      <form
-        className="gen2-composer"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void send();
-        }}
-      >
-        <textarea
-          value={prompt}
-          onChange={(event) => setPrompt(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              void send();
-            }
-          }}
-          placeholder={
-            ready
-              ? "Ask Codex to work on this machine…"
-              : "Start the instance first"
+  const composer = (
+    <form
+      className="gen2-composer"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void send();
+      }}
+    >
+      <textarea
+        value={prompt}
+        onChange={(event) => setPrompt(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            void send();
           }
-          disabled={!ready || running}
-          rows={3}
-          aria-label="Prompt"
-        />
+        }}
+        placeholder="Ask Codex to build something on this machine"
+        rows={empty ? 3 : 2}
+        aria-label="Prompt"
+      />
+      <div className="gen2-composer-row">
+        <span className="gen2-composer-hint">
+          {waking
+            ? "Waking the machine…"
+            : running
+              ? "Codex is working"
+              : ready
+                ? "Enter to send"
+                : "Starting the machine"}
+        </span>
         {running ? (
           <button
             type="button"
-            className="gen2-wb-button"
+            className="gen2-composer-stop"
             onClick={() => void stop()}
+            aria-label="Stop Codex"
           >
-            <Square aria-hidden="true" size={12} /> Stop
+            <Square aria-hidden="true" size={11} />
           </button>
         ) : (
           <button
             type="submit"
-            className="primary-button"
-            disabled={!ready || !prompt.trim()}
+            className="gen2-composer-send"
+            disabled={!prompt.trim()}
+            aria-label="Send"
           >
-            Send
+            <ArrowUp aria-hidden="true" size={15} />
           </button>
         )}
-      </form>
+      </div>
+    </form>
+  );
+
+  return (
+    <section className="gen2-chat" aria-label="Codex">
+      <header className="gen2-chat-bar">
+        <button
+          type="button"
+          className="gen2-chat-new"
+          onClick={() => void newChat()}
+        >
+          <Plus aria-hidden="true" size={13} /> New chat
+        </button>
+        {chats.length > 0 ? (
+          <nav className="gen2-chat-tabs" aria-label="Chats">
+            {chats.slice(0, 6).map((chat) => (
+              <button
+                key={chat.id}
+                type="button"
+                className="gen2-chat-tab"
+                aria-current={chat.id === chatId}
+                onClick={() => setChatId(chat.id)}
+                title={chat.title}
+              >
+                {chat.title}
+              </button>
+            ))}
+          </nav>
+        ) : null}
+      </header>
+
+      {empty ? (
+        <div className="gen2-chat-hero">
+          <div className="gen2-chat-hero-inner">
+            <h2>What should we build?</h2>
+            <p>
+              Codex works on this workspace&rsquo;s own machine. You can watch
+              the files, terminal, and Git change beside it.
+            </p>
+            {composer}
+            {error ? (
+              <p className="gen2-chat-error" role="alert">
+                {error}
+              </p>
+            ) : null}
+            <ul className="gen2-chat-suggestions">
+              {SUGGESTIONS.map((suggestion) => (
+                <li key={suggestion}>
+                  <button type="button" onClick={() => setPrompt(suggestion)}>
+                    {suggestion}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="gen2-chat-scroll">
+            <ol className="gen2-thread">
+              {thread.messages.map((message) => (
+                <li key={message.id} data-role={message.role}>
+                  {message.items?.length ? (
+                    <Gen2TurnActivity
+                      items={message.items}
+                      onOpenFile={onOpenFile}
+                    />
+                  ) : null}
+                  <p className="gen2-message">{message.body}</p>
+                </li>
+              ))}
+              {running ? (
+                <li data-role="assistant">
+                  <Gen2TurnActivity items={items} onOpenFile={onOpenFile} />
+                  {liveReply ? (
+                    <p className="gen2-message">{liveReply}</p>
+                  ) : items.length === 0 ? (
+                    <p
+                      className="gen2-message gen2-message-waiting"
+                      role="status"
+                    >
+                      Codex is starting…
+                    </p>
+                  ) : null}
+                </li>
+              ) : null}
+            </ol>
+            <div ref={bottomRef} />
+          </div>
+
+          {error ? (
+            <p className="gen2-wb-banner gen2-wb-banner-error" role="alert">
+              {error}
+            </p>
+          ) : null}
+
+          {composer}
+        </>
+      )}
     </section>
   );
 }

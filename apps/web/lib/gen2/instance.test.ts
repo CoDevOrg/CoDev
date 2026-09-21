@@ -4,7 +4,6 @@ import {
   GEN2_BLANK_BASE_SHA,
   GEN2_SANDBOX_LIFECYCLE,
   buildBlankSandboxSource,
-  canStartInstance,
   canStopInstance,
   describeGen2RuntimeFailure,
 } from "./instance";
@@ -28,14 +27,6 @@ describe("gen2 Firecracker instance policy", () => {
     });
   });
 
-  it("only starts a stopped, failed, or never-started instance", () => {
-    expect(canStartInstance("pending")).toBe(true);
-    expect(canStartInstance("failed")).toBe(true);
-    expect(canStartInstance("stopped")).toBe(true);
-    expect(canStartInstance("ready")).toBe(false);
-    expect(canStartInstance("provisioning")).toBe(false);
-  });
-
   it("only stops a live or starting instance", () => {
     expect(canStopInstance("ready")).toBe(true);
     expect(canStopInstance("provisioning")).toBe(true);
@@ -45,7 +36,7 @@ describe("gen2 Firecracker instance policy", () => {
 
   it("rewrites host fetch failures into a retryable message", () => {
     expect(describeGen2RuntimeFailure(new TypeError("fetch failed"))).toMatch(
-      /try Start instance again/,
+      /Wait a few seconds/,
     );
     expect(describeGen2RuntimeFailure(new Error("disk full"))).toBe(
       "disk full",
