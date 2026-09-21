@@ -18,7 +18,7 @@ export default defineConfig({
     : {
         webServer: {
           command:
-            "AUTH_SECRET=playwright-auth-secret-32-characters-long CODEV_ENABLE_VERIFICATION_FIXTURES=true pnpm start",
+            "AUTH_SECRET=playwright-auth-secret-32-characters-long CODEV_ENABLE_VERIFICATION_FIXTURES=true CODEV_ENABLE_REEL_DEMO=true pnpm start",
           url: "http://127.0.0.1:3000/api/health",
           reuseExistingServer: !process.env.CI,
           timeout: 120_000,

@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "dotenv -e .env.local -- pnpm --filter @codev/web dev",
+    "demo:reel": "pnpm --filter @codev/web demo:reel",
     "build": "pnpm -r --if-present build",
     "lint": "pnpm -r --if-present lint",
     "typecheck": "pnpm -r --if-present typecheck",

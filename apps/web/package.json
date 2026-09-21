@@ -9,6 +9,7 @@
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "next start",
+    "demo:reel": "next build --webpack && CODEV_ENABLE_REEL_DEMO=true next start -p 3011",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
