@@ -2072,11 +2072,57 @@ export const gen2ChatMessages = pgTable(
       .notNull(),
     role: text("role").notNull(),
     body: text("body").notNull(),
+    /**
+     * The activity cards for an assistant reply -- the reasoning, commands,
+     * and file changes Codex produced on the way to it. Null for user
+     * messages and for replies saved before this column existed.
+     */
+    items: jsonb("items"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
   },
   (table) => [
     index("gen2_chat_messages_chat_idx").on(table.chatId, table.createdAt),
+  ],
+);
+
+/**
+ * The server's copy of a running Codex turn.
+ *
+ * The guest drops every output chunk once the client acknowledges it
+ * (`poll_codex_exec` pops everything at or below `after`), so there is no way
+ * to re-read a turn after the fact -- whoever wants the transcript has to
+ * accumulate it as it streams. Before this table the browser was the only
+ * accumulator, and closing the tab mid-turn lost the reply while leaving the
+ * prompt in the chat. Now the poll route appends here, and finishes the turn
+ * itself when the process exits.
+ */
+export const gen2AgentTurns = pgTable(
+  "gen2_agent_turns",
+  {
+    sessionId: text("session_id").primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .references(() => gen2Workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    chatId: uuid("chat_id")
+      .references(() => gen2Chats.id, { onDelete: "cascade" })
+      .notNull(),
+    userId: uuid("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    /** Decoded NDJSON so far, capped; see GEN2_TURN_OUTPUT_LIMIT. */
+    output: text("output").default("").notNull(),
+    /** Trailing bytes of a UTF-8 character split across two polls. */
+    pendingBase64: text("pending_base64").default("").notNull(),
+    exited: boolean("exited").default(false).notNull(),
+    replyMessageId: uuid("reply_message_id").references(
+      () => gen2ChatMessages.id,
+      { onDelete: "set null" },
+    ),
+    ...timestamps,
+  },
+  (table) => [
+    index("gen2_agent_turns_chat_idx").on(table.chatId, table.createdAt),
   ],
 );

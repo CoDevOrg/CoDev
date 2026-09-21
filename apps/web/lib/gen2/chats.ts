@@ -9,6 +9,7 @@ import {
   type Gen2Chat,
   type Gen2ChatDetail,
   type Gen2ChatMessage,
+  type Gen2TurnItem,
 } from "@codev/contracts";
 import { schema } from "@codev/db";
 
@@ -45,12 +46,18 @@ function toMessage(row: {
   id: string;
   role: string;
   body: string;
+  items?: unknown;
   createdAt: Date;
 }): Gen2ChatMessage {
   return gen2ChatMessageSchema.parse({
     id: row.id,
     role: row.role,
     body: row.body,
+    // Replies saved before activity cards existed have no items; a shape we
+    // no longer recognise is dropped rather than failing the whole thread.
+    items:
+      gen2ChatMessageSchema.shape.items.safeParse(row.items ?? null).data ??
+      null,
     createdAt: toIso(row.createdAt),
   });
 }
@@ -114,6 +121,7 @@ export async function listGen2ChatMessages(chatId: string) {
       id: schema.gen2ChatMessages.id,
       role: schema.gen2ChatMessages.role,
       body: schema.gen2ChatMessages.body,
+      items: schema.gen2ChatMessages.items,
       createdAt: schema.gen2ChatMessages.createdAt,
     })
     .from(schema.gen2ChatMessages)
@@ -163,6 +171,7 @@ export async function appendGen2ChatMessage(input: {
   chatId: string;
   role: "user" | "assistant";
   body: string;
+  items?: Gen2TurnItem[];
 }) {
   const body = input.body.trim();
   if (!body) {
@@ -175,6 +184,7 @@ export async function appendGen2ChatMessage(input: {
         chatId: input.chatId,
         role: input.role,
         body,
+        items: input.items ?? null,
       })
       .returning();
     if (!created) {

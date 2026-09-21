@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Gen2WorkspaceDetail } from "@codev/contracts";
 
-import { Gen2AgentPanel } from "./agent-panel";
+import { Gen2ChatPanel } from "./chat-panel";
+import { Gen2Workbench, type Gen2WorkbenchHandle } from "./workbench";
 
 const STATUS_LABEL: Record<Gen2WorkspaceDetail["status"], string> = {
   pending: "Not started",
@@ -17,9 +19,7 @@ const STATUS_LABEL: Record<Gen2WorkspaceDetail["status"], string> = {
 const START_WAIT_MS = 280_000;
 
 function sleep(ms: number) {
-  return new Promise<void>((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
+  return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 }
 
 export function Gen2WorkspaceRoom({
@@ -33,11 +33,17 @@ export function Gen2WorkspaceRoom({
   const [error, setError] = useState("");
   const [inviteUrl, setInviteUrl] = useState("");
   const [copied, setCopied] = useState(false);
+  const [agentRunning, setAgentRunning] = useState(false);
+  const [refreshToken, setRefreshToken] = useState(0);
+  const workbenchRef = useRef<Gen2WorkbenchHandle | null>(null);
   const isOwner = current.role === "owner";
+  const ready = current.status === "ready";
 
-  useEffect(() => {
-    setCurrent(workspace);
-  }, [workspace]);
+  const refresh = useCallback(() => setRefreshToken((value) => value + 1), []);
+  const openFile = useCallback(
+    (path: string) => workbenchRef.current?.openFile(path),
+    [],
+  );
 
   async function applyResponse(response: Response) {
     const payload = (await response.json().catch(() => ({}))) as {
@@ -46,11 +52,7 @@ export function Gen2WorkspaceRoom({
       error?: string;
     };
     if (payload.workspace) {
-      setCurrent((value) => ({
-        ...value,
-        ...payload.workspace,
-        members: payload.workspace?.members ?? value.members,
-      }));
+      setCurrent((value) => ({ ...value, ...payload.workspace }));
     }
     if (!response.ok) {
       setError(payload.error ?? "That action could not be completed.");
@@ -58,38 +60,9 @@ export function Gen2WorkspaceRoom({
       router.refresh();
       return;
     }
-    if (payload.inviteUrl) {
-      setInviteUrl(payload.inviteUrl);
-    }
+    if (payload.inviteUrl) setInviteUrl(payload.inviteUrl);
     setBusy(null);
     router.refresh();
-  }
-
-  async function mutate(
-    action: "start" | "stop" | "share",
-    request: Promise<Response>,
-  ) {
-    setBusy(action);
-    setError("");
-    setCopied(false);
-    try {
-      await applyResponse(await request);
-    } catch {
-      setError("Couldn't reach CoDev. Try again.");
-      setBusy(null);
-    }
-  }
-
-  async function pollWorkspace() {
-    const response = await fetch(`/api/gen2/workspaces/${current.id}`);
-    const payload = (await response.json().catch(() => ({}))) as {
-      workspace?: Gen2WorkspaceDetail;
-    };
-    if (payload.workspace) {
-      setCurrent(payload.workspace);
-      return payload.workspace;
-    }
-    return null;
   }
 
   async function startInstance() {
@@ -101,12 +74,14 @@ export function Gen2WorkspaceRoom({
       status: "provisioning",
       lastError: null,
     }));
+    // Provisioning a Firecracker guest routinely outlives a single request,
+    // so race the POST against a poll and take whichever answers first.
     const request = fetch(`/api/gen2/workspaces/${current.id}/instance`, {
       method: "POST",
       signal: AbortSignal.timeout(START_WAIT_MS),
     }).then(
       (response) => ({ type: "post" as const, response }),
-      (cause) => ({ type: "fail" as const, cause }),
+      () => ({ type: "fail" as const }),
     );
     const deadline = Date.now() + START_WAIT_MS;
     while (Date.now() < deadline) {
@@ -122,18 +97,20 @@ export function Gen2WorkspaceRoom({
       }
       if (outcome.type === "post") {
         await applyResponse(outcome.response);
+        refresh();
         return;
       }
       try {
-        const snapshot = await pollWorkspace();
-        if (
-          snapshot &&
-          (snapshot.status === "ready" ||
-            snapshot.status === "failed" ||
-            (snapshot.status !== "provisioning" && snapshot.lastError))
-        ) {
+        const snapshot = await fetch(`/api/gen2/workspaces/${current.id}`)
+          .then((response) => response.json())
+          .then(
+            (payload) => payload.workspace as Gen2WorkspaceDetail | undefined,
+          );
+        if (snapshot) setCurrent(snapshot);
+        if (snapshot?.status === "ready" || snapshot?.status === "failed") {
           setBusy(null);
           if (snapshot.lastError) setError(snapshot.lastError);
+          refresh();
           router.refresh();
           return;
         }
@@ -146,32 +123,18 @@ export function Gen2WorkspaceRoom({
     router.refresh();
   }
 
-  async function copyLink() {
-    if (!inviteUrl) return;
-    await navigator.clipboard.writeText(inviteUrl);
-    setCopied(true);
-  }
-
   async function stopInstance() {
     const previous = current;
     setBusy("stop");
     setError("");
-    setCopied(false);
-    setCurrent((value) => ({
-      ...value,
-      status: "stopped",
-      sandboxId: null,
-      lastError: null,
-    }));
+    setCurrent((value) => ({ ...value, status: "stopped", sandboxId: null }));
     try {
       const response = await fetch(
         `/api/gen2/workspaces/${current.id}/instance`,
         { method: "DELETE" },
       );
       await applyResponse(response);
-      if (!response.ok) {
-        setCurrent(previous);
-      }
+      if (!response.ok) setCurrent(previous);
     } catch {
       setCurrent(previous);
       setError("Couldn't reach CoDev. Try again.");
@@ -179,15 +142,29 @@ export function Gen2WorkspaceRoom({
     }
   }
 
-  const starting = busy === "start" || current.status === "provisioning";
+  async function share() {
+    setBusy("share");
+    setError("");
+    setCopied(false);
+    try {
+      await applyResponse(
+        await fetch(`/api/gen2/workspaces/${current.id}/share`, {
+          method: "POST",
+        }),
+      );
+    } catch {
+      setError("Couldn't reach CoDev. Try again.");
+      setBusy(null);
+    }
+  }
 
   return (
-    <section className="gen2-room">
-      <header className="gen2-room-header">
-        <div>
-          <p className="eyebrow">Gen 2 workspace</p>
-          <h1>{current.name}</h1>
-        </div>
+    <div className="gen2-ws">
+      <header className="gen2-ws-bar">
+        <Link className="gen2-back" href="/gen2">
+          Workspaces
+        </Link>
+        <h1 className="gen2-ws-name">{current.name}</h1>
         <p
           className={`gen2-status gen2-status-${current.status}`}
           role="status"
@@ -195,113 +172,103 @@ export function Gen2WorkspaceRoom({
           <span className="gen2-status-dot" aria-hidden="true" />
           {STATUS_LABEL[current.status]}
         </p>
-      </header>
 
-      {current.lastError ? (
-        <p className="form-message error-copy" role="alert">
-          {current.lastError}
-        </p>
-      ) : null}
+        <ul className="gen2-ws-members" aria-label="People with access">
+          {(current.members ?? []).map((member) => (
+            <li key={member.userId} title={member.name || member.login}>
+              <span aria-hidden="true">
+                {(member.name || member.login).slice(0, 1).toUpperCase()}
+              </span>
+              <span className="gen2-visually-hidden">
+                {member.name || member.login}
+              </span>
+            </li>
+          ))}
+        </ul>
 
-      <div className="gen2-actions">
         {isOwner ? (
-          busy === "stop" ? (
-            <button className="secondary-button" type="button" disabled>
-              Stopping…
-            </button>
-          ) : current.status === "ready" ||
-            current.status === "provisioning" ? (
-            busy === "start" ? (
-              <button className="primary-button" type="button" disabled>
-                Starting…
-              </button>
-            ) : (
+          <>
+            {ready || current.status === "provisioning" ? (
               <button
-                className="secondary-button"
                 type="button"
+                className="secondary-button"
                 disabled={busy !== null}
                 onClick={() => void stopInstance()}
               >
-                Stop instance
+                {busy === "stop" ? "Stopping…" : "Stop"}
               </button>
-            )
-          ) : (
+            ) : (
+              <button
+                type="button"
+                className="primary-button"
+                disabled={busy !== null}
+                onClick={() => void startInstance()}
+              >
+                {busy === "start" ? "Starting…" : "Start instance"}
+              </button>
+            )}
             <button
-              className="primary-button"
               type="button"
+              className="secondary-button"
               disabled={busy !== null}
-              onClick={() => void startInstance()}
+              onClick={() => void share()}
             >
-              Start instance
+              {busy === "share" ? "Creating…" : "Share"}
             </button>
-          )
+          </>
         ) : (
-          <p className="gen2-note">
-            {current.status === "ready"
+          <p className="gen2-wb-hint">
+            {ready
               ? "This Firecracker instance is running."
               : "Waiting for the owner to start the instance."}
           </p>
         )}
-        {isOwner ? (
-          <button
-            className="secondary-button"
-            type="button"
-            disabled={busy !== null}
-            onClick={() =>
-              void mutate(
-                "share",
-                fetch(`/api/gen2/workspaces/${current.id}/share`, {
-                  method: "POST",
-                }),
-              )
-            }
-          >
-            {busy === "share" ? "Creating link…" : "Share"}
-          </button>
-        ) : null}
-      </div>
+      </header>
 
-      {starting ? (
-        <p className="gen2-note" role="status">
+      {(current.lastError ?? error) ? (
+        <p className="gen2-wb-banner gen2-wb-banner-error" role="alert">
+          {error || current.lastError}
+        </p>
+      ) : null}
+
+      {busy === "start" || current.status === "provisioning" ? (
+        <p className="gen2-wb-banner" role="status">
           Waking the Firecracker host. This can take about a minute.
         </p>
       ) : null}
 
       {inviteUrl ? (
-        <div className="gen2-share">
-          <label className="gen2-field">
-            <span>Invite link</span>
-            <input value={inviteUrl} readOnly aria-label="Invite link" />
-          </label>
+        <div className="gen2-ws-invite">
+          <input value={inviteUrl} readOnly aria-label="Invite link" />
           <button
-            className="secondary-button"
             type="button"
-            onClick={() => void copyLink()}
+            className="secondary-button"
+            onClick={() => {
+              void navigator.clipboard.writeText(inviteUrl);
+              setCopied(true);
+            }}
           >
             {copied ? "Copied" : "Copy link"}
           </button>
         </div>
       ) : null}
 
-      {error ? (
-        <p className="form-message error-copy" role="alert">
-          {error}
-        </p>
-      ) : null}
-
-      <Gen2AgentPanel workspace={current} />
-
-      <section className="gen2-members" aria-labelledby="gen2-members-heading">
-        <h2 id="gen2-members-heading">People</h2>
-        <ul>
-          {(current.members ?? []).map((member) => (
-            <li key={member.userId}>
-              <strong>{member.name || member.login}</strong>
-              <span>{member.role === "owner" ? "Owner" : "Member"}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
-    </section>
+      <div className="gen2-ws-body">
+        <Gen2ChatPanel
+          workspace={current}
+          onRunningChange={setAgentRunning}
+          onFilesChanged={refresh}
+          onOpenFile={openFile}
+        />
+        <Gen2Workbench
+          workspaceId={current.id}
+          ready={ready}
+          agentRunning={agentRunning}
+          refreshToken={refreshToken}
+          onRefresh={refresh}
+          handleRef={workbenchRef}
+        />
+      </div>
+    </div>
   );
 }

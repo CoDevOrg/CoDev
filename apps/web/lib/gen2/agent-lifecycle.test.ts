@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   poll: vi.fn(),
   close: vi.fn(),
   getAgentModel: vi.fn(),
+  createTurn: vi.fn(),
+  recordChunks: vi.fn(),
 }));
 
 vi.mock("./workspaces", () => ({
@@ -25,6 +27,11 @@ vi.mock("./chats", () => ({
   requireGen2Chat: (...args: unknown[]) => mocks.requireChat(...args),
   listGen2ChatMessages: (...args: unknown[]) => mocks.listMessages(...args),
   appendGen2ChatMessage: (...args: unknown[]) => mocks.appendMessage(...args),
+}));
+
+vi.mock("./turns", () => ({
+  createGen2Turn: (...args: unknown[]) => mocks.createTurn(...args),
+  recordGen2TurnChunks: (...args: unknown[]) => mocks.recordChunks(...args),
 }));
 
 vi.mock("../platform/observability", () => ({
@@ -118,6 +125,8 @@ describe("gen2 Codex agent", () => {
     mocks.claim.mockResolvedValue(undefined);
     mocks.release.mockResolvedValue(undefined);
     mocks.ensureHostReady.mockResolvedValue(undefined);
+    mocks.createTurn.mockResolvedValue(undefined);
+    mocks.recordChunks.mockResolvedValue(null);
     mocks.start.mockResolvedValue("session-1");
     mocks.poll.mockResolvedValue({
       chunks: [{ sequence: 0, dataBase64: "e30=" }],
@@ -264,11 +273,62 @@ describe("gen2 Codex agent", () => {
       nextSequence: 1,
       exited: true,
       exitCode: 0,
+      reply: null,
+      persistedMessageId: null,
     });
     expect(result).not.toHaveProperty("codexAuthCacheJson");
     expect(mocks.updateCache).toHaveBeenCalledWith(credentialId, AUTH_CACHE);
     expect(mocks.release).toHaveBeenCalledWith(credentialId);
     expect(mocks.appendMessage).not.toHaveBeenCalled();
+  });
+
+  it("opens a server-side turn record so the reply outlives the browser", async () => {
+    await startGen2AgentTurn({
+      workspaceId,
+      userId,
+      chatId,
+      prompt: "List the files",
+      idempotencyKey: "idem-0001",
+    });
+    expect(mocks.createTurn).toHaveBeenCalledWith({
+      sessionId: "session-1",
+      workspaceId,
+      chatId,
+      userId,
+    });
+  });
+
+  it("hands every poll's chunks to the accumulator", async () => {
+    await pollGen2AgentTurn({
+      workspaceId,
+      userId,
+      chatId,
+      sessionId: "session-1",
+      after: 0,
+    });
+    expect(mocks.recordChunks).toHaveBeenCalledWith({
+      sessionId: "session-1",
+      chunks: [{ sequence: 0, dataBase64: "e30=" }],
+      exited: true,
+    });
+  });
+
+  it("returns the reply the server persisted on the closing poll", async () => {
+    mocks.recordChunks.mockResolvedValue({
+      reply: "Here are the files.",
+      messageId: "66666666-6666-4666-8666-666666666666",
+    });
+    const result = await pollGen2AgentTurn({
+      workspaceId,
+      userId,
+      chatId,
+      sessionId: "session-1",
+      after: 0,
+    });
+    expect(result.reply).toBe("Here are the files.");
+    expect(result.persistedMessageId).toBe(
+      "66666666-6666-4666-8666-666666666666",
+    );
   });
 
   it("releases the seat when the turn is gone", async () => {

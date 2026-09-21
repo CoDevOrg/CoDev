@@ -1,0 +1,837 @@
+/*
+ * The Gen 2 workspace shell: chat on the left, a collapsible workbench on the
+ * right, both looking at one Firecracker machine.
+ *
+ * `gen2.css` stays the document-flow surface for /gen2 and /gen2/join. This
+ * file is a full-height app shell with a different box model, so the two are
+ * kept apart rather than interleaved.
+ */
+
+.gen2-ws {
+  --gen2-wb-width: 520px;
+  --gen2-panel: color-mix(in srgb, var(--surface-2) 70%, transparent);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* Every grid child needs an explicit zero minimum, or its automatic minimum
+   size is its content and the editor grows the page instead of scrolling. */
+.gen2-ws-body {
+  display: grid;
+  grid-template-columns: minmax(360px, 1fr) auto var(--gen2-wb-width);
+  min-height: 0;
+  height: 100%;
+}
+
+.gen2-ws-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.gen2-ws-name {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.gen2-ws-bar .primary-button,
+.gen2-ws-bar .secondary-button {
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 0.8125rem;
+}
+
+.gen2-ws-bar .gen2-status {
+  margin: 0;
+}
+
+.gen2-ws-members {
+  display: flex;
+  margin: 0 auto 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.gen2-ws-members li {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-right: -6px;
+  border: 1px solid var(--surface);
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.gen2-ws-invite {
+  display: flex;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.gen2-ws-invite input {
+  flex: 1;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 0.8125rem;
+}
+
+/* ---------------------------------------------------------------- chat */
+
+.gen2-chat {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid var(--line);
+}
+
+.gen2-chat-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.gen2-chat-select {
+  flex: 1;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 0.8125rem;
+}
+
+.gen2-chat-scroll {
+  min-height: 0;
+  padding: 16px;
+  overflow: auto;
+}
+
+.gen2-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gen2-thread > li[data-role="user"] .gen2-message {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.gen2-message {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.gen2-message-waiting {
+  color: var(--muted);
+}
+
+.gen2-composer {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  padding: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.gen2-composer textarea {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.875rem;
+  resize: none;
+}
+
+.gen2-composer textarea:focus-visible,
+.gen2-chat-select:focus-visible,
+.gen2-ws-invite input:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+
+/* ------------------------------------------------------- activity cards */
+
+.gen2-activity {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.gen2-card {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--gen2-panel);
+  font-size: 0.8125rem;
+  overflow: hidden;
+}
+
+.gen2-card[data-status="failed"] {
+  border-color: color-mix(in srgb, #f2604a 50%, var(--line));
+}
+
+.gen2-card-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 7px 10px;
+  color: var(--muted);
+  text-align: left;
+}
+
+.gen2-card-toggle {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+}
+
+.gen2-card-toggle:hover {
+  color: var(--ink);
+}
+
+.gen2-card-toggle:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+}
+
+.gen2-card-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gen2-card-command {
+  font-family: var(--font-geist-mono, ui-monospace, monospace);
+  font-size: 0.78125rem;
+}
+
+.gen2-card-exit {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  font-size: 0.6875rem;
+}
+
+.gen2-card-exit[data-failed="true"] {
+  background: color-mix(in srgb, #f2604a 22%, transparent);
+  color: #ffb3a6;
+}
+
+.gen2-card-spinner {
+  width: 8px;
+  height: 8px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: var(--gold);
+  animation: gen2-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes gen2-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.gen2-card-body {
+  padding: 0 10px 9px;
+}
+
+.gen2-card-output {
+  max-height: 260px;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: color-mix(in srgb, #000 28%, transparent);
+  color: var(--ink);
+  font-family: var(--font-geist-mono, ui-monospace, monospace);
+  font-size: 0.75rem;
+  line-height: 1.55;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.gen2-card-reasoning {
+  margin: 0;
+  color: var(--muted);
+  font-style: italic;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.gen2-card-files,
+.gen2-card-todos {
+  margin: 0;
+  padding: 0 10px 9px;
+  list-style: none;
+}
+
+.gen2-card-todos li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 2px 0;
+  color: var(--muted);
+}
+
+.gen2-card-todos li[data-done="true"] {
+  color: var(--ink);
+}
+
+.gen2-card-todo-dot {
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+}
+
+.gen2-card-file {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 3px 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-family: var(--font-geist-mono, ui-monospace, monospace);
+  font-size: 0.75rem;
+  text-align: left;
+}
+
+.gen2-card-file:hover {
+  color: var(--gold);
+}
+
+.gen2-card-file:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+
+.gen2-card-change {
+  width: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.gen2-card-change[data-change="add"] {
+  color: #9ad08a;
+}
+
+.gen2-card-change[data-change="delete"] {
+  color: #f2604a;
+}
+
+/* ----------------------------------------------------------- workbench */
+
+.gen2-resizer {
+  width: 7px;
+  background: none;
+  border: 0;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.gen2-resizer::after {
+  content: "";
+  display: block;
+  width: 1px;
+  height: 100%;
+  margin: 0 3px;
+  background: var(--line);
+  transition: background 0.15s ease;
+}
+
+.gen2-resizer:hover::after,
+.gen2-resizer:focus-visible::after {
+  background: var(--gold);
+}
+
+.gen2-resizer:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+}
+
+.gen2-wb {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+}
+
+.gen2-wb-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 6px;
+  border-left: 1px solid var(--line);
+}
+
+.gen2-wb-bar,
+.gen2-wb-subbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.gen2-wb-tabs {
+  display: flex;
+  flex: 1;
+  gap: 2px;
+}
+
+.gen2-wb-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8125rem;
+}
+
+.gen2-wb-tab[aria-selected="true"] {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.gen2-wb-tab:focus-visible,
+.gen2-wb-icon-button:focus-visible,
+.gen2-wb-button:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+
+.gen2-wb-icon-button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.gen2-wb-icon-button:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.gen2-wb-icon-button:disabled,
+.gen2-wb-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.gen2-wb-button {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78125rem;
+}
+
+.gen2-wb-button:hover:not(:disabled) {
+  border-color: var(--gold);
+}
+
+.gen2-wb-panel {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.gen2-wb-panel[hidden] {
+  display: none;
+}
+
+.gen2-wb-files {
+  display: grid;
+  grid-template-columns: minmax(150px, 34%) minmax(0, 1fr);
+  min-height: 0;
+  height: 100%;
+}
+
+.gen2-wb-tree {
+  min-height: 0;
+  padding: 6px 0;
+  border-right: 1px solid var(--line);
+  overflow: auto;
+}
+
+.gen2-wb-empty,
+.gen2-wb-hint {
+  margin: 0;
+  padding: 14px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.gen2-wb-hint {
+  padding: 4px 0 0;
+  font-size: 0.75rem;
+}
+
+.gen2-wb-banner {
+  margin: 0;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.78125rem;
+}
+
+.gen2-wb-banner-error {
+  background: color-mix(in srgb, #f2604a 12%, transparent);
+  color: #ffb3a6;
+}
+
+/* ---------------------------------------------------------------- tree */
+
+.gen2-tree,
+.gen2-tree ul,
+.gen2-git-files {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gen2-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  padding: 3px 8px 3px calc(8px + var(--gen2-depth, 0) * 11px);
+  border: 0;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78125rem;
+  text-align: left;
+}
+
+.gen2-tree-row:hover {
+  background: var(--surface-2);
+}
+
+.gen2-tree-row[data-selected="true"] {
+  background: color-mix(in srgb, var(--gold) 14%, transparent);
+}
+
+.gen2-tree-row:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+}
+
+.gen2-tree-icon {
+  flex: none;
+  color: var(--muted);
+}
+
+.gen2-tree-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gen2-tree-status {
+  margin-left: auto;
+  color: var(--gold);
+  font-family: var(--font-geist-mono, ui-monospace, monospace);
+  font-size: 0.6875rem;
+}
+
+.gen2-tree-status[data-status="??"] {
+  color: #9ad08a;
+}
+
+.gen2-tree-dot {
+  width: 5px;
+  height: 5px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: var(--gold);
+}
+
+/* -------------------------------------------------------------- editor */
+
+.gen2-editor,
+.gen2-editor-empty {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+}
+
+.gen2-editor-empty {
+  place-content: center;
+  padding: 20px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  text-align: center;
+}
+
+.gen2-editor-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.gen2-editor-path {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-family: var(--font-geist-mono, ui-monospace, monospace);
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gen2-editor-dirty {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--gold);
+}
+
+.gen2-editor-flash {
+  color: var(--gold);
+  font-size: 0.6875rem;
+}
+
+.gen2-editor-bar .gen2-wb-button {
+  margin-left: auto;
+}
+
+.gen2-editor-conflict {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--gold) 12%, transparent);
+  font-size: 0.78125rem;
+}
+
+.gen2-editor-host,
+.gen2-editor-skeleton {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.gen2-editor-host .cm-editor {
+  height: 100%;
+}
+
+.gen2-editor-skeleton {
+  background: repeating-linear-gradient(
+    180deg,
+    transparent 0 12px,
+    color-mix(in srgb, var(--ink) 4%, transparent) 12px 13px
+  );
+}
+
+/* ------------------------------------------------------------ terminal */
+
+.gen2-term {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  height: 100%;
+}
+
+.gen2-term-start {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  padding: 14px;
+}
+
+.gen2-term-host {
+  min-height: 0;
+  height: 100%;
+  padding: 6px 8px;
+  overflow: hidden;
+}
+
+.gen2-term-host:not([data-live="true"]) {
+  display: none;
+}
+
+/* ----------------------------------------------------------------- git */
+
+.gen2-git {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: 0;
+  height: 100%;
+}
+
+.gen2-git-branch {
+  color: var(--ink);
+  font-family: var(--font-geist-mono, ui-monospace, monospace);
+  font-size: 0.78125rem;
+}
+
+.gen2-git-files {
+  max-height: 34%;
+  border-bottom: 1px solid var(--line);
+  overflow: auto;
+}
+
+.gen2-git-files .gen2-tree-status {
+  margin-left: 0;
+  width: 18px;
+}
+
+.gen2-diff {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  margin: 0;
+  padding: 8px 0;
+  overflow: auto;
+  font-family: var(--font-geist-mono, ui-monospace, monospace);
+  font-size: 0.75rem;
+  line-height: 1.55;
+}
+
+.gen2-diff-line {
+  padding: 0 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.gen2-diff-line[data-kind="add"] {
+  background: color-mix(in srgb, #9ad08a 14%, transparent);
+  color: #bfe3b2;
+}
+
+.gen2-diff-line[data-kind="remove"] {
+  background: color-mix(in srgb, #f2604a 14%, transparent);
+  color: #ffb3a6;
+}
+
+.gen2-diff-line[data-kind="hunk"] {
+  color: #7fc7f5;
+}
+
+.gen2-diff-line[data-kind="meta"] {
+  color: var(--muted);
+}
+
+/* --------------------------------------------------------- adaptations */
+
+@media (max-width: 900px) {
+  .gen2-ws-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .gen2-resizer {
+    display: none;
+  }
+
+  .gen2-wb {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    background: var(--surface);
+  }
+
+  .gen2-wb-rail {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    flex-direction: row;
+    border-top: 1px solid var(--line);
+    background: var(--surface);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gen2-resizer::after {
+    transition: none;
+  }
+
+  .gen2-card-spinner {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+
+/* Names behind the member avatars, for screen readers and for tests that
+   assert who has access. */
+.gen2-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}

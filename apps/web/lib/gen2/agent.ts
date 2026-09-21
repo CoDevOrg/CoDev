@@ -26,6 +26,7 @@ import {
   requireGen2Chat,
 } from "./chats";
 import { formatGen2TurnPrompt } from "./chats-format";
+import { createGen2Turn, recordGen2TurnChunks } from "./turns";
 import { requireGen2Member } from "./workspaces";
 
 export { canRunGen2Agent } from "./agent-policy";
@@ -150,6 +151,14 @@ export async function startGen2AgentTurn(input: {
         detail: error instanceof Error ? error.message : "unknown",
       });
     }
+    // From here the server owns the transcript: every poll appends to this
+    // row, so the reply survives the browser going away mid-turn.
+    await createGen2Turn({
+      sessionId,
+      workspaceId: input.workspaceId,
+      chatId: input.chatId,
+      userId: input.userId,
+    });
     return { sessionId };
   } catch (error) {
     if (claimed) {
@@ -202,6 +211,12 @@ export async function pollGen2AgentTurn(input: {
     throw new Gen2LifecycleError(describeGen2RuntimeFailure(error), 502);
   }
 
+  const persisted = await recordGen2TurnChunks({
+    sessionId: input.sessionId,
+    chunks: result.chunks,
+    exited: result.exited,
+  });
+
   if (result.exited) {
     const hosted = await resolveHostedCodexSubscription({
       userId: input.userId,
@@ -226,6 +241,10 @@ export async function pollGen2AgentTurn(input: {
     nextSequence: result.nextSequence,
     exited: result.exited,
     exitCode: result.exitCode,
+    // Present only on the poll that ends the turn: the reply the server
+    // already saved, so the client does not have to save it too.
+    reply: persisted?.reply ?? null,
+    persistedMessageId: persisted?.messageId ?? null,
   };
 }
 

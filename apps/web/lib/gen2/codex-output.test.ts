@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 import { canRunGen2Agent } from "./agent-policy";
 import {
   decodeCodexExecOutput,
+  decodeCodexExecStream,
+  decodePendingBytes,
+  encodePendingBytes,
   mergeCodexExecChunks,
   parseCodexExecOutput,
 } from "./codex-output";
@@ -67,5 +70,61 @@ describe("codex exec output", () => {
       { sequence: 0, dataBase64: "YQ==" },
       { sequence: 1, dataBase64: "Yg==" },
     ]);
+  });
+});
+
+describe("decodeCodexExecStream", () => {
+  const encoder = new TextEncoder();
+
+  function chunk(sequence: number, bytes: Uint8Array<ArrayBufferLike>) {
+    return {
+      sequence,
+      dataBase64: Buffer.from(bytes).toString("base64"),
+    };
+  }
+
+  it("holds back a character split across two polls", () => {
+    const bytes = encoder.encode("héllo"); // é is two bytes
+    const first = decodeCodexExecStream(new Uint8Array(0), [
+      chunk(1, bytes.subarray(0, 2)), // "h" + the lead byte of é
+    ]);
+    expect(first.text).toBe("h");
+    expect(first.pending.byteLength).toBe(1);
+
+    const second = decodeCodexExecStream(first.pending, [
+      chunk(2, bytes.subarray(2)),
+    ]);
+    expect(second.text).toBe("éllo");
+    expect(second.pending.byteLength).toBe(0);
+  });
+
+  it("emits everything when the last character is complete", () => {
+    const result = decodeCodexExecStream(new Uint8Array(0), [
+      chunk(1, encoder.encode("done\n")),
+    ]);
+    expect(result.text).toBe("done\n");
+    expect(result.pending.byteLength).toBe(0);
+  });
+
+  it("reassembles a four-byte character split three ways", () => {
+    const bytes = encoder.encode("🙂");
+    let pending: Uint8Array = new Uint8Array(0);
+    let text = "";
+    for (const [index, end] of [1, 3, 4].entries()) {
+      const start = index === 0 ? 0 : [1, 3][index - 1]!;
+      const result = decodeCodexExecStream(pending, [
+        chunk(index + 1, bytes.subarray(start, end)),
+      ]);
+      text += result.text;
+      pending = result.pending;
+    }
+    expect(text).toBe("🙂");
+    expect(pending.byteLength).toBe(0);
+  });
+
+  it("round-trips pending bytes through storage", () => {
+    const pending = encoder.encode("é").subarray(0, 1);
+    expect(decodePendingBytes(encodePendingBytes(pending))).toEqual(pending);
+    expect(decodePendingBytes("")).toEqual(new Uint8Array(0));
   });
 });

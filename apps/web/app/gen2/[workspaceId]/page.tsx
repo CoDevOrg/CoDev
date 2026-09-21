@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Gen2WorkspaceRoom } from "@/components/gen2/workspace-room";
@@ -27,12 +26,7 @@ export default async function Gen2WorkspacePage({
 
   return (
     <AppChrome user={user} sidebar>
-      <main className="gen2-shell">
-        <Link className="gen2-back" href="/gen2">
-          All workspaces
-        </Link>
-        <Gen2WorkspaceRoom workspace={workspace} />
-      </main>
+      <Gen2WorkspaceRoom workspace={workspace} />
     </AppChrome>
   );
 }

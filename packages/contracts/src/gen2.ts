@@ -72,6 +72,9 @@ export const gen2AgentPollResponseSchema = z.object({
   nextSequence: z.number().int().nonnegative(),
   exited: z.boolean(),
   exitCode: z.number().int().nullable(),
+  /** Set on the poll that ends a turn: the reply the server persisted. */
+  reply: z.string().nullable().default(null),
+  persistedMessageId: identifierSchema.nullable().default(null),
 });
 
 export const gen2AgentCancelRequestSchema = z.object({
@@ -84,10 +87,90 @@ export const gen2ChatAppendRequestSchema = z.object({
 
 export const gen2ChatRoleSchema = z.enum(["user", "assistant"]);
 
+/**
+ * One entry in a Codex turn, reduced from the `codex exec --json` NDJSON
+ * stream. Every Codex item carries a stable `id` across
+ * `item.started`/`item.updated`/`item.completed`, so reducing the whole
+ * accumulated stream is idempotent and these ids are safe React keys.
+ */
+export const gen2TurnItemStatusSchema = z.enum([
+  "running",
+  "completed",
+  "failed",
+]);
+
+export const gen2FileChangeKindSchema = z.enum(["add", "modify", "delete"]);
+
+const turnItemBase = {
+  id: z.string().min(1).max(200),
+  status: gen2TurnItemStatusSchema,
+};
+
+export const gen2TurnItemSchema = z.discriminatedUnion("kind", [
+  z.object({
+    ...turnItemBase,
+    kind: z.literal("reasoning"),
+    text: z.string(),
+  }),
+  z.object({
+    ...turnItemBase,
+    kind: z.literal("command"),
+    command: z.string(),
+    output: z.string(),
+    exitCode: z.number().int().nullable(),
+  }),
+  z.object({
+    ...turnItemBase,
+    kind: z.literal("fileChange"),
+    changes: z.array(
+      z.object({ path: z.string().min(1), change: gen2FileChangeKindSchema }),
+    ),
+  }),
+  z.object({
+    ...turnItemBase,
+    kind: z.literal("todoList"),
+    todos: z.array(z.object({ text: z.string(), completed: z.boolean() })),
+  }),
+  z.object({
+    ...turnItemBase,
+    kind: z.literal("message"),
+    text: z.string(),
+  }),
+  z.object({
+    ...turnItemBase,
+    kind: z.literal("webSearch"),
+    query: z.string(),
+  }),
+  z.object({
+    ...turnItemBase,
+    kind: z.literal("toolCall"),
+    server: z.string(),
+    tool: z.string(),
+  }),
+]);
+
+export const gen2TurnUsageSchema = z.object({
+  inputTokens: z.number().int().nonnegative(),
+  cachedInputTokens: z.number().int().nonnegative(),
+  outputTokens: z.number().int().nonnegative(),
+});
+
+export const gen2TurnStatusSchema = z.enum(["running", "completed", "failed"]);
+
+export const gen2TurnStateSchema = z.object({
+  items: z.array(gen2TurnItemSchema),
+  reply: z.string(),
+  error: z.string().nullable(),
+  usage: gen2TurnUsageSchema.nullable(),
+  status: gen2TurnStatusSchema,
+});
+
 export const gen2ChatMessageSchema = z.object({
   id: identifierSchema,
   role: gen2ChatRoleSchema,
   body: z.string().min(1),
+  /** Activity cards for an assistant message; null for user messages. */
+  items: z.array(gen2TurnItemSchema).nullable().default(null),
   createdAt: timestampSchema,
 });
 
@@ -102,6 +185,107 @@ export const gen2ChatDetailSchema = gen2ChatSchema.extend({
   messages: z.array(gen2ChatMessageSchema),
 });
 
+/* ------------------------------------------------------------------ *
+ * Workbench: files, git, and terminal on the workspace's own machine.
+ *
+ * These address the same Firecracker guest Codex runs in, so the file a
+ * member opens here is the file the agent just edited. Paths are relative
+ * to the guest's /workspace.
+ * ------------------------------------------------------------------ */
+
+export const gen2FilePathSchema = z.string().min(1).max(4_096);
+
+export const gen2FileEntrySchema = z.object({
+  path: gen2FilePathSchema,
+  /** Git porcelain status (`M`, `??`, …), or null when unchanged. */
+  status: z.string().min(1).max(2).nullable(),
+});
+
+export const gen2FileListResponseSchema = z.object({
+  files: z.array(gen2FileEntrySchema),
+});
+
+export const gen2FileSearchMatchSchema = z.object({
+  path: gen2FilePathSchema,
+  line: z.number().int().positive(),
+  preview: z.string(),
+});
+
+export const gen2FileSearchResponseSchema = z.object({
+  matches: z.array(gen2FileSearchMatchSchema),
+});
+
+export const gen2FileReadRequestSchema = z.object({
+  path: gen2FilePathSchema,
+});
+
+export const gen2FileSchema = z.object({
+  path: gen2FilePathSchema,
+  contents: z.string(),
+  revision: z.string().min(1),
+});
+
+export const gen2FileReadResponseSchema = z.object({ file: gen2FileSchema });
+
+export const gen2FileWriteRequestSchema = z.object({
+  path: gen2FilePathSchema,
+  contents: z.string().max(2 * 1_024 * 1_024),
+  expectedRevision: z.string().min(1),
+});
+
+export const gen2FileWriteResponseSchema = z.object({
+  revision: z.string().min(1),
+});
+
+export const gen2GitOperationSchema = z.enum(["status", "diff", "show"]);
+
+export const gen2GitResponseSchema = z.object({ output: z.string() });
+
+/** The guest mints these; the shape is asserted before it reaches a route. */
+export const gen2TerminalSessionIdSchema = z
+  .string()
+  .regex(/^term-\d+-\d+$/, "Invalid terminal session id.");
+
+const gen2TerminalDimensions = {
+  rows: z.number().int().min(1).max(500),
+  columns: z.number().int().min(1).max(500),
+};
+
+export const gen2TerminalActionSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("start"), ...gen2TerminalDimensions }),
+  z.object({
+    action: z.literal("input"),
+    sessionId: gen2TerminalSessionIdSchema,
+    data: z.string().max(64 * 1_024),
+  }),
+  z.object({
+    action: z.literal("resize"),
+    sessionId: gen2TerminalSessionIdSchema,
+    ...gen2TerminalDimensions,
+  }),
+  z.object({
+    action: z.literal("poll"),
+    sessionId: gen2TerminalSessionIdSchema,
+    after: z.number().int().nonnegative(),
+  }),
+]);
+
+export const gen2TerminalStartResponseSchema = z.object({
+  sessionId: gen2TerminalSessionIdSchema,
+});
+
+export const gen2TerminalPollResponseSchema = z.object({
+  chunks: z.array(
+    z.object({
+      sequence: z.number().int().nonnegative(),
+      data: z.string(),
+    }),
+  ),
+  nextSequence: z.number().int().nonnegative(),
+  exited: z.boolean(),
+  exitCode: z.number().int().nullable(),
+});
+
 export type Gen2WorkspaceStatus = z.infer<typeof gen2WorkspaceStatusSchema>;
 export type Gen2WorkspaceRole = z.infer<typeof gen2WorkspaceRoleSchema>;
 export type Gen2Workspace = z.infer<typeof gen2WorkspaceSchema>;
@@ -112,3 +296,15 @@ export type Gen2AgentPollResponse = z.infer<typeof gen2AgentPollResponseSchema>;
 export type Gen2Chat = z.infer<typeof gen2ChatSchema>;
 export type Gen2ChatMessage = z.infer<typeof gen2ChatMessageSchema>;
 export type Gen2ChatDetail = z.infer<typeof gen2ChatDetailSchema>;
+export type Gen2TurnItem = z.infer<typeof gen2TurnItemSchema>;
+export type Gen2TurnItemStatus = z.infer<typeof gen2TurnItemStatusSchema>;
+export type Gen2TurnState = z.infer<typeof gen2TurnStateSchema>;
+export type Gen2TurnUsage = z.infer<typeof gen2TurnUsageSchema>;
+export type Gen2FileEntry = z.infer<typeof gen2FileEntrySchema>;
+export type Gen2FileSearchMatch = z.infer<typeof gen2FileSearchMatchSchema>;
+export type Gen2File = z.infer<typeof gen2FileSchema>;
+export type Gen2GitOperation = z.infer<typeof gen2GitOperationSchema>;
+export type Gen2TerminalAction = z.infer<typeof gen2TerminalActionSchema>;
+export type Gen2TerminalPollResponse = z.infer<
+  typeof gen2TerminalPollResponseSchema
+>;

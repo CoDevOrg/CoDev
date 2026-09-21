@@ -6,6 +6,10 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
 }));
 
+vi.mock("./workbench", () => ({
+  Gen2Workbench: () => <div data-testid="gen2-workbench" />,
+}));
+
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
     push: vi.fn(),
@@ -106,7 +110,7 @@ describe("Gen2WorkspaceRoom", () => {
     expect(
       screen.getByText("Waiting for the owner to start the instance."),
     ).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Codex" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Codex" })).toBeInTheDocument();
   });
 
   it("shows a start failure without leaving the page stuck", async () => {
@@ -165,11 +169,11 @@ describe("Gen2WorkspaceRoom", () => {
         workspace={{ ...workspace, status: "ready", sandboxId: "sandbox-1" }}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Stop instance" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
     expect(
       await screen.findByRole("button", { name: "Start instance" }),
     ).toBeInTheDocument();
     expect(screen.getByText("Ada")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Codex" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Codex" })).toBeInTheDocument();
   });
 });

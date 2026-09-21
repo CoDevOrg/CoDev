@@ -87,3 +87,77 @@ export function mergeCodexExecChunks(
     (left, right) => left.sequence - right.sequence,
   );
 }
+
+/**
+ * Decodes one poll's worth of chunks for a stream the server accumulates
+ * across many polls.
+ *
+ * `decodeCodexExecOutput` above decodes a complete byte array in one pass, so
+ * a character split across two chunks resolves correctly. That does not hold
+ * when each poll is decoded and appended on its own: a character straddling
+ * the boundary would become U+FFFD before its remaining bytes ever arrive.
+ * So hold back an incomplete trailing sequence and prepend it next time.
+ */
+export function decodeCodexExecStream(
+  pending: Uint8Array,
+  chunks: CodexExecChunk[],
+): { text: string; pending: Uint8Array } {
+  const ordered = [...chunks].sort(
+    (left, right) => left.sequence - right.sequence,
+  );
+  const pieces = ordered.map((chunk) => decodeBase64(chunk.dataBase64));
+  const total =
+    pending.byteLength +
+    pieces.reduce((sum, piece) => sum + piece.byteLength, 0);
+  const bytes = new Uint8Array(total);
+  bytes.set(pending, 0);
+  let offset = pending.byteLength;
+  for (const piece of pieces) {
+    bytes.set(piece, offset);
+    offset += piece.byteLength;
+  }
+
+  const hold = incompleteTrailingBytes(bytes);
+  const boundary = bytes.byteLength - hold;
+  return {
+    text: new TextDecoder("utf-8", { fatal: false }).decode(
+      bytes.subarray(0, boundary),
+    ),
+    pending: bytes.slice(boundary),
+  };
+}
+
+/**
+ * How many trailing bytes belong to a UTF-8 character that has not finished
+ * arriving. A sequence is at most four bytes, so looking back three is enough.
+ */
+function incompleteTrailingBytes(bytes: Uint8Array): number {
+  for (let back = 1; back <= 3 && back <= bytes.byteLength; back += 1) {
+    const byte = bytes[bytes.byteLength - back]!;
+    if ((byte & 0b1100_0000) === 0b1000_0000) continue; // continuation byte
+    const expected =
+      (byte & 0b1000_0000) === 0
+        ? 1
+        : (byte & 0b1110_0000) === 0b1100_0000
+          ? 2
+          : (byte & 0b1111_0000) === 0b1110_0000
+            ? 3
+            : (byte & 0b1111_1000) === 0b1111_0000
+              ? 4
+              : 1; // invalid lead; let the decoder emit its replacement char
+    return expected > back ? back : 0;
+  }
+  return 0;
+}
+
+export function encodePendingBytes(pending: Uint8Array): string {
+  if (pending.byteLength === 0) return "";
+  if (typeof Buffer !== "undefined") {
+    return Buffer.from(pending).toString("base64");
+  }
+  return btoa(String.fromCharCode(...pending));
+}
+
+export function decodePendingBytes(value: string): Uint8Array {
+  return value ? decodeBase64(value) : new Uint8Array(0);
+}
