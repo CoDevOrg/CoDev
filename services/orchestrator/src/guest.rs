@@ -92,8 +92,59 @@ struct WorktreeReviewQuery {
     base_sha: String,
 }
 
+/// The account interactive shells drop to.
+///
+/// Codex writes its provider token to a private `CODEX_HOME` on the guest
+/// filesystem while a turn runs. A root shell in the same microVM could read
+/// it, which on a *shared* workspace means one member could take another
+/// member's ChatGPT credential -- so historically every terminal was killed
+/// the moment a turn began. Running shells as an unprivileged account that
+/// cannot read that directory removes the exposure and lets a terminal stay
+/// open across a turn.
+#[derive(Clone, Copy, Debug)]
+struct TerminalUser {
+    uid: u32,
+    gid: u32,
+}
+
+/// The name `bootstrap-host.sh` gives the shell account in the guest image.
+const TERMINAL_USER_NAME: &str = "codev-shell";
+
+impl TerminalUser {
+    /// Reads the account out of `/etc/passwd` rather than linking libc's NSS.
+    /// A guest image without the account yields `None`, which keeps an older
+    /// image working exactly as it does today.
+    fn detect() -> Option<Self> {
+        let passwd = fs::read_to_string("/etc/passwd").ok()?;
+        Self::parse(&passwd, TERMINAL_USER_NAME)
+    }
+
+    fn parse(passwd: &str, name: &str) -> Option<Self> {
+        passwd.lines().find_map(|line| {
+            let mut fields = line.split(':');
+            if fields.next()? != name {
+                return None;
+            }
+            let _password = fields.next()?;
+            let uid = fields.next()?.parse().ok()?;
+            let gid = fields.next()?.parse().ok()?;
+            // uid 0 would defeat the entire point of the account.
+            if uid == 0 {
+                None
+            } else {
+                Some(Self { uid, gid })
+            }
+        })
+    }
+}
+
 pub struct GuestService {
     workspace_root: PathBuf,
+    /// The unprivileged account interactive shells run as, when the guest
+    /// image provides one. `None` on an image built before that user existed,
+    /// in which case shells stay root and Codex closes them on every turn --
+    /// see `terminal_isolation_available`.
+    terminal_user: Option<TerminalUser>,
     terminals: Mutex<HashMap<String, Arc<TerminalSession>>>,
     mutations: Mutex<()>,
     codex_execs: Mutex<HashMap<String, Arc<CodexExecSession>>>,
@@ -125,6 +176,7 @@ impl GuestService {
         }
         Ok(Self {
             workspace_root,
+            terminal_user: TerminalUser::detect(),
             terminals: Mutex::new(HashMap::new()),
             mutations: Mutex::new(()),
             codex_execs: Mutex::new(HashMap::new()),
@@ -134,6 +186,12 @@ impl GuestService {
             claude_setups: Mutex::new(HashMap::new()),
             claude_setup_idempotency: Mutex::new(HashMap::new()),
         })
+    }
+
+    /// Whether interactive shells are confined to an account that cannot read
+    /// a running turn's provider token.
+    fn terminal_isolation_available(&self) -> bool {
+        self.terminal_user.is_some()
     }
 
     /// Blocks until no Codex exec started via `start_codex_exec` is running.
@@ -518,14 +576,38 @@ impl GuestService {
         let pty = native_pty_system()
             .openpty(size)
             .map_err(RuntimeError::internal)?;
-        let mut command = CommandBuilder::new("/bin/sh");
-        command.arg("-l");
+        // Drop to the unprivileged shell account when the image has one, so
+        // this PTY cannot read a running turn's CODEX_HOME. `setpriv` is used
+        // rather than `su` because it execs directly without a PAM session
+        // and keeps the PTY as the controlling terminal.
+        let mut command = match self.terminal_user {
+            Some(user) => {
+                let mut command = CommandBuilder::new("/usr/bin/setpriv");
+                command.args([
+                    format!("--reuid={}", user.uid),
+                    format!("--regid={}", user.gid),
+                    "--clear-groups".to_string(),
+                    "--".to_string(),
+                    "/bin/sh".to_string(),
+                    "-l".to_string(),
+                ]);
+                command
+            }
+            None => {
+                let mut command = CommandBuilder::new("/bin/sh");
+                command.arg("-l");
+                command
+            }
+        };
         command.cwd(&self.workspace_root);
         command.env("PATH", GUEST_PATH);
         command.env("TERM", "xterm-256color");
         command.env("COLORTERM", "truecolor");
         command.env("HISTFILE", "/dev/null");
         command.env("HISTSIZE", "0");
+        // ProtectHome=true leaves no writable home; point at the workspace so
+        // tools that insist on $HOME do not fail.
+        command.env("HOME", &self.workspace_root);
         let mut child = pty
             .slave
             .spawn_command(command)
@@ -1533,18 +1615,22 @@ impl GuestService {
                     .exited()
             });
 
-        // Interactive terminals run in the same microVM. Close every PTY
-        // before materializing provider auth, exactly like exec()'s
-        // existing Codex path.
-        let sessions = {
-            let mut terminals = self.terminals.lock().expect("terminal map lock");
-            terminals
-                .drain()
-                .map(|(_, session)| session)
-                .collect::<Vec<_>>()
-        };
-        for session in sessions {
-            Self::force_close_session(session);
+        // Interactive terminals run in the same microVM as the Codex process
+        // and its CODEX_HOME. When shells are root they can read that token,
+        // so on an image without the unprivileged shell account every PTY is
+        // closed before provider auth is materialized. With the account in
+        // place the token is unreadable to them and terminals survive a turn.
+        if !self.terminal_isolation_available() {
+            let sessions = {
+                let mut terminals = self.terminals.lock().expect("terminal map lock");
+                terminals
+                    .drain()
+                    .map(|(_, session)| session)
+                    .collect::<Vec<_>>()
+            };
+            for session in sessions {
+                Self::force_close_session(session);
+            }
         }
 
         let root = self.target_root(request.worktree_id.as_deref())?;
@@ -2849,6 +2935,37 @@ fn atomic_write(path: &Path, contents: &[u8]) -> crate::model::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn terminal_user_reads_the_shell_account_from_passwd() {
+        let passwd = "root:x:0:0:root:/root:/bin/bash\n\
+                      codev-shell:x:2000:2001:CoDev shell:/workspace:/bin/sh\n";
+        let user = TerminalUser::parse(passwd, "codev-shell").expect("account");
+        assert_eq!(user.uid, 2000);
+        assert_eq!(user.gid, 2001);
+    }
+
+    #[test]
+    fn terminal_user_is_absent_on_an_image_without_the_account() {
+        // An older guest image has no shell account; the caller must fall
+        // back to root shells that are closed when a Codex turn starts.
+        let passwd = "root:x:0:0:root:/root:/bin/bash\n";
+        assert!(TerminalUser::parse(passwd, "codev-shell").is_none());
+    }
+
+    #[test]
+    fn terminal_user_refuses_a_root_shell_account() {
+        // A uid 0 "unprivileged" account would read the very token the
+        // account exists to hide, so it must not count as isolation.
+        let passwd = "codev-shell:x:0:0:CoDev shell:/workspace:/bin/sh\n";
+        assert!(TerminalUser::parse(passwd, "codev-shell").is_none());
+    }
+
+    #[test]
+    fn terminal_user_ignores_a_malformed_entry() {
+        let passwd = "codev-shell:x:notanumber:2000::/workspace:/bin/sh\n";
+        assert!(TerminalUser::parse(passwd, "codev-shell").is_none());
+    }
+
     use std::process::Command;
 
     use tempfile::tempdir;

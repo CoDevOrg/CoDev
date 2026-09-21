@@ -1051,3 +1051,37 @@
   color: #ffb3a6;
   font-size: 0.8125rem;
 }
+
+/* ------------------------------------------------------- connect card */
+
+.gen2-connect {
+  margin-top: 16px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--gen2-panel);
+}
+
+.gen2-connect h3 {
+  margin: 0 0 6px;
+  font-size: 0.9375rem;
+  font-weight: 620;
+}
+
+.gen2-connect p {
+  margin: 0 0 14px;
+  max-width: 36rem;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+
+.gen2-connect-alt {
+  margin: 12px 0 0;
+  font-size: 0.78125rem;
+}
+
+.gen2-connect-alt a {
+  color: var(--gold);
+  text-decoration: underline;
+}

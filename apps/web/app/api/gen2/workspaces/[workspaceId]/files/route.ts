@@ -1,5 +1,6 @@
 import {
   gen2FileReadRequestSchema,
+  gen2FileUploadRequestSchema,
   gen2FileWriteRequestSchema,
 } from "@codev/contracts";
 
@@ -8,6 +9,7 @@ import {
   listGen2Files,
   readGen2File,
   searchGen2Files,
+  uploadGen2File,
   writeGen2File,
 } from "@/lib/gen2/workbench";
 
@@ -35,6 +37,15 @@ export const POST = withUser<Params>(
     return Response.json({
       file: await readGen2File(workspaceId, user.id, path),
     });
+  },
+  { errorStatus: 502 },
+);
+
+/** Upload: a create, so it will not overwrite unless asked to. */
+export const PATCH = withUser<Params>(
+  async ({ request, user, params: { workspaceId } }) => {
+    const input = await readJson(request, gen2FileUploadRequestSchema);
+    return Response.json(await uploadGen2File(workspaceId, user.id, input));
   },
   { errorStatus: 502 },
 );

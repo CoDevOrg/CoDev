@@ -358,6 +358,13 @@
       "when": 1789974164007,
       "tag": "0050_flat_edwin_jarvis",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1789977886967,
+      "tag": "0051_outstanding_yellow_claw",
+      "breakpoints": true
     }
   ]
 }

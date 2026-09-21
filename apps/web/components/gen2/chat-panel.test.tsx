@@ -7,6 +7,7 @@ import { Gen2ChatPanel } from "./chat-panel";
 const workspace: Gen2WorkspaceDetail = {
   id: "11111111-1111-4111-8111-111111111111",
   name: "Studio",
+  repository: null,
   status: "ready",
   sandboxId: "sandbox-1",
   lastError: null,
@@ -35,6 +36,7 @@ describe("Gen2ChatPanel", () => {
   function stubFetch(handlers: {
     poll?: () => unknown | Promise<unknown>;
     messages?: unknown[];
+    provider?: { connected: boolean; via: string | null };
   }) {
     let turnFinished = false;
     vi.stubGlobal(
@@ -64,6 +66,9 @@ describe("Gen2ChatPanel", () => {
               messages: turnFinished ? (handlers.messages ?? []) : [],
             },
           });
+        }
+        if (path.endsWith("/api/gen2/providers")) {
+          return json(handlers.provider ?? { connected: true, via: "api-key" });
         }
         if (path.endsWith("/chats")) {
           return init?.method === "POST"
@@ -258,5 +263,39 @@ describe("Gen2ChatPanel", () => {
     );
     // Their words are not thrown away.
     expect(screen.getByLabelText("Prompt")).toHaveValue("do the thing");
+  });
+
+  it("asks for a Codex connection instead of a composer that cannot work", async () => {
+    // Turns run on the member's own credential. Without one every turn would
+    // fail with the same error, so ask for it where the work happens.
+    stubFetch({ provider: { connected: false, via: null } });
+    render(
+      <Gen2ChatPanel
+        workspace={workspace}
+        onRunningChange={vi.fn()}
+        onFilesChanged={vi.fn()}
+        onOpenFile={vi.fn()}
+        onNeedsMachine={async () => true}
+      />,
+    );
+    expect(
+      await screen.findByText("Connect ChatGPT to run Codex"),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Prompt")).toBeNull();
+  });
+
+  it("shows the composer once a credential is connected", async () => {
+    stubFetch({ provider: { connected: true, via: "subscription" } });
+    render(
+      <Gen2ChatPanel
+        workspace={workspace}
+        onRunningChange={vi.fn()}
+        onFilesChanged={vi.fn()}
+        onOpenFile={vi.fn()}
+        onNeedsMachine={async () => true}
+      />,
+    );
+    expect(await screen.findByLabelText("Prompt")).toBeInTheDocument();
+    expect(screen.queryByText("Connect ChatGPT to run Codex")).toBeNull();
   });
 });

@@ -41,6 +41,8 @@ export async function writeSandboxFile(
     contents: string;
     expectedRevision: string;
     worktreeId?: string;
+    /** Create missing directories on the way to `path`. */
+    createParents?: boolean;
   },
 ) {
   const response = await orchestratorRequest(

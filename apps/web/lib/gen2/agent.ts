@@ -3,12 +3,12 @@ import "server-only";
 import { logEvent } from "../platform/observability";
 import {
   claimHostedCodexExecution,
-  decryptHostedMaterial,
   HostedCodexSubscriptionError,
   releaseHostedCodexExecution,
   resolveHostedCodexSubscription,
   updateHostedCodexAuthCache,
 } from "../providers/hosted-codex-subscription-credentials";
+import { resolveGen2Codex } from "./providers";
 import { getAgentModel } from "../providers/ai-model";
 import { OrchestratorError } from "../runtime/orchestrator-request";
 import { ensureHostReady } from "../runtime/orchestrator-health";
@@ -30,9 +30,6 @@ import { createGen2Turn, recordGen2TurnChunks } from "./turns";
 import { requireGen2Member } from "./workspaces";
 
 export { canRunGen2Agent } from "./agent-policy";
-
-const CODEX_RECONNECT_MESSAGE =
-  "Connect Codex in Settings, or run `codev codex-auth`, then try again.";
 
 export function buildGen2CodexCommand(
   prompt: string,
@@ -76,26 +73,6 @@ async function requireReadyMember(workspaceId: string, userId: string) {
   return membership;
 }
 
-async function resolvePersonalCodex(userId: string) {
-  const hosted = await resolveHostedCodexSubscription({
-    userId,
-    includeBusy: true,
-  });
-  if (!hosted?.credential.encryptedMaterial) {
-    throw new Gen2LifecycleError(CODEX_RECONNECT_MESSAGE);
-  }
-  const material = await decryptHostedMaterial(
-    hosted.credential.encryptedMaterial,
-  );
-  if (!material.authCacheJson) {
-    throw new Gen2LifecycleError(CODEX_RECONNECT_MESSAGE);
-  }
-  return {
-    credentialId: hosted.credential.id,
-    codexAuthCacheJson: material.authCacheJson,
-  };
-}
-
 export async function startGen2AgentTurn(input: {
   workspaceId: string;
   userId: string;
@@ -106,23 +83,27 @@ export async function startGen2AgentTurn(input: {
   await requireReadyMember(input.workspaceId, input.userId);
   await requireGen2Chat(input.workspaceId, input.chatId);
   const history = await listGen2ChatMessages(input.chatId);
-  const credential = await resolvePersonalCodex(input.userId);
+  const credential = await resolveGen2Codex(input.userId);
 
+  // Only a subscription holds a seat. An API key has no one-turn-at-a-time
+  // limit, so claiming one would invent a restriction the provider does not.
   let claimed = false;
-  try {
-    await claimHostedCodexExecution(credential.credentialId);
-    claimed = true;
-  } catch (error) {
-    if (
-      !(error instanceof HostedCodexSubscriptionError) ||
-      error.code !== "hosted_codex_busy"
-    ) {
-      throw error;
+  if (credential.credentialId) {
+    try {
+      await claimHostedCodexExecution(credential.credentialId);
+      claimed = true;
+    } catch (error) {
+      if (
+        !(error instanceof HostedCodexSubscriptionError) ||
+        error.code !== "hosted_codex_busy"
+      ) {
+        throw error;
+      }
     }
   }
   const execInput = {
     command: buildGen2CodexCommand(input.prompt, history),
-    codexAuthCacheJson: credential.codexAuthCacheJson,
+    codexAuthCacheJson: credential.authCacheJson,
     idempotencyKey: input.idempotencyKey,
   };
   try {
@@ -161,7 +142,7 @@ export async function startGen2AgentTurn(input: {
     });
     return { sessionId };
   } catch (error) {
-    if (claimed) {
+    if (claimed && credential.credentialId) {
       await releaseHostedCodexExecution(credential.credentialId);
     }
     logEvent("error", "gen2.agent.start_failed", {

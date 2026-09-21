@@ -5,6 +5,8 @@ import { CreateGen2WorkspaceForm } from "@/components/gen2/create-workspace-form
 import { AppChrome } from "@/components/shell/app-chrome";
 import { requireUser } from "@/lib/auth/session";
 import { listGen2WorkspacesForUser } from "@/lib/gen2/workspaces";
+import { resolveGithubConnection } from "@/lib/github/github";
+import { connectGitHubAccount } from "@/app/actions/github";
 
 export const metadata: Metadata = { title: "Gen 2 workspaces" };
 
@@ -20,7 +22,10 @@ const STATUS_LABEL = {
 
 export default async function Gen2WorkspacesPage() {
   const user = await requireUser("/gen2");
-  const workspaces = await listGen2WorkspacesForUser(user.id);
+  const [workspaces, github] = await Promise.all([
+    listGen2WorkspacesForUser(user.id),
+    resolveGithubConnection(user.id),
+  ]);
 
   return (
     <AppChrome user={user} sidebar>
@@ -32,7 +37,11 @@ export default async function Gen2WorkspacesPage() {
           machine comes up; send the link and anyone you invite works on that
           same machine, alongside Codex.
         </p>
-        <CreateGen2WorkspaceForm />
+        <CreateGen2WorkspaceForm
+          githubConnected={github.connected}
+          appSlug={process.env.GITHUB_APP_SLUG}
+          connectGitHub={connectGitHubAccount.bind(null, "/gen2")}
+        />
         {workspaces.length === 0 ? (
           <p className="gen2-empty">No workspaces yet.</p>
         ) : (
@@ -41,6 +50,11 @@ export default async function Gen2WorkspacesPage() {
               <li key={workspace.id}>
                 <Link className="gen2-card" href={`/gen2/${workspace.id}`}>
                   <strong>{workspace.name}</strong>
+                  {workspace.repository ? (
+                    <span className="gen2-card-repo">
+                      {workspace.repository.fullName}
+                    </span>
+                  ) : null}
                   <span
                     className={`gen2-status gen2-status-${workspace.status}`}
                   >

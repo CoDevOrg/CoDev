@@ -11,6 +11,7 @@ import { Gen2WorkspaceRoom } from "./workspace-room";
 const workspace: Gen2WorkspaceDetail = {
   id: "11111111-1111-4111-8111-111111111111",
   name: "Studio",
+  repository: null,
   status: "pending",
   sandboxId: null,
   lastError: null,

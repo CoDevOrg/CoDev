@@ -3,6 +3,7 @@ import "server-only";
 import { readServerEnvironment } from "@codev/config";
 import { z } from "zod";
 
+import { fakeGuestEnabled, handleFakeGuestRequest } from "./fake-guest";
 import { resolveRuntimeHostForWorkspace } from "./runtime-host-pool";
 
 const errorSchema = z.object({
@@ -94,6 +95,15 @@ async function orchestratorDirectRequest(
   timeoutMs: number,
   endpointOverride?: string,
 ) {
+  // A local stand-in for the Azure guest, so the workspace can be exercised
+  // without infrastructure. Gated on an env var that is never set in
+  // production, and it declines any path it does not model so an unmodelled
+  // call still fails loudly instead of quietly succeeding.
+  const faked = fakeGuestEnabled()
+    ? handleFakeGuestRequest(method, path, body)
+    : null;
+  if (faked) return assertOrchestratorResponse(faked);
+
   const environment = readServerEnvironment();
   const endpoint = environment.ORCHESTRATOR_DIRECT_URL;
   const secret = environment.ORCHESTRATOR_DIRECT_SECRET;
@@ -128,19 +138,30 @@ async function orchestratorDirectRequest(
     cache: "no-store",
     signal: AbortSignal.timeout(timeoutMs),
   });
-  if (!response.ok) {
-    const payload = errorSchema.safeParse(
-      await response.json().catch(() => null),
-    );
-    throw new OrchestratorError(
-      payload.success
-        ? payload.data.error
-        : `Sandbox service returned HTTP ${response.status}.`,
-      response.status,
-      payload.success ? (payload.data.conflictPaths ?? []) : [],
-    );
-  }
-  return response;
+  return assertOrchestratorResponse(response);
+}
+
+/**
+ * Turns a non-2xx orchestrator reply into an `OrchestratorError` carrying the
+ * guest's own message and status. Shared with the local stand-in so a faked
+ * 409 behaves exactly like a real one -- otherwise the double would be
+ * kinder than the thing it stands in for, and hide conflict handling.
+ */
+async function assertOrchestratorResponse(response: Response) {
+  if (response.ok) return response;
+  const payload = errorSchema.safeParse(
+    await response
+      .clone()
+      .json()
+      .catch(() => null),
+  );
+  throw new OrchestratorError(
+    payload.success
+      ? payload.data.error
+      : `Sandbox service returned HTTP ${response.status}.`,
+    response.status,
+    payload.success ? (payload.data.conflictPaths ?? []) : [],
+  );
 }
 
 /**

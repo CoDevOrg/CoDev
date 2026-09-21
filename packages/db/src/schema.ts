@@ -2012,6 +2012,18 @@ export const gen2Workspaces = pgTable(
     sandboxId: text("sandbox_id"),
     lastError: text("last_error"),
     shareTokenHash: text("share_token_hash"),
+    /**
+     * The GitHub repository this workspace was created from, as
+     * "owner/name", or null for a blank machine. `baseSha` is the commit the
+     * guest starts at; private repositories arrive as a snapshot built by the
+     * control plane, so no GitHub token ever enters the VM.
+     */
+    githubInstallationId: bigint("github_installation_id", { mode: "number" }),
+    githubRepositoryId: bigint("github_repository_id", { mode: "number" }),
+    repository: text("repository"),
+    repositoryPrivate: boolean("repository_private").default(false).notNull(),
+    defaultBranch: text("default_branch"),
+    baseSha: text("base_sha"),
     ...timestamps,
   },
   (table) => [

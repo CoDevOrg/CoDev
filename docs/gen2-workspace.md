@@ -25,6 +25,12 @@ the file the agent just edited.
 - Prompt Codex in multiple chats on the live instance, with the turn rendered
   as it happens: reasoning, commands and their exit codes, file changes, and
   the plan, parsed from the `codex exec --json` item stream
+- Connect ChatGPT in the workspace itself, or fall back to a personal OpenAI
+  API key; turns run on the asking member's own credential
+- Create a workspace from a GitHub repository (public repositories are cloned
+  by the host, private ones arrive as a bounded snapshot the control plane
+  fetched, so no GitHub token enters the VM)
+- Upload a local file onto the machine
 - A workbench beside the chat — file tree with Git status, a CodeMirror 6
   editor with revision-checked saves, a shell, and a live Git status/diff
 
@@ -60,6 +66,16 @@ into a 502:
 | `git/status`, `git/diff`                 | no              | The Git tab stays live and polls every 4 s.       |
 | terminal `input`/`resize`/`poll`/`close` | no              | An open shell streams through a turn.             |
 
+Terminals also used to be closed outright whenever a turn began: Codex writes
+its provider token into a private `CODEX_HOME` on the guest, and a root shell
+in the same microVM could read it -- on a shared workspace that means one
+member taking another's ChatGPT credential. Shells now drop to an
+unprivileged `codev-shell` account (`guest.rs` `TerminalUser`, created by
+`bootstrap-host.sh`) that cannot read it, so a terminal survives a turn. A
+guest image without that account is detected at startup and falls back to the
+old close-on-turn behaviour, so an un-rebuilt host is safe rather than
+exposed.
+
 When a turn ends, the tree, the Git panel, and any open buffer refresh. A
 buffer with unsaved edits is never overwritten: it offers "Keep mine" or "Take
 theirs" instead. Saves carry `expectedRevision`, so a stale write is a 409 with
@@ -78,10 +94,25 @@ Each turn is still a fresh `codex exec --ephemeral --sandbox
 danger-full-access` with the prior messages in the prompt, so a shareable
 machine never keeps a personal Codex thread or auth home.
 
+## Verifying it without Azure
+
+`apps/web/lib/runtime/fake-guest.ts` is an in-memory stand-in for the guest,
+enabled with `CODEV_FAKE_GUEST=1`. It implements the same HTTP contract over a
+map of files -- revisions, porcelain output, terminal sequences, and a scripted
+`codex exec --json` turn that really edits the machine -- so the routes, domain
+modules and poll loops run end to end in tests and under `pnpm dev`. It
+declines any path it does not model, so an unmodelled call still fails rather
+than quietly passing. `lib/gen2/workbench.integration.test.ts` drives the real
+stack against it.
+
 ## Out of scope
 
 Gen 1 agent sessions, worktrees, GitHub, hibernation, OpenFGA, the original
 `workspaces` table, and the embedded Orca IDE.
+
+Concurrent agents: the guest serialises Codex (`start_codex_exec` waits on
+`codex_busy`), so one turn runs at a time per machine. Parallelism today means
+more workspaces.
 
 Not yet built here: a browser/preview tab (live port forwarding is deferred in
 `lib/runtime/preview.ts` and needs guest networking), file create/rename/delete,

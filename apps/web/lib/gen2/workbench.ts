@@ -149,6 +149,38 @@ export async function writeGen2File(
 }
 
 /**
+ * Drop a file onto the machine.
+ *
+ * The guest writes UTF-8, so binary uploads are refused here with a clear
+ * message rather than silently corrupted. `"missing"` is the revision the
+ * guest reports for a path that does not exist, which makes this a create
+ * that will not clobber an existing file.
+ */
+export async function uploadGen2File(
+  workspaceId: string,
+  userId: string,
+  input: { path: string; contents: string; overwrite?: boolean },
+) {
+  await requireReadyMember(workspaceId, userId);
+  try {
+    return await writeSandboxFile(workspaceId, {
+      path: input.path,
+      contents: input.contents,
+      expectedRevision: input.overwrite
+        ? ((await readSandboxFile(workspaceId, input.path).catch(() => null))
+            ?.revision ?? "missing")
+        : "missing",
+      createParents: true,
+    });
+  } catch (error) {
+    if (error instanceof OrchestratorError && error.status === 409) {
+      throw new Gen2FileConflictError(input.path, "exists");
+    }
+    throw error;
+  }
+}
+
+/**
  * `git status` and `git diff` are the one runtime surface the guest serves
  * without waiting for Codex to go idle, so the Git tab stays live during a
  * turn. Member-only on purpose — no ready gate, so it keeps answering.

@@ -17,6 +17,7 @@ import {
   type CodexExecChunk,
 } from "@/lib/gen2/codex-output";
 import { reduceCodexTurn } from "@/lib/gen2/turn-events";
+import { Gen2ConnectProvider, useGen2ProviderStatus } from "./connect-provider";
 import { Gen2TurnActivity } from "./turn-activity";
 
 type Thread = { messages: Gen2ChatMessage[] };
@@ -88,7 +89,10 @@ export function Gen2ChatPanel({
   const sessionRef = useRef<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const [waking, setWaking] = useState(false);
+  const { status: provider, refresh: refreshProvider } =
+    useGen2ProviderStatus();
   const ready = canRunGen2Agent(workspace.status);
+  const needsProvider = provider !== null && !provider.connected;
 
   useEffect(() => onRunningChange(running), [running, onRunningChange]);
 
@@ -200,6 +204,7 @@ export function Gen2ChatPanel({
           setError(
             cause instanceof Error ? cause.message : "That turn stopped.",
           );
+          void refreshProvider();
         }
       } finally {
         abortRef.current = null;
@@ -217,7 +222,7 @@ export function Gen2ChatPanel({
         if (sawFileChange) onFilesChanged();
       }
     },
-    [workspace.id, loadThread, loadChats, onFilesChanged],
+    [workspace.id, loadThread, loadChats, onFilesChanged, refreshProvider],
   );
 
   // Rejoin a turn that was still running when the page reloaded.
@@ -297,6 +302,9 @@ export function Gen2ChatPanel({
       };
       if (!response.ok || !payload.sessionId) {
         setError(payload.error ?? "Codex couldn't start.");
+        // A 409 here is usually a missing or busy credential; re-read it so
+        // the connect card appears instead of just an error string.
+        if (response.status === 409) void refreshProvider();
         return;
       }
       await drive(payload.sessionId, target, 0);
@@ -418,21 +426,30 @@ export function Gen2ChatPanel({
               Codex works on this workspace&rsquo;s own machine. You can watch
               the files, terminal, and Git change beside it.
             </p>
-            {composer}
-            {error ? (
-              <p className="gen2-chat-error" role="alert">
-                {error}
-              </p>
-            ) : null}
-            <ul className="gen2-chat-suggestions">
-              {SUGGESTIONS.map((suggestion) => (
-                <li key={suggestion}>
-                  <button type="button" onClick={() => setPrompt(suggestion)}>
-                    {suggestion}
-                  </button>
-                </li>
-              ))}
-            </ul>
+            {needsProvider ? (
+              <Gen2ConnectProvider onConnected={() => void refreshProvider()} />
+            ) : (
+              <>
+                {composer}
+                {error ? (
+                  <p className="gen2-chat-error" role="alert">
+                    {error}
+                  </p>
+                ) : null}
+                <ul className="gen2-chat-suggestions">
+                  {SUGGESTIONS.map((suggestion) => (
+                    <li key={suggestion}>
+                      <button
+                        type="button"
+                        onClick={() => setPrompt(suggestion)}
+                      >
+                        {suggestion}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
           </div>
         </div>
       ) : (

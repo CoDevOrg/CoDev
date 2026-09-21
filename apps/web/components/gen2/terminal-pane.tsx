@@ -27,6 +27,7 @@ export function Gen2TerminalPane({
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const sessionRef = useRef<string | null>(null);
+  const afterRef = useRef(0);
   const [status, setStatus] = useState<"idle" | "starting" | "live" | "ended">(
     "idle",
   );
@@ -65,7 +66,7 @@ export function Gen2TerminalPane({
     const fit = new Fit();
     term.loadAddon(fit);
     term.open(host);
-    fit.fit();
+    if (host.clientWidth > 0 && host.clientHeight > 0) fit.fit();
     termRef.current = term;
     fitRef.current = fit;
 
@@ -85,6 +86,7 @@ export function Gen2TerminalPane({
         return;
       }
       sessionRef.current = payload.sessionId;
+      afterRef.current = 0;
       setStatus("live");
       term.onData((data) => {
         void post({ action: "input", sessionId: payload.sessionId, data });
@@ -99,7 +101,6 @@ export function Gen2TerminalPane({
   useEffect(() => {
     if (status !== "live" || !visible) return;
     let cancelled = false;
-    let after = 0;
     let backoff = 1_000;
 
     async function pump() {
@@ -107,7 +108,11 @@ export function Gen2TerminalPane({
         const sessionId = sessionRef.current;
         if (!sessionId) return;
         try {
-          const response = await post({ action: "poll", sessionId, after });
+          const response = await post({
+            action: "poll",
+            sessionId,
+            after: afterRef.current,
+          });
           if (cancelled) return;
           if (!response.ok) {
             await new Promise((resolve) => setTimeout(resolve, backoff));
@@ -121,7 +126,7 @@ export function Gen2TerminalPane({
             exited: boolean;
           };
           for (const chunk of result.chunks) termRef.current?.write(chunk.data);
-          after = result.nextSequence;
+          afterRef.current = result.nextSequence;
           if (result.exited) {
             setStatus("ended");
             sessionRef.current = null;
@@ -153,6 +158,8 @@ export function Gen2TerminalPane({
         const term = termRef.current;
         const sessionId = sessionRef.current;
         if (!term || !sessionId) return;
+        // A hidden pane measures zero; fitting against that throws.
+        if (host.clientWidth === 0 || host.clientHeight === 0) return;
         fitRef.current?.fit();
         void post({
           action: "resize",

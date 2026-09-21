@@ -14,6 +14,7 @@ import {
   getSandbox,
   provisionSandbox,
 } from "../runtime/orchestrator-sandbox";
+import { getRepositorySnapshot } from "../github/github";
 import { Gen2AccessError, Gen2LifecycleError } from "./errors";
 import { requireGen2Member } from "./workspaces";
 
@@ -78,14 +79,46 @@ export function describeGen2RuntimeFailure(error: unknown): string {
   return message || "The Firecracker instance could not start.";
 }
 
+/**
+ * Where a new machine's files come from. Public repositories are cloned by
+ * the orchestrator host from a plain URL; private ones are fetched by the
+ * control plane with the member's GitHub token and shipped as a bounded,
+ * credential-free snapshot. Either way no GitHub credential enters the guest.
+ */
+export async function buildGen2SandboxSource(
+  userId: string,
+  repository: { fullName: string; private: boolean } | null,
+  baseSha: string | null,
+) {
+  if (!repository || !baseSha) return buildBlankSandboxSource();
+  if (!repository.private) {
+    return {
+      repositoryUrl: `https://github.com/${repository.fullName}.git`,
+      baseSha,
+    };
+  }
+  return {
+    repositoryUrl: null,
+    repositorySnapshot: await getRepositorySnapshot(
+      userId,
+      repository.fullName,
+      baseSha,
+    ),
+    baseSha,
+  };
+}
+
 export type Gen2SandboxRuntime = {
   provision(workspaceId: string, expiresAt: Date): Promise<{ id: string }>;
   destroy(workspaceId: string): Promise<void>;
   current?(workspaceId: string): Promise<{ id: string } | null>;
 };
 
-export function createFirecrackerRuntime(): Gen2SandboxRuntime {
-  const source = buildBlankSandboxSource();
+export function createFirecrackerRuntime(
+  source: Awaited<
+    ReturnType<typeof buildGen2SandboxSource>
+  > = buildBlankSandboxSource(),
+): Gen2SandboxRuntime {
   return {
     async current(workspaceId) {
       try {
@@ -115,6 +148,16 @@ export function createFirecrackerRuntime(): Gen2SandboxRuntime {
       return destroySandbox(workspaceId);
     },
   };
+}
+
+/** The create-time commit; kept off the membership view as it is internal. */
+async function readGen2BaseSha(workspaceId: string) {
+  const [row] = await getDatabase()
+    .select({ baseSha: schema.gen2Workspaces.baseSha })
+    .from(schema.gen2Workspaces)
+    .where(eq(schema.gen2Workspaces.id, workspaceId))
+    .limit(1);
+  return row?.baseSha ?? null;
 }
 
 async function writeGen2Instance(
@@ -166,10 +209,19 @@ async function claimProvisioning(workspaceId: string) {
 export async function ensureGen2Instance(
   workspaceId: string,
   userId: string,
-  runtime: Gen2SandboxRuntime = createFirecrackerRuntime(),
+  runtime?: Gen2SandboxRuntime,
 ) {
   const membership = await requireGen2Member(workspaceId, userId);
   if (membership.status === "ready") return membership;
+  const resolved =
+    runtime ??
+    createFirecrackerRuntime(
+      await buildGen2SandboxSource(
+        userId,
+        membership.repository,
+        await readGen2BaseSha(workspaceId),
+      ),
+    );
   if (!(await claimProvisioning(workspaceId))) {
     // Someone else is already bringing it up; report the live status rather
     // than racing them for the same guest.
@@ -192,12 +244,12 @@ export async function ensureGen2Instance(
   }
 
   try {
-    const existing = runtime.current
-      ? await runtime.current(workspaceId)
+    const existing = resolved.current
+      ? await resolved.current(workspaceId)
       : null;
     const sandbox =
       existing ??
-      (await runtime.provision(
+      (await resolved.provision(
         workspaceId,
         new Date(
           Date.now() + GEN2_SANDBOX_LIFECYCLE.timeoutMs - GEN2_EXPIRES_SLACK_MS,

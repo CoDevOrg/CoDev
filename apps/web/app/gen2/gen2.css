@@ -388,3 +388,120 @@
     max-height: 30vh;
   }
 }
+
+/* --------------------------------------------- create from a repository */
+
+.gen2-create-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.gen2-create-row .primary-button,
+.gen2-create-row .secondary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gen2-create-select {
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 0.8125rem;
+}
+
+.gen2-create-search {
+  display: flex;
+  flex: 1 1 18rem;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+.gen2-create-search input {
+  flex: 1;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.875rem;
+  outline: none;
+}
+
+.gen2-create-select:focus-visible,
+.gen2-create-search:focus-within {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+
+.gen2-repo-list {
+  display: grid;
+  gap: 2px;
+  margin: 14px 0 0;
+  padding: 0;
+  max-height: 20rem;
+  list-style: none;
+  overflow: auto;
+}
+
+.gen2-repo-list button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8125rem;
+  text-align: left;
+}
+
+.gen2-repo-list button:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.gen2-repo-list button:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+}
+
+.gen2-repo-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gen2-repo-tag,
+.gen2-repo-branch,
+.gen2-card-repo {
+  color: var(--muted);
+  font-size: 0.6875rem;
+}
+
+.gen2-repo-tag {
+  padding: 1px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.gen2-repo-mark {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}

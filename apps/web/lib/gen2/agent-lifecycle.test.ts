@@ -17,6 +17,11 @@ const mocks = vi.hoisted(() => ({
   getAgentModel: vi.fn(),
   createTurn: vi.fn(),
   recordChunks: vi.fn(),
+  resolveCredential: vi.fn(),
+}));
+
+vi.mock("./providers", () => ({
+  resolveGen2Codex: (...args: unknown[]) => mocks.resolveCredential(...args),
 }));
 
 vi.mock("./workspaces", () => ({
@@ -126,6 +131,11 @@ describe("gen2 Codex agent", () => {
     mocks.release.mockResolvedValue(undefined);
     mocks.ensureHostReady.mockResolvedValue(undefined);
     mocks.createTurn.mockResolvedValue(undefined);
+    mocks.resolveCredential.mockResolvedValue({
+      credentialId: credentialId,
+      authCacheJson: AUTH_CACHE,
+      via: "subscription",
+    });
     mocks.recordChunks.mockResolvedValue(null);
     mocks.start.mockResolvedValue("session-1");
     mocks.poll.mockResolvedValue({
@@ -207,10 +217,27 @@ describe("gen2 Codex agent", () => {
     expect(mocks.appendMessage).not.toHaveBeenCalled();
   });
 
-  it("asks the member to reconnect Codex when there is no personal cache", async () => {
-    mocks.resolveHosted.mockResolvedValue(null);
-    await expect(startGen2AgentTurn(turn)).rejects.toThrow(/Connect Codex/);
+  it("asks the member to connect when they have no credential", async () => {
+    mocks.resolveCredential.mockRejectedValue(
+      new Gen2LifecycleError("Connect ChatGPT or add an OpenAI API key", 409),
+    );
+    await expect(startGen2AgentTurn(turn)).rejects.toThrow(/Connect ChatGPT/);
     expect(mocks.start).not.toHaveBeenCalled();
+  });
+
+  it("does not claim a seat for an API key", async () => {
+    // A seat is a subscription concept. Claiming one for an API key would
+    // invent a one-turn-at-a-time limit the provider does not impose.
+    mocks.resolveCredential.mockResolvedValue({
+      credentialId: null,
+      authCacheJson: AUTH_CACHE,
+      via: "api-key",
+    });
+    await expect(startGen2AgentTurn(turn)).resolves.toEqual({
+      sessionId: "session-1",
+    });
+    expect(mocks.claim).not.toHaveBeenCalled();
+    expect(mocks.start).toHaveBeenCalled();
   });
 
   it("reattaches when the hosted Codex seat is already claimed", async () => {

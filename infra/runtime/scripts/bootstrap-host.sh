@@ -701,6 +701,28 @@ mkdir -p "${work_dir}/rootfs/usr/lib/${guest_lib_dir}"
 cp -a "/usr/lib/${guest_lib_dir}/." "${work_dir}/rootfs/usr/lib/${guest_lib_dir}/" 2>/dev/null || true
 install -d -m 0755 "${work_dir}/rootfs/workspace"
 
+# An unprivileged account for interactive shells. Codex writes its provider
+# token into a private CODEX_HOME while a turn runs; a root shell in the same
+# microVM could read it, which on a shared workspace means one member could
+# take another member's ChatGPT credential. Shells drop to this account
+# (guest.rs `TerminalUser`) so that directory is unreadable to them, which is
+# what lets a terminal stay open while an agent works. guestd, and Codex
+# itself, still run as root.
+#
+# Written straight into the image's passwd/group rather than via useradd so
+# the ids are fixed and the build does not need a chroot.
+if ! grep -q '^codev-shell:' "${work_dir}/rootfs/etc/group"; then
+  echo 'codev-shell:x:2000:' >>"${work_dir}/rootfs/etc/group"
+fi
+if ! grep -q '^codev-shell:' "${work_dir}/rootfs/etc/passwd"; then
+  echo 'codev-shell:x:2000:2000:CoDev shell:/workspace:/bin/sh' \
+    >>"${work_dir}/rootfs/etc/passwd"
+fi
+if ! grep -q '^codev-shell:' "${work_dir}/rootfs/etc/shadow"; then
+  # No password hash: the account is reachable only by setpriv from guestd.
+  echo 'codev-shell:!:20000::::::' >>"${work_dir}/rootfs/etc/shadow"
+fi
+
 cat >"${work_dir}/rootfs/etc/systemd/system/workspace.mount" <<'UNIT'
 [Unit]
 Description=CoDev workspace disk
@@ -724,8 +746,16 @@ Requires=workspace.mount
 
 [Service]
 Type=simple
+# The workspace disk is built on the host with root-owned files, so hand it
+# to the shell account before guestd starts. setgid keeps new files in the
+# group, so what Codex (root) writes stays editable from a shell and the
+# other way round.
+ExecStartPre=-/bin/chgrp -R codev-shell /workspace
+ExecStartPre=-/bin/chmod -R g+w /workspace
+ExecStartPre=-/bin/chmod g+s /workspace
 ExecStart=/usr/local/bin/codev-guestd
 Environment=CODEV_WORKSPACE_ROOT=/workspace
+UMask=0002
 Restart=on-failure
 RestartSec=1
 NoNewPrivileges=true

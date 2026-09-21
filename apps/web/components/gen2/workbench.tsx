@@ -8,6 +8,7 @@ import {
   PanelRightOpen,
   RefreshCw,
   SquareTerminal,
+  Upload,
 } from "lucide-react";
 import type { Gen2File, Gen2FileEntry } from "@codev/contracts";
 
@@ -52,6 +53,7 @@ export function Gen2Workbench({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const bodyRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const storageKey = `codev-gen2-workbench:${workspaceId}`;
 
   useEffect(() => {
@@ -163,6 +165,43 @@ export function Gen2Workbench({
     if (!agentRunning && openFile) void readFile(openFile.path);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentRunning, refreshToken]);
+
+  /**
+   * Upload straight onto the machine, so a file you have locally is a file
+   * Codex can read. The guest stores UTF-8, so binary is refused up front
+   * rather than written as mojibake.
+   */
+  async function upload(files: FileList | null) {
+    if (!files?.length) return;
+    setError("");
+    for (const file of Array.from(files).slice(0, 20)) {
+      if (file.size > 1_024 * 1_024) {
+        setError(`${file.name} is larger than 1 MB.`);
+        continue;
+      }
+      const contents = await file.text();
+      // A lone replacement character means the bytes were not text.
+      if (contents.includes("\uFFFD")) {
+        setError(`${file.name} is not a text file.`);
+        continue;
+      }
+      const response = await fetch(
+        `/api/gen2/workspaces/${workspaceId}/files`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path: file.name, contents }),
+        },
+      );
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        setError(payload.error ?? `${file.name} could not be uploaded.`);
+      }
+    }
+    onRefresh();
+  }
 
   function beginDrag(event: React.PointerEvent<HTMLDivElement>) {
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -277,6 +316,27 @@ export function Gen2Workbench({
               </button>
             ))}
           </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="gen2-visually-hidden"
+            aria-label="Upload files to the machine"
+            onChange={(event) => {
+              void upload(event.target.files);
+              event.target.value = "";
+            }}
+          />
+          <button
+            type="button"
+            className="gen2-wb-icon-button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={agentRunning}
+            aria-label="Upload a file"
+            title="Upload a file to this machine"
+          >
+            <Upload aria-hidden="true" size={13} />
+          </button>
           <button
             type="button"
             className="gen2-wb-icon-button"

@@ -12,8 +12,25 @@ export const gen2WorkspaceStatusSchema = z.enum([
 
 export const gen2WorkspaceRoleSchema = z.enum(["owner", "member"]);
 
-export const gen2WorkspaceCreateRequestSchema = z.object({
-  name: z.string().trim().min(1).max(80).optional(),
+export const gen2WorkspaceCreateRequestSchema = z
+  .object({
+    name: z.string().trim().min(1).max(80).optional(),
+    /** Both or neither: a repository is identified by its installation. */
+    installationId: z.number().int().positive().optional(),
+    repositoryId: z.number().int().positive().optional(),
+  })
+  .refine(
+    (input) =>
+      (input.installationId === undefined) ===
+      (input.repositoryId === undefined),
+    "Provide an installation and a repository together, or neither.",
+  );
+
+export const gen2RepositorySchema = z.object({
+  /** "owner/name", or null for a blank machine. */
+  fullName: z.string().min(1),
+  private: z.boolean(),
+  defaultBranch: z.string().min(1),
 });
 
 export const gen2WorkspaceMemberSchema = z.object({
@@ -26,6 +43,7 @@ export const gen2WorkspaceMemberSchema = z.object({
 export const gen2WorkspaceSchema = z.object({
   id: identifierSchema,
   name: z.string().min(1).max(80),
+  repository: gen2RepositorySchema.nullable().default(null),
   status: gen2WorkspaceStatusSchema,
   sandboxId: z.string().min(1).nullable(),
   lastError: z.string().nullable(),
@@ -237,6 +255,12 @@ export const gen2FileWriteResponseSchema = z.object({
   revision: z.string().min(1),
 });
 
+export const gen2FileUploadRequestSchema = z.object({
+  path: gen2FilePathSchema,
+  contents: z.string().max(1_024 * 1_024),
+  overwrite: z.boolean().default(false),
+});
+
 export const gen2GitOperationSchema = z.enum(["status", "diff", "show"]);
 
 export const gen2GitResponseSchema = z.object({ output: z.string() });
@@ -286,6 +310,7 @@ export const gen2TerminalPollResponseSchema = z.object({
   exitCode: z.number().int().nullable(),
 });
 
+export type Gen2Repository = z.infer<typeof gen2RepositorySchema>;
 export type Gen2WorkspaceStatus = z.infer<typeof gen2WorkspaceStatusSchema>;
 export type Gen2WorkspaceRole = z.infer<typeof gen2WorkspaceRoleSchema>;
 export type Gen2Workspace = z.infer<typeof gen2WorkspaceSchema>;

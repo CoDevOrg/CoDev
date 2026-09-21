@@ -1,5 +1,7 @@
 import "server-only";
 
+import { fakeGuestEnabled } from "./fake-guest";
+
 import { z } from "zod";
 
 import { requestHostWake } from "./host";
@@ -59,6 +61,8 @@ async function parseHealth(response: Response) {
  * turn of this loop rather than failing the action outright.
  */
 export async function ensureHostReady(timeoutMs = HOST_START_TIMEOUT_MS) {
+  // The local stand-in has no host to wake.
+  if (fakeGuestEnabled()) return;
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const state = await requestHostWake().catch(() => "starting" as const);

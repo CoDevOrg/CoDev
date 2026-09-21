@@ -11,6 +11,7 @@ import {
 import { schema } from "@codev/db";
 
 import { createInviteToken, hashInviteToken } from "../platform/crypto";
+import { getRepository } from "../github/github";
 import { getDatabase } from "../platform/database";
 import { logEvent } from "../platform/observability";
 import { Gen2AccessError, Gen2LifecycleError } from "./errors";
@@ -26,8 +27,23 @@ function toIso(value: Date) {
   return value.toISOString();
 }
 
-export async function createGen2Workspace(userId: string, name?: string) {
-  const workspaceName = defaultGen2WorkspaceName(name);
+export async function createGen2Workspace(
+  userId: string,
+  name?: string,
+  repository?: { installationId: number; repositoryId: number },
+) {
+  // Resolve the repository before anything is written: a repo the member
+  // cannot see should fail the create, not leave a half-built workspace.
+  const source = repository
+    ? await getRepository(
+        userId,
+        repository.installationId,
+        repository.repositoryId,
+      )
+    : null;
+  const workspaceName = defaultGen2WorkspaceName(
+    name ?? source?.repository.full_name.split("/").at(-1),
+  );
   try {
     const workspace = await getDatabase().transaction(async (transaction) => {
       const [created] = await transaction
@@ -35,6 +51,16 @@ export async function createGen2Workspace(userId: string, name?: string) {
         .values({
           ownerId: userId,
           name: workspaceName,
+          ...(source
+            ? {
+                githubInstallationId: repository!.installationId,
+                githubRepositoryId: repository!.repositoryId,
+                repository: source.repository.full_name,
+                repositoryPrivate: source.repository.private,
+                defaultBranch: source.repository.default_branch,
+                baseSha: source.baseSha,
+              }
+            : {}),
         })
         .returning();
       if (!created) {
@@ -71,6 +97,9 @@ export async function listGen2WorkspacesForUser(userId: string) {
       sandboxId: schema.gen2Workspaces.sandboxId,
       lastError: schema.gen2Workspaces.lastError,
       role: schema.gen2WorkspaceMembers.role,
+      repository: schema.gen2Workspaces.repository,
+      repositoryPrivate: schema.gen2Workspaces.repositoryPrivate,
+      defaultBranch: schema.gen2Workspaces.defaultBranch,
       createdAt: schema.gen2Workspaces.createdAt,
       updatedAt: schema.gen2Workspaces.updatedAt,
     })
@@ -92,6 +121,9 @@ export async function requireGen2Member(workspaceId: string, userId: string) {
       sandboxId: schema.gen2Workspaces.sandboxId,
       lastError: schema.gen2Workspaces.lastError,
       role: schema.gen2WorkspaceMembers.role,
+      repository: schema.gen2Workspaces.repository,
+      repositoryPrivate: schema.gen2Workspaces.repositoryPrivate,
+      defaultBranch: schema.gen2Workspaces.defaultBranch,
       createdAt: schema.gen2Workspaces.createdAt,
       updatedAt: schema.gen2Workspaces.updatedAt,
     })
@@ -189,6 +221,9 @@ function toWorkspace(
     status: Gen2Workspace["status"];
     sandboxId: string | null;
     lastError: string | null;
+    repository?: string | null;
+    repositoryPrivate?: boolean | null;
+    defaultBranch?: string | null;
     createdAt: Date;
     updatedAt: Date;
   },
@@ -200,6 +235,13 @@ function toWorkspace(
     status: row.status,
     sandboxId: row.sandboxId,
     lastError: row.lastError,
+    repository: row.repository
+      ? {
+          fullName: row.repository,
+          private: row.repositoryPrivate ?? false,
+          defaultBranch: row.defaultBranch ?? "main",
+        }
+      : null,
     role,
     createdAt: toIso(row.createdAt),
     updatedAt: toIso(row.updatedAt),

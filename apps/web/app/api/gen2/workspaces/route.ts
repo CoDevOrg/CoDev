@@ -14,7 +14,16 @@ export const GET = withUser(
 export const POST = withUser(
   async ({ request, user }) => {
     const input = await readJson(request, gen2WorkspaceCreateRequestSchema);
-    const workspace = await createGen2Workspace(user.id, input.name);
+    const workspace = await createGen2Workspace(
+      user.id,
+      input.name,
+      input.installationId && input.repositoryId
+        ? {
+            installationId: input.installationId,
+            repositoryId: input.repositoryId,
+          }
+        : undefined,
+    );
     return Response.json({ workspace }, { status: 201 });
   },
   { errorStatus: 500 },
