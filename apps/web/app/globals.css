@@ -3194,12 +3194,15 @@ footer > span {
 }
 
 .workspace-create-options {
+  display: grid;
+  gap: 12px;
   margin-top: 28px;
 }
 
 .workspace-create-blank {
   display: flex;
   width: 100%;
+  min-height: 44px;
   padding: 16px;
   align-items: center;
   gap: 14px;
@@ -3214,6 +3217,38 @@ footer > span {
 .workspace-create-blank:hover {
   border-color: var(--teal);
   background: var(--teal-soft);
+}
+
+.workspace-create-blank:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.workspace-create-blank:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.workspace-create-back {
+  display: inline-flex;
+  min-height: 44px;
+  margin-top: 20px;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.workspace-create-back:hover,
+.workspace-create-back:focus-visible {
+  color: var(--ink);
+}
+
+.workspace-create-back:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
 }
 
 .workspace-create-blank > span:last-child {

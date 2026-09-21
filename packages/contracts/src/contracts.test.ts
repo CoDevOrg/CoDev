@@ -23,6 +23,11 @@ import {
   workspaceRoleCapabilities,
   workspaceRoleCapabilitiesSchema,
   workspaceSchema,
+  gen2WorkspaceCreateRequestSchema,
+  gen2WorkspaceSchema,
+  gen2AgentStartRequestSchema,
+  gen2AgentPollResponseSchema,
+  gen2ChatAppendRequestSchema,
   MAX_PARALLEL_AGENT_SESSIONS,
   accessRequestInputSchema,
 } from "./index";
@@ -492,6 +497,54 @@ describe("access requests", () => {
     expect(() =>
       accessRequestInputSchema.parse({ email: "not-an-email" }),
     ).toThrow();
+  });
+});
+
+describe("gen2 workspace contracts", () => {
+  it("creates a named or unnamed workspace request", () => {
+    expect(gen2WorkspaceCreateRequestSchema.parse({})).toEqual({});
+    expect(
+      gen2WorkspaceCreateRequestSchema.parse({ name: " Studio " }),
+    ).toEqual({ name: "Studio" });
+  });
+
+  it("describes a shareable instance", () => {
+    expect(
+      gen2WorkspaceSchema.parse({
+        id,
+        name: "Studio",
+        status: "ready",
+        sandboxId: "sandbox-1",
+        lastError: null,
+        role: "owner",
+        createdAt: "2026-09-20T20:00:00.000Z",
+        updatedAt: "2026-09-20T20:00:00.000Z",
+      }),
+    ).toMatchObject({ status: "ready", role: "owner" });
+  });
+
+  it("accepts a Codex turn start and a poll without auth material", () => {
+    expect(
+      gen2AgentStartRequestSchema.parse({
+        chatId: id,
+        prompt: " List the files ",
+        idempotencyKey: "turn-1234",
+      }),
+    ).toEqual({
+      chatId: id,
+      prompt: "List the files",
+      idempotencyKey: "turn-1234",
+    });
+    const poll = gen2AgentPollResponseSchema.parse({
+      chunks: [{ sequence: 0, dataBase64: "aGVsbG8=" }],
+      nextSequence: 1,
+      exited: false,
+      exitCode: null,
+    });
+    expect(poll).not.toHaveProperty("codexAuthCacheJson");
+    expect(
+      gen2ChatAppendRequestSchema.parse({ body: "  README.md  " }),
+    ).toEqual({ body: "README.md" });
   });
 });
 

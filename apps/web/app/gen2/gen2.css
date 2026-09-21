@@ -1,0 +1,390 @@
+.gen2-shell {
+  width: min(960px, 100%);
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: clamp(32px, 5vw, 64px) clamp(20px, 4vw, 48px) 96px;
+}
+
+.gen2-shell h1 {
+  margin: 0;
+  font-size: clamp(1.75rem, 3vw, 2.25rem);
+  font-weight: 640;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.gen2-shell h2 {
+  margin: 0 0 12px;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.gen2-lede {
+  margin: 12px 0 32px;
+  max-width: 42rem;
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1.6;
+}
+
+.gen2-create,
+.gen2-share,
+.gen2-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.gen2-shell .primary-button,
+.gen2-shell .secondary-button,
+.gen2-card {
+  cursor: pointer;
+}
+
+.gen2-field {
+  display: flex;
+  flex: 1 1 16rem;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.gen2-field input {
+  min-height: 46px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 0.95rem;
+}
+
+.gen2-field input:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.gen2-list {
+  display: grid;
+  gap: 12px;
+  margin: 40px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gen2-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 72px;
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface-2);
+  color: inherit;
+  text-decoration: none;
+  transition:
+    transform 200ms ease,
+    border-color 200ms ease;
+}
+
+.gen2-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--line-strong);
+}
+
+.gen2-card:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+}
+
+.gen2-empty {
+  margin: 40px 0 0;
+  color: var(--muted);
+}
+
+.gen2-room-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.gen2-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.gen2-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #596888;
+}
+
+.gen2-status-ready .gen2-status-dot,
+.gen2-status-provisioning .gen2-status-dot {
+  background: var(--gold);
+  box-shadow: 0 0 9px rgba(242, 96, 74, 0.55);
+}
+
+.gen2-status-failed .gen2-status-dot {
+  background: #ef4444;
+}
+
+.gen2-note {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.gen2-agent {
+  margin-top: 48px;
+}
+
+.gen2-agent-layout {
+  display: grid;
+  grid-template-columns: minmax(12rem, 15rem) minmax(0, 1fr);
+  gap: 24px;
+  margin-top: 24px;
+  align-items: start;
+}
+
+.gen2-chat-nav {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.gen2-chat-new {
+  width: 100%;
+  min-height: 44px;
+  justify-content: flex-start;
+  padding-inline: 12px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.gen2-chat-new:hover:not(:disabled),
+.gen2-chat-new:focus-visible {
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+.gen2-chat-nav ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: min(52vh, 440px);
+  overflow: auto;
+}
+
+.gen2-chat-item {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gen2-chat-item[aria-current="true"] {
+  border-color: var(--gold);
+  background: var(--surface-2);
+  box-shadow: inset 3px 0 0 var(--gold);
+}
+
+.gen2-chat-item:hover:not(:disabled) {
+  border-color: var(--line-strong);
+}
+
+.gen2-chat-item:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.gen2-chat-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.gen2-chat-thread .gen2-empty {
+  margin: 0 0 16px;
+}
+
+.gen2-agent-log {
+  min-height: 200px;
+  max-height: min(52vh, 440px);
+  overflow: auto;
+  margin: 16px 0 0;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface-2);
+}
+
+.gen2-agent-log ol {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gen2-agent-log .gen2-empty {
+  margin: 0;
+}
+
+.gen2-agent-composer-hero {
+  margin-top: 16px;
+}
+
+.gen2-agent-composer-hero textarea {
+  min-height: 220px;
+}
+
+.gen2-agent-user span,
+.gen2-agent-assistant span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.gen2-agent-user p,
+.gen2-agent-assistant p {
+  margin: 0;
+  color: var(--ink);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.gen2-agent-live {
+  min-height: 44px;
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.gen2-agent-composer {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.gen2-field textarea {
+  min-height: 92px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.gen2-field textarea:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.gen2-field textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.gen2-agent-composer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.gen2-members {
+  margin-top: 48px;
+}
+
+.gen2-members ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gen2-members li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.gen2-members span {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.gen2-back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-bottom: 24px;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.gen2-back:hover,
+.gen2-back:focus-visible {
+  color: var(--ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gen2-card,
+  .primary-button,
+  .secondary-button {
+    transition: none;
+  }
+
+  .gen2-card:hover,
+  .primary-button:hover {
+    transform: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .gen2-agent-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .gen2-chat-nav ul {
+    max-height: 30vh;
+  }
+}

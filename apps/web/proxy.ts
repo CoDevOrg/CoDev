@@ -19,14 +19,18 @@ import { isAdminHostname } from "@/lib/platform/site-hosts";
 const authenticationProxy = nextAuth as unknown as NextMiddleware;
 
 function shouldAuthenticate(pathname: string): boolean {
+  if (pathname.startsWith("/gen2/join")) return false;
   return (
     pathname.startsWith("/dashboard/") ||
     pathname === "/dashboard" ||
+    pathname.startsWith("/gen2/") ||
+    pathname === "/gen2" ||
     pathname.startsWith("/settings/") ||
     pathname === "/settings" ||
     pathname.startsWith("/workspaces/") ||
     pathname.startsWith("/api/workspace/create") ||
     pathname.startsWith("/api/workspaces") ||
+    pathname.startsWith("/api/gen2") ||
     pathname.startsWith("/api/auth/")
   );
 }
@@ -70,6 +74,7 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   const edgeLimited =
     pathname === "/api/workspace/create" ||
     pathname === "/api/workspaces" ||
+    pathname === "/api/gen2/workspaces" ||
     pathname.startsWith("/api/auth/");
   if (edgeLimited && !apiEdgeLimiter && process.env.NODE_ENV === "production") {
     return NextResponse.json(

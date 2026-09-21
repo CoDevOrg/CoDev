@@ -26,6 +26,10 @@ describe("AppSidebarNav", () => {
       "href",
       "/rooms",
     );
+    expect(screen.getByRole("link", { name: "Gen 2" })).toHaveAttribute(
+      "href",
+      "/gen2",
+    );
   });
 
   it("sends non-admin navigation to the public host from the admin host", () => {
