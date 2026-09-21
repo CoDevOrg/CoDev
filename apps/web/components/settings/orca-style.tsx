@@ -2,10 +2,21 @@ import type { ReactNode } from "react";
 
 import { cn } from "@/lib/platform/utils";
 
-export function OrcaPageShell({ children }: { children: ReactNode }) {
+export function OrcaPageShell({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   return (
     <div className="orca-settings-scope h-full overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-10 px-8 py-10">
+      <div
+        className={cn(
+          "mx-auto flex w-full max-w-4xl flex-col gap-10 px-8 py-10",
+          className,
+        )}
+      >
         {children}
       </div>
     </div>

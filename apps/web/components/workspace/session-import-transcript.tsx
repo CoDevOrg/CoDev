@@ -21,7 +21,7 @@ function messageLabel(
   if (entry.role === "user") return "You";
   if (entry.role === "assistant")
     return provider[0]!.toUpperCase() + provider.slice(1);
-  return entry.role[0].toUpperCase() + entry.role.slice(1);
+  return entry.role.charAt(0).toUpperCase() + entry.role.slice(1);
 }
 
 export function SessionImportTranscript({
@@ -35,17 +35,26 @@ export function SessionImportTranscript({
     <ol className={styles.list} aria-label="Session messages">
       {entries.map((entry) => {
         const isLong = entry.text.length > LONG_MESSAGE_LENGTH;
+        const isContextBundle = isLong && entry.role === "user";
+        const label = messageLabel(entry, provider);
         return (
           <li
             key={entry.sequence}
-            className={`${styles.message} ${entry.role === "user" ? styles.user : styles.other}`}
+            className={`${styles.message} ${entry.role === "user" ? styles.user : styles.other} ${isContextBundle ? styles.context : ""}`}
           >
             <div className={styles.meta}>
-              <span className={styles.role}>
-                <span className={styles.sequence}>
-                  Message {entry.sequence + 1}
+              <span className={styles.identity}>
+                <span className={styles.avatar} aria-hidden="true">
+                  {entry.role === "user" ? "Y" : label.charAt(0)}
                 </span>
-                {messageLabel(entry, provider)}
+                <span className={styles.role}>
+                  <span>{isContextBundle ? "Imported context" : label}</span>
+                  <span className={styles.sequence}>
+                    {isContextBundle
+                      ? "Source prompt"
+                      : `Message ${entry.sequence + 1}`}
+                  </span>
+                </span>
               </span>
               {entry.createdAt ? (
                 <time className={styles.time} dateTime={entry.createdAt}>
@@ -60,13 +69,15 @@ export function SessionImportTranscript({
               <details className={styles.disclosure}>
                 <summary>
                   <span className={styles.disclosureLabel}>
-                    Long source message · {entry.text.length.toLocaleString()}{" "}
-                    characters
+                    {isContextBundle ? "Context bundle" : "Long message"} ·{" "}
+                    {entry.text.length.toLocaleString()} characters
                   </span>
                   <span className={styles.preview}>
                     {sessionMessagePreview(entry.text)}
                   </span>
-                  <span className={styles.expandHint}>Expand full message</span>
+                  <span className={styles.expandHint}>
+                    Review source context
+                  </span>
                 </summary>
                 <div className={styles.fullText}>
                   <SessionImportMarkdown text={entry.text} />

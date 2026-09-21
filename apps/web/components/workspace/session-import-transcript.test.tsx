@@ -39,16 +39,16 @@ describe("imported session transcript", () => {
       screen.getByRole("list", { name: "Session messages" }),
     ).getAllByRole("listitem");
     expect(messages).toHaveLength(3);
-    expect(messages[0]).toHaveTextContent("Message 1You");
-    expect(messages[1]).toHaveTextContent("Message 2Codex");
-    expect(messages[2]).toHaveTextContent("Message 3You");
+    expect(messages[0]).toHaveTextContent("Imported contextSource prompt");
+    expect(messages[1]).toHaveTextContent("CodexMessage 2");
+    expect(messages[2]).toHaveTextContent("YouMessage 3");
     expect(messages[0]).toHaveTextContent("Please fix message order");
 
     const disclosure = within(messages[0]!)
-      .getByText(/Long source message/)
+      .getByText(/Context bundle/)
       .closest("details");
     expect(disclosure).not.toHaveAttribute("open");
-    fireEvent.click(within(messages[0]!).getByText(/Long source message/));
+    fireEvent.click(within(messages[0]!).getByText(/Context bundle/));
     expect(disclosure).toHaveAttribute("open");
   });
 });

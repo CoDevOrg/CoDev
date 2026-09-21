@@ -191,6 +191,9 @@ export default async function WorkspaceSessionImportsPage({
                 </div>
 
                 <div className="max-w-[72ch] space-y-2">
+                  <h5 className="text-sm font-semibold text-foreground">
+                    Latest objective
+                  </h5>
                   {selected.handoff.currentObjective.length >
                   LONG_MESSAGE_LENGTH ? (
                     <details className="rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
@@ -211,20 +214,10 @@ export default async function WorkspaceSessionImportsPage({
                       </div>
                     </details>
                   ) : (
-                    <p className="text-sm leading-6 text-muted-foreground">
-                      Review the imported conversation below, then choose how to
-                      continue. Your original session isn&apos;t changed — CoDev
-                      keeps a private copy for this workspace.
-                    </p>
+                    <SessionImportMarkdown
+                      text={selected.handoff.currentObjective}
+                    />
                   )}
-                  <details className="rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
-                    <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-                      Read handoff summary
-                    </summary>
-                    <div className="pt-4">
-                      <SessionImportMarkdown text={selected.handoff.summary} />
-                    </div>
-                  </details>
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -268,13 +261,33 @@ export default async function WorkspaceSessionImportsPage({
                   </div>
                 </div>
 
-                <WorkspaceSessionRestoreActions
-                  workspaceId={workspaceId}
-                  importId={selected.id}
-                  status={selected.status}
-                  repositoryStatus={selected.repositoryStatus}
-                  canRestore={canRestore}
-                />
+                <section
+                  aria-labelledby="restore-repository-heading"
+                  className="rounded-xl border border-border/60 bg-muted/20 p-4"
+                >
+                  <h5
+                    id="restore-repository-heading"
+                    className="text-sm font-semibold text-foreground"
+                  >
+                    Restore repository
+                  </h5>
+                  <p className="mt-1 max-w-[72ch] text-sm leading-6 text-muted-foreground">
+                    CoDev creates an isolated worktree at the imported
+                    session&apos;s base commit, then reapplies its saved
+                    changes. It never changes the original provider session or
+                    remote repository. If the repository or base commit does not
+                    match, no changes are applied here.
+                  </p>
+                  <div className="mt-4">
+                    <WorkspaceSessionRestoreActions
+                      workspaceId={workspaceId}
+                      importId={selected.id}
+                      status={selected.status}
+                      repositoryStatus={selected.repositoryStatus}
+                      canRestore={canRestore}
+                    />
+                  </div>
+                </section>
               </div>
 
               <section>

@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CoDev · Imported session review — current UI mockup</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --page: #10151d;
+        --surface: #151b24;
+        --surface-raised: #18202b;
+        --border: #28313d;
+        --border-strong: #075fae;
+        --text: #f4f7fb;
+        --muted: #96a9bf;
+        --blue: #0a84ff;
+        --blue-soft: #10273d;
+        --radius: 16px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-width: 320px;
+        margin: 0;
+        background: var(--page);
+        color: var(--text);
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      a {
+        color: inherit;
+      }
+
+      .page {
+        width: min(100% - 40px, 844px);
+        margin: 0 auto;
+        padding: 44px 0 64px;
+      }
+
+      .back {
+        display: inline-flex;
+        min-height: 44px;
+        align-items: center;
+        gap: 9px;
+        color: var(--text);
+        font-weight: 600;
+        text-decoration: none;
+      }
+
+      .back::before {
+        content: "←";
+        color: #d8e2ee;
+        font-size: 18px;
+      }
+
+      .heading {
+        margin: 32px 0;
+        padding-bottom: 32px;
+        border-bottom: 1px solid #202833;
+      }
+      h1 {
+        margin: 0;
+        font-size: clamp(25px, 4vw, 30px);
+        letter-spacing: -0.03em;
+        line-height: 1.2;
+      }
+      .heading p {
+        max-width: 680px;
+        margin: 16px 0 0;
+        color: var(--muted);
+        font-size: 15px;
+      }
+
+      .import-toggle,
+      .card,
+      .recent-item {
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+
+      .import-toggle {
+        display: flex;
+        min-height: 70px;
+        align-items: center;
+        padding: 16px 20px;
+        font-weight: 700;
+      }
+
+      .import-toggle::before {
+        content: "▸";
+        margin-right: 10px;
+        color: #c5d2e1;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 212px minmax(0, 1fr);
+        gap: 24px;
+        margin-top: 32px;
+      }
+
+      .eyebrow {
+        margin: 0 0 12px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 750;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .recent-list {
+        display: grid;
+        gap: 8px;
+      }
+      .recent-item {
+        display: block;
+        padding: 16px;
+        text-decoration: none;
+      }
+      .recent-item.active {
+        border-color: var(--border-strong);
+        background: #0f1d2b;
+      }
+      .recent-item strong {
+        display: block;
+        font-size: 15px;
+      }
+      .recent-id,
+      .recent-meta {
+        display: block;
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 12px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .recent-id {
+        margin-top: 4px;
+      }
+      .recent-meta {
+        margin-top: 8px;
+      }
+
+      .card {
+        padding: 24px;
+      }
+      .import-top {
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .source {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 750;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+      h2 {
+        margin: 28px 0 42px;
+        font-size: 20px;
+        letter-spacing: -0.02em;
+      }
+      h3 {
+        margin: 0 0 14px;
+        font-size: 15px;
+      }
+      .status {
+        border-radius: 999px;
+        background: #202938;
+        padding: 5px 12px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .objective {
+        margin: 0 0 24px;
+        font-size: 16px;
+      }
+
+      .metadata {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 28px 48px;
+        margin: 20px 0 0;
+        border-top: 1px solid #252e39;
+        padding-top: 26px;
+      }
+      .metadata dt {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .metadata dd {
+        margin: 8px 0 0;
+        font-size: 15px;
+        overflow-wrap: anywhere;
+      }
+      .decision {
+        margin-top: 24px;
+        border: 1px solid #244d78;
+        border-radius: 11px;
+        background: #102032;
+        padding: 16px;
+      }
+      .decision h3 {
+        margin-bottom: 4px;
+      }
+      .decision p {
+        margin: 0;
+        color: var(--muted);
+      }
+      button {
+        min-height: 44px;
+        margin-top: 16px;
+        border: 0;
+        border-radius: 9px;
+        background: var(--blue);
+        padding: 0 18px;
+        color: white;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .conversation {
+        margin-top: 16px;
+      }
+      .conversation-header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: start;
+        justify-content: space-between;
+        gap: 12px;
+        border-bottom: 1px solid #28313d;
+        padding-bottom: 18px;
+      }
+      .conversation-header h2 {
+        margin: 0;
+        font-size: 17px;
+      }
+      .conversation-header p {
+        margin: 5px 0 0;
+        color: var(--muted);
+      }
+      .tag {
+        border-radius: 999px;
+        background: #222b38;
+        padding: 5px 10px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 650;
+      }
+      .context-note {
+        width: 100%;
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .messages {
+        display: grid;
+        gap: 16px;
+        margin: 20px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+      .message {
+        width: min(92%, 540px);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: #151b21;
+        padding: 16px 18px;
+      }
+      .message.user {
+        justify-self: end;
+        border-color: #28517c;
+        background: var(--blue-soft);
+      }
+      .message.context {
+        width: 100%;
+        border-style: dashed;
+        border-color: #3972a8;
+        background: #172534;
+      }
+      .message-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .speaker {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        color: var(--text);
+        font-size: 14px;
+        font-weight: 750;
+      }
+      .avatar {
+        display: grid;
+        width: 30px;
+        height: 30px;
+        place-items: center;
+        border: 1px solid #293545;
+        border-radius: 50%;
+        background: #18202c;
+        color: var(--blue);
+        font-size: 12px;
+      }
+      .message-number {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .message p {
+        margin: 15px 0 0;
+        font-size: 16px;
+      }
+      .context-body {
+        margin: 15px 0 0;
+        border-top: 1px solid #315475;
+        padding-top: 14px;
+        color: var(--muted);
+      }
+      .context-link {
+        color: #46a0ff;
+        font-weight: 700;
+      }
+
+      .brief {
+        margin-top: 40px;
+        border-top: 1px solid var(--border);
+        padding-top: 24px;
+        color: var(--muted);
+      }
+      .brief h2 {
+        margin: 0 0 8px;
+        color: var(--text);
+        font-size: 16px;
+      }
+      .brief ul {
+        margin: 12px 0 0;
+        padding-left: 20px;
+      }
+
+      @media (max-width: 720px) {
+        .page {
+          width: min(100% - 32px, 844px);
+          padding-top: 24px;
+        }
+        .heading {
+          margin: 20px 0 24px;
+          padding-bottom: 24px;
+        }
+        .layout {
+          grid-template-columns: 1fr;
+          margin-top: 24px;
+        }
+        .recent-list {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          overflow-x: auto;
+        }
+        .recent-item {
+          min-width: 180px;
+        }
+        .card {
+          padding: 18px;
+        }
+        .metadata {
+          grid-template-columns: 1fr;
+          gap: 18px;
+        }
+        h2 {
+          margin-bottom: 28px;
+        }
+        .message {
+          width: 100%;
+        }
+      }
+
+      @media (prefers-reduced-motion: no-preference) {
+        a,
+        button {
+          transition:
+            transform 160ms ease,
+            background 160ms ease;
+        }
+        a:hover,
+        button:hover {
+          transform: translateY(-1px);
+        }
+      }
+
+      :focus-visible {
+        outline: 3px solid #75b9ff;
+        outline-offset: 3px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <a class="back" href="#page-title">Back to workspace</a>
+      <header class="heading">
+        <h1 id="page-title">Review an imported session</h1>
+        <p>
+          Review the imported session, choose whether to restore its repository
+          state, then use the conversation to pick up where the agent left off.
+        </p>
+      </header>
+
+      <div class="import-toggle" aria-label="Import another session">
+        Import another session
+      </div>
+
+      <div class="layout">
+        <aside aria-labelledby="recent-imports">
+          <p class="eyebrow" id="recent-imports">Recent imports</p>
+          <nav class="recent-list" aria-label="Recent imported sessions">
+            <a class="recent-item active" href="#selected"
+              ><strong>Codex</strong
+              ><span class="recent-id">01a0c0d1-9f3c-7631-9d72-7776…</span
+              ><span class="recent-meta"
+                >stored · Sep 20, 2026, 5:56 PM</span
+              ></a
+            >
+            <a class="recent-item" href="#selected"
+              ><strong>Codex</strong
+              ><span class="recent-id">01a0c0a7-f435-7aa3-80c4-2005…</span
+              ><span class="recent-meta"
+                >stored · Sep 20, 2026, 5:17 PM</span
+              ></a
+            >
+            <a class="recent-item" href="#selected"
+              ><strong>Codex</strong
+              ><span class="recent-id">01a0c08e-deb1-78e0-9ea7-fa…</span
+              ><span class="recent-meta"
+                >failed · Sep 20, 2026, 5:08 PM</span
+              ></a
+            >
+          </nav>
+        </aside>
+
+        <section id="selected" aria-label="Selected import">
+          <article class="card">
+            <div class="import-top">
+              <p class="source">Imported from Codex</p>
+              <span class="status">Stored</span>
+            </div>
+            <h2>Session details</h2>
+            <h3>Latest objective</h3>
+            <p class="objective">testing again</p>
+            <dl class="metadata">
+              <div>
+                <dt>Repository</dt>
+                <dd>github.com/CoDevOrg/CoDev</dd>
+              </div>
+              <div>
+                <dt>Restore status</dt>
+                <dd>Pending</dd>
+              </div>
+              <div>
+                <dt>Source branch</dt>
+                <dd>codex/session-capsule-v0</dd>
+              </div>
+              <div>
+                <dt>Imported</dt>
+                <dd>Sep 20, 2026, 5:56 PM</dd>
+              </div>
+            </dl>
+            <section class="decision" aria-labelledby="repository-decision">
+              <h3 id="repository-decision">Restore repository</h3>
+              <p>
+                CoDev creates an isolated worktree at the imported session’s
+                base commit, then reapplies its saved changes. It does not
+                change the original provider session or remote repository.
+              </p>
+              <button type="button">Restore repository</button>
+            </section>
+          </article>
+
+          <article class="card conversation">
+            <header class="conversation-header">
+              <div>
+                <h2>Conversation</h2>
+                <p>5 most recent of 5 messages</p>
+              </div>
+              <span class="tag">Read-only history</span>
+              <p class="context-note">
+                Large source prompts are marked as
+                <strong>imported context</strong> and collapsed, so they are not
+                mistaken for ordinary messages.
+              </p>
+            </header>
+            <ol class="messages" aria-label="Session messages">
+              <li class="message context">
+                <div class="message-meta">
+                  <span class="speaker"
+                    ><span class="avatar">Y</span
+                    ><span
+                      >Imported context<br /><span class="message-number"
+                        >Source prompt</span
+                      ></span
+                    ></span
+                  ><time>Sep 20, 2026, 5:56 PM</time>
+                </div>
+                <div class="context-body">
+                  <strong>Context bundle · 17,170 characters</strong><br /><span
+                    class="context-link"
+                    >Review source context</span
+                  >
+                </div>
+              </li>
+              <li class="message user">
+                <div class="message-meta">
+                  <span class="speaker"
+                    ><span class="avatar">Y</span
+                    ><span
+                      >You<br /><span class="message-number"
+                        >Message 2</span
+                      ></span
+                    ></span
+                  ><time>Sep 20, 2026, 5:56 PM</time>
+                </div>
+                <p>testing 123</p>
+              </li>
+              <li class="message">
+                <div class="message-meta">
+                  <span class="speaker"
+                    ><span class="avatar">C</span
+                    ><span
+                      >Codex<br /><span class="message-number"
+                        >Message 3</span
+                      ></span
+                    ></span
+                  ><time>Sep 20, 2026, 5:56 PM</time>
+                </div>
+                <p>Received loud and clear: testing 123.</p>
+              </li>
+              <li class="message user">
+                <div class="message-meta">
+                  <span class="speaker"
+                    ><span class="avatar">Y</span
+                    ><span
+                      >You<br /><span class="message-number"
+                        >Message 4</span
+                      ></span
+                    ></span
+                  ><time>Sep 20, 2026, 5:56 PM</time>
+                </div>
+                <p>testing again</p>
+              </li>
+              <li class="message">
+                <div class="message-meta">
+                  <span class="speaker"
+                    ><span class="avatar">C</span
+                    ><span
+                      >Codex<br /><span class="message-number"
+                        >Message 5</span
+                      ></span
+                    ></span
+                  ><time>Sep 20, 2026, 5:56 PM</time>
+                </div>
+                <p>Received: testing again.</p>
+              </li>
+            </ol>
+          </article>
+        </section>
+      </div>
+
+      <aside class="brief" aria-labelledby="redesign-brief">
+        <h2 id="redesign-brief">Redesign brief for a follow-up session</h2>
+        <p>
+          This is a static representation of the current imported-session review
+          page, not production UI.
+        </p>
+        <ul>
+          <li>
+            Preserve the core information: import selection, session details,
+            repository restore state, and ordered transcript.
+          </li>
+          <li>Improve hierarchy, spacing, layout, and color clarity.</li>
+          <li>
+            Keep large rollout prompts visibly distinct from normal
+            conversational messages.
+          </li>
+        </ul>
+      </aside>
+    </main>
+  </body>
+</html>
