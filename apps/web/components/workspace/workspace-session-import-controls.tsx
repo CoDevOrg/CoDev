@@ -315,6 +315,7 @@ export function WorkspaceSessionContinueAction({
   repositoryStatus,
   agentSessionId,
   canContinue,
+  chatOnly = false,
 }: {
   workspaceId: string;
   importId: string;
@@ -322,6 +323,7 @@ export function WorkspaceSessionContinueAction({
   repositoryStatus: string;
   agentSessionId: string | null;
   canContinue: boolean;
+  chatOnly?: boolean;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -336,7 +338,12 @@ export function WorkspaceSessionContinueAction({
     repositoryStatus === "pending";
   const enabled =
     canContinue &&
-    (existing || canPrepare || (status === "ready" && repositoryReady));
+    (existing ||
+      (chatOnly &&
+        (status === "stored" ||
+          status === "restoring" ||
+          status === "ready")) ||
+      (!chatOnly && (canPrepare || (status === "ready" && repositoryReady))));
 
   async function continueSession() {
     if (!enabled || pending) return;
@@ -352,7 +359,7 @@ export function WorkspaceSessionContinueAction({
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({}),
+          body: JSON.stringify(chatOnly ? { chatOnly: true } : {}),
         },
       );
       if (!response.ok) {
@@ -371,37 +378,45 @@ export function WorkspaceSessionContinueAction({
 
   const hint = !canContinue
     ? "Workspace editing permission is required."
-    : repositoryStatus === "transcript_only"
-      ? "This import has no restored repository, so it can’t start a CoDev session."
-      : repositoryNeedsAttention
-        ? "The repository needs attention below before you can continue."
-        : status !== "ready" && !existing
-          ? canPrepare
-            ? "CoDev will prepare an isolated copy of the repository automatically."
-            : "This import is not ready to continue."
-          : null;
+    : chatOnly
+      ? "Carries over the conversation only. Imported repository changes are not applied."
+      : repositoryStatus === "transcript_only"
+        ? "This import has no restored repository, so it can’t start a CoDev session."
+        : repositoryNeedsAttention
+          ? "The repository needs attention below before you can continue."
+          : status !== "ready" && !existing
+            ? canPrepare
+              ? "CoDev will prepare an isolated copy of the repository automatically."
+              : "This import is not ready to continue."
+            : null;
 
   return (
     <div className="space-y-2">
       <button
-        className="inline-flex min-h-11 w-full cursor-pointer items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors motion-reduce:transition-none hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+        className={`inline-flex min-h-11 w-full cursor-pointer items-center justify-center rounded-lg px-4 text-sm font-medium transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${chatOnly ? "border border-border/70 bg-background text-foreground hover:bg-muted/60" : "bg-primary text-primary-foreground hover:bg-primary/90"}`}
         disabled={!enabled || pending}
         onClick={() => void continueSession()}
         type="button"
       >
         {pending
-          ? repositoryReady
-            ? "Creating session…"
-            : "Preparing workspace…"
+          ? chatOnly
+            ? "Creating chat session…"
+            : repositoryReady
+              ? "Creating session…"
+              : "Preparing workspace…"
           : existing
             ? "Open in CoDev"
-            : "Continue in CoDev"}
+            : chatOnly
+              ? "Continue chat only"
+              : "Continue in CoDev"}
       </button>
       {pending ? (
         <p role="status" className="text-center text-xs text-muted-foreground">
-          {repositoryReady
-            ? "Copying the conversation into a new session…"
-            : "Preparing the repository, then creating your session…"}
+          {chatOnly
+            ? "Copying the conversation into a new CoDev Agent session…"
+            : repositoryReady
+              ? "Copying the conversation into a new session…"
+              : "Preparing the repository, then creating your session…"}
         </p>
       ) : hint ? (
         <p className="text-center text-xs text-muted-foreground">{hint}</p>

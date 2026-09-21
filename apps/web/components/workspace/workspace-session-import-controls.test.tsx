@@ -175,6 +175,45 @@ describe("session import controls", () => {
     ).toBeTruthy();
   });
 
+  it("offers chat-only continuation without requiring repository preparation", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        Response.json(
+          { sessionId: "chat-session-1", created: true },
+          { status: 201 },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <WorkspaceSessionContinueAction
+        workspaceId="workspace-1"
+        importId="import-1"
+        status="stored"
+        repositoryStatus="pending"
+        agentSessionId={null}
+        canContinue
+        chatOnly
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue chat only" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/workspaces/workspace-1/session-imports/import-1/continue",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ chatOnly: true }),
+      }),
+    );
+    await waitFor(() =>
+      expect(push).toHaveBeenCalledWith(
+        "/workspaces/workspace-1?agent=chat-session-1",
+      ),
+    );
+  });
+
   it("requires a restored repository before continuing", () => {
     render(
       <WorkspaceSessionContinueAction

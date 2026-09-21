@@ -242,21 +242,21 @@ export default async function WorkspaceSessionImportsPage({
                   </div>
                   <div className="flex flex-col gap-2 rounded-xl border border-border/60 p-4">
                     <p className="text-sm font-semibold text-foreground">
-                      Resume in {selected.source.provider}
+                      Continue chat only
                     </p>
                     <p className="flex-1 text-xs leading-5 text-muted-foreground">
-                      Reopen the original session with its native history.
+                      Carry over the conversation into CoDev Agents without
+                      restoring the imported repository changes.
                     </p>
-                    <button
-                      className="inline-flex min-h-9 w-full cursor-not-allowed items-center justify-center rounded-lg border border-border/60 px-4 text-sm font-medium text-muted-foreground"
-                      disabled
-                      type="button"
-                    >
-                      Resume session
-                    </button>
-                    <p className="text-center text-[11px] text-muted-foreground/70">
-                      Available soon
-                    </p>
+                    <WorkspaceSessionContinueAction
+                      workspaceId={workspaceId}
+                      importId={selected.id}
+                      status={selected.status}
+                      repositoryStatus={selected.repositoryStatus}
+                      agentSessionId={selected.agentSessionId}
+                      canContinue={canRestore}
+                      chatOnly
+                    />
                   </div>
                 </div>
 

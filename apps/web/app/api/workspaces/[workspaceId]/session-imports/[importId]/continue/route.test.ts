@@ -156,6 +156,24 @@ describe("session import continuation route", () => {
     expect(mocks.continueStoredSessionImport).toHaveBeenCalledOnce();
   });
 
+  it("passes chat-only continuation through without restoring the repository", async () => {
+    mocks.continueStoredSessionImport.mockResolvedValue({
+      sessionId: "chat-session-1",
+      created: true,
+    });
+
+    const response = await invoke(JSON.stringify({ chatOnly: true }));
+
+    expect(response.status).toBe(201);
+    expect(mocks.continueStoredSessionImport).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      importId: "import-1",
+      importedBy: "member-1",
+      chatOnly: true,
+    });
+    expect(mocks.restoreStoredSessionImport).not.toHaveBeenCalled();
+  });
+
   it("does not expose internal continuation failures", async () => {
     mocks.continueStoredSessionImport.mockRejectedValue(
       new Error("database host private.internal refused connection"),

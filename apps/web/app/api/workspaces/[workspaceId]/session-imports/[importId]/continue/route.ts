@@ -12,17 +12,18 @@ import { ApiError, readJson, withWorkspace } from "@/lib/http/api-route";
 
 export const runtime = "nodejs";
 
-const bodySchema = z.object({}).strict();
+const bodySchema = z.object({ chatOnly: z.boolean().optional() }).strict();
 
 export const POST = withWorkspace<{
   workspaceId: string;
   importId: string;
 }>("coSteer", async ({ request, user, workspaceId, params }) => {
-  await readJson(request, bodySchema);
+  const body = await readJson(request, bodySchema);
   const continuationInput = {
     workspaceId,
     importId: params.importId,
     importedBy: user.id,
+    ...(body.chatOnly ? { chatOnly: true } : {}),
   };
   try {
     let result: Awaited<ReturnType<typeof continueStoredSessionImport>>;

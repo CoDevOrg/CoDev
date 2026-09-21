@@ -242,4 +242,6 @@ to reveal the manual retry and transcript-only controls.
 Runtime rehydration after IDE-home recreation and exact-native provider resume
 remain deferred. Managed CoDev continuation is implemented only for imports
 with a matched or restored repository; transcript-only imports remain
-reviewable but cannot launch a managed session.
+reviewable but cannot launch a managed session through the repository-aware
+path. A separate chat-only continuation can launch from the workspace's
+current integration baseline without applying imported repository changes.
