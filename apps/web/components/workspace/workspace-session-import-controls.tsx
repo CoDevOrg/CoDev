@@ -269,7 +269,7 @@ export function WorkspaceSessionRestoreActions({
         <p className="text-sm text-foreground">{message}</p>
         {pending ? (
           <p role="status" className="text-xs text-muted-foreground">
-            Updating repository status…
+            Preparing the repository…
           </p>
         ) : null}
         {error ? (
@@ -300,9 +300,116 @@ export function WorkspaceSessionRestoreActions({
               ? "Working…"
               : repositoryStatus === "pending"
                 ? "Restore repository"
-                : "Retry restoration"}
+                : "Retry preparation"}
           </button>
         </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function WorkspaceSessionContinueAction({
+  workspaceId,
+  importId,
+  status,
+  repositoryStatus,
+  agentSessionId,
+  canContinue,
+}: {
+  workspaceId: string;
+  importId: string;
+  status: string;
+  repositoryStatus: string;
+  agentSessionId: string | null;
+  canContinue: boolean;
+}) {
+  const router = useRouter();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  const existing = status === "active" && Boolean(agentSessionId);
+  const repositoryReady =
+    repositoryStatus === "matched" || repositoryStatus === "restored";
+  const repositoryNeedsAttention =
+    repositoryStatus === "conflicted" || repositoryStatus === "unavailable";
+  const canPrepare =
+    (status === "stored" || status === "restoring") &&
+    repositoryStatus === "pending";
+  const enabled =
+    canContinue &&
+    (existing || canPrepare || (status === "ready" && repositoryReady));
+
+  async function continueSession() {
+    if (!enabled || pending) return;
+    if (agentSessionId) {
+      router.push(`/workspaces/${workspaceId}?agent=${agentSessionId}`);
+      return;
+    }
+    setPending(true);
+    setError("");
+    try {
+      const response = await fetch(
+        `/api/workspaces/${workspaceId}/session-imports/${importId}/continue`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({}),
+        },
+      );
+      if (!response.ok) {
+        setError(await responseError(response));
+        router.refresh();
+        return;
+      }
+      const result = (await response.json()) as { sessionId: string };
+      router.push(`/workspaces/${workspaceId}?agent=${result.sessionId}`);
+    } catch {
+      setError("Could not reach the workspace. Try again.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  const hint = !canContinue
+    ? "Workspace editing permission is required."
+    : repositoryStatus === "transcript_only"
+      ? "This import has no restored repository, so it can’t start a CoDev session."
+      : repositoryNeedsAttention
+        ? "The repository needs attention below before you can continue."
+        : status !== "ready" && !existing
+          ? canPrepare
+            ? "CoDev will prepare an isolated copy of the repository automatically."
+            : "This import is not ready to continue."
+          : null;
+
+  return (
+    <div className="space-y-2">
+      <button
+        className="inline-flex min-h-11 w-full cursor-pointer items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors motion-reduce:transition-none hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+        disabled={!enabled || pending}
+        onClick={() => void continueSession()}
+        type="button"
+      >
+        {pending
+          ? repositoryReady
+            ? "Creating session…"
+            : "Preparing workspace…"
+          : existing
+            ? "Open in CoDev"
+            : "Continue in CoDev"}
+      </button>
+      {pending ? (
+        <p role="status" className="text-center text-xs text-muted-foreground">
+          {repositoryReady
+            ? "Copying the conversation into a new session…"
+            : "Preparing the repository, then creating your session…"}
+        </p>
+      ) : hint ? (
+        <p className="text-center text-xs text-muted-foreground">{hint}</p>
+      ) : null}
+      {error ? (
+        <p role="alert" className="text-center text-xs text-destructive">
+          {error}
+        </p>
       ) : null}
     </div>
   );

@@ -54,6 +54,7 @@ export async function readStoredSessionImportView(
       status: schema.agentSessionImports.status,
       repositoryStatus: schema.agentSessionImports.repositoryStatus,
       worktreeId: schema.agentSessionImports.worktreeId,
+      agentSessionId: schema.agentSessionImports.agentSessionId,
       capsuleSha256: schema.agentSessionImports.capsuleSha256,
       createdAt: schema.agentSessionImports.createdAt,
     })
@@ -104,6 +105,7 @@ export async function readStoredSessionImportView(
     status: record.status,
     repositoryStatus: record.repositoryStatus,
     worktreeId: record.worktreeId,
+    agentSessionId: record.agentSessionId,
     createdAt: record.createdAt,
     source: {
       provider: capsule.source.provider,

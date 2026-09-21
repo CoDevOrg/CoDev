@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react";
 
 import {
   WorkspaceSessionImportUpload,
+  WorkspaceSessionContinueAction,
   WorkspaceSessionRestoreActions,
 } from "@/components/workspace/workspace-session-import-controls";
 import { SessionImportMarkdown } from "@/components/workspace/session-import-markdown";
@@ -226,20 +227,18 @@ export default async function WorkspaceSessionImportsPage({
                       Continue in CoDev
                     </p>
                     <p className="flex-1 text-xs leading-5 text-muted-foreground">
-                      Start a new CoDev session using this conversation as
-                      context.
+                      Open a new agent with the full conversation and an
+                      isolated repository copy. CoDev prepares it automatically;
+                      the original stays unchanged.
                     </p>
-                    <button
-                      className="inline-flex min-h-9 w-full cursor-not-allowed items-center justify-center rounded-lg bg-primary/50 px-4 text-sm font-medium text-primary-foreground"
-                      disabled
-                      title="Launch controls are coming in a later step"
-                      type="button"
-                    >
-                      Continue in CoDev
-                    </button>
-                    <p className="text-center text-[11px] text-muted-foreground/70">
-                      Available soon
-                    </p>
+                    <WorkspaceSessionContinueAction
+                      workspaceId={workspaceId}
+                      importId={selected.id}
+                      status={selected.status}
+                      repositoryStatus={selected.repositoryStatus}
+                      agentSessionId={selected.agentSessionId}
+                      canContinue={canRestore}
+                    />
                   </div>
                   <div className="flex flex-col gap-2 rounded-xl border border-border/60 p-4">
                     <p className="text-sm font-semibold text-foreground">
@@ -261,33 +260,36 @@ export default async function WorkspaceSessionImportsPage({
                   </div>
                 </div>
 
-                <section
-                  aria-labelledby="restore-repository-heading"
-                  className="rounded-xl border border-border/60 bg-muted/20 p-4"
-                >
-                  <h5
-                    id="restore-repository-heading"
-                    className="text-sm font-semibold text-foreground"
+                {selected.status === "restoring" &&
+                (selected.repositoryStatus === "conflicted" ||
+                  selected.repositoryStatus === "unavailable") ? (
+                  <section
+                    aria-labelledby="restore-repository-heading"
+                    className="rounded-xl border border-border/60 bg-muted/20 p-4"
                   >
-                    Restore repository
-                  </h5>
-                  <p className="mt-1 max-w-[72ch] text-sm leading-6 text-muted-foreground">
-                    CoDev creates an isolated worktree at the imported
-                    session&apos;s base commit, then reapplies its saved
-                    changes. It never changes the original provider session or
-                    remote repository. If the repository or base commit does not
-                    match, no changes are applied here.
-                  </p>
-                  <div className="mt-4">
-                    <WorkspaceSessionRestoreActions
-                      workspaceId={workspaceId}
-                      importId={selected.id}
-                      status={selected.status}
-                      repositoryStatus={selected.repositoryStatus}
-                      canRestore={canRestore}
-                    />
-                  </div>
-                </section>
+                    <h5
+                      id="restore-repository-heading"
+                      className="text-sm font-semibold text-foreground"
+                    >
+                      Repository needs attention
+                    </h5>
+                    <p className="mt-1 max-w-[72ch] text-sm leading-6 text-muted-foreground">
+                      CoDev could not prepare the isolated repository
+                      automatically. Your original session, main branch, and
+                      remote repository were not changed. You can retry or keep
+                      this import as a read-only transcript.
+                    </p>
+                    <div className="mt-4">
+                      <WorkspaceSessionRestoreActions
+                        workspaceId={workspaceId}
+                        importId={selected.id}
+                        status={selected.status}
+                        repositoryStatus={selected.repositoryStatus}
+                        canRestore={canRestore}
+                      />
+                    </div>
+                  </section>
+                ) : null}
               </div>
 
               <section>
