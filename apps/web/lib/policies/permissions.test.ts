@@ -17,6 +17,7 @@ const grantedForRole: Record<
     "workspace.view",
     "workspace.editFiles",
     "workspace.useTerminal",
+    "instance.start",
     "agent.run",
     "agent.cancelOwn",
     "context.view",
