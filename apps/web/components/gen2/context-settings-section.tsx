@@ -137,15 +137,6 @@ export function Gen2ContextSettingsSection({
         </article>
       </div>
 
-      <div className="gen2-context-policy" role="note">
-        <strong>Context policy</strong>
-        <p>
-          {capabilities["workspace.managePolicy"]
-            ? "You have permission to manage workspace policy. Configurable context-policy controls are not available yet."
-            : "Only members with the workspace.managePolicy capability can change workspace policy. Context-policy controls are not available yet."}
-        </p>
-      </div>
-
       <div className="gen2-context-preview" aria-live="polite">
         <div className="gen2-context-preview-heading">
           <div>

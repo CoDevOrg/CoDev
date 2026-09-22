@@ -642,6 +642,142 @@
   margin-top: 10px;
 }
 
+.gen2-agent-policy {
+  max-width: 74rem;
+  margin: 24px auto 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.gen2-agent-policy-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.gen2-agent-policy-heading h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.9375rem;
+  font-weight: 620;
+  letter-spacing: -0.01em;
+}
+
+.gen2-agent-policy-heading p,
+.gen2-agent-policy-control p,
+.gen2-agent-policy-fixed,
+.gen2-agent-policy-readonly {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.78125rem;
+  line-height: 1.5;
+}
+
+.gen2-agent-policy-state {
+  flex: 0 0 auto;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  font-size: 0.71875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.gen2-agent-policy-control {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin: 14px 0 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.gen2-agent-policy-control label {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 9px;
+  color: var(--ink);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.gen2-agent-policy-control input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--gold);
+}
+
+.gen2-agent-policy-control:disabled {
+  opacity: 0.62;
+}
+
+.gen2-agent-policy-fixed,
+.gen2-agent-policy-readonly {
+  margin-top: 10px;
+}
+
+.gen2-agent-policy-actions {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.gen2-agent-policy-actions button {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78125rem;
+  font-weight: 600;
+}
+
+.gen2-agent-policy-actions button:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  color: var(--gold-bright);
+}
+
+.gen2-agent-policy-actions button:focus-visible,
+.gen2-agent-policy-control input:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.gen2-agent-policy-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.gen2-agent-policy-actions span,
+.gen2-agent-policy-loading,
+.gen2-agent-policy-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 0.78125rem;
+  line-height: 1.5;
+}
+
+.gen2-agent-policy-actions span {
+  margin: 0;
+}
+
+.gen2-agent-policy-error {
+  color: #ffb3a6;
+}
+
 .gen2-context-count {
   flex: 0 0 auto;
   padding: 4px 9px;
@@ -842,7 +978,8 @@
   }
 
   .gen2-context-header,
-  .gen2-context-preview-heading {
+  .gen2-context-preview-heading,
+  .gen2-agent-policy-heading {
     flex-wrap: wrap;
   }
 }

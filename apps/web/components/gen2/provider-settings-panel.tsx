@@ -21,6 +21,7 @@ import {
   OpenAIMark,
 } from "@/components/settings/provider-logos";
 import { Gen2ContextSettingsSection } from "./context-settings-section";
+import { Gen2AgentExecutionPolicySection } from "./agent-execution-policy-section";
 import { Gen2MemberConnectionsGrid } from "./member-connections-grid";
 type ProviderResponse = { providers?: Gen2ProviderReadiness[]; error?: string };
 
@@ -191,6 +192,11 @@ export function Gen2ProviderSettingsPanel({
       <Gen2ContextSettingsSection
         capabilities={capabilities}
         chatId={chatId}
+        workspaceId={workspaceId}
+      />
+
+      <Gen2AgentExecutionPolicySection
+        capabilities={capabilities}
         workspaceId={workspaceId}
       />
 
