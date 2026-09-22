@@ -28,7 +28,7 @@ const mocks = vi.hoisted(() => ({
   inserts: [] as Array<Record<string, unknown>>,
   deleted: false,
   requirePermission: vi.fn(),
-  providerStatus: vi.fn(),
+  providerReadiness: vi.fn(),
   createToken: vi.fn(),
   hashToken: vi.fn((token: string) => `hash:${token}`),
   chat: vi.fn(),
@@ -82,8 +82,9 @@ vi.mock("../platform/crypto", () => ({
   hashInviteToken: (token: string) => mocks.hashToken(token),
 }));
 
-vi.mock("./providers", () => ({
-  getGen2ProviderStatus: (...args: unknown[]) => mocks.providerStatus(...args),
+vi.mock("./provider-adapters", () => ({
+  listGen2ProviderReadiness: (...args: unknown[]) =>
+    mocks.providerReadiness(...args),
 }));
 
 vi.mock("./chats", () => ({
@@ -119,7 +120,7 @@ describe("Gen 2 control backend", () => {
       role: "owner",
       capabilities: { "member.invite": true },
     });
-    mocks.providerStatus.mockResolvedValue({ connected: true, via: "api-key" });
+    mocks.providerReadiness.mockResolvedValue([]);
   });
 
   it("rotates one editor invite and clears every field on revocation", async () => {
@@ -243,16 +244,30 @@ describe("Gen 2 control backend", () => {
     ).rejects.toMatchObject({ status: 404 });
   });
 
-  it("returns only redacted connection state and an exact context selection", async () => {
+  it("returns only redacted provider readiness and an exact context selection", async () => {
     mocks.selectResults.push([{ userId: ownerId }, { userId: editorId }]);
-    mocks.providerStatus
-      .mockResolvedValueOnce({ connected: true, via: "subscription" })
-      .mockResolvedValueOnce({ connected: false, via: null });
+    mocks.providerReadiness
+      .mockResolvedValueOnce([
+        { id: "openai", label: "OpenAI", installed: true, ready: true },
+      ])
+      .mockResolvedValueOnce([
+        { id: "openai", label: "OpenAI", installed: true, ready: false },
+      ]);
     await expect(
       getGen2MemberConnectionStatuses(workspaceId, ownerId),
     ).resolves.toEqual([
-      { userId: ownerId, connected: true },
-      { userId: editorId, connected: false },
+      {
+        userId: ownerId,
+        providers: [
+          { id: "openai", label: "OpenAI", installed: true, ready: true },
+        ],
+      },
+      {
+        userId: editorId,
+        providers: [
+          { id: "openai", label: "OpenAI", installed: true, ready: false },
+        ],
+      },
     ]);
 
     mocks.chat.mockResolvedValue({ id: chatId });

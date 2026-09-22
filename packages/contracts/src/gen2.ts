@@ -100,10 +100,10 @@ export const gen2MemberRoleMutationSchema = z.object({
   role: z.enum(["editor", "viewer"]),
 });
 
-/** Deliberately omits credential type and all provider metadata. */
+/** Redacted connection readiness for every provider known to Gen 2. */
 export const gen2MemberConnectionStatusSchema = z.object({
   userId: identifierSchema,
-  connected: z.boolean(),
+  providers: z.array(gen2ProviderReadinessSchema),
 });
 
 export const gen2WorkspaceSchema = z.object({

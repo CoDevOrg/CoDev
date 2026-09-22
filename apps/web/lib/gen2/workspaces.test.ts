@@ -17,8 +17,8 @@ vi.mock("../platform/observability", () => ({
   logEvent: vi.fn(),
 }));
 
-vi.mock("./providers", () => ({
-  getGen2ProviderStatus: vi.fn(),
+vi.mock("./provider-adapters", () => ({
+  listGen2ProviderReadiness: vi.fn(),
 }));
 
 vi.mock("../platform/database", () => ({

@@ -23,7 +23,7 @@ import {
 import { getDatabase } from "../platform/database";
 import { logEvent } from "../platform/observability";
 import { Gen2AccessError, Gen2LifecycleError } from "./errors";
-import { getGen2ProviderStatus } from "./providers";
+import { listGen2ProviderReadiness } from "./provider-adapters";
 import { buildGen2Context } from "./chats-format";
 import { listGen2ChatMessages, requireGen2Chat } from "./chats";
 
@@ -352,7 +352,7 @@ export async function getGen2MemberConnectionStatuses(
   return Promise.all(
     members.map(async (member) => ({
       userId: member.userId,
-      connected: (await getGen2ProviderStatus(member.userId)).connected,
+      providers: await listGen2ProviderReadiness(member.userId),
     })),
   );
 }
