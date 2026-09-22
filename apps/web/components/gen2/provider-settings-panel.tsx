@@ -10,6 +10,7 @@ import {
   X,
 } from "lucide-react";
 import type {
+  Gen2WorkspaceMember,
   Gen2ProviderReadiness,
   Gen2WorkspaceCapabilities,
 } from "@codev/contracts";
@@ -20,6 +21,7 @@ import {
   OpenAIMark,
 } from "@/components/settings/provider-logos";
 import { Gen2ContextSettingsSection } from "./context-settings-section";
+import { Gen2MemberConnectionsGrid } from "./member-connections-grid";
 type ProviderResponse = { providers?: Gen2ProviderReadiness[]; error?: string };
 
 const PROVIDER_BRANDS = {
@@ -48,12 +50,14 @@ export function Gen2ProviderSettingsPanel({
   chatId,
   canManageOwnConnection,
   capabilities,
+  members,
   workspaceId,
   onClose,
 }: {
   chatId: string | null;
   canManageOwnConnection: Gen2WorkspaceCapabilities["connection.manageOwn"];
   capabilities: Gen2WorkspaceCapabilities;
+  members: Gen2WorkspaceMember[];
   workspaceId: string;
   onClose: () => void;
 }) {
@@ -177,6 +181,13 @@ export function Gen2ProviderSettingsPanel({
         </ul>
       ) : null}
 
+      {capabilities["connection.viewStatus"] ? (
+        <Gen2MemberConnectionsGrid
+          members={members}
+          workspaceId={workspaceId}
+        />
+      ) : null}
+
       <Gen2ContextSettingsSection
         capabilities={capabilities}
         chatId={chatId}
@@ -185,8 +196,8 @@ export function Gen2ProviderSettingsPanel({
 
       {!canManageOwnConnection ? (
         <p className="gen2-provider-readonly" role="note">
-          Your workspace role allows viewing provider availability but not
-          managing connections.
+          Your role does not allow managing a provider connection from this
+          workspace. You can still see the redacted provider availability.
         </p>
       ) : null}
     </section>

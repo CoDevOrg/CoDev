@@ -22,9 +22,8 @@ const grantedForRole: Record<
     "context.view",
     "context.includeInTurn",
     "connection.manageOwn",
-    "connection.viewStatus",
   ],
-  viewer: ["workspace.view", "context.view", "connection.viewStatus"],
+  viewer: ["workspace.view", "context.view", "connection.manageOwn"],
 };
 
 describe("workspace role permissions", () => {

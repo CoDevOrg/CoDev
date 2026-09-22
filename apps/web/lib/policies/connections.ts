@@ -3,15 +3,14 @@ import "server-only";
 import { Gen2AccessError } from "../gen2/errors";
 import { requireWorkspacePermission, type WorkspaceAccess } from "./workspace";
 
-/** The only provider information a different workspace member may receive. */
+/** The only provider information an owner may receive about other members. */
 export type RedactedConnectionStatus = {
   connected: boolean;
 };
 
 /**
- * Authorizes a member to see a provider's redacted connected/not-connected
- * state. It intentionally does not return provider identity, token metadata,
- * or credential material.
+ * Authorizes an owner to see installed-provider readiness across workspace
+ * members. It intentionally does not return token metadata or credentials.
  */
 export function requireConnectionStatusView(
   workspaceId: string,

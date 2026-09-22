@@ -36,15 +36,19 @@ const editorPermissions: readonly WorkspacePermission[] = [
   "context.view",
   "context.includeInTurn",
   "connection.manageOwn",
-  "connection.viewStatus",
 ];
 
 const viewerPermissions: readonly WorkspacePermission[] = [
   "workspace.view",
   "context.view",
-  // Other members can only see this redacted connected/not-connected state.
-  "connection.viewStatus",
+  // Credentials are personal, so read-only workspace members may manage
+  // their own provider connection without gaining workspace-wide visibility.
+  "connection.manageOwn",
 ];
+
+// Only workspace owners receive connection.viewStatus, which authorizes the
+// aggregate member-readiness view. All member roles can manage their own
+// personal connection, never another member's credentials.
 
 /**
  * Resolves the fixed capability set for a workspace role. This is deliberately

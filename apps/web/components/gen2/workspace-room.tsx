@@ -157,6 +157,7 @@ export function Gen2WorkspaceRoom({
           chatId={activeChatId}
           canManageOwnConnection={current.capabilities["connection.manageOwn"]}
           capabilities={current.capabilities}
+          members={current.members}
           workspaceId={current.id}
           onClose={() => {
             setProvidersOpen(false);
