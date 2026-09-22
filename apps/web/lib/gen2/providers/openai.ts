@@ -20,7 +20,6 @@ import { OrchestratorError } from "../../runtime/orchestrator-request";
 import { buildGen2Context } from "../chats-format";
 import { gen2CodexSandboxForPolicy } from "../execution-policy";
 import { DEFAULT_GEN2_AGENT_EXECUTION_POLICY } from "../execution-policy";
-import { Gen2LifecycleError } from "../errors";
 import { describeGen2RuntimeFailure } from "../instance";
 import { getGen2ProviderDefinition } from "../provider-catalog";
 import type {

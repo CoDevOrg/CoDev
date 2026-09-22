@@ -37,8 +37,11 @@ export async function getGen2AgentExecutionPolicy(
 /** Used after a turn authorization has already resolved the caller. */
 export async function getGen2AgentExecutionPolicyForAccess(
   workspaceId: string,
-  _access: WorkspaceAccess,
+  access: WorkspaceAccess,
 ) {
+  // Accept resolved server authority, rather than a client user id, so this
+  // loader cannot become an alternate authorization path.
+  void access;
   return readGen2AgentExecutionPolicy(workspaceId);
 }
 
