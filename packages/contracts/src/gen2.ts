@@ -65,6 +65,21 @@ export const gen2WorkspaceMemberSchema = z.object({
   role: gen2WorkspaceRoleSchema,
 });
 
+export const gen2ActiveInviteSchema = z.object({
+  active: z.boolean(),
+  expiresAt: timestampSchema.nullable(),
+});
+
+export const gen2MemberRoleMutationSchema = z.object({
+  role: z.enum(["editor", "viewer"]),
+});
+
+/** Deliberately omits credential type and all provider metadata. */
+export const gen2MemberConnectionStatusSchema = z.object({
+  userId: identifierSchema,
+  connected: z.boolean(),
+});
+
 export const gen2WorkspaceSchema = z.object({
   id: identifierSchema,
   name: z.string().min(1).max(80),
@@ -80,6 +95,8 @@ export const gen2WorkspaceSchema = z.object({
 
 export const gen2WorkspaceDetailSchema = gen2WorkspaceSchema.extend({
   members: z.array(gen2WorkspaceMemberSchema),
+  /** Present only for callers that can manage workspace invites. */
+  activeInvite: gen2ActiveInviteSchema.optional(),
 });
 
 export const gen2ShareResponseSchema = z.object({
@@ -229,6 +246,14 @@ export const gen2ChatDetailSchema = gen2ChatSchema.extend({
   messages: z.array(gen2ChatMessageSchema),
 });
 
+export const gen2ContextPreviewSchema = z.object({
+  chatId: identifierSchema,
+  messageIds: z.array(identifierSchema),
+  messageCount: z.number().int().nonnegative(),
+  maxMessages: z.literal(20),
+  maxCharacters: z.literal(12_000),
+});
+
 /* ------------------------------------------------------------------ *
  * Workbench: files, git, and terminal on the workspace's own machine.
  *
@@ -345,11 +370,19 @@ export type Gen2WorkspaceCapabilities = z.infer<
 export type Gen2Workspace = z.infer<typeof gen2WorkspaceSchema>;
 export type Gen2WorkspaceDetail = z.infer<typeof gen2WorkspaceDetailSchema>;
 export type Gen2WorkspaceMember = z.infer<typeof gen2WorkspaceMemberSchema>;
+export type Gen2ActiveInvite = z.infer<typeof gen2ActiveInviteSchema>;
+export type Gen2MemberRoleMutation = z.infer<
+  typeof gen2MemberRoleMutationSchema
+>;
+export type Gen2MemberConnectionStatus = z.infer<
+  typeof gen2MemberConnectionStatusSchema
+>;
 export type Gen2AgentStartRequest = z.infer<typeof gen2AgentStartRequestSchema>;
 export type Gen2AgentPollResponse = z.infer<typeof gen2AgentPollResponseSchema>;
 export type Gen2Chat = z.infer<typeof gen2ChatSchema>;
 export type Gen2ChatMessage = z.infer<typeof gen2ChatMessageSchema>;
 export type Gen2ChatDetail = z.infer<typeof gen2ChatDetailSchema>;
+export type Gen2ContextPreview = z.infer<typeof gen2ContextPreviewSchema>;
 export type Gen2TurnItem = z.infer<typeof gen2TurnItemSchema>;
 export type Gen2TurnItemStatus = z.infer<typeof gen2TurnItemStatusSchema>;
 export type Gen2TurnState = z.infer<typeof gen2TurnStateSchema>;

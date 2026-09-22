@@ -25,7 +25,7 @@ import {
   listGen2ChatMessages,
   requireGen2Chat,
 } from "./chats";
-import { formatGen2TurnPrompt } from "./chats-format";
+import { buildGen2Context } from "./chats-format";
 import { createGen2Turn, recordGen2TurnChunks, requireGen2Turn } from "./turns";
 import {
   getWorkspaceAccess,
@@ -37,7 +37,11 @@ export { canRunGen2Agent } from "./agent-policy";
 
 export function buildGen2CodexCommand(
   prompt: string,
-  history: Array<{ role: "user" | "assistant"; body: string }> = [],
+  history: Array<{
+    id?: string;
+    role: "user" | "assistant";
+    body: string;
+  }> = [],
 ) {
   return [
     "codex",
@@ -60,7 +64,15 @@ export function buildGen2CodexCommand(
       "Answer the user. If they ask for code changes, make them in the current directory.",
       "Do not inspect CODEX_HOME or authentication files.",
       "",
-      formatGen2TurnPrompt(prompt, history),
+      buildGen2Context(
+        prompt,
+        history.map((message, index) => ({
+          ...message,
+          // Production history always has database IDs. This keeps this small
+          // command helper backwards-compatible for callers that only format.
+          id: message.id ?? `message-${index}`,
+        })),
+      ).prompt,
     ].join("\n"),
   ];
 }

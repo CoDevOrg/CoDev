@@ -3,8 +3,11 @@ import "server-only";
 import { and, eq } from "drizzle-orm";
 
 import {
+  gen2ContextPreviewSchema,
   gen2WorkspaceDetailSchema,
   gen2WorkspaceSchema,
+  type Gen2MemberConnectionStatus,
+  type Gen2WorkspaceRole,
   type Gen2Workspace,
   type Gen2WorkspaceDetail,
 } from "@codev/contracts";
@@ -20,8 +23,12 @@ import {
 import { getDatabase } from "../platform/database";
 import { logEvent } from "../platform/observability";
 import { Gen2AccessError, Gen2LifecycleError } from "./errors";
+import { getGen2ProviderStatus } from "./providers";
+import { buildGen2Context } from "./chats-format";
+import { listGen2ChatMessages, requireGen2Chat } from "./chats";
 
 const DEFAULT_WORKSPACE_NAME = "Workspace";
+const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
 
 export function defaultGen2WorkspaceName(name?: string) {
   const trimmed = name?.trim();
@@ -162,6 +169,15 @@ export async function getGen2WorkspaceDetail(
     "workspace.view",
   );
   const workspace = await getGen2WorkspaceForAccess(workspaceId, access);
+  const [invite] = access.capabilities["member.invite"]
+    ? await getDatabase()
+        .select({
+          expiresAt: schema.gen2Workspaces.activeInviteExpiresAt,
+        })
+        .from(schema.gen2Workspaces)
+        .where(eq(schema.gen2Workspaces.id, workspaceId))
+        .limit(1)
+    : [undefined];
   const members = await getDatabase()
     .select({
       userId: schema.gen2WorkspaceMembers.userId,
@@ -178,6 +194,14 @@ export async function getGen2WorkspaceDetail(
   return gen2WorkspaceDetailSchema.parse({
     ...workspace,
     members,
+    ...(access.capabilities["member.invite"]
+      ? {
+          activeInvite: {
+            active: invite ? workspaceInviteIsActive(invite.expiresAt) : false,
+            expiresAt: invite?.expiresAt ? toIso(invite.expiresAt) : null,
+          },
+        }
+      : {}),
   });
 }
 
@@ -188,14 +212,34 @@ export async function createGen2ShareLink(
 ) {
   await requireWorkspacePermission(workspaceId, userId, "member.invite");
   const token = createInviteToken();
+  const createdAt = new Date();
   await getDatabase()
     .update(schema.gen2Workspaces)
     .set({
-      shareTokenHash: hashInviteToken(token),
+      activeInviteTokenHash: hashInviteToken(token),
+      activeInviteCreatedByUserId: userId,
+      activeInviteRole: "editor",
+      activeInviteCreatedAt: createdAt,
+      activeInviteExpiresAt: new Date(createdAt.getTime() + INVITE_TTL_MS),
       updatedAt: new Date(),
     })
     .where(eq(schema.gen2Workspaces.id, workspaceId));
   return { inviteUrl: `${origin}/gen2/join/${token}` };
+}
+
+export async function revokeGen2ShareLink(workspaceId: string, userId: string) {
+  await requireWorkspacePermission(workspaceId, userId, "member.invite");
+  await getDatabase()
+    .update(schema.gen2Workspaces)
+    .set({
+      activeInviteTokenHash: null,
+      activeInviteCreatedByUserId: null,
+      activeInviteRole: null,
+      activeInviteCreatedAt: null,
+      activeInviteExpiresAt: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.gen2Workspaces.id, workspaceId));
 }
 
 export async function joinGen2Workspace(token: string, userId: string) {
@@ -203,11 +247,12 @@ export async function joinGen2Workspace(token: string, userId: string) {
   const [workspace] = await getDatabase()
     .select({
       id: schema.gen2Workspaces.id,
+      activeInviteExpiresAt: schema.gen2Workspaces.activeInviteExpiresAt,
     })
     .from(schema.gen2Workspaces)
-    .where(eq(schema.gen2Workspaces.shareTokenHash, tokenHash))
+    .where(eq(schema.gen2Workspaces.activeInviteTokenHash, tokenHash))
     .limit(1);
-  if (!workspace) {
+  if (!workspace || !workspaceInviteIsActive(workspace.activeInviteExpiresAt)) {
     throw new Gen2AccessError("This invite link is no longer valid.", 404);
   }
 
@@ -216,8 +261,7 @@ export async function joinGen2Workspace(token: string, userId: string) {
     .values({
       workspaceId: workspace.id,
       userId,
-      // Preserve Gen 2's current shared-workspace behavior while its invite UI
-      // has no role picker. The policy foundation will make this explicit.
+      // Active invites always grant the fixed editor role.
       role: "editor",
     })
     .onConflictDoNothing();
@@ -228,6 +272,125 @@ export async function joinGen2Workspace(token: string, userId: string) {
     "workspace.view",
   );
   return getGen2WorkspaceForAccess(workspace.id, access);
+}
+
+export async function changeGen2MemberRole(input: {
+  workspaceId: string;
+  userId: string;
+  targetUserId: string;
+  role: Extract<Gen2WorkspaceRole, "editor" | "viewer">;
+}) {
+  await requireWorkspacePermission(
+    input.workspaceId,
+    input.userId,
+    "member.changeRole",
+  );
+  const target = await requireGen2MemberTarget(
+    input.workspaceId,
+    input.targetUserId,
+  );
+  if (target.role === "owner") {
+    throw new Gen2LifecycleError("Owners cannot be demoted.", 409);
+  }
+  const [member] = await getDatabase()
+    .update(schema.gen2WorkspaceMembers)
+    .set({ role: input.role })
+    .where(
+      and(
+        eq(schema.gen2WorkspaceMembers.workspaceId, input.workspaceId),
+        eq(schema.gen2WorkspaceMembers.userId, input.targetUserId),
+      ),
+    )
+    .returning({
+      userId: schema.gen2WorkspaceMembers.userId,
+      role: schema.gen2WorkspaceMembers.role,
+    });
+  if (!member) throw new Gen2AccessError("Member not found.", 404);
+  return member;
+}
+
+export async function removeGen2Member(input: {
+  workspaceId: string;
+  userId: string;
+  targetUserId: string;
+}) {
+  await requireWorkspacePermission(
+    input.workspaceId,
+    input.userId,
+    "member.remove",
+  );
+  const target = await requireGen2MemberTarget(
+    input.workspaceId,
+    input.targetUserId,
+  );
+  if (target.role === "owner") {
+    throw new Gen2LifecycleError("Owners cannot be removed.", 409);
+  }
+  await getDatabase()
+    .delete(schema.gen2WorkspaceMembers)
+    .where(
+      and(
+        eq(schema.gen2WorkspaceMembers.workspaceId, input.workspaceId),
+        eq(schema.gen2WorkspaceMembers.userId, input.targetUserId),
+      ),
+    );
+}
+
+export async function getGen2MemberConnectionStatuses(
+  workspaceId: string,
+  userId: string,
+): Promise<Gen2MemberConnectionStatus[]> {
+  await requireWorkspacePermission(
+    workspaceId,
+    userId,
+    "connection.viewStatus",
+  );
+  const members = await getDatabase()
+    .select({ userId: schema.gen2WorkspaceMembers.userId })
+    .from(schema.gen2WorkspaceMembers)
+    .where(eq(schema.gen2WorkspaceMembers.workspaceId, workspaceId));
+  return Promise.all(
+    members.map(async (member) => ({
+      userId: member.userId,
+      connected: (await getGen2ProviderStatus(member.userId)).connected,
+    })),
+  );
+}
+
+export async function getGen2ContextPreview(input: {
+  workspaceId: string;
+  chatId: string;
+  userId: string;
+}) {
+  await requireWorkspacePermission(
+    input.workspaceId,
+    input.userId,
+    "context.view",
+  );
+  const chat = await requireGen2Chat(input.workspaceId, input.chatId);
+  const context = buildGen2Context("", await listGen2ChatMessages(chat.id));
+  return gen2ContextPreviewSchema.parse({
+    chatId: chat.id,
+    messageIds: context.messageIds,
+    messageCount: context.messageCount,
+    maxMessages: context.maxMessages,
+    maxCharacters: context.maxCharacters,
+  });
+}
+
+async function requireGen2MemberTarget(workspaceId: string, userId: string) {
+  const [member] = await getDatabase()
+    .select({ role: schema.gen2WorkspaceMembers.role })
+    .from(schema.gen2WorkspaceMembers)
+    .where(
+      and(
+        eq(schema.gen2WorkspaceMembers.workspaceId, workspaceId),
+        eq(schema.gen2WorkspaceMembers.userId, userId),
+      ),
+    )
+    .limit(1);
+  if (!member) throw new Gen2AccessError("Member not found.", 404);
+  return member;
 }
 
 /**
@@ -259,6 +422,10 @@ export async function getGen2WorkspaceForAccess(
     throw new Gen2AccessError();
   }
   return toWorkspace(row, access.role, access.capabilities);
+}
+
+function workspaceInviteIsActive(expiresAt: Date | null) {
+  return expiresAt !== null && expiresAt > new Date();
 }
 
 function toWorkspace(

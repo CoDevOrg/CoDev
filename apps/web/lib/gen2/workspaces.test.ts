@@ -17,6 +17,10 @@ vi.mock("../platform/observability", () => ({
   logEvent: vi.fn(),
 }));
 
+vi.mock("./providers", () => ({
+  getGen2ProviderStatus: vi.fn(),
+}));
+
 vi.mock("../platform/database", () => ({
   getDatabase: () => ({
     transaction: async (callback: (transaction: unknown) => unknown) => {

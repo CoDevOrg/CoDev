@@ -107,6 +107,7 @@ import {
   pollGen2AgentTurn,
   startGen2AgentTurn,
 } from "./agent";
+import { buildGen2Context } from "./chats-format";
 import { Gen2AccessError, Gen2LifecycleError } from "./errors";
 
 const workspaceId = "11111111-1111-4111-8111-111111111111";
@@ -240,6 +241,13 @@ describe("gen2 Codex agent", () => {
     const command = mocks.start.mock.calls[0]?.[1] as {
       command: string[];
     };
+    const history = [
+      { id: "history-1", role: "user" as const, body: "hi" },
+      { id: "history-2", role: "assistant" as const, body: "hello" },
+    ];
+    expect(command.command.at(-1)).toContain(
+      buildGen2Context(turn.prompt, history).prompt,
+    );
     expect(command.command.at(-1)).toMatch(/Continue this conversation/);
     expect(command.command.at(-1)).toMatch(/hello/);
     expect(command.command.at(-1)).toMatch(/List the files/);

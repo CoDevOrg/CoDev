@@ -2020,7 +2020,17 @@ export const gen2Workspaces = pgTable(
     status: gen2WorkspaceStatus("status").default("pending").notNull(),
     sandboxId: text("sandbox_id"),
     lastError: text("last_error"),
-    shareTokenHash: text("share_token_hash"),
+    activeInviteTokenHash: text("active_invite_token_hash"),
+    activeInviteCreatedByUserId: uuid(
+      "active_invite_created_by_user_id",
+    ).references(() => users.id, { onDelete: "restrict" }),
+    activeInviteRole: gen2WorkspaceRole("active_invite_role"),
+    activeInviteCreatedAt: timestamp("active_invite_created_at", {
+      withTimezone: true,
+    }),
+    activeInviteExpiresAt: timestamp("active_invite_expires_at", {
+      withTimezone: true,
+    }),
     /**
      * The GitHub repository this workspace was created from, as
      * "owner/name", or null for a blank machine. `baseSha` is the commit the
@@ -2037,8 +2047,8 @@ export const gen2Workspaces = pgTable(
   },
   (table) => [
     index("gen2_workspaces_owner_idx").on(table.ownerId),
-    uniqueIndex("gen2_workspaces_share_token_hash_idx").on(
-      table.shareTokenHash,
+    uniqueIndex("gen2_workspaces_active_invite_token_hash_idx").on(
+      table.activeInviteTokenHash,
     ),
   ],
 );
