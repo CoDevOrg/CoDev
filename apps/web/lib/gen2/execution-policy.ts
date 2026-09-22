@@ -11,7 +11,7 @@ export const DEFAULT_GEN2_AGENT_EXECUTION_POLICY: Gen2AgentExecutionPolicy = {
  * supplying an execution policy with a turn request.
  */
 export function resolveGen2AgentExecutionPolicy(input: {
-  allowFileChanges: boolean | null | undefined;
+  allowFileChanges?: boolean | null;
 }): Gen2AgentExecutionPolicy {
   return {
     allowFileChanges:
