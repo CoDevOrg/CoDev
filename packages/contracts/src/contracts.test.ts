@@ -517,10 +517,30 @@ describe("gen2 workspace contracts", () => {
         sandboxId: "sandbox-1",
         lastError: null,
         role: "owner",
+        capabilities: {
+          "workspace.view": true,
+          "workspace.editFiles": true,
+          "workspace.useTerminal": true,
+          "agent.run": true,
+          "agent.cancelOwn": true,
+          "agent.cancelAny": true,
+          "context.view": true,
+          "context.includeInTurn": true,
+          "member.invite": true,
+          "member.changeRole": true,
+          "member.remove": true,
+          "workspace.managePolicy": true,
+          "connection.manageOwn": true,
+          "connection.viewStatus": true,
+        },
         createdAt: "2026-09-20T20:00:00.000Z",
         updatedAt: "2026-09-20T20:00:00.000Z",
       }),
-    ).toMatchObject({ status: "ready", role: "owner" });
+    ).toMatchObject({
+      status: "ready",
+      role: "owner",
+      capabilities: { "workspace.managePolicy": true },
+    });
   });
 
   it("only exposes Gen 2 policy-preset roles", async () => {

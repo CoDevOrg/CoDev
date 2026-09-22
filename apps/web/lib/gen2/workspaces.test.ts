@@ -75,6 +75,10 @@ describe("gen2 workspace creation", () => {
       status: "pending",
       role: "owner",
       sandboxId: null,
+      capabilities: {
+        "workspace.managePolicy": true,
+        "agent.cancelAny": true,
+      },
     });
     expect(mocks.inserted).toEqual([
       {

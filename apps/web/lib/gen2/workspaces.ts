@@ -258,7 +258,7 @@ export async function getGen2WorkspaceForAccess(
   if (!row) {
     throw new Gen2AccessError();
   }
-  return toWorkspace(row, access.role);
+  return toWorkspace(row, access.role, access.capabilities);
 }
 
 function toWorkspace(
@@ -275,6 +275,7 @@ function toWorkspace(
     updatedAt: Date;
   },
   role: Gen2Workspace["role"],
+  capabilities = permissionsForWorkspaceRole(role),
 ): Gen2Workspace {
   return gen2WorkspaceSchema.parse({
     id: row.id,
@@ -290,6 +291,7 @@ function toWorkspace(
         }
       : null,
     role,
+    capabilities,
     createdAt: toIso(row.createdAt),
     updatedAt: toIso(row.updatedAt),
   });

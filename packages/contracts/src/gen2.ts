@@ -16,6 +16,27 @@ export const gen2WorkspaceStatusSchema = z.enum([
  */
 export const gen2WorkspaceRoleSchema = z.enum(["owner", "editor", "viewer"]);
 
+/**
+ * The policy decisions resolved for the current member. These flags help the
+ * client present available actions; API routes remain the source of authority.
+ */
+export const gen2WorkspaceCapabilitiesSchema = z.object({
+  "workspace.view": z.boolean(),
+  "workspace.editFiles": z.boolean(),
+  "workspace.useTerminal": z.boolean(),
+  "agent.run": z.boolean(),
+  "agent.cancelOwn": z.boolean(),
+  "agent.cancelAny": z.boolean(),
+  "context.view": z.boolean(),
+  "context.includeInTurn": z.boolean(),
+  "member.invite": z.boolean(),
+  "member.changeRole": z.boolean(),
+  "member.remove": z.boolean(),
+  "workspace.managePolicy": z.boolean(),
+  "connection.manageOwn": z.boolean(),
+  "connection.viewStatus": z.boolean(),
+});
+
 export const gen2WorkspaceCreateRequestSchema = z
   .object({
     name: z.string().trim().min(1).max(80).optional(),
@@ -52,6 +73,7 @@ export const gen2WorkspaceSchema = z.object({
   sandboxId: z.string().min(1).nullable(),
   lastError: z.string().nullable(),
   role: gen2WorkspaceRoleSchema,
+  capabilities: gen2WorkspaceCapabilitiesSchema,
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
 });
@@ -317,6 +339,9 @@ export const gen2TerminalPollResponseSchema = z.object({
 export type Gen2Repository = z.infer<typeof gen2RepositorySchema>;
 export type Gen2WorkspaceStatus = z.infer<typeof gen2WorkspaceStatusSchema>;
 export type Gen2WorkspaceRole = z.infer<typeof gen2WorkspaceRoleSchema>;
+export type Gen2WorkspaceCapabilities = z.infer<
+  typeof gen2WorkspaceCapabilitiesSchema
+>;
 export type Gen2Workspace = z.infer<typeof gen2WorkspaceSchema>;
 export type Gen2WorkspaceDetail = z.infer<typeof gen2WorkspaceDetailSchema>;
 export type Gen2WorkspaceMember = z.infer<typeof gen2WorkspaceMemberSchema>;
