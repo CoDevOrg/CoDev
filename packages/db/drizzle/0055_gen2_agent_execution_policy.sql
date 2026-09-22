@@ -1,0 +1,1 @@
+ALTER TABLE "gen2_workspaces" ADD COLUMN "agent_file_changes" boolean DEFAULT true NOT NULL;

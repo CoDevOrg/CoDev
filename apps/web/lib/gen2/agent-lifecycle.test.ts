@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   adapterPoll: vi.fn(),
   adapterCancel: vi.fn(),
   adapterRelease: vi.fn(),
+  executionPolicy: vi.fn(),
 }));
 
 vi.mock("../policies/workspace", () => ({
@@ -24,6 +25,11 @@ vi.mock("../policies/workspace", () => ({
 
 vi.mock("./workspaces", () => ({
   getGen2WorkspaceForAccess: (...args: unknown[]) => mocks.workspace(...args),
+}));
+
+vi.mock("./workspace-policy", () => ({
+  getGen2AgentExecutionPolicyForAccess: (...args: unknown[]) =>
+    mocks.executionPolicy(...args),
 }));
 
 vi.mock("./chats", () => ({
@@ -82,7 +88,12 @@ describe("Gen 2 agent lifecycle", () => {
     });
     mocks.getAccess.mockResolvedValue({ role: "owner", capabilities: {} });
     mocks.workspace.mockResolvedValue({ id: workspaceId, status: "ready" });
-    mocks.requireChat.mockResolvedValue({ id: chatId, title: "New chat" });
+    mocks.executionPolicy.mockResolvedValue({ allowFileChanges: true });
+    mocks.requireChat.mockResolvedValue({
+      id: chatId,
+      title: "New chat",
+      defaultProvider: "openai",
+    });
     mocks.listMessages.mockResolvedValue([]);
     mocks.appendMessage.mockResolvedValue({ id: "message-1" });
     mocks.createTurn.mockResolvedValue(undefined);
@@ -125,6 +136,7 @@ describe("Gen 2 agent lifecycle", () => {
       prompt: "List the files",
       history: [],
       idempotencyKey: "turn-1234",
+      executionPolicy: { allowFileChanges: true },
     });
     expect(mocks.createTurn).toHaveBeenCalledWith({
       sessionId: "session-1",

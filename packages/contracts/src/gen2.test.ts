@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   gen2ContextPreviewSchema,
+  gen2AgentExecutionPolicyUpdateSchema,
   gen2MemberConnectionStatusSchema,
   gen2MemberRoleMutationSchema,
 } from "./gen2";
@@ -20,13 +21,14 @@ describe("Gen 2 Control contracts", () => {
     expect(
       gen2MemberConnectionStatusSchema.parse({
         userId: "11111111-1111-4111-8111-111111111111",
+        providers: [],
         connected: true,
         via: "subscription",
         token: "secret",
       }),
     ).toEqual({
       userId: "11111111-1111-4111-8111-111111111111",
-      connected: true,
+      providers: [],
     });
   });
 
@@ -40,5 +42,16 @@ describe("Gen 2 Control contracts", () => {
         maxCharacters: 12_000,
       }),
     ).toMatchObject({ maxMessages: 20, maxCharacters: 12_000 });
+  });
+
+  it("accepts only a boolean file-change execution policy", () => {
+    expect(
+      gen2AgentExecutionPolicyUpdateSchema.parse({ allowFileChanges: false }),
+    ).toEqual({ allowFileChanges: false });
+    expect(
+      gen2AgentExecutionPolicyUpdateSchema.safeParse({
+        allowFileChanges: "false",
+      }).success,
+    ).toBe(false);
   });
 });

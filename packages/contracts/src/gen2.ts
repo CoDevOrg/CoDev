@@ -50,6 +50,8 @@ export const gen2WorkspaceCapabilitiesSchema = z.object({
   "workspace.view": z.boolean(),
   "workspace.editFiles": z.boolean(),
   "workspace.useTerminal": z.boolean(),
+  "instance.start": z.boolean(),
+  "instance.stop": z.boolean(),
   "agent.run": z.boolean(),
   "agent.cancelOwn": z.boolean(),
   "agent.cancelAny": z.boolean(),
@@ -105,6 +107,18 @@ export const gen2MemberConnectionStatusSchema = z.object({
   userId: identifierSchema,
   providers: z.array(gen2ProviderReadinessSchema),
 });
+
+/**
+ * Workspace-wide limits for every agent turn. These are not member roles:
+ * role capabilities decide who can start a turn or change this policy.
+ */
+export const gen2AgentExecutionPolicySchema = z.object({
+  /** A false value runs Codex in its read-only sandbox. */
+  allowFileChanges: z.boolean(),
+});
+
+export const gen2AgentExecutionPolicyUpdateSchema =
+  gen2AgentExecutionPolicySchema;
 
 export const gen2WorkspaceSchema = z.object({
   id: identifierSchema,
@@ -420,6 +434,12 @@ export type Gen2MemberRoleMutation = z.infer<
 >;
 export type Gen2MemberConnectionStatus = z.infer<
   typeof gen2MemberConnectionStatusSchema
+>;
+export type Gen2AgentExecutionPolicy = z.infer<
+  typeof gen2AgentExecutionPolicySchema
+>;
+export type Gen2AgentExecutionPolicyUpdate = z.infer<
+  typeof gen2AgentExecutionPolicyUpdateSchema
 >;
 export type Gen2AgentStartRequest = z.infer<typeof gen2AgentStartRequestSchema>;
 export type Gen2AgentPollResponse = z.infer<typeof gen2AgentPollResponseSchema>;

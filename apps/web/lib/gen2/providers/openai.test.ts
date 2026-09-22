@@ -47,7 +47,7 @@ vi.mock("../providers", () => ({
   resolveGen2Codex: (...args: unknown[]) => mocks.resolveCredential(...args),
 }));
 
-import { openAiGen2ProviderAdapter } from "./openai";
+import { buildGen2CodexCommand, openAiGen2ProviderAdapter } from "./openai";
 
 const workspaceId = "11111111-1111-4111-8111-111111111111";
 const userId = "22222222-2222-4222-8222-222222222222";
@@ -90,6 +90,15 @@ describe("OpenAI Gen 2 provider adapter", () => {
     });
   });
 
+  it("passes a read-only sandbox to Codex when file changes are disallowed", () => {
+    const command = buildGen2CodexCommand("Inspect the files", [], {
+      allowFileChanges: false,
+    });
+    expect(command).toContain("--sandbox");
+    expect(command[command.indexOf("--sandbox") + 1]).toBe("read-only");
+    expect(command).toContain('approval_policy="never"');
+  });
+
   it("owns credential resolution and runtime start without exposing auth", async () => {
     await expect(
       openAiGen2ProviderAdapter.start({
@@ -98,6 +107,7 @@ describe("OpenAI Gen 2 provider adapter", () => {
         prompt: "List the files",
         history: [],
         idempotencyKey: "turn-1234",
+        executionPolicy: { allowFileChanges: true },
       }),
     ).resolves.toEqual({ sessionId: "session-1" });
     expect(mocks.claim).toHaveBeenCalledWith(credentialId);
@@ -119,6 +129,7 @@ describe("OpenAI Gen 2 provider adapter", () => {
         prompt: "List the files",
         history: [],
         idempotencyKey: "turn-1234",
+        executionPolicy: { allowFileChanges: true },
       }),
     ).rejects.toThrow("guest down");
     expect(mocks.release).toHaveBeenCalledWith(credentialId);

@@ -18,6 +18,7 @@ import {
   requireWorkspacePermission,
 } from "../policies/workspace";
 import { getGen2WorkspaceForAccess } from "./workspaces";
+import { getGen2AgentExecutionPolicyForAccess } from "./workspace-policy";
 
 export { canRunGen2Agent } from "./agent-policy";
 
@@ -35,7 +36,7 @@ async function requireReadyWorkspace(workspaceId: string, userId: string) {
         : "Start the instance before asking an agent to work.",
     );
   }
-  return workspace;
+  return { access, workspace };
 }
 
 export async function startGen2AgentTurn(input: {
@@ -46,7 +47,10 @@ export async function startGen2AgentTurn(input: {
   idempotencyKey: string;
   provider?: Gen2ProviderId;
 }) {
-  await requireReadyWorkspace(input.workspaceId, input.userId);
+  const { access } = await requireReadyWorkspace(
+    input.workspaceId,
+    input.userId,
+  );
   await requireWorkspacePermission(
     input.workspaceId,
     input.userId,
@@ -56,6 +60,10 @@ export async function startGen2AgentTurn(input: {
   const history = await listGen2ChatMessages(input.chatId);
   const provider = input.provider ?? chat.defaultProvider;
   const adapter = getGen2ProviderAdapter(provider);
+  const executionPolicy = await getGen2AgentExecutionPolicyForAccess(
+    input.workspaceId,
+    access,
+  );
   try {
     const { sessionId } = await adapter.start({
       workspaceId: input.workspaceId,
@@ -63,6 +71,7 @@ export async function startGen2AgentTurn(input: {
       prompt: input.prompt,
       history,
       idempotencyKey: input.idempotencyKey,
+      executionPolicy,
     });
     try {
       await appendGen2ChatMessage({

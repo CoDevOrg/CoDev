@@ -2,6 +2,7 @@ import "server-only";
 
 import type {
   Gen2ChatMessage,
+  Gen2AgentExecutionPolicy,
   Gen2ProviderId,
   Gen2ProviderReadiness,
 } from "@codev/contracts";
@@ -23,6 +24,7 @@ export type Gen2ProviderTurnInput = {
   prompt: string;
   history: Gen2ChatMessage[];
   idempotencyKey: string;
+  executionPolicy: Gen2AgentExecutionPolicy;
 };
 
 /**

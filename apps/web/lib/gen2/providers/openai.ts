@@ -18,6 +18,8 @@ import {
 } from "../../runtime/orchestrator-codex-exec";
 import { OrchestratorError } from "../../runtime/orchestrator-request";
 import { buildGen2Context } from "../chats-format";
+import { gen2CodexSandboxForPolicy } from "../execution-policy";
+import { DEFAULT_GEN2_AGENT_EXECUTION_POLICY } from "../execution-policy";
 import { Gen2LifecycleError } from "../errors";
 import { describeGen2RuntimeFailure } from "../instance";
 import { getGen2ProviderDefinition } from "../provider-catalog";
@@ -31,6 +33,7 @@ import { getGen2ProviderStatus, resolveGen2Codex } from "../providers";
 export function buildGen2CodexCommand(
   prompt: string,
   history: Gen2ProviderTurnInput["history"],
+  executionPolicy: Gen2ProviderTurnInput["executionPolicy"] = DEFAULT_GEN2_AGENT_EXECUTION_POLICY,
 ) {
   return [
     "codex",
@@ -40,7 +43,7 @@ export function buildGen2CodexCommand(
     "--ignore-user-config",
     "--skip-git-repo-check",
     "--sandbox",
-    "danger-full-access",
+    gen2CodexSandboxForPolicy(executionPolicy),
     "-c",
     'approval_policy="never"',
     "--model",
@@ -112,7 +115,11 @@ export const openAiGen2ProviderAdapter: Gen2ProviderAdapter = {
     }
 
     const execInput = {
-      command: buildGen2CodexCommand(input.prompt, input.history),
+      command: buildGen2CodexCommand(
+        input.prompt,
+        input.history,
+        input.executionPolicy,
+      ),
       codexAuthCacheJson: credential.authCacheJson,
       idempotencyKey: input.idempotencyKey,
     };

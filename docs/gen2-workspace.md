@@ -94,6 +94,32 @@ Each turn is still a fresh `codex exec --ephemeral --sandbox
 danger-full-access` with the prior messages in the prompt, so a shareable
 machine never keeps a personal Codex thread or auth home.
 
+## Agent execution policy
+
+Workspace roles and execution policy are deliberately separate. Roles resolve
+server-side capabilities: `agent.run` starts a turn and `workspace.managePolicy`
+may change the workspace policy. A browser never supplies either the caller's
+capabilities or the effective execution policy to the runtime.
+
+The persisted policy currently has one enforceable setting:
+
+- **Allow file changes** — defaults to enabled to preserve existing behavior.
+  When disabled, the server passes Codex `--sandbox read-only`; the CLI applies
+  that filesystem boundary for the whole turn rather than trusting the UI.
+
+Repository access and agent terminal use are intentionally documented as fixed
+properties, not controls. A Gen 2 turn must read its shared `/workspace`
+repository, and Codex currently has no launch setting that removes shell-tool
+access while still permitting useful repository analysis. The existing launch
+configuration is `--sandbox danger-full-access` and
+`approval_policy="never"`; file-change policy replaces the sandbox value but
+does not make approval interactive. We must not add repository or terminal
+toggles until the guest/runtime can actually enforce them.
+
+Turning off file changes affects new turns only. It does not revoke a member's
+separate `workspace.editFiles` or `workspace.useTerminal` role capabilities,
+and it cannot retroactively constrain an already-running Codex process.
+
 ## Verifying it without Azure
 
 `apps/web/lib/runtime/fake-guest.ts` is an in-memory stand-in for the guest,

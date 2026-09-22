@@ -8,6 +8,8 @@ const editorCapabilities = {
   "workspace.view": true,
   "workspace.editFiles": true,
   "workspace.useTerminal": true,
+  "instance.start": true,
+  "instance.stop": false,
   "agent.run": true,
   "agent.cancelOwn": true,
   "agent.cancelAny": false,

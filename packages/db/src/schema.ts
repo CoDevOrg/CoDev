@@ -956,6 +956,8 @@ export const workspaceRuntimes = pgTable(
     lastHeartbeatAt: timestamp("last_heartbeat_at", { withTimezone: true }),
     hibernatedAt: timestamp("hibernated_at", { withTimezone: true }),
     lastError: text("last_error"),
+    /** False runs every Gen 2 Codex turn in its read-only sandbox. */
+    agentFileChanges: boolean("agent_file_changes").default(true).notNull(),
     provisionedAt: timestamp("provisioned_at", { withTimezone: true }),
     stoppedAt: timestamp("stopped_at", { withTimezone: true }),
     ...timestamps,

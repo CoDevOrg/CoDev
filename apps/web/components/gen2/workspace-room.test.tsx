@@ -20,6 +20,8 @@ const workspace: Gen2WorkspaceDetail = {
     "workspace.view": true,
     "workspace.editFiles": true,
     "workspace.useTerminal": true,
+    "instance.start": true,
+    "instance.stop": true,
     "agent.run": true,
     "agent.cancelOwn": true,
     "agent.cancelAny": true,
