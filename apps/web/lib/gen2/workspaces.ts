@@ -12,6 +12,11 @@ import { schema } from "@codev/db";
 
 import { createInviteToken, hashInviteToken } from "../platform/crypto";
 import { getRepository } from "../github/github";
+import { permissionsForWorkspaceRole } from "../policies/permissions";
+import {
+  requireWorkspacePermission,
+  type WorkspaceAccess,
+} from "../policies/workspace";
 import { getDatabase } from "../platform/database";
 import { logEvent } from "../platform/observability";
 import { Gen2AccessError, Gen2LifecycleError } from "./errors";
@@ -109,7 +114,9 @@ export async function listGen2WorkspacesForUser(userId: string) {
       eq(schema.gen2WorkspaceMembers.workspaceId, schema.gen2Workspaces.id),
     )
     .where(eq(schema.gen2WorkspaceMembers.userId, userId));
-  return rows.map((row) => toWorkspace(row, row.role));
+  return rows
+    .filter((row) => permissionsForWorkspaceRole(row.role)["workspace.view"])
+    .map((row) => toWorkspace(row, row.role));
 }
 
 export async function requireGen2Member(workspaceId: string, userId: string) {
@@ -149,7 +156,12 @@ export async function getGen2WorkspaceDetail(
   workspaceId: string,
   userId: string,
 ): Promise<Gen2WorkspaceDetail> {
-  const workspace = await requireGen2Member(workspaceId, userId);
+  const access = await requireWorkspacePermission(
+    workspaceId,
+    userId,
+    "workspace.view",
+  );
+  const workspace = await getGen2WorkspaceForAccess(workspaceId, access);
   const members = await getDatabase()
     .select({
       userId: schema.gen2WorkspaceMembers.userId,
@@ -174,10 +186,7 @@ export async function createGen2ShareLink(
   userId: string,
   origin: string,
 ) {
-  const membership = await requireGen2Member(workspaceId, userId);
-  if (membership.role !== "owner") {
-    throw new Gen2AccessError("Only the owner can share this workspace.", 403);
-  }
+  await requireWorkspacePermission(workspaceId, userId, "member.invite");
   const token = createInviteToken();
   await getDatabase()
     .update(schema.gen2Workspaces)
@@ -213,7 +222,43 @@ export async function joinGen2Workspace(token: string, userId: string) {
     })
     .onConflictDoNothing();
 
-  return requireGen2Member(workspace.id, userId);
+  const access = await requireWorkspacePermission(
+    workspace.id,
+    userId,
+    "workspace.view",
+  );
+  return getGen2WorkspaceForAccess(workspace.id, access);
+}
+
+/**
+ * Loads workspace state only after a policy guard has resolved the caller's
+ * authority. It deliberately accepts access rather than a user id, so this
+ * data loader cannot become a second membership authorization path.
+ */
+export async function getGen2WorkspaceForAccess(
+  workspaceId: string,
+  access: WorkspaceAccess,
+) {
+  const [row] = await getDatabase()
+    .select({
+      id: schema.gen2Workspaces.id,
+      name: schema.gen2Workspaces.name,
+      status: schema.gen2Workspaces.status,
+      sandboxId: schema.gen2Workspaces.sandboxId,
+      lastError: schema.gen2Workspaces.lastError,
+      repository: schema.gen2Workspaces.repository,
+      repositoryPrivate: schema.gen2Workspaces.repositoryPrivate,
+      defaultBranch: schema.gen2Workspaces.defaultBranch,
+      createdAt: schema.gen2Workspaces.createdAt,
+      updatedAt: schema.gen2Workspaces.updatedAt,
+    })
+    .from(schema.gen2Workspaces)
+    .where(eq(schema.gen2Workspaces.id, workspaceId))
+    .limit(1);
+  if (!row) {
+    throw new Gen2AccessError();
+  }
+  return toWorkspace(row, access.role);
 }
 
 function toWorkspace(

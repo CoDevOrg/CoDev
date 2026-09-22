@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  requireMember: vi.fn(),
+  requirePermission: vi.fn(),
+  workspace: vi.fn(),
   requireChat: vi.fn(),
   listMessages: vi.fn(),
   appendMessage: vi.fn(),
@@ -24,8 +25,22 @@ vi.mock("./providers", () => ({
   resolveGen2Codex: (...args: unknown[]) => mocks.resolveCredential(...args),
 }));
 
+vi.mock("../policies/workspace", () => ({
+  requireWorkspacePermission: (...args: unknown[]) =>
+    mocks.requirePermission(...args),
+}));
+
 vi.mock("./workspaces", () => ({
-  requireGen2Member: (...args: unknown[]) => mocks.requireMember(...args),
+  getGen2WorkspaceForAccess: (...args: unknown[]) => mocks.workspace(...args),
+}));
+
+vi.mock("./instance", () => ({
+  describeGen2RuntimeFailure: (error: unknown) =>
+    error instanceof Error && /fetch failed/.test(error.message)
+      ? "The Firecracker host could not be reached."
+      : error instanceof Error
+        ? error.message
+        : "runtime failure",
 }));
 
 vi.mock("./chats", () => ({
@@ -108,7 +123,11 @@ describe("gen2 Codex agent", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mocks.getAgentModel.mockReturnValue("gpt-5.4");
-    mocks.requireMember.mockResolvedValue({
+    mocks.requirePermission.mockResolvedValue({
+      role: "owner",
+      capabilities: {},
+    });
+    mocks.workspace.mockResolvedValue({
       id: workspaceId,
       status: "ready",
       role: "owner",
@@ -174,6 +193,16 @@ describe("gen2 Codex agent", () => {
     await expect(startGen2AgentTurn(turn)).resolves.toEqual({
       sessionId: "session-1",
     });
+    expect(mocks.requirePermission).toHaveBeenCalledWith(
+      workspaceId,
+      userId,
+      "agent.run",
+    );
+    expect(mocks.requirePermission).toHaveBeenCalledWith(
+      workspaceId,
+      userId,
+      "context.includeInTurn",
+    );
     expect(mocks.claim).toHaveBeenCalledWith(credentialId);
     expect(mocks.start).toHaveBeenCalledWith(
       workspaceId,
@@ -205,7 +234,7 @@ describe("gen2 Codex agent", () => {
   });
 
   it("refuses to start until the instance is ready", async () => {
-    mocks.requireMember.mockResolvedValue({
+    mocks.workspace.mockResolvedValue({
       id: workspaceId,
       status: "pending",
       role: "owner",

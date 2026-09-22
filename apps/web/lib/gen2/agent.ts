@@ -27,7 +27,8 @@ import {
 } from "./chats";
 import { formatGen2TurnPrompt } from "./chats-format";
 import { createGen2Turn, recordGen2TurnChunks } from "./turns";
-import { requireGen2Member } from "./workspaces";
+import { requireWorkspacePermission } from "../policies/workspace";
+import { getGen2WorkspaceForAccess } from "./workspaces";
 
 export { canRunGen2Agent } from "./agent-policy";
 
@@ -61,16 +62,21 @@ export function buildGen2CodexCommand(
   ];
 }
 
-async function requireReadyMember(workspaceId: string, userId: string) {
-  const membership = await requireGen2Member(workspaceId, userId);
-  if (!canRunGen2Agent(membership.status)) {
+async function requireReadyWorkspace(workspaceId: string, userId: string) {
+  const access = await requireWorkspacePermission(
+    workspaceId,
+    userId,
+    "agent.run",
+  );
+  const workspace = await getGen2WorkspaceForAccess(workspaceId, access);
+  if (!canRunGen2Agent(workspace.status)) {
     throw new Gen2LifecycleError(
-      membership.status === "provisioning"
+      workspace.status === "provisioning"
         ? "The instance is still starting."
         : "Start the instance before asking Codex to work.",
     );
   }
-  return membership;
+  return workspace;
 }
 
 export async function startGen2AgentTurn(input: {
@@ -80,7 +86,12 @@ export async function startGen2AgentTurn(input: {
   prompt: string;
   idempotencyKey: string;
 }) {
-  await requireReadyMember(input.workspaceId, input.userId);
+  await requireReadyWorkspace(input.workspaceId, input.userId);
+  await requireWorkspacePermission(
+    input.workspaceId,
+    input.userId,
+    "context.includeInTurn",
+  );
   await requireGen2Chat(input.workspaceId, input.chatId);
   const history = await listGen2ChatMessages(input.chatId);
   const credential = await resolveGen2Codex(input.userId);
@@ -171,7 +182,11 @@ export async function pollGen2AgentTurn(input: {
   sessionId: string;
   after: number;
 }) {
-  await requireGen2Member(input.workspaceId, input.userId);
+  await requireWorkspacePermission(
+    input.workspaceId,
+    input.userId,
+    "context.view",
+  );
   let result;
   try {
     result = await pollCodexExecInSandbox(
@@ -234,7 +249,11 @@ export async function cancelGen2AgentTurn(input: {
   userId: string;
   sessionId: string;
 }) {
-  await requireGen2Member(input.workspaceId, input.userId);
+  await requireWorkspacePermission(
+    input.workspaceId,
+    input.userId,
+    "agent.cancelOwn",
+  );
   try {
     await closeCodexExecInSandbox(input.workspaceId, input.sessionId);
   } catch (error) {

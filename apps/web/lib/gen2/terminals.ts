@@ -7,9 +7,10 @@ import {
   sendSandboxTerminalInput,
   startSandboxTerminal,
 } from "../runtime/orchestrator-terminals";
+import { requireWorkspacePermission } from "../policies/workspace";
 import { canRunGen2Agent } from "./agent-policy";
 import { Gen2LifecycleError } from "./errors";
-import { requireGen2Member } from "./workspaces";
+import { getGen2WorkspaceForAccess } from "./workspaces";
 
 /**
  * A shell on the workspace's own machine — the same `/workspace` Codex edits.
@@ -17,21 +18,26 @@ import { requireGen2Member } from "./workspaces";
  * Only `start` needs the instance to be idle: the guest takes its mutation
  * lock to spawn a PTY and waits for any running Codex turn first. Input,
  * resize, poll, and close skip that wait entirely, which is why a terminal
- * opened before a turn keeps streaming straight through it. Those four are
- * member-only so a poll racing a Stop returns `exited` rather than a
- * confusing 409.
+ * opened before a turn keeps streaming straight through it. Those four require
+ * `workspace.useTerminal`, so a poll racing a Stop returns `exited` rather
+ * than a confusing 409.
  */
 
-async function requireReadyMember(workspaceId: string, userId: string) {
-  const membership = await requireGen2Member(workspaceId, userId);
-  if (!canRunGen2Agent(membership.status)) {
+async function requireReadyWorkspace(workspaceId: string, userId: string) {
+  const access = await requireWorkspacePermission(
+    workspaceId,
+    userId,
+    "workspace.useTerminal",
+  );
+  const workspace = await getGen2WorkspaceForAccess(workspaceId, access);
+  if (!canRunGen2Agent(workspace.status)) {
     throw new Gen2LifecycleError(
-      membership.status === "provisioning"
+      workspace.status === "provisioning"
         ? "The instance is still starting."
         : "Start the instance first.",
     );
   }
-  return membership;
+  return workspace;
 }
 
 export async function startGen2Terminal(
@@ -39,7 +45,7 @@ export async function startGen2Terminal(
   userId: string,
   size: { rows: number; columns: number },
 ) {
-  await requireReadyMember(workspaceId, userId);
+  await requireReadyWorkspace(workspaceId, userId);
   return startSandboxTerminal(workspaceId, size);
 }
 
@@ -49,7 +55,11 @@ export async function sendGen2TerminalInput(
   sessionId: string,
   data: string,
 ) {
-  await requireGen2Member(workspaceId, userId);
+  await requireWorkspacePermission(
+    workspaceId,
+    userId,
+    "workspace.useTerminal",
+  );
   await sendSandboxTerminalInput(workspaceId, sessionId, data);
 }
 
@@ -59,7 +69,11 @@ export async function resizeGen2Terminal(
   sessionId: string,
   size: { rows: number; columns: number },
 ) {
-  await requireGen2Member(workspaceId, userId);
+  await requireWorkspacePermission(
+    workspaceId,
+    userId,
+    "workspace.useTerminal",
+  );
   await resizeSandboxTerminal(workspaceId, sessionId, size);
 }
 
@@ -69,7 +83,11 @@ export async function pollGen2Terminal(
   sessionId: string,
   after: number,
 ) {
-  await requireGen2Member(workspaceId, userId);
+  await requireWorkspacePermission(
+    workspaceId,
+    userId,
+    "workspace.useTerminal",
+  );
   return pollSandboxTerminal(workspaceId, sessionId, after);
 }
 
@@ -78,6 +96,10 @@ export async function closeGen2Terminal(
   userId: string,
   sessionId: string,
 ) {
-  await requireGen2Member(workspaceId, userId);
+  await requireWorkspacePermission(
+    workspaceId,
+    userId,
+    "workspace.useTerminal",
+  );
   await closeSandboxTerminal(workspaceId, sessionId);
 }

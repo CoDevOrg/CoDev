@@ -1,15 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  requireMember: vi.fn(),
+  requirePermission: vi.fn(),
+  workspace: vi.fn(),
   exec: vi.fn(),
   git: vi.fn(),
   read: vi.fn(),
   write: vi.fn(),
 }));
 
+vi.mock("../policies/workspace", () => ({
+  requireWorkspacePermission: (...args: unknown[]) =>
+    mocks.requirePermission(...args),
+}));
+
 vi.mock("./workspaces", () => ({
-  requireGen2Member: (...args: unknown[]) => mocks.requireMember(...args),
+  getGen2WorkspaceForAccess: (...args: unknown[]) => mocks.workspace(...args),
 }));
 
 vi.mock("../runtime/orchestrator-files", () => ({
@@ -36,7 +42,11 @@ const userId = "22222222-2222-4222-8222-222222222222";
 describe("gen2 workbench", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    mocks.requireMember.mockResolvedValue({
+    mocks.requirePermission.mockResolvedValue({
+      role: "owner",
+      capabilities: {},
+    });
+    mocks.workspace.mockResolvedValue({
       id: workspaceId,
       status: "ready",
       role: "owner",
@@ -49,7 +59,7 @@ describe("gen2 workbench", () => {
     // lib/runtime/orchestrator-* performs no authorization of its own, so
     // this ordering is the only thing standing between a signed-in stranger
     // and every Gen 2 workspace.
-    mocks.requireMember.mockRejectedValue(new Error("not a member"));
+    mocks.requirePermission.mockRejectedValue(new Error("not a member"));
     await expect(listGen2Files(workspaceId, userId)).rejects.toThrow(
       "not a member",
     );
@@ -65,7 +75,7 @@ describe("gen2 workbench", () => {
   });
 
   it("refuses the exec-backed surfaces until the instance is running", async () => {
-    mocks.requireMember.mockResolvedValue({
+    mocks.workspace.mockResolvedValue({
       id: workspaceId,
       status: "stopped",
       role: "owner",
@@ -79,7 +89,7 @@ describe("gen2 workbench", () => {
   it("keeps reading files and git available without a ready gate", async () => {
     // Neither read_file nor git/* takes the guest mutation lock, so both keep
     // answering while a Codex turn holds it.
-    mocks.requireMember.mockResolvedValue({
+    mocks.workspace.mockResolvedValue({
       id: workspaceId,
       status: "provisioning",
       role: "editor",
@@ -103,6 +113,11 @@ describe("gen2 workbench", () => {
       { path: "README.md", status: null },
       { path: "src/a.ts", status: "M" },
     ]);
+    expect(mocks.requirePermission).toHaveBeenCalledWith(
+      workspaceId,
+      userId,
+      "workspace.view",
+    );
   });
 
   it("searches untracked files too", async () => {
@@ -132,6 +147,11 @@ describe("gen2 workbench", () => {
       currentRevision: "abc123",
       status: 409,
     });
+    expect(mocks.requirePermission).toHaveBeenCalledWith(
+      workspaceId,
+      userId,
+      "workspace.editFiles",
+    );
   });
 
   it("reports a file that is not in HEAD rather than an empty one", async () => {

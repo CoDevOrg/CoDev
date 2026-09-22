@@ -14,40 +14,49 @@ import {
   parseFileList,
   parseSearchMatches,
 } from "../runtime/ide";
+import { requireWorkspacePermission } from "../policies/workspace";
 import { canRunGen2Agent } from "./agent-policy";
 import { Gen2FileConflictError, Gen2LifecycleError } from "./errors";
-import { requireGen2Member } from "./workspaces";
+import { getGen2WorkspaceForAccess } from "./workspaces";
 
 /**
  * Files and Git for a Gen 2 workspace, addressed against the same Firecracker
  * guest Codex runs in — the file a member opens here is the file the agent
  * just edited.
  *
- * Every function in this module takes `userId` and checks membership *before*
- * it touches the orchestrator. That is deliberate: `lib/runtime/orchestrator-*`
- * performs no authorization at all, so a route that reached it directly would
- * be an IDOR across every Gen 2 workspace. Keeping the guard here means a new
- * route cannot forget it.
+ * Every function in this module takes `userId` and enforces a named capability
+ * *before* it touches the orchestrator. That is deliberate:
+ * `lib/runtime/orchestrator-*` performs no authorization at all, so a route
+ * that reached it directly would be an IDOR across every Gen 2 workspace.
  */
 
 /** Guest handlers that take the mutation lock stall until a turn finishes. */
-async function requireReadyMember(workspaceId: string, userId: string) {
-  const membership = await requireGen2Member(workspaceId, userId);
-  if (!canRunGen2Agent(membership.status)) {
+async function requireReadyWorkspace(
+  workspaceId: string,
+  userId: string,
+  permission: "workspace.view" | "workspace.editFiles",
+) {
+  const access = await requireWorkspacePermission(
+    workspaceId,
+    userId,
+    permission,
+  );
+  const workspace = await getGen2WorkspaceForAccess(workspaceId, access);
+  if (!canRunGen2Agent(workspace.status)) {
     throw new Gen2LifecycleError(
-      membership.status === "provisioning"
+      workspace.status === "provisioning"
         ? "The instance is still starting."
         : "Start the instance first.",
     );
   }
-  return membership;
+  return workspace;
 }
 
 export async function listGen2Files(
   workspaceId: string,
   userId: string,
 ): Promise<Gen2FileEntry[]> {
-  await requireReadyMember(workspaceId, userId);
+  await requireReadyWorkspace(workspaceId, userId, "workspace.view");
   const [files, status] = await Promise.all([
     listGuestFiles(workspaceId),
     getSandboxGitOutput(workspaceId, "status"),
@@ -92,7 +101,7 @@ export async function searchGen2Files(
   userId: string,
   query: string,
 ): Promise<Gen2FileSearchMatch[]> {
-  await requireReadyMember(workspaceId, userId);
+  await requireReadyWorkspace(workspaceId, userId, "workspace.view");
   const result = await executeInSandbox(workspaceId, {
     // `--untracked` is the difference that matters here: without it, a file
     // the agent created moments ago is invisible to search until someone
@@ -124,8 +133,8 @@ export async function readGen2File(
   path: string,
 ) {
   // Reading does not take the guest mutation lock, so it keeps working while
-  // a Codex turn runs. Membership is still required.
-  await requireGen2Member(workspaceId, userId);
+  // a Codex turn runs. `workspace.view` is still required.
+  await requireWorkspacePermission(workspaceId, userId, "workspace.view");
   return readSandboxFile(workspaceId, path);
 }
 
@@ -136,7 +145,7 @@ export async function writeGen2File(
   userId: string,
   input: { path: string; contents: string; expectedRevision: string },
 ) {
-  await requireReadyMember(workspaceId, userId);
+  await requireReadyWorkspace(workspaceId, userId, "workspace.editFiles");
   try {
     return await writeSandboxFile(workspaceId, input);
   } catch (error) {
@@ -161,7 +170,7 @@ export async function uploadGen2File(
   userId: string,
   input: { path: string; contents: string; overwrite?: boolean },
 ) {
-  await requireReadyMember(workspaceId, userId);
+  await requireReadyWorkspace(workspaceId, userId, "workspace.editFiles");
   try {
     return await writeSandboxFile(workspaceId, {
       path: input.path,
@@ -183,14 +192,14 @@ export async function uploadGen2File(
 /**
  * `git status` and `git diff` are the one runtime surface the guest serves
  * without waiting for Codex to go idle, so the Git tab stays live during a
- * turn. Member-only on purpose — no ready gate, so it keeps answering.
+ * turn. `workspace.view` is enough — no ready gate, so it keeps answering.
  */
 export async function getGen2Git(
   workspaceId: string,
   userId: string,
   operation: "status" | "diff",
 ) {
-  await requireGen2Member(workspaceId, userId);
+  await requireWorkspacePermission(workspaceId, userId, "workspace.view");
   return getSandboxGitOutput(workspaceId, operation);
 }
 
@@ -199,7 +208,7 @@ export async function showGen2HeadFile(
   userId: string,
   path: string,
 ) {
-  await requireReadyMember(workspaceId, userId);
+  await requireReadyWorkspace(workspaceId, userId, "workspace.view");
   const result = await executeInSandbox(workspaceId, {
     command: ["git", "show", `HEAD:./${path}`],
     timeoutSeconds: 30,
