@@ -207,7 +207,9 @@ export async function joinGen2Workspace(token: string, userId: string) {
     .values({
       workspaceId: workspace.id,
       userId,
-      role: "member",
+      // Preserve Gen 2's current shared-workspace behavior while its invite UI
+      // has no role picker. The policy foundation will make this explicit.
+      role: "editor",
     })
     .onConflictDoNothing();
 

@@ -523,6 +523,16 @@ describe("gen2 workspace contracts", () => {
     ).toMatchObject({ status: "ready", role: "owner" });
   });
 
+  it("only exposes Gen 2 policy-preset roles", async () => {
+    const { gen2WorkspaceRoleSchema } = await import("./gen2");
+    expect(gen2WorkspaceRoleSchema.options).toEqual([
+      "owner",
+      "editor",
+      "viewer",
+    ]);
+    expect(() => gen2WorkspaceRoleSchema.parse("member")).toThrow();
+  });
+
   it("accepts a Codex turn start and a poll without auth material", () => {
     expect(
       gen2AgentStartRequestSchema.parse({

@@ -59,6 +59,15 @@ export const workspaceRuntimeAssignmentState = pgEnum(
   ["assigned", "starting", "ready", "draining", "lost"],
 );
 export const memberRole = pgEnum("member_role", ["owner", "member"]);
+/**
+ * Deliberately separate from the Gen 1 `member_role` enum. Gen 2 roles are
+ * only presets; authorization is resolved by the policy layer.
+ */
+export const gen2WorkspaceRole = pgEnum("gen2_workspace_role", [
+  "owner",
+  "editor",
+  "viewer",
+]);
 export const organizationRole = pgEnum("organization_role", [
   "owner",
   "admin",
@@ -2043,7 +2052,7 @@ export const gen2WorkspaceMembers = pgTable(
     userId: uuid("user_id")
       .references(() => users.id, { onDelete: "cascade" })
       .notNull(),
-    role: memberRole("role").default("member").notNull(),
+    role: gen2WorkspaceRole("role").default("editor").notNull(),
     joinedAt: timestamp("joined_at", { withTimezone: true })
       .defaultNow()
       .notNull(),

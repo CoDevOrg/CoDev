@@ -10,7 +10,11 @@ export const gen2WorkspaceStatusSchema = z.enum([
   "stopped",
 ]);
 
-export const gen2WorkspaceRoleSchema = z.enum(["owner", "member"]);
+/**
+ * Gen 2 workspace roles are permission presets. Server code authorizes
+ * capabilities through `lib/policies`, rather than branching on these values.
+ */
+export const gen2WorkspaceRoleSchema = z.enum(["owner", "editor", "viewer"]);
 
 export const gen2WorkspaceCreateRequestSchema = z
   .object({
