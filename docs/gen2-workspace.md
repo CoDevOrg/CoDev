@@ -37,11 +37,12 @@ the file the agent just edited.
 ## No start button
 
 Opening a workspace is the intent to use it, so `ensureGen2Instance` runs on
-open and is safe for any member to call -- the person who follows a share link
-should not have to wait for the owner to press something. The composer is
-never disabled either: type into a cold workspace and the machine is brought
-up as part of sending. The orchestrator pauses an idle guest after four hours
-on its own, so nothing needs stopping by hand.
+open for members with the `instance.start` capability (owners and editors).
+An editor who follows a share link can start the machine needed for agent work
+without waiting for the owner; viewers cannot create compute. The composer is
+never disabled for agent-capable members either: type into a cold workspace and
+the machine is brought up as part of sending. The orchestrator pauses an idle
+guest after four hours on its own, so nothing needs stopping by hand.
 
 ## Interface
 
