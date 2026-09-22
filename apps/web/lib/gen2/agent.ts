@@ -121,6 +121,10 @@ export async function pollGen2AgentTurn(input: {
   sessionId: string;
   after: number;
 }) {
+  // Turns and their persisted transcript are workspace-shared. Any member
+  // with context.view may poll a turn, while only its initiator (or a member
+  // with agent.cancelAny) may cancel it. The immutable turn owner remains the
+  // sole authority for provider credential cleanup.
   await requireWorkspacePermission(
     input.workspaceId,
     input.userId,

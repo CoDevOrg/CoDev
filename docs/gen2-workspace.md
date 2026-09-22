@@ -120,6 +120,19 @@ Turning off file changes affects new turns only. It does not revoke a member's
 separate `workspace.editFiles` or `workspace.useTerminal` role capabilities,
 and it cannot retroactively constrain an already-running Codex process.
 
+## Shared-session ownership
+
+Agent-turn polling is intentionally shared: any workspace member with
+`context.view` may follow the live output and see the server-persisted
+transcript. The initiating user remains immutable turn ownership for provider
+credential cleanup, and cancellation still requires `agent.cancelOwn` for
+one's own turn or `agent.cancelAny` for another member's turn.
+
+Terminals are also intentionally workspace-shared rather than creator-owned.
+Every input, resize, poll, and close request requires `workspace.useTerminal`,
+and the orchestrator scopes each session id by workspace. We will not persist
+terminal owners or change that shared model unless the product decision changes.
+
 ## Verifying it without Azure
 
 `apps/web/lib/runtime/fake-guest.ts` is an in-memory stand-in for the guest,

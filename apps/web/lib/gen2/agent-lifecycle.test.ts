@@ -183,6 +183,11 @@ describe("Gen 2 agent lifecycle", () => {
       chunks: [{ sequence: 0, dataBase64: "e30=" }],
       exited: true,
     });
+    expect(mocks.requirePermission).toHaveBeenCalledWith(
+      workspaceId,
+      anotherUserId,
+      "context.view",
+    );
     expect(result).not.toHaveProperty("codexAuthCacheJson");
   });
 
