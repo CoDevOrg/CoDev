@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   requirePermission: vi.fn(),
+  getAccess: vi.fn(),
   workspace: vi.fn(),
   requireChat: vi.fn(),
   listMessages: vi.fn(),
@@ -18,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   getAgentModel: vi.fn(),
   createTurn: vi.fn(),
   recordChunks: vi.fn(),
+  requireTurn: vi.fn(),
   resolveCredential: vi.fn(),
 }));
 
@@ -26,6 +28,7 @@ vi.mock("./providers", () => ({
 }));
 
 vi.mock("../policies/workspace", () => ({
+  getWorkspaceAccess: (...args: unknown[]) => mocks.getAccess(...args),
   requireWorkspacePermission: (...args: unknown[]) =>
     mocks.requirePermission(...args),
 }));
@@ -52,6 +55,7 @@ vi.mock("./chats", () => ({
 vi.mock("./turns", () => ({
   createGen2Turn: (...args: unknown[]) => mocks.createTurn(...args),
   recordGen2TurnChunks: (...args: unknown[]) => mocks.recordChunks(...args),
+  requireGen2Turn: (...args: unknown[]) => mocks.requireTurn(...args),
 }));
 
 vi.mock("../platform/observability", () => ({
@@ -103,10 +107,11 @@ import {
   pollGen2AgentTurn,
   startGen2AgentTurn,
 } from "./agent";
-import { Gen2LifecycleError } from "./errors";
+import { Gen2AccessError, Gen2LifecycleError } from "./errors";
 
 const workspaceId = "11111111-1111-4111-8111-111111111111";
 const userId = "22222222-2222-4222-8222-222222222222";
+const anotherUserId = "77777777-7777-4777-8777-777777777777";
 const chatId = "44444444-4444-4444-8444-444444444444";
 const credentialId = "33333333-3333-4333-8333-333333333333";
 const AUTH_CACHE = '{"token":"must-not-escape"}';
@@ -127,6 +132,7 @@ describe("gen2 Codex agent", () => {
       role: "owner",
       capabilities: {},
     });
+    mocks.getAccess.mockResolvedValue({ role: "owner", capabilities: {} });
     mocks.workspace.mockResolvedValue({
       id: workspaceId,
       status: "ready",
@@ -156,6 +162,12 @@ describe("gen2 Codex agent", () => {
       via: "subscription",
     });
     mocks.recordChunks.mockResolvedValue(null);
+    mocks.requireTurn.mockResolvedValue({
+      workspaceId,
+      chatId,
+      userId,
+      exited: false,
+    });
     mocks.start.mockResolvedValue("session-1");
     mocks.poll.mockResolvedValue({
       chunks: [{ sequence: 0, dataBase64: "e30=" }],
@@ -354,6 +366,24 @@ describe("gen2 Codex agent", () => {
     });
   });
 
+  it("refreshes and releases the initiating member's credential when another member polls", async () => {
+    await pollGen2AgentTurn({
+      workspaceId,
+      userId: anotherUserId,
+      sessionId: "session-1",
+      after: 0,
+    });
+
+    expect(mocks.resolveHosted).toHaveBeenCalledWith({
+      userId,
+      includeBusy: true,
+    });
+    expect(mocks.resolveHosted).not.toHaveBeenCalledWith({
+      userId: anotherUserId,
+      includeBusy: true,
+    });
+  });
+
   it("hands every poll's chunks to the accumulator", async () => {
     await pollGen2AgentTurn({
       workspaceId,
@@ -408,5 +438,55 @@ describe("gen2 Codex agent", () => {
     });
     expect(mocks.close).toHaveBeenCalledWith(workspaceId, "session-1");
     expect(mocks.release).toHaveBeenCalledWith(credentialId);
+  });
+
+  it("requires cancel-any to stop another member's turn", async () => {
+    await cancelGen2AgentTurn({
+      workspaceId,
+      userId: anotherUserId,
+      sessionId: "session-1",
+    });
+
+    expect(mocks.requirePermission).toHaveBeenCalledWith(
+      workspaceId,
+      anotherUserId,
+      "agent.cancelAny",
+    );
+    expect(mocks.release).toHaveBeenCalledWith(credentialId);
+  });
+
+  it("does not let an editor cancel another member's turn", async () => {
+    mocks.getAccess.mockResolvedValue({ role: "editor", capabilities: {} });
+    mocks.requirePermission.mockImplementation(
+      (_workspaceId: string, _userId: string, permission: string) => {
+        if (permission === "agent.cancelAny") {
+          throw new Gen2AccessError("forbidden", 403);
+        }
+      },
+    );
+
+    await expect(
+      cancelGen2AgentTurn({
+        workspaceId,
+        userId: anotherUserId,
+        sessionId: "session-1",
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(mocks.close).not.toHaveBeenCalled();
+    expect(mocks.release).not.toHaveBeenCalled();
+  });
+
+  it("does not forward a turn from another workspace to the guest", async () => {
+    mocks.requireTurn.mockRejectedValue(new Gen2AccessError("Turn not found."));
+
+    await expect(
+      pollGen2AgentTurn({
+        workspaceId,
+        userId,
+        sessionId: "session-from-another-workspace",
+        after: 0,
+      }),
+    ).rejects.toThrow("Turn not found.");
+    expect(mocks.poll).not.toHaveBeenCalled();
   });
 });

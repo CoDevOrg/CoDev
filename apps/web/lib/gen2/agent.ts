@@ -26,8 +26,11 @@ import {
   requireGen2Chat,
 } from "./chats";
 import { formatGen2TurnPrompt } from "./chats-format";
-import { createGen2Turn, recordGen2TurnChunks } from "./turns";
-import { requireWorkspacePermission } from "../policies/workspace";
+import { createGen2Turn, recordGen2TurnChunks, requireGen2Turn } from "./turns";
+import {
+  getWorkspaceAccess,
+  requireWorkspacePermission,
+} from "../policies/workspace";
 import { getGen2WorkspaceForAccess } from "./workspaces";
 
 export { canRunGen2Agent } from "./agent-policy";
@@ -187,6 +190,7 @@ export async function pollGen2AgentTurn(input: {
     input.userId,
     "context.view",
   );
+  const turn = await requireGen2Turn(input.workspaceId, input.sessionId);
   let result;
   try {
     result = await pollCodexExecInSandbox(
@@ -199,7 +203,7 @@ export async function pollGen2AgentTurn(input: {
       detail: error instanceof Error ? error.message : "unknown",
     });
     if (error instanceof OrchestratorError && error.status === 404) {
-      await releasePersonalCodex(input.userId);
+      await releasePersonalCodex(turn.userId);
       throw new Gen2LifecycleError(
         "This Codex turn is no longer running. Send the prompt again.",
       );
@@ -215,7 +219,7 @@ export async function pollGen2AgentTurn(input: {
 
   if (result.exited) {
     const hosted = await resolveHostedCodexSubscription({
-      userId: input.userId,
+      userId: turn.userId,
       includeBusy: true,
     });
     if (hosted?.credential.id) {
@@ -249,10 +253,15 @@ export async function cancelGen2AgentTurn(input: {
   userId: string;
   sessionId: string;
 }) {
+  const access = await getWorkspaceAccess(input.workspaceId, input.userId);
+  if (!access) {
+    throw new Gen2AccessError("You don't have access to this workspace.", 403);
+  }
+  const turn = await requireGen2Turn(input.workspaceId, input.sessionId);
   await requireWorkspacePermission(
     input.workspaceId,
     input.userId,
-    "agent.cancelOwn",
+    turn.userId === input.userId ? "agent.cancelOwn" : "agent.cancelAny",
   );
   try {
     await closeCodexExecInSandbox(input.workspaceId, input.sessionId);
@@ -261,7 +270,7 @@ export async function cancelGen2AgentTurn(input: {
       throw new Gen2LifecycleError(describeGen2RuntimeFailure(error), 502);
     }
   } finally {
-    await releasePersonalCodex(input.userId);
+    await releasePersonalCodex(turn.userId);
   }
 }
 

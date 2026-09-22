@@ -1,12 +1,13 @@
 import "server-only";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 
 import { getDatabase } from "../platform/database";
 import { logEvent } from "../platform/observability";
 import { appendGen2ChatMessage } from "./chats";
+import { Gen2AccessError } from "./errors";
 import {
   decodeCodexExecStream,
   decodePendingBytes,
@@ -47,6 +48,34 @@ export async function createGen2Turn(input: {
     .insert(schema.gen2AgentTurns)
     .values(input)
     .onConflictDoNothing();
+}
+
+/**
+ * Finds a turn only within the requested workspace. The caller's workspace
+ * capability is checked separately; this prevents a session id from being a
+ * cross-workspace authority and supplies the immutable initiating user for
+ * credential cleanup and cancellation policy.
+ */
+export async function requireGen2Turn(workspaceId: string, sessionId: string) {
+  const [turn] = await getDatabase()
+    .select({
+      workspaceId: schema.gen2AgentTurns.workspaceId,
+      chatId: schema.gen2AgentTurns.chatId,
+      userId: schema.gen2AgentTurns.userId,
+      exited: schema.gen2AgentTurns.exited,
+    })
+    .from(schema.gen2AgentTurns)
+    .where(
+      and(
+        eq(schema.gen2AgentTurns.workspaceId, workspaceId),
+        eq(schema.gen2AgentTurns.sessionId, sessionId),
+      ),
+    )
+    .limit(1);
+  if (!turn) {
+    throw new Gen2AccessError("Turn not found.");
+  }
+  return turn;
 }
 
 /**

@@ -20,7 +20,10 @@ import { getGen2WorkspaceForAccess } from "./workspaces";
  * resize, poll, and close skip that wait entirely, which is why a terminal
  * opened before a turn keeps streaming straight through it. Those four require
  * `workspace.useTerminal`, so a poll racing a Stop returns `exited` rather
- * than a confusing 409.
+ * than a confusing 409. Terminal sessions are intentionally shared by every
+ * terminal-capable workspace member; the orchestrator scopes each session id
+ * under the workspace id in every request, so knowing an id alone is not
+ * authority over another workspace.
  */
 
 async function requireReadyWorkspace(workspaceId: string, userId: string) {

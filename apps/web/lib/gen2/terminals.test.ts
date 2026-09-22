@@ -36,6 +36,7 @@ const {
 
 const workspaceId = "11111111-1111-4111-8111-111111111111";
 const userId = "22222222-2222-4222-8222-222222222222";
+const collaboratorId = "33333333-3333-4333-8333-333333333333";
 const sessionId = "term-1-2";
 
 describe("gen2 terminals", () => {
@@ -104,5 +105,23 @@ describe("gen2 terminals", () => {
     );
     await sendGen2TerminalInput(workspaceId, userId, sessionId, "ls\n");
     expect(mocks.input).toHaveBeenCalledWith(workspaceId, sessionId, "ls\n");
+  });
+
+  it("treats terminals as workspace-shared, not creator-owned", async () => {
+    mocks.poll.mockResolvedValue({
+      chunks: [],
+      nextSequence: 1,
+      exited: false,
+      exitCode: null,
+    });
+
+    await pollGen2Terminal(workspaceId, collaboratorId, sessionId, 0);
+
+    expect(mocks.requirePermission).toHaveBeenCalledWith(
+      workspaceId,
+      collaboratorId,
+      "workspace.useTerminal",
+    );
+    expect(mocks.poll).toHaveBeenCalledWith(workspaceId, sessionId, 0);
   });
 });
