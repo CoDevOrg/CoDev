@@ -44,7 +44,7 @@ export async function createGen2Turn(input: {
   workspaceId: string;
   chatId: string;
   userId: string;
-  provider?: Gen2ProviderId;
+  provider: Gen2ProviderId;
 }) {
   await getDatabase()
     .insert(schema.gen2AgentTurns)

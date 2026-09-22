@@ -1,22 +1,8 @@
 import "server-only";
 
+import type { Gen2ProviderId } from "@codev/contracts";
+
 import { logEvent } from "../platform/observability";
-import {
-  claimHostedCodexExecution,
-  HostedCodexSubscriptionError,
-  releaseHostedCodexExecution,
-  resolveHostedCodexSubscription,
-  updateHostedCodexAuthCache,
-} from "../providers/hosted-codex-subscription-credentials";
-import { resolveGen2Codex } from "./providers";
-import { getAgentModel } from "../providers/ai-model";
-import { OrchestratorError } from "../runtime/orchestrator-request";
-import { ensureHostReady } from "../runtime/orchestrator-health";
-import {
-  closeCodexExecInSandbox,
-  pollCodexExecInSandbox,
-  startCodexExecInSandbox,
-} from "../runtime/orchestrator-codex-exec";
 import { Gen2AccessError, Gen2LifecycleError } from "./errors";
 import { describeGen2RuntimeFailure } from "./instance";
 import { canRunGen2Agent } from "./agent-policy";
@@ -25,7 +11,7 @@ import {
   listGen2ChatMessages,
   requireGen2Chat,
 } from "./chats";
-import { buildGen2Context } from "./chats-format";
+import { getGen2ProviderAdapter } from "./provider-adapters";
 import { createGen2Turn, recordGen2TurnChunks, requireGen2Turn } from "./turns";
 import {
   getWorkspaceAccess,
@@ -34,48 +20,6 @@ import {
 import { getGen2WorkspaceForAccess } from "./workspaces";
 
 export { canRunGen2Agent } from "./agent-policy";
-
-export function buildGen2CodexCommand(
-  prompt: string,
-  history: Array<{
-    id?: string;
-    role: "user" | "assistant";
-    body: string;
-  }> = [],
-) {
-  return [
-    "codex",
-    "exec",
-    "--json",
-    "--ephemeral",
-    "--ignore-user-config",
-    "--skip-git-repo-check",
-    "--sandbox",
-    "danger-full-access",
-    "-c",
-    'approval_policy="never"',
-    "--model",
-    getAgentModel("openai"),
-    "--cd",
-    ".",
-    [
-      "You are Codex on this workspace's Firecracker machine.",
-      "The working directory is /workspace. Use the shell to inspect and change files there.",
-      "Answer the user. If they ask for code changes, make them in the current directory.",
-      "Do not inspect CODEX_HOME or authentication files.",
-      "",
-      buildGen2Context(
-        prompt,
-        history.map((message, index) => ({
-          ...message,
-          // Production history always has database IDs. This keeps this small
-          // command helper backwards-compatible for callers that only format.
-          id: message.id ?? `message-${index}`,
-        })),
-      ).prompt,
-    ].join("\n"),
-  ];
-}
 
 async function requireReadyWorkspace(workspaceId: string, userId: string) {
   const access = await requireWorkspacePermission(
@@ -88,7 +32,7 @@ async function requireReadyWorkspace(workspaceId: string, userId: string) {
     throw new Gen2LifecycleError(
       workspace.status === "provisioning"
         ? "The instance is still starting."
-        : "Start the instance before asking Codex to work.",
+        : "Start the instance before asking an agent to work.",
     );
   }
   return workspace;
@@ -100,6 +44,7 @@ export async function startGen2AgentTurn(input: {
   chatId: string;
   prompt: string;
   idempotencyKey: string;
+  provider?: Gen2ProviderId;
 }) {
   await requireReadyWorkspace(input.workspaceId, input.userId);
   await requireWorkspacePermission(
@@ -109,44 +54,16 @@ export async function startGen2AgentTurn(input: {
   );
   await requireGen2Chat(input.workspaceId, input.chatId);
   const history = await listGen2ChatMessages(input.chatId);
-  const credential = await resolveGen2Codex(input.userId);
-
-  // Only a subscription holds a seat. An API key has no one-turn-at-a-time
-  // limit, so claiming one would invent a restriction the provider does not.
-  let claimed = false;
-  if (credential.credentialId) {
-    try {
-      await claimHostedCodexExecution(credential.credentialId);
-      claimed = true;
-    } catch (error) {
-      if (
-        !(error instanceof HostedCodexSubscriptionError) ||
-        error.code !== "hosted_codex_busy"
-      ) {
-        throw error;
-      }
-    }
-  }
-  const execInput = {
-    command: buildGen2CodexCommand(input.prompt, history),
-    codexAuthCacheJson: credential.authCacheJson,
-    idempotencyKey: input.idempotencyKey,
-  };
+  const provider = input.provider ?? "openai";
+  const adapter = getGen2ProviderAdapter(provider);
   try {
-    let sessionId: string;
-    try {
-      sessionId = await startCodexExecInSandbox(input.workspaceId, execInput);
-    } catch (error) {
-      if (
-        !/Firecracker host could not be reached/.test(
-          describeGen2RuntimeFailure(error),
-        )
-      ) {
-        throw error;
-      }
-      await ensureHostReady();
-      sessionId = await startCodexExecInSandbox(input.workspaceId, execInput);
-    }
+    const { sessionId } = await adapter.start({
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      prompt: input.prompt,
+      history,
+      idempotencyKey: input.idempotencyKey,
+    });
     try {
       await appendGen2ChatMessage({
         chatId: input.chatId,
@@ -165,16 +82,14 @@ export async function startGen2AgentTurn(input: {
       workspaceId: input.workspaceId,
       chatId: input.chatId,
       userId: input.userId,
+      provider,
     });
-    return { sessionId };
+    return { sessionId, provider };
   } catch (error) {
-    if (claimed && credential.credentialId) {
-      await releaseHostedCodexExecution(credential.credentialId);
-    }
     logEvent("error", "gen2.agent.start_failed", {
       detail: error instanceof Error ? error.message : "unknown",
     });
-    if (error instanceof OrchestratorError && error.status === 404) {
+    if (hasStatus(error) && error.status === 404) {
       throw new Gen2LifecycleError(
         "The instance is not running. Start it and try again.",
       );
@@ -182,7 +97,7 @@ export async function startGen2AgentTurn(input: {
     if (
       error instanceof Gen2AccessError ||
       error instanceof Gen2LifecycleError ||
-      error instanceof HostedCodexSubscriptionError
+      hasStatus(error)
     ) {
       throw error;
     }
@@ -203,21 +118,23 @@ export async function pollGen2AgentTurn(input: {
     "context.view",
   );
   const turn = await requireGen2Turn(input.workspaceId, input.sessionId);
+  const adapter = getGen2ProviderAdapter(turn.provider);
   let result;
   try {
-    result = await pollCodexExecInSandbox(
-      input.workspaceId,
-      input.sessionId,
-      input.after,
-    );
+    result = await adapter.poll({
+      workspaceId: input.workspaceId,
+      turnOwnerId: turn.userId,
+      sessionId: input.sessionId,
+      after: input.after,
+    });
   } catch (error) {
     logEvent("error", "gen2.agent.poll_failed", {
       detail: error instanceof Error ? error.message : "unknown",
     });
-    if (error instanceof OrchestratorError && error.status === 404) {
-      await releasePersonalCodex(turn.userId);
+    if (hasStatus(error) && error.status === 404) {
+      await adapter.release(turn.userId);
       throw new Gen2LifecycleError(
-        "This Codex turn is no longer running. Send the prompt again.",
+        "This agent turn is no longer running. Send the prompt again.",
       );
     }
     throw new Gen2LifecycleError(describeGen2RuntimeFailure(error), 502);
@@ -228,25 +145,6 @@ export async function pollGen2AgentTurn(input: {
     chunks: result.chunks,
     exited: result.exited,
   });
-
-  if (result.exited) {
-    const hosted = await resolveHostedCodexSubscription({
-      userId: turn.userId,
-      includeBusy: true,
-    });
-    if (hosted?.credential.id) {
-      try {
-        if (result.codexAuthCacheJson) {
-          await updateHostedCodexAuthCache(
-            hosted.credential.id,
-            result.codexAuthCacheJson,
-          );
-        }
-      } finally {
-        await releaseHostedCodexExecution(hosted.credential.id);
-      }
-    }
-  }
 
   return {
     chunks: result.chunks,
@@ -275,23 +173,23 @@ export async function cancelGen2AgentTurn(input: {
     input.userId,
     turn.userId === input.userId ? "agent.cancelOwn" : "agent.cancelAny",
   );
+  const adapter = getGen2ProviderAdapter(turn.provider);
   try {
-    await closeCodexExecInSandbox(input.workspaceId, input.sessionId);
+    await adapter.cancel({
+      workspaceId: input.workspaceId,
+      turnOwnerId: turn.userId,
+      sessionId: input.sessionId,
+    });
   } catch (error) {
-    if (!(error instanceof OrchestratorError && error.status === 404)) {
-      throw new Gen2LifecycleError(describeGen2RuntimeFailure(error), 502);
-    }
-  } finally {
-    await releasePersonalCodex(turn.userId);
+    throw new Gen2LifecycleError(describeGen2RuntimeFailure(error), 502);
   }
 }
 
-async function releasePersonalCodex(userId: string) {
-  const hosted = await resolveHostedCodexSubscription({
-    userId,
-    includeBusy: true,
-  });
-  if (hosted?.credential.id) {
-    await releaseHostedCodexExecution(hosted.credential.id);
-  }
+function hasStatus(error: unknown): error is { status: number } {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "status" in error &&
+    typeof error.status === "number"
+  );
 }

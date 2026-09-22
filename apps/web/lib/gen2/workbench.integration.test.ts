@@ -69,7 +69,7 @@ const {
 } = await import("../runtime/orchestrator-codex-exec");
 const { decodeCodexExecOutput } = await import("./codex-output");
 const { reduceCodexTurn } = await import("./turn-events");
-const { buildGen2CodexCommand } = await import("./agent");
+const { buildGen2CodexCommand } = await import("./providers/openai");
 const {
   closeGen2Terminal,
   pollGen2Terminal,
