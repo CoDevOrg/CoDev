@@ -19,6 +19,7 @@ import {
   CursorMark,
   OpenAIMark,
 } from "@/components/settings/provider-logos";
+import { Gen2ContextSettingsSection } from "./context-settings-section";
 type ProviderResponse = { providers?: Gen2ProviderReadiness[]; error?: string };
 
 const PROVIDER_BRANDS = {
@@ -44,10 +45,16 @@ function providerDescription(provider: Gen2ProviderReadiness) {
 }
 
 export function Gen2ProviderSettingsPanel({
+  chatId,
   canManageOwnConnection,
+  capabilities,
+  workspaceId,
   onClose,
 }: {
+  chatId: string | null;
   canManageOwnConnection: Gen2WorkspaceCapabilities["connection.manageOwn"];
+  capabilities: Gen2WorkspaceCapabilities;
+  workspaceId: string;
   onClose: () => void;
 }) {
   const [providers, setProviders] = useState<Gen2ProviderReadiness[] | null>(
@@ -93,10 +100,10 @@ export function Gen2ProviderSettingsPanel({
     >
       <div className="gen2-access-header">
         <div>
-          <h2 id="gen2-provider-settings-title">Providers</h2>
+          <h2 id="gen2-provider-settings-title">Workspace settings</h2>
           <p>
-            See which providers can run your agent turns. Credentials are never
-            shown here.
+            Provider connections and the context used for agent turns. Provider
+            credentials are never shown here.
           </p>
         </div>
         <button
@@ -169,6 +176,12 @@ export function Gen2ProviderSettingsPanel({
           })}
         </ul>
       ) : null}
+
+      <Gen2ContextSettingsSection
+        capabilities={capabilities}
+        chatId={chatId}
+        workspaceId={workspaceId}
+      />
 
       {!canManageOwnConnection ? (
         <p className="gen2-provider-readonly" role="note">

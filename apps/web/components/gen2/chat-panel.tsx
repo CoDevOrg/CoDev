@@ -73,12 +73,14 @@ function rememberTurn(
 export function Gen2ChatPanel({
   workspace,
   onRunningChange,
+  onChatChange,
   onFilesChanged,
   onOpenFile,
   onNeedsMachine,
 }: {
   workspace: Gen2WorkspaceDetail;
   onRunningChange: (running: boolean) => void;
+  onChatChange?: (chatId: string | null) => void;
   onFilesChanged: () => void;
   onOpenFile: (path: string) => void;
   /** Brings the machine up; resolves false if it could not. */
@@ -126,6 +128,8 @@ export function Gen2ChatPanel({
   const canRunSelectedProvider = selectedProviderChoice?.enabled === true;
 
   useEffect(() => onRunningChange(running), [running, onRunningChange]);
+
+  useEffect(() => onChatChange?.(chatId), [chatId, onChatChange]);
 
   const loadChats = useCallback(async () => {
     const response = await fetch(`/api/gen2/workspaces/${workspace.id}/chats`);

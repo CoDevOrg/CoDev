@@ -412,6 +412,9 @@
 
 .gen2-provider-settings {
   min-width: 0;
+  max-height: 48dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 20px 16px;
   border-bottom: 1px solid var(--line);
   background: color-mix(in srgb, var(--surface-2) 54%, var(--surface));
@@ -559,6 +562,163 @@
   margin-bottom: 0;
 }
 
+.gen2-context-settings {
+  max-width: 74rem;
+  margin: 24px auto 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.gen2-context-header,
+.gen2-context-preview-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.gen2-context-header h3,
+.gen2-context-preview-heading h4 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.9375rem;
+  font-weight: 620;
+  letter-spacing: -0.01em;
+}
+
+.gen2-context-header p,
+.gen2-context-preview-heading p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.78125rem;
+  line-height: 1.5;
+}
+
+.gen2-context-sources {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.gen2-context-sources article,
+.gen2-context-policy,
+.gen2-context-preview {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.gen2-context-sources h4,
+.gen2-context-policy strong {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.gen2-context-sources p,
+.gen2-context-policy p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.78125rem;
+  line-height: 1.55;
+}
+
+.gen2-context-sources code {
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.95em;
+}
+
+.gen2-context-policy {
+  margin-top: 10px;
+  background: color-mix(in srgb, var(--surface-2) 54%, var(--surface));
+}
+
+.gen2-context-preview {
+  margin-top: 10px;
+}
+
+.gen2-context-count {
+  flex: 0 0 auto;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.71875rem;
+  white-space: nowrap;
+}
+
+.gen2-context-state,
+.gen2-context-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 0.78125rem;
+  line-height: 1.5;
+}
+
+.gen2-context-error {
+  flex-wrap: wrap;
+  color: #ffb3a6;
+}
+
+.gen2-context-error button {
+  min-height: 44px;
+  margin-left: auto;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+}
+
+.gen2-context-error button:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.gen2-context-message-list {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0 4px 0 0;
+  list-style: none;
+}
+
+.gen2-context-message-list li {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.gen2-context-message-list li > span {
+  color: var(--muted);
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.gen2-context-message-list li > p {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 4px 0 0;
+  color: var(--ink);
+  font-size: 0.78125rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
 @media (max-width: 640px) {
   .gen2-provider-row {
     grid-template-columns: 36px minmax(0, 1fr);
@@ -569,6 +729,15 @@
   .gen2-provider-manage {
     grid-column: 2;
     justify-self: start;
+  }
+
+  .gen2-context-sources {
+    grid-template-columns: 1fr;
+  }
+
+  .gen2-context-header,
+  .gen2-context-preview-heading {
+    flex-wrap: wrap;
   }
 }
 

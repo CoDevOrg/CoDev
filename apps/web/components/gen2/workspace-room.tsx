@@ -26,10 +26,11 @@ export function Gen2WorkspaceRoom({
   const [current, setCurrent] = useState(workspace);
   const [accessOpen, setAccessOpen] = useState(false);
   const [providersOpen, setProvidersOpen] = useState(false);
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [agentRunning, setAgentRunning] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
   const workbenchRef = useRef<Gen2WorkbenchHandle | null>(null);
-  const providersButtonRef = useRef<HTMLButtonElement | null>(null);
+  const settingsButtonRef = useRef<HTMLButtonElement | null>(null);
   const ready = current.status === "ready";
 
   const refresh = useCallback(() => setRefreshToken((value) => value + 1), []);
@@ -101,7 +102,6 @@ export function Gen2WorkspaceRoom({
         </ul>
 
         <button
-          ref={providersButtonRef}
           type="button"
           className="gen2-wb-button"
           aria-controls="gen2-access-panel"
@@ -114,6 +114,7 @@ export function Gen2WorkspaceRoom({
           <UsersRound aria-hidden="true" size={14} /> Members
         </button>
         <button
+          ref={settingsButtonRef}
           type="button"
           className="gen2-wb-button"
           aria-controls="gen2-provider-settings-panel"
@@ -153,10 +154,13 @@ export function Gen2WorkspaceRoom({
 
       {providersOpen ? (
         <Gen2ProviderSettingsPanel
+          chatId={activeChatId}
           canManageOwnConnection={current.capabilities["connection.manageOwn"]}
+          capabilities={current.capabilities}
+          workspaceId={current.id}
           onClose={() => {
             setProvidersOpen(false);
-            providersButtonRef.current?.focus();
+            settingsButtonRef.current?.focus();
           }}
         />
       ) : null}
@@ -165,6 +169,7 @@ export function Gen2WorkspaceRoom({
         <Gen2ChatPanel
           workspace={current}
           onRunningChange={setAgentRunning}
+          onChatChange={setActiveChatId}
           onFilesChanged={refresh}
           onOpenFile={openFile}
           onNeedsMachine={ensureRunning}
