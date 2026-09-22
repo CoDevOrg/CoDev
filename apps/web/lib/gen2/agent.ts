@@ -52,9 +52,9 @@ export async function startGen2AgentTurn(input: {
     input.userId,
     "context.includeInTurn",
   );
-  await requireGen2Chat(input.workspaceId, input.chatId);
+  const chat = await requireGen2Chat(input.workspaceId, input.chatId);
   const history = await listGen2ChatMessages(input.chatId);
-  const provider = input.provider ?? "openai";
+  const provider = input.provider ?? chat.defaultProvider;
   const adapter = getGen2ProviderAdapter(provider);
   try {
     const { sessionId } = await adapter.start({

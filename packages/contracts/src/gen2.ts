@@ -135,8 +135,8 @@ export const gen2JoinRequestSchema = z.object({
 
 export const gen2AgentStartRequestSchema = z.object({
   chatId: identifierSchema,
-  /** Defaults while the initial client continues to use OpenAI. */
-  provider: gen2ProviderIdSchema.default("openai"),
+  /** Omitted clients use the chat's saved default provider. */
+  provider: gen2ProviderIdSchema.optional(),
   prompt: z.string().trim().min(1).max(20_000),
   idempotencyKey: z.string().trim().min(8).max(128),
 });
@@ -173,6 +173,10 @@ export const gen2AgentCancelRequestSchema = z.object({
 
 export const gen2ChatAppendRequestSchema = z.object({
   body: z.string().trim().min(1).max(100_000),
+});
+
+export const gen2ChatProviderUpdateRequestSchema = z.object({
+  defaultProvider: gen2ProviderIdSchema,
 });
 
 export const gen2ChatRoleSchema = z.enum(["user", "assistant"]);
@@ -420,6 +424,9 @@ export type Gen2MemberConnectionStatus = z.infer<
 export type Gen2AgentStartRequest = z.infer<typeof gen2AgentStartRequestSchema>;
 export type Gen2AgentPollResponse = z.infer<typeof gen2AgentPollResponseSchema>;
 export type Gen2Chat = z.infer<typeof gen2ChatSchema>;
+export type Gen2ChatProviderUpdateRequest = z.infer<
+  typeof gen2ChatProviderUpdateRequestSchema
+>;
 export type Gen2ChatMessage = z.infer<typeof gen2ChatMessageSchema>;
 export type Gen2ChatDetail = z.infer<typeof gen2ChatDetailSchema>;
 export type Gen2ContextPreview = z.infer<typeof gen2ContextPreviewSchema>;

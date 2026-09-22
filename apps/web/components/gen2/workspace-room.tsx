@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, UsersRound } from "lucide-react";
+import { ArrowLeft, Settings2, UsersRound } from "lucide-react";
 import type { Gen2WorkspaceDetail } from "@codev/contracts";
 
 import { Gen2ChatPanel } from "./chat-panel";
 import { Gen2Workbench, type Gen2WorkbenchHandle } from "./workbench";
 import { Gen2WorkspaceAccessPanel } from "./workspace-access-panel";
+import { Gen2ProviderSettingsPanel } from "./provider-settings-panel";
 
 const STATUS_LABEL: Record<Gen2WorkspaceDetail["status"], string> = {
   pending: "Starting",
@@ -24,9 +25,11 @@ export function Gen2WorkspaceRoom({
 }) {
   const [current, setCurrent] = useState(workspace);
   const [accessOpen, setAccessOpen] = useState(false);
+  const [providersOpen, setProvidersOpen] = useState(false);
   const [agentRunning, setAgentRunning] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
   const workbenchRef = useRef<Gen2WorkbenchHandle | null>(null);
+  const providersButtonRef = useRef<HTMLButtonElement | null>(null);
   const ready = current.status === "ready";
 
   const refresh = useCallback(() => setRefreshToken((value) => value + 1), []);
@@ -98,13 +101,29 @@ export function Gen2WorkspaceRoom({
         </ul>
 
         <button
+          ref={providersButtonRef}
           type="button"
           className="gen2-wb-button"
           aria-controls="gen2-access-panel"
           aria-expanded={accessOpen}
-          onClick={() => setAccessOpen((open) => !open)}
+          onClick={() => {
+            setProvidersOpen(false);
+            setAccessOpen((open) => !open);
+          }}
         >
           <UsersRound aria-hidden="true" size={14} /> Members
+        </button>
+        <button
+          type="button"
+          className="gen2-wb-button"
+          aria-controls="gen2-provider-settings-panel"
+          aria-expanded={providersOpen}
+          onClick={() => {
+            setAccessOpen(false);
+            setProvidersOpen((open) => !open);
+          }}
+        >
+          <Settings2 aria-hidden="true" size={14} /> Settings
         </button>
       </header>
 
@@ -129,6 +148,16 @@ export function Gen2WorkspaceRoom({
           onClose={() => setAccessOpen(false)}
           onWorkspaceChange={setCurrent}
           workspace={current}
+        />
+      ) : null}
+
+      {providersOpen ? (
+        <Gen2ProviderSettingsPanel
+          canManageOwnConnection={current.capabilities["connection.manageOwn"]}
+          onClose={() => {
+            setProvidersOpen(false);
+            providersButtonRef.current?.focus();
+          }}
         />
       ) : null}
 

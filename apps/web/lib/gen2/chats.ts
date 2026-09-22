@@ -155,6 +155,33 @@ export async function getGen2ChatDetail(
   });
 }
 
+export async function updateGen2ChatDefaultProvider(input: {
+  workspaceId: string;
+  chatId: string;
+  userId: string;
+  defaultProvider: Gen2Chat["defaultProvider"];
+}) {
+  await requireWorkspacePermission(
+    input.workspaceId,
+    input.userId,
+    "agent.run",
+  );
+  await requireGen2Chat(input.workspaceId, input.chatId);
+  await getDatabase()
+    .update(schema.gen2Chats)
+    .set({
+      defaultProvider: input.defaultProvider,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(schema.gen2Chats.workspaceId, input.workspaceId),
+        eq(schema.gen2Chats.id, input.chatId),
+      ),
+    );
+  return requireGen2Chat(input.workspaceId, input.chatId);
+}
+
 export async function saveGen2AssistantReply(input: {
   workspaceId: string;
   chatId: string;

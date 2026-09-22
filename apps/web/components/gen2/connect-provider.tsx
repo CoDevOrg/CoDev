@@ -2,12 +2,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import type { Gen2ProviderReadiness } from "@codev/contracts";
 
 import { CodexHostedConnect } from "@/components/settings/codex-hosted-connect";
 
 export type Gen2ProviderStatus = {
   connected: boolean;
   via: "subscription" | "api-key" | null;
+};
+
+type Gen2ProviderResponse = Gen2ProviderStatus & {
+  providers?: Gen2ProviderReadiness[];
 };
 
 /**
@@ -43,12 +48,17 @@ export function Gen2ConnectProvider({
 /** Polls only while disconnected, so a connected workspace costs nothing. */
 export function useGen2ProviderStatus() {
   const [status, setStatus] = useState<Gen2ProviderStatus | null>(null);
+  const [providers, setProviders] = useState<Gen2ProviderReadiness[] | null>(
+    null,
+  );
 
   const refresh = useCallback(async () => {
     try {
       const response = await fetch("/api/gen2/providers");
       if (!response.ok) return;
-      setStatus((await response.json()) as Gen2ProviderStatus);
+      const payload = (await response.json()) as Gen2ProviderResponse;
+      setStatus({ connected: payload.connected, via: payload.via });
+      setProviders(payload.providers ?? null);
     } catch {
       /* Leave the last known state; the composer still explains itself. */
     }
@@ -62,5 +72,5 @@ export function useGen2ProviderStatus() {
     void refresh();
   }, [refresh]);
 
-  return { status, refresh };
+  return { status, providers, refresh };
 }

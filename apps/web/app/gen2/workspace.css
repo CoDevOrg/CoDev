@@ -68,6 +68,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  min-height: 44px;
   border-radius: 999px;
 }
 
@@ -407,6 +408,170 @@
   font-size: 0.78125rem;
 }
 
+/* ------------------------------------------------------- provider settings */
+
+.gen2-provider-settings {
+  min-width: 0;
+  padding: 20px 16px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface-2) 54%, var(--surface));
+}
+
+.gen2-provider-settings .gen2-access-header,
+.gen2-provider-list,
+.gen2-provider-error,
+.gen2-provider-loading,
+.gen2-provider-readonly {
+  max-width: 74rem;
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.gen2-provider-settings .gen2-access-header {
+  margin-bottom: 16px;
+}
+
+.gen2-provider-list {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.gen2-provider-row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.gen2-provider-mark {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--ink);
+}
+
+.gen2-provider-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.gen2-provider-copy strong {
+  color: var(--ink);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.gen2-provider-copy span,
+.gen2-provider-readonly {
+  color: var(--muted);
+  font-size: 0.78125rem;
+  line-height: 1.5;
+}
+
+.gen2-provider-state {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.gen2-provider-state-connected {
+  border-color: color-mix(in srgb, #83d6bb 38%, var(--line));
+  background: color-mix(in srgb, #83d6bb 10%, var(--surface));
+  color: #a3e7d0;
+}
+
+.gen2-provider-state-available {
+  border-color: color-mix(in srgb, var(--gold) 42%, var(--line));
+  background: color-mix(in srgb, var(--gold) 10%, var(--surface));
+  color: var(--gold-bright);
+}
+
+.gen2-provider-manage,
+.gen2-provider-retry {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.78125rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.gen2-provider-manage:hover,
+.gen2-provider-retry:hover {
+  border-color: var(--line-strong);
+  color: var(--gold-bright);
+}
+
+.gen2-provider-manage:focus-visible,
+.gen2-provider-retry:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.gen2-provider-error,
+.gen2-provider-loading {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 9px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.gen2-provider-error {
+  flex-wrap: wrap;
+  color: #ffb3a6;
+}
+
+.gen2-provider-retry {
+  margin-left: auto;
+  cursor: pointer;
+}
+
+.gen2-provider-readonly {
+  margin-top: 12px;
+  margin-bottom: 0;
+}
+
+@media (max-width: 640px) {
+  .gen2-provider-row {
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 9px;
+  }
+
+  .gen2-provider-state,
+  .gen2-provider-manage {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
 /* ---------------------------------------------------------------- chat */
 
 .gen2-chat {
@@ -522,6 +687,11 @@
   border: 0;
 }
 
+.gen2-chat-hero .gen2-provider-picker {
+  padding: 0;
+  margin-bottom: 10px;
+}
+
 .gen2-chat-suggestions {
   display: flex;
   flex-wrap: wrap;
@@ -585,6 +755,70 @@
 
 .gen2-message-waiting {
   color: var(--muted);
+}
+
+.gen2-message-provider {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  margin-bottom: 6px;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.6875rem;
+  font-weight: 550;
+}
+
+.gen2-provider-picker {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px 12px;
+  width: min(44rem, 100%);
+  margin: 0 auto;
+  padding: 8px 16px 0;
+}
+
+.gen2-provider-picker label {
+  color: var(--muted);
+  font-size: 0.78125rem;
+  font-weight: 550;
+}
+
+.gen2-provider-picker select {
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 34px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.8125rem;
+}
+
+.gen2-provider-picker select:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.gen2-provider-picker select:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.gen2-provider-picker p,
+.gen2-provider-picker > span {
+  grid-column: 2;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.gen2-provider-picker > span[role="status"] {
+  color: var(--gold-bright);
 }
 
 /* One rounded field holding the textarea and its controls, so the composer
