@@ -258,6 +258,8 @@ export const gen2TurnStateSchema = z.object({
 export const gen2ChatMessageSchema = z.object({
   id: identifierSchema,
   role: gen2ChatRoleSchema,
+  /** Null for a member message; identifies the adapter that made a reply. */
+  provider: gen2ProviderIdSchema.nullable().default(null),
   body: z.string().min(1),
   /** Activity cards for an assistant message; null for user messages. */
   items: z.array(gen2TurnItemSchema).nullable().default(null),
@@ -267,6 +269,7 @@ export const gen2ChatMessageSchema = z.object({
 export const gen2ChatSchema = z.object({
   id: identifierSchema,
   title: z.string().min(1).max(80),
+  defaultProvider: gen2ProviderIdSchema.default("openai"),
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
 });

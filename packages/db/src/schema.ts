@@ -68,6 +68,11 @@ export const gen2WorkspaceRole = pgEnum("gen2_workspace_role", [
   "editor",
   "viewer",
 ]);
+export const gen2Provider = pgEnum("gen2_provider", [
+  "openai",
+  "anthropic",
+  "cursor",
+]);
 export const organizationRole = pgEnum("organization_role", [
   "owner",
   "admin",
@@ -2084,6 +2089,10 @@ export const gen2Chats = pgTable(
       .references(() => users.id, { onDelete: "restrict" })
       .notNull(),
     title: text("title").notNull(),
+    /** The member's preferred provider for the next turn in this chat. */
+    defaultProvider: gen2Provider("default_provider")
+      .default("openai")
+      .notNull(),
     ...timestamps,
   },
   (table) => [
@@ -2103,6 +2112,8 @@ export const gen2ChatMessages = pgTable(
       .notNull(),
     role: text("role").notNull(),
     body: text("body").notNull(),
+    /** Null for user messages; immutable provenance for an agent reply. */
+    provider: gen2Provider("provider"),
     /**
      * The activity cards for an assistant reply -- the reasoning, commands,
      * and file changes Codex produced on the way to it. Null for user
@@ -2142,6 +2153,8 @@ export const gen2AgentTurns = pgTable(
     userId: uuid("user_id")
       .references(() => users.id, { onDelete: "cascade" })
       .notNull(),
+    /** The immutable provider chosen when this turn started. */
+    provider: gen2Provider("provider").default("openai").notNull(),
     /** Decoded NDJSON so far, capped; see GEN2_TURN_OUTPUT_LIMIT. */
     output: text("output").default("").notNull(),
     /** Trailing bytes of a UTF-8 character split across two polls. */

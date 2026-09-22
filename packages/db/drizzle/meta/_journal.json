@@ -379,6 +379,13 @@
       "when": 1790051443996,
       "tag": "0053_good_plazm",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1790055020398,
+      "tag": "0054_slow_silverclaw",
+      "breakpoints": true
     }
   ]
 }

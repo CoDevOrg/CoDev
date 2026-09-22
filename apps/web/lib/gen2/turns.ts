@@ -3,6 +3,7 @@ import "server-only";
 import { and, eq } from "drizzle-orm";
 
 import { schema } from "@codev/db";
+import type { Gen2ProviderId } from "@codev/contracts";
 
 import { getDatabase } from "../platform/database";
 import { logEvent } from "../platform/observability";
@@ -43,6 +44,7 @@ export async function createGen2Turn(input: {
   workspaceId: string;
   chatId: string;
   userId: string;
+  provider?: Gen2ProviderId;
 }) {
   await getDatabase()
     .insert(schema.gen2AgentTurns)
@@ -62,6 +64,7 @@ export async function requireGen2Turn(workspaceId: string, sessionId: string) {
       workspaceId: schema.gen2AgentTurns.workspaceId,
       chatId: schema.gen2AgentTurns.chatId,
       userId: schema.gen2AgentTurns.userId,
+      provider: schema.gen2AgentTurns.provider,
       exited: schema.gen2AgentTurns.exited,
     })
     .from(schema.gen2AgentTurns)
@@ -125,6 +128,7 @@ export async function recordGen2TurnChunks(input: {
           role: "assistant",
           body,
           items: state.items,
+          provider: turn.provider,
         })
       : null;
     await database

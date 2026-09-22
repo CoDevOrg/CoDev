@@ -278,6 +278,7 @@ export function Gen2ChatPanel({
           role: "user",
           body: text,
           items: null,
+          provider: null,
           createdAt: new Date().toISOString(),
         },
       ],

@@ -28,6 +28,8 @@ import {
   gen2AgentStartRequestSchema,
   gen2AgentPollResponseSchema,
   gen2ChatAppendRequestSchema,
+  gen2ChatMessageSchema,
+  gen2ChatSchema,
   MAX_PARALLEL_AGENT_SESSIONS,
   accessRequestInputSchema,
 } from "./index";
@@ -577,6 +579,23 @@ describe("gen2 workspace contracts", () => {
     expect(
       gen2ChatAppendRequestSchema.parse({ body: "  README.md  " }),
     ).toEqual({ body: "README.md" });
+    expect(
+      gen2ChatSchema.parse({
+        id,
+        title: "New chat",
+        createdAt: "2026-09-22T00:00:00.000Z",
+        updatedAt: "2026-09-22T00:00:00.000Z",
+      }),
+    ).toMatchObject({ defaultProvider: "openai" });
+    expect(
+      gen2ChatMessageSchema.parse({
+        id,
+        role: "assistant",
+        provider: "anthropic",
+        body: "Done.",
+        createdAt: "2026-09-22T00:00:00.000Z",
+      }),
+    ).toMatchObject({ provider: "anthropic" });
   });
 });
 

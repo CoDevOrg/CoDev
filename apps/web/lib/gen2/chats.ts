@@ -31,12 +31,14 @@ function toIso(value: Date) {
 function toChat(row: {
   id: string;
   title: string;
+  defaultProvider: Gen2Chat["defaultProvider"];
   createdAt: Date;
   updatedAt: Date;
 }): Gen2Chat {
   return gen2ChatSchema.parse({
     id: row.id,
     title: row.title,
+    defaultProvider: row.defaultProvider,
     createdAt: toIso(row.createdAt),
     updatedAt: toIso(row.updatedAt),
   });
@@ -46,12 +48,14 @@ function toMessage(row: {
   id: string;
   role: string;
   body: string;
+  provider?: Gen2ChatMessage["provider"];
   items?: unknown;
   createdAt: Date;
 }): Gen2ChatMessage {
   return gen2ChatMessageSchema.parse({
     id: row.id,
     role: row.role,
+    provider: row.provider ?? null,
     body: row.body,
     // Replies saved before activity cards existed have no items; a shape we
     // no longer recognise is dropped rather than failing the whole thread.
@@ -68,6 +72,7 @@ export async function listGen2Chats(workspaceId: string, userId: string) {
     .select({
       id: schema.gen2Chats.id,
       title: schema.gen2Chats.title,
+      defaultProvider: schema.gen2Chats.defaultProvider,
       createdAt: schema.gen2Chats.createdAt,
       updatedAt: schema.gen2Chats.updatedAt,
     })
@@ -103,6 +108,7 @@ export async function requireGen2Chat(workspaceId: string, chatId: string) {
     .select({
       id: schema.gen2Chats.id,
       title: schema.gen2Chats.title,
+      defaultProvider: schema.gen2Chats.defaultProvider,
       createdAt: schema.gen2Chats.createdAt,
       updatedAt: schema.gen2Chats.updatedAt,
     })
@@ -125,6 +131,7 @@ export async function listGen2ChatMessages(chatId: string) {
     .select({
       id: schema.gen2ChatMessages.id,
       role: schema.gen2ChatMessages.role,
+      provider: schema.gen2ChatMessages.provider,
       body: schema.gen2ChatMessages.body,
       items: schema.gen2ChatMessages.items,
       createdAt: schema.gen2ChatMessages.createdAt,
@@ -181,6 +188,7 @@ export async function appendGen2ChatMessage(input: {
   role: "user" | "assistant";
   body: string;
   items?: Gen2TurnItem[];
+  provider?: Gen2ChatMessage["provider"];
 }) {
   const body = input.body.trim();
   if (!body) {
@@ -192,6 +200,7 @@ export async function appendGen2ChatMessage(input: {
       .values({
         chatId: input.chatId,
         role: input.role,
+        provider: input.provider ?? null,
         body,
         items: input.items ?? null,
       })
