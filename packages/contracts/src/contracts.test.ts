@@ -553,15 +553,17 @@ describe("gen2 workspace contracts", () => {
     expect(() => gen2WorkspaceRoleSchema.parse("member")).toThrow();
   });
 
-  it("accepts a Codex turn start and a poll without auth material", () => {
+  it("accepts a provider-selected Gen 2 turn start and a poll without auth material", () => {
     expect(
       gen2AgentStartRequestSchema.parse({
         chatId: id,
+        provider: "openai",
         prompt: " List the files ",
         idempotencyKey: "turn-1234",
       }),
     ).toEqual({
       chatId: id,
+      provider: "openai",
       prompt: "List the files",
       idempotencyKey: "turn-1234",
     });

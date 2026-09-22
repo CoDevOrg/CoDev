@@ -17,6 +17,32 @@ export const gen2WorkspaceStatusSchema = z.enum([
 export const gen2WorkspaceRoleSchema = z.enum(["owner", "editor", "viewer"]);
 
 /**
+ * A provider identity is stable across workspace settings, a chat's default,
+ * and the immutable record of the provider that handled a turn.
+ */
+export const gen2ProviderIdSchema = z.enum(["openai", "anthropic", "cursor"]);
+
+export const gen2ProviderCapabilitiesSchema = z.object({
+  canRun: z.boolean(),
+  canCancel: z.boolean(),
+  canStreamActivity: z.boolean(),
+  canUseWorkspaceTools: z.boolean(),
+});
+
+export const gen2ProviderDescriptorSchema = z.object({
+  id: gen2ProviderIdSchema,
+  label: z.string().min(1),
+  /** Whether a Gen 2 execution adapter is registered for this provider. */
+  installed: z.boolean(),
+  capabilities: gen2ProviderCapabilitiesSchema,
+});
+
+export const gen2ProviderReadinessSchema = gen2ProviderDescriptorSchema.extend({
+  /** Redacted member-specific readiness; no credential metadata travels here. */
+  ready: z.boolean(),
+});
+
+/**
  * The policy decisions resolved for the current member. These flags help the
  * client present available actions; API routes remain the source of authority.
  */
@@ -109,12 +135,15 @@ export const gen2JoinRequestSchema = z.object({
 
 export const gen2AgentStartRequestSchema = z.object({
   chatId: identifierSchema,
+  /** Defaults while the initial client continues to use OpenAI. */
+  provider: gen2ProviderIdSchema.default("openai"),
   prompt: z.string().trim().min(1).max(20_000),
   idempotencyKey: z.string().trim().min(8).max(128),
 });
 
 export const gen2AgentStartResponseSchema = z.object({
   sessionId: z.string().min(1).max(80),
+  provider: gen2ProviderIdSchema,
 });
 
 export const gen2AgentPollRequestSchema = z.object({
@@ -364,6 +393,14 @@ export const gen2TerminalPollResponseSchema = z.object({
 export type Gen2Repository = z.infer<typeof gen2RepositorySchema>;
 export type Gen2WorkspaceStatus = z.infer<typeof gen2WorkspaceStatusSchema>;
 export type Gen2WorkspaceRole = z.infer<typeof gen2WorkspaceRoleSchema>;
+export type Gen2ProviderId = z.infer<typeof gen2ProviderIdSchema>;
+export type Gen2ProviderCapabilities = z.infer<
+  typeof gen2ProviderCapabilitiesSchema
+>;
+export type Gen2ProviderDescriptor = z.infer<
+  typeof gen2ProviderDescriptorSchema
+>;
+export type Gen2ProviderReadiness = z.infer<typeof gen2ProviderReadinessSchema>;
 export type Gen2WorkspaceCapabilities = z.infer<
   typeof gen2WorkspaceCapabilitiesSchema
 >;
