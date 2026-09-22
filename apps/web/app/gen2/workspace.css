@@ -11,7 +11,7 @@
   --gen2-wb-width: 520px;
   --gen2-panel: color-mix(in srgb, var(--surface-2) 70%, transparent);
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   height: 100dvh;
   overflow: hidden;
 }
@@ -125,6 +125,286 @@
   background: var(--surface-2);
   color: var(--ink);
   font-size: 0.8125rem;
+}
+
+/* ---------------------------------------------------- members & access */
+
+.gen2-access {
+  min-width: 0;
+  padding: 20px 16px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface-2) 54%, var(--surface));
+}
+
+.gen2-access-header,
+.gen2-access-section-heading,
+.gen2-access-members li,
+.gen2-access-link,
+.gen2-access-actions,
+.gen2-access-confirm > div {
+  display: flex;
+  align-items: center;
+}
+
+.gen2-access-header {
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 74rem;
+  margin: 0 auto 20px;
+}
+
+.gen2-access-header h2,
+.gen2-access-section-heading h3 {
+  margin: 0;
+  color: var(--ink);
+  font-weight: 620;
+  letter-spacing: -0.015em;
+}
+
+.gen2-access-header h2 {
+  font-size: 1rem;
+}
+
+.gen2-access-header p,
+.gen2-access-note,
+.gen2-access-member-name span,
+.gen2-access-confirm p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.78125rem;
+  line-height: 1.5;
+}
+
+.gen2-access-close,
+.gen2-access-remove {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.gen2-access-close:hover,
+.gen2-access-remove:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.gen2-access-close:focus-visible,
+.gen2-access-remove:focus-visible,
+.gen2-access-role-select select:focus-visible,
+.gen2-access-text-danger:focus-visible,
+.gen2-access-danger:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.gen2-access-close:disabled,
+.gen2-access-remove:disabled,
+.gen2-access-danger:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.gen2-access-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(18rem, 0.7fr);
+  gap: 16px;
+  max-width: 74rem;
+  margin: 0 auto;
+}
+
+.gen2-access-section {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.gen2-access-section-heading {
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.gen2-access-section-heading h3 {
+  font-size: 0.8125rem;
+}
+
+.gen2-access-section-heading > span,
+.gen2-access-role {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.gen2-access-members {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gen2-access-members li {
+  position: relative;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-height: 48px;
+  padding: 6px;
+  border-radius: 9px;
+}
+
+.gen2-access-members li:hover {
+  background: var(--surface-2);
+}
+
+.gen2-access-avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--gold) 17%, var(--surface-2));
+  color: var(--ink);
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.gen2-access-member-name {
+  display: grid;
+  min-width: 0;
+  margin-right: auto;
+}
+
+.gen2-access-member-name strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 0.8125rem;
+  font-weight: 560;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gen2-access-member-name span {
+  margin: 0;
+}
+
+.gen2-access-role-select select {
+  min-height: 44px;
+  padding: 0 25px 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.75rem;
+}
+
+.gen2-access-note {
+  margin: 0 0 14px;
+}
+
+.gen2-access-link {
+  gap: 8px;
+  min-width: 0;
+  margin-bottom: 12px;
+}
+
+.gen2-access-link input {
+  min-width: 0;
+  flex: 1;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.75rem;
+}
+
+.gen2-access-actions,
+.gen2-access-confirm > div {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.gen2-access-actions .gen2-wb-button,
+.gen2-access-link .gen2-wb-button,
+.gen2-access-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+}
+
+.gen2-access .gen2-wb-button {
+  min-height: 44px;
+}
+
+.gen2-access-text-danger,
+.gen2-access-danger {
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.75rem;
+}
+
+.gen2-access-text-danger {
+  min-height: 44px;
+  padding: 0 9px;
+  background: none;
+  color: #f2604a;
+}
+
+.gen2-access-danger {
+  min-height: 36px;
+  padding: 0 11px;
+  background: #f2604a;
+  color: #1a1204;
+  font-weight: 600;
+}
+
+.gen2-access-confirm {
+  grid-column: 1 / -1;
+  width: 100%;
+  margin: 4px 0 2px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, #f2604a 45%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, #f2604a 9%, var(--surface));
+}
+
+.gen2-access-confirm p {
+  margin: 0 0 9px;
+  color: var(--ink);
+}
+
+.gen2-access-error {
+  max-width: 74rem;
+  margin: 0 auto 14px;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, #f2604a 45%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, #f2604a 9%, var(--surface));
+  color: #ffb3a6;
+  font-size: 0.78125rem;
 }
 
 /* ---------------------------------------------------------------- chat */
@@ -995,6 +1275,10 @@
 /* --------------------------------------------------------- adaptations */
 
 @media (max-width: 900px) {
+  .gen2-access-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .gen2-ws-body {
     grid-template-columns: minmax(0, 1fr);
   }

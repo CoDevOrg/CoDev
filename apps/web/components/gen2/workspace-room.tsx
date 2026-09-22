@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check, Link2 } from "lucide-react";
+import { ArrowLeft, UsersRound } from "lucide-react";
 import type { Gen2WorkspaceDetail } from "@codev/contracts";
 
 import { Gen2ChatPanel } from "./chat-panel";
 import { Gen2Workbench, type Gen2WorkbenchHandle } from "./workbench";
+import { Gen2WorkspaceAccessPanel } from "./workspace-access-panel";
 
 const STATUS_LABEL: Record<Gen2WorkspaceDetail["status"], string> = {
   pending: "Starting",
@@ -22,8 +23,7 @@ export function Gen2WorkspaceRoom({
   workspace: Gen2WorkspaceDetail;
 }) {
   const [current, setCurrent] = useState(workspace);
-  const [inviteUrl, setInviteUrl] = useState("");
-  const [copied, setCopied] = useState(false);
+  const [accessOpen, setAccessOpen] = useState(false);
   const [agentRunning, setAgentRunning] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
   const workbenchRef = useRef<Gen2WorkbenchHandle | null>(null);
@@ -69,20 +69,6 @@ export function Gen2WorkspaceRoom({
     void ensureRunning();
   }, [ready, ensureRunning]);
 
-  async function share() {
-    const response = await fetch(`/api/gen2/workspaces/${current.id}/share`, {
-      method: "POST",
-    });
-    const payload = (await response.json().catch(() => ({}))) as {
-      inviteUrl?: string;
-    };
-    if (!payload.inviteUrl) return;
-    setInviteUrl(payload.inviteUrl);
-    await navigator.clipboard.writeText(payload.inviteUrl).catch(() => {});
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 2_500);
-  }
-
   return (
     <div className="gen2-ws">
       <header className="gen2-ws-bar">
@@ -114,17 +100,11 @@ export function Gen2WorkspaceRoom({
         <button
           type="button"
           className="gen2-wb-button"
-          onClick={() => void share()}
+          aria-controls="gen2-access-panel"
+          aria-expanded={accessOpen}
+          onClick={() => setAccessOpen((open) => !open)}
         >
-          {copied ? (
-            <>
-              <Check aria-hidden="true" size={13} /> Link copied
-            </>
-          ) : (
-            <>
-              <Link2 aria-hidden="true" size={13} /> Share
-            </>
-          )}
+          <UsersRound aria-hidden="true" size={14} /> Members
         </button>
       </header>
 
@@ -144,10 +124,12 @@ export function Gen2WorkspaceRoom({
         </p>
       ) : null}
 
-      {inviteUrl ? (
-        <div className="gen2-ws-invite">
-          <input value={inviteUrl} readOnly aria-label="Invite link" />
-        </div>
+      {accessOpen ? (
+        <Gen2WorkspaceAccessPanel
+          onClose={() => setAccessOpen(false)}
+          onWorkspaceChange={setCurrent}
+          workspace={current}
+        />
       ) : null}
 
       <div className="gen2-ws-body">

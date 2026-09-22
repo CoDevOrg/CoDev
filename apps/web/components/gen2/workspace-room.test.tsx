@@ -124,20 +124,15 @@ describe("Gen2WorkspaceRoom", () => {
     expect(await screen.findByText("Ready")).toBeInTheDocument();
   });
 
-  it("copies the invite link straight to the clipboard", async () => {
+  it("opens the members and access panel", async () => {
     stubFetch(ready);
     render(<Gen2WorkspaceRoom workspace={{ ...workspace, status: "ready" }} />);
-    fireEvent.click(screen.getByRole("button", { name: /Share/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Members/ }));
 
-    await waitFor(() =>
-      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
-        "https://codev.test/gen2/join/tok",
-      ),
-    );
-    expect(await screen.findByText("Link copied")).toBeInTheDocument();
-    expect(screen.getByLabelText("Invite link")).toHaveValue(
-      "https://codev.test/gen2/join/tok",
-    );
+    expect(
+      await screen.findByRole("heading", { name: "Members & access" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Invite link")).toBeInTheDocument();
   });
 
   it("shows who else is in the workspace", async () => {
