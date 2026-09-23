@@ -125,7 +125,15 @@ export function Gen2ChatPanel({
   const selectedProviderChoice = providerChoices.find(
     (choice) => choice.id === selectedProvider,
   );
-  const canRunSelectedProvider = selectedProviderChoice?.enabled === true;
+  // `provider`/`providers` are null until the initial /api/gen2/providers
+  // fetch resolves. The composer must stay usable during that window (see
+  // the "wakes the machine" test below), so treat the default OpenAI
+  // provider as runnable while its real readiness is still loading rather
+  // than disabling the composer.
+  const providerLoading = provider === null && providers === null;
+  const canRunSelectedProvider =
+    selectedProviderChoice?.enabled === true ||
+    (providerLoading && selectedProvider === "openai");
 
   useEffect(() => onRunningChange(running), [running, onRunningChange]);
 
@@ -286,7 +294,6 @@ export function Gen2ChatPanel({
       return;
     }
     setError("");
-    setPrompt("");
 
     // The composer is never disabled. If the machine is not up yet, say so
     // and bring it up rather than making the member find a button.
@@ -296,10 +303,11 @@ export function Gen2ChatPanel({
       setWaking(false);
       if (!started) {
         setError("The machine could not start. Try again in a moment.");
-        setPrompt(text);
         return;
       }
     }
+
+    setPrompt("");
 
     let target = chatId;
     if (!target) {
@@ -491,7 +499,7 @@ export function Gen2ChatPanel({
             className="gen2-composer-send"
             disabled={
               !prompt.trim() ||
-              !canRunSelectedProvider ||
+              (!providerLoading && !canRunSelectedProvider) ||
               providerSaving ||
               !workspace.capabilities["agent.run"]
             }
@@ -513,7 +521,7 @@ export function Gen2ChatPanel({
         disabled={
           providerSaving ||
           !workspace.capabilities["agent.run"] ||
-          (provider === null && providers === null)
+          providerLoading
         }
         onChange={(event) =>
           void saveDefaultProvider(event.target.value as Gen2ProviderId)

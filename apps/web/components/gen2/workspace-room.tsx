@@ -101,6 +101,21 @@ export function Gen2WorkspaceRoom({
           ))}
         </ul>
 
+        {/*
+         * Codex is a participant in this room, not just a feature of the chat
+         * panel, so it gets a presence indicator alongside the human members
+         * regardless of whether the workbench or a turn has started yet.
+         */}
+        <div
+          className="gen2-codex-presence"
+          role="region"
+          aria-label="Codex"
+          data-active={agentRunning || undefined}
+        >
+          <span className="gen2-codex-presence-dot" aria-hidden="true" />
+          Codex
+        </div>
+
         <button
           type="button"
           className="gen2-wb-button"

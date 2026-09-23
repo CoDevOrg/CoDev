@@ -102,6 +102,36 @@
   font-weight: 600;
 }
 
+.gen2-codex-presence {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 4px;
+  padding: 4px 10px 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.gen2-codex-presence-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.gen2-codex-presence[data-active="true"] {
+  border-color: color-mix(in srgb, var(--gold) 42%, var(--line));
+  color: var(--gold-bright);
+}
+
+.gen2-codex-presence[data-active="true"] .gen2-codex-presence-dot {
+  background: var(--gold);
+  animation: gen2-pulse 1.4s ease-in-out infinite;
+}
+
 .gen2-ws-invite {
   display: flex;
   gap: 8px;
