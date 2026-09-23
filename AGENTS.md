@@ -138,6 +138,35 @@ Azure stack itself is `infra/azure/`.
   provider** and have nothing to do with the retired runtime. Do not remove
   those two, and do not add the rest back.
 
+## Database migrations
+
+Drizzle reads `packages/db/drizzle/meta/_journal.json` to decide what exists —
+**it never scans the migration directory**. A hand-written `.sql` file is
+invisible to it, and `pnpm db:migrate` will skip it and still print
+`migrations applied successfully`. A hand-written file also leaves the snapshot
+chain stale, so the next `pnpm db:generate` re-emits the same change as a
+second migration that fails with "already exists" for anyone who applied the
+first. Both of these have already cost this repo a silent no-op deploy.
+
+- **Never write or rename a migration file by hand.** Edit
+  `packages/db/src/schema.ts`, then run `pnpm db:generate`
+  (`--name=<descriptive_name>` if you want a readable filename).
+- **Commit the three generated files as one unit**: `drizzle/NNNN_*.sql`,
+  `drizzle/meta/_journal.json`, and `drizzle/meta/NNNN_snapshot.json`. A commit
+  missing the journal or the snapshot is a broken migration.
+- **Drizzle applies migrations by timestamp high-water mark**, not by set
+  membership: it runs only migrations whose journal `when` is newer than the
+  newest row already in `drizzle.__drizzle_migrations`. A migration generated
+  before one that has already landed on the shared database is skipped
+  **silently and permanently**. Because every branch here shares one Supabase
+  database, regenerate your migration after merging `main` if `main` gained one
+  in the meantime — do not merge an older-timestamped migration and assume it
+  ran.
+- **Verify against the database, not the success message.** `drizzle-kit check`
+  validates the journal and snapshot chain but cannot see a file that was never
+  journaled. After deploying, confirm the objects actually exist
+  (`\d <table>`), which is the only check that cannot lie.
+
 ## UI & Design (required skills)
 
 Every change that touches the interface — pages, components, layout, spacing,
