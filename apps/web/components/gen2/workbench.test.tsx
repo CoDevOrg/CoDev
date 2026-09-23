@@ -23,6 +23,7 @@ const { Gen2Workbench } = await import("./workbench");
 type Handle = import("./workbench").Gen2WorkbenchHandle;
 
 const workspaceId = "11111111-1111-4111-8111-111111111111";
+const storage = new Map<string, string>();
 
 function renderWorkbench(props: Partial<{ agentRunning: boolean }> = {}) {
   const handleRef =
@@ -44,7 +45,12 @@ function renderWorkbench(props: Partial<{ agentRunning: boolean }> = {}) {
 
 describe("Gen2Workbench", () => {
   beforeEach(() => {
-    localStorage.clear();
+    storage.clear();
+    vi.stubGlobal("localStorage", {
+      clear: () => storage.clear(),
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+    });
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: string, init?: RequestInit) => {
