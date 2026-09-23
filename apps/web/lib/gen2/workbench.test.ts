@@ -82,7 +82,7 @@ describe("gen2 workbench", () => {
     mocks.requireMember.mockResolvedValue({
       id: workspaceId,
       status: "provisioning",
-      role: "member",
+      role: "editor",
     });
     mocks.read.mockResolvedValue({ path: "a.ts", contents: "", revision: "r" });
     await expect(readGen2File(workspaceId, userId, "a.ts")).resolves.toEqual({

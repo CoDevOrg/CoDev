@@ -10,7 +10,7 @@ export const gen2WorkspaceStatusSchema = z.enum([
   "stopped",
 ]);
 
-export const gen2WorkspaceRoleSchema = z.enum(["owner", "member"]);
+export const gen2WorkspaceRoleSchema = z.enum(["owner", "editor", "viewer"]);
 
 export const gen2WorkspaceCreateRequestSchema = z
   .object({

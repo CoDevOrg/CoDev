@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => {
     status: "pending" as string,
     sandboxId: null as string | null,
     lastError: null as string | null,
-    role: "owner" as "owner" | "member",
+    role: "owner" as "owner" | "editor" | "viewer",
     createdAt: new Date("2026-09-20T20:00:00.000Z"),
     updatedAt: new Date("2026-09-20T20:00:00.000Z"),
   };
@@ -208,10 +208,10 @@ describe("gen2 instance lifecycle", () => {
     expect(mocks.updates).toEqual([]);
   });
 
-  it("lets any member bring the machine up, not just the owner", async () => {
+  it("lets any editor bring the machine up, not just the owner", async () => {
     // Whoever opens the share link first should not have to wait for the
     // owner to press something.
-    mocks.member.role = "member";
+    mocks.member.role = "editor";
     const workspace = await ensureGen2Instance(mocks.member.id, "user-2", {
       provision: mocks.provision,
       destroy: mocks.destroy,

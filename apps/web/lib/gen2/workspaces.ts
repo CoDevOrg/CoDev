@@ -17,6 +17,7 @@ import { logEvent } from "../platform/observability";
 import { Gen2AccessError, Gen2LifecycleError } from "./errors";
 
 const DEFAULT_WORKSPACE_NAME = "Workspace";
+const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
 
 export function defaultGen2WorkspaceName(name?: string) {
   const trimmed = name?.trim();
@@ -25,6 +26,10 @@ export function defaultGen2WorkspaceName(name?: string) {
 
 function toIso(value: Date) {
   return value.toISOString();
+}
+
+function workspaceInviteIsActive(expiresAt: Date | null) {
+  return expiresAt !== null && expiresAt.getTime() > Date.now();
 }
 
 export async function createGen2Workspace(
@@ -179,10 +184,15 @@ export async function createGen2ShareLink(
     throw new Gen2AccessError("Only the owner can share this workspace.", 403);
   }
   const token = createInviteToken();
+  const createdAt = new Date();
   await getDatabase()
     .update(schema.gen2Workspaces)
     .set({
-      shareTokenHash: hashInviteToken(token),
+      activeInviteTokenHash: hashInviteToken(token),
+      activeInviteCreatedByUserId: userId,
+      activeInviteRole: "editor",
+      activeInviteCreatedAt: createdAt,
+      activeInviteExpiresAt: new Date(createdAt.getTime() + INVITE_TTL_MS),
       updatedAt: new Date(),
     })
     .where(eq(schema.gen2Workspaces.id, workspaceId));
@@ -194,11 +204,12 @@ export async function joinGen2Workspace(token: string, userId: string) {
   const [workspace] = await getDatabase()
     .select({
       id: schema.gen2Workspaces.id,
+      activeInviteExpiresAt: schema.gen2Workspaces.activeInviteExpiresAt,
     })
     .from(schema.gen2Workspaces)
-    .where(eq(schema.gen2Workspaces.shareTokenHash, tokenHash))
+    .where(eq(schema.gen2Workspaces.activeInviteTokenHash, tokenHash))
     .limit(1);
-  if (!workspace) {
+  if (!workspace || !workspaceInviteIsActive(workspace.activeInviteExpiresAt)) {
     throw new Gen2AccessError("This invite link is no longer valid.", 404);
   }
 
@@ -207,7 +218,7 @@ export async function joinGen2Workspace(token: string, userId: string) {
     .values({
       workspaceId: workspace.id,
       userId,
-      role: "member",
+      role: "editor",
     })
     .onConflictDoNothing();
 
