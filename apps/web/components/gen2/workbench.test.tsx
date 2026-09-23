@@ -35,6 +35,7 @@ function renderWorkbench(props: Partial<{ agentRunning: boolean }> = {}) {
       agentRunning={props.agentRunning ?? false}
       refreshToken={0}
       onRefresh={onRefresh}
+      onResumeWorkspace={async () => true}
       handleRef={handleRef}
     />,
   );
@@ -133,6 +134,7 @@ describe("Gen2Workbench", () => {
         agentRunning={false}
         refreshToken={0}
         onRefresh={vi.fn()}
+        onResumeWorkspace={async () => true}
         handleRef={handleRef}
       />,
     );

@@ -1136,6 +1136,7 @@ mod tests {
         let request = CreateRequest {
             workspace_id: "e010bd2c-a3c1-438f-acef-166287a3b1cb".into(),
             ephemeral: false,
+            hibernate_on_idle: false,
             repository_url: None,
             repository_snapshot: Some(RepositorySnapshot {
                 files: vec![RepositorySnapshotFile {

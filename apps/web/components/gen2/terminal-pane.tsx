@@ -9,19 +9,21 @@ import type { FitAddon } from "@xterm/addon-fit";
  *
  * The orchestrator has no WebSocket, so output arrives by long poll: each
  * request parks in the guest for up to 20s and returns whatever appeared.
- * Polling stops when the pane is hidden or the tab is backgrounded — an idle
- * workspace should not burn a function invocation every 20 seconds.
+ * Polling stops when the pane is hidden. Empty long-polls are transport, not
+ * user activity, so an open but idle terminal cannot keep its VM alive.
  */
 export function Gen2TerminalPane({
   workspaceId,
   visible,
   canStart,
   onExit,
+  onResumeWorkspace,
 }: {
   workspaceId: string;
   visible: boolean;
   canStart: boolean;
   onExit: () => void;
+  onResumeWorkspace: () => Promise<boolean>;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -32,6 +34,14 @@ export function Gen2TerminalPane({
     "idle",
   );
   const [error, setError] = useState("");
+  const [workspacePaused, setWorkspacePaused] = useState(false);
+
+  const markWorkspacePaused = useCallback(() => {
+    sessionRef.current = null;
+    setWorkspacePaused(true);
+    setError("The terminal disconnected when the workspace stopped.");
+    setStatus("ended");
+  }, []);
 
   const post = useCallback(
     (body: unknown) =>
@@ -48,6 +58,7 @@ export function Gen2TerminalPane({
     if (!host || sessionRef.current) return;
     setStatus("starting");
     setError("");
+    setWorkspacePaused(false);
 
     const [{ Terminal: XTerm }, { FitAddon: Fit }] = await Promise.all([
       import("@xterm/xterm"),
@@ -81,6 +92,10 @@ export function Gen2TerminalPane({
         error?: string;
       };
       if (!response.ok || !payload.sessionId) {
+        if ([404, 502, 503].includes(response.status)) {
+          markWorkspacePaused();
+          return;
+        }
         setError(payload.error ?? "The terminal could not start.");
         setStatus("idle");
         return;
@@ -89,19 +104,26 @@ export function Gen2TerminalPane({
       afterRef.current = 0;
       setStatus("live");
       term.onData((data) => {
-        void post({ action: "input", sessionId: payload.sessionId, data });
+        void post({ action: "input", sessionId: payload.sessionId, data })
+          .then((inputResponse) => {
+            if ([404, 502, 503].includes(inputResponse.status)) {
+              markWorkspacePaused();
+            }
+          })
+          .catch(markWorkspacePaused);
       });
     } catch {
       setError("Couldn't reach CoDev. Try again.");
       setStatus("idle");
     }
-  }, [post]);
+  }, [markWorkspacePaused, post]);
 
   // Long-poll loop. Restarted whenever the pane becomes visible again.
   useEffect(() => {
     if (status !== "live" || !visible) return;
     let cancelled = false;
     let backoff = 1_000;
+    let networkFailures = 0;
 
     async function pump() {
       while (!cancelled) {
@@ -115,10 +137,15 @@ export function Gen2TerminalPane({
           });
           if (cancelled) return;
           if (!response.ok) {
+            if ([404, 502, 503].includes(response.status)) {
+              markWorkspacePaused();
+              return;
+            }
             await new Promise((resolve) => setTimeout(resolve, backoff));
             backoff = Math.min(backoff * 2, 15_000);
             continue;
           }
+          networkFailures = 0;
           backoff = 1_000;
           const result = (await response.json()) as {
             chunks: { sequence: number; data: string }[];
@@ -135,6 +162,11 @@ export function Gen2TerminalPane({
           }
         } catch {
           if (cancelled) return;
+          networkFailures += 1;
+          if (networkFailures >= 3) {
+            markWorkspacePaused();
+            return;
+          }
           await new Promise((resolve) => setTimeout(resolve, backoff));
           backoff = Math.min(backoff * 2, 15_000);
         }
@@ -145,7 +177,7 @@ export function Gen2TerminalPane({
     return () => {
       cancelled = true;
     };
-  }, [status, visible, post, onExit]);
+  }, [status, visible, post, onExit, markWorkspacePaused]);
 
   // Keep the PTY's idea of the viewport in step with the pane.
   useEffect(() => {
@@ -192,7 +224,20 @@ export function Gen2TerminalPane({
 
   return (
     <div className="gen2-term">
-      {status === "idle" || status === "ended" ? (
+      {workspacePaused ? (
+        <div className="gen2-term-start">
+          <p className="gen2-wb-banner gen2-wb-banner-error" role="alert">
+            {error} Resume the workspace to reconnect.
+          </p>
+          <button
+            type="button"
+            className="gen2-wb-button"
+            onClick={() => void onResumeWorkspace()}
+          >
+            Resume workspace
+          </button>
+        </div>
+      ) : status === "idle" || status === "ended" ? (
         <div className="gen2-term-start">
           <button
             type="button"

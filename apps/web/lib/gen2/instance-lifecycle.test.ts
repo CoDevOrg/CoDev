@@ -208,6 +208,46 @@ describe("gen2 instance lifecycle", () => {
     expect(mocks.updates).toEqual([]);
   });
 
+  it("leaves a ready workspace untouched when runtime verification succeeds", async () => {
+    mocks.member.status = "ready";
+    mocks.member.sandboxId = "sandbox-1";
+    const current = vi.fn().mockResolvedValue({ id: "sandbox-1" });
+
+    const workspace = await ensureGen2Instance(mocks.member.id, "user-1", {
+      provision: mocks.provision,
+      destroy: mocks.destroy,
+      current,
+    });
+
+    expect(current).toHaveBeenCalledOnce();
+    expect(mocks.provision).not.toHaveBeenCalled();
+    expect(mocks.updates).toEqual([]);
+    expect(workspace.status).toBe("ready");
+  });
+
+  it("reprovisions a ready workspace whose host no longer has its VM", async () => {
+    mocks.member.status = "ready";
+    mocks.member.sandboxId = "sandbox-1";
+    const current = vi
+      .fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+
+    const workspace = await ensureGen2Instance(mocks.member.id, "user-1", {
+      provision: mocks.provision,
+      destroy: mocks.destroy,
+      current,
+    });
+
+    expect(current).toHaveBeenCalledTimes(2);
+    expect(mocks.provision).toHaveBeenCalledOnce();
+    expect(mocks.updates.map((update) => update.status)).toEqual([
+      "provisioning",
+      "ready",
+    ]);
+    expect(workspace.status).toBe("ready");
+  });
+
   it("lets any editor bring the machine up, not just the owner", async () => {
     // Whoever opens the share link first should not have to wait for the
     // owner to press something.

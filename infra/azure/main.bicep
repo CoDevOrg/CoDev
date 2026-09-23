@@ -20,8 +20,8 @@ param namePrefix string = 'codev-runtime'
 @description('Region for all resources. Nested virtualization must be available here.')
 param location string = resourceGroup().location
 
-@description('VM size for the Firecracker host. MUST support nested virtualization: Firecracker needs /dev/kvm. Verified on Standard_D2s_v7 (Intel, vmx exposed). AMD sizes and the B-family are not safe defaults.')
-param hostVmSize string = 'Standard_D2s_v7'
+@description('VM size for the Firecracker host. MUST support nested virtualization: Firecracker needs /dev/kvm. Dsv7 Intel sizes support nested virtualization; D8s_v7 is the six-workspace development target.')
+param hostVmSize string = 'Standard_D8s_v7'
 
 @description('Optional Azure Compute Gallery image version resource ID. When empty, the host uses the stock Ubuntu image and the existing bootstrap fallback.')
 param hostImageId string = ''

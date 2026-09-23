@@ -74,6 +74,10 @@ pub struct CreateRequest {
     /// as a hosted provider-auth runner. The host may destroy it at expiry.
     #[serde(default)]
     pub ephemeral: bool,
+    /// Preserve writable guest disks and release the microVM after inactivity.
+    /// The workspace can be booted again from the disk checkpoint.
+    #[serde(default)]
+    pub hibernate_on_idle: bool,
     pub repository_url: Option<String>,
     pub repository_snapshot: Option<RepositorySnapshot>,
     pub base_sha: String,
