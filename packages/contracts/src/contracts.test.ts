@@ -28,6 +28,8 @@ import {
   gen2AgentStartRequestSchema,
   gen2AgentPollResponseSchema,
   gen2ChatAppendRequestSchema,
+  gen2ChatMessageSchema,
+  gen2ChatSchema,
   MAX_PARALLEL_AGENT_SESSIONS,
   accessRequestInputSchema,
 } from "./index";
@@ -517,21 +519,55 @@ describe("gen2 workspace contracts", () => {
         sandboxId: "sandbox-1",
         lastError: null,
         role: "owner",
+        capabilities: {
+          "workspace.view": true,
+          "workspace.editFiles": true,
+          "workspace.useTerminal": true,
+          "instance.start": true,
+          "instance.stop": true,
+          "agent.run": true,
+          "agent.cancelOwn": true,
+          "agent.cancelAny": true,
+          "context.view": true,
+          "context.includeInTurn": true,
+          "member.invite": true,
+          "member.changeRole": true,
+          "member.remove": true,
+          "workspace.managePolicy": true,
+          "connection.manageOwn": true,
+          "connection.viewStatus": true,
+        },
         createdAt: "2026-09-20T20:00:00.000Z",
         updatedAt: "2026-09-20T20:00:00.000Z",
       }),
-    ).toMatchObject({ status: "ready", role: "owner" });
+    ).toMatchObject({
+      status: "ready",
+      role: "owner",
+      capabilities: { "workspace.managePolicy": true },
+    });
   });
 
-  it("accepts a Codex turn start and a poll without auth material", () => {
+  it("only exposes Gen 2 policy-preset roles", async () => {
+    const { gen2WorkspaceRoleSchema } = await import("./gen2");
+    expect(gen2WorkspaceRoleSchema.options).toEqual([
+      "owner",
+      "editor",
+      "viewer",
+    ]);
+    expect(() => gen2WorkspaceRoleSchema.parse("member")).toThrow();
+  });
+
+  it("accepts a provider-selected Gen 2 turn start and a poll without auth material", () => {
     expect(
       gen2AgentStartRequestSchema.parse({
         chatId: id,
+        provider: "openai",
         prompt: " List the files ",
         idempotencyKey: "turn-1234",
       }),
     ).toEqual({
       chatId: id,
+      provider: "openai",
       prompt: "List the files",
       idempotencyKey: "turn-1234",
     });
@@ -545,6 +581,23 @@ describe("gen2 workspace contracts", () => {
     expect(
       gen2ChatAppendRequestSchema.parse({ body: "  README.md  " }),
     ).toEqual({ body: "README.md" });
+    expect(
+      gen2ChatSchema.parse({
+        id,
+        title: "New chat",
+        createdAt: "2026-09-22T00:00:00.000Z",
+        updatedAt: "2026-09-22T00:00:00.000Z",
+      }),
+    ).toMatchObject({ defaultProvider: "openai" });
+    expect(
+      gen2ChatMessageSchema.parse({
+        id,
+        role: "assistant",
+        provider: "anthropic",
+        body: "Done.",
+        createdAt: "2026-09-22T00:00:00.000Z",
+      }),
+    ).toMatchObject({ provider: "anthropic" });
   });
 });
 

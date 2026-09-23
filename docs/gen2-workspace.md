@@ -37,11 +37,12 @@ the file the agent just edited.
 ## No start button
 
 Opening a workspace is the intent to use it, so `ensureGen2Instance` runs on
-open and is safe for any member to call -- the person who follows a share link
-should not have to wait for the owner to press something. The composer is
-never disabled either: type into a cold workspace and the machine is brought
-up as part of sending. The orchestrator pauses an idle guest after four hours
-on its own, so nothing needs stopping by hand.
+open for members with the `instance.start` capability (owners and editors).
+An editor who follows a share link can start the machine needed for agent work
+without waiting for the owner; viewers cannot create compute. The composer is
+never disabled for agent-capable members either: type into a cold workspace and
+the machine is brought up as part of sending. The orchestrator pauses an idle
+guest after four hours on its own, so nothing needs stopping by hand.
 
 ## Interface
 
@@ -93,6 +94,45 @@ workspace see the turn too.
 Each turn is still a fresh `codex exec --ephemeral --sandbox
 danger-full-access` with the prior messages in the prompt, so a shareable
 machine never keeps a personal Codex thread or auth home.
+
+## Agent execution policy
+
+Workspace roles and execution policy are deliberately separate. Roles resolve
+server-side capabilities: `agent.run` starts a turn and `workspace.managePolicy`
+may change the workspace policy. A browser never supplies either the caller's
+capabilities or the effective execution policy to the runtime.
+
+The persisted policy currently has one enforceable setting:
+
+- **Allow file changes** — defaults to enabled to preserve existing behavior.
+  When disabled, the server passes Codex `--sandbox read-only`; the CLI applies
+  that filesystem boundary for the whole turn rather than trusting the UI.
+
+Repository access and agent terminal use are intentionally documented as fixed
+properties, not controls. A Gen 2 turn must read its shared `/workspace`
+repository, and Codex currently has no launch setting that removes shell-tool
+access while still permitting useful repository analysis. The existing launch
+configuration is `--sandbox danger-full-access` and
+`approval_policy="never"`; file-change policy replaces the sandbox value but
+does not make approval interactive. We must not add repository or terminal
+toggles until the guest/runtime can actually enforce them.
+
+Turning off file changes affects new turns only. It does not revoke a member's
+separate `workspace.editFiles` or `workspace.useTerminal` role capabilities,
+and it cannot retroactively constrain an already-running Codex process.
+
+## Shared-session ownership
+
+Agent-turn polling is intentionally shared: any workspace member with
+`context.view` may follow the live output and see the server-persisted
+transcript. The initiating user remains immutable turn ownership for provider
+credential cleanup, and cancellation still requires `agent.cancelOwn` for
+one's own turn or `agent.cancelAny` for another member's turn.
+
+Terminals are also intentionally workspace-shared rather than creator-owned.
+Every input, resize, poll, and close request requires `workspace.useTerminal`,
+and the orchestrator scopes each session id by workspace. We will not persist
+terminal owners or change that shared model unless the product decision changes.
 
 ## Verifying it without Azure
 

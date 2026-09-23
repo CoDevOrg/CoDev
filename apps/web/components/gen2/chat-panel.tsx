@@ -6,6 +6,7 @@ import type {
   Gen2Chat,
   Gen2ChatDetail,
   Gen2ChatMessage,
+  Gen2ProviderId,
   Gen2TurnItem,
   Gen2WorkspaceDetail,
 } from "@codev/contracts";
@@ -28,6 +29,12 @@ const SUGGESTIONS = [
   "Scaffold a small Next.js app",
   "Set up a Python project with tests",
   "Show me what's on this machine",
+];
+
+const GEN2_PROVIDERS: Array<{ id: Gen2ProviderId; label: string }> = [
+  { id: "openai", label: "OpenAI" },
+  { id: "anthropic", label: "Anthropic" },
+  { id: "cursor", label: "Cursor" },
 ];
 
 function storedTurn(workspaceId: string) {
@@ -66,12 +73,14 @@ function rememberTurn(
 export function Gen2ChatPanel({
   workspace,
   onRunningChange,
+  onChatChange,
   onFilesChanged,
   onOpenFile,
   onNeedsMachine,
 }: {
   workspace: Gen2WorkspaceDetail;
   onRunningChange: (running: boolean) => void;
+  onChatChange?: (chatId: string | null) => void;
   onFilesChanged: () => void;
   onOpenFile: (path: string) => void;
   /** Brings the machine up; resolves false if it could not. */
@@ -89,12 +98,46 @@ export function Gen2ChatPanel({
   const sessionRef = useRef<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const [waking, setWaking] = useState(false);
-  const { status: provider, refresh: refreshProvider } =
-    useGen2ProviderStatus();
+  const [providerSaving, setProviderSaving] = useState(false);
+  const {
+    status: provider,
+    providers,
+    refresh: refreshProvider,
+  } = useGen2ProviderStatus();
   const ready = canRunGen2Agent(workspace.status);
   const needsProvider = provider !== null && !provider.connected;
+  const selectedChat = chats.find((chat) => chat.id === chatId);
+  const selectedProvider = selectedChat?.defaultProvider ?? "openai";
+  const providerChoices = GEN2_PROVIDERS.map((choice) => {
+    const readiness = providers?.find((item) => item.id === choice.id);
+    const installed = readiness?.installed ?? choice.id === "openai";
+    const connected =
+      readiness?.ready ??
+      (choice.id === "openai" && provider?.connected === true);
+    const canRun = readiness?.capabilities.canRun ?? choice.id === "openai";
+    return {
+      ...choice,
+      enabled: installed && connected && canRun,
+      installed,
+      connected,
+    };
+  });
+  const selectedProviderChoice = providerChoices.find(
+    (choice) => choice.id === selectedProvider,
+  );
+  // `provider`/`providers` are null until the initial /api/gen2/providers
+  // fetch resolves. The composer must stay usable during that window (see
+  // the "wakes the machine" test below), so treat the default OpenAI
+  // provider as runnable while its real readiness is still loading rather
+  // than disabling the composer.
+  const providerLoading = provider === null && providers === null;
+  const canRunSelectedProvider =
+    selectedProviderChoice?.enabled === true ||
+    (providerLoading && selectedProvider === "openai");
 
   useEffect(() => onRunningChange(running), [running, onRunningChange]);
+
+  useEffect(() => onChatChange?.(chatId), [chatId, onChatChange]);
 
   const loadChats = useCallback(async () => {
     const response = await fetch(`/api/gen2/workspaces/${workspace.id}/chats`);
@@ -120,6 +163,13 @@ export function Gen2ChatPanel({
       if (!response.ok) return;
       const payload = (await response.json()) as { chat?: Gen2ChatDetail };
       setThread({ messages: payload.chat?.messages ?? [] });
+      if (payload.chat) {
+        setChats((current) =>
+          current.map((chat) =>
+            chat.id === payload.chat?.id ? { ...chat, ...payload.chat } : chat,
+          ),
+        );
+      }
     },
     [workspace.id],
   );
@@ -239,8 +289,11 @@ export function Gen2ChatPanel({
   async function send() {
     const text = prompt.trim();
     if (!text || running) return;
+    if (!canRunSelectedProvider) {
+      setError("Connect a supported provider before starting this turn.");
+      return;
+    }
     setError("");
-    setPrompt("");
 
     // The composer is never disabled. If the machine is not up yet, say so
     // and bring it up rather than making the member find a button.
@@ -250,10 +303,11 @@ export function Gen2ChatPanel({
       setWaking(false);
       if (!started) {
         setError("The machine could not start. Try again in a moment.");
-        setPrompt(text);
         return;
       }
     }
+
+    setPrompt("");
 
     let target = chatId;
     if (!target) {
@@ -278,6 +332,7 @@ export function Gen2ChatPanel({
           role: "user",
           body: text,
           items: null,
+          provider: null,
           createdAt: new Date().toISOString(),
         },
       ],
@@ -291,6 +346,7 @@ export function Gen2ChatPanel({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             chatId: target,
+            provider: selectedProvider,
             prompt: text,
             idempotencyKey: crypto.randomUUID(),
           }),
@@ -334,6 +390,67 @@ export function Gen2ChatPanel({
     setChatId(chat.id);
   }
 
+  async function saveDefaultProvider(nextProvider: Gen2ProviderId) {
+    if (providerSaving || nextProvider === selectedProvider) return;
+    const nextChoice = providerChoices.find(
+      (choice) => choice.id === nextProvider,
+    );
+    if (!nextChoice?.enabled) return;
+
+    setProviderSaving(true);
+    setError("");
+    try {
+      let targetChatId = chatId;
+      if (!targetChatId) {
+        const created = await fetch(
+          `/api/gen2/workspaces/${workspace.id}/chats`,
+          { method: "POST" },
+        );
+        const payload = (await created.json().catch(() => ({}))) as {
+          chat?: Gen2Chat;
+          error?: string;
+        };
+        if (!created.ok || !payload.chat) {
+          throw new Error(payload.error ?? "Could not create a chat.");
+        }
+        targetChatId = payload.chat.id;
+        setChats((current) => [payload.chat!, ...current]);
+        setChatId(targetChatId);
+      }
+
+      const response = await fetch(
+        `/api/gen2/workspaces/${workspace.id}/chats/${targetChatId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ defaultProvider: nextProvider }),
+        },
+      );
+      const payload = (await response.json().catch(() => ({}))) as {
+        chat?: Gen2Chat;
+        error?: string;
+      };
+      if (!response.ok || !payload.chat) {
+        throw new Error(
+          payload.error ?? "Could not save this chat's provider.",
+        );
+      }
+      setChats((current) =>
+        current.map((chat) =>
+          chat.id === payload.chat?.id ? { ...chat, ...payload.chat } : chat,
+        ),
+      );
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Could not save this chat's provider.",
+      );
+    } finally {
+      setProviderSaving(false);
+    }
+  }
+
   const empty = thread.messages.length === 0 && !running;
 
   const composer = (
@@ -353,7 +470,7 @@ export function Gen2ChatPanel({
             void send();
           }
         }}
-        placeholder="Ask Codex to build something on this machine"
+        placeholder={`Ask ${selectedProviderChoice?.label ?? "an agent"} to build something on this machine`}
         rows={empty ? 3 : 2}
         aria-label="Prompt"
       />
@@ -380,7 +497,12 @@ export function Gen2ChatPanel({
           <button
             type="submit"
             className="gen2-composer-send"
-            disabled={!prompt.trim()}
+            disabled={
+              !prompt.trim() ||
+              (!providerLoading && !canRunSelectedProvider) ||
+              providerSaving ||
+              !workspace.capabilities["agent.run"]
+            }
             aria-label="Send"
           >
             <ArrowUp aria-hidden="true" size={15} />
@@ -390,8 +512,52 @@ export function Gen2ChatPanel({
     </form>
   );
 
+  const providerPicker = (
+    <div className="gen2-provider-picker">
+      <label htmlFor="gen2-chat-provider">Provider</label>
+      <select
+        id="gen2-chat-provider"
+        value={selectedProvider}
+        disabled={
+          providerSaving ||
+          !workspace.capabilities["agent.run"] ||
+          providerLoading
+        }
+        onChange={(event) =>
+          void saveDefaultProvider(event.target.value as Gen2ProviderId)
+        }
+        aria-describedby="gen2-chat-provider-help"
+      >
+        {providerChoices.map((choice) => {
+          const status = !choice.installed
+            ? "Not yet supported"
+            : choice.connected
+              ? "Connected"
+              : "Available · connect your account";
+          return (
+            <option
+              disabled={!choice.enabled}
+              key={choice.id}
+              value={choice.id}
+            >
+              {choice.label} ({status})
+            </option>
+          );
+        })}
+      </select>
+      <p id="gen2-chat-provider-help">
+        {selectedProviderChoice?.enabled
+          ? `This chat will use ${selectedProviderChoice.label}. The choice is saved with the chat.`
+          : selectedProviderChoice?.installed
+            ? `${selectedProviderChoice.label} is available, but you must connect your account before using it.`
+            : `${selectedProviderChoice?.label ?? "This provider"} is not yet supported in Gen 2.`}
+      </p>
+      {providerSaving ? <span role="status">Saving provider…</span> : null}
+    </div>
+  );
+
   return (
-    <section className="gen2-chat" aria-label="Codex">
+    <section className="gen2-chat" aria-label="Agent chat">
       <header className="gen2-chat-bar">
         <button
           type="button"
@@ -426,30 +592,26 @@ export function Gen2ChatPanel({
               Codex works on this workspace&rsquo;s own machine. You can watch
               the files, terminal, and Git change beside it.
             </p>
+            {providerPicker}
             {needsProvider ? (
               <Gen2ConnectProvider onConnected={() => void refreshProvider()} />
             ) : (
-              <>
-                {composer}
-                {error ? (
-                  <p className="gen2-chat-error" role="alert">
-                    {error}
-                  </p>
-                ) : null}
-                <ul className="gen2-chat-suggestions">
-                  {SUGGESTIONS.map((suggestion) => (
-                    <li key={suggestion}>
-                      <button
-                        type="button"
-                        onClick={() => setPrompt(suggestion)}
-                      >
-                        {suggestion}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </>
+              composer
             )}
+            {error ? (
+              <p className="gen2-chat-error" role="alert">
+                {error}
+              </p>
+            ) : null}
+            <ul className="gen2-chat-suggestions">
+              {SUGGESTIONS.map((suggestion) => (
+                <li key={suggestion}>
+                  <button type="button" onClick={() => setPrompt(suggestion)}>
+                    {suggestion}
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       ) : (
@@ -463,6 +625,13 @@ export function Gen2ChatPanel({
                       items={message.items}
                       onOpenFile={onOpenFile}
                     />
+                  ) : null}
+                  {message.role === "assistant" && message.provider ? (
+                    <span className="gen2-message-provider">
+                      {GEN2_PROVIDERS.find(
+                        (choice) => choice.id === message.provider,
+                      )?.label ?? message.provider}
+                    </span>
                   ) : null}
                   <p className="gen2-message">{message.body}</p>
                 </li>
@@ -492,7 +661,12 @@ export function Gen2ChatPanel({
             </p>
           ) : null}
 
-          {composer}
+          {providerPicker}
+          {needsProvider ? (
+            <Gen2ConnectProvider onConnected={() => void refreshProvider()} />
+          ) : (
+            composer
+          )}
         </>
       )}
     </section>

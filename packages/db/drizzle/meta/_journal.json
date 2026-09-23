@@ -365,6 +365,34 @@
       "when": 1789977886967,
       "tag": "0051_outstanding_yellow_claw",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1790040526440,
+      "tag": "0052_cynical_venus",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1790051443996,
+      "tag": "0053_good_plazm",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1790055020398,
+      "tag": "0054_slow_silverclaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1790128902513,
+      "tag": "0055_gen2_agent_execution_policy",
+      "breakpoints": true
     }
   ]
 }

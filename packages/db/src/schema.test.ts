@@ -50,6 +50,8 @@ import {
   gen2WorkspaceMembers,
   gen2Chats,
   gen2ChatMessages,
+  gen2AgentTurns,
+  gen2Provider,
   worktrees,
   yjsSnapshots,
 } from "./schema";
@@ -83,6 +85,8 @@ describe("database schema", () => {
     expect(getTableName(gen2WorkspaceMembers)).toBe("gen2_workspace_members");
     expect(getTableName(gen2Chats)).toBe("gen2_chats");
     expect(getTableName(gen2ChatMessages)).toBe("gen2_chat_messages");
+    expect(getTableName(gen2AgentTurns)).toBe("gen2_agent_turns");
+    expect(gen2Provider.enumValues).toEqual(["openai", "anthropic", "cursor"]);
     expect(getTableName(organizations)).toBe("organizations");
     expect(getTableName(organizationMembers)).toBe("organization_members");
     expect(getTableName(plans)).toBe("plans");

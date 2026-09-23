@@ -15,8 +15,9 @@ import {
   provisionSandbox,
 } from "../runtime/orchestrator-sandbox";
 import { getRepositorySnapshot } from "../github/github";
-import { Gen2AccessError, Gen2LifecycleError } from "./errors";
-import { requireGen2Member } from "./workspaces";
+import { Gen2LifecycleError } from "./errors";
+import { requireWorkspacePermission } from "../policies/workspace";
+import { getGen2WorkspaceForAccess } from "./workspaces";
 
 /** Orchestrator create validation requires a 40-character hex SHA. */
 export const GEN2_BLANK_BASE_SHA = "0".repeat(40);
@@ -203,32 +204,37 @@ async function claimProvisioning(workspaceId: string) {
  *
  * There is no "start" button: opening a workspace is the intent to use it, so
  * this runs on open and on create. It is idempotent and safe to call from any
- * member -- a workspace nobody can start is a workspace nobody can use, and
- * the owner is not always the person who opens the share link first.
+ * editor -- an editor can run an agent and therefore needs to start the
+ * instance without waiting for an owner.
  */
 export async function ensureGen2Instance(
   workspaceId: string,
   userId: string,
   runtime?: Gen2SandboxRuntime,
 ) {
-  const membership = await requireGen2Member(workspaceId, userId);
-  if (membership.status === "ready") return membership;
+  const access = await requireWorkspacePermission(
+    workspaceId,
+    userId,
+    "instance.start",
+  );
+  const workspace = await getGen2WorkspaceForAccess(workspaceId, access);
+  if (workspace.status === "ready") return workspace;
   const resolved =
     runtime ??
     createFirecrackerRuntime(
       await buildGen2SandboxSource(
         userId,
-        membership.repository,
+        workspace.repository,
         await readGen2BaseSha(workspaceId),
       ),
     );
   if (!(await claimProvisioning(workspaceId))) {
     // Someone else is already bringing it up; report the live status rather
     // than racing them for the same guest.
-    return requireGen2Member(workspaceId, userId);
+    return getGen2WorkspaceForAccess(workspaceId, access);
   }
 
-  const previousStatus = membership.status;
+  const previousStatus = workspace.status;
   try {
     await ensureHostReady();
   } catch (error) {
@@ -272,7 +278,7 @@ export async function ensureGen2Instance(
     throw new Gen2LifecycleError(message, 502);
   }
 
-  return requireGen2Member(workspaceId, userId);
+  return getGen2WorkspaceForAccess(workspaceId, access);
 }
 
 export async function stopGen2Instance(
@@ -280,11 +286,13 @@ export async function stopGen2Instance(
   userId: string,
   runtime: Gen2SandboxRuntime = createFirecrackerRuntime(),
 ) {
-  const membership = await requireGen2Member(workspaceId, userId);
-  if (membership.role !== "owner") {
-    throw new Gen2AccessError("Only the owner can stop this instance.", 403);
-  }
-  if (!canStopInstance(membership.status)) {
+  const access = await requireWorkspacePermission(
+    workspaceId,
+    userId,
+    "instance.stop",
+  );
+  const workspace = await getGen2WorkspaceForAccess(workspaceId, access);
+  if (!canStopInstance(workspace.status)) {
     throw new Gen2LifecycleError("This instance is not running.");
   }
 
@@ -295,5 +303,5 @@ export async function stopGen2Instance(
     lastError: null,
   });
 
-  return requireGen2Member(workspaceId, userId);
+  return getGen2WorkspaceForAccess(workspaceId, access);
 }

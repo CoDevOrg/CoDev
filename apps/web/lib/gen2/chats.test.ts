@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildGen2Context,
   formatGen2TurnPrompt,
   GEN2_NEW_CHAT_TITLE,
   gen2ChatTitleFromPrompt,
@@ -33,5 +34,22 @@ describe("gen2 chat transcript", () => {
         "Add tests",
       ].join("\n"),
     );
+  });
+
+  it("selects the same bounded message context that execution formats", () => {
+    const history = Array.from({ length: 21 }, (_, index) => ({
+      id: `message-${index + 1}`,
+      role: index % 2 === 0 ? ("user" as const) : ("assistant" as const),
+      body: `message ${index + 1}`,
+    }));
+    const context = buildGen2Context("Continue", history);
+
+    expect(context).toMatchObject({
+      messageIds: history.slice(1).map((message) => message.id),
+      messageCount: 20,
+      maxMessages: 20,
+      maxCharacters: 12_000,
+    });
+    expect(context.prompt).toBe(formatGen2TurnPrompt("Continue", history));
   });
 });

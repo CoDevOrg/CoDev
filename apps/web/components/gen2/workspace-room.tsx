@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check, Link2 } from "lucide-react";
+import { ArrowLeft, Settings2, UsersRound } from "lucide-react";
 import type { Gen2WorkspaceDetail } from "@codev/contracts";
 
 import { Gen2ChatPanel } from "./chat-panel";
 import { Gen2Workbench, type Gen2WorkbenchHandle } from "./workbench";
+import { Gen2WorkspaceAccessPanel } from "./workspace-access-panel";
+import { Gen2ProviderSettingsPanel } from "./provider-settings-panel";
 
 const STATUS_LABEL: Record<Gen2WorkspaceDetail["status"], string> = {
   pending: "Starting",
@@ -22,11 +24,13 @@ export function Gen2WorkspaceRoom({
   workspace: Gen2WorkspaceDetail;
 }) {
   const [current, setCurrent] = useState(workspace);
-  const [inviteUrl, setInviteUrl] = useState("");
-  const [copied, setCopied] = useState(false);
+  const [accessOpen, setAccessOpen] = useState(false);
+  const [providersOpen, setProvidersOpen] = useState(false);
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [agentRunning, setAgentRunning] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
   const workbenchRef = useRef<Gen2WorkbenchHandle | null>(null);
+  const settingsButtonRef = useRef<HTMLButtonElement | null>(null);
   const ready = current.status === "ready";
 
   const refresh = useCallback(() => setRefreshToken((value) => value + 1), []);
@@ -69,20 +73,6 @@ export function Gen2WorkspaceRoom({
     void ensureRunning();
   }, [ready, ensureRunning]);
 
-  async function share() {
-    const response = await fetch(`/api/gen2/workspaces/${current.id}/share`, {
-      method: "POST",
-    });
-    const payload = (await response.json().catch(() => ({}))) as {
-      inviteUrl?: string;
-    };
-    if (!payload.inviteUrl) return;
-    setInviteUrl(payload.inviteUrl);
-    await navigator.clipboard.writeText(payload.inviteUrl).catch(() => {});
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 2_500);
-  }
-
   return (
     <div className="gen2-ws">
       <header className="gen2-ws-bar">
@@ -111,20 +101,45 @@ export function Gen2WorkspaceRoom({
           ))}
         </ul>
 
+        {/*
+         * Codex is a participant in this room, not just a feature of the chat
+         * panel, so it gets a presence indicator alongside the human members
+         * regardless of whether the workbench or a turn has started yet.
+         */}
+        <div
+          className="gen2-codex-presence"
+          role="region"
+          aria-label="Codex"
+          data-active={agentRunning || undefined}
+        >
+          <span className="gen2-codex-presence-dot" aria-hidden="true" />
+          Codex
+        </div>
+
         <button
           type="button"
           className="gen2-wb-button"
-          onClick={() => void share()}
+          aria-controls="gen2-access-panel"
+          aria-expanded={accessOpen}
+          onClick={() => {
+            setProvidersOpen(false);
+            setAccessOpen((open) => !open);
+          }}
         >
-          {copied ? (
-            <>
-              <Check aria-hidden="true" size={13} /> Link copied
-            </>
-          ) : (
-            <>
-              <Link2 aria-hidden="true" size={13} /> Share
-            </>
-          )}
+          <UsersRound aria-hidden="true" size={14} /> Members
+        </button>
+        <button
+          ref={settingsButtonRef}
+          type="button"
+          className="gen2-wb-button"
+          aria-controls="gen2-provider-settings-panel"
+          aria-expanded={providersOpen}
+          onClick={() => {
+            setAccessOpen(false);
+            setProvidersOpen((open) => !open);
+          }}
+        >
+          <Settings2 aria-hidden="true" size={14} /> Settings
         </button>
       </header>
 
@@ -144,16 +159,33 @@ export function Gen2WorkspaceRoom({
         </p>
       ) : null}
 
-      {inviteUrl ? (
-        <div className="gen2-ws-invite">
-          <input value={inviteUrl} readOnly aria-label="Invite link" />
-        </div>
+      {accessOpen ? (
+        <Gen2WorkspaceAccessPanel
+          onClose={() => setAccessOpen(false)}
+          onWorkspaceChange={setCurrent}
+          workspace={current}
+        />
+      ) : null}
+
+      {providersOpen ? (
+        <Gen2ProviderSettingsPanel
+          chatId={activeChatId}
+          canManageOwnConnection={current.capabilities["connection.manageOwn"]}
+          capabilities={current.capabilities}
+          members={current.members}
+          workspaceId={current.id}
+          onClose={() => {
+            setProvidersOpen(false);
+            settingsButtonRef.current?.focus();
+          }}
+        />
       ) : null}
 
       <div className="gen2-ws-body">
         <Gen2ChatPanel
           workspace={current}
           onRunningChange={setAgentRunning}
+          onChatChange={setActiveChatId}
           onFilesChanged={refresh}
           onOpenFile={openFile}
           onNeedsMachine={ensureRunning}

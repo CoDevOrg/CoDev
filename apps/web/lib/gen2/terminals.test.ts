@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  requireMember: vi.fn(),
+  requirePermission: vi.fn(),
+  workspace: vi.fn(),
   start: vi.fn(),
   input: vi.fn(),
   resize: vi.fn(),
@@ -9,8 +10,13 @@ const mocks = vi.hoisted(() => ({
   close: vi.fn(),
 }));
 
+vi.mock("../policies/workspace", () => ({
+  requireWorkspacePermission: (...args: unknown[]) =>
+    mocks.requirePermission(...args),
+}));
+
 vi.mock("./workspaces", () => ({
-  requireGen2Member: (...args: unknown[]) => mocks.requireMember(...args),
+  getGen2WorkspaceForAccess: (...args: unknown[]) => mocks.workspace(...args),
 }));
 
 vi.mock("../runtime/orchestrator-terminals", () => ({
@@ -30,12 +36,17 @@ const {
 
 const workspaceId = "11111111-1111-4111-8111-111111111111";
 const userId = "22222222-2222-4222-8222-222222222222";
+const collaboratorId = "33333333-3333-4333-8333-333333333333";
 const sessionId = "term-1-2";
 
 describe("gen2 terminals", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    mocks.requireMember.mockResolvedValue({
+    mocks.requirePermission.mockResolvedValue({
+      role: "owner",
+      capabilities: {},
+    });
+    mocks.workspace.mockResolvedValue({
       id: workspaceId,
       status: "ready",
       role: "owner",
@@ -43,7 +54,7 @@ describe("gen2 terminals", () => {
   });
 
   it("checks membership before it reaches the orchestrator", async () => {
-    mocks.requireMember.mockRejectedValue(new Error("not a member"));
+    mocks.requirePermission.mockRejectedValue(new Error("not a member"));
     await expect(
       pollGen2Terminal(workspaceId, userId, sessionId, 0),
     ).rejects.toThrow("not a member");
@@ -54,7 +65,7 @@ describe("gen2 terminals", () => {
     // start_terminal waits for Codex to go idle in the guest; input, resize,
     // poll and close do not, which is why a terminal opened before a turn
     // keeps streaming through it.
-    mocks.requireMember.mockResolvedValue({
+    mocks.workspace.mockResolvedValue({
       id: workspaceId,
       status: "stopped",
       role: "owner",
@@ -87,7 +98,30 @@ describe("gen2 terminals", () => {
     });
     await pollGen2Terminal(workspaceId, userId, sessionId, 3);
     expect(mocks.poll).toHaveBeenCalledWith(workspaceId, sessionId, 3);
+    expect(mocks.requirePermission).toHaveBeenCalledWith(
+      workspaceId,
+      userId,
+      "workspace.useTerminal",
+    );
     await sendGen2TerminalInput(workspaceId, userId, sessionId, "ls\n");
     expect(mocks.input).toHaveBeenCalledWith(workspaceId, sessionId, "ls\n");
+  });
+
+  it("treats terminals as workspace-shared, not creator-owned", async () => {
+    mocks.poll.mockResolvedValue({
+      chunks: [],
+      nextSequence: 1,
+      exited: false,
+      exitCode: null,
+    });
+
+    await pollGen2Terminal(workspaceId, collaboratorId, sessionId, 0);
+
+    expect(mocks.requirePermission).toHaveBeenCalledWith(
+      workspaceId,
+      collaboratorId,
+      "workspace.useTerminal",
+    );
+    expect(mocks.poll).toHaveBeenCalledWith(workspaceId, sessionId, 0);
   });
 });

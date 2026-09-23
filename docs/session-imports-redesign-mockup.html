@@ -24,20 +24,33 @@
       /* CoDev forces dark regardless of OS theme (see app/globals.css) —
          no light-mode branch here to match. */
 
-      * { box-sizing: border-box; }
+      * {
+        box-sizing: border-box;
+      }
 
       body {
         min-width: 320px;
         margin: 0;
         background: var(--page);
         color: var(--text);
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
         font-size: 14px;
         line-height: 1.55;
       }
 
-      a { color: inherit; }
-      button { font: inherit; }
+      a {
+        color: inherit;
+      }
+      button {
+        font: inherit;
+      }
 
       .page {
         width: min(100% - 48px, 1180px);
@@ -63,8 +76,13 @@
         font-weight: 600;
         text-decoration: none;
       }
-      .back:hover { color: var(--text); }
-      .back svg { width: 14px; height: 14px; }
+      .back:hover {
+        color: var(--text);
+      }
+      .back svg {
+        width: 14px;
+        height: 14px;
+      }
 
       .topbar h1 {
         margin: 0;
@@ -90,13 +108,17 @@
         cursor: pointer;
         white-space: nowrap;
       }
-      .btn:hover { border-color: var(--muted-2); }
+      .btn:hover {
+        border-color: var(--muted-2);
+      }
       .btn-primary {
         border-color: transparent;
         background: var(--coral);
         color: #fff;
       }
-      .btn-primary:hover { filter: brightness(1.06); }
+      .btn-primary:hover {
+        filter: brightness(1.06);
+      }
 
       /* ---- two-zone layout ---- */
       .layout {
@@ -107,7 +129,10 @@
       }
 
       /* ---- sidebar ---- */
-      .sidebar { position: sticky; top: 20px; }
+      .sidebar {
+        position: sticky;
+        top: 20px;
+      }
       .sidebar-label {
         margin: 0 0 8px 10px;
         color: var(--muted-2);
@@ -128,7 +153,9 @@
         color: var(--text);
         border-left: 2px solid transparent;
       }
-      .import-row:hover { background: var(--border-soft); }
+      .import-row:hover {
+        background: var(--border-soft);
+      }
       .import-row.active {
         background: var(--border-soft);
         border-left-color: var(--coral);
@@ -148,8 +175,12 @@
         background: var(--muted-2);
         flex: 0 0 auto;
       }
-      .dot.ready { background: var(--violet); }
-      .dot.pending { background: var(--muted); }
+      .dot.ready {
+        background: var(--violet);
+      }
+      .dot.pending {
+        background: var(--muted);
+      }
       .import-row-time {
         margin-left: 12px;
         color: var(--muted);
@@ -157,7 +188,11 @@
       }
 
       /* ---- session-ready header ---- */
-      .handoff { padding-bottom: 22px; margin-bottom: 22px; border-bottom: 1px solid var(--border); }
+      .handoff {
+        padding-bottom: 22px;
+        margin-bottom: 22px;
+        border-bottom: 1px solid var(--border);
+      }
       .handoff h2 {
         margin: 0;
         font-size: 17px;
@@ -169,8 +204,14 @@
         font-size: 12.5px;
         overflow-wrap: anywhere;
       }
-      .meta-row b { color: var(--text); font-weight: 600; }
-      .meta-sep { margin: 0 8px; color: var(--muted-2); }
+      .meta-row b {
+        color: var(--text);
+        font-weight: 600;
+      }
+      .meta-sep {
+        margin: 0 8px;
+        color: var(--muted-2);
+      }
 
       .objective {
         margin-top: 14px;
@@ -199,22 +240,41 @@
         border-color: color-mix(in srgb, var(--coral) 45%, var(--border));
         background: color-mix(in srgb, var(--coral) 7%, var(--surface));
       }
-      .option-title { font-size: 13.5px; font-weight: 650; }
-      .option-desc { color: var(--muted); font-size: 12.5px; line-height: 1.5; flex: 1; }
-      .btn-full { width: 100%; justify-content: center; height: 34px; }
+      .option-title {
+        font-size: 13.5px;
+        font-weight: 650;
+      }
+      .option-desc {
+        color: var(--muted);
+        font-size: 12.5px;
+        line-height: 1.5;
+        flex: 1;
+      }
+      .btn-full {
+        width: 100%;
+        justify-content: center;
+        height: 34px;
+      }
       .btn[disabled] {
         opacity: 0.5;
         cursor: default;
         pointer-events: none;
       }
-      .btn-note { color: var(--muted-2); font-size: 11px; text-align: center; }
+      .btn-note {
+        color: var(--muted-2);
+        font-size: 11px;
+        text-align: center;
+      }
 
       .completion-note {
         margin-top: 14px;
         color: var(--muted);
         font-size: 12px;
       }
-      .completion-note b { color: var(--text); font-weight: 600; }
+      .completion-note b {
+        color: var(--text);
+        font-weight: 600;
+      }
 
       /* ---- repository state: separate, secondary card ---- */
       .repo-card {
@@ -236,14 +296,24 @@
         text-transform: uppercase;
         margin: 0 0 4px;
       }
-      .repo-card-status { font-size: 13px; color: var(--text); }
-      .repo-card-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+      .repo-card-status {
+        font-size: 13px;
+        color: var(--text);
+      }
+      .repo-card-actions {
+        display: flex;
+        gap: 8px;
+        flex: 0 0 auto;
+      }
       .btn-ghost {
         background: transparent;
         border-color: transparent;
         color: var(--muted);
       }
-      .btn-ghost:hover { color: var(--text); border-color: var(--border); }
+      .btn-ghost:hover {
+        color: var(--text);
+        border-color: var(--border);
+      }
 
       /* ---- transcript ---- */
       .transcript-header {
@@ -259,7 +329,10 @@
         font-weight: 700;
         letter-spacing: 0.02em;
       }
-      .transcript-count { color: var(--muted); font-size: 12px; }
+      .transcript-count {
+        color: var(--muted);
+        font-size: 12px;
+      }
       .readonly-tag {
         color: var(--muted-2);
         font-size: 11px;
@@ -275,7 +348,10 @@
         padding: 12px 0;
         border-top: 1px solid var(--border-soft);
       }
-      .row:first-child { border-top: none; padding-top: 4px; }
+      .row:first-child {
+        border-top: none;
+        padding-top: 4px;
+      }
 
       .row-meta {
         display: flex;
@@ -288,9 +364,15 @@
         letter-spacing: 0.05em;
         text-transform: uppercase;
       }
-      .row-role.user { color: var(--coral); }
-      .row-role.assistant { color: var(--violet); }
-      .row-role.system { color: var(--muted); }
+      .row-role.user {
+        color: var(--coral);
+      }
+      .row-role.assistant {
+        color: var(--violet);
+      }
+      .row-role.system {
+        color: var(--muted);
+      }
       .row-time {
         margin-left: auto;
         color: var(--muted-2);
@@ -302,8 +384,12 @@
         font-size: 13.5px;
         line-height: 1.65;
       }
-      .row-body p { margin: 0 0 0.6em; }
-      .row-body p:last-child { margin-bottom: 0; }
+      .row-body p {
+        margin: 0 0 0.6em;
+      }
+      .row-body p:last-child {
+        margin-bottom: 0;
+      }
       .row-body code {
         background: var(--border-soft);
         border-radius: 4px;
@@ -326,18 +412,38 @@
         color: var(--muted);
         font-size: 12.5px;
       }
-      .context-toggle b { color: var(--text); font-weight: 600; }
-      .context-toggle .chev { margin-left: auto; color: var(--muted-2); font-size: 11px; }
-      details[open] .context-toggle .chev::before { content: "▾"; }
-      .context-toggle .chev::before { content: "▸"; }
-      details .row-body { padding: 4px 0 8px; }
+      .context-toggle b {
+        color: var(--text);
+        font-weight: 600;
+      }
+      .context-toggle .chev {
+        margin-left: auto;
+        color: var(--muted-2);
+        font-size: 11px;
+      }
+      details[open] .context-toggle .chev::before {
+        content: "▾";
+      }
+      .context-toggle .chev::before {
+        content: "▸";
+      }
+      details .row-body {
+        padding: 4px 0 8px;
+      }
     </style>
   </head>
   <body>
     <div class="page">
       <div class="topbar">
         <a class="back" href="#">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13 5 8l5-5"/></svg>
+          <svg
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M10 13 5 8l5-5" />
+          </svg>
           Workspace
         </a>
         <h1>Imported sessions</h1>
@@ -348,11 +454,15 @@
         <div class="sidebar">
           <p class="sidebar-label">Recent imports</p>
           <a class="import-row active" href="#">
-            <span class="import-row-top"><span class="dot ready"></span> Claude Code</span>
+            <span class="import-row-top"
+              ><span class="dot ready"></span> Claude Code</span
+            >
             <span class="import-row-time">Restored · 2h ago</span>
           </a>
           <a class="import-row" href="#">
-            <span class="import-row-top"><span class="dot pending"></span> Codex</span>
+            <span class="import-row-top"
+              ><span class="dot pending"></span> Codex</span
+            >
             <span class="import-row-time">Pending restore · yesterday</span>
           </a>
           <a class="import-row" href="#">
@@ -360,7 +470,9 @@
             <span class="import-row-time">Reviewed · 3 days ago</span>
           </a>
           <a class="import-row" href="#">
-            <span class="import-row-top"><span class="dot ready"></span> Claude Code</span>
+            <span class="import-row-top"
+              ><span class="dot ready"></span> Claude Code</span
+            >
             <span class="import-row-time">Restored · last week</span>
           </a>
         </div>
@@ -369,7 +481,8 @@
           <div class="handoff">
             <h2>Session imported</h2>
             <div class="meta-row">
-              <b>Claude Code</b> · 42 messages · <b>codev-app</b> · feat/session-import-ui
+              <b>Claude Code</b> · 42 messages · <b>codev-app</b> ·
+              feat/session-import-ui
               <span class="meta-sep">·</span>
               Imported Sep 20, 2026, 9:14 AM
             </div>
@@ -382,12 +495,18 @@
             <div class="continue-options">
               <div class="option-card primary">
                 <p class="option-title">Continue in CoDev</p>
-                <p class="option-desc">Start a new CoDev session using this conversation as context.</p>
-                <button class="btn btn-primary btn-full">Continue in CoDev</button>
+                <p class="option-desc">
+                  Start a new CoDev session using this conversation as context.
+                </p>
+                <button class="btn btn-primary btn-full">
+                  Continue in CoDev
+                </button>
               </div>
               <div class="option-card">
                 <p class="option-title">Resume in Claude Code</p>
-                <p class="option-desc">Reopen the original session with its native history.</p>
+                <p class="option-desc">
+                  Reopen the original session with its native history.
+                </p>
                 <button class="btn btn-full" disabled>Available soon</button>
               </div>
             </div>
@@ -415,20 +534,30 @@
             <span class="readonly-tag">Read-only</span>
           </div>
 
-          <ol style="list-style:none;margin:0;padding:0;">
+          <ol style="list-style: none; margin: 0; padding: 0">
             <li class="row">
               <div class="row-meta">
                 <span class="row-role user">You</span>
                 <span class="row-time">9:02 AM</span>
               </div>
-              <div class="row-body"><p>Can you redesign the session-imports page? I don't like the layout or spacing.</p></div>
+              <div class="row-body">
+                <p>
+                  Can you redesign the session-imports page? I don't like the
+                  layout or spacing.
+                </p>
+              </div>
             </li>
             <li class="row">
               <div class="row-meta">
                 <span class="row-role assistant">Claude Code</span>
                 <span class="row-time">9:03 AM</span>
               </div>
-              <div class="row-body"><p>Sure — I'll look at the page and transcript components first, then propose a layout before touching code.</p></div>
+              <div class="row-body">
+                <p>
+                  Sure — I'll look at the page and transcript components first,
+                  then propose a layout before touching code.
+                </p>
+              </div>
             </li>
             <li class="row context-row">
               <details>
@@ -437,7 +566,10 @@
                   <span class="chev"></span>
                 </summary>
                 <div class="row-body">
-                  <p>Full pasted mockup HTML and design system notes from the original session, preserved for reference…</p>
+                  <p>
+                    Full pasted mockup HTML and design system notes from the
+                    original session, preserved for reference…
+                  </p>
                 </div>
               </details>
             </li>
@@ -446,7 +578,13 @@
                 <span class="row-role assistant">Claude Code</span>
                 <span class="row-time">9:11 AM</span>
               </div>
-              <div class="row-body"><p>Here's the plan: a compact top bar, a 240px sidebar for recent imports, and a flat transcript with hairline dividers instead of message bubbles.</p></div>
+              <div class="row-body">
+                <p>
+                  Here's the plan: a compact top bar, a 240px sidebar for recent
+                  imports, and a flat transcript with hairline dividers instead
+                  of message bubbles.
+                </p>
+              </div>
             </li>
             <li class="row">
               <div class="row-meta">
@@ -460,7 +598,12 @@
                 <span class="row-role system">System</span>
                 <span class="row-time">9:15 AM</span>
               </div>
-              <div class="row-body"><p>Restore completed for branch <code>feat/session-import-ui</code>.</p></div>
+              <div class="row-body">
+                <p>
+                  Restore completed for branch
+                  <code>feat/session-import-ui</code>.
+                </p>
+              </div>
             </li>
           </ol>
         </div>

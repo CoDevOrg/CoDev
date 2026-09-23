@@ -1,11 +1,18 @@
 import { withUser } from "@/lib/http/api-route";
 import { getGen2ProviderStatus } from "@/lib/gen2/providers";
+import { listGen2ProviderReadiness } from "@/lib/gen2/provider-adapters";
 
 /**
- * Whether this member can run Codex yet. Returns only a boolean and how they
- * connected -- never any part of the credential.
+ * Redacted readiness for every known provider. The legacy OpenAI fields keep
+ * the current single-provider composer working until provider choice ships.
  */
 export const GET = withUser(
-  async ({ user }) => Response.json(await getGen2ProviderStatus(user.id)),
+  async ({ user }) => {
+    const [providers, openAi] = await Promise.all([
+      listGen2ProviderReadiness(user.id),
+      getGen2ProviderStatus(user.id),
+    ]);
+    return Response.json({ ...openAi, providers });
+  },
   { errorStatus: 500 },
 );

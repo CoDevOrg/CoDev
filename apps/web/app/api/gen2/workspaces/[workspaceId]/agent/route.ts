@@ -17,6 +17,7 @@ export const POST = withUser<Params>(
         workspaceId,
         userId: user.id,
         chatId: input.chatId,
+        ...(input.provider ? { provider: input.provider } : {}),
         prompt: input.prompt,
         idempotencyKey: input.idempotencyKey,
       }),

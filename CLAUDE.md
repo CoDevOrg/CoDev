@@ -56,6 +56,16 @@ Vercel bill and the budget is small.
   `docs/`, `.github/`, or `packages/ide/` source (with no regenerated bundle)
   builds no web deployment.
 
+## Never hand-write a migration
+
+Edit `packages/db/src/schema.ts` and run `pnpm db:generate` — then commit the
+`.sql`, `meta/_journal.json`, and `meta/NNNN_snapshot.json` it produces as one
+unit. Drizzle reads the journal, not the directory, so a hand-written migration
+file never runs _and_ `pnpm db:migrate` still prints success. This has already
+produced one silent no-op deploy. Full rule, including the timestamp
+high-water-mark trap that silently skips an older migration on the shared
+database, is under "Database migrations" in [`AGENTS.md`](AGENTS.md).
+
 ## Shared working tree
 
 Multiple agent sessions share this checkout and push straight to `main`. Pull

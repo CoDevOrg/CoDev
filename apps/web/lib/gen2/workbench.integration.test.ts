@@ -14,10 +14,40 @@ process.env.CODEV_FAKE_GUEST = "1";
 process.env.ORCHESTRATOR_DIRECT_URL = "https://orchestrator.invalid";
 process.env.ORCHESTRATOR_DIRECT_SECRET = "x".repeat(40);
 
-const mocks = vi.hoisted(() => ({ requireMember: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  requirePermission: vi.fn(),
+  workspace: vi.fn(),
+}));
+
+vi.mock("../policies/workspace", () => ({
+  requireWorkspacePermission: (...args: unknown[]) =>
+    mocks.requirePermission(...args),
+}));
 
 vi.mock("./workspaces", () => ({
-  requireGen2Member: (...args: unknown[]) => mocks.requireMember(...args),
+  getGen2WorkspaceForAccess: (...args: unknown[]) => mocks.workspace(...args),
+}));
+
+vi.mock("./instance", () => ({
+  describeGen2RuntimeFailure: (error: unknown) =>
+    error instanceof Error ? error.message : "runtime failure",
+}));
+
+vi.mock("./providers", () => ({
+  resolveGen2Codex: vi.fn(),
+}));
+
+vi.mock("../providers/hosted-codex-subscription-credentials", () => ({
+  HostedCodexSubscriptionError: class HostedCodexSubscriptionError extends Error {},
+  claimHostedCodexExecution: vi.fn(),
+  releaseHostedCodexExecution: vi.fn(),
+  resolveHostedCodexSubscription: vi.fn(),
+  updateHostedCodexAuthCache: vi.fn(),
+}));
+
+vi.mock("../platform/azure-kms", () => ({
+  decryptWithAzure: vi.fn(),
+  encryptWithAzure: vi.fn(),
 }));
 
 const { resetFakeGuest, fakeGuestSandbox } =
@@ -39,7 +69,7 @@ const {
 } = await import("../runtime/orchestrator-codex-exec");
 const { decodeCodexExecOutput } = await import("./codex-output");
 const { reduceCodexTurn } = await import("./turn-events");
-const { buildGen2CodexCommand } = await import("./agent");
+const { buildGen2CodexCommand } = await import("./providers/openai");
 const {
   closeGen2Terminal,
   pollGen2Terminal,
@@ -68,7 +98,11 @@ async function bootMachine() {
 describe("gen2 workbench against the guest", () => {
   beforeEach(async () => {
     resetFakeGuest();
-    mocks.requireMember.mockResolvedValue({
+    mocks.requirePermission.mockResolvedValue({
+      role: "owner",
+      capabilities: {},
+    });
+    mocks.workspace.mockResolvedValue({
       id: workspaceId,
       status: "ready",
       role: "owner",

@@ -17,6 +17,10 @@ vi.mock("../platform/observability", () => ({
   logEvent: vi.fn(),
 }));
 
+vi.mock("./provider-adapters", () => ({
+  listGen2ProviderReadiness: vi.fn(),
+}));
+
 vi.mock("../platform/database", () => ({
   getDatabase: () => ({
     transaction: async (callback: (transaction: unknown) => unknown) => {
@@ -75,6 +79,10 @@ describe("gen2 workspace creation", () => {
       status: "pending",
       role: "owner",
       sandboxId: null,
+      capabilities: {
+        "workspace.managePolicy": true,
+        "agent.cancelAny": true,
+      },
     });
     expect(mocks.inserted).toEqual([
       {

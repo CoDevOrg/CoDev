@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => {
     status: "pending" as string,
     sandboxId: null as string | null,
     lastError: null as string | null,
-    role: "owner" as "owner" | "member",
+    role: "owner" as "owner" | "editor" | "viewer",
     createdAt: new Date("2026-09-20T20:00:00.000Z"),
     updatedAt: new Date("2026-09-20T20:00:00.000Z"),
   };
@@ -86,6 +86,10 @@ vi.mock("../platform/crypto", () => ({
 
 vi.mock("../platform/observability", () => ({
   logEvent: vi.fn(),
+}));
+
+vi.mock("../github/github", () => ({
+  getRepositorySnapshot: vi.fn(),
 }));
 
 vi.mock("../runtime/orchestrator-health", () => ({
@@ -208,16 +212,28 @@ describe("gen2 instance lifecycle", () => {
     expect(mocks.updates).toEqual([]);
   });
 
-  it("lets any member bring the machine up, not just the owner", async () => {
-    // Whoever opens the share link first should not have to wait for the
-    // owner to press something.
-    mocks.member.role = "member";
+  it("lets an editor bring the machine up, not just the owner", async () => {
+    // An editor can initiate agent work, so they can bring up the instance
+    // needed to do it without waiting for an owner.
+    mocks.member.role = "editor";
     const workspace = await ensureGen2Instance(mocks.member.id, "user-2", {
       provision: mocks.provision,
       destroy: mocks.destroy,
     });
     expect(workspace.status).toBe("ready");
     expect(mocks.provision).toHaveBeenCalledOnce();
+  });
+
+  it("does not let a viewer start the instance", async () => {
+    mocks.member.role = "viewer";
+
+    await expect(
+      ensureGen2Instance(mocks.member.id, "user-3", {
+        provision: mocks.provision,
+        destroy: mocks.destroy,
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(mocks.provision).not.toHaveBeenCalled();
   });
 
   it("steps aside when another member already claimed provisioning", async () => {
@@ -240,5 +256,18 @@ describe("gen2 instance lifecycle", () => {
     expect(mocks.destroy).toHaveBeenCalledWith(mocks.member.id);
     expect(workspace.status).toBe("stopped");
     expect(workspace.sandboxId).toBeNull();
+  });
+
+  it("does not let an editor stop the instance", async () => {
+    mocks.member.status = "ready";
+    mocks.member.role = "editor";
+
+    await expect(
+      stopGen2Instance(mocks.member.id, "user-2", {
+        provision: mocks.provision,
+        destroy: mocks.destroy,
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(mocks.destroy).not.toHaveBeenCalled();
   });
 });

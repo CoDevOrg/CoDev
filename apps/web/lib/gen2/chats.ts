@@ -14,9 +14,9 @@ import {
 import { schema } from "@codev/db";
 
 import { getDatabase } from "../platform/database";
+import { requireWorkspacePermission } from "../policies/workspace";
 import { Gen2AccessError } from "./errors";
 import { GEN2_NEW_CHAT_TITLE, gen2ChatTitleFromPrompt } from "./chats-format";
-import { requireGen2Member } from "./workspaces";
 
 export {
   formatGen2TurnPrompt,
@@ -31,12 +31,14 @@ function toIso(value: Date) {
 function toChat(row: {
   id: string;
   title: string;
+  defaultProvider: Gen2Chat["defaultProvider"];
   createdAt: Date;
   updatedAt: Date;
 }): Gen2Chat {
   return gen2ChatSchema.parse({
     id: row.id,
     title: row.title,
+    defaultProvider: row.defaultProvider,
     createdAt: toIso(row.createdAt),
     updatedAt: toIso(row.updatedAt),
   });
@@ -46,12 +48,14 @@ function toMessage(row: {
   id: string;
   role: string;
   body: string;
+  provider?: Gen2ChatMessage["provider"];
   items?: unknown;
   createdAt: Date;
 }): Gen2ChatMessage {
   return gen2ChatMessageSchema.parse({
     id: row.id,
     role: row.role,
+    provider: row.provider ?? null,
     body: row.body,
     // Replies saved before activity cards existed have no items; a shape we
     // no longer recognise is dropped rather than failing the whole thread.
@@ -63,11 +67,12 @@ function toMessage(row: {
 }
 
 export async function listGen2Chats(workspaceId: string, userId: string) {
-  await requireGen2Member(workspaceId, userId);
+  await requireWorkspacePermission(workspaceId, userId, "context.view");
   const rows = await getDatabase()
     .select({
       id: schema.gen2Chats.id,
       title: schema.gen2Chats.title,
+      defaultProvider: schema.gen2Chats.defaultProvider,
       createdAt: schema.gen2Chats.createdAt,
       updatedAt: schema.gen2Chats.updatedAt,
     })
@@ -78,7 +83,12 @@ export async function listGen2Chats(workspaceId: string, userId: string) {
 }
 
 export async function createGen2Chat(workspaceId: string, userId: string) {
-  await requireGen2Member(workspaceId, userId);
+  await requireWorkspacePermission(workspaceId, userId, "agent.run");
+  await requireWorkspacePermission(
+    workspaceId,
+    userId,
+    "context.includeInTurn",
+  );
   const [created] = await getDatabase()
     .insert(schema.gen2Chats)
     .values({
@@ -98,6 +108,7 @@ export async function requireGen2Chat(workspaceId: string, chatId: string) {
     .select({
       id: schema.gen2Chats.id,
       title: schema.gen2Chats.title,
+      defaultProvider: schema.gen2Chats.defaultProvider,
       createdAt: schema.gen2Chats.createdAt,
       updatedAt: schema.gen2Chats.updatedAt,
     })
@@ -120,6 +131,7 @@ export async function listGen2ChatMessages(chatId: string) {
     .select({
       id: schema.gen2ChatMessages.id,
       role: schema.gen2ChatMessages.role,
+      provider: schema.gen2ChatMessages.provider,
       body: schema.gen2ChatMessages.body,
       items: schema.gen2ChatMessages.items,
       createdAt: schema.gen2ChatMessages.createdAt,
@@ -135,12 +147,39 @@ export async function getGen2ChatDetail(
   chatId: string,
   userId: string,
 ): Promise<Gen2ChatDetail> {
-  await requireGen2Member(workspaceId, userId);
+  await requireWorkspacePermission(workspaceId, userId, "context.view");
   const chat = await requireGen2Chat(workspaceId, chatId);
   return gen2ChatDetailSchema.parse({
     ...chat,
     messages: await listGen2ChatMessages(chat.id),
   });
+}
+
+export async function updateGen2ChatDefaultProvider(input: {
+  workspaceId: string;
+  chatId: string;
+  userId: string;
+  defaultProvider: Gen2Chat["defaultProvider"];
+}) {
+  await requireWorkspacePermission(
+    input.workspaceId,
+    input.userId,
+    "agent.run",
+  );
+  await requireGen2Chat(input.workspaceId, input.chatId);
+  await getDatabase()
+    .update(schema.gen2Chats)
+    .set({
+      defaultProvider: input.defaultProvider,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(schema.gen2Chats.workspaceId, input.workspaceId),
+        eq(schema.gen2Chats.id, input.chatId),
+      ),
+    );
+  return requireGen2Chat(input.workspaceId, input.chatId);
 }
 
 export async function saveGen2AssistantReply(input: {
@@ -149,7 +188,11 @@ export async function saveGen2AssistantReply(input: {
   userId: string;
   body: string;
 }) {
-  await requireGen2Member(input.workspaceId, input.userId);
+  await requireWorkspacePermission(
+    input.workspaceId,
+    input.userId,
+    "context.includeInTurn",
+  );
   await requireGen2Chat(input.workspaceId, input.chatId);
   const body = input.body.trim();
   if (!body || body === "Working…") {
@@ -172,6 +215,7 @@ export async function appendGen2ChatMessage(input: {
   role: "user" | "assistant";
   body: string;
   items?: Gen2TurnItem[];
+  provider?: Gen2ChatMessage["provider"];
 }) {
   const body = input.body.trim();
   if (!body) {
@@ -183,6 +227,7 @@ export async function appendGen2ChatMessage(input: {
       .values({
         chatId: input.chatId,
         role: input.role,
+        provider: input.provider ?? null,
         body,
         items: input.items ?? null,
       })
