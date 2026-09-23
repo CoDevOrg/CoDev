@@ -2,27 +2,42 @@
    Public landing page.
 
    Scoped entirely under `.lp-page` so it can never leak into the product
-   surfaces in globals.css / app-theme.css. The palette is CoDev's warm black
-   and dry antique gold, pitched dark so the animated backdrop has something
-   to glow against.
+   surfaces in globals.css / app-theme.css. That scoping is what lets the
+   marketing page run a light cream-and-navy palette while every signed-in
+   surface stays on the dark product theme.
+
+   The palette is paper cream, deep navy ink and a vibrant blue accent, with a
+   teal and a terracotta carrying the two remaining agent identities. Token
+   names predate this palette and are kept so the 2,600 rules below did not
+   all have to be rewritten; read them as slots, not as colour words.
    ========================================================================== */
 
 .lp-page {
-  --lp-bg: #121417;
-  --lp-bg-2: #1a1d21;
-  --lp-ink: #edeef0;
-  --lp-muted: rgba(237, 238, 240, 0.62);
-  --lp-faint: rgba(237, 238, 240, 0.4);
-  --lp-line: rgba(237, 238, 240, 0.12);
-  --lp-line-strong: rgba(237, 238, 240, 0.22);
-  --lp-panel: rgba(237, 238, 240, 0.045);
-  --lp-panel-2: rgba(237, 238, 240, 0.08);
-  --lp-lime: #f2604a;
-  --lp-orange: #ff7c63;
-  --lp-sky: #5b9bd5;
-  --lp-violet: #b08bf5;
-  --lp-review-blue: #62c3dc;
-  --lp-warn: #e8b44a;
+  color-scheme: light;
+
+  --lp-bg: #f2e9d6;
+  --lp-bg-2: #e8dcc0;
+  --lp-ink: #0e2f7e;
+  --lp-muted: rgba(14, 47, 126, 0.73);
+  --lp-faint: rgba(14, 47, 126, 0.59);
+  --lp-line: rgba(14, 47, 126, 0.16);
+  --lp-line-strong: rgba(14, 47, 126, 0.28);
+  --lp-panel: rgba(255, 253, 247, 0.62);
+  --lp-panel-2: rgba(255, 253, 247, 0.85);
+
+  /* Accents below are the darkest point of each hue that still clears 5:1
+     against the paper, measured rather than eyeballed: they are used as body
+     text, not only as fills. */
+  --lp-lime: #1b63b3;
+  /* Agent identity 1, and the warm counterpoint in the brand gradient. */
+  --lp-orange: #9e4a2a;
+  /* Agent identity 3. */
+  --lp-sky: #2a6d62;
+  /* Agent identity 2. */
+  --lp-violet: #5b4fa8;
+  --lp-review-blue: #1b63b3;
+  --lp-warn: #86590b;
+
   --lp-shell: min(1200px, calc(100% - 48px));
   --lp-px: 0;
   --lp-py: 0;
@@ -34,12 +49,23 @@
     radial-gradient(120% 80% at 50% -10%, var(--lp-bg-2) 0%, transparent 60%),
     var(--lp-bg);
   color: var(--lp-ink);
+  font-family: var(--lp-font-sans), var(--font-geist-sans), sans-serif;
   font-feature-settings: "ss01" on;
+}
+
+/* globals.css paints html/body the dark product surface and sets
+   `color-scheme: dark` on :root. The landing is the one light route, so it
+   repaints the document behind itself; without this, overscroll and the area
+   beyond the last section flash near-black. */
+html:has(.lp-page),
+body:has(.lp-page) {
+  background: #f2e9d6;
+  color-scheme: light;
 }
 
 .lp-page ::selection {
   background: var(--lp-lime);
-  color: #0c0e10;
+  color: #f7f3e8;
 }
 
 /* --------------------------------------------------------------------------
@@ -65,7 +91,7 @@
   width: min(128vmin, 1180px);
   translate: -50% -50%;
   aspect-ratio: 1;
-  opacity: 0.09;
+  opacity: 0.045;
   background: conic-gradient(
     from 0deg,
     var(--lp-lime),
@@ -90,7 +116,11 @@
   right: -10%;
   width: min(52vw, 34rem);
   height: min(52vw, 34rem);
-  background: radial-gradient(circle, rgba(242, 96, 74, 0.34), transparent 68%);
+  background: radial-gradient(
+    circle,
+    rgba(30, 108, 196, 0.34),
+    transparent 68%
+  );
   animation: codev-page-ambient 26s ease-in-out infinite alternate;
   translate: calc(var(--lp-px) * 34px) calc(var(--lp-py) * 34px);
 }
@@ -100,7 +130,11 @@
   left: -18%;
   width: min(58vw, 40rem);
   height: min(58vw, 40rem);
-  background: radial-gradient(circle, rgba(242, 96, 74, 0.24), transparent 70%);
+  background: radial-gradient(
+    circle,
+    rgba(30, 108, 196, 0.24),
+    transparent 70%
+  );
   animation: lp-drift 22s ease-in-out infinite;
   translate: calc(var(--lp-px) * -26px) calc(var(--lp-py) * -26px);
 }
@@ -110,7 +144,7 @@
   bottom: -20%;
   width: min(48vw, 32rem);
   height: min(48vw, 32rem);
-  background: radial-gradient(circle, rgba(91, 155, 213, 0.2), transparent 70%);
+  background: radial-gradient(circle, rgba(47, 122, 110, 0.2), transparent 70%);
   animation: lp-drift 30s ease-in-out infinite reverse;
   translate: calc(var(--lp-px) * 20px) calc(var(--lp-py) * 20px);
 }
@@ -136,11 +170,72 @@
   position: absolute;
   inset: 0;
   background-image: radial-gradient(
-    rgba(237, 238, 240, 0.3) 0.5px,
+    rgba(14, 47, 126, 0.32) 0.5px,
     transparent 0.7px
   );
   background-size: 3px 3px;
   opacity: 0.05;
+}
+
+/* --------------------------------------------------------------------------
+   WebGL backdrop.
+
+   `components/landing/webgl/landing-canvas.tsx` mounts the canvas only once it
+   knows the reader wants motion and that the browser can draw it. Until then,
+   and permanently for anyone who opted out of motion or has no WebGL, the
+   generated still below is the backdrop. It sits at the same z-index as
+   `.lp-backdrop`, behind the `z-index: 1` content shell.
+   -------------------------------------------------------------------------- */
+
+.lp-canvas-layer {
+  position: fixed;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+  contain: strict;
+}
+
+.lp-canvas-still {
+  position: absolute;
+  inset: 0;
+  background: url("/brand/landing/hero-still.webp") center / cover no-repeat;
+  opacity: 0.72;
+  transition: opacity 900ms ease;
+  -webkit-mask-image: radial-gradient(
+    92% 74% at 50% 46%,
+    #000,
+    transparent 86%
+  );
+  mask-image: radial-gradient(92% 74% at 50% 46%, #000, transparent 86%);
+}
+
+.lp-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 1200ms ease;
+}
+
+.lp-canvas-layer[data-canvas="on"] .lp-canvas {
+  /* Atmosphere, not decoration: the field has to stay under the body copy
+     without touching its contrast. */
+  opacity: 0.5;
+}
+
+/* The still is server-rendered inside `.lp-backdrop`, so it is painted before
+   this bundle loads and stays put for a reader with no JavaScript. It only
+   steps aside once the canvas reports that it is actually drawing. */
+.lp-page:has(.lp-canvas-layer[data-canvas="on"]) .lp-canvas-still {
+  opacity: 0;
+}
+
+/* The CSS auroras are the still's glow. Once the canvas is live they pull back
+   so the two atmospheres do not compete, which is what keeps the motion
+   ambient rather than busy. */
+.lp-page:has(.lp-canvas-layer[data-canvas="on"]) .lp-aurora {
+  opacity: 0.4;
 }
 
 @keyframes lp-spin {
@@ -252,14 +347,14 @@
 }
 
 .lp-cta-primary {
-  background: var(--lp-orange);
-  color: #0c0e10;
-  box-shadow: 0 12px 34px rgba(242, 96, 74, 0.28);
+  background: var(--lp-lime);
+  color: #f7f3e8;
+  box-shadow: 0 12px 34px rgba(30, 108, 196, 0.28);
 }
 
 .lp-cta-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 18px 44px rgba(242, 96, 74, 0.36);
+  box-shadow: 0 18px 44px rgba(30, 108, 196, 0.36);
 }
 
 .lp-cta-primary:disabled {
@@ -284,7 +379,7 @@
   min-height: 40px;
   padding: 0 18px;
   background: var(--lp-ink);
-  color: #0c0e10;
+  color: #f7f3e8;
   font-size: 14px;
 }
 
@@ -333,7 +428,7 @@
   height: 7px;
   border-radius: 50%;
   background: var(--lp-lime);
-  box-shadow: 0 0 0 0 rgba(242, 96, 74, 0.55);
+  box-shadow: 0 0 0 0 rgba(30, 108, 196, 0.55);
   animation: lp-pulse 2.2s ease-out infinite;
 }
 
@@ -346,24 +441,49 @@
   font-weight: 600;
   font-size: clamp(46px, 8.4vw, 104px);
   line-height: 0.94;
-  letter-spacing: -0.045em;
+  letter-spacing: -0.05em;
+  text-wrap: balance;
   animation: lp-rise 0.8s 0.1s both cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Kinetic headline. Each word is its own inline-block so it can carry a
+   different parallax depth, and the long transition turns discrete pointer
+   samples into trailing inertia. Both inputs come from `--lp-px` / `--lp-py`,
+   which `landing-motion.tsx` already publishes and which stay at 0 when the
+   reader has asked for reduced motion, so this flattens to plain type. */
+.lp-kinetic-word,
+.lp-kinetic em {
+  --i: 1;
+
+  display: inline-block;
+  transform: translate3d(
+    calc(var(--lp-px) * var(--i) * 7px),
+    calc(var(--lp-py) * var(--i) * 4px),
+    0
+  );
+  transition: transform 620ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
 }
 
 .lp-hero h1 em {
   position: relative;
+  font-family: var(--lp-font-serif), Georgia, serif;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  /* Kept inside the navy-to-blue family: the sheen sweeps across display
+     type, so every stop has to clear 4.5:1 on paper on its own. The warm and
+     teal agent identities do not, and they read muddy at this size. */
   background: linear-gradient(
     90deg,
     var(--lp-ink),
-    var(--lp-sky),
+    #17559c,
     var(--lp-lime),
-    #c04a38,
-    var(--lp-orange),
+    #17559c,
     var(--lp-ink),
-    var(--lp-sky),
+    #17559c,
     var(--lp-lime),
-    #c04a38,
-    var(--lp-orange)
+    #17559c,
+    var(--lp-ink)
   );
   background-clip: text;
   -webkit-background-clip: text;
@@ -437,11 +557,11 @@
 
 @keyframes lp-pulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(242, 96, 74, 0.5);
+    box-shadow: 0 0 0 0 rgba(30, 108, 196, 0.5);
   }
   70%,
   100% {
-    box-shadow: 0 0 0 9px rgba(242, 96, 74, 0);
+    box-shadow: 0 0 0 9px rgba(30, 108, 196, 0);
   }
 }
 
@@ -491,8 +611,43 @@
   border: 0;
 }
 
+/* The workspace demo stays a dark instrument panel sitting on the cream page:
+   it is a picture of the product, and the product is dark. Keeping it dark
+   also preserves the internal contrast every rule below was tuned for, so the
+   shared tokens are re-declared here with their original dark values rather
+   than the page's light ones. */
 .lp-demo {
+  /* Surface tokens too, not just ink: the repo header, the team rail and the
+     live-agents panel are all painted with --lp-bg-2. Leaving those on the
+     page's cream put light text on a light panel. */
+  --lp-bg: #121417;
+  --lp-bg-2: #1a1d21;
+  --lp-ink: #edeef0;
+  --lp-muted: rgba(237, 238, 240, 0.62);
+  --lp-faint: rgba(237, 238, 240, 0.4);
+  --lp-line: rgba(237, 238, 240, 0.12);
+  --lp-line-strong: rgba(237, 238, 240, 0.22);
+  --lp-panel: rgba(237, 238, 240, 0.045);
+  --lp-panel-2: rgba(237, 238, 240, 0.08);
+
+  /* Agent identities, brightened for the dark panel. */
+  --lp-lime: #5aa9f0;
+  --lp-orange: #e8825a;
+  --lp-sky: #5fbfab;
+  --lp-violet: #a595e8;
+  --lp-review-blue: #5aa9f0;
+  --lp-warn: #e8b44a;
+
+  color: var(--lp-ink);
+
   width: 100%;
+  padding: 18px;
+  border: 1px solid rgba(237, 238, 240, 0.1);
+  border-radius: 20px;
+  background: #121417;
+  box-shadow:
+    0 2px 6px rgba(14, 47, 126, 0.12),
+    0 30px 80px -34px rgba(14, 47, 126, 0.5);
 }
 
 .lp-demo-controls {
@@ -539,7 +694,7 @@
   border: 1px solid rgba(237, 238, 240, 0.14);
   border-radius: 50%;
   color: inherit;
-  font-family: var(--font-geist-mono), monospace;
+  font-family: var(--lp-font-mono), var(--font-geist-mono), monospace;
   font-size: 9px;
 }
 
@@ -623,7 +778,7 @@
   border: 1px solid rgba(237, 238, 240, 0.1);
   border-radius: 5px;
   color: var(--lp-muted);
-  font-family: var(--font-geist-mono), monospace;
+  font-family: var(--lp-font-mono), var(--font-geist-mono), monospace;
   font-size: 9px;
 }
 
@@ -665,11 +820,11 @@
 }
 
 .lp-workspace-people i:nth-child(1) {
-  background: #5b9bd5;
+  background: #2f7a6e;
 }
 
 .lp-workspace-people i:nth-child(2) {
-  background: #8b7cd8;
+  background: #5b4fa8;
 }
 
 .lp-workspace-people i:nth-child(3) {
@@ -758,7 +913,7 @@
 .lp-share-add {
   min-height: 52px;
   padding: 10px 13px;
-  border: 1px solid #f2604a;
+  border: 1px solid #1e6cc4;
   border-radius: 5px;
   background: #1a1d21;
   color: #9ba1ab;
@@ -788,7 +943,7 @@
   place-items: center;
   border: 2px solid #2c3138;
   border-radius: 50%;
-  background: #5b9bd5;
+  background: #2f7a6e;
   color: #edeef0;
   font-size: 9px;
   font-style: normal;
@@ -857,10 +1012,10 @@
   min-height: 39px;
   padding: 0 16px;
   gap: 8px;
-  border: 1px solid #f2604a;
+  border: 1px solid #1e6cc4;
   border-radius: 22px;
   background: #1a1d21;
-  color: #ff7c63;
+  color: #5aa9f0;
   font-size: 13px;
   font-weight: 600;
   transition:
@@ -869,8 +1024,8 @@
 }
 
 .lp-share-actions > span:last-child {
-  border-color: #f2604a;
-  background: #f2604a;
+  border-color: #1e6cc4;
+  background: #1e6cc4;
   color: #0c0e10;
 }
 
@@ -931,7 +1086,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  border: 2px solid #ff7c63;
+  border: 2px solid #5aa9f0;
   animation: lp-cursor-tap 0.45s ease-out;
 }
 
@@ -1030,11 +1185,11 @@
 }
 
 .lp-person-orange {
-  background: #5b9bd5;
+  background: #2f7a6e;
 }
 
 .lp-person-green {
-  background: #8b7cd8;
+  background: #5b4fa8;
 }
 
 .lp-person-purple {
@@ -1080,7 +1235,7 @@
   padding: 2px 7px;
   align-self: center;
   border-radius: 999px;
-  background: rgba(91, 155, 213, 0.18);
+  background: rgba(47, 122, 110, 0.18);
   color: var(--lp-sky);
   font-size: 8px;
   font-style: normal;
@@ -1218,7 +1373,8 @@
   padding: 7px 0 112px;
   overflow: visible;
   color: var(--lp-ink);
-  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-family:
+    var(--lp-font-mono), var(--font-geist-mono), ui-monospace, monospace;
   font-size: clamp(9px, 0.9vw, 11px);
   line-height: 1.75;
   tab-size: 2;
@@ -1268,17 +1424,17 @@
 
 .lp-code-orange {
   --cursor: var(--lp-orange);
-  --cursor-soft: rgba(255, 124, 99, 0.12);
+  --cursor-soft: rgba(90, 169, 240, 0.12);
 }
 
 .lp-code-green {
   --cursor: var(--lp-violet);
-  --cursor-soft: rgba(176, 139, 245, 0.12);
+  --cursor-soft: rgba(91, 79, 168, 0.12);
 }
 
 .lp-code-purple {
   --cursor: var(--lp-sky);
-  --cursor-soft: rgba(91, 155, 213, 0.1);
+  --cursor-soft: rgba(47, 122, 110, 0.1);
 }
 
 .lp-agent-cursor {
@@ -1305,7 +1461,7 @@
   border-radius: 6px 3px 0 6px;
   background: var(--cursor);
   color: #0c0e10;
-  font-family: var(--font-geist-sans), Arial, sans-serif;
+  font-family: var(--lp-font-sans), var(--font-geist-sans), Arial, sans-serif;
   font-size: 8px;
   font-style: normal;
   font-weight: 650;
@@ -1405,7 +1561,7 @@
 }
 
 .lp-terminal header code {
-  font-family: var(--font-geist-mono), monospace;
+  font-family: var(--lp-font-mono), var(--font-geist-mono), monospace;
 }
 
 .lp-terminal p {
@@ -1413,7 +1569,7 @@
   margin: 11px 0 0;
   align-items: center;
   gap: 7px;
-  font-family: var(--font-geist-mono), monospace;
+  font-family: var(--lp-font-mono), var(--font-geist-mono), monospace;
   font-size: 9px;
 }
 
@@ -1566,7 +1722,7 @@
 .lp-sync-lane code {
   overflow: hidden;
   color: var(--lp-muted);
-  font-family: var(--font-geist-mono), monospace;
+  font-family: var(--lp-font-mono), var(--font-geist-mono), monospace;
   font-size: 8px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1585,12 +1741,12 @@
 }
 
 .lp-sync-tag.is-warn {
-  background: rgba(255, 124, 99, 0.18);
+  background: rgba(90, 169, 240, 0.18);
   color: var(--lp-orange);
 }
 
 .lp-sync-tag.is-ok {
-  background: rgba(98, 195, 220, 0.16);
+  background: rgba(30, 108, 196, 0.16);
   color: var(--lp-review-blue);
 }
 
@@ -1600,7 +1756,7 @@
 }
 
 .lp-sync-lane.is-flagged {
-  border-color: rgba(255, 124, 99, 0.55);
+  border-color: rgba(90, 169, 240, 0.55);
   animation: lp-sync-shake 0.4s ease;
 }
 
@@ -1626,7 +1782,7 @@
 }
 
 .lp-sync-thread.is-resolved {
-  background: rgba(98, 195, 220, 0.08);
+  background: rgba(30, 108, 196, 0.08);
 }
 
 .lp-sync-alert {
@@ -1639,7 +1795,7 @@
 }
 
 .lp-sync-alert code {
-  font-family: var(--font-geist-mono), monospace;
+  font-family: var(--lp-font-mono), var(--font-geist-mono), monospace;
   font-size: 8px;
 }
 
@@ -1661,7 +1817,7 @@
 .lp-sync-msg b {
   flex: 0 0 auto;
   color: var(--tone, var(--lp-ink));
-  font-family: var(--font-geist-mono), monospace;
+  font-family: var(--lp-font-mono), var(--font-geist-mono), monospace;
   font-size: 8px;
   font-weight: 700;
 }
@@ -1784,7 +1940,7 @@
 
 @keyframes lp-merge-pulse {
   50% {
-    border-color: rgba(255, 124, 99, 0.55);
+    border-color: rgba(90, 169, 240, 0.55);
   }
 }
 
@@ -1804,7 +1960,7 @@
 
 @keyframes lp-tab-contested {
   50% {
-    background: rgba(242, 96, 74, 0.12);
+    background: rgba(30, 108, 196, 0.12);
   }
 }
 
@@ -1911,7 +2067,7 @@
   display: block;
   overflow: hidden;
   color: var(--lp-faint);
-  font-family: var(--font-geist-mono), monospace;
+  font-family: var(--lp-font-mono), var(--font-geist-mono), monospace;
   font-size: 8px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1947,9 +2103,9 @@
   padding: 10px;
   align-items: center;
   gap: 8px;
-  border: 1px solid rgba(242, 96, 74, 0.3);
+  border: 1px solid rgba(30, 108, 196, 0.3);
   border-radius: 8px;
-  background: rgba(242, 96, 74, 0.09);
+  background: rgba(30, 108, 196, 0.09);
   color: var(--lp-sky);
   opacity: 0;
   transform: translateY(8px);
@@ -2049,6 +2205,9 @@
 }
 
 .lp-speed h2 em {
+  font-family: var(--lp-font-serif), Georgia, serif;
+  font-weight: 400;
+  letter-spacing: -0.015em;
   color: var(--lp-orange);
   font-style: italic;
 }
@@ -2086,21 +2245,21 @@
   height: 36px;
   margin-bottom: 26px;
   place-items: center;
-  border: 1px solid rgba(242, 96, 74, 0.3);
+  border: 1px solid rgba(30, 108, 196, 0.3);
   border-radius: 11px;
-  background: rgba(242, 96, 74, 0.1);
+  background: rgba(30, 108, 196, 0.1);
   color: var(--lp-orange);
 }
 
 .lp-speed-grid article:nth-child(2) .lp-speed-icon {
-  border-color: rgba(176, 139, 245, 0.34);
-  background: rgba(176, 139, 245, 0.1);
+  border-color: rgba(91, 79, 168, 0.34);
+  background: rgba(91, 79, 168, 0.1);
   color: var(--lp-violet);
 }
 
 .lp-speed-grid article:nth-child(3) .lp-speed-icon {
-  border-color: rgba(91, 155, 213, 0.34);
-  background: rgba(91, 155, 213, 0.1);
+  border-color: rgba(47, 122, 110, 0.34);
+  background: rgba(47, 122, 110, 0.1);
   color: var(--lp-sky);
 }
 
@@ -2161,11 +2320,11 @@
 }
 
 .lp-contrast-after {
-  border-color: rgba(242, 96, 74, 0.28) !important;
+  border-color: rgba(30, 108, 196, 0.28) !important;
   background: linear-gradient(
     150deg,
-    rgba(242, 96, 74, 0.1),
-    rgba(242, 96, 74, 0.05)
+    rgba(30, 108, 196, 0.1),
+    rgba(30, 108, 196, 0.05)
   ) !important;
 }
 
@@ -2221,7 +2380,7 @@
   border: 1px solid var(--lp-line-strong);
   border-radius: 16px;
   background: var(--lp-bg-2);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
+  box-shadow: 0 18px 48px -12px rgba(14, 47, 126, 0.22);
   text-align: left;
 }
 
@@ -2244,7 +2403,7 @@
   top: 0;
   left: 0;
   will-change: transform;
-  filter: drop-shadow(0 3px 7px rgba(0, 0, 0, 0.45));
+  filter: drop-shadow(0 3px 7px rgba(14, 47, 126, 0.3));
 }
 
 .lp-ghost svg {
@@ -2284,7 +2443,7 @@
   padding: 11px 13px;
   border: 1px solid var(--lp-line);
   border-radius: 10px;
-  background: rgba(12, 14, 16, 0.72);
+  background: rgba(255, 253, 247, 0.85);
   color: var(--lp-ink);
   font: inherit;
   font-size: 14px;
@@ -2298,7 +2457,7 @@
 
 .lp-field input::placeholder,
 .lp-field textarea::placeholder {
-  color: rgba(237, 238, 240, 0.5);
+  color: rgba(14, 47, 126, 0.73);
 }
 
 .lp-field input:hover,
@@ -2339,7 +2498,7 @@
   padding: 8px 13px;
   border: 1px solid var(--lp-line);
   border-radius: 999px;
-  background: rgba(12, 14, 16, 0.72);
+  background: rgba(255, 253, 247, 0.85);
   color: var(--lp-muted);
   font-size: 13px;
   transition:
@@ -2355,7 +2514,7 @@
 
 .lp-choice input:checked + span {
   border-color: var(--lp-orange);
-  background: rgba(242, 96, 74, 0.14);
+  background: rgba(30, 108, 196, 0.14);
   color: var(--lp-ink);
 }
 
@@ -2378,9 +2537,9 @@
 .lp-form-error {
   margin: 0;
   padding: 10px 13px;
-  border: 1px solid rgba(242, 96, 74, 0.4);
+  border: 1px solid rgba(30, 108, 196, 0.4);
   border-radius: 10px;
-  background: rgba(242, 96, 74, 0.1);
+  background: rgba(30, 108, 196, 0.1);
   color: var(--lp-orange);
   font-size: 13px;
 }

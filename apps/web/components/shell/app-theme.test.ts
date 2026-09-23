@@ -68,7 +68,7 @@ describe("CoDev product theme", () => {
     // bleed into an authenticated page.
     expect(globals).not.toContain(".landing-page {");
     expect(landing).toContain(".lp-page {");
-    expect(landing).toContain("--lp-bg: #121417;");
+    expect(landing).toContain("--lp-bg: #f2e9d6;");
     expect(landing).toContain(".lp-hero h1 em {");
     expect(landing).toContain("var(--lp-lime)");
     expect(landing).toContain("var(--lp-sky)");
@@ -82,6 +82,42 @@ describe("CoDev product theme", () => {
       }
       expect(rule).toMatch(/\.lp-|^@keyframes|^:/);
     }
+  });
+
+  it("runs the marketing page light without lightening the product", () => {
+    // The landing page is the one light surface: paper cream with deep navy
+    // ink. globals.css stays dark for every signed-in route, so the only way
+    // this is safe is the `.lp-page` scoping asserted above.
+    expect(landing).toContain("--lp-bg: #f2e9d6;");
+    expect(landing).toContain("--lp-ink: #0e2f7e;");
+    expect(landing).toContain("color-scheme: light;");
+    // The product theme must stay dark.
+    expect(globals).toContain("color-scheme: dark");
+
+    // The workspace demo stays a dark panel on the light page, so it
+    // re-declares the ink tokens rather than inheriting the navy ones.
+    const demo = landing.slice(landing.indexOf(".lp-demo {"));
+    expect(demo).toContain("--lp-ink: #edeef0;");
+    expect(demo).toContain("background: #121417;");
+  });
+
+  it("keeps a readable backdrop for readers who never get the canvas", () => {
+    // The WebGL layer is progressive enhancement. The still is server-rendered
+    // in app/page.tsx and only steps aside once the canvas reports that it is
+    // drawing, so reduced motion, a browser without WebGL, and no JavaScript
+    // at all each keep a complete backdrop.
+    const page = readFileSync(resolve(process.cwd(), "app/page.tsx"), "utf8");
+    expect(page).toContain('<div className="lp-canvas-still" />');
+
+    expect(landing).toContain(".lp-canvas-still {");
+    expect(landing).toContain("/brand/landing/hero-still.webp");
+    expect(landing).toContain(
+      '.lp-page:has(.lp-canvas-layer[data-canvas="on"]) .lp-canvas-still {',
+    );
+
+    // The canvas never takes pointer events away from the content above it.
+    expect(landing).toContain(".lp-canvas-layer {");
+    expect(landing).toMatch(/\.lp-canvas-layer \{[^}]*pointer-events: none;/);
   });
 
   it("carries ambient motion through each CoDev page shell", () => {
