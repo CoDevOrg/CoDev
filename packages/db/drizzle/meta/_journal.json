@@ -386,6 +386,13 @@
       "when": 1790055020398,
       "tag": "0054_slow_silverclaw",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1790128902513,
+      "tag": "0055_gen2_agent_execution_policy",
+      "breakpoints": true
     }
   ]
 }
