@@ -26,6 +26,7 @@ kept for the record only.
 | [BACKEND_FRONTEND_INTEGRATION.md](./BACKEND_FRONTEND_INTEGRATION.md)                       | Current | Contract between the workspace frontend and the control-plane APIs       |
 | [gen2-workspace.md](./gen2-workspace.md)                                                   | Current | Gen 2 workspace: Firecracker instance, shareable membership, Codex chats |
 | [WORKSPACE_CONSOLIDATION.md](./WORKSPACE_CONSOLIDATION.md)                                 | Current | Sandbox/IDE consolidation; what shipped and what is still gated          |
+| [SUPERSET_WORKSPACE_OWNERSHIP.md](./SUPERSET_WORKSPACE_OWNERSHIP.md)                       | Design  | Phase 1 ownership contract for a first-party Superset-powered workspace  |
 | [workspace-startup-performance-plan.md](./workspace-startup-performance-plan.md)           | Active  | Faster workspace startup, host pooling, persistence, and headless IDE    |
 | [branch-workspaces-plan.md](./branch-workspaces-plan.md)                                   | Current | Branches-first collaboration plan, phases 1 to 5                         |
 | [branch-workspaces-phase-5-verification.md](./branch-workspaces-phase-5-verification.md)   | Current | Verification record for the branch-workspaces rollout                    |
