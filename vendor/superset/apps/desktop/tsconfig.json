@@ -1,0 +1,25 @@
+{
+	"extends": "@superset/typescript/electron.json",
+	"compilerOptions": {
+		"types": ["bun"],
+		"paths": {
+			"@superset/chat-runtime": ["../../packages/chat-runtime/src/index.ts"],
+			"*": ["./src/*"],
+			"~/*": ["./*"]
+		}
+	},
+	"include": [
+		"./src",
+		"electron.vite.config.ts",
+		"electron-builder.ts",
+		"index.d.ts"
+	],
+	"exclude": [
+		"node_modules",
+		"dist",
+		"dist-electron",
+		"release",
+		"src/**/templates/**",
+		"src/resources/browser-extension"
+	]
+}

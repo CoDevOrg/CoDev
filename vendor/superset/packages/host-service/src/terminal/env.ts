@@ -1,0 +1,318 @@
+/**
+ * V2 terminal environment contract.
+ *
+ * PTY env is built from a preserved shell snapshot resolved by the host-service
+ * at startup — never from desktop main or the live host-service process.env.
+ */
+
+export { stripTerminalRuntimeEnv } from "./env-strip.ts";
+export type {
+	ShellBootstrapParams,
+	ShellLaunchParams,
+} from "./shell-launch.ts";
+export {
+	getShellBootstrapEnv,
+	getShellLaunchArgs,
+	getSupersetShellPaths,
+	resolveLaunchShell,
+	shellLaunchExpectsReadyMarker,
+} from "./shell-launch.ts";
+
+import fs from "node:fs";
+import os from "node:os";
+import {
+	TERMINAL_TERM_PROGRAM,
+	TERMINAL_TERM_PROGRAM_VERSION,
+} from "@superset/shared/constants";
+import { getManagedEnv } from "../runtime/sandbox-managed-env/sandbox-managed-env.ts";
+import {
+	augmentPathForMacOS,
+	clearStrictShellEnvCache,
+	getStrictShellEnvironment,
+} from "./clean-shell-env.ts";
+import { stripTerminalRuntimeEnv } from "./env-strip.ts";
+import { getShellBootstrapEnv } from "./shell-launch.ts";
+
+const MACOS_SYSTEM_CERT_FILE = "/etc/ssl/cert.pem";
+let cachedMacosSystemCertAvailable: boolean | null = null;
+
+/**
+ * The sandbox firewall terminates TLS for the domains it injects credentials
+ * into, presenting a per-sandbox CA that the platform trusts through these
+ * variables. Node ignores the system store without them, so an agent in a
+ * terminal that lost them fails every model call with a certificate error.
+ */
+const SANDBOX_FIREWALL_CA_KEYS = [
+	"NODE_EXTRA_CA_CERTS",
+	"NODE_USE_SYSTEM_CA",
+	"SSL_CERT_FILE",
+	"CURL_CA_BUNDLE",
+	"REQUESTS_CA_BUNDLE",
+	"AWS_CA_BUNDLE",
+	"GIT_SSL_CAINFO",
+	"NPM_CONFIG_CAFILE",
+	"PIP_CERT",
+	"CARGO_HTTP_CAINFO",
+	"GRPC_DEFAULT_SSL_ROOTS_FILE_PATH",
+];
+
+function hasMacosSystemCertBundle(): boolean {
+	if (cachedMacosSystemCertAvailable !== null) {
+		return cachedMacosSystemCertAvailable;
+	}
+	cachedMacosSystemCertAvailable = fs.existsSync(MACOS_SYSTEM_CERT_FILE);
+	return cachedMacosSystemCertAvailable;
+}
+
+// ── Shell snapshot preservation ──────────────────────────────────────
+
+let _terminalBaseEnv: Record<string, string> | null = null;
+
+function snapshotStringEnv(
+	baseEnv: NodeJS.ProcessEnv | Record<string, string> = process.env,
+): Record<string, string> {
+	const snapshot: Record<string, string> = {};
+	for (const [key, value] of Object.entries(baseEnv)) {
+		if (typeof value === "string") {
+			snapshot[key] = value;
+		}
+	}
+	return snapshot;
+}
+
+/**
+ * Resolve the shell-derived terminal base env inside the host-service process.
+ * Desktop main should not construct or own this snapshot.
+ *
+ * Falls back to a process.env snapshot if the user's login shell can't be
+ * probed — crashing host-service startup over a degraded PTY env strands
+ * users on v2. v1 desktop main does the same in apps/desktop shell-env.ts.
+ */
+export async function resolveTerminalBaseEnv(): Promise<
+	Record<string, string>
+> {
+	try {
+		return await getStrictShellEnvironment();
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		console.warn(
+			`[host-service] Shell env snapshot failed, falling back to process.env: ${message}`,
+		);
+		const fallback = snapshotStringEnv(process.env);
+		augmentPathForMacOS(fallback);
+		return fallback;
+	}
+}
+
+/**
+ * Capture the terminal base env at host-service startup.
+ *
+ * Accepts an explicit shell snapshot for the real startup path, but retains a
+ * process.env fallback for tests and local helpers.
+ */
+export function initTerminalBaseEnv(baseEnv?: Record<string, string>): void {
+	_terminalBaseEnv = stripTerminalRuntimeEnv(snapshotStringEnv(baseEnv));
+}
+
+export function getTerminalBaseEnv(): Record<string, string> {
+	if (!_terminalBaseEnv) {
+		throw new Error(
+			"Terminal base env not initialized. Call initTerminalBaseEnv() at host-service startup.",
+		);
+	}
+	return { ..._terminalBaseEnv };
+}
+
+let _terminalBaseEnvReady: Promise<void> | null = null;
+
+/**
+ * Kick off the shell-env snapshot in the background and stash it once resolved.
+ *
+ * Startup must NOT await this. The login-shell probe can take up to
+ * SHELL_ENV_TIMEOUT_MS (8s) — often the full budget when the user's shell is
+ * slow (e.g. a wedged powerlevel10k/gitstatus init) — and gating the HTTP
+ * listen on it pushes cold starts past the desktop coordinator's health-check
+ * window, especially when every org boots at once. PTY creation awaits
+ * `waitForTerminalBaseEnv()` instead, so terminals still get the preserved
+ * snapshot without blocking the server from becoming reachable.
+ */
+export function startTerminalBaseEnvResolution(): void {
+	if (_terminalBaseEnvReady) return;
+	const promise = resolveTerminalBaseEnv().then((baseEnv) => {
+		// Ignore a stale resolution whose gate was already reset (tests) so it
+		// can't clobber fresh state.
+		if (_terminalBaseEnvReady === promise) initTerminalBaseEnv(baseEnv);
+	});
+	// Fire-and-forget: nothing awaits the gate until the first PTY is created,
+	// so swallow a background failure rather than crash on an unhandled
+	// rejection. resolveTerminalBaseEnv already falls back internally.
+	promise.catch((err) => {
+		console.warn("[host-service] terminal base env resolution failed:", err);
+	});
+	_terminalBaseEnvReady = promise;
+}
+
+/**
+ * Await the background shell-env snapshot before reading getTerminalBaseEnv().
+ * Resolves immediately when resolution was never started (tests and helpers
+ * that call initTerminalBaseEnv() directly).
+ */
+export async function waitForTerminalBaseEnv(): Promise<void> {
+	if (_terminalBaseEnvReady) await _terminalBaseEnvReady;
+}
+
+export function resetTerminalBaseEnvForTests(): void {
+	_terminalBaseEnv = null;
+	_terminalBaseEnvReady = null;
+	cachedMacosSystemCertAvailable = null;
+	clearStrictShellEnvCache();
+}
+
+// ── Locale ───────────────────────────────────────────────────────────
+
+const UTF8_RE = /utf-?8/i;
+
+/** POSIX precedence: LC_ALL overrides LANG. Matches utf8/UTF-8/UTF8. */
+export function normalizeUtf8Locale(baseEnv: Record<string, string>): string {
+	if (baseEnv.LC_ALL && UTF8_RE.test(baseEnv.LC_ALL)) return baseEnv.LC_ALL;
+	if (baseEnv.LANG && UTF8_RE.test(baseEnv.LANG)) return baseEnv.LANG;
+	return "en_US.UTF-8";
+}
+
+// ── V2 terminal env construction ─────────────────────────────────────
+
+interface BuildV2TerminalEnvParams {
+	baseEnv: Record<string, string>;
+	shell: string;
+	supersetHomeDir: string;
+	organizationId: string;
+	themeType?: "dark" | "light";
+	cwd: string;
+	terminalId: string;
+	workspaceId: string;
+	workspacePath: string;
+	rootPath: string;
+	supersetEnv: "development" | "production";
+	agentHookPort: string;
+	agentHookVersion: string;
+	/**
+	 * tRPC URL for the host-service notifications.hook mutation.
+	 * Endpoint is unauthenticated by design — it broadcasts chimes and
+	 * nudges the workspace's linked task to In Progress (idempotent,
+	 * forward-only). See the router for rationale.
+	 */
+	hostAgentHookUrl?: string;
+}
+
+/**
+ * Build the final v2 PTY environment.
+ * baseEnv must be the preserved shell snapshot from getTerminalBaseEnv().
+ */
+export function buildV2TerminalEnv(
+	params: BuildV2TerminalEnvParams,
+): Record<string, string> {
+	const {
+		baseEnv,
+		shell,
+		supersetHomeDir,
+		organizationId,
+		themeType,
+		cwd,
+		terminalId,
+		workspaceId,
+		workspacePath,
+		rootPath,
+		supersetEnv,
+		agentHookPort,
+		agentHookVersion,
+		hostAgentHookUrl,
+	} = params;
+
+	// Defense in depth — baseEnv is pre-stripped at init, but strip again
+	// to guarantee no runtime keys reach PTYs regardless of call site
+	const env = stripTerminalRuntimeEnv(baseEnv);
+
+	Object.assign(env, getShellBootstrapEnv({ shell, baseEnv, supersetHomeDir }));
+
+	env.TERM = "xterm-256color";
+	env.SHELL = shell;
+	// See TERMINAL_TERM_PROGRAM for why we identify as kitty: the client's
+	// full-fidelity wheel handler produces a native-grade report stream that
+	// TUIs must trust as-is, not amplify with vscode-style compensation.
+	// Shift+Enter does NOT depend on this: line-edit-translations.ts sends
+	// ESC+CR directly.
+	env.TERM_PROGRAM = TERMINAL_TERM_PROGRAM;
+	env.TERM_PROGRAM_VERSION = TERMINAL_TERM_PROGRAM_VERSION;
+	env.COLORTERM = "truecolor";
+	env.COLORFGBG = themeType === "light" ? "0;15" : "15;0";
+	// TERM_THEME is an explicit light/dark hint that cursor-agent (and other
+	// TUIs) read before falling back to an OSC 11 background probe. Our PTY
+	// output round-trips through the renderer's xterm, so that probe routinely
+	// exceeds cursor-agent's ~100ms timeout and defaults to dark on a light
+	// theme. Setting it here resolves the theme without the probe race.
+	env.TERM_THEME = themeType === "light" ? "light" : "dark";
+	env.LANG = normalizeUtf8Locale(baseEnv);
+	env.PWD = cwd;
+
+	env.SUPERSET_TERMINAL_ID = terminalId;
+	// Scope CLI commands launched in this terminal to the same organization as
+	// the org-specific host-service that owns the workspace. This is routing
+	// metadata, not a credential; the CLI still uses its own authenticated
+	// session, but no longer consults that session's unrelated active-org choice.
+	if (organizationId) {
+		env.SUPERSET_ORGANIZATION_ID = organizationId;
+	}
+	env.SUPERSET_WORKSPACE_ID = workspaceId;
+	// In a cloud workspace, say so and say which: `superset` here authenticates
+	// as the workspace rather than a person, and an agent asked to reach its
+	// own box needs the id it was provisioned for.
+	if (process.env.SUPERSET_HOST_RUN_MODE === "sandbox") {
+		const sandboxWorkspaceId = process.env.SUPERSET_SANDBOX_WORKSPACE_ID;
+		if (sandboxWorkspaceId) {
+			env.SUPERSET_SANDBOX_WORKSPACE_ID = sandboxWorkspaceId;
+		}
+	}
+	env.SUPERSET_WORKSPACE_PATH = workspacePath;
+	env.SUPERSET_ROOT_PATH = rootPath;
+	env.SUPERSET_ENV = supersetEnv;
+	env.SUPERSET_AGENT_HOOK_PORT = agentHookPort;
+	env.SUPERSET_AGENT_HOOK_VERSION = agentHookVersion;
+	// v2 — agent posts to host-service so the renderer can play the sound
+	// client-side. No auth token: the endpoint is unauthenticated by design
+	// (chimes plus an idempotent linked-task In Progress nudge). The
+	// notify-hook script falls back to the electron endpoint when this URL
+	// isn't set.
+	if (hostAgentHookUrl) {
+		env.SUPERSET_HOST_AGENT_HOOK_URL = hostAgentHookUrl;
+	}
+
+	if (supersetHomeDir) {
+		env.SUPERSET_HOME_DIR = supersetHomeDir;
+	}
+
+	if (process.env.SUPERSET_HOST_RUN_MODE === "sandbox") {
+		// The environment's variables and the credential placeholders arrive
+		// from the control plane after boot and live only in memory; a terminal
+		// opened before the first push gets none, and the next one gets them.
+		Object.assign(env, getManagedEnv());
+		for (const key of SANDBOX_FIREWALL_CA_KEYS) {
+			const value = process.env[key];
+			if (value) env[key] = value;
+		}
+		// Claude refuses `--dangerously-skip-permissions` unless told it is
+		// inside a sandbox, which is exactly what this is.
+		env.IS_SANDBOX = "1";
+	}
+
+	// Electron child processes can't access macOS Keychain for TLS cert verification,
+	// causing "x509: OSStatus -26276" in Go binaries like `gh`. File-based fallback.
+	if (
+		os.platform() === "darwin" &&
+		!env.SSL_CERT_FILE &&
+		hasMacosSystemCertBundle()
+	) {
+		env.SSL_CERT_FILE = MACOS_SYSTEM_CERT_FILE;
+	}
+
+	return env;
+}

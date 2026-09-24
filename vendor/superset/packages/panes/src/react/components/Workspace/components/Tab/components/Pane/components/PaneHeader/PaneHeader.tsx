@@ -1,0 +1,90 @@
+import { cn } from "@superset/ui/utils";
+import { type ReactNode, useCallback, useRef } from "react";
+import { useDrag } from "react-dnd";
+import { DefaultHeaderContent } from "./components/DefaultHeaderContent";
+
+interface PaneHeaderProps {
+	title: ReactNode;
+	icon?: ReactNode;
+	isActive: boolean;
+	titleContent?: ReactNode;
+	headerExtras?: ReactNode;
+	actionsContent: ReactNode;
+	toolbar?: ReactNode;
+	paneId?: string;
+	onClick?: () => void;
+	onMiddleClick?: () => void;
+}
+
+export const PANE_DRAG_TYPE = "pane";
+
+export function PaneHeader({
+	title,
+	icon,
+	isActive,
+	titleContent,
+	headerExtras,
+	actionsContent,
+	toolbar,
+	paneId,
+	onClick,
+	onMiddleClick,
+}: PaneHeaderProps) {
+	const [{ isDragging }, connectDrag] = useDrag(
+		() => ({
+			type: PANE_DRAG_TYPE,
+			item: { paneId },
+			canDrag: !!paneId,
+			collect: (monitor) => ({
+				isDragging: monitor.isDragging(),
+			}),
+		}),
+		[paneId],
+	);
+
+	const nodeRef = useRef<HTMLDivElement>(null);
+	const setRef = useCallback(
+		(node: HTMLDivElement | null) => {
+			(nodeRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+			connectDrag(node);
+		},
+		[connectDrag],
+	);
+
+	return (
+		// biome-ignore lint/a11y/useKeyWithClickEvents: pane header click-to-pin doesn't need keyboard equivalent
+		// biome-ignore lint/a11y/noStaticElementInteractions: click to pin, middle-click to close
+		<div
+			ref={setRef}
+			className={cn(
+				// Not the @container/pane-header itself: containment would make
+				// this a stacking context, trapping the URL-bar suggestions
+				// (an absolute z-50 box inside the header) under later siblings
+				// like the import banner. The pane root carries the container.
+				"flex h-7 shrink-0 cursor-grab items-center border-b border-border/20 bg-muted/30 transition-opacity duration-150",
+				!isActive &&
+					!isDragging &&
+					"opacity-60 hover:opacity-100 focus-within:opacity-100",
+				isDragging && "opacity-30",
+			)}
+			onClick={onClick}
+			onAuxClick={(e) => {
+				if (e.button === 1 && onMiddleClick) {
+					e.preventDefault();
+					onMiddleClick();
+				}
+			}}
+		>
+			{toolbar ?? (
+				<DefaultHeaderContent
+					title={title}
+					icon={icon}
+					isActive={isActive}
+					titleContent={titleContent}
+					headerExtras={headerExtras}
+					actionsContent={actionsContent}
+				/>
+			)}
+		</div>
+	);
+}

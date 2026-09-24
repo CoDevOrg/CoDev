@@ -1,0 +1,79 @@
+import { describe, expect, test } from "bun:test";
+import { publishPageSchema } from "./schema";
+
+const WORKSPACE = "00000000-0000-4000-8000-000000000001";
+const PAGE = "00000000-0000-4000-8000-000000000002";
+const FILE = "00000000-0000-4000-8000-000000000003";
+
+const base = { fileId: FILE, filename: "index.html" };
+
+describe("publishPageSchema", () => {
+	// Carries a valid upload as well, so the body is what it is refused for.
+	test("refuses the document in the body, as clients before the upload sent it", () => {
+		expect(
+			publishPageSchema.safeParse({
+				...base,
+				pageId: PAGE,
+				content: Buffer.from("<!doctype html>").toString("base64"),
+				contentType: "text/html",
+			}).success,
+		).toBe(false);
+	});
+
+	test("accepts a publish anchored to nothing", () => {
+		expect(publishPageSchema.safeParse(base).success).toBe(true);
+	});
+
+	test("accepts a publish anchored by pageId alone", () => {
+		expect(publishPageSchema.safeParse({ ...base, pageId: PAGE }).success).toBe(
+			true,
+		);
+	});
+
+	test("accepts pageId carrying a workspace id but no entry path", () => {
+		expect(
+			publishPageSchema.safeParse({
+				...base,
+				pageId: PAGE,
+				workspaceId: WORKSPACE,
+			}).success,
+		).toBe(true);
+	});
+
+	test("accepts a publish carrying both link fields", () => {
+		expect(
+			publishPageSchema.safeParse({
+				...base,
+				workspaceId: WORKSPACE,
+				entryPath: "site/index.html",
+			}).success,
+		).toBe(true);
+	});
+
+	test("rejects entryPath without workspaceId", () => {
+		const result = publishPageSchema.safeParse({
+			...base,
+			entryPath: "site/index.html",
+		});
+		if (result.success) throw new Error("expected a validation failure");
+		expect(result.error.issues[0]?.message).toBe(
+			"workspaceId and entryPath must be provided together",
+		);
+	});
+
+	test("rejects workspaceId without entryPath", () => {
+		expect(
+			publishPageSchema.safeParse({ ...base, workspaceId: WORKSPACE }).success,
+		).toBe(false);
+	});
+
+	test("tolerates a stray entryPath once pageId anchors the publish", () => {
+		expect(
+			publishPageSchema.safeParse({
+				...base,
+				pageId: PAGE,
+				entryPath: "site/index.html",
+			}).success,
+		).toBe(true);
+	});
+});

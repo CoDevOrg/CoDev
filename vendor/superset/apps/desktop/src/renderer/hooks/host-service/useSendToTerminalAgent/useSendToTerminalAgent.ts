@@ -1,0 +1,111 @@
+import { useLingui } from "@lingui/react/macro";
+import { errorMessage } from "@superset/i18n/errors";
+import { sanitizePromptForPty } from "@superset/shared/agent-prompt-launch";
+import { toast } from "@superset/ui/sonner";
+import { workspaceTrpc } from "@superset/workspace-client";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
+import { getTerminalAgentBindingsQueryKey } from "../useTerminalAgentBindings/useTerminalAgentBindings";
+
+export type AgentPromptFileSide = "additions" | "deletions" | "mixed";
+
+export interface AgentPromptFileContext {
+	path: string;
+	startLine: number;
+	endLine: number;
+	/** Which side of the diff the selection covers. When omitted, the prompt
+	 *  is rendered without a side annotation (single-file viewer case).
+	 *  `deletions` and `mixed` are tagged explicitly because their line
+	 *  numbers refer to the pre-diff file and would otherwise be ambiguous. */
+	side?: AgentPromptFileSide;
+}
+
+interface FormatPromptInput {
+	comment: string;
+	file: AgentPromptFileContext;
+}
+
+/**
+ * Build the prompt body for sending a comment to a CLI agent that should
+ * be anchored to a specific file/line range (e.g. inline diff comments,
+ * file-viewer selections). Keep this stable so consumers can format the
+ * same way without sharing logic.
+ */
+export function formatAgentPromptWithFileContext({
+	comment,
+	file,
+}: FormatPromptInput): string {
+	const range =
+		file.startLine === file.endLine
+			? `L${file.startLine}`
+			: `L${file.startLine}-L${file.endLine}`;
+	const sideSuffix =
+		file.side === "deletions"
+			? " (deleted lines)"
+			: file.side === "mixed"
+				? " (across deletions and additions)"
+				: "";
+	return `In ${file.path}:${range}${sideSuffix}: ${comment}`;
+}
+
+export interface SendToTerminalAgentInput {
+	workspaceId: string;
+	terminalId: string;
+	/** Already-formatted prompt body. The host submits it with Enter. */
+	text: string;
+}
+
+interface UseSendToTerminalAgentResult {
+	send: (input: SendToTerminalAgentInput) => Promise<void>;
+	isPending: boolean;
+}
+
+/**
+ * Shared writer for pushing a comment/prompt into an existing terminal
+ * agent via the host-service `terminal.send` mutation, which paste-frames the
+ * text. `terminal.writeInput` delivers raw keystrokes: a TUI reads a prompt's
+ * embedded newlines as Enter presses and drops or splits the text.
+ * Surfaces (DiffPane composer, file-viewer comments, etc.) should funnel
+ * through this so the payload normalization + error toast stay consistent.
+ */
+export function useSendToTerminalAgent(): UseSendToTerminalAgentResult {
+	const { t } = useLingui();
+	const queryClient = useQueryClient();
+	const sendToTerminal = workspaceTrpc.terminal.send.useMutation();
+
+	const send = useCallback(
+		async ({ workspaceId, terminalId, text }: SendToTerminalAgentInput) => {
+			try {
+				await sendToTerminal.mutateAsync({
+					workspaceId,
+					terminalId,
+					text: sanitizePromptForPty(text).trimEnd(),
+					submit: true,
+				});
+			} catch (error) {
+				// The likeliest failure is a target whose pty died (daemon crash,
+				// reboot) while its session row lagged behind — refetch the
+				// bindings so the composer stops offering the dead agent.
+				void queryClient.invalidateQueries({
+					queryKey: getTerminalAgentBindingsQueryKey(workspaceId),
+				});
+				const message = errorMessage(
+					error,
+					t({
+						message: "Unknown error",
+					}),
+				);
+				toast.error(
+					t({
+						message: "Couldn't send to agent",
+					}),
+					{ description: message },
+				);
+				throw error;
+			}
+		},
+		[sendToTerminal, t, queryClient],
+	);
+
+	return { send, isPending: sendToTerminal.isPending };
+}
