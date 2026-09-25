@@ -53,18 +53,17 @@ export async function sendAccessRequestReceipt(request: {
   email: string;
   name?: string | undefined;
 }) {
-  const firstName = request.name?.split(/\s+/)[0];
   await send({
     to: request.email,
     subject: "We got your CoDev access request",
     text: [
-      firstName ? `Hi ${firstName},` : "Hi,",
+      "Thanks for joining the CoDev waitlist.",
       "",
-      "Thanks for asking for access to CoDev. Your request is in — we're letting builders in a group at a time while the private beta is still small.",
+      "We’re building CoDev to make coding with AI feel multiplayer. Bring in your existing chats, work in shared coding workspaces, and let teammates jump into the same sessions and collaborate with you and your agents in real time.",
       "",
-      "When your invite is ready we'll email this address with a link that gets you straight into a workspace.",
+      "We’ll be opening up access soon.",
       "",
-      "— The CoDev team",
+      "The CoDev Team",
     ].join("\n"),
   });
 }
