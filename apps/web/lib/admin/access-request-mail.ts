@@ -57,13 +57,13 @@ export async function sendAccessRequestReceipt(request: {
     to: request.email,
     subject: "We got your CoDev access request",
     text: [
-      "Thanks for joining the Codev waitlist.",
+      "Thanks for joining the CoDev waitlist.",
       "",
-      "We’re building Codev to make coding with AI feel multiplayer. Bring in your existing chats, work in shared coding workspaces, and let teammates jump into the same sessions and collaborate with you and your agents in real time.",
+      "We’re building CoDev to make coding with AI feel multiplayer. Bring in your existing chats, work in shared coding workspaces, and let teammates jump into the same sessions and collaborate with you and your agents in real time.",
       "",
       "We’ll be opening up access soon.",
       "",
-      "The Codev Team",
+      "The CoDev Team",
     ].join("\n"),
   });
 }
