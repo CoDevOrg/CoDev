@@ -122,9 +122,11 @@ Concurrent agents: the guest serialises Codex (`start_codex_exec` waits on
 more workspaces.
 
 Not yet built here: a browser/preview tab (live port forwarding is deferred in
-`lib/runtime/preview.ts` and needs guest networking), file create/rename/delete,
-Git staging and commit from the UI, and realtime fan-out between members —
-two people in one workspace see each other's writes only on refresh.
+`lib/runtime/preview.ts` and needs guest networking), Git staging and commit
+from the UI, and realtime fan-out between members. The feature-flagged
+`/superset` page supports nested file/folder creation, rename, and permanent
+delete through the Superset host filesystem service; two people in one
+workspace still see each other's writes only on refresh.
 
 ## Routes
 

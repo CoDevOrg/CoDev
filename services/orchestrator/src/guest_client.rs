@@ -12,7 +12,8 @@ use crate::model::{
     ClaudeSetupStartRequest, CodexExecPollRequest, CodexExecPollResponse, CodexExecStartRequest,
     ExecRequest, ExecResponse, FileResponse, PublicationExportRequest, PublicationExportResponse,
     Result, RuntimeError, SessionRestoreBeginRequest, SessionRestoreChunkRequest,
-    SessionRestoreFinalizeResponse, SupersetCreateEntryRequest, TerminalInputRequest,
+    SessionRestoreFinalizeResponse, SupersetCreateEntryRequest, SupersetDeleteEntryRequest,
+    SupersetMoveEntryRequest, TerminalInputRequest,
     TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
     WorktreeCheckpointRequest, WorktreeCheckpointResponse, WorktreeCreateRequest,
     WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest, WorktreeRebaseResponse,
@@ -96,6 +97,22 @@ impl GuestClient {
         request: &SupersetCreateEntryRequest,
     ) -> Result<serde_json::Value> {
         self.request("POST", "/v1/superset/entry/create", Some(request))
+            .await
+    }
+
+    pub async fn superset_move_entry(
+        &self,
+        request: &SupersetMoveEntryRequest,
+    ) -> Result<serde_json::Value> {
+        self.request("POST", "/v1/superset/entry/move", Some(request))
+            .await
+    }
+
+    pub async fn superset_delete_entry(
+        &self,
+        request: &SupersetDeleteEntryRequest,
+    ) -> Result<serde_json::Value> {
+        self.request("POST", "/v1/superset/entry/delete", Some(request))
             .await
     }
 

@@ -317,9 +317,23 @@ export const gen2SupersetSaveFileResponseSchema = z.object({
   file: gen2SupersetFileSchema,
 });
 
-/** A root-level entry is created atomically; nested creation comes later. */
+const gen2SupersetRelativePathSchema = gen2FilePathSchema.refine(
+  (value) =>
+    !value
+      .split("/")
+      .some((part) => part.length === 0 || part === "." || part === ".."),
+  "Path must stay within the selected worktree.",
+);
+
+const gen2SupersetParentPathSchema = z.union([
+  z.literal(""),
+  gen2SupersetRelativePathSchema,
+]);
+
+/** An entry is created atomically in the selected workspace folder. */
 export const gen2SupersetCreateEntryRequestSchema = z.object({
   worktreeId: gen2SupersetWorktreeIdSchema,
+  parentPath: gen2SupersetParentPathSchema.default(""),
   name: z
     .string()
     .trim()
@@ -343,6 +357,27 @@ export const gen2SupersetCreateEntryRequestSchema = z.object({
 
 export const gen2SupersetCreateEntryResponseSchema = z.object({
   entry: gen2SupersetEntrySchema,
+});
+
+/** Move also covers a rename when the parent path is unchanged. */
+export const gen2SupersetMoveEntryRequestSchema = z.object({
+  worktreeId: gen2SupersetWorktreeIdSchema,
+  path: gen2SupersetRelativePathSchema,
+  parentPath: gen2SupersetParentPathSchema,
+  name: gen2SupersetCreateEntryRequestSchema.shape.name,
+});
+
+export const gen2SupersetMoveEntryResponseSchema = z.object({
+  entry: gen2SupersetEntrySchema,
+});
+
+export const gen2SupersetDeleteEntryRequestSchema = z.object({
+  worktreeId: gen2SupersetWorktreeIdSchema,
+  path: gen2SupersetRelativePathSchema,
+});
+
+export const gen2SupersetDeleteEntryResponseSchema = z.object({
+  path: gen2SupersetRelativePathSchema,
 });
 
 /** A 409 save response carries the host's current revision. */

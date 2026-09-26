@@ -30,10 +30,10 @@ import {
 
 import { gen2LanguageExtension } from "./editor-languages";
 import {
-  buildSupersetFoldChevron,
   supersetEditorTheme,
   supersetHighlighting,
 } from "./superset-editor-theme";
+import { buildFoldChevron } from "../../../../vendor/superset/apps/desktop/src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/hooks/usePaneRegistry/components/FilePane/registry/views/CodeView/components/CodeEditor/extensions/foldChevron/foldChevron";
 
 /**
  * Browser-safe adaptation of Superset's CodeEditor. Desktop font settings,
@@ -78,7 +78,7 @@ export function SupersetCodeEditor({
           highlightSpecialChars(),
           highlightActiveLineGutter(),
           highlightSelectionMatches(),
-          foldGutter({ markerDOM: buildSupersetFoldChevron }),
+          foldGutter({ markerDOM: buildFoldChevron }),
           codeFolding(),
           history(),
           drawSelection(),

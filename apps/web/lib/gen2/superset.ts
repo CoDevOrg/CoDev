@@ -2,8 +2,10 @@ import "server-only";
 
 import {
   gen2SupersetCreateEntryResponseSchema,
+  gen2SupersetDeleteEntryResponseSchema,
   gen2SupersetExternalFileChangesResponseSchema,
   gen2SupersetListFilesResponseSchema,
+  gen2SupersetMoveEntryResponseSchema,
   gen2SupersetReadFileResponseSchema,
   gen2SupersetSaveFileResponseSchema,
   type Gen2SupersetFile,
@@ -78,7 +80,12 @@ export async function listGen2SupersetFiles(
 export async function createGen2SupersetEntry(
   workspaceId: string,
   userId: string,
-  input: { worktreeId: string; name: string; kind: "file" | "directory" },
+  input: {
+    worktreeId: string;
+    parentPath: string;
+    name: string;
+    kind: "file" | "directory";
+  },
 ): Promise<Gen2SupersetEntry> {
   const membership = await requireReadySupersetMember(workspaceId, userId);
   if (membership.role === "viewer") {
@@ -95,6 +102,54 @@ export async function createGen2SupersetEntry(
   );
   return gen2SupersetCreateEntryResponseSchema.parse(await response.json())
     .entry;
+}
+
+export async function moveGen2SupersetEntry(
+  workspaceId: string,
+  userId: string,
+  input: {
+    worktreeId: string;
+    path: string;
+    parentPath: string;
+    name: string;
+  },
+): Promise<Gen2SupersetEntry> {
+  const membership = await requireReadySupersetMember(workspaceId, userId);
+  if (membership.role === "viewer") {
+    throw new Gen2AccessError(
+      "Edit permission is required to rename or move files and folders.",
+      403,
+    );
+  }
+  const response = await orchestratorRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/superset/entry/move`,
+    input,
+    35_000,
+  );
+  return gen2SupersetMoveEntryResponseSchema.parse(await response.json()).entry;
+}
+
+export async function deleteGen2SupersetEntry(
+  workspaceId: string,
+  userId: string,
+  input: { worktreeId: string; path: string },
+): Promise<string> {
+  const membership = await requireReadySupersetMember(workspaceId, userId);
+  if (membership.role === "viewer") {
+    throw new Gen2AccessError(
+      "Edit permission is required to delete files and folders.",
+      403,
+    );
+  }
+  const response = await orchestratorRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/superset/entry/delete`,
+    input,
+    35_000,
+  );
+  return gen2SupersetDeleteEntryResponseSchema.parse(await response.json())
+    .path;
 }
 
 export async function readGen2SupersetFile(

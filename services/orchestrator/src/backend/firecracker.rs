@@ -34,7 +34,8 @@ use crate::{
         CodexExecStartRequest, CreateRequest, ExecRequest, ExecResponse, FileResponse, Instance,
         PublicationExportRequest, PublicationExportResponse, RepositorySnapshot, Result,
         RuntimeError, SessionRestoreBeginRequest, SessionRestoreChunkRequest,
-        SessionRestoreFinalizeResponse, SupersetCreateEntryRequest, TerminalInputRequest,
+        SessionRestoreFinalizeResponse, SupersetCreateEntryRequest, SupersetDeleteEntryRequest,
+        SupersetMoveEntryRequest, TerminalInputRequest,
         TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
         WorktreeCheckpointRequest, WorktreeCheckpointResponse, WorktreeCreateRequest,
         WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest, WorktreeRebaseResponse,
@@ -665,6 +666,28 @@ impl FirecrackerBackend {
     ) -> Result<serde_json::Value> {
         let machine = self.machine(workspace_id).await?;
         let result = machine.guest.superset_create_entry(request).await?;
+        self.mark_activity(&machine);
+        Ok(result)
+    }
+
+    pub async fn superset_move_entry(
+        &self,
+        workspace_id: &str,
+        request: &SupersetMoveEntryRequest,
+    ) -> Result<serde_json::Value> {
+        let machine = self.machine(workspace_id).await?;
+        let result = machine.guest.superset_move_entry(request).await?;
+        self.mark_activity(&machine);
+        Ok(result)
+    }
+
+    pub async fn superset_delete_entry(
+        &self,
+        workspace_id: &str,
+        request: &SupersetDeleteEntryRequest,
+    ) -> Result<serde_json::Value> {
+        let machine = self.machine(workspace_id).await?;
+        let result = machine.guest.superset_delete_entry(request).await?;
         self.mark_activity(&machine);
         Ok(result)
     }

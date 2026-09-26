@@ -28,7 +28,8 @@ use crate::model::{
     PublicationExportResponse, PublicationFile, RuntimeError, SESSION_RESTORE_CHUNK_BYTES,
     SESSION_RESTORE_FILE_BYTES, SESSION_RESTORE_TOTAL_BYTES, SessionRestoreBeginRequest,
     SessionRestoreChunkRequest, SessionRestoreFileKind, SessionRestoreFinalizeResponse,
-    SessionRestoreStatus, SupersetCreateEntryRequest, TerminalChunk, TerminalInputRequest,
+    SessionRestoreStatus, SupersetCreateEntryRequest, SupersetDeleteEntryRequest,
+    SupersetMoveEntryRequest, TerminalChunk, TerminalInputRequest,
     TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
     WorktreeCheckpointRequest, WorktreeCheckpointResponse, WorktreeCreateRequest,
     WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest, WorktreeRebaseResponse,
@@ -245,6 +246,12 @@ impl GuestService {
                 if path == "/v1/superset/entry/create" && method == "POST" {
                     return self.superset_create_entry(body);
                 }
+                if path == "/v1/superset/entry/move" && method == "POST" {
+                    return self.superset_move_entry(body);
+                }
+                if path == "/v1/superset/entry/delete" && method == "POST" {
+                    return self.superset_delete_entry(body);
+                }
                 if path == "/v1/superset/file/changes" && method == "POST" {
                     return self.superset_file_changes(body);
                 }
@@ -448,6 +455,9 @@ impl GuestService {
         if let Err(error) = validate_worktree_id(&request.worktree_id) {
             return GuestResponse::error(400, error);
         }
+        if !request.parent_path.is_empty() && !is_safe_relative_path(&request.parent_path) {
+            return GuestResponse::error(400, "invalid parent path");
+        }
         if !is_safe_entry_name(&request.name) {
             return GuestResponse::error(400, "invalid file or folder name");
         }
@@ -455,6 +465,37 @@ impl GuestService {
             return GuestResponse::error(400, "invalid entry kind");
         }
         self.superset_bridge_request("POST", "/codev/entry", body)
+    }
+
+    fn superset_move_entry(&self, body: &[u8]) -> GuestResponse {
+        let request: SupersetMoveEntryRequest = match decode(body) {
+            Ok(request) => request,
+            Err(error) => return GuestResponse::error(400, error),
+        };
+        if let Err(error) = validate_worktree_id(&request.worktree_id) {
+            return GuestResponse::error(400, error);
+        }
+        if !is_safe_relative_path(&request.path)
+            || (!request.parent_path.is_empty() && !is_safe_relative_path(&request.parent_path))
+            || !is_safe_entry_name(&request.name)
+        {
+            return GuestResponse::error(400, "invalid file move request");
+        }
+        self.superset_bridge_request("POST", "/codev/entry/move", body)
+    }
+
+    fn superset_delete_entry(&self, body: &[u8]) -> GuestResponse {
+        let request: SupersetDeleteEntryRequest = match decode(body) {
+            Ok(request) => request,
+            Err(error) => return GuestResponse::error(400, error),
+        };
+        if let Err(error) = validate_worktree_id(&request.worktree_id) {
+            return GuestResponse::error(400, error);
+        }
+        if !is_safe_relative_path(&request.path) {
+            return GuestResponse::error(400, "invalid file deletion request");
+        }
+        self.superset_bridge_request("POST", "/codev/entry/delete", body)
     }
 
     fn superset_file_changes(&self, body: &[u8]) -> GuestResponse {

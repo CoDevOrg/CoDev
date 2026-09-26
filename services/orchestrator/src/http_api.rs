@@ -25,7 +25,8 @@ use crate::{
         IDE_EXEC_MAX_ARGUMENTS, IDE_EXEC_MAX_TIMEOUT_SECONDS, IdeExecRequest, IdePrepareRequest,
         IdeStartRequest, IdeWriteFileRequest, MAX_IDE_FILE_BYTES, PublicationExportRequest, Result,
         RuntimeError, SESSION_RESTORE_CHUNK_BYTES, SessionRestoreBeginRequest,
-        SessionRestoreChunkRequest, SupersetCreateEntryRequest, TerminalInputRequest,
+        SessionRestoreChunkRequest, SupersetCreateEntryRequest, SupersetDeleteEntryRequest,
+        SupersetMoveEntryRequest, TerminalInputRequest,
         TerminalPollRequest, TerminalResizeRequest, TerminalStartRequest,
         WorktreeCheckpointRequest, WorktreeCreateRequest, WorktreeMergeRequest,
         WorktreeRebaseRequest, WriteFileRequest,
@@ -101,6 +102,14 @@ pub fn router(backend: SharedBackend, ide: IdeBackend) -> Router {
         .route(
             "/v1/sandboxes/{workspace_id}/superset/entry/create",
             post(superset_create_entry),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/superset/entry/move",
+            post(superset_move_entry),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/superset/entry/delete",
+            post(superset_delete_entry),
         )
         .route(
             "/v1/sandboxes/{workspace_id}/superset/file/changes",
@@ -440,6 +449,11 @@ async fn superset_create_entry(
 ) -> Result<Json<serde_json::Value>> {
     validate_workspace_id(&workspace_id)?;
     validate_optional_worktree_id(Some(&request.worktree_id))?;
+    if !request.parent_path.is_empty() && !is_safe_superset_relative_path(&request.parent_path) {
+        return Err(RuntimeError::BadRequest(
+            "invalid file creation request".into(),
+        ));
+    }
     if request.name.is_empty()
         || request.name.len() > 255
         || matches!(request.name.as_str(), "." | "..")
@@ -455,6 +469,46 @@ async fn superset_create_entry(
         backend
             .superset_create_entry(&workspace_id, &request)
             .await?,
+    ))
+}
+
+async fn superset_move_entry(
+    State(backend): State<SharedBackend>,
+    Path(workspace_id): Path<String>,
+    Json(request): Json<SupersetMoveEntryRequest>,
+) -> Result<Json<serde_json::Value>> {
+    validate_workspace_id(&workspace_id)?;
+    validate_optional_worktree_id(Some(&request.worktree_id))?;
+    if !is_safe_superset_relative_path(&request.path)
+        || (!request.parent_path.is_empty()
+            && !is_safe_superset_relative_path(&request.parent_path))
+        || request.name.is_empty()
+        || request.name.len() > 255
+        || matches!(request.name.as_str(), "." | "..")
+        || request.name.contains(['/', '\\', '\0'])
+        || request.name.chars().any(char::is_control)
+    {
+        return Err(RuntimeError::BadRequest("invalid file move request".into()));
+    }
+    Ok(Json(
+        backend.superset_move_entry(&workspace_id, &request).await?,
+    ))
+}
+
+async fn superset_delete_entry(
+    State(backend): State<SharedBackend>,
+    Path(workspace_id): Path<String>,
+    Json(request): Json<SupersetDeleteEntryRequest>,
+) -> Result<Json<serde_json::Value>> {
+    validate_workspace_id(&workspace_id)?;
+    validate_optional_worktree_id(Some(&request.worktree_id))?;
+    if !is_safe_superset_relative_path(&request.path) {
+        return Err(RuntimeError::BadRequest(
+            "invalid file deletion request".into(),
+        ));
+    }
+    Ok(Json(
+        backend.superset_delete_entry(&workspace_id, &request).await?,
     ))
 }
 
@@ -1190,6 +1244,17 @@ fn validate_worktree_id(worktree_id: &str) -> Result<()> {
     } else {
         Err(RuntimeError::BadRequest("invalid worktree ID".into()))
     }
+}
+
+fn is_safe_superset_relative_path(path: &str) -> bool {
+    !path.is_empty()
+        && path.len() <= 4_096
+        && !path.starts_with('/')
+        && !path.contains(['\\', '\0'])
+        && !path.chars().any(char::is_control)
+        && path
+            .split('/')
+            .all(|part| !part.is_empty() && !matches!(part, "." | ".."))
 }
 
 fn validate_sha(value: &str, label: &str) -> Result<()> {

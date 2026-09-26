@@ -55,15 +55,24 @@ const entryNameSchema = z
 		{ message: "Name must be a single file or folder name." },
 	);
 const createEntrySchema = listSchema.extend({
+	parentPath: z.union([z.literal(""), pathSchema]).default(""),
 	name: entryNameSchema,
 	kind: z.enum(["file", "directory"]),
 });
+const moveEntrySchema = listSchema.extend({
+	path: pathSchema,
+	parentPath: z.union([z.literal(""), pathSchema]),
+	name: entryNameSchema,
+});
+const deleteEntrySchema = listSchema.extend({ path: pathSchema });
 
 type FileService = Pick<
 	FsHostService,
 	| "createUniqueEntry"
+	| "deletePath"
 	| "getMetadata"
 	| "listDirectory"
+	| "movePath"
 	| "readFile"
 	| "watchPath"
 	| "writeFile"
@@ -352,7 +361,7 @@ export function registerCoDevFileBridge({
 			await changes.start(parsed.data.worktreeId);
 			const service = filesystem.getServiceForRootPath(root);
 			const created = await service.createUniqueEntry({
-				parentAbsolutePath: root,
+				parentAbsolutePath: resolve(root, parsed.data.parentPath),
 				baseName: parsed.data.name,
 				kind: parsed.data.kind,
 			});
@@ -370,6 +379,47 @@ export function registerCoDevFileBridge({
 			});
 		} catch (error) {
 			return context.json({ error: error instanceof Error ? error.message : "Could not create file." }, 400);
+		}
+	});
+
+	app.post("/codev/entry/move", async (context) => {
+		if (!requireBridge(context.req.raw)) return context.json({ error: "Unauthorized" }, 401);
+		const parsed = moveEntrySchema.safeParse(await context.req.json().catch(() => undefined));
+		if (!parsed.success) return context.json({ error: "Invalid file move request." }, 400);
+		try {
+			const root = await resolveCoDevWorktreeRoot(workspaceRoot, parsed.data.worktreeId);
+			await changes.start(parsed.data.worktreeId);
+			const service = filesystem.getServiceForRootPath(root);
+			const source = resolve(root, parsed.data.path);
+			const destination = resolve(root, parsed.data.parentPath, parsed.data.name);
+			await service.movePath({ sourceAbsolutePath: source, destinationAbsolutePath: destination });
+			const path = asRelativePath(root, destination);
+			const metadata = await service.getMetadata({ absolutePath: destination });
+			if (!metadata) throw new Error("Moved entry could not be read.");
+			return context.json({
+				entry:
+					metadata.kind === "directory"
+						? { path, kind: "directory" }
+						: { path, kind: "file", size: metadata.size ?? 0 },
+			});
+		} catch (error) {
+			return context.json({ error: error instanceof Error ? error.message : "Could not move file." }, 400);
+		}
+	});
+
+	app.post("/codev/entry/delete", async (context) => {
+		if (!requireBridge(context.req.raw)) return context.json({ error: "Unauthorized" }, 401);
+		const parsed = deleteEntrySchema.safeParse(await context.req.json().catch(() => undefined));
+		if (!parsed.success) return context.json({ error: "Invalid file deletion request." }, 400);
+		try {
+			const root = await resolveCoDevWorktreeRoot(workspaceRoot, parsed.data.worktreeId);
+			await changes.start(parsed.data.worktreeId);
+			await filesystem.getServiceForRootPath(root).deletePath({
+				absolutePath: resolve(root, parsed.data.path),
+			});
+			return context.json({ path: parsed.data.path });
+		} catch (error) {
+			return context.json({ error: error instanceof Error ? error.message : "Could not delete file." }, 400);
 		}
 	});
 
