@@ -48,7 +48,10 @@ const entryNameSchema = z
 			!value.includes("/") &&
 			!value.includes("\\") &&
 			!value.includes("\0") &&
-			![...value].some((character) => /[\x00-\x1F\x7F]/.test(character)),
+			![...value].some((character) => {
+				const code = character.charCodeAt(0);
+				return code < 32 || code === 127;
+			}),
 		{ message: "Name must be a single file or folder name." },
 	);
 const createEntrySchema = listSchema.extend({
