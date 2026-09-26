@@ -9,7 +9,9 @@ import {
 } from "@codemirror/commands";
 import {
   bracketMatching,
+  codeFolding,
   foldGutter,
+  foldKeymap,
   indentOnInput,
   indentUnit,
 } from "@codemirror/language";
@@ -17,16 +19,22 @@ import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
 import { Compartment, EditorState } from "@codemirror/state";
 import {
   drawSelection,
+  dropCursor,
   EditorView,
   highlightActiveLine,
   highlightActiveLineGutter,
+  highlightSpecialChars,
   keymap,
   lineNumbers,
   rectangularSelection,
 } from "@codemirror/view";
 
 import { gen2LanguageExtension } from "./editor-languages";
-import { gen2EditorTheme, gen2Highlighting } from "./editor-theme";
+import {
+  buildSupersetFoldChevron,
+  supersetEditorTheme,
+  supersetHighlighting,
+} from "./superset-editor-theme";
 
 /**
  * Browser-safe adaptation of Superset's CodeEditor. Desktop font settings,
@@ -65,20 +73,23 @@ export function SupersetCodeEditor({
         doc: value,
         extensions: [
           lineNumbers(),
-          highlightActiveLine(),
+          highlightSpecialChars(),
           highlightActiveLineGutter(),
           highlightSelectionMatches(),
-          foldGutter(),
+          foldGutter({ markerDOM: buildSupersetFoldChevron }),
+          codeFolding(),
           history(),
           drawSelection(),
+          dropCursor(),
           rectangularSelection(),
+          EditorState.allowMultipleSelections.of(true),
           indentOnInput(),
           bracketMatching(),
           indentUnit.of("  "),
           EditorView.lineWrapping,
           EditorView.contentAttributes.of({ spellcheck: "false" }),
-          gen2EditorTheme,
-          gen2Highlighting,
+          supersetEditorTheme,
+          supersetHighlighting,
           language.of([]),
           keymap.of([
             {
@@ -92,6 +103,7 @@ export function SupersetCodeEditor({
             ...defaultKeymap,
             ...historyKeymap,
             ...searchKeymap,
+            ...foldKeymap,
             indentWithTab,
           ]),
           EditorView.updateListener.of((update) => {

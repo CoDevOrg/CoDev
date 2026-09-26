@@ -32,7 +32,8 @@ describe("SupersetFilePane", () => {
     expect(
       screen.getByRole("treeitem", { name: /greeting\.ts/ }),
     ).toHaveAttribute("aria-current", "page");
-    expect(screen.getByText("Sample file")).toBeInTheDocument();
+    expect(screen.getByLabelText("Open file: greeting.ts")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "New file" })).toBeDisabled();
   });
 
   it("makes sample-only saves explicit", () => {

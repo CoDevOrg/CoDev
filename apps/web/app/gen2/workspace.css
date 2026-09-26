@@ -906,27 +906,103 @@
 /* --------------------------------------------------- Superset file slice */
 
 .gen2-superset-file-pane {
+  --ss-background: #151110;
+  --ss-foreground: #eae8e6;
+  --ss-card: #201e1c;
+  --ss-secondary: #2a2827;
+  --ss-secondary-foreground: #eae8e6;
+  --ss-muted: #2a2827;
+  --ss-muted-foreground: #a8a5a3;
+  --ss-accent: #2a2827;
+  --ss-border: #2a2827;
+  --ss-input: #2a2827;
+  --ss-highlight-match: rgba(224, 120, 80, 0.2);
+  --ss-highlight: #e07850;
   display: grid;
-  grid-template-columns: minmax(11rem, 18rem) minmax(0, 1fr);
+  grid-template-columns: minmax(13rem, 18rem) minmax(0, 1fr);
+  grid-template-rows: 40px minmax(0, 1fr);
   min-height: 100dvh;
-  background: var(--surface);
+  overflow: hidden;
+  background: var(--ss-background);
+  color: var(--ss-foreground);
+  font-family: var(--font-geist-sans), Arial, sans-serif;
+  color-scheme: dark;
+}
+
+.gen2-superset-tab-strip {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: end;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--ss-border);
+  background: color-mix(in srgb, var(--ss-muted) 45%, var(--ss-background));
+}
+
+.gen2-superset-tab {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid var(--ss-border);
+  border-bottom: 0;
+  border-radius: 6px 6px 0 0;
+  background: var(--ss-background);
+  color: var(--ss-foreground);
+  font-size: 0.75rem;
+}
+
+.gen2-superset-dirty {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--ss-muted-foreground);
 }
 
 .gen2-superset-file-list {
   min-width: 0;
-  padding: 20px 12px;
-  border-right: 1px solid var(--line);
-  background: color-mix(in srgb, var(--surface-2) 72%, transparent);
+  overflow: auto;
+  border-right: 1px solid var(--ss-border);
+  background: var(--ss-background);
 }
 
-.gen2-superset-eyebrow {
-  margin: 0 0 12px;
+.gen2-superset-files-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 40px;
   padding: 0 8px;
-  color: var(--muted);
-  font-size: 0.6875rem;
-  font-weight: 650;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
+  border-bottom: 1px solid var(--ss-border);
+  background: color-mix(in srgb, var(--ss-muted) 45%, var(--ss-background));
+}
+
+.gen2-superset-search {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 28px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ss-muted-foreground);
+  font: inherit;
+  font-size: 0.75rem;
+  text-align: left;
+}
+
+.gen2-superset-search:disabled {
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+
+.gen2-superset-files-actions,
+.gen2-superset-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .gen2-superset-file-list ul {
@@ -945,32 +1021,41 @@
   align-items: center;
   gap: 7px;
   width: 100%;
-  min-height: 36px;
-  padding: 6px 8px;
-  border-radius: 7px;
-  color: var(--ink);
-  font-family: var(--font-geist-mono, ui-monospace, monospace);
-  font-size: 0.8125rem;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--ss-foreground);
+  font-family: inherit;
+  font-size: 0.75rem;
 }
 
 .gen2-superset-folder {
-  color: var(--muted);
-}
-
-.gen2-superset-file {
-  border: 0;
-  background: color-mix(in srgb, var(--gold) 14%, transparent);
+  background: transparent;
+  color: var(--ss-muted-foreground);
   cursor: pointer;
   text-align: left;
 }
 
-.gen2-superset-file:hover {
-  background: color-mix(in srgb, var(--gold) 20%, transparent);
+.gen2-superset-file {
+  background: color-mix(in srgb, var(--ss-foreground) 10%, transparent);
+  cursor: pointer;
+  text-align: left;
 }
 
+.gen2-superset-folder:hover,
+.gen2-superset-file:hover {
+  background: color-mix(in srgb, var(--ss-foreground) 7%, transparent);
+}
+
+.gen2-superset-folder:focus-visible,
 .gen2-superset-file:focus-visible {
-  outline: 2px solid var(--gold);
-  outline-offset: 2px;
+  outline: 2px solid var(--ss-highlight);
+  outline-offset: -2px;
+}
+
+.gen2-superset-chevron-closed {
+  transform: rotate(-90deg);
 }
 
 .gen2-superset-editor {
@@ -985,44 +1070,71 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 48px;
-  padding: 0 16px;
-  border-bottom: 1px solid var(--line);
+  min-height: 40px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--ss-border);
+  background: color-mix(in srgb, var(--ss-muted) 45%, var(--ss-background));
 }
 
 .gen2-superset-path {
   min-width: 0;
   overflow: hidden;
-  color: var(--ink);
-  font-family: var(--font-geist-mono, ui-monospace, monospace);
-  font-size: 0.8125rem;
+  color: var(--ss-foreground);
+  font-family: inherit;
+  font-size: 0.75rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.gen2-superset-path span {
-  margin-left: 8px;
-  color: var(--gold);
-  font-size: 0.625rem;
-  vertical-align: middle;
+.gen2-superset-save,
+.gen2-superset-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ss-muted-foreground);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.75rem;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
 }
 
-.gen2-superset-sample {
-  flex: none;
-  padding: 4px 8px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  color: var(--muted);
-  font-size: 0.6875rem;
+.gen2-superset-save {
+  min-width: auto;
+  padding: 0 8px;
+}
+
+.gen2-superset-save:hover:not(:disabled),
+.gen2-superset-icon-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ss-foreground) 7%, transparent);
+  color: var(--ss-foreground);
+}
+
+.gen2-superset-save:focus-visible,
+.gen2-superset-icon-button:focus-visible {
+  outline: 2px solid var(--ss-highlight);
+  outline-offset: 2px;
+}
+
+.gen2-superset-save:disabled,
+.gen2-superset-icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
 }
 
 .gen2-superset-notice {
   margin: 0;
   padding: 8px 16px;
-  border-bottom: 1px solid var(--line);
-  background: color-mix(in srgb, var(--gold) 10%, transparent);
-  color: var(--ink);
-  font-size: 0.78125rem;
+  border-bottom: 1px solid var(--ss-border);
+  background: var(--ss-muted);
+  color: var(--ss-foreground);
+  font-size: 0.75rem;
 }
 
 .gen2-superset-code-editor,
@@ -1165,7 +1277,11 @@
   }
 
   .gen2-superset-file-list {
-    padding-inline: 6px;
+    min-width: 0;
+  }
+
+  .gen2-superset-search span {
+    display: none;
   }
 }
 
