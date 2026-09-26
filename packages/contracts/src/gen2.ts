@@ -280,6 +280,16 @@ export const gen2SupersetFileEntrySchema = z.object({
   size: z.number().int().nonnegative(),
 });
 
+export const gen2SupersetDirectoryEntrySchema = z.object({
+  path: gen2FilePathSchema,
+  kind: z.literal("directory"),
+});
+
+export const gen2SupersetEntrySchema = z.discriminatedUnion("kind", [
+  gen2SupersetFileEntrySchema,
+  gen2SupersetDirectoryEntrySchema,
+]);
+
 export const gen2SupersetFileSchema = gen2SupersetFileEntrySchema.extend({
   contents: z.string(),
   revision: z.string().min(1),
@@ -287,7 +297,7 @@ export const gen2SupersetFileSchema = gen2SupersetFileEntrySchema.extend({
 
 /** GET .../superset/files?worktreeId=:worktreeId */
 export const gen2SupersetListFilesResponseSchema = z.object({
-  files: z.array(gen2SupersetFileEntrySchema),
+  files: z.array(gen2SupersetEntrySchema),
 });
 
 /** GET .../superset/file?worktreeId=:worktreeId&path=:path */
@@ -305,6 +315,31 @@ export const gen2SupersetSaveFileRequestSchema = z.object({
 
 export const gen2SupersetSaveFileResponseSchema = z.object({
   file: gen2SupersetFileSchema,
+});
+
+/** A root-level entry is created atomically; nested creation comes later. */
+export const gen2SupersetCreateEntryRequestSchema = z.object({
+  worktreeId: gen2SupersetWorktreeIdSchema,
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .max(255)
+    .refine(
+      (value) =>
+        value !== "." &&
+        value !== ".." &&
+        !value.includes("/") &&
+        !value.includes("\\") &&
+        !value.includes("\0") &&
+        ![...value].some((character) => /[\x00-\x1F\x7F]/.test(character)),
+      "Name must be a single file or folder name.",
+    ),
+  kind: z.enum(["file", "directory"]),
+});
+
+export const gen2SupersetCreateEntryResponseSchema = z.object({
+  entry: gen2SupersetEntrySchema,
 });
 
 /** A 409 save response carries the host's current revision. */
@@ -392,9 +427,16 @@ export type Gen2FileEntry = z.infer<typeof gen2FileEntrySchema>;
 export type Gen2FileSearchMatch = z.infer<typeof gen2FileSearchMatchSchema>;
 export type Gen2File = z.infer<typeof gen2FileSchema>;
 export type Gen2SupersetFileEntry = z.infer<typeof gen2SupersetFileEntrySchema>;
+export type Gen2SupersetDirectoryEntry = z.infer<
+  typeof gen2SupersetDirectoryEntrySchema
+>;
+export type Gen2SupersetEntry = z.infer<typeof gen2SupersetEntrySchema>;
 export type Gen2SupersetFile = z.infer<typeof gen2SupersetFileSchema>;
 export type Gen2SupersetSaveFileRequest = z.infer<
   typeof gen2SupersetSaveFileRequestSchema
+>;
+export type Gen2SupersetCreateEntryRequest = z.infer<
+  typeof gen2SupersetCreateEntryRequestSchema
 >;
 export type Gen2SupersetExternalFileChange = z.infer<
   typeof gen2SupersetExternalFileChangeSchema

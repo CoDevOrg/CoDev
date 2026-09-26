@@ -1,10 +1,11 @@
 import {
+  gen2SupersetCreateEntryResponseSchema,
   gen2SupersetExternalFileChangesResponseSchema,
   gen2SupersetListFilesResponseSchema,
   gen2SupersetReadFileResponseSchema,
   gen2SupersetSaveFileResponseSchema,
   type Gen2SupersetFile,
-  type Gen2SupersetFileEntry,
+  type Gen2SupersetEntry,
   type Gen2SupersetExternalFileChange,
 } from "@codev/contracts";
 
@@ -51,13 +52,29 @@ async function request<T>(
 export async function listSupersetFiles(
   workspaceId: string,
   signal?: AbortSignal,
-): Promise<Gen2SupersetFileEntry[]> {
-  const response = await request<{ files: Gen2SupersetFileEntry[] }>(
+): Promise<Gen2SupersetEntry[]> {
+  const response = await request<{ files: Gen2SupersetEntry[] }>(
     `${fileApiBase(workspaceId)}/files?worktreeId=${SUPERSET_WORKTREE_ID}`,
     (payload) => gen2SupersetListFilesResponseSchema.parse(payload),
     { signal: signal ?? null },
   );
   return response.files;
+}
+
+export async function createSupersetEntry(
+  workspaceId: string,
+  input: { name: string; kind: "file" | "directory" },
+): Promise<Gen2SupersetEntry> {
+  const response = await request<{ entry: Gen2SupersetEntry }>(
+    `${fileApiBase(workspaceId)}/entry`,
+    (payload) => gen2SupersetCreateEntryResponseSchema.parse(payload),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ worktreeId: SUPERSET_WORKTREE_ID, ...input }),
+    },
+  );
+  return response.entry;
 }
 
 export async function readSupersetFile(

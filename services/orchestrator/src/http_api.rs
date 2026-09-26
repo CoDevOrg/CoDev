@@ -25,7 +25,7 @@ use crate::{
         IDE_EXEC_MAX_ARGUMENTS, IDE_EXEC_MAX_TIMEOUT_SECONDS, IdeExecRequest, IdePrepareRequest,
         IdeStartRequest, IdeWriteFileRequest, MAX_IDE_FILE_BYTES, PublicationExportRequest, Result,
         RuntimeError, SESSION_RESTORE_CHUNK_BYTES, SessionRestoreBeginRequest,
-        SessionRestoreChunkRequest, TerminalInputRequest, TerminalPollRequest,
+        SessionRestoreChunkRequest, SupersetCreateEntryRequest, TerminalInputRequest, TerminalPollRequest,
         TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
         WorktreeCreateRequest, WorktreeMergeRequest, WorktreeRebaseRequest, WriteFileRequest,
     },
@@ -96,6 +96,10 @@ pub fn router(backend: SharedBackend, ide: IdeBackend) -> Router {
         .route(
             "/v1/sandboxes/{workspace_id}/superset/file/write",
             post(superset_write_file),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/superset/entry/create",
+            post(superset_create_entry),
         )
         .route(
             "/v1/sandboxes/{workspace_id}/superset/file/changes",
@@ -425,6 +429,27 @@ async fn superset_write_file(
     }
     Ok(Json(
         backend.superset_write_file(&workspace_id, &request).await?,
+    ))
+}
+
+async fn superset_create_entry(
+    State(backend): State<SharedBackend>,
+    Path(workspace_id): Path<String>,
+    Json(request): Json<SupersetCreateEntryRequest>,
+) -> Result<Json<serde_json::Value>> {
+    validate_workspace_id(&workspace_id)?;
+    validate_optional_worktree_id(Some(&request.worktree_id))?;
+    if request.name.is_empty()
+        || request.name.len() > 255
+        || matches!(request.name.as_str(), "." | "..")
+        || request.name.contains(['/', '\\', '\0'])
+        || request.name.chars().any(char::is_control)
+        || !matches!(request.kind.as_str(), "file" | "directory")
+    {
+        return Err(RuntimeError::BadRequest("invalid file creation request".into()));
+    }
+    Ok(Json(
+        backend.superset_create_entry(&workspace_id, &request).await?,
     ))
 }
 

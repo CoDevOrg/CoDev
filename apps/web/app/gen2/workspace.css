@@ -1019,6 +1019,77 @@
   gap: 2px;
 }
 
+.gen2-superset-create-entry {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--ss-border);
+  background: color-mix(in srgb, var(--ss-muted) 28%, var(--ss-background));
+  color: var(--ss-muted-foreground);
+  font-size: 0.6875rem;
+}
+
+.gen2-superset-create-entry label {
+  display: grid;
+  gap: 5px;
+  color: var(--ss-foreground);
+  font-weight: 600;
+}
+
+.gen2-superset-create-entry input {
+  min-height: 30px;
+  width: 100%;
+  border: 1px solid var(--ss-border);
+  border-radius: 5px;
+  background: var(--ss-background);
+  color: var(--ss-foreground);
+  font: inherit;
+  padding: 4px 7px;
+}
+
+.gen2-superset-create-entry input:focus-visible {
+  outline: 2px solid var(--ss-highlight);
+  outline-offset: 1px;
+}
+
+.gen2-superset-create-entry p {
+  margin: 0;
+}
+
+.gen2-superset-create-entry > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.gen2-superset-create-entry button {
+  min-height: 28px;
+  border: 1px solid var(--ss-border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ss-foreground);
+  cursor: pointer;
+  font: inherit;
+  font-size: inherit;
+  padding: 3px 8px;
+}
+
+.gen2-superset-create-entry button[type="submit"] {
+  border-color: var(--ss-highlight);
+  background: var(--ss-highlight);
+  color: var(--ss-background);
+}
+
+.gen2-superset-create-entry button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.gen2-superset-create-entry button:focus-visible {
+  outline: 2px solid var(--ss-highlight);
+  outline-offset: 1px;
+}
+
 .gen2-superset-file-list ul {
   margin: 0;
   padding: 0;
