@@ -377,6 +377,17 @@ impl OrcaBackend {
             .max()
     }
 
+    /// Whether any IDE session has been used within its idle timeout. The
+    /// host can use a shorter deallocation window for Firecracker guests, but
+    /// must not power off while an IDE session is still considered active.
+    pub async fn has_recent_activity(&self) -> bool {
+        self.sessions
+            .read()
+            .await
+            .values()
+            .any(|session| session.idle_for() < self.config.idle_timeout)
+    }
+
     /// Record browser-side activity against this workspace's IDE session. The
     /// browser connects straight to `orca serve` through Caddy and never
     /// touches the orchestrator, so without an explicit keepalive a session

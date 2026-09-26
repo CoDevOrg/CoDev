@@ -75,15 +75,16 @@ describe("Gen2WorkspaceRoom", () => {
     expect(screen.queryByRole("button", { name: /Stop/ })).toBeNull();
   });
 
-  it("does not ask for a machine that is already running", async () => {
+  it("verifies a ready workspace against the runtime when reopened", async () => {
     stubFetch(ready);
     render(<Gen2WorkspaceRoom workspace={{ ...workspace, status: "ready" }} />);
-    await waitFor(() => expect(fetch).toHaveBeenCalled());
-    expect(
-      (fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.filter(
-        (call) => String(call[0]).endsWith("/instance"),
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        `/api/gen2/workspaces/${workspace.id}/instance`,
+        expect.objectContaining({ method: "POST" }),
       ),
-    ).toHaveLength(0);
+    );
+    expect(await screen.findByText("Ready")).toBeInTheDocument();
   });
 
   it("offers a retry when the machine could not start", async () => {

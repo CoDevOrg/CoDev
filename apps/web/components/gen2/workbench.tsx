@@ -36,6 +36,7 @@ export function Gen2Workbench({
   agentRunning,
   refreshToken,
   onRefresh,
+  onResumeWorkspace,
   handleRef,
 }: {
   workspaceId: string;
@@ -43,6 +44,7 @@ export function Gen2Workbench({
   agentRunning: boolean;
   refreshToken: number;
   onRefresh: () => void;
+  onResumeWorkspace: () => Promise<boolean>;
   handleRef: React.RefObject<Gen2WorkbenchHandle | null>;
 }) {
   const [tab, setTab] = useState<Tab>("files");
@@ -404,6 +406,7 @@ export function Gen2Workbench({
                 visible={tab === "terminal"}
                 canStart={!agentRunning}
                 onExit={onRefresh}
+                onResumeWorkspace={onResumeWorkspace}
               />
             </div>
 

@@ -54,7 +54,7 @@ async fn reap_expired_sandboxes(backend: SharedBackend) {
         interval.tick().await;
         let reaped = backend.reap_expired().await;
         if reaped > 0 {
-            info!(reaped, "reaped expired Firecracker sandboxes");
+            info!(reaped, "stopped or hibernated idle Firecracker sandboxes");
         }
     }
 }
@@ -134,6 +134,14 @@ async fn stop_idle_host(backend: SharedBackend, ide: IdeBackend, idle_timeout: D
             continue;
         }
         let since = *quiet_since.get_or_insert_with(chrono::Utc::now);
+        // The host window can be shorter than the IDE session timeout to
+        // save compute after Firecracker guests hibernate. Keep an Orca-only
+        // workspace online until its own idle reaper considers it inactive,
+        // while preserving the quiet clock so stale IDE sessions add no
+        // second full idle window.
+        if ide.has_recent_activity().await {
+            continue;
+        }
         // Whichever is later: when this loop first saw the host quiet, or
         // when an IDE session was last actually used.
         let idle_from = ide
@@ -147,12 +155,10 @@ async fn stop_idle_host(backend: SharedBackend, ide: IdeBackend, idle_timeout: D
             continue;
         }
         info!(?idle_timeout, "stopping idle Firecracker host");
-        // Not `systemctl poweroff` directly. The helper the host bootstrap
-        // installs knows which cloud this is: on EC2 it powers off (the
-        // instance's shutdown behaviour stops it and stops the bill), and on
-        // Azure it asks ARM to deallocate, because a guest-initiated
-        // poweroff there leaves the VM allocated and still charging for its
-        // cores. See codev-host-poweroff in infra/runtime/scripts/bootstrap-host.sh.
+        // Not `systemctl poweroff` directly. The helper asks Azure Resource
+        // Manager to deallocate the VM; a guest-initiated poweroff leaves it
+        // allocated and still charging for its cores. See codev-host-poweroff
+        // in infra/runtime/scripts/bootstrap-host.sh.
         match time::timeout(
             Duration::from_secs(30),
             Command::new("/usr/local/sbin/codev-host-poweroff").output(),
@@ -199,10 +205,10 @@ fn environment_duration(name: &str, default: Duration) -> Result<Duration> {
         .ok_or_else(|| RuntimeError::BadRequest(format!("{name} is too large")))?;
     let duration = Duration::from_secs(seconds);
     if name == "CODEV_HOST_IDLE_TIMEOUT"
-        && !(Duration::from_secs(5 * 60)..=Duration::from_secs(4 * 60 * 60)).contains(&duration)
+        && !(Duration::from_secs(60)..=Duration::from_secs(4 * 60 * 60)).contains(&duration)
     {
         return Err(RuntimeError::BadRequest(
-            "CODEV_HOST_IDLE_TIMEOUT must be between five minutes and four hours".into(),
+            "CODEV_HOST_IDLE_TIMEOUT must be between one minute and four hours".into(),
         ));
     }
     Ok(duration)

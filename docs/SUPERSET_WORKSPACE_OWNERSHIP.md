@@ -1,6 +1,6 @@
 # Superset-powered workspace ownership contract
 
-**Status:** Design; Phase 1 target, not a description of shipped behavior  
+**Status:** Design; Phase 1 target, not a description of shipped behavior
 **Date:** 2026-09-24
 
 ## Decision

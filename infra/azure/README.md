@@ -36,11 +36,16 @@ VM's managed identity holds Virtual Machine Contributor scoped to itself so it
 can. Getting this wrong produces a host that looks off and costs full price.
 
 **The VM size is load-bearing.** Firecracker needs `/dev/kvm`. The default
-`Standard_D2s_v7` was verified to expose `vmx` with `kvm_intel` loaded and to
-run Firecracker v1.13.2. Not every size does, and a size without nested
-virtualization provisions perfectly and then cannot start a single microVM.
-Note also that 850 of 1,333 sizes are restricted on this subscription,
-including the whole x86 B-family, so there is no cheap burstable tier here.
+`Standard_D8s_v7` provides 8 vCPUs and 32 GiB for the six-sandbox development
+target. With the current 2-vCPU guest default, six guests can contend for CPU
+during simultaneous compile-heavy work; this size is the lower-cost interactive
+dev target, not a guarantee of six dedicated guest cores. The Dsv7 Intel series
+supports nested virtualization; `D2s_v7` was the size previously smoke-tested
+with `vmx` and `kvm_intel`. Verify `/dev/kvm` and
+start a guest after resizing, since a size without nested virtualization
+provisions perfectly but cannot start a microVM. Note also that 850 of 1,333
+sizes are restricted on this subscription, including the whole x86 B-family,
+so there is no cheap burstable tier here.
 
 ## The bootstrap
 
@@ -103,24 +108,27 @@ show it running; a line containing `ordering cycle` means it did not.
 Re-running on every boot is what makes a release roll forward, and it used to
 mean a full reinstall each time: apt, Node, the agent CLIs, the Cursor
 installer, the Orca tarball, Caddy, Firecracker, and a 3 GB guest rootfs
-rebuilt from a freshly downloaded Ubuntu squashfs. On a two-core host that is
-minutes of work, and because `codev-orchestrator` only starts once the script
-finishes, every one of those minutes landed on whoever was sitting in front of
-an opening workspace. With a ten-minute idle deallocation, that is most of the
-times anyone opens one.
+rebuilt from a freshly downloaded Ubuntu squashfs. That is minutes of work,
+and because `codev-orchestrator` only starts once the script finishes, every
+one of those minutes landed on whoever was sitting in front of an opening
+workspace. The host is deallocated after a short quiet window to save compute,
+so reopened workspaces need a cold host start.
 
 So each of those stages now declares a key over its own inputs and runs only
 when the key differs from what the last successful run recorded, under
 `/var/lib/codev/bootstrap-stamps`. A release roll changes the keys and
 reinstalls what actually moved; a plain reboot changes none of them and goes
-straight to the service restarts at the end. `CODEV_BOOTSTRAP_FORCE=1` runs
-everything regardless, which is the thing to reach for when a host is in a
-state nobody can explain. The rules for adding a stage are in the script, next
-to the helpers.
+straight to the service restarts at the end. Firecracker guests hibernate
+after 15 idle minutes and keep their workspace disks. With no sandbox or
+recently used IDE session, the host deallocates after one quiet minute.
+`CODEV_BOOTSTRAP_FORCE=1` runs everything regardless, which is the thing to
+reach for when a host is in a state nobody can explain. The rules for adding a
+stage are in the script, next to the helpers.
 
 ### Rolling a host that is off
 
-The host deallocates itself after ten idle minutes, so a deploy usually finds
+The host deallocates itself after one quiet minute without an active sandbox
+or recently used IDE session, so a deploy usually finds
 it off. `deploy.sh` checks the power state: a running host is restarted, a
 deallocated one is started. Both re-run the bootstrap, and both read the new
 `ReleaseVersion` tag. `az vm restart` alone refuses a deallocated VM, which

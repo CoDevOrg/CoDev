@@ -36,21 +36,27 @@ const azureImageBuild = read("../azure/build-host-image.sh");
 
 // Firecracker needs /dev/kvm, and not every Azure size exposes it: a size
 // without nested virtualization provisions perfectly and then cannot start a
-// single microVM. Standard_D2s_v7 was verified to expose vmx with kvm_intel
-// loaded, so the default must not drift off it by accident.
-test("defaults the Firecracker host to a size that exposes nested KVM", () => {
-  assert.match(azureTemplate, /param hostVmSize string = 'Standard_D2s_v7'/);
+// single microVM. The Dsv7 Intel series supports nested virtualization and
+// D8s_v7 is the current six-sandbox default.
+test("defaults the Firecracker host to a six-sandbox nested-KVM size", () => {
+  assert.match(azureTemplate, /param hostVmSize string = 'Standard_D8s_v7'/);
+  assert.match(azureDeploy, /CODEV_AZURE_VM_SIZE:-Standard_D8s_v7/);
+  assert.match(bootstrap, /CODEV_MAX_SANDBOXES=6/);
   // On-demand only. A Spot VM that loses its pool refuses to start again,
   // which strands a workspace whose only way back is starting the host.
   assert.doesNotMatch(azureTemplate, /priority:\s*'Spot'/);
 });
 
-test("stops the host after ten idle minutes, counting IDE sessions", () => {
-  assert.match(bootstrap, /CODEV_HOST_IDLE_TIMEOUT=10m/);
+test("hibernates idle sandboxes after fifteen minutes and quickly deallocates the host", () => {
+  assert.match(bootstrap, /CODEV_IDLE_TIMEOUT=15m/);
+  assert.match(bootstrap, /CODEV_HOST_IDLE_TIMEOUT=1m/);
   assert.match(bootstrap, /CODEV_IDE_IDLE_TIMEOUT=10m/);
   const orchestrator = read(
     "../../services/orchestrator/src/bin/orchestrator.rs",
   );
+  const orca = read("../../services/orchestrator/src/backend/orca.rs");
+  assert.match(orca, /has_recent_activity/);
+  assert.match(orchestrator, /ide\s*\.has_recent_activity\(\)\.await/);
   // An Orca-only workspace never provisions a sandbox, so the host's idle
   // check has to consult the IDE backend or it powers off mid-session - and
   // it has to measure last *use*, not session existence, or an abandoned
@@ -202,8 +208,9 @@ test("the direct bearer route serves /healthz and both copies agree", () => {
 });
 
 // The bootstrap runs on every boot, not once, and the host boots far more
-// often than it is deployed to -- it deallocates itself after ten idle
-// minutes. Reinstalling apt packages, Node, the agent CLIs, Orca, Caddy,
+// often than it is deployed to -- it deallocates itself after one quiet
+// minutes without a sandbox or recently used IDE session. Reinstalling apt
+// packages, Node, the agent CLIs, Orca, Caddy,
 // Firecracker and a 3 GB guest rootfs on each of those boots put minutes in
 // front of whoever was opening a workspace, because the orchestrator only
 // starts once all of it finishes. Each of those stages is now keyed on its own
@@ -249,12 +256,23 @@ test("every expensive bootstrap stage is skipped when already current", () => {
   );
 
   // And the guest rootfs names every input it bakes in: the Ubuntu image, this
-  // release's guest daemon, and the two keys standing for the host files it
-  // copies from.
-  assert.match(
+  // release's guest daemon, the Superset archive checksum, and the two keys
+  // standing for the host files it copies from.
+  const rootfsStage = between(
     bootstrap,
-    /rootfs_key="\$\(codev_stage_key rootfs-v1 \\\n\s+"\$\{firecracker_ci_base\}\/ubuntu-24\.04\.squashfs" \\\n\s+"\$\(codev_fingerprint \/usr\/local\/bin\/codev-guestd\)" \\\n\s+"\$\{packages_key\}" \\\n\s+"\$\{node_key\}"\)"/,
+    "rootfs_key=",
+    "if codev_stage_done rootfs",
   );
+  for (const input of [
+    "rootfs-v2",
+    "ubuntu-24.04.squashfs",
+    "codev_fingerprint /usr/local/bin/codev-guestd",
+    "superset_guest_archive}.sha256",
+    "packages_key",
+    "node_key",
+  ]) {
+    assert.ok(rootfsStage.includes(input), "rootfs key must include " + input);
+  }
 });
 
 test("a bootstrap stage stamp tracks its key and honours the force switch", () => {

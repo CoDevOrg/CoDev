@@ -79,7 +79,8 @@ codev_restart_if_changed() {
 # Stages
 #
 # This script re-runs on every boot, and the host boots far more often than it
-# is deployed to: the orchestrator deallocates it after ten idle minutes, so
+# is deployed to: the orchestrator deallocates it after one quiet minute
+# without a sandbox or recently used IDE session, so
 # every member returning from a break pays for whatever this script does. Most
 # of it is installation -- apt, npm, the Cursor installer, the Orca tarball,
 # Firecracker, and a 3 GB guest rootfs rebuilt from a downloaded Ubuntu
@@ -923,12 +924,12 @@ Type=simple
 ExecStart=/usr/local/bin/codev-orchestrator
 Environment=PORT=8080
 Environment=SANDBOX_BACKEND=firecracker
-Environment=CODEV_MAX_SANDBOXES=2
+Environment=CODEV_MAX_SANDBOXES=6
 Environment=CODEV_VM_VCPU=2
 Environment=CODEV_VM_MEMORY_MIB=2048
 Environment=CODEV_VM_DISK_GIB=10
-Environment=CODEV_IDLE_TIMEOUT=10m
-Environment=CODEV_HOST_IDLE_TIMEOUT=10m
+Environment=CODEV_IDLE_TIMEOUT=15m
+Environment=CODEV_HOST_IDLE_TIMEOUT=1m
 Environment=CODEV_ORCA_APPRUN_BIN=${orca_dir}/squashfs-root/AppRun
 Environment=CODEV_ORCA_WORKSPACES_ROOT=${orca_workspaces_root}
 Environment=CODEV_ORCA_PUBLIC_HOST=${orca_public_host}

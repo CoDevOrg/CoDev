@@ -95,6 +95,15 @@ impl IdeBackend {
         }
     }
 
+    /// Whether an IDE session is still within its configured idle window.
+    pub async fn has_recent_activity(&self) -> bool {
+        match self {
+            #[cfg(target_os = "linux")]
+            Self::Orca(backend) => backend.has_recent_activity().await,
+            Self::Disabled => false,
+        }
+    }
+
     pub async fn touch(&self, workspace_id: &str) -> Result<IdeSession> {
         #[cfg(not(target_os = "linux"))]
         let _ = &workspace_id;
@@ -183,8 +192,8 @@ impl Backend {
         }
     }
 
-    /// Stop ephemeral sandboxes whose advertised lifetime has elapsed. This
-    /// is a host-level backstop for callers that disappear before DELETE.
+    /// Reap expired short-lived sandboxes and hibernate durable idle ones.
+    /// This is a host-level backstop for callers that disappear before DELETE.
     pub async fn reap_expired(&self) -> usize {
         match self {
             Self::Fake(backend) => backend.reap_expired(),
@@ -1038,6 +1047,7 @@ mod tests {
         CreateRequest {
             workspace_id: workspace_id.into(),
             ephemeral: false,
+            hibernate_on_idle: false,
             repository_url: Some("https://github.com/yousef20920/CoDev.git".into()),
             repository_snapshot: None,
             base_sha: "fc1ba2947ffdaf8c1961e5342387e1079afface6".into(),

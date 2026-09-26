@@ -26,8 +26,13 @@ export function Gen2WorkspaceRoom({
   const [copied, setCopied] = useState(false);
   const [agentRunning, setAgentRunning] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
+  const [runtimeReady, setRuntimeReady] = useState(false);
   const workbenchRef = useRef<Gen2WorkbenchHandle | null>(null);
-  const ready = current.status === "ready";
+  const ready = current.status === "ready" && runtimeReady;
+  const displayStatus =
+    current.status === "ready" && !runtimeReady
+      ? "provisioning"
+      : current.status;
 
   const refresh = useCallback(() => setRefreshToken((value) => value + 1), []);
   const openFile = useCallback(
@@ -42,32 +47,42 @@ export function Gen2WorkspaceRoom({
    * same workspace joins the boot already in progress.
    */
   const ensureRunning = useCallback(async () => {
-    const response = await fetch(
-      `/api/gen2/workspaces/${current.id}/instance`,
-      { method: "POST" },
-    );
-    const payload = (await response.json().catch(() => ({}))) as {
-      workspace?: Gen2WorkspaceDetail;
-      error?: string;
-    };
-    if (payload.workspace) setCurrent(payload.workspace);
-    if (!response.ok) {
+    setRuntimeReady(false);
+    try {
+      const response = await fetch(
+        `/api/gen2/workspaces/${current.id}/instance`,
+        { method: "POST" },
+      );
+      const payload = (await response.json().catch(() => ({}))) as {
+        workspace?: Gen2WorkspaceDetail;
+        error?: string;
+      };
+      if (payload.workspace) setCurrent(payload.workspace);
+      if (!response.ok) {
+        setCurrent((value) => ({
+          ...value,
+          lastError: payload.error ?? "The machine could not start.",
+        }));
+        return false;
+      }
+      setRuntimeReady(true);
+      refresh();
+      return true;
+    } catch {
       setCurrent((value) => ({
         ...value,
-        lastError: payload.error ?? "The machine could not start.",
+        lastError: "The machine could not be reached. Try again.",
       }));
       return false;
     }
-    refresh();
-    return true;
   }, [current.id, refresh]);
 
   const bootedRef = useRef(false);
   useEffect(() => {
-    if (ready || bootedRef.current) return;
+    if (bootedRef.current) return;
     bootedRef.current = true;
     void ensureRunning();
-  }, [ready, ensureRunning]);
+  }, [ensureRunning]);
 
   async function share() {
     const response = await fetch(`/api/gen2/workspaces/${current.id}/share`, {
@@ -90,12 +105,9 @@ export function Gen2WorkspaceRoom({
           <ArrowLeft aria-hidden="true" size={15} />
         </Link>
         <h1 className="gen2-ws-name">{current.name}</h1>
-        <p
-          className={`gen2-status gen2-status-${current.status}`}
-          role="status"
-        >
+        <p className={`gen2-status gen2-status-${displayStatus}`} role="status">
           <span className="gen2-status-dot" aria-hidden="true" />
-          {STATUS_LABEL[current.status]}
+          {STATUS_LABEL[displayStatus]}
         </p>
 
         <ul className="gen2-ws-members" aria-label="People with access">
@@ -164,6 +176,7 @@ export function Gen2WorkspaceRoom({
           agentRunning={agentRunning}
           refreshToken={refreshToken}
           onRefresh={refresh}
+          onResumeWorkspace={ensureRunning}
           handleRef={workbenchRef}
         />
       </div>

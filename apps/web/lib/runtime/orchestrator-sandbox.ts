@@ -16,6 +16,8 @@ export interface ProvisionSandboxInput {
   resumeFromSnapshot: boolean;
   /** Azure managed-disk LUN carrying the workspace.ext4 image, when enabled. */
   persistentDiskLun?: number;
+  /** Preserve the guest disks and hibernate the VM after host idle timeout. */
+  hibernateOnIdle?: boolean;
   lifecycle: {
     timeoutMs: number;
     lifecycle: { onTimeout: "pause"; autoResume: true };

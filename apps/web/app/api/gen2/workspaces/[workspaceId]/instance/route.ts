@@ -22,9 +22,8 @@ export const POST = withUser<Params>(
 );
 
 /**
- * Owner-only teardown. Not surfaced in the UI -- the orchestrator pauses an
- * idle guest after four hours on its own -- but kept so a workspace's compute
- * can be reclaimed deliberately.
+ * Owner-only teardown. Not surfaced in the UI; automatic idle hibernation
+ * preserves the writable disks and is handled by the orchestrator.
  */
 export const DELETE = withUser<Params>(
   async ({ user, params: { workspaceId } }) => {

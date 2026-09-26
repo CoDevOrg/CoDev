@@ -16,12 +16,13 @@ readonly resource_group="${AZURE_RESOURCE_GROUP:-codev-runtime-migration}"
 readonly subscription_id="${AZURE_SUBSCRIPTION_ID:-$(az account show --query id -o tsv)}"
 
 # Nested virtualization is not optional: Firecracker needs /dev/kvm, and a
-# size without it produces a host that provisions cleanly and then cannot
-# start a single microVM. Verified working on Standard_D2s_v7.
+# size without it provisions cleanly but cannot start a microVM. The Dsv7
+# Intel series supports nested virtualization; D8s_v7 is the six-workspace
+# development target. Guest vCPUs may contend during simultaneous CPU-heavy work.
 # Must match main.bicep's namePrefix parameter: every resource name below is
 # derived from it, so a mismatch silently targets a host that does not exist.
 readonly name_prefix="${CODEV_NAME_PREFIX:-codev-runtime}"
-readonly vm_size="${CODEV_AZURE_VM_SIZE:-Standard_D2s_v7}"
+readonly vm_size="${CODEV_AZURE_VM_SIZE:-Standard_D8s_v7}"
 host_image_id="${CODEV_HOST_IMAGE_ID:-}"
 readonly host_arch="${CODEV_HOST_ARCH:-x86_64}"
 readonly host_volume_size_gib="${CODEV_HOST_VOLUME_SIZE_GIB:-64}"
@@ -258,10 +259,10 @@ az storage container create \
 # ---------------------------------------------------------------------------
 
 if [[ "${host_existed}" == "true" ]]; then
-  # An idle host deallocates itself after ten minutes, so more often than not
-  # the host being rolled is off. `az vm restart` refuses a deallocated VM;
-  # `az vm start` boots it, and a boot re-runs the bootstrap just like a
-  # restart does, so both land on the new tag.
+  # A quiet host deallocates itself after its one-minute window, unless a
+  # recently used IDE session extends that window. `az vm restart` refuses a
+  # deallocated VM; `az vm start` boots it, and a boot re-runs the bootstrap
+  # just like a restart does, so both land on the new tag.
   host_power="$(az vm get-instance-view \
     --resource-group "${resource_group}" \
     --name "${name_prefix}-host" \

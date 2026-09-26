@@ -5,7 +5,10 @@ use std::{
     os::unix::fs::PermissionsExt,
     path::{Component, Path, PathBuf},
     process::Stdio,
-    sync::{Arc, RwLock},
+    sync::{
+        Arc, RwLock,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+    },
     time::{Duration, Instant},
 };
 
@@ -139,7 +142,7 @@ impl FirecrackerConfig {
             ),
             jailer_bin: environment_path("CODEV_JAILER_BIN", "/usr/local/bin/jailer"),
             jailer_dir: environment_path("CODEV_JAILER_DIR", "/srv/jailer"),
-            max_sandboxes: environment_number("CODEV_MAX_SANDBOXES", 2)?,
+            max_sandboxes: environment_number("CODEV_MAX_SANDBOXES", 6)?,
             vcpu_count: environment_number("CODEV_VM_VCPU", 2)?,
             memory_mib: environment_number("CODEV_VM_MEMORY_MIB", 2048)?,
             workspace_disk_gib: environment_number("CODEV_VM_DISK_GIB", 10)?,
@@ -152,9 +155,9 @@ impl FirecrackerConfig {
                 Duration::from_secs(4 * 60 * 60),
             )?,
         };
-        if !(1..=8).contains(&config.max_sandboxes) {
+        if !(1..=6).contains(&config.max_sandboxes) {
             return Err(RuntimeError::BadRequest(
-                "CODEV_MAX_SANDBOXES must be between 1 and 8".into(),
+                "CODEV_MAX_SANDBOXES must be between 1 and 6".into(),
             ));
         }
         if !(1..=8).contains(&config.vcpu_count) {
@@ -194,6 +197,24 @@ struct RunningMachine {
     jail_dir: PathBuf,
     slot: u32,
     reap_on_expiry: bool,
+    hibernate_on_idle: bool,
+    hibernating: AtomicBool,
+    reaper_exempt_requests: AtomicUsize,
+}
+
+struct ReaperExemptRequest<'a>(&'a AtomicUsize);
+
+impl<'a> ReaperExemptRequest<'a> {
+    fn new(count: &'a AtomicUsize) -> Self {
+        count.fetch_add(1, Ordering::AcqRel);
+        Self(count)
+    }
+}
+
+impl Drop for ReaperExemptRequest<'_> {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::AcqRel);
+    }
 }
 
 impl RunningMachine {
@@ -210,6 +231,16 @@ impl RunningMachine {
 struct MicroVmSnapshotMetadata {
     head_sha: String,
     slot: u32,
+    #[serde(default)]
+    kind: SnapshotKind,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum SnapshotKind {
+    #[default]
+    FullMachine,
+    WorkspaceDisks,
 }
 
 struct FirecrackerApiClient {
@@ -431,8 +462,12 @@ impl FirecrackerBackend {
             machines
                 .iter()
                 .filter(|&(_, machine)| {
-                    machine.reap_on_expiry
-                        && machine.instance.read().expect("machine lock").expires_at <= now
+                    let instance = machine.instance.read().expect("machine lock");
+                    let idle = (now - instance.last_activity_at)
+                        .to_std()
+                        .is_ok_and(|elapsed| elapsed >= self.config.idle_timeout);
+                    (machine.hibernate_on_idle && idle)
+                        || (machine.reap_on_expiry && instance.expires_at <= now)
                 })
                 .map(|(workspace_id, machine)| (workspace_id.clone(), machine.clone()))
                 .collect::<Vec<_>>()
@@ -440,17 +475,50 @@ impl FirecrackerBackend {
 
         let mut reaped = 0;
         for (workspace_id, machine) in expired {
-            // Activity may have refreshed the deadline after collection.
-            if machine.instance.read().expect("machine lock").expires_at > Utc::now() {
+            if machine
+                .hibernating
+                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                .is_err()
+            {
                 continue;
             }
-            match self.stop_machine(machine).await {
+            let now = Utc::now();
+            let still_expired = {
+                let instance = machine.instance.read().expect("machine lock");
+                let still_idle = (now - instance.last_activity_at)
+                    .to_std()
+                    .is_ok_and(|elapsed| elapsed >= self.config.idle_timeout);
+                machine.hibernate_on_idle && still_idle
+                    || machine.reap_on_expiry && instance.expires_at <= now
+            };
+            if !still_expired {
+                machine.hibernating.store(false, Ordering::Release);
+                continue;
+            }
+
+            let reaper_exempt = machine.reaper_exempt_requests.load(Ordering::Acquire);
+            if has_reaper_blocking_requests(Arc::strong_count(&machine), reaper_exempt) {
+                machine.hibernating.store(false, Ordering::Release);
+                continue;
+            }
+            let idle = machine.hibernate_on_idle;
+            let result = if idle {
+                self.hibernate_machine(machine.clone()).await
+            } else {
+                self.stop_machine(machine.clone()).await
+            };
+            match result {
                 Ok(()) => {
                     self.machines.write().await.remove(&workspace_id);
                     reaped += 1;
-                    info!(%workspace_id, "stopped expired Firecracker sandbox");
+                    if idle {
+                        info!(%workspace_id, "hibernated idle Firecracker sandbox");
+                    } else {
+                        info!(%workspace_id, "stopped expired Firecracker sandbox");
+                    }
                 }
                 Err(error) => {
+                    machine.hibernating.store(false, Ordering::Release);
                     warn!(%workspace_id, %error, "failed to stop expired Firecracker sandbox");
                 }
             }
@@ -477,18 +545,12 @@ impl FirecrackerBackend {
     }
 
     pub async fn get(&self, workspace_id: &str) -> Result<Instance> {
-        let machines = self.machines.read().await;
-        machines
-            .get(workspace_id)
-            .map(|machine| machine.instance.read().expect("machine lock").clone())
-            .ok_or(RuntimeError::SandboxNotFound)
+        let machine = self.machine(workspace_id).await?;
+        Ok(machine.instance.read().expect("machine lock").clone())
     }
 
     pub async fn touch(&self, workspace_id: &str) -> Result<Instance> {
-        let machines = self.machines.read().await;
-        let machine = machines
-            .get(workspace_id)
-            .ok_or(RuntimeError::SandboxNotFound)?;
+        let machine = self.machine(workspace_id).await?;
         let mut instance = machine.instance.write().expect("machine lock");
         let now = Utc::now();
         instance.last_activity_at = now;
@@ -600,10 +662,11 @@ impl FirecrackerBackend {
         session_id: &str,
         request: TerminalPollRequest,
     ) -> Result<TerminalPollResponse> {
-        let machine = self.machine(workspace_id).await?;
-        let result = machine.guest.poll_terminal(session_id, &request).await?;
-        self.mark_activity(&machine);
-        Ok(result)
+        // A terminal's empty long-poll is transport, not user activity. Let
+        // the idle reaper hibernate even if that poll is currently parked.
+        let machine = self.machine_without_activity(workspace_id).await?;
+        let _reaper_exempt = ReaperExemptRequest::new(&machine.reaper_exempt_requests);
+        machine.guest.poll_terminal(session_id, &request).await
     }
 
     pub async fn close_terminal(&self, workspace_id: &str, session_id: &str) -> Result<()> {
@@ -849,6 +912,18 @@ impl FirecrackerBackend {
     }
 
     async fn machine(&self, workspace_id: &str) -> Result<Arc<RunningMachine>> {
+        self.machine_with_activity(workspace_id, true).await
+    }
+
+    async fn machine_without_activity(&self, workspace_id: &str) -> Result<Arc<RunningMachine>> {
+        self.machine_with_activity(workspace_id, false).await
+    }
+
+    async fn machine_with_activity(
+        &self,
+        workspace_id: &str,
+        count_as_activity: bool,
+    ) -> Result<Arc<RunningMachine>> {
         let machine = self
             .machines
             .read()
@@ -856,6 +931,14 @@ impl FirecrackerBackend {
             .get(workspace_id)
             .cloned()
             .ok_or(RuntimeError::SandboxNotFound)?;
+        if machine.hibernating.load(Ordering::Acquire) {
+            return Err(RuntimeError::Unavailable(
+                "sandbox is shutting down after inactivity".into(),
+            ));
+        }
+        if count_as_activity {
+            self.mark_activity(&machine);
+        }
         let exited = machine
             .child
             .lock()
@@ -883,29 +966,50 @@ impl FirecrackerBackend {
         self.config.jailer_dir.join("snapshots").join(workspace_id)
     }
 
+    fn previous_snapshot_dir(&self, workspace_id: &str) -> PathBuf {
+        self.config
+            .jailer_dir
+            .join("snapshots")
+            .join(format!(".{workspace_id}.previous"))
+    }
+
     async fn snapshot_metadata(
         &self,
         workspace_id: &str,
-    ) -> Result<Option<MicroVmSnapshotMetadata>> {
-        let directory = self.snapshot_dir(workspace_id);
+    ) -> Result<Option<(PathBuf, MicroVmSnapshotMetadata)>> {
+        let mut directory = self.snapshot_dir(workspace_id);
         let metadata_path = directory.join("metadata.json");
-        let metadata = match fs::read(&metadata_path).await {
-            Ok(contents) => serde_json::from_slice(&contents).map_err(|error| {
+        let contents = match fs::read(&metadata_path).await {
+            Ok(contents) => contents,
+            Err(error) if error.kind() == ErrorKind::NotFound => {
+                directory = self.previous_snapshot_dir(workspace_id);
+                match fs::read(directory.join("metadata.json")).await {
+                    Ok(contents) => contents,
+                    Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
+                    Err(error) => return Err(RuntimeError::internal(error)),
+                }
+            }
+            Err(error) => return Err(RuntimeError::internal(error)),
+        };
+        let metadata: MicroVmSnapshotMetadata =
+            serde_json::from_slice(&contents).map_err(|error| {
                 RuntimeError::Internal(format!(
                     "invalid Firecracker snapshot metadata for {workspace_id}: {error}"
                 ))
-            })?,
-            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
-            Err(error) => return Err(RuntimeError::internal(error)),
-        };
+            })?;
         for name in ["snapshot_file", "mem_file", "rootfs.ext4", "workspace.ext4"] {
+            if metadata.kind == SnapshotKind::WorkspaceDisks
+                && matches!(name, "snapshot_file" | "mem_file")
+            {
+                continue;
+            }
             if !directory.join(name).is_file() {
                 return Err(RuntimeError::Unavailable(format!(
                     "Firecracker snapshot for {workspace_id} is incomplete"
                 )));
             }
         }
-        Ok(Some(metadata))
+        Ok(Some((directory, metadata)))
     }
 
     async fn snapshot_machine(&self, machine: &RunningMachine, head_sha: &str) -> Result<()> {
@@ -944,6 +1048,7 @@ impl FirecrackerBackend {
             let metadata = serde_json::to_vec(&MicroVmSnapshotMetadata {
                 head_sha: head_sha.to_owned(),
                 slot: machine.slot,
+                kind: SnapshotKind::FullMachine,
             })
             .map_err(RuntimeError::internal)?;
             fs::write(staging.join("metadata.json"), metadata)
@@ -972,17 +1077,106 @@ impl FirecrackerBackend {
         Ok(())
     }
 
+    /// Keep the writable guest disks, but discard guest RAM and release its
+    /// slot. A later create boots these disks into a fresh microVM, which can
+    /// use any free tap/CID instead of pinning capacity to the old slot.
+    async fn hibernate_machine(&self, machine: Arc<RunningMachine>) -> Result<()> {
+        if machine.persistent_mount_dir.is_some() {
+            // The attached Azure disk is already durable; just flush and stop.
+            return self.stop_machine(machine).await;
+        }
+
+        machine.guest.flush_workspace().await?;
+        let api = FirecrackerApiClient::new(machine.api_socket.clone());
+        api.pause().await?;
+
+        let workspace_id = machine.workspace_id();
+        let snapshots_root = self.config.jailer_dir.join("snapshots");
+        let staging = snapshots_root.join(format!(".{workspace_id}.idle.next"));
+        let destination = self.snapshot_dir(&workspace_id);
+        let previous = self.previous_snapshot_dir(&workspace_id);
+        let persist_result = async {
+            fs::create_dir_all(&snapshots_root)
+                .await
+                .map_err(RuntimeError::internal)?;
+            remove_directory_if_present(&staging).await?;
+            fs::create_dir_all(&staging)
+                .await
+                .map_err(RuntimeError::internal)?;
+            for (name, source) in [
+                ("rootfs.ext4", machine.jail_dir.join("root/rootfs.ext4")),
+                (
+                    "workspace.ext4",
+                    machine.jail_dir.join("root/workspace.ext4"),
+                ),
+            ] {
+                link_or_copy(&source, &staging.join(name)).await?;
+            }
+            let metadata = serde_json::to_vec(&MicroVmSnapshotMetadata {
+                head_sha: machine
+                    .instance
+                    .read()
+                    .expect("machine lock")
+                    .head_sha
+                    .clone(),
+                slot: machine.slot,
+                kind: SnapshotKind::WorkspaceDisks,
+            })
+            .map_err(RuntimeError::internal)?;
+            fs::write(staging.join("metadata.json"), metadata)
+                .await
+                .map_err(RuntimeError::internal)?;
+
+            remove_directory_if_present(&previous).await?;
+            let had_previous = match fs::rename(&destination, &previous).await {
+                Ok(()) => true,
+                Err(error) if error.kind() == ErrorKind::NotFound => false,
+                Err(error) => return Err(RuntimeError::internal(error)),
+            };
+            if let Err(error) = fs::rename(&staging, &destination).await {
+                if had_previous {
+                    let _ = fs::rename(&previous, &destination).await;
+                }
+                return Err(RuntimeError::internal(error));
+            }
+            if had_previous && let Err(error) = remove_directory_if_present(&previous).await {
+                warn!(%workspace_id, %error, "could not remove prior Firecracker checkpoint");
+            }
+            Ok::<(), RuntimeError>(())
+        }
+        .await;
+
+        if let Err(error) = persist_result {
+            let _ = api
+                .request("PATCH", "/vm", json!({ "state": "Resumed" }))
+                .await;
+            let _ = remove_directory_if_present(&staging).await;
+            return Err(error);
+        }
+
+        self.stop_machine(machine).await
+    }
+
     async fn prepare_and_start(&self, request: &CreateRequest) -> Result<RunningMachine> {
-        let snapshot_metadata =
+        let snapshot_state =
             if request.resume_from_snapshot && request.persistent_disk_lun.is_none() {
                 self.snapshot_metadata(&request.workspace_id).await?
             } else {
                 None
             };
-        let restore_snapshot = snapshot_metadata.is_some();
+        let snapshot_metadata = snapshot_state.as_ref().map(|(_, metadata)| metadata);
+        let snapshot_directory = snapshot_state
+            .as_ref()
+            .map(|(directory, _)| directory.clone())
+            .unwrap_or_else(|| self.snapshot_dir(&request.workspace_id));
+        let restore_snapshot =
+            snapshot_metadata.is_some_and(|metadata| metadata.kind == SnapshotKind::FullMachine);
+        let disk_checkpoint =
+            snapshot_metadata.filter(|metadata| metadata.kind == SnapshotKind::WorkspaceDisks);
         let slot = {
             let machines = self.machines.read().await;
-            if let Some(metadata) = snapshot_metadata.as_ref() {
+            if restore_snapshot {
+                let metadata = snapshot_metadata.expect("snapshot metadata");
                 if metadata.slot >= self.config.max_sandboxes as u32
                     || machines
                         .values()
@@ -1033,21 +1227,15 @@ impl FirecrackerBackend {
         fs::create_dir_all(&jail_root)
             .await
             .map_err(RuntimeError::internal)?;
-
         let head_sha = match if restore_snapshot {
-            self.prepare_snapshot_resources(
-                &self.snapshot_dir(&request.workspace_id),
-                &jail_root,
-                uid,
-            )
-            .await
-            .map(|_| {
-                snapshot_metadata
-                    .as_ref()
-                    .expect("snapshot metadata")
-                    .head_sha
-                    .clone()
-            })
+            self.prepare_snapshot_resources(&snapshot_directory, &jail_root, uid)
+                .await
+                .map(|_| {
+                    snapshot_metadata
+                        .expect("snapshot metadata")
+                        .head_sha
+                        .clone()
+                })
         } else {
             self.prepare_resources(
                 request,
@@ -1057,6 +1245,7 @@ impl FirecrackerBackend {
                 persistent_storage
                     .as_ref()
                     .map(|(_, workspace_image)| workspace_image.as_path()),
+                disk_checkpoint.map(|metadata| (snapshot_directory.as_path(), metadata)),
             )
             .await
         } {
@@ -1173,6 +1362,9 @@ impl FirecrackerBackend {
             jail_dir,
             slot,
             reap_on_expiry: request.ephemeral,
+            hibernate_on_idle: request.hibernate_on_idle,
+            hibernating: AtomicBool::new(false),
+            reaper_exempt_requests: AtomicUsize::new(0),
         };
 
         if restore_snapshot {
@@ -1245,8 +1437,10 @@ impl FirecrackerBackend {
         .await;
         match ready {
             Ok(Ok(())) => {
-                if restore_snapshot {
+                if snapshot_state.is_some() {
                     remove_directory_if_present(&self.snapshot_dir(&request.workspace_id)).await?;
+                    remove_directory_if_present(&self.previous_snapshot_dir(&request.workspace_id))
+                        .await?;
                 }
                 Ok(machine)
             }
@@ -1270,13 +1464,26 @@ impl FirecrackerBackend {
         jail_root: &Path,
         guest_cid: u32,
         persistent_workspace_image: Option<&Path>,
+        disk_checkpoint: Option<(&Path, &MicroVmSnapshotMetadata)>,
     ) -> Result<String> {
         let workspace_disk = persistent_workspace_image
             .map(PathBuf::from)
             .unwrap_or_else(|| jail_root.join("workspace.ext4"));
         let existing_persistent_disk =
             persistent_workspace_image.is_some() && workspace_disk.is_file();
-        let head_sha = if existing_persistent_disk {
+        let head_sha = if let Some((checkpoint_directory, metadata)) = disk_checkpoint {
+            clone_or_copy(
+                &checkpoint_directory.join("rootfs.ext4"),
+                &jail_root.join("rootfs.ext4"),
+            )
+            .await?;
+            clone_or_copy(
+                &checkpoint_directory.join("workspace.ext4"),
+                &workspace_disk,
+            )
+            .await?;
+            metadata.head_sha.clone()
+        } else if existing_persistent_disk {
             request.base_sha.clone()
         } else {
             let repository = workspace_dir.join("repository");
@@ -1332,11 +1539,13 @@ impl FirecrackerBackend {
             head_sha
         };
 
-        let mut copy = Command::new("cp");
-        copy.args(["--reflink=auto", "--sparse=always"])
-            .arg(&self.config.rootfs_image)
-            .arg(jail_root.join("rootfs.ext4"));
-        run_command(copy, "copy guest rootfs").await?;
+        if disk_checkpoint.is_none() {
+            let mut copy = Command::new("cp");
+            copy.args(["--reflink=auto", "--sparse=always"])
+                .arg(&self.config.rootfs_image)
+                .arg(jail_root.join("rootfs.ext4"));
+            run_command(copy, "copy guest rootfs").await?;
+        }
         fs::copy(&self.config.kernel_image, jail_root.join("vmlinux"))
             .await
             .map_err(RuntimeError::internal)?;
@@ -1699,9 +1908,9 @@ async fn link_or_copy(source: &Path, destination: &Path) -> Result<()> {
 /// Restore writable VM resources without hard-linking them to the durable
 /// snapshot. A resumed guest can mutate its disk images; a filesystem reflink
 /// keeps a failed restore from corrupting the only recovery artifact without
-/// copying multi-GiB block devices. AWS provisions `/srv/jailer` as XFS with
-/// reflinks enabled; fail rather than silently taking a slow full-copy path on
-/// an incorrectly configured host.
+/// copying multi-GiB block devices. The host provisions `/srv/jailer` as XFS
+/// with reflinks enabled; fail rather than silently taking a slow full-copy
+/// path on an incorrectly configured host.
 async fn clone_or_copy(source: &Path, destination: &Path) -> Result<()> {
     let output = Command::new("cp")
         .args(["--reflink=always", "--sparse=auto"])
@@ -1727,6 +1936,13 @@ fn first_available_slot(
         .into_iter()
         .collect::<std::collections::HashSet<_>>();
     (0..max_sandboxes as u32).find(|slot| !occupied.contains(slot))
+}
+
+/// The map and the reaper's candidate list own two references. Terminal
+/// long-polls are explicitly exempt because they are transport, not activity;
+/// every other in-flight request must hold the machine open until it finishes.
+fn has_reaper_blocking_requests(machine_references: usize, reaper_exempt: usize) -> bool {
+    machine_references > 2usize.saturating_add(reaper_exempt)
 }
 
 fn environment_path(name: &str, fallback: &str) -> PathBuf {
@@ -1778,7 +1994,8 @@ pub fn parse_duration(value: &str) -> Option<Duration> {
 #[cfg(test)]
 mod tests {
     use super::{
-        GUEST_CID_BASE, first_available_slot, guest_ip, host_ip, parse_duration, tap_name,
+        GUEST_CID_BASE, MicroVmSnapshotMetadata, SnapshotKind, first_available_slot, guest_ip,
+        has_reaper_blocking_requests, host_ip, parse_duration, tap_name,
     };
 
     #[test]
@@ -1793,6 +2010,16 @@ mod tests {
         assert_eq!(first_available_slot([0, 1], 3), Some(2));
         assert_eq!(first_available_slot([1], 3), Some(0));
         assert_eq!(first_available_slot([0, 1], 2), None);
+        assert_eq!(first_available_slot(0..5, 6), Some(5));
+        assert_eq!(first_available_slot(0..6, 6), None);
+    }
+
+    #[test]
+    fn terminal_long_polls_do_not_block_idle_hibernation() {
+        assert!(!has_reaper_blocking_requests(2, 0));
+        assert!(!has_reaper_blocking_requests(3, 1));
+        assert!(has_reaper_blocking_requests(3, 0));
+        assert!(has_reaper_blocking_requests(4, 1));
     }
 
     #[test]
@@ -1800,13 +2027,13 @@ mod tests {
         // Each slot is its own /30, so a guest's only on-link neighbour is the
         // host tap. If two slots ever shared a subnet, guests could address one
         // another directly and bypass the host's filtering entirely.
-        for slot in 0..8 {
+        for slot in 0..6 {
             assert_eq!(host_ip(slot), format!("10.200.{slot}.1"));
             assert_eq!(guest_ip(slot), format!("10.200.{slot}.2"));
             assert_eq!(tap_name(slot), format!("codev-tap{slot}"));
         }
-        let all: std::collections::HashSet<String> = (0..8).map(guest_ip).collect();
-        assert_eq!(all.len(), 8, "guest addresses must be unique per slot");
+        let all: std::collections::HashSet<String> = (0..6).map(guest_ip).collect();
+        assert_eq!(all.len(), 6, "guest addresses must be unique per slot");
     }
 
     #[test]
@@ -1814,9 +2041,19 @@ mod tests {
         // The boot arguments derive the slot back out of guest_cid; a restored
         // machine keeps its recorded slot, which is what makes its tap name
         // stable across a snapshot restore.
-        for slot in 0u32..8 {
+        for slot in 0u32..6 {
             let guest_cid = GUEST_CID_BASE + slot;
             assert_eq!((guest_cid - GUEST_CID_BASE) as usize, slot as usize);
         }
+    }
+
+    #[test]
+    fn existing_full_snapshots_keep_their_restore_format() {
+        let metadata: MicroVmSnapshotMetadata = serde_json::from_str(
+            r#"{"head_sha":"fc1ba2947ffdaf8c1961e5342387e1079afface6","slot":3}"#,
+        )
+        .expect("legacy full snapshot metadata");
+        assert_eq!(metadata.kind, SnapshotKind::FullMachine);
+        assert_eq!(metadata.slot, 3);
     }
 }

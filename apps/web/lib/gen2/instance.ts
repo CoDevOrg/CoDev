@@ -137,7 +137,8 @@ export function createFirecrackerRuntime(
           workspaceId,
           ...source,
           expiresAt: expiresAt.toISOString(),
-          resumeFromSnapshot: false,
+          resumeFromSnapshot: true,
+          hibernateOnIdle: true,
           lifecycle: GEN2_SANDBOX_LIFECYCLE,
         },
         GEN2_PROVISION_TIMEOUT_MS,
@@ -191,7 +192,12 @@ async function claimProvisioning(workspaceId: string) {
     .where(
       and(
         eq(schema.gen2Workspaces.id, workspaceId),
-        inArray(schema.gen2Workspaces.status, ["pending", "stopped", "failed"]),
+        inArray(schema.gen2Workspaces.status, [
+          "pending",
+          "stopped",
+          "failed",
+          "ready",
+        ]),
       ),
     )
     .returning({ id: schema.gen2Workspaces.id });
@@ -212,16 +218,27 @@ export async function ensureGen2Instance(
   runtime?: Gen2SandboxRuntime,
 ) {
   const membership = await requireGen2Member(workspaceId, userId);
-  if (membership.status === "ready") return membership;
-  const resolved =
-    runtime ??
-    createFirecrackerRuntime(
-      await buildGen2SandboxSource(
-        userId,
-        membership.repository,
-        await readGen2BaseSha(workspaceId),
-      ),
-    );
+  const currentRuntime = runtime ?? createFirecrackerRuntime();
+  let hostReady = false;
+
+  // A Gen 2 row stays `ready` while its idle guest is hibernated. Verify the
+  // runtime before trusting the persisted status so opening the workspace can
+  // resume its disk checkpoint.
+  if (membership.status === "ready") {
+    if (!currentRuntime.current) return membership;
+    try {
+      await ensureHostReady();
+      hostReady = true;
+      if (await currentRuntime.current(workspaceId)) return membership;
+    } catch (error) {
+      const message = describeGen2RuntimeFailure(error);
+      logEvent("error", "gen2.instance.host_unready", {
+        detail: error instanceof Error ? error.message : "unknown",
+      });
+      throw new Gen2LifecycleError(message, 503);
+    }
+  }
+
   if (!(await claimProvisioning(workspaceId))) {
     // Someone else is already bringing it up; report the live status rather
     // than racing them for the same guest.
@@ -229,27 +246,39 @@ export async function ensureGen2Instance(
   }
 
   const previousStatus = membership.status;
-  try {
-    await ensureHostReady();
-  } catch (error) {
-    const message = describeGen2RuntimeFailure(error);
-    logEvent("error", "gen2.instance.host_unready", {
-      detail: error instanceof Error ? error.message : "unknown",
-    });
-    await writeGen2Instance(workspaceId, {
-      status: previousStatus,
-      lastError: message,
-    });
-    throw new Gen2LifecycleError(message, 503);
+  if (!hostReady) {
+    try {
+      await ensureHostReady();
+    } catch (error) {
+      const message = describeGen2RuntimeFailure(error);
+      logEvent("error", "gen2.instance.host_unready", {
+        detail: error instanceof Error ? error.message : "unknown",
+      });
+      await writeGen2Instance(workspaceId, {
+        status: previousStatus,
+        lastError: message,
+      });
+      throw new Gen2LifecycleError(message, 503);
+    }
   }
 
   try {
-    const existing = resolved.current
-      ? await resolved.current(workspaceId)
+    const existing = currentRuntime.current
+      ? await currentRuntime.current(workspaceId)
       : null;
+    const provisioner =
+      runtime || existing
+        ? currentRuntime
+        : createFirecrackerRuntime(
+            await buildGen2SandboxSource(
+              userId,
+              membership.repository,
+              await readGen2BaseSha(workspaceId),
+            ),
+          );
     const sandbox =
       existing ??
-      (await resolved.provision(
+      (await provisioner.provision(
         workspaceId,
         new Date(
           Date.now() + GEN2_SANDBOX_LIFECYCLE.timeoutMs - GEN2_EXPIRES_SLACK_MS,
