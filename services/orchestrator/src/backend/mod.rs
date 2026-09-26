@@ -13,10 +13,10 @@ use crate::model::{
     IdeSession, IdeStartRequest, IdeWriteFileRequest, Instance, PublicationExportRequest,
     PublicationExportResponse, Result, RuntimeError, SessionRestoreBeginRequest,
     SessionRestoreChunkRequest, SessionRestoreFinalizeResponse, SessionRestoreStatus,
-    SupersetCreateEntryRequest, TerminalInputRequest, TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest,
-    TerminalStartRequest, WorktreeCheckpointRequest, WorktreeCheckpointResponse,
-    WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest,
-    WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
+    SupersetCreateEntryRequest, TerminalInputRequest, TerminalPollRequest, TerminalPollResponse,
+    TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
+    WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse,
+    WorktreeRebaseRequest, WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
 };
 
 const MAX_ACTIVE_SESSIONS: usize = 3;
@@ -358,7 +358,9 @@ impl Backend {
                 "Superset host service is unavailable in the fake backend".into(),
             )),
             #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => backend.superset_create_entry(workspace_id, request).await,
+            Self::Firecracker(backend) => {
+                backend.superset_create_entry(workspace_id, request).await
+            }
         }
     }
 

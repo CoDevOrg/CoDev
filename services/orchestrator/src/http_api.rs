@@ -25,9 +25,10 @@ use crate::{
         IDE_EXEC_MAX_ARGUMENTS, IDE_EXEC_MAX_TIMEOUT_SECONDS, IdeExecRequest, IdePrepareRequest,
         IdeStartRequest, IdeWriteFileRequest, MAX_IDE_FILE_BYTES, PublicationExportRequest, Result,
         RuntimeError, SESSION_RESTORE_CHUNK_BYTES, SessionRestoreBeginRequest,
-        SessionRestoreChunkRequest, SupersetCreateEntryRequest, TerminalInputRequest, TerminalPollRequest,
-        TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
-        WorktreeCreateRequest, WorktreeMergeRequest, WorktreeRebaseRequest, WriteFileRequest,
+        SessionRestoreChunkRequest, SupersetCreateEntryRequest, TerminalInputRequest,
+        TerminalPollRequest, TerminalResizeRequest, TerminalStartRequest,
+        WorktreeCheckpointRequest, WorktreeCreateRequest, WorktreeMergeRequest,
+        WorktreeRebaseRequest, WriteFileRequest,
     },
 };
 
@@ -446,10 +447,14 @@ async fn superset_create_entry(
         || request.name.chars().any(char::is_control)
         || !matches!(request.kind.as_str(), "file" | "directory")
     {
-        return Err(RuntimeError::BadRequest("invalid file creation request".into()));
+        return Err(RuntimeError::BadRequest(
+            "invalid file creation request".into(),
+        ));
     }
     Ok(Json(
-        backend.superset_create_entry(&workspace_id, &request).await?,
+        backend
+            .superset_create_entry(&workspace_id, &request)
+            .await?,
     ))
 }
 
