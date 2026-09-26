@@ -14,26 +14,47 @@ const mocks = vi.hoisted(() => {
     createdAt: new Date("2026-09-20T20:00:00.000Z"),
     updatedAt: new Date("2026-09-20T20:00:00.000Z"),
   };
-  const selectQuery = {
+  const memberSelect = {
     from: vi.fn(),
     innerJoin: vi.fn(),
     where: vi.fn(),
     limit: vi.fn(),
   };
-  selectQuery.from.mockReturnValue(selectQuery);
-  selectQuery.innerJoin.mockReturnValue(selectQuery);
-  selectQuery.where.mockReturnValue(selectQuery);
-  selectQuery.limit.mockResolvedValue([member]);
+  memberSelect.from.mockReturnValue(memberSelect);
+  memberSelect.innerJoin.mockReturnValue(memberSelect);
+  memberSelect.where.mockReturnValue(memberSelect);
+  memberSelect.limit.mockResolvedValue([member]);
+
+  const lockedRows = [{ ownerId: "user-1", status: "failed" }];
+  const lockQuery = { for: vi.fn().mockResolvedValue(lockedRows) };
+  const lockWhere = { where: vi.fn(() => lockQuery) };
+  const lockSelect = { from: vi.fn(() => lockWhere) };
+  const updateQuery = { where: vi.fn().mockResolvedValue(undefined) };
+  const updateSet = { set: vi.fn(() => updateQuery) };
+  const transaction = {
+    select: vi.fn(() => lockSelect),
+    update: vi.fn(() => updateSet),
+  };
   const deleteQuery = { where: vi.fn().mockResolvedValue(undefined) };
+  const databaseUpdateQuery = { where: vi.fn().mockResolvedValue(undefined) };
+  const databaseUpdateSet = { set: vi.fn(() => databaseUpdateQuery) };
 
   return {
     destroySandbox: vi.fn(),
+    discardSandboxSnapshot: vi.fn(),
+    ensureHostReady: vi.fn(),
     logEvent: vi.fn(),
-    selectQuery,
+    memberSelect,
     deleteQuery,
+    databaseUpdateQuery,
+    transaction,
     database: {
-      select: vi.fn(() => selectQuery),
+      transaction: vi.fn(async (callback: (tx: unknown) => unknown) =>
+        callback(transaction),
+      ),
+      select: vi.fn(() => memberSelect),
       delete: vi.fn(() => deleteQuery),
+      update: vi.fn(() => databaseUpdateSet),
     },
   };
 });
@@ -51,8 +72,14 @@ vi.mock("../platform/observability", () => ({
   logEvent: (...args: unknown[]) => mocks.logEvent(...args),
 }));
 
+vi.mock("../runtime/orchestrator-health", () => ({
+  ensureHostReady: (...args: unknown[]) => mocks.ensureHostReady(...args),
+}));
+
 vi.mock("../runtime/orchestrator-sandbox", () => ({
   destroySandbox: (...args: unknown[]) => mocks.destroySandbox(...args),
+  discardSandboxSnapshot: (...args: unknown[]) =>
+    mocks.discardSandboxSnapshot(...args),
 }));
 
 import { deleteGen2Workspace } from "./workspaces";
@@ -60,18 +87,27 @@ import { deleteGen2Workspace } from "./workspaces";
 describe("Gen 2 workspace deletion", () => {
   beforeEach(() => {
     mocks.destroySandbox.mockReset();
+    mocks.discardSandboxSnapshot.mockReset();
+    mocks.ensureHostReady.mockReset();
     mocks.logEvent.mockReset();
     mocks.database.delete.mockClear();
     mocks.deleteQuery.where.mockClear();
+    mocks.database.update.mockClear();
+    mocks.databaseUpdateQuery.where.mockClear();
   });
 
-  it("deletes a failed workspace when its stopped host cannot be reached", async () => {
-    mocks.destroySandbox.mockRejectedValue(new TypeError("fetch failed"));
+  it("wakes an unreachable host to purge workspace data before deleting", async () => {
+    mocks.destroySandbox
+      .mockRejectedValueOnce(new TypeError("fetch failed"))
+      .mockResolvedValueOnce(undefined);
 
     await expect(
       deleteGen2Workspace("11111111-1111-4111-8111-111111111111", "user-1"),
     ).resolves.toBeUndefined();
 
+    expect(mocks.ensureHostReady).toHaveBeenCalledOnce();
+    expect(mocks.destroySandbox).toHaveBeenCalledTimes(2);
+    expect(mocks.discardSandboxSnapshot).toHaveBeenCalledOnce();
     expect(mocks.database.delete).toHaveBeenCalledOnce();
     expect(mocks.logEvent).toHaveBeenCalledWith(
       "warn",
@@ -82,13 +118,19 @@ describe("Gen 2 workspace deletion", () => {
     );
   });
 
-  it("does not delete the workspace after a reachable-host teardown failure", async () => {
+  it("keeps the workspace retryable after a teardown failure", async () => {
     mocks.destroySandbox.mockRejectedValue(new Error("guest refused teardown"));
 
     await expect(
       deleteGen2Workspace("11111111-1111-4111-8111-111111111111", "user-1"),
-    ).rejects.toThrow("guest refused teardown");
+    ).rejects.toMatchObject({
+      message:
+        "Couldn't fully delete this workspace. Retry deletion from the workspace list.",
+      status: 502,
+    });
 
+    expect(mocks.discardSandboxSnapshot).not.toHaveBeenCalled();
     expect(mocks.database.delete).not.toHaveBeenCalled();
+    expect(mocks.database.update).toHaveBeenCalledOnce();
   });
 });

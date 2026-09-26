@@ -14,6 +14,7 @@ const STATUS_LABEL: Record<Gen2WorkspaceDetail["status"], string> = {
   ready: "Ready",
   failed: "Failed",
   stopped: "Starting",
+  deleting: "Deleting",
 };
 
 export function Gen2WorkspaceRoom({

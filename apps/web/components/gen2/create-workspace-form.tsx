@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Plus, Search } from "lucide-react";
 
 import { GithubMark } from "@/components/settings/github-mark";
+import { GEN2_MAX_OWNED_WORKSPACES } from "@/lib/gen2/constants";
 
 type Installation = {
   id: number;
@@ -27,10 +28,12 @@ type Repository = {
  */
 export function CreateGen2WorkspaceForm({
   githubConnected,
+  ownedWorkspaceCount = 0,
   appSlug,
   connectGitHub,
 }: {
   githubConnected: boolean;
+  ownedWorkspaceCount?: number;
   appSlug?: string | undefined;
   /**
    * The bound `connectGitHubAccount` server action, handed down rather than
@@ -40,6 +43,7 @@ export function CreateGen2WorkspaceForm({
   connectGitHub?: (() => void) | undefined;
 }) {
   const router = useRouter();
+  const atWorkspaceLimit = ownedWorkspaceCount >= GEN2_MAX_OWNED_WORKSPACES;
   const [installations, setInstallations] = useState<Installation[]>([]);
   const [installationId, setInstallationId] = useState<number | null>(null);
   const [repositories, setRepositories] = useState<Repository[]>([]);
@@ -118,7 +122,7 @@ export function CreateGen2WorkspaceForm({
         <button
           type="button"
           className="primary-button"
-          disabled={busy}
+          disabled={busy || atWorkspaceLimit}
           onClick={() => void create({})}
         >
           <Plus aria-hidden="true" size={14} />
@@ -163,13 +167,20 @@ export function CreateGen2WorkspaceForm({
         )}
       </div>
 
+      {atWorkspaceLimit ? (
+        <p className="gen2-create-limit" role="status">
+          You own {ownedWorkspaceCount} of {GEN2_MAX_OWNED_WORKSPACES} Gen 2
+          workspaces. Delete one to create another.
+        </p>
+      ) : null}
+
       {githubConnected && visible.length > 0 ? (
         <ul className="gen2-repo-list">
           {visible.map((repo) => (
             <li key={repo.id}>
               <button
                 type="button"
-                disabled={busy}
+                disabled={busy || atWorkspaceLimit}
                 onClick={() =>
                   void create({
                     installationId,

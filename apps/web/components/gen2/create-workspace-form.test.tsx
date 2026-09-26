@@ -50,6 +50,21 @@ describe("CreateGen2WorkspaceForm", () => {
     );
   });
 
+  it("blocks workspace creation when the owner limit is reached", () => {
+    render(
+      <CreateGen2WorkspaceForm
+        githubConnected={false}
+        ownedWorkspaceCount={2}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: /Blank workspace/ }),
+    ).toBeDisabled();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "You own 2 of 2 Gen 2 workspaces. Delete one to create another.",
+    );
+  });
+
   it("offers GitHub when it is not connected yet", () => {
     render(<CreateGen2WorkspaceForm githubConnected={false} />);
     expect(

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { LoaderCircle, Trash2 } from "lucide-react";
 import type { Gen2Workspace } from "@codev/contracts";
@@ -11,6 +12,7 @@ const STATUS_LABEL: Record<Gen2Workspace["status"], string> = {
   ready: "Ready",
   failed: "Failed",
   stopped: "Idle",
+  deleting: "Deleting",
 };
 
 export function Gen2WorkspaceList({
@@ -18,6 +20,7 @@ export function Gen2WorkspaceList({
 }: {
   workspaces: Gen2Workspace[];
 }) {
+  const router = useRouter();
   const [workspaces, setWorkspaces] = useState(initialWorkspaces);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<{
@@ -52,6 +55,7 @@ export function Gen2WorkspaceList({
       setWorkspaces((current) =>
         current.filter((item) => item.id !== workspace.id),
       );
+      router.refresh();
     } catch {
       setActionError({
         workspaceId: workspace.id,
@@ -70,26 +74,36 @@ export function Gen2WorkspaceList({
     <ul className="gen2-list">
       {workspaces.map((workspace) => {
         const isDeleting = deletingId === workspace.id;
+        const deletionPending = workspace.status === "deleting";
         const error =
           actionError?.workspaceId === workspace.id
             ? actionError.message
             : null;
+        const cardContent = (
+          <>
+            <strong>{workspace.name}</strong>
+            {workspace.repository ? (
+              <span className="gen2-card-repo">
+                {workspace.repository.fullName}
+              </span>
+            ) : null}
+            <span className={`gen2-status gen2-status-${workspace.status}`}>
+              <span className="gen2-status-dot" aria-hidden="true" />
+              {STATUS_LABEL[workspace.status]}
+            </span>
+          </>
+        );
 
         return (
           <li key={workspace.id}>
             <div className="gen2-card-row">
-              <Link className="gen2-card" href={`/gen2/${workspace.id}`}>
-                <strong>{workspace.name}</strong>
-                {workspace.repository ? (
-                  <span className="gen2-card-repo">
-                    {workspace.repository.fullName}
-                  </span>
-                ) : null}
-                <span className={`gen2-status gen2-status-${workspace.status}`}>
-                  <span className="gen2-status-dot" aria-hidden="true" />
-                  {STATUS_LABEL[workspace.status]}
-                </span>
-              </Link>
+              {deletionPending ? (
+                <div className="gen2-card gen2-card-pending">{cardContent}</div>
+              ) : (
+                <Link className="gen2-card" href={`/gen2/${workspace.id}`}>
+                  {cardContent}
+                </Link>
+              )}
               {workspace.role === "owner" ? (
                 <button
                   type="button"
@@ -97,9 +111,13 @@ export function Gen2WorkspaceList({
                   aria-label={
                     isDeleting
                       ? `Deleting ${workspace.name}`
-                      : `Delete ${workspace.name}`
+                      : deletionPending
+                        ? `Retry deletion of ${workspace.name}`
+                        : `Delete ${workspace.name}`
                   }
-                  title="Delete workspace"
+                  title={
+                    deletionPending ? "Retry deletion" : "Delete workspace"
+                  }
                   disabled={deletingId !== null}
                   onClick={() => void deleteWorkspace(workspace)}
                 >
@@ -115,6 +133,16 @@ export function Gen2WorkspaceList({
                 </button>
               ) : null}
             </div>
+            {deletionPending && !error ? (
+              <p
+                className="gen2-action-error"
+                role={workspace.lastError ? "alert" : "status"}
+              >
+                {workspace.lastError
+                  ? "Deletion did not finish. Retry deletion to continue."
+                  : "Workspace deletion is in progress."}
+              </p>
+            ) : null}
             {error ? (
               <p className="gen2-action-error" role="alert">
                 {error}

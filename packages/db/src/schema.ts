@@ -1998,6 +1998,7 @@ export const gen2WorkspaceStatus = pgEnum("gen2_workspace_status", [
   "ready",
   "failed",
   "stopped",
+  "deleting",
 ]);
 
 export const gen2WorkspaceRole = pgEnum("gen2_workspace_role", [

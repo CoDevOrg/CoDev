@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 
 import {
   gen2WorkspaceDetailSchema,
@@ -14,7 +14,12 @@ import { createInviteToken, hashInviteToken } from "../platform/crypto";
 import { getRepository } from "../github/github";
 import { getDatabase } from "../platform/database";
 import { logEvent } from "../platform/observability";
-import { destroySandbox } from "../runtime/orchestrator-sandbox";
+import { ensureHostReady } from "../runtime/orchestrator-health";
+import {
+  destroySandbox,
+  discardSandboxSnapshot,
+} from "../runtime/orchestrator-sandbox";
+import { GEN2_MAX_OWNED_WORKSPACES } from "./constants";
 import {
   Gen2AccessError,
   Gen2LifecycleError,
@@ -56,6 +61,24 @@ export async function createGen2Workspace(
   );
   try {
     const workspace = await getDatabase().transaction(async (transaction) => {
+      // Serialize creates for this owner so two simultaneous requests cannot
+      // both observe the last available slot.
+      await transaction
+        .select({ id: schema.users.id })
+        .from(schema.users)
+        .where(eq(schema.users.id, userId))
+        .for("update");
+      const [owned] = await transaction
+        .select({ count: count() })
+        .from(schema.gen2Workspaces)
+        .where(eq(schema.gen2Workspaces.ownerId, userId));
+      if ((owned?.count ?? 0) >= GEN2_MAX_OWNED_WORKSPACES) {
+        throw new Gen2LifecycleError(
+          `You can own up to ${GEN2_MAX_OWNED_WORKSPACES} Gen 2 workspaces. Delete one to create another.`,
+          409,
+        );
+      }
+
       const [created] = await transaction
         .insert(schema.gen2Workspaces)
         .values({
@@ -122,7 +145,11 @@ export async function listGen2WorkspacesForUser(userId: string) {
   return rows.map((row) => toWorkspace(row, row.role));
 }
 
-export async function requireGen2Member(workspaceId: string, userId: string) {
+export async function requireGen2Member(
+  workspaceId: string,
+  userId: string,
+  options: { allowDeleting?: boolean } = {},
+) {
   const [row] = await getDatabase()
     .select({
       id: schema.gen2Workspaces.id,
@@ -152,6 +179,9 @@ export async function requireGen2Member(workspaceId: string, userId: string) {
   if (!row) {
     throw new Gen2AccessError();
   }
+  if (row.status === "deleting" && !options.allowDeleting) {
+    throw new Gen2LifecycleError("This workspace is being deleted.");
+  }
   return toWorkspace(row, row.role);
 }
 
@@ -180,27 +210,106 @@ export async function getGen2WorkspaceDetail(
 }
 
 export async function deleteGen2Workspace(workspaceId: string, userId: string) {
-  const workspace = await requireGen2Member(workspaceId, userId);
+  const workspace = await requireGen2Member(workspaceId, userId, {
+    allowDeleting: true,
+  });
   if (workspace.role !== "owner") {
     throw new Gen2AccessError("Only the owner can delete this workspace.", 403);
   }
+  if (workspace.status === "provisioning") {
+    throw new Gen2LifecycleError(
+      "Wait for the workspace to finish starting before deleting it.",
+    );
+  }
 
-  // The sandbox owns the workspace files and hibernation snapshot. Destroy it
-  // before removing the database row when the host is reachable. A host that
-  // has already stopped cannot keep a guest alive, so do not strand a failed
-  // workspace just because its best-effort teardown cannot connect.
+  const database = getDatabase();
+  const currentStatus = await database.transaction(async (transaction) => {
+    const [current] = await transaction
+      .select({
+        ownerId: schema.gen2Workspaces.ownerId,
+        status: schema.gen2Workspaces.status,
+      })
+      .from(schema.gen2Workspaces)
+      .where(eq(schema.gen2Workspaces.id, workspaceId))
+      .for("update");
+    if (!current) throw new Gen2AccessError();
+    if (current.ownerId !== userId) {
+      throw new Gen2AccessError(
+        "Only the owner can delete this workspace.",
+        403,
+      );
+    }
+    if (current.status === "provisioning") {
+      throw new Gen2LifecycleError(
+        "Wait for the workspace to finish starting before deleting it.",
+      );
+    }
+    if (current.status !== "deleting") {
+      await transaction
+        .update(schema.gen2Workspaces)
+        .set({ status: "deleting", lastError: null, updatedAt: new Date() })
+        .where(eq(schema.gen2Workspaces.id, workspaceId));
+    }
+    return current.status;
+  });
+
   try {
-    await destroySandbox(workspaceId);
+    // A never-started workspace has no guest or snapshot, so don't wake a host
+    // just to delete its database row. For all other states, purge the runtime
+    // data before freeing the owner's workspace slot.
+    if (currentStatus !== "pending") {
+      try {
+        await destroySandbox(workspaceId);
+      } catch (error) {
+        if (!isGen2HostUnreachable(error)) throw error;
+        logEvent("warn", "gen2.workspace.delete_host_unreachable", {
+          workspaceId,
+          detail: error instanceof Error ? error.message : "unknown",
+        });
+        // The host may have deallocated while retaining the workspace disk.
+        // Wake it so deletion can remove the snapshot rather than orphaning it.
+        await ensureHostReady();
+        await destroySandbox(workspaceId);
+      }
+      await discardSandboxSnapshot(workspaceId);
+    }
+    await database
+      .delete(schema.gen2Workspaces)
+      .where(
+        and(
+          eq(schema.gen2Workspaces.id, workspaceId),
+          eq(schema.gen2Workspaces.ownerId, userId),
+          eq(schema.gen2Workspaces.status, "deleting"),
+        ),
+      );
   } catch (error) {
-    if (!isGen2HostUnreachable(error)) throw error;
-    logEvent("warn", "gen2.workspace.delete_host_unreachable", {
-      workspaceId,
+    logEvent("error", "gen2.workspace.delete_failed", {
       detail: error instanceof Error ? error.message : "unknown",
     });
+    try {
+      await database
+        .update(schema.gen2Workspaces)
+        .set({
+          lastError:
+            "Deletion did not finish. Retry deletion from the workspace list.",
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(schema.gen2Workspaces.id, workspaceId),
+            eq(schema.gen2Workspaces.status, "deleting"),
+          ),
+        );
+    } catch (updateError) {
+      logEvent("error", "gen2.workspace.delete_status_failed", {
+        detail: updateError instanceof Error ? updateError.message : "unknown",
+      });
+    }
+    throw new Gen2LifecycleError(
+      "Couldn't fully delete this workspace. Retry deletion from the workspace list.",
+      502,
+    );
   }
-  await getDatabase()
-    .delete(schema.gen2Workspaces)
-    .where(eq(schema.gen2Workspaces.id, workspaceId));
 }
 
 export async function createGen2ShareLink(
@@ -233,12 +342,17 @@ export async function joinGen2Workspace(token: string, userId: string) {
   const [workspace] = await getDatabase()
     .select({
       id: schema.gen2Workspaces.id,
+      status: schema.gen2Workspaces.status,
       activeInviteExpiresAt: schema.gen2Workspaces.activeInviteExpiresAt,
     })
     .from(schema.gen2Workspaces)
     .where(eq(schema.gen2Workspaces.activeInviteTokenHash, tokenHash))
     .limit(1);
-  if (!workspace || !workspaceInviteIsActive(workspace.activeInviteExpiresAt)) {
+  if (
+    !workspace ||
+    workspace.status === "deleting" ||
+    !workspaceInviteIsActive(workspace.activeInviteExpiresAt)
+  ) {
     throw new Gen2AccessError("This invite link is no longer valid.", 404);
   }
 
