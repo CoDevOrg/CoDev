@@ -261,6 +261,15 @@ Options=rw,nosuid,nodev
 WantedBy=multi-user.target
 UNIT
 
+# codev-guestd is the only guest process allowed to use the Superset file
+# bridge. Keep this separate from service unit text so a shell user cannot
+# replay host-service requests over loopback.
+install -d -m 0700 "${work_dir}/rootfs/etc/codev"
+superset_bridge_secret="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
+printf 'CODEV_SUPERSET_BRIDGE_SECRET=%s\n' "${superset_bridge_secret}" \
+  >"${work_dir}/rootfs/etc/codev/superset-bridge.env"
+chmod 0600 "${work_dir}/rootfs/etc/codev/superset-bridge.env"
+
 cat >"${work_dir}/rootfs/etc/systemd/system/codev-guestd.service" <<'UNIT'
 [Unit]
 Description=CoDev guest daemon
@@ -271,6 +280,7 @@ Requires=workspace.mount
 Type=simple
 ExecStart=/usr/local/bin/codev-guestd
 Environment=CODEV_WORKSPACE_ROOT=/workspace
+EnvironmentFile=/etc/codev/superset-bridge.env
 Restart=on-failure
 RestartSec=1
 NoNewPrivileges=true
@@ -296,6 +306,8 @@ Requires=workspace.mount
 Type=simple
 ExecStart=/usr/local/bin/node /opt/codev/superset-host/host-service.js
 Environment=HOME=/var/lib/codev-superset
+Environment=CODEV_WORKSPACE_ROOT=/workspace
+EnvironmentFile=/etc/codev/superset-bridge.env
 Environment=SUPERSET_HOME_DIR=/var/lib/codev-superset
 Environment=HOST_DB_PATH=/var/lib/codev-superset/host.db
 Environment=HOST_MIGRATIONS_FOLDER=/opt/codev/superset-host/host-migrations

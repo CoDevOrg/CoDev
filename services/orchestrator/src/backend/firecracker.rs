@@ -623,6 +623,40 @@ impl FirecrackerBackend {
         machine.guest.superset_health().await
     }
 
+    pub async fn superset_list_files(
+        &self,
+        workspace_id: &str,
+        worktree_id: &str,
+    ) -> Result<serde_json::Value> {
+        let machine = self.machine(workspace_id).await?;
+        let result = machine.guest.superset_list_files(worktree_id).await?;
+        self.mark_activity(&machine);
+        Ok(result)
+    }
+
+    pub async fn superset_read_file(
+        &self,
+        workspace_id: &str,
+        path: String,
+        worktree_id: &str,
+    ) -> Result<serde_json::Value> {
+        let machine = self.machine(workspace_id).await?;
+        let result = machine.guest.superset_read_file(path, worktree_id).await?;
+        self.mark_activity(&machine);
+        Ok(result)
+    }
+
+    pub async fn superset_write_file(
+        &self,
+        workspace_id: &str,
+        request: &WriteFileRequest,
+    ) -> Result<serde_json::Value> {
+        let machine = self.machine(workspace_id).await?;
+        let result = machine.guest.superset_write_file(request).await?;
+        self.mark_activity(&machine);
+        Ok(result)
+    }
+
     pub async fn write_file(
         &self,
         workspace_id: &str,

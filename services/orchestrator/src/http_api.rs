@@ -85,6 +85,18 @@ pub fn router(backend: SharedBackend, ide: IdeBackend) -> Router {
             "/v1/sandboxes/{workspace_id}/superset/health",
             get(superset_health),
         )
+        .route(
+            "/v1/sandboxes/{workspace_id}/superset/files",
+            post(superset_list_files),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/superset/file/read",
+            post(superset_read_file),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/superset/file/write",
+            post(superset_write_file),
+        )
         .route("/v1/sandboxes/{workspace_id}/files/write", post(write_file))
         .route("/v1/sandboxes/{workspace_id}/pty/exec", post(exec_pty))
         .route(
@@ -357,6 +369,57 @@ async fn superset_health(
     validate_workspace_id(&workspace_id)?;
     backend.superset_health(&workspace_id).await?;
     Ok(Json(serde_json::json!({ "status": "ok" })))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SupersetListFilesRequest {
+    worktree_id: String,
+}
+
+async fn superset_list_files(
+    State(backend): State<SharedBackend>,
+    Path(workspace_id): Path<String>,
+    Json(request): Json<SupersetListFilesRequest>,
+) -> Result<Json<serde_json::Value>> {
+    validate_workspace_id(&workspace_id)?;
+    validate_optional_worktree_id(Some(&request.worktree_id))?;
+    Ok(Json(
+        backend
+            .superset_list_files(&workspace_id, &request.worktree_id)
+            .await?,
+    ))
+}
+
+async fn superset_read_file(
+    State(backend): State<SharedBackend>,
+    Path(workspace_id): Path<String>,
+    Json(request): Json<FileRequest>,
+) -> Result<Json<serde_json::Value>> {
+    validate_workspace_id(&workspace_id)?;
+    let worktree_id = request
+        .worktree_id
+        .as_deref()
+        .ok_or_else(|| RuntimeError::BadRequest("worktree ID is required".into()))?;
+    validate_optional_worktree_id(Some(worktree_id))?;
+    Ok(Json(
+        backend
+            .superset_read_file(&workspace_id, request.path, worktree_id)
+            .await?,
+    ))
+}
+
+async fn superset_write_file(
+    State(backend): State<SharedBackend>,
+    Path(workspace_id): Path<String>,
+    Json(request): Json<WriteFileRequest>,
+) -> Result<Json<serde_json::Value>> {
+    validate_workspace_id(&workspace_id)?;
+    validate_optional_worktree_id(request.worktree_id.as_deref())?;
+    if request.worktree_id.is_none() {
+        return Err(RuntimeError::BadRequest("worktree ID is required".into()));
+    }
+    Ok(Json(backend.superset_write_file(&workspace_id, &request).await?))
 }
 
 async fn write_file(

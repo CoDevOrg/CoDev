@@ -266,7 +266,12 @@ export const gen2FileUploadRequestSchema = z.object({
  * guestd contracts because the Superset host selects an explicit worktree and
  * reports external host-side changes onto the shared document stream.
  */
-export const gen2SupersetWorktreeIdSchema = z.string().min(1).max(4_096);
+/** Matches the guest's safe worktree directory identifier. */
+export const gen2SupersetWorktreeIdSchema = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/);
 
 export const gen2SupersetFileEntrySchema = z.object({
   path: gen2FilePathSchema,

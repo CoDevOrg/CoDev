@@ -51,6 +51,36 @@ impl GuestClient {
         .map(|_| ())
     }
 
+    pub async fn superset_list_files(&self, worktree_id: &str) -> Result<serde_json::Value> {
+        self.request(
+            "POST",
+            "/v1/superset/files",
+            Some(&serde_json::json!({ "worktreeId": worktree_id })),
+        )
+        .await
+    }
+
+    pub async fn superset_read_file(
+        &self,
+        path: String,
+        worktree_id: &str,
+    ) -> Result<serde_json::Value> {
+        self.request(
+            "POST",
+            "/v1/superset/file/read",
+            Some(&serde_json::json!({ "path": path, "worktreeId": worktree_id })),
+        )
+        .await
+    }
+
+    pub async fn superset_write_file(
+        &self,
+        request: &WriteFileRequest,
+    ) -> Result<serde_json::Value> {
+        self.request("POST", "/v1/superset/file/write", Some(request))
+            .await
+    }
+
     pub async fn flush_workspace(&self) -> Result<()> {
         self.request::<(), serde_json::Value>("POST", "/v1/workspace/flush", None)
             .await

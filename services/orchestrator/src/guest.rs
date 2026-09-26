@@ -89,6 +89,12 @@ struct FileRequest {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct SupersetListFilesRequest {
+    worktree_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct WorktreeReviewQuery {
     base_sha: String,
 }
@@ -226,6 +232,15 @@ impl GuestService {
             ("POST", "/v1/publication/export") => self.export_publication(body),
             ("POST", "/v1/workspace/snapshot") => self.snapshot_workspace(body),
             _ => {
+                if path == "/v1/superset/files" && method == "POST" {
+                    return self.superset_list_files(body);
+                }
+                if path == "/v1/superset/file/read" && method == "POST" {
+                    return self.superset_read_file(body);
+                }
+                if path == "/v1/superset/file/write" && method == "POST" {
+                    return self.superset_write_file(body);
+                }
                 if let Some(worktree_id) = path.strip_prefix("/v1/worktrees/") {
                     let (worktree_id, action_and_query) =
                         worktree_id.split_once('/').unwrap_or((worktree_id, ""));
@@ -351,6 +366,116 @@ impl GuestService {
             ));
         }
         Ok(serde_json::json!({ "status": "ok", "service": "superset-host" }))
+    }
+
+    fn superset_list_files(&self, body: &[u8]) -> GuestResponse {
+        let request: SupersetListFilesRequest = match decode(body) {
+            Ok(request) => request,
+            Err(error) => return GuestResponse::error(400, error),
+        };
+        if let Err(error) = validate_worktree_id(&request.worktree_id) {
+            return GuestResponse::error(400, error);
+        }
+        self.superset_bridge_request(
+            "GET",
+            &format!("/codev/files?worktreeId={}", percent_encode(&request.worktree_id)),
+            &[],
+        )
+    }
+
+    fn superset_read_file(&self, body: &[u8]) -> GuestResponse {
+        let request: FileRequest = match decode(body) {
+            Ok(request) => request,
+            Err(error) => return GuestResponse::error(400, error),
+        };
+        let Some(worktree_id) = request.worktree_id.as_deref() else {
+            return GuestResponse::error(400, "worktree ID is required");
+        };
+        if let Err(error) = validate_worktree_id(worktree_id) {
+            return GuestResponse::error(400, error);
+        }
+        if !is_safe_relative_path(&request.path) {
+            return GuestResponse::error(400, "invalid file path");
+        }
+        self.superset_bridge_request(
+            "GET",
+            &format!(
+                "/codev/file?worktreeId={}&path={}",
+                percent_encode(worktree_id),
+                percent_encode(&request.path),
+            ),
+            &[],
+        )
+    }
+
+    fn superset_write_file(&self, body: &[u8]) -> GuestResponse {
+        let request: WriteFileRequest = match decode(body) {
+            Ok(request) => request,
+            Err(error) => return GuestResponse::error(400, error),
+        };
+        let Some(worktree_id) = request.worktree_id.as_deref() else {
+            return GuestResponse::error(400, "worktree ID is required");
+        };
+        if let Err(error) = validate_worktree_id(worktree_id) {
+            return GuestResponse::error(400, error);
+        }
+        if !is_safe_relative_path(&request.path) {
+            return GuestResponse::error(400, "invalid file path");
+        }
+        // The bridge only supports updates to an existing editor file. Creating
+        // entries belongs to the later file/folder action slice.
+        if request.create_parents {
+            return GuestResponse::error(400, "creating file parents is not supported");
+        }
+        self.superset_bridge_request("PUT", "/codev/file", body)
+    }
+
+    fn superset_bridge_request(&self, method: &str, path: &str, body: &[u8]) -> GuestResponse {
+        let secret = match std::env::var("CODEV_SUPERSET_BRIDGE_SECRET") {
+            Ok(secret) if !secret.is_empty() => secret,
+            _ => return GuestResponse::error(503, "Superset file bridge is not configured"),
+        };
+        let address = SocketAddr::from(([127, 0, 0, 1], 4879));
+        let mut connection = match TcpStream::connect_timeout(&address, Duration::from_secs(3)) {
+            Ok(connection) => connection,
+            Err(_) => return GuestResponse::error(503, "Superset host service is unavailable"),
+        };
+        if connection.set_read_timeout(Some(Duration::from_secs(35))).is_err()
+            || connection.set_write_timeout(Some(Duration::from_secs(5))).is_err()
+        {
+            return GuestResponse::error(503, "Superset host service is unavailable");
+        }
+        let request = format!(
+            "{method} {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nAccept: application/json\r\nContent-Type: application/json\r\nContent-Length: {}\r\nx-codev-bridge-secret: {secret}\r\nConnection: close\r\n\r\n",
+            body.len(),
+        );
+        if connection.write_all(request.as_bytes()).is_err() || connection.write_all(body).is_err() {
+            return GuestResponse::error(503, "Superset host service is unavailable");
+        }
+        let mut raw = Vec::new();
+        let limit = (MAX_BODY_BYTES * 5) as u64;
+        if connection.take(limit).read_to_end(&mut raw).is_err() || raw.len() as u64 >= limit {
+            return GuestResponse::error(503, "Superset host response is unavailable");
+        }
+        let Some(headers_end) = raw.windows(4).position(|window| window == b"\r\n\r\n") else {
+            return GuestResponse::error(503, "Superset host returned an invalid response");
+        };
+        let status = std::str::from_utf8(&raw[..headers_end])
+            .ok()
+            .and_then(|headers| headers.lines().next())
+            .and_then(|line| line.split_whitespace().nth(1))
+            .and_then(|code| code.parse::<u16>().ok());
+        let Some(status) = status else {
+            return GuestResponse::error(503, "Superset host returned an invalid response");
+        };
+        match status {
+            200 | 400 | 409 => GuestResponse {
+                status,
+                body: raw[(headers_end + 4)..].to_vec(),
+            },
+            401 => GuestResponse::error(503, "Superset file bridge rejected the guest credential"),
+            _ => GuestResponse::error(503, "Superset host service is unavailable"),
+        }
     }
 
     fn flush_workspace(&self) -> crate::model::Result<serde_json::Value> {
@@ -2741,6 +2866,27 @@ fn validate_worktree_id(worktree_id: &str) -> crate::model::Result<()> {
     } else {
         Err(RuntimeError::BadRequest("invalid worktree ID".into()))
     }
+}
+
+fn is_safe_relative_path(path: &str) -> bool {
+    !path.is_empty()
+        && !path.starts_with('/')
+        && !path.contains('\\')
+        && Path::new(path)
+            .components()
+            .all(|component| matches!(component, Component::Normal(_)))
+}
+
+fn percent_encode(value: &str) -> String {
+    value
+        .bytes()
+        .flat_map(|byte| match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                vec![byte as char]
+            }
+            _ => format!("%{byte:02X}").chars().collect(),
+        })
+        .collect()
 }
 
 fn validate_restore_operation_id(operation_id: &str) -> crate::model::Result<()> {
