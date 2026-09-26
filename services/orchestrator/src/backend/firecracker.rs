@@ -641,10 +641,10 @@ impl FirecrackerBackend {
         path: String,
         worktree_id: &str,
     ) -> Result<serde_json::Value> {
-        let machine = self.machine(workspace_id).await?;
-        let result = machine.guest.superset_read_file(path, worktree_id).await?;
-        self.mark_activity(&machine);
-        Ok(result)
+        // The browser periodically verifies the open file's revision. These
+        // reads must not keep an otherwise idle workspace awake indefinitely.
+        let machine = self.machine_without_activity(workspace_id).await?;
+        machine.guest.superset_read_file(path, worktree_id).await
     }
 
     pub async fn superset_write_file(
@@ -663,10 +663,9 @@ impl FirecrackerBackend {
         workspace_id: &str,
         worktree_id: &str,
     ) -> Result<serde_json::Value> {
-        let machine = self.machine(workspace_id).await?;
-        let result = machine.guest.superset_file_changes(worktree_id).await?;
-        self.mark_activity(&machine);
-        Ok(result)
+        // Empty browser polls are transport, not member activity.
+        let machine = self.machine_without_activity(workspace_id).await?;
+        machine.guest.superset_file_changes(worktree_id).await
     }
 
     pub async fn write_file(
