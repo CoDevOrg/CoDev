@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 
+import "./rooms-theme.css";
+
 import { AppChrome } from "@/components/shell/app-chrome";
 import { RoomsView } from "@/components/rooms/rooms-view";
 import { requireUser } from "@/lib/auth/session";
