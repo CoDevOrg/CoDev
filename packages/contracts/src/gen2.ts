@@ -8,6 +8,7 @@ export const gen2WorkspaceStatusSchema = z.enum([
   "ready",
   "failed",
   "stopped",
+  "deleting",
 ]);
 
 export const gen2WorkspaceRoleSchema = z.enum(["owner", "editor", "viewer"]);

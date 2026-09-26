@@ -29,6 +29,9 @@ export default async function Gen2WorkspacesPage() {
         </p>
         <CreateGen2WorkspaceForm
           githubConnected={github.connected}
+          ownedWorkspaceCount={
+            workspaces.filter((workspace) => workspace.role === "owner").length
+          }
           appSlug={process.env.GITHUB_APP_SLUG}
           connectGitHub={connectGitHubAccount.bind(null, "/gen2")}
         />

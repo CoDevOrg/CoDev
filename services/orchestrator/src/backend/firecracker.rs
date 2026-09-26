@@ -603,7 +603,8 @@ impl FirecrackerBackend {
 
     pub async fn discard_snapshot(&self, workspace_id: &str) -> Result<()> {
         let _guard = self.provision.lock().await;
-        remove_directory_if_present(&self.snapshot_dir(workspace_id)).await
+        remove_directory_if_present(&self.snapshot_dir(workspace_id)).await?;
+        remove_directory_if_present(&self.previous_snapshot_dir(workspace_id)).await
     }
 
     pub async fn read_file(
