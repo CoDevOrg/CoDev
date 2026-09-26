@@ -18,12 +18,16 @@ export default async function Gen2SupersetFilesPage({
 
   const { workspaceId } = await params;
   const user = await requireUser(`/gen2/${workspaceId}/superset`);
+  let role: "owner" | "editor" | "viewer";
   try {
-    await getGen2WorkspaceDetail(workspaceId, user.id);
+    const workspace = await getGen2WorkspaceDetail(workspaceId, user.id);
+    role = workspace.role;
   } catch (error) {
     if (error instanceof Gen2AccessError) notFound();
     throw error;
   }
 
-  return <SupersetFilePane />;
+  return (
+    <SupersetFilePane workspaceId={workspaceId} canEdit={role !== "viewer"} />
+  );
 }

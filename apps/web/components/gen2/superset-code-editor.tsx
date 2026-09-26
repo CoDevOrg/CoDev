@@ -21,7 +21,6 @@ import {
   drawSelection,
   dropCursor,
   EditorView,
-  highlightActiveLine,
   highlightActiveLineGutter,
   highlightSpecialChars,
   keymap,
@@ -44,11 +43,13 @@ import {
 export function SupersetCodeEditor({
   path,
   value,
+  readOnly = false,
   onChange,
   onSave,
 }: {
   path: string;
   value: string;
+  readOnly?: boolean;
   onChange: (value: string) => void;
   onSave: () => void;
 }) {
@@ -57,6 +58,7 @@ export function SupersetCodeEditor({
   const languageRef = useRef(new Compartment());
   const onChangeRef = useRef(onChange);
   const onSaveRef = useRef(onSave);
+  const syncingValueRef = useRef(false);
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -88,6 +90,8 @@ export function SupersetCodeEditor({
           indentUnit.of("  "),
           EditorView.lineWrapping,
           EditorView.contentAttributes.of({ spellcheck: "false" }),
+          EditorState.readOnly.of(readOnly),
+          EditorView.editable.of(!readOnly),
           supersetEditorTheme,
           supersetHighlighting,
           language.of([]),
@@ -107,7 +111,7 @@ export function SupersetCodeEditor({
             indentWithTab,
           ]),
           EditorView.updateListener.of((update) => {
-            if (update.docChanged)
+            if (update.docChanged && !syncingValueRef.current)
               onChangeRef.current(update.state.doc.toString());
           }),
         ],
@@ -135,9 +139,14 @@ export function SupersetCodeEditor({
   useEffect(() => {
     const view = viewRef.current;
     if (!view || view.state.doc.toString() === value) return;
-    view.dispatch({
-      changes: { from: 0, to: view.state.doc.length, insert: value },
-    });
+    syncingValueRef.current = true;
+    try {
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: value },
+      });
+    } finally {
+      syncingValueRef.current = false;
+    }
   }, [value]);
 
   return <div ref={hostRef} className="gen2-superset-code-editor" />;

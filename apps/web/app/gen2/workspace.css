@@ -993,9 +993,23 @@
   text-align: left;
 }
 
-.gen2-superset-search:disabled {
-  cursor: not-allowed;
-  opacity: 0.75;
+.gen2-superset-search:focus-within {
+  outline: 2px solid var(--ss-highlight);
+  outline-offset: 1px;
+}
+
+.gen2-superset-search input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ss-foreground);
+  font: inherit;
+}
+
+.gen2-superset-search input::placeholder {
+  color: var(--ss-muted-foreground);
 }
 
 .gen2-superset-files-actions,
@@ -1038,9 +1052,31 @@
 }
 
 .gen2-superset-file {
-  background: color-mix(in srgb, var(--ss-foreground) 10%, transparent);
+  background: transparent;
   cursor: pointer;
   text-align: left;
+}
+
+.gen2-superset-file[aria-selected="true"] {
+  background: color-mix(in srgb, var(--ss-foreground) 10%, transparent);
+}
+
+.gen2-superset-file:disabled {
+  cursor: wait;
+}
+
+.gen2-superset-tree-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gen2-superset-list-state {
+  margin: 0;
+  padding: 14px 12px;
+  color: var(--ss-muted-foreground);
+  font-size: 0.75rem;
 }
 
 .gen2-superset-folder:hover,
@@ -1059,8 +1095,8 @@
 }
 
 .gen2-superset-editor {
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
 }
@@ -1083,6 +1119,12 @@
   font-family: inherit;
   font-size: 0.75rem;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gen2-superset-read-only {
+  color: var(--ss-muted-foreground);
+  font-size: 0.75rem;
   white-space: nowrap;
 }
 
@@ -1130,6 +1172,11 @@
 
 .gen2-superset-notice {
   margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
   padding: 8px 16px;
   border-bottom: 1px solid var(--ss-border);
   background: var(--ss-muted);
@@ -1137,10 +1184,43 @@
   font-size: 0.75rem;
 }
 
+.gen2-superset-notice-conflict,
+.gen2-superset-notice-error {
+  border-left: 2px solid var(--ss-highlight);
+}
+
+.gen2-superset-notice-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.gen2-superset-notice button {
+  border: 0;
+  background: transparent;
+  color: var(--ss-highlight);
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+}
+
+.gen2-superset-notice button:focus-visible {
+  outline: 2px solid var(--ss-highlight);
+  outline-offset: 2px;
+}
+
+.gen2-superset-empty-state {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  margin: 0;
+  color: var(--ss-muted-foreground);
+  font-size: 0.8rem;
+}
+
 .gen2-superset-code-editor,
 .gen2-superset-code-editor-skeleton {
+  flex: 1;
   min-height: 0;
-  height: 100%;
 }
 
 .gen2-superset-code-editor .cm-editor {
@@ -1280,12 +1360,50 @@
     min-width: 0;
   }
 
-  .gen2-superset-search span {
+  .gen2-superset-files-header {
+    height: auto;
+    min-height: 40px;
+    flex-wrap: wrap;
+    padding-block: 6px;
+  }
+
+  .gen2-superset-search {
+    flex-basis: 100%;
+  }
+
+  .gen2-superset-search input {
+    font-size: 1rem;
+  }
+
+  .gen2-superset-files-actions {
+    margin-left: auto;
+  }
+
+  .gen2-superset-folder,
+  .gen2-superset-file {
+    min-height: 44px;
+  }
+
+  .gen2-superset-save,
+  .gen2-superset-icon-button {
+    min-width: 44px;
+    height: 44px;
+  }
+}
+
+@media (max-width: 600px) {
+  .gen2-superset-files-actions .gen2-superset-icon-button:disabled {
     display: none;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .gen2-superset-save,
+  .gen2-superset-icon-button,
+  .gen2-superset-code-editor .cm-foldChevron {
+    transition: none;
+  }
+
   .gen2-resizer::after {
     transition: none;
   }
