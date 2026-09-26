@@ -903,6 +903,146 @@
   );
 }
 
+/* --------------------------------------------------- Superset file slice */
+
+.gen2-superset-file-pane {
+  display: grid;
+  grid-template-columns: minmax(11rem, 18rem) minmax(0, 1fr);
+  min-height: 100dvh;
+  background: var(--surface);
+}
+
+.gen2-superset-file-list {
+  min-width: 0;
+  padding: 20px 12px;
+  border-right: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface-2) 72%, transparent);
+}
+
+.gen2-superset-eyebrow {
+  margin: 0 0 12px;
+  padding: 0 8px;
+  color: var(--muted);
+  font-size: 0.6875rem;
+  font-weight: 650;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.gen2-superset-file-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gen2-superset-file-list [role="group"] {
+  padding-left: 12px;
+}
+
+.gen2-superset-folder,
+.gen2-superset-file {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  color: var(--ink);
+  font-family: var(--font-geist-mono, ui-monospace, monospace);
+  font-size: 0.8125rem;
+}
+
+.gen2-superset-folder {
+  color: var(--muted);
+}
+
+.gen2-superset-file {
+  border: 0;
+  background: color-mix(in srgb, var(--gold) 14%, transparent);
+  cursor: pointer;
+  text-align: left;
+}
+
+.gen2-superset-file:hover {
+  background: color-mix(in srgb, var(--gold) 20%, transparent);
+}
+
+.gen2-superset-file:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.gen2-superset-editor {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+}
+
+.gen2-superset-editor-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.gen2-superset-path {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-family: var(--font-geist-mono, ui-monospace, monospace);
+  font-size: 0.8125rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gen2-superset-path span {
+  margin-left: 8px;
+  color: var(--gold);
+  font-size: 0.625rem;
+  vertical-align: middle;
+}
+
+.gen2-superset-sample {
+  flex: none;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.6875rem;
+}
+
+.gen2-superset-notice {
+  margin: 0;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--gold) 10%, transparent);
+  color: var(--ink);
+  font-size: 0.78125rem;
+}
+
+.gen2-superset-code-editor,
+.gen2-superset-code-editor-skeleton {
+  min-height: 0;
+  height: 100%;
+}
+
+.gen2-superset-code-editor .cm-editor {
+  height: 100%;
+}
+
+.gen2-superset-code-editor-skeleton {
+  background: repeating-linear-gradient(
+    180deg,
+    transparent 0 12px,
+    color-mix(in srgb, var(--ink) 4%, transparent) 12px 13px
+  );
+}
+
 /* ------------------------------------------------------------ terminal */
 
 .gen2-term {
@@ -1018,6 +1158,14 @@
     flex-direction: row;
     border-top: 1px solid var(--line);
     background: var(--surface);
+  }
+
+  .gen2-superset-file-pane {
+    grid-template-columns: minmax(8rem, 34%) minmax(0, 1fr);
+  }
+
+  .gen2-superset-file-list {
+    padding-inline: 6px;
   }
 }
 

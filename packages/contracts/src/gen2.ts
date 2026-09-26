@@ -261,6 +261,59 @@ export const gen2FileUploadRequestSchema = z.object({
   overwrite: z.boolean().default(false),
 });
 
+/*
+ * Superset-derived file slice. These are separate from the existing Gen 2
+ * guestd contracts because the Superset host selects an explicit worktree and
+ * reports external host-side changes onto the shared document stream.
+ */
+export const gen2SupersetWorktreeIdSchema = z.string().min(1).max(4_096);
+
+export const gen2SupersetFileEntrySchema = z.object({
+  path: gen2FilePathSchema,
+  kind: z.literal("file"),
+  size: z.number().int().nonnegative(),
+});
+
+export const gen2SupersetFileSchema = gen2SupersetFileEntrySchema.extend({
+  contents: z.string(),
+  revision: z.string().min(1),
+});
+
+/** GET .../superset/files?worktreeId=:worktreeId */
+export const gen2SupersetListFilesResponseSchema = z.object({
+  files: z.array(gen2SupersetFileEntrySchema),
+});
+
+/** GET .../superset/file?worktreeId=:worktreeId&path=:path */
+export const gen2SupersetReadFileResponseSchema = z.object({
+  file: gen2SupersetFileSchema,
+});
+
+/** PUT .../superset/file */
+export const gen2SupersetSaveFileRequestSchema = z.object({
+  worktreeId: gen2SupersetWorktreeIdSchema,
+  path: gen2FilePathSchema,
+  contents: z.string().max(2 * 1_024 * 1_024),
+  expectedRevision: z.string().min(1),
+});
+
+export const gen2SupersetSaveFileResponseSchema = z.object({
+  file: gen2SupersetFileSchema,
+});
+
+/** A 409 save response carries the host's current revision. */
+export const gen2SupersetSaveConflictResponseSchema = z.object({
+  currentRevision: z.string().min(1),
+});
+
+export const gen2SupersetExternalFileChangeSchema = z.object({
+  type: z.literal("file.changed"),
+  worktreeId: gen2SupersetWorktreeIdSchema,
+  path: gen2FilePathSchema,
+  revision: z.string().min(1),
+  origin: z.literal("external"),
+});
+
 export const gen2GitOperationSchema = z.enum(["status", "diff", "show"]);
 
 export const gen2GitResponseSchema = z.object({ output: z.string() });
@@ -328,6 +381,14 @@ export type Gen2TurnUsage = z.infer<typeof gen2TurnUsageSchema>;
 export type Gen2FileEntry = z.infer<typeof gen2FileEntrySchema>;
 export type Gen2FileSearchMatch = z.infer<typeof gen2FileSearchMatchSchema>;
 export type Gen2File = z.infer<typeof gen2FileSchema>;
+export type Gen2SupersetFileEntry = z.infer<typeof gen2SupersetFileEntrySchema>;
+export type Gen2SupersetFile = z.infer<typeof gen2SupersetFileSchema>;
+export type Gen2SupersetSaveFileRequest = z.infer<
+  typeof gen2SupersetSaveFileRequestSchema
+>;
+export type Gen2SupersetExternalFileChange = z.infer<
+  typeof gen2SupersetExternalFileChangeSchema
+>;
 export type Gen2GitOperation = z.infer<typeof gen2GitOperationSchema>;
 export type Gen2TerminalAction = z.infer<typeof gen2TerminalActionSchema>;
 export type Gen2TerminalPollResponse = z.infer<
