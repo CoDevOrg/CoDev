@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ConversationImportPreview } from "./conversation-import-preview";
+import { RoomImportPanel } from "./room-import-panel";
 
 const routerPush = vi.fn();
 
@@ -50,7 +50,7 @@ const conversation = {
   warnings: [],
 };
 
-describe("ConversationImportPreview", () => {
+describe("RoomImportPanel", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     routerPush.mockReset();
@@ -72,7 +72,7 @@ describe("ConversationImportPreview", () => {
         ),
       );
     vi.stubGlobal("fetch", fetchMock);
-    render(<ConversationImportPreview />);
+    render(<RoomImportPanel open />);
 
     fireEvent.change(screen.getByLabelText("Public share link"), {
       target: { value: shareUrl },
@@ -115,7 +115,7 @@ describe("ConversationImportPreview", () => {
           }),
         ),
     );
-    render(<ConversationImportPreview />);
+    render(<RoomImportPanel open />);
 
     fireEvent.change(screen.getByLabelText("Public share link"), {
       target: { value: shareUrl },
@@ -141,7 +141,7 @@ describe("ConversationImportPreview", () => {
       }),
     );
     vi.stubGlobal("fetch", fetchMock);
-    render(<ConversationImportPreview />);
+    render(<RoomImportPanel open />);
 
     fireEvent.change(screen.getByLabelText("Public share link"), {
       target: { value: `  ${shareUrl}  ` },
@@ -181,7 +181,7 @@ describe("ConversationImportPreview", () => {
         ),
       ),
     );
-    render(<ConversationImportPreview />);
+    render(<RoomImportPanel open />);
 
     fireEvent.change(screen.getByLabelText("Public share link"), {
       target: { value: shareUrl },
@@ -201,7 +201,7 @@ describe("ConversationImportPreview", () => {
       "fetch",
       vi.fn(() => new Promise(() => undefined)),
     );
-    render(<ConversationImportPreview />);
+    render(<RoomImportPanel open />);
 
     fireEvent.change(screen.getByLabelText("Public share link"), {
       target: { value: shareUrl },

@@ -17,7 +17,7 @@ import type {
   ImportedConversationMessage,
 } from "@codev/contracts";
 
-import styles from "./conversation-import-preview.module.css";
+import styles from "./room-import-panel.module.css";
 
 type PreviewResponse = {
   conversation?: ImportedConversation;
@@ -52,7 +52,7 @@ function formatTimestamp(value: string | null) {
   }).format(date);
 }
 
-export function ConversationImportPreview() {
+export function RoomImportPanel({ open }: { open: boolean }) {
   const router = useRouter();
   const [url, setUrl] = useState("");
   const [conversation, setConversation] = useState<ImportedConversation | null>(
@@ -131,6 +131,8 @@ export function ConversationImportPreview() {
     }
   }
 
+  if (!open) return null;
+
   const artifactCount =
     conversation?.messages.reduce(
       (total, message) => total + message.artifacts.length,
@@ -138,16 +140,7 @@ export function ConversationImportPreview() {
     ) ?? 0;
 
   return (
-    <div className={styles.page}>
-      <header className={styles.intro}>
-        <span className={styles.eyebrow}>Portable conversations</span>
-        <h1>Bring a chat into CoDev.</h1>
-        <p>
-          Paste a public ChatGPT share link to see the clean conversation before
-          turning it into a collaborative room.
-        </p>
-      </header>
-
+    <>
       <section className={styles.formCard} aria-labelledby="import-chat-title">
         <div className={styles.formHeading}>
           <div className={styles.providerIcon} aria-hidden="true">
@@ -319,6 +312,6 @@ export function ConversationImportPreview() {
           </div>
         </section>
       ) : null}
-    </div>
+    </>
   );
 }

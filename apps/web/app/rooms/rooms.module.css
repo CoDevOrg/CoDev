@@ -35,19 +35,21 @@
 }
 
 .createLink,
-.empty a {
+.empty button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
   min-height: 40px;
   padding: 0 14px;
+  border: 0;
   border-radius: 9px;
   background: var(--codev-gold-500);
   color: var(--codev-on-gold);
   font-size: 12px;
   font-weight: 750;
   text-decoration: none;
+  cursor: pointer;
 }
 
 .createLink svg {

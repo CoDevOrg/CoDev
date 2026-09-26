@@ -1,16 +1,3 @@
-.page {
-  width: min(1080px, 100%);
-  min-height: 100dvh;
-  margin: 0 auto;
-  padding: clamp(34px, 6vw, 72px) clamp(18px, 5vw, 58px) 96px;
-}
-
-.intro {
-  max-width: 680px;
-  margin-bottom: 26px;
-}
-
-.eyebrow,
 .previewLabel {
   display: inline-block;
   margin-bottom: 10px;
@@ -19,22 +6,6 @@
   font-weight: 750;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-}
-
-.intro h1 {
-  margin: 0;
-  color: var(--ink);
-  font-size: clamp(32px, 5vw, 54px);
-  line-height: 1.02;
-  letter-spacing: -0.045em;
-}
-
-.intro p {
-  max-width: 620px;
-  margin: 15px 0 0;
-  color: var(--muted);
-  font-size: 16px;
-  line-height: 1.65;
 }
 
 .formCard,
@@ -481,10 +452,6 @@
 }
 
 @media (max-width: 700px) {
-  .page {
-    padding-top: 30px;
-  }
-
   .inputRow {
     grid-template-columns: 1fr;
   }
