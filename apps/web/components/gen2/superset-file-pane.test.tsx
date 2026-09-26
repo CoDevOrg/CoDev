@@ -79,7 +79,11 @@ describe("SupersetFilePane", () => {
     mocks.create.mockImplementation(
       async (
         _id: string,
-        input: { name: string; kind: "file" | "directory" },
+        input: {
+          parentPath: string;
+          name: string;
+          kind: "file" | "directory";
+        },
       ) =>
         input.kind === "file"
           ? { path: input.name, kind: "file", size: 0 }
@@ -225,6 +229,7 @@ describe("SupersetFilePane", () => {
 
     await waitFor(() =>
       expect(mocks.create).toHaveBeenCalledWith(workspaceId, {
+        parentPath: "",
         name: newFile.path,
         kind: "file",
       }),
@@ -255,6 +260,7 @@ describe("SupersetFilePane", () => {
 
     await waitFor(() =>
       expect(mocks.create).toHaveBeenCalledWith(workspaceId, {
+        parentPath: "",
         name: "notes",
         kind: "directory",
       }),
