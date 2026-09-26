@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { MarkdownContent } from "@/components/markdown/markdown-content";
 import { cn } from "@/lib/platform/utils";
 
 type PreviewResponse = {
@@ -393,9 +394,10 @@ export function RoomImportPanel({ open }: { open: boolean }) {
                             </time>
                           ) : null}
                         </div>
-                        <p className="m-0 text-[12.5px] leading-relaxed break-words whitespace-pre-wrap">
-                          {message.text}
-                        </p>
+                        <MarkdownContent
+                          text={message.text}
+                          className="text-[12.5px]"
+                        />
                         {message.artifacts.length ? (
                           <ul
                             aria-label="Message attachments"

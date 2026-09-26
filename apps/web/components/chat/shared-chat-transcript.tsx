@@ -11,6 +11,7 @@ import {
 
 import { CHANNEL_MESSAGE_POLL_MS } from "@/lib/chat/team-chat-view";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { MarkdownContent } from "@/components/markdown/markdown-content";
 import { cn } from "@/lib/platform/utils";
 
 import { avatarColor, avatarInitials } from "./shared-chat-avatar";
@@ -234,30 +235,31 @@ export function SharedChatTranscript({
                       {message.generation.model}
                     </span>
                   ) : null}
-                  <p
-                    aria-busy={pending}
-                    className="m-0 text-[13.5px] leading-relaxed break-words whitespace-pre-wrap"
-                  >
-                    {pending ? (
-                      <>
-                        {label} is replying…
-                        <span
-                          aria-hidden="true"
-                          className="ml-1.5 inline-flex gap-0.5 align-middle"
-                        >
-                          {[0, 1, 2].map((index) => (
-                            <span
-                              key={index}
-                              style={{ animationDelay: `${index * 0.15}s` }}
-                              className="size-1 animate-bounce rounded-full bg-muted-foreground"
-                            />
-                          ))}
-                        </span>
-                      </>
-                    ) : (
-                      message.text
-                    )}
-                  </p>
+                  {pending ? (
+                    <p
+                      aria-busy="true"
+                      className="m-0 text-[13.5px] leading-relaxed"
+                    >
+                      {label} is replying…
+                      <span
+                        aria-hidden="true"
+                        className="ml-1.5 inline-flex gap-0.5 align-middle"
+                      >
+                        {[0, 1, 2].map((index) => (
+                          <span
+                            key={index}
+                            style={{ animationDelay: `${index * 0.15}s` }}
+                            className="size-1 animate-bounce rounded-full bg-muted-foreground"
+                          />
+                        ))}
+                      </span>
+                    </p>
+                  ) : (
+                    <MarkdownContent
+                      text={message.text}
+                      className="text-[13.5px]"
+                    />
+                  )}
                   {message.artifacts.length ? (
                     <ul
                       aria-label="Message attachments"
