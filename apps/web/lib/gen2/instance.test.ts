@@ -27,9 +27,9 @@ describe("gen2 Firecracker instance policy", () => {
     });
   });
 
-  it("only stops a live or starting instance", () => {
+  it("only stops a ready instance", () => {
     expect(canStopInstance("ready")).toBe(true);
-    expect(canStopInstance("provisioning")).toBe(true);
+    expect(canStopInstance("provisioning")).toBe(false);
     expect(canStopInstance("stopped")).toBe(false);
     expect(canStopInstance("pending")).toBe(false);
   });

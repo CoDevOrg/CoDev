@@ -365,6 +365,54 @@ impl FirecrackerApiClient {
     }
 }
 
+async fn load_snapshot_while_firecracker_runs(
+    api: &FirecrackerApiClient,
+    child: &Mutex<Child>,
+) -> std::result::Result<(), SnapshotRestoreFailure> {
+    tokio::select! {
+        result = api.load_snapshot() => result.map_err(SnapshotRestoreFailure::Api),
+        exit = async {
+            let mut child = child.lock().await;
+            child.wait().await
+        } => {
+            match exit {
+                Ok(status) => Err(SnapshotRestoreFailure::FirecrackerExited(status)),
+                Err(error) => Err(SnapshotRestoreFailure::Api(RuntimeError::internal(error))),
+            }
+        }
+    }
+}
+
+enum SnapshotRestoreFailure {
+    Api(RuntimeError),
+    FirecrackerExited(std::process::ExitStatus),
+}
+
+async fn restore_snapshot_while_firecracker_runs(
+    api: &FirecrackerApiClient,
+    child: &Mutex<Child>,
+    timeout_duration: Duration,
+) -> Result<()> {
+    timeout(timeout_duration, async {
+        loop {
+            match load_snapshot_while_firecracker_runs(api, child).await {
+                Ok(()) => return Ok(()),
+                Err(SnapshotRestoreFailure::Api(RuntimeError::Unavailable(_))) => {
+                    sleep(Duration::from_millis(100)).await
+                }
+                Err(SnapshotRestoreFailure::Api(error)) => return Err(error),
+                Err(SnapshotRestoreFailure::FirecrackerExited(status)) => {
+                    return Err(RuntimeError::Unavailable(format!(
+                        "Firecracker exited before snapshot restore: {status}"
+                    )));
+                }
+            }
+        }
+    })
+    .await
+    .map_err(|_| RuntimeError::Timeout("Firecracker snapshot restore timed out".into()))?
+}
+
 async fn read_until_sequence(
     stream: &mut UnixStream,
     sequence: &[u8],
@@ -1179,6 +1227,37 @@ impl FirecrackerBackend {
     }
 
     async fn prepare_and_start(&self, request: &CreateRequest) -> Result<RunningMachine> {
+        let mut restore_from_saved_disks = false;
+        loop {
+            let mut full_snapshot_restore_failed = false;
+            match self
+                .prepare_and_start_attempt(
+                    request,
+                    restore_from_saved_disks,
+                    &mut full_snapshot_restore_failed,
+                )
+                .await
+            {
+                Ok(machine) => return Ok(machine),
+                Err(error) if full_snapshot_restore_failed && !restore_from_saved_disks => {
+                    warn!(
+                        workspace_id = %request.workspace_id,
+                        %error,
+                        "full Firecracker snapshot restore failed; retrying from saved workspace disks"
+                    );
+                    restore_from_saved_disks = true;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+    }
+
+    async fn prepare_and_start_attempt(
+        &self,
+        request: &CreateRequest,
+        restore_from_saved_disks: bool,
+        full_snapshot_restore_failed: &mut bool,
+    ) -> Result<RunningMachine> {
         let snapshot_state =
             if request.resume_from_snapshot && request.persistent_disk_lun.is_none() {
                 self.snapshot_metadata(&request.workspace_id).await?
@@ -1190,10 +1269,16 @@ impl FirecrackerBackend {
             .as_ref()
             .map(|(directory, _)| directory.clone())
             .unwrap_or_else(|| self.snapshot_dir(&request.workspace_id));
-        let restore_snapshot =
-            snapshot_metadata.is_some_and(|metadata| metadata.kind == SnapshotKind::FullMachine);
-        let disk_checkpoint =
-            snapshot_metadata.filter(|metadata| metadata.kind == SnapshotKind::WorkspaceDisks);
+        let restore_snapshot = !restore_from_saved_disks
+            && snapshot_metadata.is_some_and(|metadata| metadata.kind == SnapshotKind::FullMachine);
+        let disk_checkpoint = snapshot_metadata.filter(|metadata| {
+            restore_from_saved_disks || metadata.kind == SnapshotKind::WorkspaceDisks
+        });
+        if restore_from_saved_disks && disk_checkpoint.is_none() {
+            return Err(RuntimeError::Unavailable(
+                "saved Firecracker workspace disks are unavailable for recovery".into(),
+            ));
+        }
         let slot = {
             let machines = self.machines.read().await;
             if restore_snapshot {
@@ -1390,23 +1475,15 @@ impl FirecrackerBackend {
 
         if restore_snapshot {
             let restore_started_at = Instant::now();
-            let restore = timeout(Duration::from_secs(45), async {
-                loop {
-                    match FirecrackerApiClient::new(machine.api_socket.clone())
-                        .load_snapshot()
-                        .await
-                    {
-                        Ok(()) => break Ok(()),
-                        Err(RuntimeError::Unavailable(_)) => {
-                            sleep(Duration::from_millis(100)).await
-                        }
-                        Err(error) => break Err(error),
-                    }
-                }
-            })
-            .await;
-            match restore {
-                Ok(Ok(())) => {
+            let api = FirecrackerApiClient::new(machine.api_socket.clone());
+            match restore_snapshot_while_firecracker_runs(
+                &api,
+                &machine.child,
+                Duration::from_secs(45),
+            )
+            .await
+            {
+                Ok(()) => {
                     let restore_ms = restore_started_at.elapsed().as_millis() as u64;
                     if restore_ms > 500 {
                         warn!(
@@ -1423,15 +1500,10 @@ impl FirecrackerBackend {
                         );
                     }
                 }
-                Ok(Err(error)) => {
+                Err(error) => {
                     self.cleanup_failed_machine(&machine).await;
+                    *full_snapshot_restore_failed = true;
                     return Err(error);
-                }
-                Err(_) => {
-                    self.cleanup_failed_machine(&machine).await;
-                    return Err(RuntimeError::Timeout(
-                        "Firecracker snapshot restore timed out".into(),
-                    ));
                 }
             }
         }
@@ -2015,8 +2087,21 @@ pub fn parse_duration(value: &str) -> Option<Duration> {
 #[cfg(test)]
 mod tests {
     use super::{
-        GUEST_CID_BASE, MicroVmSnapshotMetadata, SnapshotKind, first_available_slot, guest_ip,
-        has_reaper_blocking_requests, host_ip, parse_duration, tap_name,
+        FirecrackerApiClient, FirecrackerBackend, FirecrackerConfig, GUEST_CID_BASE,
+        MicroVmSnapshotMetadata, SnapshotKind, first_available_slot, guest_ip,
+        has_reaper_blocking_requests, host_ip, parse_duration,
+        restore_snapshot_while_firecracker_runs, tap_name,
+    };
+    use crate::model::RuntimeError;
+    use std::{
+        collections::HashMap,
+        path::PathBuf,
+        sync::atomic::{AtomicBool, Ordering},
+        time::{Duration, Instant},
+    };
+    use tokio::{
+        process::Command,
+        sync::{Mutex, RwLock as AsyncRwLock},
     };
 
     #[test]
@@ -2076,5 +2161,85 @@ mod tests {
         .expect("legacy full snapshot metadata");
         assert_eq!(metadata.kind, SnapshotKind::FullMachine);
         assert_eq!(metadata.slot, 3);
+    }
+
+    #[tokio::test]
+    async fn exits_during_snapshot_restore_are_reported_immediately() {
+        let child = Command::new("sh")
+            .args(["-c", "exit 17"])
+            .spawn()
+            .expect("spawn an exiting Firecracker stand-in");
+        let child = Mutex::new(child);
+        let api = FirecrackerApiClient::new(
+            tempfile::tempdir()
+                .expect("temporary directory")
+                .path()
+                .join("missing-api.socket"),
+        );
+        let started_at = Instant::now();
+
+        let error = restore_snapshot_while_firecracker_runs(&api, &child, Duration::from_secs(45))
+            .await
+            .expect_err("an exited Firecracker process cannot restore a snapshot");
+
+        assert!(matches!(
+            error,
+            RuntimeError::Unavailable(message)
+                if message.contains("Firecracker exited before snapshot restore")
+                    && message.contains("17")
+        ));
+        assert!(started_at.elapsed() < Duration::from_secs(2));
+    }
+
+    #[tokio::test]
+    async fn shutdown_reservation_blocks_create_on_the_firecracker_backend() {
+        let backend = FirecrackerBackend {
+            config: FirecrackerConfig {
+                runtime_dir: PathBuf::new(),
+                kernel_image: PathBuf::new(),
+                rootfs_image: PathBuf::new(),
+                firecracker_bin: PathBuf::new(),
+                jailer_bin: PathBuf::new(),
+                jailer_dir: PathBuf::new(),
+                max_sandboxes: 1,
+                vcpu_count: 1,
+                memory_mib: 256,
+                workspace_disk_gib: 1,
+                idle_timeout: Duration::from_secs(60),
+                guest_network: false,
+            },
+            machines: AsyncRwLock::new(HashMap::new()),
+            provision: Mutex::new(()),
+            host_shutdown_pending: AtomicBool::new(false),
+        };
+
+        assert!(backend.begin_host_shutdown_if_idle().await);
+        let request = serde_json::from_value(serde_json::json!({
+            "workspaceId": "lifecycle-test",
+            "repositoryUrl": null,
+            "repositorySnapshot": {
+                "files": [],
+                "totalBytes": 0
+            },
+            "baseSha": "0000000000000000000000000000000000000000",
+            "expiresAt": "2026-09-26T08:00:00Z",
+            "resumeFromSnapshot": false,
+            "lifecycle": {
+                "timeoutMs": 14400000,
+                "lifecycle": { "onTimeout": "pause", "autoResume": true }
+            }
+        }))
+        .expect("valid create request");
+        let error = backend
+            .create(request)
+            .await
+            .expect_err("create must not race host deallocation");
+
+        assert!(matches!(
+            error,
+            RuntimeError::Unavailable(message) if message.contains("host is shutting down")
+        ));
+        backend.cancel_host_shutdown();
+        assert!(!backend.host_shutdown_pending.load(Ordering::Acquire));
     }
 }

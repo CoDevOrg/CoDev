@@ -20,11 +20,7 @@ import {
   discardSandboxSnapshot,
 } from "../runtime/orchestrator-sandbox";
 import { GEN2_MAX_OWNED_WORKSPACES } from "./constants";
-import {
-  Gen2AccessError,
-  Gen2LifecycleError,
-  isGen2HostUnreachable,
-} from "./errors";
+import { Gen2AccessError, Gen2LifecycleError } from "./errors";
 
 const DEFAULT_WORKSPACE_NAME = "Workspace";
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
@@ -255,22 +251,15 @@ export async function deleteGen2Workspace(workspaceId: string, userId: string) {
 
   try {
     // A never-started workspace has no guest or snapshot, so don't wake a host
-    // just to delete its database row. For all other states, purge the runtime
-    // data before freeing the owner's workspace slot.
+    // just to delete its database row. For all other states, make sure the
+    // host is responsive before teardown so an unreachable-host timeout does
+    // not consume most of Vercel's function budget before the wake attempt.
     if (currentStatus !== "pending") {
-      try {
-        await destroySandbox(workspaceId);
-      } catch (error) {
-        if (!isGen2HostUnreachable(error)) throw error;
-        logEvent("warn", "gen2.workspace.delete_host_unreachable", {
-          workspaceId,
-          detail: error instanceof Error ? error.message : "unknown",
-        });
-        // The host may have deallocated while retaining the workspace disk.
-        // Wake it so deletion can remove the snapshot rather than orphaning it.
-        await ensureHostReady();
-        await destroySandbox(workspaceId);
-      }
+      // Leave room in Vercel's 300-second request budget for guest teardown,
+      // snapshot removal, and the final database delete. If the Azure VM is
+      // still booting at this bound, the deleting record remains retryable.
+      await ensureHostReady(120_000);
+      await destroySandbox(workspaceId);
       await discardSandboxSnapshot(workspaceId);
     }
     await database

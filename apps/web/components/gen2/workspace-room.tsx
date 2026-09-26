@@ -6,6 +6,7 @@ import { ArrowLeft, Check, Link2 } from "lucide-react";
 import type { Gen2WorkspaceDetail } from "@codev/contracts";
 
 import { Gen2ChatPanel } from "./chat-panel";
+import { ensureGen2WorkspaceReady } from "@/lib/gen2/startup-client";
 import { Gen2Workbench, type Gen2WorkbenchHandle } from "./workbench";
 
 const STATUS_LABEL: Record<Gen2WorkspaceDetail["status"], string> = {
@@ -29,6 +30,7 @@ export function Gen2WorkspaceRoom({
   const [refreshToken, setRefreshToken] = useState(0);
   const [runtimeReady, setRuntimeReady] = useState(false);
   const workbenchRef = useRef<Gen2WorkbenchHandle | null>(null);
+  const startupInFlightRef = useRef<Promise<boolean> | null>(null);
   const ready = current.status === "ready" && runtimeReady;
   const displayStatus =
     current.status === "ready" && !runtimeReady
@@ -47,35 +49,29 @@ export function Gen2WorkspaceRoom({
    * decides whether anything needs doing, and a second member opening the
    * same workspace joins the boot already in progress.
    */
-  const ensureRunning = useCallback(async () => {
+  const ensureRunning = useCallback(() => {
+    if (startupInFlightRef.current) return startupInFlightRef.current;
+
     setRuntimeReady(false);
-    try {
-      const response = await fetch(
-        `/api/gen2/workspaces/${current.id}/instance`,
-        { method: "POST" },
-      );
-      const payload = (await response.json().catch(() => ({}))) as {
-        workspace?: Gen2WorkspaceDetail;
-        error?: string;
-      };
-      if (payload.workspace) setCurrent(payload.workspace);
-      if (!response.ok) {
-        setCurrent((value) => ({
-          ...value,
-          lastError: payload.error ?? "The machine could not start.",
-        }));
-        return false;
+    setCurrent((value) => ({ ...value, lastError: null }));
+    const attempt = (async () => {
+      const result = await ensureGen2WorkspaceReady(current.id);
+      if (result.workspace) {
+        setCurrent(result.workspace);
+        setRuntimeReady(true);
+        refresh();
+        return true;
       }
-      setRuntimeReady(true);
-      refresh();
-      return true;
-    } catch {
-      setCurrent((value) => ({
-        ...value,
-        lastError: "The machine could not be reached. Try again.",
-      }));
+      setCurrent((value) => ({ ...value, lastError: result.error }));
       return false;
-    }
+    })();
+    const tracked = attempt.finally(() => {
+      if (startupInFlightRef.current === tracked) {
+        startupInFlightRef.current = null;
+      }
+    });
+    startupInFlightRef.current = tracked;
+    return tracked;
   }, [current.id, refresh]);
 
   const bootedRef = useRef(false);
