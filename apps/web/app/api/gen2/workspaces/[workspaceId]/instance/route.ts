@@ -2,7 +2,7 @@ import { withUser } from "@/lib/http/api-route";
 import { ensureGen2Instance, stopGen2Instance } from "@/lib/gen2/instance";
 import { getGen2WorkspaceDetail } from "@/lib/gen2/workspaces";
 
-/** Host wake, Firecracker creation, and persistence fit Vercel's 300s limit. */
+/** One bounded host-wake attempt plus guest creation fits Vercel's 300s limit. */
 export const maxDuration = 300;
 
 type Params = { workspaceId: string };
@@ -14,9 +14,13 @@ type Params = { workspaceId: string };
 export const POST = withUser<Params>(
   async ({ user, params: { workspaceId } }) => {
     await ensureGen2Instance(workspaceId, user.id);
-    return Response.json({
-      workspace: await getGen2WorkspaceDetail(workspaceId, user.id),
-    });
+    const workspace = await getGen2WorkspaceDetail(workspaceId, user.id);
+    return Response.json(
+      { workspace },
+      {
+        status: workspace.status === "ready" && workspace.sandboxId ? 200 : 202,
+      },
+    );
   },
   { errorStatus: 502 },
 );

@@ -65,7 +65,9 @@ export async function ensureHostReady(timeoutMs = HOST_START_TIMEOUT_MS) {
   if (fakeGuestEnabled()) return;
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const state = await requestHostWake().catch(() => "starting" as const);
+    // This function owns its own poll loop; keep an individual Azure status
+    // check from spending the whole loop budget waiting out a stopping VM.
+    const state = await requestHostWake(1).catch(() => "starting" as const);
     if (state === "running") {
       try {
         await waitForOrchestrator(Math.min(45_000, deadline - Date.now()));

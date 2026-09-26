@@ -54,7 +54,7 @@ export function buildBlankSandboxSource() {
 }
 
 export function canStopInstance(status: Gen2WorkspaceStatus) {
-  return status === "ready" || status === "provisioning";
+  return status === "ready";
 }
 
 const HOST_UNREACHABLE_MESSAGE =
@@ -62,17 +62,20 @@ const HOST_UNREACHABLE_MESSAGE =
 
 /** Firecracker create can outlast the default 70s orchestrator timeout. */
 const GEN2_PROVISION_TIMEOUT_MS = 120_000;
-/** Leave room for guest creation within Vercel's 300-second function limit. */
-const GEN2_HOST_READY_TIMEOUT_MS = 150_000;
+/**
+ * A host wake is one bounded attempt. The workspace page retries this request
+ * while Azure finishes booting, keeping each Vercel invocation comfortably
+ * below its 300-second limit.
+ */
+const GEN2_HOST_READY_TIMEOUT_MS = 60_000;
 /** Keep expiry inside the orchestrator's exclusive four-hour window. */
 const GEN2_EXPIRES_SLACK_MS = 60_000;
 /**
- * The host wake and guest creation budgets total 270 seconds. Leave another
- * thirty seconds for source preparation and persisting the final state.
+ * One host wake attempt and guest creation fit within 180 seconds. Leave
+ * another thirty seconds for source preparation and persisting the final state.
  */
 const GEN2_PROVISIONING_STALE_AFTER_MS =
   GEN2_HOST_READY_TIMEOUT_MS + GEN2_PROVISION_TIMEOUT_MS + 30_000;
-const GEN2_PROVISIONING_POLL_MS = 1_000;
 
 export function describeGen2RuntimeFailure(error: unknown): string {
   if (isGen2HostUnreachable(error)) {
@@ -233,43 +236,6 @@ async function claimProvisioning(workspaceId: string) {
   return claim?.updatedAt ?? null;
 }
 
-async function waitForProvisioning(workspaceId: string, userId: string) {
-  const deadline = Date.now() + GEN2_PROVISIONING_STALE_AFTER_MS;
-  while (Date.now() < deadline) {
-    const workspace = await requireGen2Member(workspaceId, userId);
-    if (workspace.status === "ready") return workspace;
-    if (workspace.status === "failed") {
-      throw new Gen2LifecycleError(
-        workspace.lastError ?? "The Firecracker instance could not start.",
-        502,
-      );
-    }
-    if (workspace.status !== "provisioning") {
-      throw new Gen2LifecycleError(
-        workspace.lastError ??
-          "Workspace startup ended before the machine was ready.",
-        503,
-      );
-    }
-    if (
-      Date.now() - Date.parse(workspace.updatedAt) >=
-      GEN2_PROVISIONING_STALE_AFTER_MS
-    ) {
-      throw new Gen2LifecycleError(
-        "The previous startup attempt stopped responding. Try again to resume this workspace.",
-        503,
-      );
-    }
-    await new Promise((resolve) =>
-      setTimeout(resolve, GEN2_PROVISIONING_POLL_MS),
-    );
-  }
-  throw new Gen2LifecycleError(
-    "The Firecracker instance is still starting. Try again in a moment.",
-    503,
-  );
-}
-
 /**
  * Makes sure this workspace has a machine, and returns once it does.
  *
@@ -307,10 +273,9 @@ export async function ensureGen2Instance(
 
   const provisioningAt = await claimProvisioning(workspaceId);
   if (!provisioningAt) {
-    // Another member owns the startup lease. Join that operation instead of
-    // returning a successful response that leaves this browser stuck at
-    // "Starting" without an active runtime.
-    return waitForProvisioning(workspaceId, userId);
+    // Another member owns startup. Return its durable workspace state so this
+    // request stays short; the opening browser polls until it is ready.
+    return requireGen2Member(workspaceId, userId);
   }
 
   // A process can be terminated by its platform before its catch block runs.
@@ -409,16 +374,67 @@ export async function stopGen2Instance(
   if (membership.role !== "owner") {
     throw new Gen2AccessError("Only the owner can stop this instance.", 403);
   }
+  if (membership.status === "provisioning") {
+    throw new Gen2LifecycleError(
+      "Wait for the instance to finish starting before stopping it.",
+    );
+  }
   if (!canStopInstance(membership.status)) {
     throw new Gen2LifecycleError("This instance is not running.");
   }
 
-  await runtime.destroy(workspaceId);
-  await writeGen2Instance(workspaceId, {
-    status: "stopped",
-    sandboxId: null,
-    lastError: null,
-  });
+  // Reserve the workspace before contacting Firecracker so a simultaneous
+  // open joins this stop instead of returning a guest that is being removed.
+  const stoppingAt = new Date();
+  const [stopLease] = await getDatabase()
+    .update(schema.gen2Workspaces)
+    .set({ status: "provisioning", lastError: null, updatedAt: stoppingAt })
+    .where(
+      and(
+        eq(schema.gen2Workspaces.id, workspaceId),
+        eq(schema.gen2Workspaces.status, "ready"),
+      ),
+    )
+    .returning({ updatedAt: schema.gen2Workspaces.updatedAt });
+  if (!stopLease) {
+    throw new Gen2LifecycleError(
+      "The instance changed state. Reload the workspace and try again.",
+      409,
+    );
+  }
+
+  try {
+    await runtime.destroy(workspaceId);
+  } catch (error) {
+    if (!isGen2HostUnreachable(error)) {
+      const message = describeGen2RuntimeFailure(error);
+      await writeGen2Instance(
+        workspaceId,
+        { status: "ready", lastError: message },
+        stoppingAt,
+      );
+      throw new Gen2LifecycleError(message, 502);
+    }
+
+    // A deallocated host cannot have a running guest to stop. Preserve the
+    // workspace snapshot; the next open wakes the host and restores it.
+    logEvent("warn", "gen2.instance.stop_host_unreachable", {
+      workspaceId,
+      detail: error instanceof Error ? error.message : "unknown",
+    });
+  }
+
+  const committed = await writeGen2Instance(
+    workspaceId,
+    { status: "stopped", sandboxId: null, lastError: null },
+    stoppingAt,
+  );
+  if (!committed) {
+    throw new Gen2LifecycleError(
+      "A newer lifecycle operation took over. Reload the workspace and try again.",
+      503,
+    );
+  }
 
   return requireGen2Member(workspaceId, userId);
 }
