@@ -16,6 +16,38 @@ if (!globalThis.ResizeObserver) {
   } as unknown as typeof ResizeObserver;
 }
 
+// Nor IntersectionObserver, which the landing surfaces use to reveal sections
+// and to park animation loops while they are off screen.
+if (!globalThis.IntersectionObserver) {
+  globalThis.IntersectionObserver = class {
+    readonly root = null;
+    readonly rootMargin = "";
+    readonly thresholds: ReadonlyArray<number> = [];
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords(): IntersectionObserverEntry[] {
+      return [];
+    }
+  } as unknown as typeof IntersectionObserver;
+}
+
+// jsdom has no matchMedia, and several components branch on
+// `prefers-reduced-motion` before they do anything else. Default to "motion is
+// fine" so existing suites are unaffected; a test that cares stubs the return.
+if (!window.matchMedia) {
+  window.matchMedia = ((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia;
+}
+
 afterEach(() => {
   cleanup();
 });
