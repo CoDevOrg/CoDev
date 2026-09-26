@@ -1,7 +1,7 @@
 # Gen 2 workspace
 
 **Status:** Current  
-**Date:** 2026-09-21
+**Date:** 2026-09-26
 
 Gen 2 is a new workspace, isolated from `lib/workspaces`. The product is:
 
@@ -30,6 +30,11 @@ the file the agent just edited.
 - Create a workspace from a GitHub repository (public repositories are cloned
   by the host, private ones arrive as a bounded snapshot the control plane
   fetched, so no GitHub token enters the VM)
+- Own up to two Gen 2 workspaces at a time; shared workspaces do not count
+- Delete an owned workspace to remove its guest and saved disk snapshots and
+  free an ownership slot
+- Run up to six active sandboxes per host; idle guests hibernate after 15
+  minutes and a quiet host deallocates after one minute
 - Upload a local file onto the machine
 - A workbench beside the chat — file tree with Git status, a CodeMirror 6
   editor with revision-checked saves, a shell, and a live Git status/diff
@@ -40,8 +45,10 @@ Opening a workspace is the intent to use it, so `ensureGen2Instance` runs on
 open and is safe for any member to call -- the person who follows a share link
 should not have to wait for the owner to press something. The composer is
 never disabled either: type into a cold workspace and the machine is brought
-up as part of sending. The orchestrator pauses an idle guest after four hours
-on its own, so nothing needs stopping by hand.
+up as part of sending. The orchestrator hibernates an idle guest after 15
+minutes, preserving its workspace disk while releasing its sandbox slot. A
+host with no active sandboxes deallocates after one quiet minute. Opening the
+workspace resumes it from the saved disk.
 
 ## Interface
 
@@ -107,7 +114,7 @@ stack against it.
 
 ## Out of scope
 
-Gen 1 agent sessions, worktrees, GitHub, hibernation, OpenFGA, the original
+Gen 1 agent sessions, worktrees, GitHub, OpenFGA, the original
 `workspaces` table, and the embedded Orca IDE.
 
 Concurrent agents: the guest serialises Codex (`start_codex_exec` waits on

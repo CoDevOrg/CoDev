@@ -107,6 +107,11 @@
   border-color: var(--line-strong);
 }
 
+.gen2-card-pending {
+  cursor: default;
+  opacity: 0.72;
+}
+
 .gen2-card:focus-visible {
   outline: 2px solid var(--gold);
   outline-offset: 3px;
@@ -168,6 +173,14 @@
   color: var(--muted);
 }
 
+.gen2-create-limit {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
 .gen2-room-header {
   display: flex;
   flex-wrap: wrap;
@@ -201,6 +214,10 @@
 }
 
 .gen2-status-failed .gen2-status-dot {
+  background: #ef4444;
+}
+
+.gen2-status-deleting .gen2-status-dot {
   background: #ef4444;
 }
 

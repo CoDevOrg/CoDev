@@ -208,6 +208,18 @@ describe("gen2 instance lifecycle", () => {
     expect(mocks.updates).toEqual([]);
   });
 
+  it("does not restart a workspace once deletion has begun", async () => {
+    mocks.member.status = "deleting";
+    await expect(
+      ensureGen2Instance(mocks.member.id, "user-1", {
+        provision: mocks.provision,
+        destroy: mocks.destroy,
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(mocks.ensureHostReady).not.toHaveBeenCalled();
+    expect(mocks.provision).not.toHaveBeenCalled();
+  });
+
   it("leaves a ready workspace untouched when runtime verification succeeds", async () => {
     mocks.member.status = "ready";
     mocks.member.sandboxId = "sandbox-1";

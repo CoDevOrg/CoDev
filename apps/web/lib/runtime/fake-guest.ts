@@ -297,6 +297,9 @@ export function handleFakeGuestRequest(
       sandboxes.delete(workspaceId);
       return new Response(null, { status: 204 });
     }
+    if (method === "DELETE" && rest === "/snapshot") {
+      return new Response(null, { status: 204 });
+    }
 
     const sandbox = require(workspaceId);
     const input = payload as Record<string, string & number>;

@@ -1,0 +1,1 @@
+ALTER TYPE "public"."gen2_workspace_status" ADD VALUE 'deleting';
