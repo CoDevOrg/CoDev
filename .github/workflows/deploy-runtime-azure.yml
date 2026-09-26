@@ -27,6 +27,7 @@ on:
       # often than the runtime and a host roll takes tens of minutes.
       - "infra/runtime/scripts/**"
       - "infra/runtime/orca-build/**"
+      - "vendor/superset/**"
       - ".github/workflows/deploy-runtime-azure.yml"
   workflow_dispatch:
 
@@ -97,6 +98,31 @@ jobs:
         with:
           node-version: 24
 
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: vendor/superset/.bun-version
+
+      - name: Fingerprint Superset build inputs
+        id: superset_inputs
+        run: |
+          # The Git tree covers every tracked Superset file, including hidden
+          # build configuration; the script hashes cover CoDev's packaging.
+          source_tree="$(git rev-parse HEAD:vendor/superset)"
+          script_hashes="$(sha256sum \
+            infra/runtime/scripts/build-superset-host.sh \
+            infra/runtime/scripts/package-superset-native.mjs \
+            infra/runtime/scripts/verify-superset-host-artifact.mjs)"
+          fingerprint="$(printf '%s\n' "${source_tree}" "${script_hashes}" "$(node -p 'process.versions.modules')" "$(uname -m)" | sha256sum | cut -d' ' -f1)"
+          echo "fingerprint=${fingerprint}" >> "${GITHUB_OUTPUT}"
+
+      # Cache the built guest distribution, not Superset's node_modules. The
+      # release still uploads its own copy; unchanged Superset inputs reuse
+      # this archive instead of reinstalling and rebuilding the monorepo.
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/superset-host-cache
+          key: superset-host-ubuntu24-v1-${{ steps.superset_inputs.outputs.fingerprint }}
+
       - name: Install the Rust toolchain the orchestrator builds with
         run: |
           rustup toolchain install 1.97.1 --profile minimal
@@ -112,6 +138,8 @@ jobs:
 
       - name: Deploy the runtime
         env:
+          CODEV_SUPERSET_CACHE_DIR: ${{ runner.temp }}/superset-host-cache
+          CODEV_SUPERSET_CACHE_KEY: ${{ steps.superset_inputs.outputs.fingerprint }}
           AZURE_LOCATION: ${{ vars.AZURE_LOCATION || 'westus2' }}
           AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
           AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}

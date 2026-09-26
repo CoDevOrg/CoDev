@@ -1,7 +1,8 @@
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     fs::{self, OpenOptions},
-    io::{Read, Write},
+    io::{BufRead, BufReader, Read, Write},
+    net::{SocketAddr, TcpStream},
     os::unix::fs::{OpenOptionsExt, PermissionsExt},
     path::{Component, Path, PathBuf},
     process::{Command, Stdio},
@@ -212,6 +213,7 @@ impl GuestService {
         }
         let result = match (method, path) {
             ("GET", "/healthz") => self.health(),
+            ("GET", "/v1/superset/health") => self.superset_health(),
             ("POST", "/v1/workspace/flush") => self.flush_workspace(),
             ("POST", "/v1/files/read") => self.read_file(body),
             ("POST", "/v1/files/write") => self.write_file(body),
@@ -316,6 +318,31 @@ impl GuestService {
             "status": "ok",
             "service": "codev-guest"
         }))
+    }
+
+    fn superset_health(&self) -> crate::model::Result<serde_json::Value> {
+        let address = SocketAddr::from(([127, 0, 0, 1], 4879));
+        let mut connection = TcpStream::connect_timeout(&address, Duration::from_secs(2))
+            .map_err(|_| RuntimeError::Unavailable("Superset host service is unavailable".into()))?;
+        connection
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .map_err(RuntimeError::internal)?;
+        connection
+            .set_write_timeout(Some(Duration::from_secs(2)))
+            .map_err(RuntimeError::internal)?;
+        connection
+            .write_all(b"GET /trpc/health.check HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
+            .map_err(|_| RuntimeError::Unavailable("Superset host service is unavailable".into()))?;
+        let mut status = String::new();
+        BufReader::new(connection)
+            .read_line(&mut status)
+            .map_err(|_| RuntimeError::Unavailable("Superset host service is unavailable".into()))?;
+        if !status.starts_with("HTTP/1.1 200 ") && !status.starts_with("HTTP/1.0 200 ") {
+            return Err(RuntimeError::Unavailable(
+                "Superset host service failed its health check".into(),
+            ));
+        }
+        Ok(serde_json::json!({ "status": "ok", "service": "superset-host" }))
     }
 
     fn flush_workspace(&self) -> crate::model::Result<serde_json::Value> {

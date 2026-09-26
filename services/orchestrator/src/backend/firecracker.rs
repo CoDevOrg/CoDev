@@ -536,6 +536,11 @@ impl FirecrackerBackend {
         Ok(result)
     }
 
+    pub async fn superset_health(&self, workspace_id: &str) -> Result<()> {
+        let machine = self.machine(workspace_id).await?;
+        machine.guest.superset_health().await
+    }
+
     pub async fn write_file(
         &self,
         workspace_id: &str,

@@ -254,6 +254,19 @@ impl Backend {
         }
     }
 
+    pub async fn superset_health(&self, workspace_id: &str) -> Result<()> {
+        match self {
+            Self::Fake(_) => {
+                let _ = workspace_id;
+                Err(RuntimeError::Unavailable(
+                    "Superset host service is unavailable in the fake backend".into(),
+                ))
+            }
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => backend.superset_health(workspace_id).await,
+        }
+    }
+
     pub async fn write_file(
         &self,
         workspace_id: &str,

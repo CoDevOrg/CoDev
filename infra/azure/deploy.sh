@@ -69,6 +69,43 @@ install -m 0755 \
   "${repo_root}/services/orchestrator/target/${rust_target}/release/guestd" \
   "${build_dir}/codev-guestd-linux-${artifact_arch}"
 
+echo "==> Preparing the Superset host service for the Firecracker guest"
+if [[ "$(uname -m)" != "${host_arch}" ]]; then
+  echo "Superset's native modules require a Linux build runner matching CODEV_HOST_ARCH (${host_arch})." >&2
+  exit 1
+fi
+superset_archive="superset-host-linux-${artifact_arch}.tar.gz"
+superset_output_dir="${build_dir}"
+superset_source_version="${release_version}"
+if [[ -n "${CODEV_SUPERSET_CACHE_DIR:-}" ]]; then
+  if [[ ! "${CODEV_SUPERSET_CACHE_KEY:-}" =~ ^[a-f0-9]{64}$ ]]; then
+    echo "CODEV_SUPERSET_CACHE_KEY must be a SHA-256 fingerprint when caching is enabled." >&2
+    exit 1
+  fi
+  # Each fingerprint gets its own directory so a different Superset source
+  # cannot accidentally reuse a previous release's correctly checksummed tar.
+  superset_output_dir="${CODEV_SUPERSET_CACHE_DIR}/${CODEV_SUPERSET_CACHE_KEY}/${artifact_arch}"
+  superset_source_version="${CODEV_SUPERSET_CACHE_KEY}"
+  install -d -m 0755 "${superset_output_dir}"
+fi
+
+if [[ "${superset_output_dir}" != "${build_dir}" \
+  && -f "${superset_output_dir}/${superset_archive}" \
+  && -f "${superset_output_dir}/${superset_archive}.sha256" ]] \
+  && (cd "${superset_output_dir}" && sha256sum --check --status "${superset_archive}.sha256"); then
+  echo "==> Reusing cached Superset host service ${superset_source_version}"
+else
+  CODEV_SUPERSET_ARTIFACT_VERSION="${superset_source_version}" \
+  CODEV_SUPERSET_ARTIFACT_NAME="superset-host-linux-${artifact_arch}" \
+    "${repo_root}/infra/runtime/scripts/build-superset-host.sh" "${superset_output_dir}"
+fi
+(cd "${superset_output_dir}" && sha256sum --check "${superset_archive}.sha256")
+if [[ "${superset_output_dir}" != "${build_dir}" ]]; then
+  install -m 0644 "${superset_output_dir}/${superset_archive}" "${build_dir}/${superset_archive}"
+  install -m 0644 "${superset_output_dir}/${superset_archive}.sha256" \
+    "${build_dir}/${superset_archive}.sha256"
+fi
+
 # Building orca serve from source takes ~15-30 minutes; skip it for
 # orchestrator-only iteration once a matching archive already exists at the
 # target release version.

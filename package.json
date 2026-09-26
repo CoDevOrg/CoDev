@@ -41,6 +41,6 @@
     "blockExoticSubdeps": false
   },
   "lint-staged": {
-    "!(packages/ide/**)*.{js,jsx,ts,tsx,json,md,mdx,css,yml,yaml}": "prettier --write"
+    "!(packages/ide/**|vendor/superset/**)*.{js,jsx,ts,tsx,json,md,mdx,css,yml,yaml}": "prettier --write"
   }
 }

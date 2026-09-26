@@ -40,6 +40,17 @@ impl GuestClient {
             .map(|_| ())
     }
 
+    pub async fn superset_health(&self) -> Result<()> {
+        self.request_with_timeout::<(), serde_json::Value>(
+            "GET",
+            "/v1/superset/health",
+            None,
+            Duration::from_secs(5),
+        )
+        .await
+        .map(|_| ())
+    }
+
     pub async fn flush_workspace(&self) -> Result<()> {
         self.request::<(), serde_json::Value>("POST", "/v1/workspace/flush", None)
             .await

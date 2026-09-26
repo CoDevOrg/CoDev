@@ -178,6 +178,12 @@ artifact_download "codev-orchestrator-linux-${artifact_arch}" /usr/local/bin/cod
 artifact_download "codev-guestd-linux-${artifact_arch}" /usr/local/bin/codev-guestd
 chmod 0755 /usr/local/bin/codev-orchestrator /usr/local/bin/codev-guestd
 
+readonly superset_guest_archive="superset-host-linux-${artifact_arch}.tar.gz"
+artifact_download "${superset_guest_archive}" "${work_dir}/${superset_guest_archive}"
+artifact_download "${superset_guest_archive}.sha256" \
+  "${work_dir}/${superset_guest_archive}.sha256"
+(cd "${work_dir}" && sha256sum --check "${superset_guest_archive}.sha256")
+
 artifact_download "orca-serve-linux-${artifact_arch}.tar.gz" \
   "${work_dir}/orca-serve.tar.gz"
 artifact_download "orca-serve-linux-${artifact_arch}.tar.gz.sha256" \
@@ -215,6 +221,9 @@ chmod 0644 "${base_dir}/vmlinux"
 curl -fsSL "${firecracker_ci_base}/ubuntu-24.04.squashfs" \
   -o "${work_dir}/ubuntu.squashfs"
 unsquashfs -no-progress -d "${work_dir}/rootfs" "${work_dir}/ubuntu.squashfs"
+install -d -m 0755 "${work_dir}/rootfs/opt/codev/superset-host"
+tar -xzf "${work_dir}/${superset_guest_archive}" \
+  -C "${work_dir}/rootfs/opt/codev/superset-host"
 install -m 0755 /usr/local/bin/codev-guestd "${work_dir}/rootfs/usr/local/bin/codev-guestd"
 install -m 0755 /usr/bin/git "${work_dir}/rootfs/usr/bin/git"
 install -m 0755 /usr/bin/rg "${work_dir}/rootfs/usr/bin/rg"
@@ -277,10 +286,48 @@ MemoryMax=512M
 WantedBy=multi-user.target
 UNIT
 
+cat >"${work_dir}/rootfs/etc/systemd/system/codev-superset-host.service" <<'UNIT'
+[Unit]
+Description=CoDev Superset host service
+After=workspace.mount
+Requires=workspace.mount
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/node /opt/codev/superset-host/host-service.js
+Environment=HOME=/var/lib/codev-superset
+Environment=SUPERSET_HOME_DIR=/var/lib/codev-superset
+Environment=HOST_DB_PATH=/var/lib/codev-superset/host.db
+Environment=HOST_MIGRATIONS_FOLDER=/opt/codev/superset-host/host-migrations
+Environment=SUPERSET_CHAT_V3_MIGRATIONS=/opt/codev/superset-host/chat-migrations
+Environment=SUPERSET_AGENT_TEMPLATES_DIR=/opt/codev/superset-host/agent-templates
+Environment=SUPERSET_PTY_DAEMON_SCRIPT_PATH=/opt/codev/superset-host/pty-daemon.js
+Environment=ORGANIZATION_ID=00000000-0000-4000-8000-000000000001
+Environment=AUTH_TOKEN=codev-guest-local
+Environment=SUPERSET_API_URL=http://127.0.0.1:9
+Environment=PORT=4879
+Environment=NODE_ENV=production
+StateDirectory=codev-superset
+StateDirectoryMode=0700
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/workspace /var/lib/codev-superset
+TasksMax=256
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
 ln -s ../workspace.mount \
   "${work_dir}/rootfs/etc/systemd/system/multi-user.target.wants/workspace.mount"
 ln -s ../codev-guestd.service \
   "${work_dir}/rootfs/etc/systemd/system/multi-user.target.wants/codev-guestd.service"
+ln -s ../codev-superset-host.service \
+  "${work_dir}/rootfs/etc/systemd/system/multi-user.target.wants/codev-superset-host.service"
 cat >"${work_dir}/rootfs/etc/resolv.conf" <<'RESOLV'
 nameserver 1.1.1.1
 nameserver 8.8.8.8
@@ -303,9 +350,10 @@ caddy_key="$(codev_stage_key caddy-v1 "https://dl.cloudsmith.io/public/caddy/sta
 orca_key="$(codev_stage_key orca-v1 "$(cat "${work_dir}/orca-serve.tar.gz.sha256" 2>/dev/null || true)")"
 firecracker_key="$(codev_stage_key firecracker-v1 "${firecracker_version}" "${firecracker_arch}")"
 kernel_key="$(codev_stage_key kernel-v1 "${firecracker_ci_base}/${guest_kernel}")"
-rootfs_key="$(codev_stage_key rootfs-v1 \
+rootfs_key="$(codev_stage_key rootfs-v2 \
   "${firecracker_ci_base}/ubuntu-24.04.squashfs" \
   "$(codev_fingerprint /usr/local/bin/codev-guestd)" \
+  "$(cat "${work_dir}/${superset_guest_archive}.sha256")" \
   "${packages_key}" \
   "${node_key}")"
 codev_stage_record packages "${packages_key}"

@@ -81,6 +81,10 @@ pub fn router(backend: SharedBackend, ide: IdeBackend) -> Router {
         )
         .route("/v1/sandboxes/{workspace_id}/ide/exec", post(exec_ide))
         .route("/v1/sandboxes/{workspace_id}/files/read", post(read_file))
+        .route(
+            "/v1/sandboxes/{workspace_id}/superset/health",
+            get(superset_health),
+        )
         .route("/v1/sandboxes/{workspace_id}/files/write", post(write_file))
         .route("/v1/sandboxes/{workspace_id}/pty/exec", post(exec_pty))
         .route(
@@ -344,6 +348,15 @@ async fn read_file(
         .read_file(&workspace_id, request.path, request.worktree_id.as_deref())
         .await?;
     Ok(Json(serde_json::json!({ "file": file })))
+}
+
+async fn superset_health(
+    State(backend): State<SharedBackend>,
+    Path(workspace_id): Path<String>,
+) -> Result<Json<serde_json::Value>> {
+    validate_workspace_id(&workspace_id)?;
+    backend.superset_health(&workspace_id).await?;
+    Ok(Json(serde_json::json!({ "status": "ok" })))
 }
 
 async fn write_file(

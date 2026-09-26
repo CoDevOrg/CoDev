@@ -14,6 +14,10 @@ apps/web/app/.well-known/workflow
 apps/web/.swc
 apps/web/public/orca
 
+# Superset is vendored as an upstream snapshot and uses its own toolchain.
+# Keep root format and format:check from rewriting or checking its sources.
+vendor/superset
+
 # CoDev's IDE (packages/ide) carries its own formatter (oxfmt, see its
 # .oxfmtrc.json) and lints itself with oxlint. Running the root Prettier over
 # its ~11k sources would rewrite the entire IDE to a different style and turn
