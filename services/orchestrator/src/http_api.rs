@@ -97,6 +97,10 @@ pub fn router(backend: SharedBackend, ide: IdeBackend) -> Router {
             "/v1/sandboxes/{workspace_id}/superset/file/write",
             post(superset_write_file),
         )
+        .route(
+            "/v1/sandboxes/{workspace_id}/superset/file/changes",
+            post(superset_file_changes),
+        )
         .route("/v1/sandboxes/{workspace_id}/files/write", post(write_file))
         .route("/v1/sandboxes/{workspace_id}/pty/exec", post(exec_pty))
         .route(
@@ -420,6 +424,20 @@ async fn superset_write_file(
         return Err(RuntimeError::BadRequest("worktree ID is required".into()));
     }
     Ok(Json(backend.superset_write_file(&workspace_id, &request).await?))
+}
+
+async fn superset_file_changes(
+    State(backend): State<SharedBackend>,
+    Path(workspace_id): Path<String>,
+    Json(request): Json<SupersetListFilesRequest>,
+) -> Result<Json<serde_json::Value>> {
+    validate_workspace_id(&workspace_id)?;
+    validate_optional_worktree_id(Some(&request.worktree_id))?;
+    Ok(Json(
+        backend
+            .superset_file_changes(&workspace_id, &request.worktree_id)
+            .await?,
+    ))
 }
 
 async fn write_file(

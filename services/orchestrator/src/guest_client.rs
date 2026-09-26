@@ -81,6 +81,18 @@ impl GuestClient {
             .await
     }
 
+    pub async fn superset_file_changes(
+        &self,
+        worktree_id: &str,
+    ) -> Result<serde_json::Value> {
+        self.request(
+            "POST",
+            "/v1/superset/file/changes",
+            Some(&serde_json::json!({ "worktreeId": worktree_id })),
+        )
+        .await
+    }
+
     pub async fn flush_workspace(&self) -> Result<()> {
         self.request::<(), serde_json::Value>("POST", "/v1/workspace/flush", None)
             .await

@@ -241,6 +241,9 @@ impl GuestService {
                 if path == "/v1/superset/file/write" && method == "POST" {
                     return self.superset_write_file(body);
                 }
+                if path == "/v1/superset/file/changes" && method == "POST" {
+                    return self.superset_file_changes(body);
+                }
                 if let Some(worktree_id) = path.strip_prefix("/v1/worktrees/") {
                     let (worktree_id, action_and_query) =
                         worktree_id.split_once('/').unwrap_or((worktree_id, ""));
@@ -428,6 +431,24 @@ impl GuestService {
             return GuestResponse::error(400, "creating file parents is not supported");
         }
         self.superset_bridge_request("PUT", "/codev/file", body)
+    }
+
+    fn superset_file_changes(&self, body: &[u8]) -> GuestResponse {
+        let request: SupersetListFilesRequest = match decode(body) {
+            Ok(request) => request,
+            Err(error) => return GuestResponse::error(400, error),
+        };
+        if let Err(error) = validate_worktree_id(&request.worktree_id) {
+            return GuestResponse::error(400, error);
+        }
+        self.superset_bridge_request(
+            "GET",
+            &format!(
+                "/codev/file/changes?worktreeId={}",
+                percent_encode(&request.worktree_id),
+            ),
+            &[],
+        )
     }
 
     fn superset_bridge_request(&self, method: &str, path: &str, body: &[u8]) -> GuestResponse {

@@ -319,6 +319,10 @@ export const gen2SupersetExternalFileChangeSchema = z.object({
   origin: z.literal("external"),
 });
 
+export const gen2SupersetExternalFileChangesResponseSchema = z.object({
+  changes: z.array(gen2SupersetExternalFileChangeSchema),
+});
+
 export const gen2GitOperationSchema = z.enum(["status", "diff", "show"]);
 
 export const gen2GitResponseSchema = z.object({ output: z.string() });

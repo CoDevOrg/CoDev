@@ -342,6 +342,20 @@ impl Backend {
         }
     }
 
+    pub async fn superset_file_changes(
+        &self,
+        workspace_id: &str,
+        worktree_id: &str,
+    ) -> Result<serde_json::Value> {
+        match self {
+            Self::Fake(_) => Err(RuntimeError::Unavailable(
+                "Superset host service is unavailable in the fake backend".into(),
+            )),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => backend.superset_file_changes(workspace_id, worktree_id).await,
+        }
+    }
+
     pub async fn write_file(
         &self,
         workspace_id: &str,

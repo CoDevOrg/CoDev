@@ -657,6 +657,17 @@ impl FirecrackerBackend {
         Ok(result)
     }
 
+    pub async fn superset_file_changes(
+        &self,
+        workspace_id: &str,
+        worktree_id: &str,
+    ) -> Result<serde_json::Value> {
+        let machine = self.machine(workspace_id).await?;
+        let result = machine.guest.superset_file_changes(worktree_id).await?;
+        self.mark_activity(&machine);
+        Ok(result)
+    }
+
     pub async fn write_file(
         &self,
         workspace_id: &str,

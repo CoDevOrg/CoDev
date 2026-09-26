@@ -1,10 +1,12 @@
 import "server-only";
 
 import {
+  gen2SupersetExternalFileChangesResponseSchema,
   gen2SupersetListFilesResponseSchema,
   gen2SupersetReadFileResponseSchema,
   gen2SupersetSaveFileResponseSchema,
   type Gen2SupersetFile,
+  type Gen2SupersetExternalFileChange,
   type Gen2SupersetFileEntry,
 } from "@codev/contracts";
 import { z } from "zod";
@@ -122,4 +124,26 @@ export async function saveGen2SupersetFile(
     }
     throw error;
   }
+}
+
+/**
+ * Drains external host-side changes observed since the editor's last poll.
+ * The Gen 2 collaboration client reconciles each event with its live buffer;
+ * it never receives a host path or host-service credential.
+ */
+export async function listGen2SupersetExternalFileChanges(
+  workspaceId: string,
+  userId: string,
+  worktreeId: string,
+): Promise<Gen2SupersetExternalFileChange[]> {
+  await requireReadySupersetMember(workspaceId, userId);
+  const response = await orchestratorRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/superset/file/changes`,
+    { worktreeId },
+    35_000,
+  );
+  return gen2SupersetExternalFileChangesResponseSchema.parse(
+    await response.json(),
+  ).changes;
 }
