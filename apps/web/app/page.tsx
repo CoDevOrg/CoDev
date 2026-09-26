@@ -1,4 +1,11 @@
+import { Fragment } from "react";
+import type { CSSProperties } from "react";
 import type { Metadata } from "next";
+import {
+  Instrument_Serif,
+  Inter_Tight,
+  JetBrains_Mono,
+} from "next/font/google";
 import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -8,14 +15,63 @@ import { LandingMotion } from "@/components/landing/landing-motion";
 import { LandingWorkspaceDemo } from "@/components/landing/landing-workspace-demo";
 import { RequestAccessButton } from "@/components/landing/request-access-button";
 import { WaitlistInline } from "@/components/landing/waitlist-inline";
+import { LandingBackdrop } from "@/components/landing/webgl/landing-backdrop";
 import { getCurrentAppUser } from "@/lib/auth/identity";
 
 import "./landing.css";
 
+/**
+ * The landing page runs its own type stack, loaded here rather than in the
+ * root layout so the three extra families are only fetched on this route. The
+ * product keeps Geist.
+ */
+const interTight = Inter_Tight({
+  subsets: ["latin"],
+  variable: "--lp-font-sans",
+  display: "swap",
+});
+
+const instrumentSerif = Instrument_Serif({
+  subsets: ["latin"],
+  weight: "400",
+  style: ["normal", "italic"],
+  variable: "--lp-font-serif",
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--lp-font-mono",
+  display: "swap",
+});
+
+const LANDING_FONTS = [
+  interTight.variable,
+  instrumentSerif.variable,
+  jetbrainsMono.variable,
+].join(" ");
+
+/** The headline, split so each word can carry its own parallax depth. */
+const HEADLINE = ["Ship", "it", "together."];
+
+const DESCRIPTION =
+  "CoDev is one shared cloud workspace where you, your friends, and a crew of AI agents build the same project at the same time, on isolated worktrees that merge without conflicts. Request access to the private beta.";
+
 export const metadata: Metadata = {
   title: "Build together, with agents",
-  description:
-    "CoDev is a shared cloud workspace where you, your friends, and a crew of AI agents build the same project at the same time, helping teams ship up to 50% faster. Request access to the private beta.",
+  description: DESCRIPTION,
+  openGraph: {
+    title: "Build together, with agents",
+    description: DESCRIPTION,
+    images: [
+      {
+        url: "/brand/landing/og-card.webp",
+        width: 1200,
+        height: 630,
+        alt: "Three streams of work converging into one line",
+      },
+    ],
+  },
 };
 
 export default async function HomePage() {
@@ -24,17 +80,19 @@ export default async function HomePage() {
   }
 
   return (
-    <main className="lp-page">
+    <main className={`lp-page ${LANDING_FONTS}`}>
       <LandingMotion />
 
       <div className="lp-backdrop" aria-hidden="true">
         <div className="lp-mark" />
+        <div className="lp-canvas-still" />
         <div className="lp-aurora lp-aurora-a" />
         <div className="lp-aurora lp-aurora-b" />
         <div className="lp-aurora lp-aurora-c" />
         <div className="lp-grid" />
         <div className="lp-grain" />
       </div>
+      <LandingBackdrop />
 
       <header className="lp-nav">
         <Link className="lp-brand" href="/" aria-label="CoDev home">
@@ -59,15 +117,29 @@ export default async function HomePage() {
         <p className="lp-pill">
           <i aria-hidden="true" /> Private beta · now inviting builders
         </p>
-        <h1>
-          Ship it together.
+        <h1 className="lp-kinetic">
+          {HEADLINE.map((word, index) => (
+            <Fragment key={word}>
+              {/* The separating space is a text node outside the span on
+                  purpose: each word is an inline-block for its own parallax
+                  depth, and an inline-block trims its own trailing space,
+                  which runs the headline together. */}
+              <span
+                className="lp-kinetic-word"
+                style={{ "--i": index + 1 } as CSSProperties}
+              >
+                {word}
+              </span>
+              {index < HEADLINE.length - 1 ? " " : null}
+            </Fragment>
+          ))}
           <br />
-          <em>Agents included.</em>
+          <em style={{ "--i": 4 } as CSSProperties}>Agents included.</em>
         </h1>
         <p className="lp-lede">
           CoDev is one shared cloud workspace where you, your friends, and a
-          crew of AI agents build the same project at the same time, live, in
-          the same room, and never on top of each other.
+          crew of AI agents build the same project at the same time, each on an
+          isolated worktree, so nobody lands on top of anyone else.
         </p>
         <div className="lp-hero-actions">
           <RequestAccessButton className="lp-cta lp-cta-primary">
@@ -88,8 +160,8 @@ export default async function HomePage() {
             <span>to bring anyone in</span>
           </li>
           <li>
-            <strong>50% faster</strong>
-            <span>from idea to merged code</span>
+            <strong>Your own keys</strong>
+            <span>Claude, Codex, or Cursor</span>
           </li>
         </ul>
       </section>
@@ -104,9 +176,9 @@ export default async function HomePage() {
         data-reveal
       >
         <div className="lp-speed-heading">
-          <p className="lp-speed-kicker">The speed advantage</p>
+          <p className="lp-speed-kicker">Why it moves faster</p>
           <h2 id="lp-speed-title">
-            Ship up to <em>50% faster.</em>
+            Less waiting. <em>Less rework.</em>
           </h2>
           <p>
             CoDev removes the waiting and rework between writing code and

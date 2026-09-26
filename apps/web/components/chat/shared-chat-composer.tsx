@@ -2,14 +2,16 @@
 
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
+import { AnimatePresence, motion } from "motion/react";
 import { ChevronRight, ChevronUp, LoaderCircle, Send } from "lucide-react";
 
 import {
   importedConversationMessageSchema,
   type ImportedConversationMessage,
 } from "@codev/contracts";
-
-import styles from "./shared-chat-room.module.css";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/platform/utils";
 
 type MessageResponse = {
   message?: ImportedConversationMessage;
@@ -30,8 +32,8 @@ const PROVIDER_META: Record<
   string,
   { label: string; logo: string; color: string }
 > = {
-  claude: { label: "Claude", logo: "A", color: "var(--codev-gold-500)" },
-  codex: { label: "OpenAI Codex", logo: "O", color: "#0e8f6f" },
+  claude: { label: "Claude", logo: "A", color: "var(--color-orange)" },
+  codex: { label: "OpenAI Codex", logo: "O", color: "var(--color-teal)" },
 };
 
 function providerMeta(provider: string) {
@@ -39,7 +41,7 @@ function providerMeta(provider: string) {
     PROVIDER_META[provider] ?? {
       label: provider.charAt(0).toUpperCase() + provider.slice(1),
       logo: provider.slice(0, 1).toUpperCase(),
-      color: "var(--surface-3)",
+      color: "var(--color-muted-foreground)",
     }
   );
 }
@@ -163,13 +165,15 @@ export function SharedChatComposer({
 
   return (
     <form
-      className={styles.composer}
       onSubmit={sendMessage}
       aria-busy={sending}
+      className="flex flex-col gap-2 border-t border-border px-6 py-4"
     >
-      <label htmlFor="room-message">Add to the conversation</label>
-      <div className={styles.composerBox}>
-        <textarea
+      <label htmlFor="room-message" className="sr-only">
+        Add to the conversation
+      </label>
+      <div className="rounded-2xl border border-input bg-card px-4 py-3 focus-within:border-ring">
+        <Textarea
           id="room-message"
           value={body}
           onChange={(event) => setBody(event.target.value)}
@@ -182,13 +186,13 @@ export function SharedChatComposer({
           maxLength={20_000}
           rows={1}
           disabled={sending}
+          className="min-h-6"
         />
-        <div className={styles.composerRow}>
+        <div className="mt-2 flex items-center justify-between gap-3">
           {options.length ? (
-            <div className={styles.modelPicker} ref={pickerRef}>
+            <div className="relative" ref={pickerRef}>
               <button
                 type="button"
-                className={styles.modelTrigger}
                 aria-haspopup="menu"
                 aria-expanded={menuOpen}
                 aria-label={`Model: ${model || "select a model"}`}
@@ -197,81 +201,117 @@ export function SharedChatComposer({
                   setViewedProvider(provider);
                   setMenuOpen((open) => !open);
                 }}
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-transparent px-2.5 py-1 text-[11.5px] font-semibold text-muted-foreground hover:border-input"
               >
-                <span className={styles.dot} />
+                <span
+                  aria-hidden="true"
+                  className="size-1.5 rounded-full bg-teal"
+                />
                 {model || "Select model"}
-                <ChevronUp className={styles.chev} aria-hidden="true" />
+                <ChevronUp
+                  aria-hidden="true"
+                  className={`size-3 transition-transform ${menuOpen ? "" : "rotate-180"}`}
+                />
               </button>
-              {menuOpen ? (
-                <div className={styles.modelMenu} role="menu">
-                  <div className={`${styles.modelCol} ${styles.providers}`}>
-                    <div className={styles.menuLabel}>Provider</div>
-                    {options.map((option) => {
-                      const meta = providerMeta(option.provider);
-                      const active = option.provider === viewedProvider;
-                      return (
-                        <button
-                          key={option.provider}
-                          type="button"
-                          className={`${styles.provider} ${
-                            active ? styles.active : ""
-                          }`}
-                          onMouseEnter={() =>
-                            setViewedProvider(option.provider)
-                          }
-                          onClick={() => setViewedProvider(option.provider)}
-                        >
-                          <span
-                            className={styles.providerLogo}
-                            style={{ background: meta.color }}
-                            aria-hidden="true"
+              <AnimatePresence>
+                {menuOpen ? (
+                  <motion.div
+                    role="menu"
+                    initial={{ opacity: 0, y: 6, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 6, scale: 0.98 }}
+                    transition={{ duration: 0.14 }}
+                    className="absolute bottom-full left-0 z-20 mb-2 flex w-72 overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-xl shadow-foreground/10"
+                  >
+                    <div className="flex w-1/2 flex-col gap-0.5 border-r border-border p-1.5">
+                      <div className="px-2 py-1 text-[10px] font-bold tracking-[0.08em] text-muted-foreground uppercase">
+                        Provider
+                      </div>
+                      {options.map((option) => {
+                        const meta = providerMeta(option.provider);
+                        const active = option.provider === viewedProvider;
+                        return (
+                          <button
+                            key={option.provider}
+                            type="button"
+                            onMouseEnter={() =>
+                              setViewedProvider(option.provider)
+                            }
+                            onClick={() => setViewedProvider(option.provider)}
+                            className={cn(
+                              "flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] font-medium",
+                              active ? "bg-muted" : "hover:bg-muted/60",
+                            )}
                           >
-                            {meta.logo}
-                          </span>
-                          <span className={styles.name}>{meta.label}</span>
-                          <ChevronRight
-                            className={styles.chev}
-                            aria-hidden="true"
-                          />
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className={styles.modelCol}>
-                    <div className={styles.menuLabel}>Model</div>
-                    {viewedModels.map((value) => {
-                      const selected =
-                        value === model && viewedProvider === provider;
-                      return (
-                        <button
-                          key={value}
-                          type="button"
-                          role="menuitemradio"
-                          aria-checked={selected}
-                          className={`${styles.modelOption} ${
-                            selected ? styles.selected : ""
-                          }`}
-                          onClick={() => chooseModel(viewedProvider, value)}
-                        >
-                          <span className={styles.radio} aria-hidden="true" />
-                          <span>
-                            <span className={styles.label}>{value}</span>
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null}
+                            <span
+                              aria-hidden="true"
+                              style={{ background: meta.color }}
+                              className="flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                            >
+                              {meta.logo}
+                            </span>
+                            <span className="flex-1 truncate">
+                              {meta.label}
+                            </span>
+                            <ChevronRight
+                              aria-hidden="true"
+                              className="size-3 text-muted-foreground"
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="flex w-1/2 flex-col gap-0.5 p-1.5">
+                      <div className="px-2 py-1 text-[10px] font-bold tracking-[0.08em] text-muted-foreground uppercase">
+                        Model
+                      </div>
+                      {viewedModels.map((value) => {
+                        const selected =
+                          value === model && viewedProvider === provider;
+                        return (
+                          <button
+                            key={value}
+                            type="button"
+                            role="menuitemradio"
+                            aria-checked={selected}
+                            onClick={() => chooseModel(viewedProvider, value)}
+                            className={cn(
+                              "flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px]",
+                              selected
+                                ? "bg-muted font-semibold"
+                                : "hover:bg-muted/60",
+                            )}
+                          >
+                            <span
+                              aria-hidden="true"
+                              className={cn(
+                                "size-2.5 shrink-0 rounded-full border",
+                                selected
+                                  ? "border-primary bg-primary"
+                                  : "border-input",
+                              )}
+                            />
+                            <span className="truncate">{value}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
             </div>
           ) : (
-            <span className={styles.connectHint}>
+            <span className="text-[11.5px] text-muted-foreground">
               {loading ? (
                 "Loading subscriptions…"
               ) : (
                 <>
                   To ask AI,{" "}
-                  <a href="/settings/personal/providers">
+                  <a
+                    href="/settings/personal/providers"
+                    style={{ color: "var(--color-primary)" }}
+                    className="hover:underline"
+                  >
                     connect your subscription
                   </a>
                   .
@@ -280,29 +320,30 @@ export function SharedChatComposer({
             </span>
           )}
 
-          <div className={styles.postGroup}>
-            <button
-              type="submit"
-              className={styles.postButton}
-              disabled={sending || !body.trim()}
-            >
-              {sending ? (
-                <LoaderCircle className={styles.spinner} aria-hidden="true" />
-              ) : (
-                <Send aria-hidden="true" />
-              )}
-              {sending ? "Sending…" : "Send"}
-            </button>
-          </div>
+          <Button
+            type="submit"
+            disabled={sending || !body.trim()}
+            className="h-8 rounded-full px-3.5 text-xs"
+          >
+            {sending ? (
+              <LoaderCircle
+                className="size-3.5 animate-spin"
+                aria-hidden="true"
+              />
+            ) : (
+              <Send aria-hidden="true" className="size-3.5" />
+            )}
+            {sending ? "Sending…" : "Send"}
+          </Button>
         </div>
       </div>
-      <p className={styles.hint}>
+      <p className="m-0 text-[11px] text-muted-foreground">
         {options.length
           ? "Sending posts to the room and asks the assistant to reply, using your subscription and recent room history — visible to everyone."
           : "Messages are visible to everyone in the room."}
       </p>
       {error ? (
-        <p className={styles.composerError} role="alert">
+        <p role="alert" className="m-0 text-[11.5px] text-destructive">
           {error}
         </p>
       ) : null}

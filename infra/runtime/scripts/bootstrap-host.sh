@@ -747,6 +747,15 @@ Options=rw,nosuid,nodev
 WantedBy=multi-user.target
 UNIT
 
+# Only codev-guestd may call the Superset host's private file bridge. Keep the
+# value out of the world-readable unit files: an interactive shell shares the
+# guest network namespace but must not be able to mint host-service requests.
+install -d -m 0700 "${work_dir}/rootfs/etc/codev"
+superset_bridge_secret="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
+printf 'CODEV_SUPERSET_BRIDGE_SECRET=%s\n' "${superset_bridge_secret}" \
+  >"${work_dir}/rootfs/etc/codev/superset-bridge.env"
+chmod 0600 "${work_dir}/rootfs/etc/codev/superset-bridge.env"
+
 cat >"${work_dir}/rootfs/etc/systemd/system/codev-guestd.service" <<'UNIT'
 [Unit]
 Description=CoDev guest daemon
@@ -764,6 +773,7 @@ ExecStartPre=-/bin/chmod -R g+w /workspace
 ExecStartPre=-/bin/chmod g+s /workspace
 ExecStart=/usr/local/bin/codev-guestd
 Environment=CODEV_WORKSPACE_ROOT=/workspace
+EnvironmentFile=/etc/codev/superset-bridge.env
 UMask=0002
 Restart=on-failure
 RestartSec=1
@@ -790,6 +800,8 @@ Requires=workspace.mount
 Type=simple
 ExecStart=/usr/local/bin/node /opt/codev/superset-host/host-service.js
 Environment=HOME=/var/lib/codev-superset
+Environment=CODEV_WORKSPACE_ROOT=/workspace
+EnvironmentFile=/etc/codev/superset-bridge.env
 Environment=SUPERSET_HOME_DIR=/var/lib/codev-superset
 Environment=HOST_DB_PATH=/var/lib/codev-superset/host.db
 Environment=HOST_MIGRATIONS_FOLDER=/opt/codev/superset-host/host-migrations

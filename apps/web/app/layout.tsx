@@ -19,7 +19,24 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+/**
+ * Base for resolving the relative social image on the landing page. Without
+ * it Next falls back to the opaque per-deployment vercel.app host, so a shared
+ * link from production would not point at trycodev.com. Mirrors the
+ * environment split already used by `lib/auth/auth-cookie.ts`.
+ */
+function metadataBase(): URL {
+  if (process.env.VERCEL_ENV === "production") {
+    return new URL("https://trycodev.com");
+  }
+  if (process.env.VERCEL_URL) {
+    return new URL(`https://${process.env.VERCEL_URL}`);
+  }
+  return new URL("http://localhost:3000");
+}
+
 export const metadata: Metadata = {
+  metadataBase: metadataBase(),
   title: {
     default: "CoDev",
     template: "%s · CoDev",

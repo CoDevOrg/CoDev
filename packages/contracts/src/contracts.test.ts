@@ -28,6 +28,8 @@ import {
   gen2AgentStartRequestSchema,
   gen2AgentPollResponseSchema,
   gen2ChatAppendRequestSchema,
+  gen2SupersetExternalFileChangeSchema,
+  gen2SupersetSaveFileRequestSchema,
   MAX_PARALLEL_AGENT_SESSIONS,
   accessRequestInputSchema,
 } from "./index";
@@ -545,6 +547,26 @@ describe("gen2 workspace contracts", () => {
     expect(
       gen2ChatAppendRequestSchema.parse({ body: "  README.md  " }),
     ).toEqual({ body: "README.md" });
+  });
+
+  it("defines revision-checked Superset file writes and external changes", () => {
+    expect(
+      gen2SupersetSaveFileRequestSchema.parse({
+        worktreeId: "main",
+        path: "src/greeting.ts",
+        contents: "export {};",
+        expectedRevision: "rev-1",
+      }),
+    ).toMatchObject({ worktreeId: "main", expectedRevision: "rev-1" });
+    expect(
+      gen2SupersetExternalFileChangeSchema.parse({
+        type: "file.changed",
+        worktreeId: "main",
+        path: "src/greeting.ts",
+        revision: "rev-2",
+        origin: "external",
+      }),
+    ).toMatchObject({ type: "file.changed", revision: "rev-2" });
   });
 });
 

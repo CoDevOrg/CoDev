@@ -73,6 +73,24 @@ export class WorkspaceFilesystemManager {
 	}
 
 	/**
+	 * Returns the same confined filesystem service for a root that a trusted
+	 * host adapter has already resolved. This deliberately is not exposed to
+	 * tRPC: callers must establish the root from a CoDev worktree ID rather
+	 * than accept an arbitrary browser-supplied directory.
+	 */
+	getServiceForRootPath(rootPath: string): FsHostService {
+		let service = this.serviceCache.get(rootPath);
+		if (!service) {
+			service = createFsHostService({
+				rootPath,
+				watcherManager: this.watchAttachGuard,
+			});
+			this.serviceCache.set(rootPath, service);
+		}
+		return service;
+	}
+
+	/**
 	 * Whether the workspace's recursive watcher delivers no events for this
 	 * path (pruned subtree, outside the root, or no watcher attached). Callers
 	 * use it to decide whether an open file needs its own targeted watch.
@@ -98,18 +116,6 @@ export class WorkspaceFilesystemManager {
 		return await this.watcherManager.refreshIgnores(
 			this.resolveWorkspaceRoot(workspaceId),
 		);
-	}
-
-	private getServiceForRootPath(rootPath: string): FsHostService {
-		let service = this.serviceCache.get(rootPath);
-		if (!service) {
-			service = createFsHostService({
-				rootPath,
-				watcherManager: this.watchAttachGuard,
-			});
-			this.serviceCache.set(rootPath, service);
-		}
-		return service;
 	}
 
 	async close(): Promise<void> {

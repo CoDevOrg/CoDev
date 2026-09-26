@@ -9,6 +9,7 @@ import { resolveRuntimeHostForWorkspace } from "./runtime-host-pool";
 const errorSchema = z.object({
   error: z.string(),
   conflictPaths: z.array(z.string()).optional(),
+  currentRevision: z.string().optional(),
 });
 
 export class OrchestratorError extends Error {
@@ -16,6 +17,7 @@ export class OrchestratorError extends Error {
     message: string,
     readonly status: number,
     readonly conflictPaths: string[] = [],
+    readonly currentRevision?: string,
   ) {
     super(message);
     this.name = "OrchestratorError";
@@ -24,7 +26,13 @@ export class OrchestratorError extends Error {
   /** Used by `withUser`/`withWorkspace` in place of the plain error body. */
   toResponse() {
     return Response.json(
-      { error: this.message, conflictPaths: this.conflictPaths },
+      {
+        error: this.message,
+        conflictPaths: this.conflictPaths,
+        ...(this.currentRevision
+          ? { currentRevision: this.currentRevision }
+          : {}),
+      },
       { status: this.status },
     );
   }
@@ -161,6 +169,7 @@ async function assertOrchestratorResponse(response: Response) {
       : `Sandbox service returned HTTP ${response.status}.`,
     response.status,
     payload.success ? (payload.data.conflictPaths ?? []) : [],
+    payload.success ? payload.data.currentRevision : undefined,
   );
 }
 
