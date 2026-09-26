@@ -15,7 +15,11 @@ import { getRepository } from "../github/github";
 import { getDatabase } from "../platform/database";
 import { logEvent } from "../platform/observability";
 import { destroySandbox } from "../runtime/orchestrator-sandbox";
-import { Gen2AccessError, Gen2LifecycleError } from "./errors";
+import {
+  Gen2AccessError,
+  Gen2LifecycleError,
+  isGen2HostUnreachable,
+} from "./errors";
 
 const DEFAULT_WORKSPACE_NAME = "Workspace";
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
@@ -182,9 +186,18 @@ export async function deleteGen2Workspace(workspaceId: string, userId: string) {
   }
 
   // The sandbox owns the workspace files and hibernation snapshot. Destroy it
-  // before removing the database row so a runtime failure leaves the workspace
-  // visible and retryable instead of orphaning its machine.
-  await destroySandbox(workspaceId);
+  // before removing the database row when the host is reachable. A host that
+  // has already stopped cannot keep a guest alive, so do not strand a failed
+  // workspace just because its best-effort teardown cannot connect.
+  try {
+    await destroySandbox(workspaceId);
+  } catch (error) {
+    if (!isGen2HostUnreachable(error)) throw error;
+    logEvent("warn", "gen2.workspace.delete_host_unreachable", {
+      workspaceId,
+      detail: error instanceof Error ? error.message : "unknown",
+    });
+  }
   await getDatabase()
     .delete(schema.gen2Workspaces)
     .where(eq(schema.gen2Workspaces.id, workspaceId));

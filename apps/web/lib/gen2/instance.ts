@@ -15,7 +15,11 @@ import {
   provisionSandbox,
 } from "../runtime/orchestrator-sandbox";
 import { getRepositorySnapshot } from "../github/github";
-import { Gen2AccessError, Gen2LifecycleError } from "./errors";
+import {
+  Gen2AccessError,
+  Gen2LifecycleError,
+  isGen2HostUnreachable,
+} from "./errors";
 import { requireGen2Member } from "./workspaces";
 
 /** Orchestrator create validation requires a 40-character hex SHA. */
@@ -62,17 +66,7 @@ const GEN2_PROVISION_TIMEOUT_MS = 120_000;
 const GEN2_EXPIRES_SLACK_MS = 60_000;
 
 export function describeGen2RuntimeFailure(error: unknown): string {
-  const parts: string[] = [];
-  let current: unknown = error;
-  for (let depth = 0; depth < 4 && current instanceof Error; depth += 1) {
-    parts.push(current.message);
-    current = current.cause;
-  }
-  if (
-    /fetch failed|ECONNREFUSED|ENOTFOUND|EHOSTUNREACH|ETIMEDOUT|UND_ERR|aborted/i.test(
-      parts.join(" "),
-    )
-  ) {
+  if (isGen2HostUnreachable(error)) {
     return HOST_UNREACHABLE_MESSAGE;
   }
   const message = error instanceof Error ? error.message.trim() : "";
