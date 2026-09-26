@@ -160,6 +160,14 @@ pub struct WriteFileRequest {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SupersetCreateEntryRequest {
+    pub worktree_id: String,
+    pub name: String,
+    pub kind: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ExecRequest {
     pub command: Vec<String>,
     #[serde(default)]

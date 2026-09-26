@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   read: vi.fn(),
   save: vi.fn(),
   changes: vi.fn(),
+  create: vi.fn(),
 }));
 
 vi.mock("./superset-file-client", async (importOriginal) => ({
@@ -19,6 +20,7 @@ vi.mock("./superset-file-client", async (importOriginal) => ({
   listSupersetFiles: mocks.list,
   readSupersetFile: mocks.read,
   saveSupersetFile: mocks.save,
+  createSupersetEntry: mocks.create,
   listSupersetFileChanges: mocks.changes,
 }));
 
@@ -74,6 +76,15 @@ describe("SupersetFilePane", () => {
       }),
     );
     mocks.changes.mockResolvedValue([]);
+    mocks.create.mockImplementation(
+      async (
+        _id: string,
+        input: { name: string; kind: "file" | "directory" },
+      ) =>
+        input.kind === "file"
+          ? { path: input.name, kind: "file", size: 0 }
+          : { path: input.name, kind: "directory" },
+    );
   });
 
   afterEach(() => {
@@ -184,5 +195,73 @@ describe("SupersetFilePane", () => {
     expect(await screen.findByLabelText("Code")).toHaveAttribute("readonly");
     expect(screen.getByText("Read only")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "New file" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "New folder" })).toBeDisabled();
+  });
+
+  it("creates and opens a new root-level file", async () => {
+    const newFile = {
+      path: "notes.md",
+      kind: "file" as const,
+      size: 0,
+      contents: "",
+      revision: "rev-new",
+    };
+    mocks.read.mockImplementation(async (_id: string, path: string) =>
+      path === newFile.path
+        ? newFile
+        : path === firstFile.path
+          ? firstFile
+          : secondFile,
+    );
+    render(<SupersetFilePane workspaceId={workspaceId} canEdit />);
+    await screen.findByLabelText("Code");
+
+    fireEvent.click(screen.getByRole("button", { name: "New file" }));
+    const name = screen.getByLabelText("New file name");
+    expect(name).toHaveFocus();
+    fireEvent.change(name, { target: { value: newFile.path } });
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+
+    await waitFor(() =>
+      expect(mocks.create).toHaveBeenCalledWith(workspaceId, {
+        name: newFile.path,
+        kind: "file",
+      }),
+    );
+    await waitFor(() =>
+      expect(mocks.read).toHaveBeenLastCalledWith(
+        workspaceId,
+        newFile.path,
+        undefined,
+      ),
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "File notes.md created.",
+    );
+  });
+
+  it("creates an empty folder without replacing an unsaved draft", async () => {
+    render(<SupersetFilePane workspaceId={workspaceId} canEdit />);
+    fireEvent.change(await screen.findByLabelText("Code"), {
+      target: { value: "keep this draft" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "New folder" }));
+    fireEvent.change(screen.getByLabelText("New folder name"), {
+      target: { value: "notes" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+
+    await waitFor(() =>
+      expect(mocks.create).toHaveBeenCalledWith(workspaceId, {
+        name: "notes",
+        kind: "directory",
+      }),
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Folder notes created.",
+    );
+    expect(screen.getByLabelText("Code")).toHaveValue("keep this draft");
   });
 });

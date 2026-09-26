@@ -1,8 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import dynamic from "next/dynamic";
-import type { Gen2SupersetFile, Gen2SupersetFileEntry } from "@codev/contracts";
+import type {
+  Gen2SupersetEntry,
+  Gen2SupersetFile,
+  Gen2SupersetFileEntry,
+} from "@codev/contracts";
 import {
   Check,
   ChevronDown,
@@ -20,6 +30,7 @@ import {
   listSupersetFiles,
   readSupersetFile,
   saveSupersetFile,
+  createSupersetEntry,
   SupersetFileApiError,
 } from "./superset-file-client";
 
@@ -43,12 +54,13 @@ type FileTree = {
 
 type Notice = { kind: "error" | "info" | "success" | "conflict"; text: string };
 
-function buildFileTree(files: Gen2SupersetFileEntry[]): FileTree {
+function buildFileTree(entries: Gen2SupersetEntry[]): FileTree {
   const root: FileTree = { name: "", path: "", folders: new Map(), files: [] };
-  for (const file of files) {
-    const parts = file.path.split("/");
+  for (const entry of entries) {
+    const parts = entry.path.split("/");
     let folder = root;
-    for (const name of parts.slice(0, -1)) {
+    const folderParts = entry.kind === "directory" ? parts : parts.slice(0, -1);
+    for (const name of folderParts) {
       let child = folder.folders.get(name);
       if (!child) {
         child = {
@@ -61,7 +73,7 @@ function buildFileTree(files: Gen2SupersetFileEntry[]): FileTree {
       }
       folder = child;
     }
-    folder.files.push(file);
+    if (entry.kind === "file") folder.files.push(entry);
   }
   return root;
 }
@@ -82,7 +94,7 @@ export function SupersetFilePane({
   workspaceId: string;
   canEdit: boolean;
 }) {
-  const [files, setFiles] = useState<Gen2SupersetFileEntry[]>([]);
+  const [files, setFiles] = useState<Gen2SupersetEntry[]>([]);
   const [openFile, setOpenFile] = useState<Gen2SupersetFile | null>(null);
   const [contents, setContents] = useState("");
   const [openingPath, setOpeningPath] = useState<string | null>(null);
@@ -92,6 +104,11 @@ export function SupersetFilePane({
   const [notice, setNotice] = useState<Notice | null>(null);
   const [copied, setCopied] = useState(false);
   const [query, setQuery] = useState("");
+  const [createKind, setCreateKind] = useState<"file" | "directory" | null>(
+    null,
+  );
+  const [createName, setCreateName] = useState("");
+  const [creating, setCreating] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
     new Set(),
   );
@@ -163,9 +180,13 @@ export function SupersetFilePane({
           const preferred =
             nextFiles.find(
               (file) =>
+                file.kind === "file" &&
                 file.size <= 2 * 1024 * 1024 &&
                 /\.(tsx?|jsx?|py|rs|md|json|css|html)$/i.test(file.path),
-            ) ?? nextFiles.find((file) => file.size <= 2 * 1024 * 1024);
+            ) ??
+            nextFiles.find(
+              (file) => file.kind === "file" && file.size <= 2 * 1024 * 1024,
+            );
           if (preferred) void openPath(preferred.path, signal);
         }
         if (!quiet)
@@ -332,6 +353,50 @@ export function SupersetFilePane({
     }
   }
 
+  function startCreate(kind: "file" | "directory") {
+    setCreateKind(kind);
+    setCreateName(kind === "file" ? "untitled.txt" : "untitled-folder");
+    setNotice(null);
+  }
+
+  async function createEntry(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const kind = createKind;
+    const name = createName.trim();
+    if (!kind || !name || creating) return;
+    setCreating(true);
+    setNotice(null);
+    try {
+      const entry = await createSupersetEntry(workspaceId, { name, kind });
+      setCreateKind(null);
+      setCreateName("");
+      await refreshFiles(false, true);
+      const current = openFileRef.current;
+      const hasUnsavedChanges =
+        current !== null && contentsRef.current !== current.contents;
+      if (entry.kind === "file" && !hasUnsavedChanges) {
+        await openPath(entry.path);
+      }
+      setNotice({
+        kind: "success",
+        text:
+          entry.kind === "file" && hasUnsavedChanges
+            ? `File ${entry.path} created. Save or discard your current changes before opening it.`
+            : `${entry.kind === "file" ? "File" : "Folder"} ${entry.path} created.`,
+      });
+    } catch (error) {
+      setNotice({
+        kind: "error",
+        text: errorMessage(
+          error,
+          "Couldn’t create this entry. Try another name.",
+        ),
+      });
+    } finally {
+      setCreating(false);
+    }
+  }
+
   function selectFile(path: string) {
     if (savingRef.current || openingPath || path === openFileRef.current?.path)
       return;
@@ -379,8 +444,8 @@ export function SupersetFilePane({
   }
 
   const visibleFiles = query.trim()
-    ? files.filter((file) =>
-        file.path.toLowerCase().includes(query.trim().toLowerCase()),
+    ? files.filter((entry) =>
+        entry.path.toLowerCase().includes(query.trim().toLowerCase()),
       )
     : files;
   const tree = buildFileTree(visibleFiles);
@@ -497,8 +562,26 @@ export function SupersetFilePane({
             className="gen2-superset-files-actions"
             aria-label="File actions"
           >
-            <UnavailableAction icon={FilePlus} label="New file" />
-            <UnavailableAction icon={FolderPlus} label="New folder" />
+            <button
+              type="button"
+              className="gen2-superset-icon-button"
+              aria-label="New file"
+              title="New file"
+              disabled={!canEdit || creating}
+              onClick={() => startCreate("file")}
+            >
+              <FilePlus aria-hidden="true" size={14} />
+            </button>
+            <button
+              type="button"
+              className="gen2-superset-icon-button"
+              aria-label="New folder"
+              title="New folder"
+              disabled={!canEdit || creating}
+              onClick={() => startCreate("directory")}
+            >
+              <FolderPlus aria-hidden="true" size={14} />
+            </button>
             <button
               type="button"
               className="gen2-superset-icon-button"
@@ -511,6 +594,43 @@ export function SupersetFilePane({
             </button>
           </div>
         </header>
+        {createKind ? (
+          <form className="gen2-superset-create-entry" onSubmit={createEntry}>
+            <label>
+              <span>
+                {createKind === "file" ? "New file name" : "New folder name"}
+              </span>
+              <input
+                autoFocus
+                value={createName}
+                onChange={(event) => setCreateName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape" && !creating) {
+                    event.preventDefault();
+                    setCreateKind(null);
+                  }
+                }}
+                disabled={creating}
+                aria-describedby="gen2-superset-create-entry-help"
+              />
+            </label>
+            <p id="gen2-superset-create-entry-help">
+              Names are created at the workspace root.
+            </p>
+            <div>
+              <button
+                type="button"
+                disabled={creating}
+                onClick={() => setCreateKind(null)}
+              >
+                Cancel
+              </button>
+              <button type="submit" disabled={!createName.trim() || creating}>
+                {creating ? "Creating…" : "Create"}
+              </button>
+            </div>
+          </form>
+        ) : null}
         {loadingFiles ? (
           <p className="gen2-superset-list-state" role="status">
             Loading files…
@@ -619,25 +739,5 @@ export function SupersetFilePane({
         )}
       </section>
     </main>
-  );
-}
-
-function UnavailableAction({
-  icon: Icon,
-  label,
-}: {
-  icon: typeof FilePlus;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      className="gen2-superset-icon-button"
-      aria-label={label}
-      title={`${label} is coming soon`}
-      disabled
-    >
-      <Icon aria-hidden="true" size={14} />
-    </button>
   );
 }

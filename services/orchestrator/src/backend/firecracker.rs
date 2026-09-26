@@ -34,7 +34,8 @@ use crate::{
         CodexExecStartRequest, CreateRequest, ExecRequest, ExecResponse, FileResponse, Instance,
         PublicationExportRequest, PublicationExportResponse, RepositorySnapshot, Result,
         RuntimeError, SessionRestoreBeginRequest, SessionRestoreChunkRequest,
-        SessionRestoreFinalizeResponse, TerminalInputRequest, TerminalPollRequest,
+        SessionRestoreFinalizeResponse, SupersetCreateEntryRequest, TerminalInputRequest,
+        TerminalPollRequest,
         TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
         WorktreeCheckpointRequest, WorktreeCheckpointResponse, WorktreeCreateRequest,
         WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest, WorktreeRebaseResponse,
@@ -654,6 +655,17 @@ impl FirecrackerBackend {
     ) -> Result<serde_json::Value> {
         let machine = self.machine(workspace_id).await?;
         let result = machine.guest.superset_write_file(request).await?;
+        self.mark_activity(&machine);
+        Ok(result)
+    }
+
+    pub async fn superset_create_entry(
+        &self,
+        workspace_id: &str,
+        request: &SupersetCreateEntryRequest,
+    ) -> Result<serde_json::Value> {
+        let machine = self.machine(workspace_id).await?;
+        let result = machine.guest.superset_create_entry(request).await?;
         self.mark_activity(&machine);
         Ok(result)
     }

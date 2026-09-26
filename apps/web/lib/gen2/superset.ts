@@ -1,13 +1,14 @@
 import "server-only";
 
 import {
+  gen2SupersetCreateEntryResponseSchema,
   gen2SupersetExternalFileChangesResponseSchema,
   gen2SupersetListFilesResponseSchema,
   gen2SupersetReadFileResponseSchema,
   gen2SupersetSaveFileResponseSchema,
   type Gen2SupersetFile,
   type Gen2SupersetExternalFileChange,
-  type Gen2SupersetFileEntry,
+  type Gen2SupersetEntry,
 } from "@codev/contracts";
 import { z } from "zod";
 
@@ -63,7 +64,7 @@ export async function listGen2SupersetFiles(
   workspaceId: string,
   userId: string,
   worktreeId: string,
-): Promise<Gen2SupersetFileEntry[]> {
+): Promise<Gen2SupersetEntry[]> {
   await requireReadySupersetMember(workspaceId, userId);
   const response = await orchestratorRequest(
     "POST",
@@ -72,6 +73,28 @@ export async function listGen2SupersetFiles(
     35_000,
   );
   return gen2SupersetListFilesResponseSchema.parse(await response.json()).files;
+}
+
+export async function createGen2SupersetEntry(
+  workspaceId: string,
+  userId: string,
+  input: { worktreeId: string; name: string; kind: "file" | "directory" },
+): Promise<Gen2SupersetEntry> {
+  const membership = await requireReadySupersetMember(workspaceId, userId);
+  if (membership.role === "viewer") {
+    throw new Gen2AccessError(
+      "Edit permission is required to create files and folders.",
+      403,
+    );
+  }
+  const response = await orchestratorRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/superset/entry/create`,
+    input,
+    35_000,
+  );
+  return gen2SupersetCreateEntryResponseSchema.parse(await response.json())
+    .entry;
 }
 
 export async function readGen2SupersetFile(
