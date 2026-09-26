@@ -13,19 +13,15 @@ import { AppSidebarNav } from "./app-sidebar-nav";
 
 describe("AppSidebarNav", () => {
   beforeEach(() => {
-    mocks.usePathname.mockReturnValue("/import");
+    mocks.usePathname.mockReturnValue("/rooms");
   });
 
-  it("links to the chat import surface and marks it active", () => {
+  it("links to the rooms surface and marks it active", () => {
     render(<AppSidebarNav />);
 
-    const link = screen.getByRole("link", { name: "Import chat" });
-    expect(link).toHaveAttribute("href", "/import");
+    const link = screen.getByRole("link", { name: "Rooms" });
+    expect(link).toHaveAttribute("href", "/rooms");
     expect(link).toHaveClass("is-active");
-    expect(screen.getByRole("link", { name: "Rooms" })).toHaveAttribute(
-      "href",
-      "/rooms",
-    );
     expect(screen.getByRole("link", { name: "Gen 2" })).toHaveAttribute(
       "href",
       "/gen2",

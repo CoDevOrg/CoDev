@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { motion } from "motion/react";
 import { Paperclip } from "lucide-react";
 
 import {
@@ -9,10 +10,12 @@ import {
 } from "@codev/contracts";
 
 import { CHANNEL_MESSAGE_POLL_MS } from "@/lib/chat/team-chat-view";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { MarkdownContent } from "@/components/markdown/markdown-content";
+import { cn } from "@/lib/platform/utils";
 
 import { avatarColor, avatarInitials } from "./shared-chat-avatar";
 import { SharedChatComposer } from "./shared-chat-composer";
-import styles from "./shared-chat-room.module.css";
 
 function messageLabel(message: ImportedConversationMessage) {
   if (message.authorName) return message.authorName;
@@ -20,10 +23,11 @@ function messageLabel(message: ImportedConversationMessage) {
   return message.role.charAt(0).toUpperCase() + message.role.slice(1);
 }
 
-function messageClass(message: ImportedConversationMessage) {
-  if (message.role === "user") return styles.userMessage;
-  if (message.role === "assistant") return styles.assistantMessage;
-  return styles.contextMessage;
+function messageAlignClass(message: ImportedConversationMessage) {
+  if (message.role === "user")
+    return "self-end rounded-br-sm border-primary/25 bg-primary/8";
+  if (message.role === "assistant") return "self-start rounded-bl-sm bg-card";
+  return "self-center w-[90%] bg-violet/8";
 }
 
 function formatTime(createdAt: string | null | undefined) {
@@ -169,14 +173,17 @@ export function SharedChatTranscript({
   }, [roomId, addMessages]);
 
   return (
-    <section className={styles.transcript} aria-label="Conversation messages">
+    <section
+      className="flex min-h-0 flex-1 flex-col"
+      aria-label="Conversation messages"
+    >
       <div
-        className={styles.messageLog}
         role="log"
         aria-live="polite"
         aria-relevant="additions text"
+        className="flex flex-1 flex-col gap-3 overflow-y-auto px-6 py-5"
       >
-        <span className={styles.liveStatus}>
+        <span className="mb-1 self-center rounded-full border border-border bg-card px-2.5 py-1 text-[10.5px] font-semibold text-muted-foreground">
           Live · {messages.length}{" "}
           {messages.length === 1 ? "message" : "messages"}
         </span>
@@ -186,61 +193,95 @@ export function SharedChatTranscript({
           const time = formatTime(message.createdAt);
           const isAssistant = message.role === "assistant";
           return (
-            <article
-              className={`${styles.message} ${messageClass(message)} ${
-                pending ? styles.pending : ""
-              }`}
+            <motion.article
               key={message.sequence}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.22 }}
               aria-label={`${label} message ${message.sequence + 1}`}
+              className={cn(
+                "flex max-w-[78%] items-start gap-2.5 rounded-2xl border border-border px-4 py-3",
+                messageAlignClass(message),
+              )}
             >
-              <span
-                className={styles.avatar}
-                aria-hidden="true"
-                style={
-                  isAssistant ? undefined : { background: avatarColor(label) }
-                }
-              >
-                {isAssistant ? "C" : avatarInitials(label)}
-              </span>
-              <div>
-                <div className={styles.msgHead}>
-                  <strong>{label}</strong>
-                  {time ? <time suppressHydrationWarning>{time}</time> : null}
+              <Avatar className="mt-0.5 size-7 shrink-0">
+                <AvatarFallback
+                  style={
+                    isAssistant
+                      ? { background: "var(--color-primary)", color: "#f7f3e8" }
+                      : { background: avatarColor(label), color: "#f7f3e8" }
+                  }
+                >
+                  {isAssistant ? "C" : avatarInitials(label)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline justify-between gap-4">
+                  <strong className="text-[12.5px] font-semibold">
+                    {label}
+                  </strong>
+                  {time ? (
+                    <time
+                      suppressHydrationWarning
+                      className="text-[10px] text-muted-foreground"
+                    >
+                      {time}
+                    </time>
+                  ) : null}
                 </div>
-                <div className={styles.body}>
+                <div className="mt-1">
                   {isAssistant && message.generation ? (
-                    <span className={styles.modelTag}>
+                    <span className="mb-1 inline-block rounded-full border border-border bg-card px-2 py-0.5 text-[10px] text-muted-foreground">
                       {message.generation.model}
                     </span>
                   ) : null}
-                  <p aria-busy={pending}>
-                    {pending ? (
-                      <>
-                        {label} is replying…
-                        <span className={styles.beads} aria-hidden="true">
-                          <i />
-                          <i />
-                          <i />
-                        </span>
-                      </>
-                    ) : (
-                      message.text
-                    )}
-                  </p>
+                  {pending ? (
+                    <p
+                      aria-busy="true"
+                      className="m-0 text-[13.5px] leading-relaxed"
+                    >
+                      {label} is replying…
+                      <span
+                        aria-hidden="true"
+                        className="ml-1.5 inline-flex gap-0.5 align-middle"
+                      >
+                        {[0, 1, 2].map((index) => (
+                          <span
+                            key={index}
+                            style={{ animationDelay: `${index * 0.15}s` }}
+                            className="size-1 animate-bounce rounded-full bg-muted-foreground"
+                          />
+                        ))}
+                      </span>
+                    </p>
+                  ) : (
+                    <MarkdownContent
+                      text={message.text}
+                      className="text-[13.5px]"
+                    />
+                  )}
                   {message.artifacts.length ? (
-                    <ul aria-label="Message attachments">
+                    <ul
+                      aria-label="Message attachments"
+                      className="mt-2 flex flex-wrap gap-1.5"
+                    >
                       {message.artifacts.map((artifact) => (
-                        <li key={`${artifact.kind}-${artifact.sourceUrl}`}>
-                          <Paperclip aria-hidden="true" />
-                          <span>{artifact.filename}</span>
-                          <small>{artifact.kind}</small>
+                        <li
+                          key={`${artifact.kind}-${artifact.sourceUrl}`}
+                          className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border bg-card px-2 py-1 text-[11px] text-muted-foreground"
+                        >
+                          <Paperclip aria-hidden="true" className="size-3" />
+                          <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+                            {artifact.filename}
+                          </span>
+                          <small className="uppercase">{artifact.kind}</small>
                         </li>
                       ))}
                     </ul>
                   ) : null}
                 </div>
               </div>
-            </article>
+            </motion.article>
           );
         })}
       </div>

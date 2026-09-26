@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { Check, Copy, Link2, LoaderCircle } from "lucide-react";
 
-import styles from "./shared-chat-room.module.css";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 
 type InviteResponse = {
   inviteUrl?: string;
@@ -54,36 +56,62 @@ export function SharedChatInvite({ roomId }: { roomId: string }) {
   }
 
   return (
-    <div className={styles.inviteControl}>
-      <button type="button" disabled={busy} onClick={() => void createInvite()}>
+    <div className="flex flex-col gap-2">
+      <Button
+        type="button"
+        variant="outline"
+        disabled={busy}
+        onClick={() => void createInvite()}
+        className="h-8 rounded-full px-3 text-xs"
+      >
         {busy ? (
-          <LoaderCircle className={styles.spinner} aria-hidden="true" />
+          <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
         ) : (
-          <Link2 aria-hidden="true" />
+          <Link2 aria-hidden="true" className="size-3.5" />
         )}
         {busy ? "Creating…" : "Invite people"}
-      </button>
-      {inviteUrl ? (
-        <div className={styles.inviteResult} aria-live="polite">
-          <div>
-            <strong>
-              {reused ? "Saved invite link" : "Invite link ready"}
-            </strong>
-            <span>It expires in 24 hours and works once.</span>
-          </div>
-          <code>{inviteUrl}</code>
-          <button type="button" onClick={() => void copyInvite()}>
-            {copied ? (
-              <Check aria-hidden="true" />
-            ) : (
-              <Copy aria-hidden="true" />
-            )}
-            {copied ? "Copied" : "Copy"}
-          </button>
-        </div>
-      ) : null}
+      </Button>
+      <AnimatePresence>
+        {inviteUrl ? (
+          <motion.div
+            aria-live="polite"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.18 }}
+            className="overflow-hidden"
+          >
+            <Card className="flex flex-col gap-2 p-3">
+              <div>
+                <strong className="block text-[12px] font-semibold">
+                  {reused ? "Saved invite link" : "Invite link ready"}
+                </strong>
+                <span className="text-[11px] text-muted-foreground">
+                  It expires in 24 hours and works once.
+                </span>
+              </div>
+              <code className="overflow-hidden text-ellipsis whitespace-nowrap rounded-md border border-border bg-muted px-2 py-1.5 text-[10.5px]">
+                {inviteUrl}
+              </code>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => void copyInvite()}
+                className="h-7 self-start rounded-full px-2.5 text-[11px]"
+              >
+                {copied ? (
+                  <Check aria-hidden="true" className="size-3" />
+                ) : (
+                  <Copy aria-hidden="true" className="size-3" />
+                )}
+                {copied ? "Copied" : "Copy"}
+              </Button>
+            </Card>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
       {error ? (
-        <p className={styles.inviteError} role="alert">
+        <p role="alert" className="m-0 text-[11px] text-destructive">
           {error}
         </p>
       ) : null}
