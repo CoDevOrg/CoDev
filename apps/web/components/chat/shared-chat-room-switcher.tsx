@@ -2,9 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { AnimatePresence, motion } from "motion/react";
 import { ChevronDown } from "lucide-react";
-
-import styles from "./shared-chat-room.module.css";
 
 export type RoomSwitcherOption = {
   id: string;
@@ -43,41 +42,58 @@ export function SharedChatRoomSwitcher({
   }, [open]);
 
   return (
-    <div className={styles.switcher} ref={ref}>
-      <h1 className={styles.switcherTitle}>
+    <div className="relative" ref={ref}>
+      <h1 className="m-0">
         <button
           type="button"
-          className={styles.switcherBtn}
           aria-haspopup="menu"
           aria-expanded={open}
           disabled={!hasOthers}
           onClick={() => setOpen((value) => !value)}
+          style={{ color: "var(--color-foreground)" }}
+          className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[17px] font-semibold tracking-tight disabled:cursor-default enabled:hover:bg-muted"
         >
-          <span className={styles.switcherName}>{title}</span>
+          <span className="truncate">{title}</span>
           {hasOthers ? (
-            <ChevronDown className={styles.switcherChev} aria-hidden="true" />
+            <ChevronDown
+              aria-hidden="true"
+              className={`size-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+            />
           ) : null}
         </button>
       </h1>
-      {open && hasOthers ? (
-        <div className={styles.switcherMenu} role="menu">
-          <div className={styles.menuLabel}>Switch room</div>
-          {others.map((room) => (
-            <Link
-              key={room.id}
-              href={`/rooms/${room.id}`}
-              className={styles.switcherItem}
-              role="menuitem"
-              onClick={() => setOpen(false)}
-            >
-              <span>{room.title}</span>
-              {typeof room.messageCount === "number" ? (
-                <small>{room.messageCount}</small>
-              ) : null}
-            </Link>
-          ))}
-        </div>
-      ) : null}
+      <AnimatePresence>
+        {open && hasOthers ? (
+          <motion.div
+            role="menu"
+            initial={{ opacity: 0, y: -4, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -4, scale: 0.98 }}
+            transition={{ duration: 0.14 }}
+            className="absolute top-full left-0 z-20 mt-1.5 w-64 overflow-hidden rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-xl shadow-foreground/10"
+          >
+            <div className="px-2.5 py-1.5 text-[10.5px] font-bold tracking-[0.08em] text-muted-foreground uppercase">
+              Switch room
+            </div>
+            {others.map((room) => (
+              <Link
+                key={room.id}
+                href={`/rooms/${room.id}`}
+                role="menuitem"
+                onClick={() => setOpen(false)}
+                className="flex items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-[13px] hover:bg-muted"
+              >
+                <span className="truncate">{room.title}</span>
+                {typeof room.messageCount === "number" ? (
+                  <small className="text-muted-foreground">
+                    {room.messageCount}
+                  </small>
+                ) : null}
+              </Link>
+            ))}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }
