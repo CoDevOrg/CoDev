@@ -192,6 +192,29 @@ impl Backend {
         }
     }
 
+    /// Atomically reserve an otherwise empty host for shutdown. Sandbox
+    /// creation takes the same lifecycle lock, so it either completes before
+    /// this reservation (and prevents shutdown), or observes the reservation
+    /// and retries through the normal host-wake path instead of starting a
+    /// guest on a VM that is being deallocated.
+    pub async fn begin_host_shutdown_if_idle(&self) -> bool {
+        match self {
+            Self::Fake(backend) => backend.begin_host_shutdown_if_idle(),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => backend.begin_host_shutdown_if_idle().await,
+        }
+    }
+
+    /// Clear a shutdown reservation after the Azure deallocation helper
+    /// failed, allowing the host to continue serving sandbox requests.
+    pub fn cancel_host_shutdown(&self) {
+        match self {
+            Self::Fake(backend) => backend.cancel_host_shutdown(),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => backend.cancel_host_shutdown(),
+        }
+    }
+
     /// Reap expired short-lived sandboxes and hibernate durable idle ones.
     /// This is a host-level backstop for callers that disappear before DELETE.
     pub async fn reap_expired(&self) -> usize {
@@ -679,6 +702,7 @@ pub type SharedBackend = Arc<Backend>;
 pub struct FakeBackend {
     instances: RwLock<HashMap<String, Instance>>,
     ephemeral: RwLock<HashSet<String>>,
+    host_shutdown_pending: std::sync::atomic::AtomicBool,
     max: usize,
 }
 
@@ -693,6 +717,7 @@ impl FakeBackend {
         Self {
             instances: RwLock::new(HashMap::new()),
             ephemeral: RwLock::new(HashSet::new()),
+            host_shutdown_pending: std::sync::atomic::AtomicBool::new(false),
             max: MAX_ACTIVE_SESSIONS,
         }
     }
@@ -703,6 +728,21 @@ impl FakeBackend {
 
     fn active_count(&self) -> usize {
         self.instances.read().expect("fake backend lock").len()
+    }
+
+    fn begin_host_shutdown_if_idle(&self) -> bool {
+        let instances = self.instances.read().expect("fake backend lock");
+        if !instances.is_empty() {
+            return false;
+        }
+        self.host_shutdown_pending
+            .store(true, std::sync::atomic::Ordering::Release);
+        true
+    }
+
+    fn cancel_host_shutdown(&self) {
+        self.host_shutdown_pending
+            .store(false, std::sync::atomic::Ordering::Release);
     }
 
     fn reap_expired(&self) -> usize {
@@ -719,6 +759,14 @@ impl FakeBackend {
 
     fn create(&self, request: CreateRequest) -> Result<Instance> {
         let mut instances = self.instances.write().expect("fake backend lock");
+        if self
+            .host_shutdown_pending
+            .load(std::sync::atomic::Ordering::Acquire)
+        {
+            return Err(RuntimeError::Unavailable(
+                "Firecracker host is shutting down".into(),
+            ));
+        }
         if let Some(instance) = instances.get(&request.workspace_id) {
             return Ok(instance.clone());
         }
@@ -1097,6 +1145,23 @@ mod tests {
             .await
             .expect("destroy");
         assert_eq!(backend.active_count().await, 0);
+    }
+
+    #[tokio::test]
+    async fn host_shutdown_reservation_blocks_new_sandboxes_until_cancelled() {
+        let backend = Backend::fake();
+        assert!(backend.begin_host_shutdown_if_idle().await);
+        assert!(matches!(
+            backend.create(create_request("workspace")).await,
+            Err(RuntimeError::Unavailable(_))
+        ));
+
+        backend.cancel_host_shutdown();
+        backend
+            .create(create_request("workspace"))
+            .await
+            .expect("create after cancelled shutdown");
+        assert!(!backend.begin_host_shutdown_if_idle().await);
     }
 
     #[tokio::test]

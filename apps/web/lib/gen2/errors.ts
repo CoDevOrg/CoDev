@@ -19,6 +19,23 @@ export class Gen2LifecycleError extends Error {
 }
 
 /**
+ * A stopped or deallocating Firecracker host cannot accept a teardown request.
+ * Keep this deliberately narrow: callers may safely proceed without guest
+ * cleanup only when the transport itself did not reach the host.
+ */
+export function isGen2HostUnreachable(error: unknown) {
+  const parts: string[] = [];
+  let current: unknown = error;
+  for (let depth = 0; depth < 4 && current instanceof Error; depth += 1) {
+    parts.push(`${current.name}: ${current.message}`);
+    current = current.cause;
+  }
+  return /fetch failed|ECONNREFUSED|ENOTFOUND|EHOSTUNREACH|ETIMEDOUT|UND_ERR|aborted/i.test(
+    parts.join(" "),
+  );
+}
+
+/**
  * A save that lost a race. The guest compares `expectedRevision` against what
  * is on disk and rejects a mismatch, which is how a member's editor and the
  * agent stay off each other's toes on the one shared filesystem. The current

@@ -248,7 +248,7 @@ const BOOTSTRAP_UNIT_ENV: &str = "CODEV_BOOTSTRAP_UNIT";
 /// release changed; a session opened before it finishes would die with it. So
 /// report unhealthy until it is done. Any failure to ask counts as done, so a
 /// broken check can never hold every workspace in "starting".
-async fn host_bootstrap_still_running() -> bool {
+pub async fn host_bootstrap_still_running() -> bool {
     let Ok(unit) = std::env::var(BOOTSTRAP_UNIT_ENV) else {
         return false;
     };

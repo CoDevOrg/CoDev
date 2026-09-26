@@ -13,6 +13,9 @@ const mocks = vi.hoisted(() => ({
   memberLastError: null as string | null,
   createInviteToken: vi.fn(() => "share-token"),
   hashInviteToken: vi.fn((token: string) => `hash:${token}`),
+  ensureHostReady: vi.fn(async () => {
+    mocks.events.push("wake-host");
+  }),
   destroySandbox: vi.fn(async () => {
     mocks.events.push("destroy");
   }),
@@ -29,6 +32,10 @@ vi.mock("../platform/crypto", () => ({
 
 vi.mock("../platform/observability", () => ({
   logEvent: vi.fn(),
+}));
+
+vi.mock("../runtime/orchestrator-health", () => ({
+  ensureHostReady: mocks.ensureHostReady,
 }));
 
 vi.mock("../runtime/orchestrator-sandbox", () => ({
@@ -213,6 +220,8 @@ describe("gen2 workspaces", () => {
   });
 
   it("stops the guest and purges its snapshot before deleting the row", async () => {
+    mocks.currentStatus = "ready";
+    mocks.memberStatus = "ready";
     await deleteGen2Workspace("11111111-1111-4111-8111-111111111111", "user-1");
     expect(mocks.events).toEqual([
       "lock-delete-row",
@@ -223,7 +232,41 @@ describe("gen2 workspaces", () => {
     ]);
   });
 
+  it("does not wake the host for a workspace that never started", async () => {
+    await deleteGen2Workspace("11111111-1111-4111-8111-111111111111", "user-1");
+    expect(mocks.events).toEqual([
+      "lock-delete-row",
+      "update:gen2_workspaces",
+      "delete-row",
+    ]);
+    expect(mocks.ensureHostReady).not.toHaveBeenCalled();
+  });
+
+  it("wakes an unreachable host and purges the snapshot before deletion", async () => {
+    mocks.currentStatus = "stopped";
+    mocks.memberStatus = "stopped";
+    mocks.destroySandbox
+      .mockRejectedValueOnce(new TypeError("fetch failed"))
+      .mockImplementationOnce(async () => {
+        mocks.events.push("destroy");
+      });
+
+    await deleteGen2Workspace("11111111-1111-4111-8111-111111111111", "user-1");
+
+    expect(mocks.events).toEqual([
+      "lock-delete-row",
+      "update:gen2_workspaces",
+      "wake-host",
+      "destroy",
+      "discard-snapshot",
+      "delete-row",
+    ]);
+    expect(mocks.ensureHostReady).toHaveBeenCalledOnce();
+  });
+
   it("keeps failed deletions retryable and only then frees the slot", async () => {
+    mocks.currentStatus = "ready";
+    mocks.memberStatus = "ready";
     mocks.failDiscard = true;
     await expect(
       deleteGen2Workspace("11111111-1111-4111-8111-111111111111", "user-1"),

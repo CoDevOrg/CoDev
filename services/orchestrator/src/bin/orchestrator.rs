@@ -129,6 +129,15 @@ async fn stop_idle_host(backend: SharedBackend, ide: IdeBackend, idle_timeout: D
     let mut quiet_since: Option<chrono::DateTime<chrono::Utc>> = None;
     loop {
         interval.tick().await;
+        // The boot-time service deliberately keeps /healthz unavailable until
+        // it has fetched and installed this release. Treat that preparation as
+        // host activity: otherwise the one-minute idle timer can deallocate a
+        // freshly woken VM before the control plane is allowed to create its
+        // first sandbox, which causes an endless start/stop loop.
+        if http_api::host_bootstrap_still_running().await {
+            quiet_since = None;
+            continue;
+        }
         if backend.active_count().await > 0 {
             quiet_since = None;
             continue;
@@ -154,6 +163,13 @@ async fn stop_idle_host(backend: SharedBackend, ide: IdeBackend, idle_timeout: D
         {
             continue;
         }
+        // This is the final, atomic check. A sandbox create holds the same
+        // lifecycle lock while it prepares the guest, so a VM cannot be
+        // deallocated between the idle observation above and guest readiness.
+        if !backend.begin_host_shutdown_if_idle().await {
+            quiet_since = None;
+            continue;
+        }
         info!(?idle_timeout, "stopping idle Firecracker host");
         // Not `systemctl poweroff` directly. The helper asks Azure Resource
         // Manager to deallocate the VM; a guest-initiated poweroff leaves it
@@ -174,6 +190,7 @@ async fn stop_idle_host(backend: SharedBackend, ide: IdeBackend, idle_timeout: D
             Ok(Err(error)) => error!(%error, "failed to execute host shutdown"),
             Err(_) => error!("host shutdown command timed out"),
         }
+        backend.cancel_host_shutdown();
         // The poweroff failed. Back off a full window before trying again
         // rather than retrying every 30 seconds.
         quiet_since = Some(chrono::Utc::now());

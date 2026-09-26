@@ -14,12 +14,17 @@ import { createInviteToken, hashInviteToken } from "../platform/crypto";
 import { getRepository } from "../github/github";
 import { getDatabase } from "../platform/database";
 import { logEvent } from "../platform/observability";
+import { ensureHostReady } from "../runtime/orchestrator-health";
 import {
   destroySandbox,
   discardSandboxSnapshot,
 } from "../runtime/orchestrator-sandbox";
 import { GEN2_MAX_OWNED_WORKSPACES } from "./constants";
-import { Gen2AccessError, Gen2LifecycleError } from "./errors";
+import {
+  Gen2AccessError,
+  Gen2LifecycleError,
+  isGen2HostUnreachable,
+} from "./errors";
 
 const DEFAULT_WORKSPACE_NAME = "Workspace";
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
@@ -218,7 +223,7 @@ export async function deleteGen2Workspace(workspaceId: string, userId: string) {
   }
 
   const database = getDatabase();
-  await database.transaction(async (transaction) => {
+  const currentStatus = await database.transaction(async (transaction) => {
     const [current] = await transaction
       .select({
         ownerId: schema.gen2Workspaces.ownerId,
@@ -245,14 +250,29 @@ export async function deleteGen2Workspace(workspaceId: string, userId: string) {
         .set({ status: "deleting", lastError: null, updatedAt: new Date() })
         .where(eq(schema.gen2Workspaces.id, workspaceId));
     }
+    return current.status;
   });
 
   try {
-    // Stop a live guest, then remove its hibernation snapshot. The normal stop
-    // path intentionally preserves that snapshot for resume; deletion must
-    // purge it before freeing the owner's workspace slot.
-    await destroySandbox(workspaceId);
-    await discardSandboxSnapshot(workspaceId);
+    // A never-started workspace has no guest or snapshot, so don't wake a host
+    // just to delete its database row. For all other states, purge the runtime
+    // data before freeing the owner's workspace slot.
+    if (currentStatus !== "pending") {
+      try {
+        await destroySandbox(workspaceId);
+      } catch (error) {
+        if (!isGen2HostUnreachable(error)) throw error;
+        logEvent("warn", "gen2.workspace.delete_host_unreachable", {
+          workspaceId,
+          detail: error instanceof Error ? error.message : "unknown",
+        });
+        // The host may have deallocated while retaining the workspace disk.
+        // Wake it so deletion can remove the snapshot rather than orphaning it.
+        await ensureHostReady();
+        await destroySandbox(workspaceId);
+      }
+      await discardSandboxSnapshot(workspaceId);
+    }
     await database
       .delete(schema.gen2Workspaces)
       .where(

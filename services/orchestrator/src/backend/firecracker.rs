@@ -391,6 +391,7 @@ pub struct FirecrackerBackend {
     config: FirecrackerConfig,
     machines: AsyncRwLock<HashMap<String, Arc<RunningMachine>>>,
     provision: Mutex<()>,
+    host_shutdown_pending: AtomicBool,
 }
 
 impl FirecrackerBackend {
@@ -399,6 +400,7 @@ impl FirecrackerBackend {
             config,
             machines: AsyncRwLock::new(HashMap::new()),
             provision: Mutex::new(()),
+            host_shutdown_pending: AtomicBool::new(false),
         };
         backend.health().await?;
         let workspaces = backend.config.runtime_dir.join("workspaces");
@@ -452,6 +454,19 @@ impl FirecrackerBackend {
 
     pub async fn active_count(&self) -> usize {
         self.machines.read().await.len()
+    }
+
+    pub async fn begin_host_shutdown_if_idle(&self) -> bool {
+        let _guard = self.provision.lock().await;
+        if !self.machines.read().await.is_empty() {
+            return false;
+        }
+        self.host_shutdown_pending.store(true, Ordering::Release);
+        true
+    }
+
+    pub fn cancel_host_shutdown(&self) {
+        self.host_shutdown_pending.store(false, Ordering::Release);
     }
 
     pub async fn reap_expired(&self) -> usize {
@@ -528,6 +543,11 @@ impl FirecrackerBackend {
 
     pub async fn create(&self, request: CreateRequest) -> Result<Instance> {
         let _guard = self.provision.lock().await;
+        if self.host_shutdown_pending.load(Ordering::Acquire) {
+            return Err(RuntimeError::Unavailable(
+                "Firecracker host is shutting down".into(),
+            ));
+        }
         if let Some(machine) = self.machines.read().await.get(&request.workspace_id) {
             return Ok(machine.instance.read().expect("machine lock").clone());
         }
