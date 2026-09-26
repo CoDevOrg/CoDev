@@ -1,0 +1,84 @@
+/*
+ * Tailwind for the Rooms page only. Rooms runs a light "paper cream + navy
+ * ink" palette lifted from the landing page's landing.css (the marketing
+ * site's own tokens, renamed to shadcn's --color-* convention here) instead
+ * of the app shell's dark gold theme, so it needs its own scoped theme block
+ * the way orca-theme.css does for the settings shell: reset < theme <
+ * utilities layering keeps this from touching any other route, and the
+ * plain-element reset below stays inside `.rooms-scope` so nothing outside
+ * a page that opts in is affected.
+ */
+@layer reset, theme, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@theme {
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+  --radius: 1rem;
+  --radius-sm: calc(var(--radius) * 0.55);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.35);
+
+  --color-background: #f2e9d6;
+  --color-background-2: #e8dcc0;
+  --color-foreground: #0e2f7e;
+  --color-card: rgba(255, 253, 247, 0.62);
+  --color-card-foreground: #0e2f7e;
+  --color-popover: rgba(255, 253, 247, 0.94);
+  --color-popover-foreground: #0e2f7e;
+  --color-primary: #1b63b3;
+  --color-primary-foreground: #f7f3e8;
+  --color-secondary: rgba(255, 253, 247, 0.9);
+  --color-secondary-foreground: #0e2f7e;
+  --color-muted: rgba(14, 47, 126, 0.08);
+  --color-muted-foreground: rgba(14, 47, 126, 0.65);
+  --color-accent: rgba(255, 253, 247, 0.9);
+  --color-accent-foreground: #0e2f7e;
+  --color-destructive: #b3261e;
+  --color-border: rgba(14, 47, 126, 0.16);
+  --color-input: rgba(14, 47, 126, 0.28);
+  --color-ring: #1b63b3;
+
+  --color-teal: #2a6d62;
+  --color-orange: #9e4a2a;
+  --color-violet: #5b4fa8;
+}
+
+@layer reset {
+  .rooms-scope {
+    /* The app shell sets `color-scheme: dark` on :root, which makes native
+       form controls (button/input/select) render with the browser's dark
+       UA colors — a mid-grey button face — even where no background is
+       authored. Rooms is the one light route, so it opts back into light
+       native-control rendering here. */
+    color-scheme: light;
+    background:
+      radial-gradient(
+        120% 60% at 30% -10%,
+        var(--color-background-2) 0%,
+        transparent 60%
+      ),
+      var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+  }
+
+  .rooms-scope ul,
+  .rooms-scope ol {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .rooms-scope button {
+    font: inherit;
+    color: inherit;
+  }
+
+  .rooms-scope input {
+    font: inherit;
+  }
+}

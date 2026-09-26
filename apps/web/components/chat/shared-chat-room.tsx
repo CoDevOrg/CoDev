@@ -1,6 +1,9 @@
 import { ExternalLink, LockKeyhole, Users } from "lucide-react";
 
 import type { SharedChatRoom as SharedChatRoomData } from "@/lib/chat/shared-chat";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 
 import { avatarColor, avatarInitials } from "./shared-chat-avatar";
 import { SharedChatInvite } from "./shared-chat-invite";
@@ -9,7 +12,6 @@ import {
   type RoomSwitcherOption,
 } from "./shared-chat-room-switcher";
 import { SharedChatTranscript } from "./shared-chat-transcript";
-import styles from "./shared-chat-room.module.css";
 
 const AVATAR_STACK_LIMIT = 4;
 
@@ -25,16 +27,17 @@ export function SharedChatRoom({
   const overflow = room.members.length - stacked.length;
 
   return (
-    <main className={styles.page}>
-      <header className={styles.chatHeader}>
+    <main className="rooms-scope grid min-h-dvh grid-cols-1 grid-rows-[auto_1fr] lg:grid-cols-[minmax(0,1fr)_300px]">
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border px-6 py-4 lg:col-span-2">
         <SharedChatRoomSwitcher
           currentId={room.id}
           title={conversation.title}
           rooms={rooms}
         />
-        <div className={styles.meta}>
-          <span>
-            <LockKeyhole aria-hidden="true" /> Private
+        <div className="flex items-center gap-4 text-[12.5px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5">
+            <LockKeyhole aria-hidden="true" className="size-3.5" />
+            Private
           </span>
           <span>
             {room.members.length}{" "}
@@ -43,11 +46,16 @@ export function SharedChatRoom({
         </div>
       </header>
 
-      <div className={styles.chat}>
+      <div className="flex min-h-0 flex-col">
         {conversation.warnings.length ? (
-          <div className={styles.warnings}>
+          <div className="mx-6 mt-4 rounded-lg border border-violet/30 bg-violet/8 px-3.5 py-2.5 text-xs text-violet">
             {conversation.warnings.map((warning) => (
-              <p key={warning}>{warning}</p>
+              <p
+                key={warning}
+                className="m-0 first:mt-0 [&:not(:first-child)]:mt-1"
+              >
+                {warning}
+              </p>
             ))}
           </div>
         ) : null}
@@ -57,31 +65,31 @@ export function SharedChatRoom({
         />
       </div>
 
-      <aside className={styles.rail} aria-label="Room details">
-        <div className={styles.railTop}>
-          <div className={styles.stack} aria-hidden="true">
-            {stacked.map((member) =>
-              member.avatarUrl ? (
-                <img
-                  key={member.userId}
-                  className={styles.av}
-                  src={member.avatarUrl}
-                  alt=""
-                />
-              ) : (
-                <span
-                  key={member.userId}
-                  className={styles.av}
+      <aside
+        aria-label="Room details"
+        className="flex flex-col gap-4 border-t border-border p-5 lg:border-t-0 lg:border-l"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex -space-x-2" aria-hidden="true">
+            {stacked.map((member) => (
+              <Avatar key={member.userId} className="size-7">
+                {member.avatarUrl ? (
+                  <AvatarImage src={member.avatarUrl} alt="" />
+                ) : null}
+                <AvatarFallback
                   style={{
                     background: avatarColor(member.login ?? member.userId),
+                    color: "#f7f3e8",
                   }}
                 >
                   {avatarInitials(member.name ?? member.login)}
-                </span>
-              ),
-            )}
+                </AvatarFallback>
+              </Avatar>
+            ))}
             {overflow > 0 ? (
-              <span className={`${styles.av} ${styles.more}`}>+{overflow}</span>
+              <Avatar className="size-7">
+                <AvatarFallback>+{overflow}</AvatarFallback>
+              </Avatar>
             ) : null}
           </div>
           {room.viewerRole === "owner" ? (
@@ -89,55 +97,68 @@ export function SharedChatRoom({
           ) : null}
         </div>
 
-        <section className={styles.railBlock}>
-          <h2>Details</h2>
+        <Card className="flex flex-col gap-2.5 p-4">
+          <h2 className="m-0 text-[13px] font-semibold tracking-tight">
+            Details
+          </h2>
           {conversation.source.model ? (
-            <p className={styles.railRow}>
-              <span>Model</span>
-              <strong>{conversation.source.model}</strong>
+            <p className="m-0 flex items-center justify-between text-[12.5px]">
+              <span className="text-muted-foreground">Model</span>
+              <strong className="font-semibold">
+                {conversation.source.model}
+              </strong>
             </p>
           ) : null}
           <a
             href={conversation.source.url}
             target="_blank"
             rel="noreferrer"
-            className={styles.sourceLink}
+            style={{ color: "var(--color-primary)" }}
+            className="inline-flex items-center gap-1.5 text-[12.5px] font-medium hover:underline"
           >
-            <ExternalLink aria-hidden="true" />
+            <ExternalLink aria-hidden="true" className="size-3.5" />
             Open original
           </a>
-        </section>
+        </Card>
 
-        <section className={styles.railBlock}>
-          <h2>
-            <Users aria-hidden="true" /> In this room
+        <Card className="flex flex-col gap-3 p-4">
+          <h2 className="m-0 flex items-center gap-1.5 text-[13px] font-semibold tracking-tight">
+            <Users aria-hidden="true" className="size-3.5" />
+            In this room
           </h2>
-          <ul className={styles.memberList}>
+          <ul className="flex flex-col gap-3">
             {room.members.map((member) => (
-              <li key={member.userId}>
-                {member.avatarUrl ? (
-                  <img src={member.avatarUrl} alt="" />
-                ) : (
-                  <span
-                    aria-hidden="true"
+              <li key={member.userId} className="flex items-center gap-2.5">
+                <Avatar className="size-8">
+                  {member.avatarUrl ? (
+                    <AvatarImage src={member.avatarUrl} alt="" />
+                  ) : null}
+                  <AvatarFallback
                     style={{
                       background: avatarColor(member.login ?? member.userId),
+                      color: "#f7f3e8",
                     }}
                   >
                     {avatarInitials(member.name ?? member.login)}
-                  </span>
-                )}
-                <div>
-                  <strong>{member.name ?? member.login}</strong>
-                  <small>@{member.login}</small>
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0 flex-1">
+                  <strong className="block truncate text-[12.5px] font-semibold">
+                    {member.name ?? member.login}
+                  </strong>
+                  <small className="block truncate text-[11px] text-muted-foreground">
+                    @{member.login}
+                  </small>
                 </div>
-                <em>{member.role}</em>
+                <Badge variant="muted" className="capitalize">
+                  {member.role}
+                </Badge>
               </li>
             ))}
           </ul>
-        </section>
+        </Card>
 
-        <p className={styles.railNote}>
+        <p className="m-0 text-[11.5px] leading-relaxed text-muted-foreground">
           {room.viewerRole === "owner"
             ? "Create an invite link to bring another authenticated member into this room."
             : "You joined this room through an invitation and can contribute to its conversation."}
