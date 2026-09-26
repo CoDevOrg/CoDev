@@ -129,6 +129,15 @@ async fn stop_idle_host(backend: SharedBackend, ide: IdeBackend, idle_timeout: D
     let mut quiet_since: Option<chrono::DateTime<chrono::Utc>> = None;
     loop {
         interval.tick().await;
+        // The boot-time service deliberately keeps /healthz unavailable until
+        // it has fetched and installed this release. Treat that preparation as
+        // host activity: otherwise the one-minute idle timer can deallocate a
+        // freshly woken VM before the control plane is allowed to create its
+        // first sandbox, which causes an endless start/stop loop.
+        if http_api::host_bootstrap_still_running().await {
+            quiet_since = None;
+            continue;
+        }
         if backend.active_count().await > 0 {
             quiet_since = None;
             continue;

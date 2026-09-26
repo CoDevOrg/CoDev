@@ -56,6 +56,13 @@ test("hibernates idle sandboxes after fifteen minutes and quickly deallocates th
   );
   const orca = read("../../services/orchestrator/src/backend/orca.rs");
   assert.match(orca, /has_recent_activity/);
+  // Bootstrap deliberately keeps /healthz unavailable while a freshly woken
+  // host installs its release. It must also block idle deallocation; otherwise
+  // a workspace request can wake the VM forever without reaching provisioning.
+  assert.match(
+    orchestrator,
+    /http_api::host_bootstrap_still_running\(\)\.await/,
+  );
   assert.match(orchestrator, /ide\s*\.has_recent_activity\(\)\.await/);
   // An Orca-only workspace never provisions a sandbox, so the host's idle
   // check has to consult the IDE backend or it powers off mid-session - and
