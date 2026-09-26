@@ -42,9 +42,9 @@ function messageLabel(message: ImportedConversationMessage) {
 }
 
 function messageAlignClass(message: ImportedConversationMessage) {
-  if (message.role === "user") return "self-start rounded-bl-sm bg-card";
-  if (message.role === "assistant")
+  if (message.role === "user")
     return "self-end rounded-br-sm border-primary/25 bg-primary/8";
+  if (message.role === "assistant") return "self-start rounded-bl-sm bg-card";
   return "self-center w-[90%] bg-violet/8";
 }
 

@@ -134,3 +134,39 @@
   color: var(--color-muted-foreground);
   font-style: italic;
 }
+
+.canvas {
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 0.65rem;
+  background: var(--color-muted);
+}
+
+.canvasHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 0.8rem;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-muted-foreground);
+  font-size: 0.82em;
+  font-weight: 650;
+}
+
+.canvasIcon {
+  width: 1em;
+  height: 1em;
+  flex: 0 0 auto;
+}
+
+.canvasBody {
+  padding: 0.75rem 0.9rem;
+}
+
+.canvasBody > :first-child {
+  margin-top: 0;
+}
+
+.canvasBody > :last-child {
+  margin-bottom: 0;
+}
