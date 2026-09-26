@@ -74,6 +74,17 @@
   list-style: none;
 }
 
+.gen2-card-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.gen2-card-row .gen2-card {
+  flex: 1;
+  min-width: 0;
+}
+
 .gen2-card {
   display: flex;
   align-items: center;
@@ -99,6 +110,57 @@
 .gen2-card:focus-visible {
   outline: 2px solid var(--gold);
   outline-offset: 3px;
+}
+
+.gen2-delete-button {
+  display: inline-flex;
+  flex: 0 0 48px;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  margin-block: auto;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    border-color 160ms ease,
+    opacity 160ms ease;
+}
+
+.gen2-delete-button:hover:not(:disabled) {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.gen2-delete-button:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.gen2-delete-button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.gen2-delete-spinner {
+  animation: gen2-delete-spin 900ms linear infinite;
+}
+
+.gen2-action-error {
+  margin: 8px 0 0;
+  color: #ffb3a6;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+@keyframes gen2-delete-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .gen2-empty {
@@ -368,9 +430,14 @@
 
 @media (prefers-reduced-motion: reduce) {
   .gen2-card,
+  .gen2-delete-button,
   .primary-button,
   .secondary-button {
     transition: none;
+  }
+
+  .gen2-delete-spinner {
+    animation: none;
   }
 
   .gen2-card:hover,
@@ -386,6 +453,30 @@
 
   .gen2-chat-nav ul {
     max-height: 30vh;
+  }
+}
+
+@media (max-width: 520px) {
+  .gen2-card {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 4px 12px;
+  }
+
+  .gen2-card > strong {
+    flex: 1 0 100%;
+  }
+
+  .gen2-card-repo {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .gen2-card .gen2-status {
+    min-height: 32px;
   }
 }
 

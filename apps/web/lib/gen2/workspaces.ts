@@ -14,6 +14,7 @@ import { createInviteToken, hashInviteToken } from "../platform/crypto";
 import { getRepository } from "../github/github";
 import { getDatabase } from "../platform/database";
 import { logEvent } from "../platform/observability";
+import { destroySandbox } from "../runtime/orchestrator-sandbox";
 import { Gen2AccessError, Gen2LifecycleError } from "./errors";
 
 const DEFAULT_WORKSPACE_NAME = "Workspace";
@@ -172,6 +173,21 @@ export async function getGen2WorkspaceDetail(
     ...workspace,
     members,
   });
+}
+
+export async function deleteGen2Workspace(workspaceId: string, userId: string) {
+  const workspace = await requireGen2Member(workspaceId, userId);
+  if (workspace.role !== "owner") {
+    throw new Gen2AccessError("Only the owner can delete this workspace.", 403);
+  }
+
+  // The sandbox owns the workspace files and hibernation snapshot. Destroy it
+  // before removing the database row so a runtime failure leaves the workspace
+  // visible and retryable instead of orphaning its machine.
+  await destroySandbox(workspaceId);
+  await getDatabase()
+    .delete(schema.gen2Workspaces)
+    .where(eq(schema.gen2Workspaces.id, workspaceId));
 }
 
 export async function createGen2ShareLink(
