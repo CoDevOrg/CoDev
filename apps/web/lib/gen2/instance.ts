@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, lt, or } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 import type { Gen2WorkspaceStatus } from "@codev/contracts";
@@ -62,8 +62,17 @@ const HOST_UNREACHABLE_MESSAGE =
 
 /** Firecracker create can outlast the default 70s orchestrator timeout. */
 const GEN2_PROVISION_TIMEOUT_MS = 120_000;
+/** Leave room for guest creation within Vercel's 300-second function limit. */
+const GEN2_HOST_READY_TIMEOUT_MS = 150_000;
 /** Keep expiry inside the orchestrator's exclusive four-hour window. */
 const GEN2_EXPIRES_SLACK_MS = 60_000;
+/**
+ * The host wake and guest creation budgets total 270 seconds. Leave another
+ * thirty seconds for source preparation and persisting the final state.
+ */
+const GEN2_PROVISIONING_STALE_AFTER_MS =
+  GEN2_HOST_READY_TIMEOUT_MS + GEN2_PROVISION_TIMEOUT_MS + 30_000;
+const GEN2_PROVISIONING_POLL_MS = 1_000;
 
 export function describeGen2RuntimeFailure(error: unknown): string {
   if (isGen2HostUnreachable(error)) {
@@ -162,14 +171,30 @@ async function writeGen2Instance(
     sandboxId?: string | null;
     lastError: string | null;
   },
+  expectedProvisioningAt?: Date,
 ) {
-  await getDatabase()
+  const update = getDatabase()
     .update(schema.gen2Workspaces)
     .set({
       ...values,
       updatedAt: new Date(),
     })
-    .where(eq(schema.gen2Workspaces.id, workspaceId));
+    .where(
+      expectedProvisioningAt
+        ? and(
+            eq(schema.gen2Workspaces.id, workspaceId),
+            eq(schema.gen2Workspaces.status, "provisioning"),
+            eq(schema.gen2Workspaces.updatedAt, expectedProvisioningAt),
+          )
+        : eq(schema.gen2Workspaces.id, workspaceId),
+    );
+  if (expectedProvisioningAt) {
+    return (
+      (await update.returning({ id: schema.gen2Workspaces.id })).length > 0
+    );
+  }
+  await update;
+  return true;
 }
 
 /**
@@ -177,25 +202,72 @@ async function writeGen2Instance(
  *
  * Two members opening the same workspace at once would otherwise both see
  * `pending` and both provision. The compare-and-set means exactly one wins;
- * the loser gets `null` and simply waits for the winner's VM.
+ * the loser gets `null` and waits for the winner to finish starting the VM.
  */
 async function claimProvisioning(workspaceId: string) {
-  const claimed = await getDatabase()
+  const now = new Date();
+  const staleBefore = new Date(
+    now.getTime() - GEN2_PROVISIONING_STALE_AFTER_MS,
+  );
+  const [claim] = await getDatabase()
     .update(schema.gen2Workspaces)
-    .set({ status: "provisioning", lastError: null, updatedAt: new Date() })
+    .set({ status: "provisioning", lastError: null, updatedAt: now })
     .where(
       and(
         eq(schema.gen2Workspaces.id, workspaceId),
-        inArray(schema.gen2Workspaces.status, [
-          "pending",
-          "stopped",
-          "failed",
-          "ready",
-        ]),
+        or(
+          inArray(schema.gen2Workspaces.status, [
+            "pending",
+            "stopped",
+            "failed",
+            "ready",
+          ]),
+          and(
+            eq(schema.gen2Workspaces.status, "provisioning"),
+            lt(schema.gen2Workspaces.updatedAt, staleBefore),
+          ),
+        ),
       ),
     )
-    .returning({ id: schema.gen2Workspaces.id });
-  return claimed.length > 0;
+    .returning({ updatedAt: schema.gen2Workspaces.updatedAt });
+  return claim?.updatedAt ?? null;
+}
+
+async function waitForProvisioning(workspaceId: string, userId: string) {
+  const deadline = Date.now() + GEN2_PROVISIONING_STALE_AFTER_MS;
+  while (Date.now() < deadline) {
+    const workspace = await requireGen2Member(workspaceId, userId);
+    if (workspace.status === "ready") return workspace;
+    if (workspace.status === "failed") {
+      throw new Gen2LifecycleError(
+        workspace.lastError ?? "The Firecracker instance could not start.",
+        502,
+      );
+    }
+    if (workspace.status !== "provisioning") {
+      throw new Gen2LifecycleError(
+        workspace.lastError ??
+          "Workspace startup ended before the machine was ready.",
+        503,
+      );
+    }
+    if (
+      Date.now() - Date.parse(workspace.updatedAt) >=
+      GEN2_PROVISIONING_STALE_AFTER_MS
+    ) {
+      throw new Gen2LifecycleError(
+        "The previous startup attempt stopped responding. Try again to resume this workspace.",
+        503,
+      );
+    }
+    await new Promise((resolve) =>
+      setTimeout(resolve, GEN2_PROVISIONING_POLL_MS),
+    );
+  }
+  throw new Gen2LifecycleError(
+    "The Firecracker instance is still starting. Try again in a moment.",
+    503,
+  );
 }
 
 /**
@@ -221,7 +293,7 @@ export async function ensureGen2Instance(
   if (membership.status === "ready") {
     if (!currentRuntime.current) return membership;
     try {
-      await ensureHostReady();
+      await ensureHostReady(GEN2_HOST_READY_TIMEOUT_MS);
       hostReady = true;
       if (await currentRuntime.current(workspaceId)) return membership;
     } catch (error) {
@@ -233,25 +305,35 @@ export async function ensureGen2Instance(
     }
   }
 
-  if (!(await claimProvisioning(workspaceId))) {
-    // Someone else is already bringing it up; report the live status rather
-    // than racing them for the same guest.
-    return requireGen2Member(workspaceId, userId);
+  const provisioningAt = await claimProvisioning(workspaceId);
+  if (!provisioningAt) {
+    // Another member owns the startup lease. Join that operation instead of
+    // returning a successful response that leaves this browser stuck at
+    // "Starting" without an active runtime.
+    return waitForProvisioning(workspaceId, userId);
   }
 
-  const previousStatus = membership.status;
+  // A process can be terminated by its platform before its catch block runs.
+  // A stale provisioning lease is recoverable, so if host wake fails during
+  // recovery leave a retryable failure instead of refreshing the stuck lease.
+  const previousStatus =
+    membership.status === "provisioning" ? "failed" : membership.status;
   if (!hostReady) {
     try {
-      await ensureHostReady();
+      await ensureHostReady(GEN2_HOST_READY_TIMEOUT_MS);
     } catch (error) {
       const message = describeGen2RuntimeFailure(error);
       logEvent("error", "gen2.instance.host_unready", {
         detail: error instanceof Error ? error.message : "unknown",
       });
-      await writeGen2Instance(workspaceId, {
-        status: previousStatus,
-        lastError: message,
-      });
+      await writeGen2Instance(
+        workspaceId,
+        {
+          status: previousStatus,
+          lastError: message,
+        },
+        provisioningAt,
+      );
       throw new Gen2LifecycleError(message, 503);
     }
   }
@@ -278,20 +360,40 @@ export async function ensureGen2Instance(
           Date.now() + GEN2_SANDBOX_LIFECYCLE.timeoutMs - GEN2_EXPIRES_SLACK_MS,
         ),
       ));
-    await writeGen2Instance(workspaceId, {
-      status: "ready",
-      sandboxId: sandbox.id,
-      lastError: null,
-    });
+    const committed = await writeGen2Instance(
+      workspaceId,
+      {
+        status: "ready",
+        sandboxId: sandbox.id,
+        lastError: null,
+      },
+      provisioningAt,
+    );
+    if (!committed) {
+      throw new Gen2LifecycleError(
+        "A newer startup attempt took over. Try opening the workspace again.",
+        503,
+      );
+    }
   } catch (error) {
     const message = describeGen2RuntimeFailure(error);
     logEvent("error", "gen2.instance.start_failed", {
       detail: error instanceof Error ? error.message : "unknown",
     });
-    await writeGen2Instance(workspaceId, {
-      status: "failed",
-      lastError: message,
-    });
+    const markedFailed = await writeGen2Instance(
+      workspaceId,
+      {
+        status: "failed",
+        lastError: message,
+      },
+      provisioningAt,
+    );
+    if (!markedFailed) {
+      throw new Gen2LifecycleError(
+        "A newer startup attempt took over. Try opening the workspace again.",
+        503,
+      );
+    }
     throw new Gen2LifecycleError(message, 502);
   }
 

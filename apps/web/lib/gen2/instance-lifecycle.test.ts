@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
   const updates: Array<Record<string, unknown>> = [];
@@ -22,7 +22,7 @@ const mocks = vi.hoisted(() => {
   // `.returning()`. `claimed` says whether the compare-and-set matched a row;
   // when it does not, the write must not land -- that is the whole point of
   // the claim, and modelling it is how the race test means anything.
-  const state = { claimed: true };
+  const state = { claimed: true, leaseCurrent: true };
   let pending: Record<string, unknown> | null = null;
 
   function apply() {
@@ -37,6 +37,9 @@ const mocks = vi.hoisted(() => {
     if ("lastError" in values) {
       member.lastError = values.lastError as string | null;
     }
+    if ("updatedAt" in values) {
+      member.updatedAt = values.updatedAt as Date;
+    }
   }
 
   const updateQuery = {
@@ -46,12 +49,16 @@ const mocks = vi.hoisted(() => {
     }),
     where: vi.fn(() => updateQuery),
     returning: vi.fn(async () => {
-      if (!state.claimed) {
+      const status = pending?.status;
+      if (
+        (status === "provisioning" && !state.claimed) ||
+        (status !== "provisioning" && !state.leaseCurrent)
+      ) {
         pending = null;
         return [];
       }
       apply();
-      return [{ id: member.id }];
+      return [{ id: member.id, updatedAt: member.updatedAt }];
     }),
     then: (resolve: (value: undefined) => unknown) => {
       apply();
@@ -96,13 +103,19 @@ import { Gen2LifecycleError } from "./errors";
 import { ensureGen2Instance, stopGen2Instance } from "./instance";
 
 describe("gen2 instance lifecycle", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   beforeEach(() => {
     mocks.updates.length = 0;
     mocks.member.status = "pending";
     mocks.member.sandboxId = null;
     mocks.member.lastError = null;
+    mocks.member.updatedAt = new Date("2026-09-20T20:00:00.000Z");
     mocks.member.role = "owner";
     mocks.state.claimed = true;
+    mocks.state.leaseCurrent = true;
     for (const method of ["from", "innerJoin", "where"] as const) {
       mocks.selectQuery[method].mockReturnValue(mocks.selectQuery);
     }
@@ -130,7 +143,7 @@ describe("gen2 instance lifecycle", () => {
     ]);
     expect(workspace.status).toBe("ready");
     expect(workspace.sandboxId).toBe("sandbox-1");
-    expect(mocks.ensureHostReady).toHaveBeenCalledOnce();
+    expect(mocks.ensureHostReady).toHaveBeenCalledWith(150_000);
   });
 
   it("reattaches when the Firecracker machine is already on the host", async () => {
@@ -193,6 +206,43 @@ describe("gen2 instance lifecycle", () => {
     expect(mocks.updates.at(-1)).toMatchObject({
       status: "failed",
       lastError: "host unavailable",
+    });
+  });
+
+  it("recovers a stale provisioning claim", async () => {
+    mocks.member.status = "provisioning";
+    mocks.member.updatedAt = new Date(Date.now() - 10 * 60_000);
+
+    const workspace = await ensureGen2Instance(mocks.member.id, "user-1", {
+      provision: mocks.provision,
+      destroy: mocks.destroy,
+    });
+
+    expect(mocks.provision).toHaveBeenCalledOnce();
+    expect(mocks.updates.map((update) => update.status)).toEqual([
+      "provisioning",
+      "ready",
+    ]);
+    expect(workspace.status).toBe("ready");
+  });
+
+  it("records a retryable failure when host wake fails during stale recovery", async () => {
+    mocks.member.status = "provisioning";
+    mocks.member.updatedAt = new Date(Date.now() - 10 * 60_000);
+    mocks.ensureHostReady.mockRejectedValue(new TypeError("fetch failed"));
+
+    await expect(
+      ensureGen2Instance(mocks.member.id, "user-1", {
+        provision: mocks.provision,
+        destroy: mocks.destroy,
+      }),
+    ).rejects.toMatchObject({ status: 503 });
+
+    expect(mocks.provision).not.toHaveBeenCalled();
+    expect(mocks.member.status).toBe("failed");
+    expect(mocks.updates.at(-1)).toMatchObject({
+      status: "failed",
+      lastError: expect.stringMatching(/Firecracker host could not be reached/),
     });
   });
 
@@ -272,14 +322,83 @@ describe("gen2 instance lifecycle", () => {
     expect(mocks.provision).toHaveBeenCalledOnce();
   });
 
-  it("steps aside when another member already claimed provisioning", async () => {
+  it("waits for another member's provisioning attempt to finish", async () => {
+    vi.useFakeTimers();
+    mocks.member.status = "provisioning";
+    mocks.member.updatedAt = new Date();
     mocks.state.claimed = false;
-    const workspace = await ensureGen2Instance(mocks.member.id, "user-2", {
+    let reads = 0;
+    mocks.selectQuery.limit.mockImplementation(async () => {
+      reads += 1;
+      if (reads === 3) {
+        mocks.member.status = "ready";
+        mocks.member.sandboxId = "sandbox-1";
+      }
+      return [mocks.member];
+    });
+
+    const opening = ensureGen2Instance(mocks.member.id, "user-2", {
       provision: mocks.provision,
       destroy: mocks.destroy,
     });
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    const workspace = await opening;
+
     expect(mocks.provision).not.toHaveBeenCalled();
-    expect(workspace.status).toBe("pending");
+    expect(reads).toBeGreaterThanOrEqual(3);
+    expect(workspace.status).toBe("ready");
+  });
+
+  it("does not let an old provisioner overwrite a newer startup lease", async () => {
+    const newerLease = new Date(Date.now() + 1_000);
+    mocks.provision.mockImplementation(async () => {
+      mocks.member.status = "provisioning";
+      mocks.member.updatedAt = newerLease;
+      mocks.state.leaseCurrent = false;
+      return { id: "sandbox-1" };
+    });
+
+    await expect(
+      ensureGen2Instance(mocks.member.id, "user-1", {
+        provision: mocks.provision,
+        destroy: mocks.destroy,
+      }),
+    ).rejects.toMatchObject({
+      message: /newer startup attempt took over/,
+      status: 503,
+    });
+
+    expect(mocks.member.status).toBe("provisioning");
+    expect(mocks.member.updatedAt).toBe(newerLease);
+    expect(mocks.updates.map((update) => update.status)).toEqual([
+      "provisioning",
+    ]);
+  });
+
+  it("reopens the machine after the owner stops it", async () => {
+    mocks.member.status = "ready";
+    mocks.member.sandboxId = "sandbox-1";
+    const runtime = {
+      provision: mocks.provision,
+      destroy: mocks.destroy,
+    };
+
+    await stopGen2Instance(mocks.member.id, "user-1", runtime);
+    const workspace = await ensureGen2Instance(
+      mocks.member.id,
+      "user-1",
+      runtime,
+    );
+
+    expect(mocks.destroy).toHaveBeenCalledOnce();
+    expect(mocks.provision).toHaveBeenCalledOnce();
+    expect(mocks.updates.map((update) => update.status)).toEqual([
+      "stopped",
+      "provisioning",
+      "ready",
+    ]);
+    expect(workspace.status).toBe("ready");
   });
 
   it("destroys the sandbox when the owner stops it", async () => {

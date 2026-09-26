@@ -2,7 +2,7 @@ import { withUser } from "@/lib/http/api-route";
 import { ensureGen2Instance, stopGen2Instance } from "@/lib/gen2/instance";
 import { getGen2WorkspaceDetail } from "@/lib/gen2/workspaces";
 
-/** Provisioning a Firecracker guest can outlast a normal request. */
+/** Host wake, Firecracker creation, and persistence fit Vercel's 300s limit. */
 export const maxDuration = 300;
 
 type Params = { workspaceId: string };
