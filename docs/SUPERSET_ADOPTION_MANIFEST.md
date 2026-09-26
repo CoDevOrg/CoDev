@@ -1,6 +1,6 @@
 # Superset adoption manifest
 
-**Status:** Design; Phase 1 source map, not an implementation guarantee
+**Status:** Design; incremental adoption plan, not an implementation guarantee
 **Date:** 2026-09-24
 
 ## Source pin
@@ -117,7 +117,7 @@ On a Superset-backed path, the ownership change is:
 | Gen 2 `agent` and `agent/poll` routes launch and poll fresh `codex exec` turns through `lib/gen2/agent.ts` and the guest. | Superset host-service launches and tracks terminal-agent sessions; CoDev's route adapter creates, streams, interrupts, and maps those sessions.                | Member credential selection, launch permission, quota reservation, metering, durable CoDev activity, and actor attribution.            |
 | Gen 2 `files`, `git`, and `terminal` routes call guest handlers for file I/O, Git, and PTYs.                              | Those same authenticated CoDev routes call a private adapter to Superset host-service for the selected worktree.                                               | CoDev auth, per-operation role checks, workspace identity, and request limits.                                                         |
 | Gen 2 `chat` routes and `chat-panel.tsx` show the CoDev-specific Codex conversation.                                      | Port Superset's agent/session presentation and selected `ChatV3Pane` or agent terminal UI into the CoDev page, backed by Superset sessions.                    | CoDev workspace membership and shared activity. Keep CoDev chat only if product explicitly chooses to retain it as a separate surface. |
-| CoDev Gen 2 file tree and Git panel show one checkout.                                                                    | Adapt Superset's file, terminal, changes, and worktree panels; group internal agent worktrees under one CoDev workspace page.                                  | CoDev CodeMirror 6 and Yjs remain the shared live editor and presence system.                                                          |
+| CoDev Gen 2 file tree, editor, and Git panel show one checkout.                                                           | Adapt Superset's file pane, CodeEditor, terminal, changes, and worktree panels; group internal agent worktrees under one CoDev workspace page.                 | CoDev supplies the Yjs document, presence, conflict handling, and authorized persistence beneath Superset's editor UI.                 |
 | Gen 1 page embeds the Orca IDE and its runtime pairing/agent connections.                                                 | After the Gen 2 prototype passes, make the Superset-backed workspace the normal CoDev workspace route and remove the Orca surface through a planned migration. | CoDev sign-in, invites/roles, credential vault, quotas, workspace records, and Azure VM lifecycle.                                     |
 
 The browser never calls the host service directly. The page calls existing or
@@ -154,16 +154,41 @@ Candidate components to adapt selectively:
 - `.../$workspaceId/hooks/usePaneRegistry/components/DiffPane/` and
   `.../$workspaceId/components/WorkspaceSidebar/` for changes, file
   navigation, and review interaction patterns.
-- `.../$workspaceId/hooks/usePaneRegistry/components/FilePane/` for file
-  navigation patterns only. Keep CoDev's existing CodeMirror 6 editor and
-  bind it to CoDev Yjs; do not adopt the Superset CodeEditor as the editor
-  authority.
+- `.../$workspaceId/hooks/usePaneRegistry/components/FilePane/`, including
+  its `CodeEditor`, as the intended file-navigation and editor UI. It is a
+  CodeMirror implementation, but its document state and save path must be
+  replaced with a browser-safe CoDev adapter that binds the editor to CoDev's
+  Yjs document and presence state.
 
 The desktop route and its `WorkspaceProvider`/`WorkspaceTrpcProvider` are not
 direct imports for `apps/web`. `@superset/workspace-client` imports the host
 `AppRouter` type and declares the host-service package as a dependency; build
 a browser-safe CoDev client facade that calls CoDev APIs instead of pulling
 that host package into the web dependency graph.
+
+### Incremental browser integration
+
+Do not design a complete replacement API before building the UI. Integrate one
+Superset workspace feature at a time:
+
+1. Adapt the selected Superset component into the CoDev browser shell and
+   remove or replace its Electron-only dependencies.
+2. Define the smallest CoDev browser API contract that component requires.
+   The route authenticates the member, checks permissions and quota, then
+   forwards the authorized operation to the private host service.
+3. Connect the component to the selected worktree and verify it in a real Gen
+   2 workspace before starting the next feature.
+
+The first browser slice is the Superset `FilePane` and `CodeEditor`.
+Its CoDev adapter must support file listing, read, revision-checked save,
+external-change notification, Yjs document binding, and shared presence.
+Finish that slice only when two members can edit the same file and an agent
+write is reconciled without silently losing either person's work.
+
+After files and the shared editor, add Superset's terminal, changes/Git and
+branch-worktree panels, then agent and subagent/session panels, then preview.
+Each feature adds only the CoDev APIs it needs. The browser never receives a
+host-service administrative secret or bypasses CoDev authorization.
 
 Do not include in the first browser slice:
 
@@ -178,18 +203,25 @@ Do not include in the first browser slice:
 
 ## Phase 1 integration sequence
 
-1. Produce a guest build of the selected host-service dependency closure and
-   start it beside the existing Gen 2 guest services.
-2. Route one authorized CoDev file, Git status/diff, and terminal operation
-   through a CoDev API adapter to the host service.
-3. Run one Superset terminal agent through the same adapter, scoped to one
-   selected worktree and the requesting member's credential profile.
-4. Add a second worktree and a second concurrent agent; verify the CoDev page
-   can list and inspect both without switching top-level workspaces.
-5. Connect CodeMirror/Yjs to that worktree and reconcile a human edit with an
-   external agent write.
-6. Verify a host restart and Gen 2 snapshot/restore preserve files, worktrees,
-   agent mappings, and recoverable session state.
+1. Keep the Gen 2 host and guest lifecycle reliable across create, open,
+   restart, hibernation, restore, and deletion. The health endpoint only proves
+   that the host service starts; it does not prove workspace operations.
+2. Ship the FilePane and CodeEditor slice, backed by the smallest authorized
+   CoDev file API and CoDev's Yjs/presence adapter.
+3. Ship the terminal slice, followed by Git status/diff and worktree selection,
+   with every panel scoped to the same selected branch.
+4. Ship agent, session, and subagent panels. A launch is scoped to the
+   requesting member's credential profile and a selected worktree.
+5. Add a second worktree and a second concurrent agent; verify the page can
+   show both branches, sessions, files, and diffs together.
+6. Add preview if it remains useful after the other panels, then verify host
+   restart and Gen 2 snapshot/restore preserve files, worktrees, agent
+   mappings, and recoverable session state.
+
+For each feature slice, one contributor can own the guest adapter and CoDev
+API contract while another owns the Superset component adaptation and browser
+interaction. Integrate after the feature's end-to-end check passes, then begin
+the next slice.
 
 This map is complete when the selected source set, browser adaptation list,
 cloud-only seams, and isolated build boundary are understood. Passing the
