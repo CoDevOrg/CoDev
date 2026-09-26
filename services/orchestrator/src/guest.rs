@@ -381,7 +381,10 @@ impl GuestService {
         }
         self.superset_bridge_request(
             "GET",
-            &format!("/codev/files?worktreeId={}", percent_encode(&request.worktree_id)),
+            &format!(
+                "/codev/files?worktreeId={}",
+                percent_encode(&request.worktree_id)
+            ),
             &[],
         )
     }
@@ -461,8 +464,12 @@ impl GuestService {
             Ok(connection) => connection,
             Err(_) => return GuestResponse::error(503, "Superset host service is unavailable"),
         };
-        if connection.set_read_timeout(Some(Duration::from_secs(35))).is_err()
-            || connection.set_write_timeout(Some(Duration::from_secs(5))).is_err()
+        if connection
+            .set_read_timeout(Some(Duration::from_secs(35)))
+            .is_err()
+            || connection
+                .set_write_timeout(Some(Duration::from_secs(5)))
+                .is_err()
         {
             return GuestResponse::error(503, "Superset host service is unavailable");
         }
@@ -470,7 +477,8 @@ impl GuestService {
             "{method} {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nAccept: application/json\r\nContent-Type: application/json\r\nContent-Length: {}\r\nx-codev-bridge-secret: {secret}\r\nConnection: close\r\n\r\n",
             body.len(),
         );
-        if connection.write_all(request.as_bytes()).is_err() || connection.write_all(body).is_err() {
+        if connection.write_all(request.as_bytes()).is_err() || connection.write_all(body).is_err()
+        {
             return GuestResponse::error(503, "Superset host service is unavailable");
         }
         let mut raw = Vec::new();

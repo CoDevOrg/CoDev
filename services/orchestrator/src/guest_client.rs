@@ -81,10 +81,7 @@ impl GuestClient {
             .await
     }
 
-    pub async fn superset_file_changes(
-        &self,
-        worktree_id: &str,
-    ) -> Result<serde_json::Value> {
+    pub async fn superset_file_changes(&self, worktree_id: &str) -> Result<serde_json::Value> {
         self.request(
             "POST",
             "/v1/superset/file/changes",

@@ -423,7 +423,9 @@ async fn superset_write_file(
     if request.worktree_id.is_none() {
         return Err(RuntimeError::BadRequest("worktree ID is required".into()));
     }
-    Ok(Json(backend.superset_write_file(&workspace_id, &request).await?))
+    Ok(Json(
+        backend.superset_write_file(&workspace_id, &request).await?,
+    ))
 }
 
 async fn superset_file_changes(

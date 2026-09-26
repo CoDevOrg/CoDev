@@ -309,7 +309,9 @@ impl Backend {
                 "Superset host service is unavailable in the fake backend".into(),
             )),
             #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => backend.superset_list_files(workspace_id, worktree_id).await,
+            Self::Firecracker(backend) => {
+                backend.superset_list_files(workspace_id, worktree_id).await
+            }
         }
     }
 
@@ -324,7 +326,11 @@ impl Backend {
                 "Superset host service is unavailable in the fake backend".into(),
             )),
             #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => backend.superset_read_file(workspace_id, path, worktree_id).await,
+            Self::Firecracker(backend) => {
+                backend
+                    .superset_read_file(workspace_id, path, worktree_id)
+                    .await
+            }
         }
     }
 
@@ -352,7 +358,11 @@ impl Backend {
                 "Superset host service is unavailable in the fake backend".into(),
             )),
             #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => backend.superset_file_changes(workspace_id, worktree_id).await,
+            Self::Firecracker(backend) => {
+                backend
+                    .superset_file_changes(workspace_id, worktree_id)
+                    .await
+            }
         }
     }
 
