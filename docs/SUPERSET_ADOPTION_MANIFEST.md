@@ -34,8 +34,21 @@ The current concrete reuse is the separately built Superset host artifact, its
 PTY daemon and host-local persistence, and the private CoDev file bridge. The
 feature-gated file operations traverse CoDev authorization, the orchestrator,
 `codev-guestd`, and the host service rather than reimplementing file management
-in the browser. Terminal, Git/worktree, and agent-session replacement remain
-the next proof points.
+in the browser.
+
+The next slice is implemented behind `CODEV_SUPERSET_RUNTIME_ENABLED=true`:
+Superset's host service owns terminal lifecycle, Git status/diff, and managed
+branch-worktree creation/listing. CoDev keeps the public routes, membership and
+role checks, then sends a private request through the orchestrator and
+`codev-guestd`; the browser never receives the host bridge secret. Terminal
+requests select a worktree (defaulting to `main`), and the host verifies that a
+session belongs to that worktree before accepting input, resize, poll, or
+close. CoDev-launched shells omit Superset's host-wide provider account and
+run through `codev-shell`, never as the host-service account.
+
+This is still an internal flag-gated integration, not a rollout: it requires a
+guest-image smoke test before enabling it for members. Superset agent-session
+replacement and the per-launch provider credential adapter remain unbuilt.
 
 After the terminal, Git status/diff, and worktree bridge slice, make a stop/go
 decision. If those operations cannot run through the real Superset host service

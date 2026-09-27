@@ -115,6 +115,16 @@ impl GuestClient {
             .await
     }
 
+    pub async fn superset_runtime(
+        &self,
+        method: &str,
+        operation: &str,
+        body: Option<&serde_json::Value>,
+    ) -> Result<serde_json::Value> {
+        self.request(method, &format!("/v1/superset/runtime/{operation}"), body)
+            .await
+    }
+
     pub async fn flush_workspace(&self) -> Result<()> {
         self.request::<(), serde_json::Value>("POST", "/v1/workspace/flush", None)
             .await

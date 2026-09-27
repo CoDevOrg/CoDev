@@ -7,9 +7,19 @@ import {
   sendSandboxTerminalInput,
   startSandboxTerminal,
 } from "../runtime/orchestrator-terminals";
+import {
+  closeSupersetTerminal,
+  pollSupersetTerminal,
+  resizeSupersetTerminal,
+  sendSupersetTerminalInput,
+  startSupersetTerminal,
+} from "../runtime/orchestrator-superset-runtime";
 import { canRunGen2Agent } from "./agent-policy";
 import { Gen2LifecycleError } from "./errors";
 import { requireGen2Member } from "./workspaces";
+import { isGen2SupersetRuntimeEnabled } from "./superset-runtime-feature";
+
+const PRIMARY_WORKTREE_ID = "main";
 
 /**
  * A shell on the workspace's own machine — the same `/workspace` Codex edits.
@@ -37,10 +47,20 @@ async function requireReadyMember(workspaceId: string, userId: string) {
 export async function startGen2Terminal(
   workspaceId: string,
   userId: string,
-  size: { rows: number; columns: number },
+  size: { rows: number; columns: number; worktreeId?: string },
 ) {
   await requireReadyMember(workspaceId, userId);
-  return startSandboxTerminal(workspaceId, size);
+  if (isGen2SupersetRuntimeEnabled()) {
+    return startSupersetTerminal(workspaceId, {
+      worktreeId: size.worktreeId ?? PRIMARY_WORKTREE_ID,
+      rows: size.rows,
+      columns: size.columns,
+    });
+  }
+  return startSandboxTerminal(workspaceId, {
+    rows: size.rows,
+    columns: size.columns,
+  });
 }
 
 export async function sendGen2TerminalInput(
@@ -48,8 +68,17 @@ export async function sendGen2TerminalInput(
   userId: string,
   sessionId: string,
   data: string,
+  worktreeId = PRIMARY_WORKTREE_ID,
 ) {
   await requireGen2Member(workspaceId, userId);
+  if (isGen2SupersetRuntimeEnabled()) {
+    await sendSupersetTerminalInput(workspaceId, {
+      worktreeId,
+      sessionId,
+      data,
+    });
+    return;
+  }
   await sendSandboxTerminalInput(workspaceId, sessionId, data);
 }
 
@@ -58,8 +87,17 @@ export async function resizeGen2Terminal(
   userId: string,
   sessionId: string,
   size: { rows: number; columns: number },
+  worktreeId = PRIMARY_WORKTREE_ID,
 ) {
   await requireGen2Member(workspaceId, userId);
+  if (isGen2SupersetRuntimeEnabled()) {
+    await resizeSupersetTerminal(workspaceId, {
+      worktreeId,
+      sessionId,
+      ...size,
+    });
+    return;
+  }
   await resizeSandboxTerminal(workspaceId, sessionId, size);
 }
 
@@ -68,8 +106,16 @@ export async function pollGen2Terminal(
   userId: string,
   sessionId: string,
   after: number,
+  worktreeId = PRIMARY_WORKTREE_ID,
 ) {
   await requireGen2Member(workspaceId, userId);
+  if (isGen2SupersetRuntimeEnabled()) {
+    return pollSupersetTerminal(workspaceId, {
+      worktreeId,
+      sessionId,
+      after,
+    });
+  }
   return pollSandboxTerminal(workspaceId, sessionId, after);
 }
 
@@ -77,7 +123,12 @@ export async function closeGen2Terminal(
   workspaceId: string,
   userId: string,
   sessionId: string,
+  worktreeId = PRIMARY_WORKTREE_ID,
 ) {
   await requireGen2Member(workspaceId, userId);
+  if (isGen2SupersetRuntimeEnabled()) {
+    await closeSupersetTerminal(workspaceId, { sessionId, worktreeId });
+    return;
+  }
   await closeSandboxTerminal(workspaceId, sessionId);
 }

@@ -1020,6 +1020,39 @@ export function writeInputToSession({
 	return { success: true };
 }
 
+/** Resize a headless bridge session without requiring a renderer WebSocket. */
+export async function resizeTerminalSession({
+	terminalId,
+	workspaceId,
+	columns,
+	rows,
+	db,
+	eventBus,
+}: {
+	terminalId: string;
+	workspaceId: string;
+	columns: number;
+	rows: number;
+	db: HostDb;
+	eventBus?: EventBus;
+}): Promise<{ success: true } | TerminalSessionError> {
+	const session = await getOrAdoptSession({
+		terminalId,
+		workspaceId,
+		db,
+		eventBus,
+	});
+	if ("error" in session) return session;
+	if (session.exited) {
+		return { kind: "SESSION_EXITED", error: "Terminal session has exited" };
+	}
+	const cols = Math.max(MIN_TERMINAL_COLS, Math.floor(columns));
+	const nextRows = Math.max(MIN_TERMINAL_ROWS, Math.floor(rows));
+	session.pty.resize(cols, nextRows);
+	session.modeTracker.resize(cols, nextRows);
+	return { success: true };
+}
+
 // Compatibility with daemons predating the replay-complete checkpoint.
 const ADOPTION_REPLAY_WAIT_MS = 500;
 
@@ -2841,6 +2874,11 @@ interface CreateTerminalSessionOptions {
 	listed?: boolean;
 	cols?: number;
 	rows?: number;
+	/** CoDev shells must not inherit a host-wide provider account. */
+	includeDefaultAccountEnv?: boolean;
+	/** Trusted host callers may replace the login shell for an unprivileged launcher. */
+	shell?: string;
+	shellArgs?: string[];
 	/** Only recover an already-live daemon session; never spawn a new PTY. */
 	adoptOnly?: boolean;
 	/**
@@ -2927,6 +2965,9 @@ async function createTerminalSessionUnlocked({
 	listed = true,
 	cols: requestedCols,
 	rows: requestedRows,
+	includeDefaultAccountEnv = true,
+	shell: shellOverride,
+	shellArgs: shellArgsOverride,
 	adoptOnly = false,
 	restoredNotice = false,
 }: CreateTerminalSessionOptions): Promise<
@@ -3015,8 +3056,8 @@ async function createTerminalSessionUnlocked({
 	// without it the wrapper paths, hook guard env, and shell bootstrap all
 	// silently disable (#6254).
 	const supersetHomeDir = resolveSupersetHomeDir();
-	const shell = resolveLaunchShell(baseEnv);
-	const shellArgs = getShellLaunchArgs({ shell, supersetHomeDir });
+	const shell = shellOverride ?? resolveLaunchShell(baseEnv);
+	const shellArgs = shellArgsOverride ?? getShellLaunchArgs({ shell, supersetHomeDir });
 	const ptyEnv = {
 		...buildV2TerminalEnv({
 			baseEnv,
@@ -3038,7 +3079,7 @@ async function createTerminalSessionUnlocked({
 		// Usage-tab default account: provider CLIs typed or preset-launched in
 		// this terminal run on the selected login. Baked at spawn as the fast
 		// path; the agent wrappers re-resolve later switches at launch time.
-		...resolveDefaultAccountTerminalEnv(db),
+		...(includeDefaultAccountEnv ? resolveDefaultAccountTerminalEnv(db) : {}),
 		SUPERSET_ACCOUNT_ATTRIBUTION_TOKEN: issueAttributionToken(terminalId),
 	};
 

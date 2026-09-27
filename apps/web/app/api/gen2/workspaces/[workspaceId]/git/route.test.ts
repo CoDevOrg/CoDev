@@ -38,8 +38,28 @@ describe("gen2 git route", () => {
     const response = await GET(new Request(`${url}?operation=status`), {
       params,
     });
-    expect(mocks.git).toHaveBeenCalledWith(workspaceId, userId, "status");
+    expect(mocks.git).toHaveBeenCalledWith(
+      workspaceId,
+      userId,
+      "status",
+      "main",
+    );
     expect(await response.json()).toEqual({ output: "## main\n M a.ts\n" });
+  });
+
+  it("reads Git state from the selected worktree", async () => {
+    mocks.git.mockResolvedValue("## codev/agent-a\n");
+    const response = await GET(
+      new Request(`${url}?operation=status&worktreeId=agent-a`),
+      { params },
+    );
+    expect(mocks.git).toHaveBeenCalledWith(
+      workspaceId,
+      userId,
+      "status",
+      "agent-a",
+    );
+    expect(await response.json()).toEqual({ output: "## codev/agent-a\n" });
   });
 
   it("rejects an operation it does not serve", async () => {

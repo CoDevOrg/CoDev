@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   requireMember: vi.fn(),
@@ -7,6 +7,11 @@ const mocks = vi.hoisted(() => ({
   resize: vi.fn(),
   poll: vi.fn(),
   close: vi.fn(),
+  supersetStart: vi.fn(),
+  supersetInput: vi.fn(),
+  supersetResize: vi.fn(),
+  supersetPoll: vi.fn(),
+  supersetClose: vi.fn(),
 }));
 
 vi.mock("./workspaces", () => ({
@@ -21,6 +26,15 @@ vi.mock("../runtime/orchestrator-terminals", () => ({
   closeSandboxTerminal: (...args: unknown[]) => mocks.close(...args),
 }));
 
+vi.mock("../runtime/orchestrator-superset-runtime", () => ({
+  startSupersetTerminal: (...args: unknown[]) => mocks.supersetStart(...args),
+  sendSupersetTerminalInput: (...args: unknown[]) =>
+    mocks.supersetInput(...args),
+  resizeSupersetTerminal: (...args: unknown[]) => mocks.supersetResize(...args),
+  pollSupersetTerminal: (...args: unknown[]) => mocks.supersetPoll(...args),
+  closeSupersetTerminal: (...args: unknown[]) => mocks.supersetClose(...args),
+}));
+
 const {
   closeGen2Terminal,
   pollGen2Terminal,
@@ -31,10 +45,12 @@ const {
 const workspaceId = "11111111-1111-4111-8111-111111111111";
 const userId = "22222222-2222-4222-8222-222222222222";
 const sessionId = "term-1-2";
+const originalSupersetRuntime = process.env.CODEV_SUPERSET_RUNTIME_ENABLED;
 
 describe("gen2 terminals", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    delete process.env.CODEV_SUPERSET_RUNTIME_ENABLED;
     mocks.requireMember.mockResolvedValue({
       id: workspaceId,
       status: "ready",
@@ -90,4 +106,26 @@ describe("gen2 terminals", () => {
     await sendGen2TerminalInput(workspaceId, userId, sessionId, "ls\n");
     expect(mocks.input).toHaveBeenCalledWith(workspaceId, sessionId, "ls\n");
   });
+
+  it("uses the Superset terminal lifecycle when the runtime flag is enabled", async () => {
+    process.env.CODEV_SUPERSET_RUNTIME_ENABLED = "true";
+    mocks.supersetStart.mockResolvedValue(sessionId);
+    await expect(
+      startGen2Terminal(workspaceId, userId, { rows: 24, columns: 80 }),
+    ).resolves.toBe(sessionId);
+    expect(mocks.supersetStart).toHaveBeenCalledWith(workspaceId, {
+      worktreeId: "main",
+      rows: 24,
+      columns: 80,
+    });
+    expect(mocks.start).not.toHaveBeenCalled();
+  });
+});
+
+afterEach(() => {
+  if (originalSupersetRuntime === undefined) {
+    delete process.env.CODEV_SUPERSET_RUNTIME_ENABLED;
+  } else {
+    process.env.CODEV_SUPERSET_RUNTIME_ENABLED = originalSupersetRuntime;
+  }
 });

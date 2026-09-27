@@ -1,6 +1,7 @@
 import {
   gen2TerminalActionSchema,
   gen2TerminalSessionIdSchema,
+  gen2SupersetWorktreeIdSchema,
 } from "@codev/contracts";
 
 import { ApiError, readJson, withUser } from "@/lib/http/api-route";
@@ -31,10 +32,17 @@ export const POST = withUser<Params>(
           user.id,
           input.sessionId,
           input.data,
+          input.worktreeId,
         );
         return new Response(null, { status: 204 });
       case "resize":
-        await resizeGen2Terminal(workspaceId, user.id, input.sessionId, input);
+        await resizeGen2Terminal(
+          workspaceId,
+          user.id,
+          input.sessionId,
+          input,
+          input.worktreeId,
+        );
         return new Response(null, { status: 204 });
       case "poll":
         return Response.json(
@@ -43,6 +51,7 @@ export const POST = withUser<Params>(
             user.id,
             input.sessionId,
             input.after,
+            input.worktreeId,
           ),
         );
     }
@@ -55,10 +64,18 @@ export const DELETE = withUser<Params>(
     const sessionId = gen2TerminalSessionIdSchema.safeParse(
       new URL(request.url).searchParams.get("sessionId"),
     );
-    if (!sessionId.success) {
+    const worktreeId = gen2SupersetWorktreeIdSchema.safeParse(
+      new URL(request.url).searchParams.get("worktreeId") ?? "main",
+    );
+    if (!sessionId.success || !worktreeId.success) {
       throw new ApiError("A valid terminal session is required.", 400);
     }
-    await closeGen2Terminal(workspaceId, user.id, sessionId.data);
+    await closeGen2Terminal(
+      workspaceId,
+      user.id,
+      sessionId.data,
+      worktreeId.data,
+    );
     return new Response(null, { status: 204 });
   },
   { errorStatus: 502 },

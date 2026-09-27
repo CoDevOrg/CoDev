@@ -127,6 +127,18 @@ creation of further workspaces; using it unchanged cannot meet the
 multiple-worktree requirement. The CoDev mode must not inherit Superset's
 host-wide managed provider environment for multi-member agent sessions.
 
+### Current bridge boundary
+
+`CODEV_SUPERSET_RUNTIME_ENABLED` is deliberately off by default. When enabled
+for an internal workspace, the existing authenticated terminal and Git routes
+call the private Superset runtime bridge for the selected worktree; the
+`/superset/worktrees` route lists and creates host-owned checkouts. Members can
+read Git and use terminals, while only editors and owners can create a
+worktree. The host service validates its bridge credential and terminal
+worktree ownership; it starts CoDev shells via `codev-shell` without a
+host-wide Superset provider account. Do not enable the flag in production until
+the guest image has passed an end-to-end terminal, Git, and worktree smoke test.
+
 ## Phase 1 proof and exit criteria
 
 The first implementation phase is an internal, flag-gated prototype. It is

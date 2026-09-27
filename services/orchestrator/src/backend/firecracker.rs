@@ -821,6 +821,24 @@ impl FirecrackerBackend {
         machine.guest.superset_file_changes(worktree_id).await
     }
 
+    pub async fn superset_runtime(
+        &self,
+        workspace_id: &str,
+        method: &str,
+        operation: &str,
+        body: Option<&serde_json::Value>,
+    ) -> Result<serde_json::Value> {
+        let machine = self.machine(workspace_id).await?;
+        let result = machine
+            .guest
+            .superset_runtime(method, operation, body)
+            .await?;
+        if !(method == "POST" && operation == "terminal/poll") {
+            self.mark_activity(&machine);
+        }
+        Ok(result)
+    }
+
     pub async fn write_file(
         &self,
         workspace_id: &str,
