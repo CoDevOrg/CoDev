@@ -130,19 +130,3 @@ export const supersetHighlighting = syntaxHighlighting(
     { tag: [tags.invalid], color: "#ffcccc" },
   ]),
 );
-
-/** Superset renders these Lucide-compatible markers rather than text glyphs. */
-export function buildSupersetFoldChevron(open: boolean): HTMLElement {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("fill", "none");
-  svg.setAttribute("stroke", "currentColor");
-  svg.setAttribute("stroke-width", "2");
-  svg.setAttribute("stroke-linecap", "round");
-  svg.setAttribute("stroke-linejoin", "round");
-  svg.setAttribute("class", "cm-foldChevron");
-  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  path.setAttribute("d", open ? "m6 9 6 6 6-6" : "m9 18 6-6-6-6");
-  svg.appendChild(path);
-  return svg as unknown as HTMLElement;
-}

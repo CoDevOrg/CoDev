@@ -1,17 +1,10 @@
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   list: vi.fn(),
   read: vi.fn(),
   save: vi.fn(),
-  changes: vi.fn(),
   create: vi.fn(),
 }));
 
@@ -21,7 +14,18 @@ vi.mock("./superset-file-client", async (importOriginal) => ({
   readSupersetFile: mocks.read,
   saveSupersetFile: mocks.save,
   createSupersetEntry: mocks.create,
-  listSupersetFileChanges: mocks.changes,
+}));
+
+vi.mock("./use-gen2-shared-file-document", () => ({
+  useGen2SharedFileDocument: () => ({
+    text: null,
+    awareness: null,
+    state: "connected",
+    notice: null,
+    members: [],
+    updateCursor: vi.fn(),
+    readOnly: false,
+  }),
 }));
 
 vi.mock("./superset-code-editor", () => ({
@@ -75,11 +79,14 @@ describe("SupersetFilePane", () => {
         revision: "rev-2",
       }),
     );
-    mocks.changes.mockResolvedValue([]);
     mocks.create.mockImplementation(
       async (
         _id: string,
-        input: { name: string; kind: "file" | "directory" },
+        input: {
+          parentPath: string;
+          name: string;
+          kind: "file" | "directory";
+        },
       ) =>
         input.kind === "file"
           ? { path: input.name, kind: "file", size: 0 }
@@ -123,9 +130,7 @@ describe("SupersetFilePane", () => {
         "export const live = true;",
       ),
     );
-    expect(await screen.findByRole("status", { name: "" })).toHaveTextContent(
-      "File saved.",
-    );
+    expect(await screen.findByText("File saved.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
 
@@ -156,38 +161,6 @@ describe("SupersetFilePane", () => {
       expect(screen.getByLabelText("Code")).toHaveValue("external edit"),
     );
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-  });
-
-  it("flags an external change while the current file has unsaved edits", async () => {
-    let poll: (() => void) | undefined;
-    vi.spyOn(window, "setInterval").mockImplementation((callback, delay) => {
-      if (delay === 10_000) poll = callback as () => void;
-      return 1 as unknown as ReturnType<typeof setInterval>;
-    });
-    vi.spyOn(window, "clearInterval").mockImplementation(() => {});
-    render(<SupersetFilePane workspaceId={workspaceId} canEdit />);
-    fireEvent.change(await screen.findByLabelText("Code"), {
-      target: { value: "keep this draft" },
-    });
-    mocks.changes.mockResolvedValueOnce([
-      {
-        type: "file.changed",
-        worktreeId: "main",
-        path: firstFile.path,
-        revision: "rev-2",
-        origin: "external",
-      },
-    ]);
-
-    act(() => poll?.());
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "changed elsewhere",
-    );
-    expect(screen.getByLabelText("Code")).toHaveValue("keep this draft");
-    expect(
-      screen.getByRole("button", { name: "Copy changes" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
 
   it("shows a read-only editor to workspace viewers", async () => {
@@ -225,6 +198,7 @@ describe("SupersetFilePane", () => {
 
     await waitFor(() =>
       expect(mocks.create).toHaveBeenCalledWith(workspaceId, {
+        parentPath: "",
         name: newFile.path,
         kind: "file",
       }),
@@ -236,9 +210,9 @@ describe("SupersetFilePane", () => {
         undefined,
       ),
     );
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "File notes.md created.",
-    );
+    expect(
+      await screen.findByText("File notes.md created."),
+    ).toBeInTheDocument();
   });
 
   it("creates an empty folder without replacing an unsaved draft", async () => {
@@ -255,13 +229,14 @@ describe("SupersetFilePane", () => {
 
     await waitFor(() =>
       expect(mocks.create).toHaveBeenCalledWith(workspaceId, {
+        parentPath: "",
         name: "notes",
         kind: "directory",
       }),
     );
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "Folder notes created.",
-    );
+    expect(
+      await screen.findByText("Folder notes created."),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText("Code")).toHaveValue("keep this draft");
   });
 });

@@ -1019,6 +1019,18 @@
   gap: 2px;
 }
 
+/* A quiet, text-first live region keeps collaboration state visible without
+   competing with the file name or changing the editor's layout. */
+.gen2-superset-collaboration-state {
+  max-width: 12rem;
+  overflow: hidden;
+  color: var(--ss-muted-foreground);
+  font-size: 0.6875rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .gen2-superset-create-entry {
   display: grid;
   gap: 8px;
@@ -1113,6 +1125,83 @@
   color: var(--ss-foreground);
   font-family: inherit;
   font-size: 0.75rem;
+}
+
+.gen2-superset-tree-row {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.gen2-superset-tree-row .gen2-superset-folder,
+.gen2-superset-tree-row .gen2-superset-file {
+  flex: 1;
+  min-width: 0;
+}
+
+.gen2-superset-tree-action {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  min-height: 28px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ss-muted-foreground);
+  cursor: pointer;
+}
+
+.gen2-superset-tree-action:hover,
+.gen2-superset-tree-action[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--ss-foreground) 7%, transparent);
+  color: var(--ss-foreground);
+}
+
+.gen2-superset-tree-action:focus-visible {
+  outline: 2px solid var(--ss-highlight);
+  outline-offset: -2px;
+}
+
+.gen2-superset-tree-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
+}
+
+.gen2-superset-entry-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 3px 8px 7px 30px;
+}
+
+.gen2-superset-entry-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 26px;
+  border: 1px solid var(--ss-border);
+  border-radius: 4px;
+  background: var(--ss-secondary);
+  color: var(--ss-foreground);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.6875rem;
+  padding: 3px 6px;
+}
+
+.gen2-superset-entry-actions button:hover {
+  border-color: var(--ss-muted-foreground);
+}
+
+.gen2-superset-entry-actions button:focus-visible {
+  outline: 2px solid var(--ss-highlight);
+  outline-offset: 1px;
+}
+
+.gen2-superset-entry-actions .gen2-superset-destructive {
+  color: #ffb4a9;
 }
 
 .gen2-superset-folder {
@@ -1239,6 +1328,78 @@
 .gen2-superset-icon-button:disabled {
   cursor: not-allowed;
   opacity: 0.38;
+}
+
+.gen2-superset-dialog-backdrop {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(0 0 0 / 58%);
+}
+
+.gen2-superset-dialog {
+  width: min(100%, 25rem);
+  padding: 18px;
+  border: 1px solid var(--ss-border);
+  border-radius: 9px;
+  background: var(--ss-card);
+  box-shadow: 0 16px 48px rgb(0 0 0 / 38%);
+  color: var(--ss-foreground);
+}
+
+.gen2-superset-dialog h2 {
+  margin: 0;
+  font-size: 0.9375rem;
+}
+
+.gen2-superset-dialog p {
+  margin: 9px 0 0;
+  color: var(--ss-muted-foreground);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.gen2-superset-dialog strong {
+  color: var(--ss-foreground);
+}
+
+.gen2-superset-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.gen2-superset-dialog-actions button {
+  min-height: 32px;
+  border: 1px solid var(--ss-border);
+  border-radius: 5px;
+  background: var(--ss-secondary);
+  color: var(--ss-foreground);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.75rem;
+  padding: 5px 9px;
+}
+
+.gen2-superset-dialog-actions .gen2-superset-dialog-delete {
+  border-color: #b64c43;
+  background: #a83d35;
+  color: #fff8f6;
+}
+
+.gen2-superset-dialog-actions button:focus-visible {
+  outline: 2px solid var(--ss-highlight);
+  outline-offset: 2px;
+}
+
+.gen2-superset-dialog-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .gen2-superset-notice {

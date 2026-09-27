@@ -1,7 +1,7 @@
 # Superset adoption manifest
 
 **Status:** Design; incremental adoption plan, not an implementation guarantee
-**Date:** 2026-09-24
+**Date:** 2026-09-27
 
 ## Source pin
 
@@ -16,6 +16,48 @@ The root Git commit that imported the snapshot is
 Keep the snapshot available for review and upstream updates, but build only
 the packages needed by CoDev. This map selects an integration slice; it does
 not recommend importing the whole Superset application into the web app.
+
+## Adoption decision: replace, do not duplicate
+
+The vendor import is justified only when Superset host-service code replaces a
+corresponding Gen 2 guest capability. It is not a component gallery or a source
+of interaction ideas for a parallel CoDev implementation.
+
+For every adopted capability, the change must name: the Superset host-service
+module that runs in the guest, the narrow CoDev gateway/adapter that authorizes
+it, the old Gen 2 path that becomes a temporary fallback or is removed, and an
+end-to-end acceptance check. Do not add the same filesystem, PTY, Git,
+worktree, watcher, or agent-session behavior to both `codev-guestd` and the
+Superset host service.
+
+The current concrete reuse is the separately built Superset host artifact, its
+PTY daemon and host-local persistence, and the private CoDev file bridge. The
+feature-gated file operations traverse CoDev authorization, the orchestrator,
+`codev-guestd`, and the host service rather than reimplementing file management
+in the browser. Terminal, Git/worktree, and agent-session replacement remain
+the next proof points.
+
+After the terminal, Git status/diff, and worktree bridge slice, make a stop/go
+decision. If those operations cannot run through the real Superset host service
+with less duplicated guest code than the existing Gen 2 implementation, stop
+the migration rather than retaining the vendor tree as reference material.
+
+### Provider connection and agent-launch contract
+
+Superset configures and supervises a CLI process; it is not CoDev's provider
+connection system. For every launch, CoDev selects the requesting member's
+eligible connection, enforces role and quota checks, reserves any required
+provider lease, and creates a one-launch private credential profile. The guest
+delivers that profile only to the selected Superset agent process in its
+selected worktree. The browser, ordinary terminals, other members, and other
+agent processes cannot read it.
+
+If a provider refreshes its CLI cache, the host returns the updated material
+through the trusted guest/orchestrator path for CoDev to encrypt and persist;
+CoDev then releases the lease and removes the private profile. Do not use
+Superset host-wide default accounts, Superset cloud auth, member cookies, or a
+shared process environment for a CoDev agent launch. CoDev remains the source
+of truth for connection status, metering, actor attribution, and audit events.
 
 ## Build and tooling boundary
 
@@ -168,22 +210,49 @@ that host package into the web dependency graph.
 
 ### Incremental browser integration
 
-Do not design a complete replacement API before building the UI. Integrate one
-Superset workspace feature at a time:
+Integrate one runtime replacement at a time; do not port a Superset panel
+ahead of the guest capability it represents:
 
-1. Adapt the selected Superset component into the CoDev browser shell and
-   remove or replace its Electron-only dependencies.
-2. Define the smallest CoDev browser API contract that component requires.
-   The route authenticates the member, checks permissions and quota, then
+1. Extend the CoDev-specific bridge in the vendored host service and prove the
+   selected filesystem, terminal, Git, worktree, or agent operation runs there.
+   `codev-guestd` is limited to validation, bridge authentication, and transport
+   while that transition is in progress.
+2. Define the smallest typed CoDev gateway contract. The route authenticates
+   the member, checks permissions and quota, persists any CoDev mapping, then
    forwards the authorized operation to the private host service.
-3. Connect the component to the selected worktree and verify it in a real Gen
-   2 workspace before starting the next feature.
+3. Only after the host path works, adapt the selected Superset component into
+   the CoDev browser shell and replace its Electron-only dependencies with the
+   browser-safe CoDev client facade.
+4. Verify the selected worktree in a real Gen 2 workspace, identify the old
+   path to retire or retain behind the feature flag, and only then begin the
+   next capability.
 
 The first browser slice is the Superset `FilePane` and `CodeEditor`.
 Its CoDev adapter must support file listing, read, revision-checked save,
 external-change notification, Yjs document binding, and shared presence.
 Finish that slice only when two members can edit the same file and an agent
 write is reconciled without silently losing either person's work.
+
+### Shared-editor implementation (awaiting real-workspace verification)
+
+The Gen 2 FilePane/CodeEditor adapter is implemented, but is not yet a shipped
+claim. It uses a Gen 2-scoped Yjs snapshot table and an authenticated CoDev
+WebSocket; it does not reuse the Gen 1 worktree snapshot identity. CodeMirror
+writes to the open file's `Y.Text`, while revision-checked file save remains
+the durable persistence boundary.
+
+The adapter reuses CoDev's browser-safe Yjs update, awareness, Redis fan-out,
+and conflict patterns. It does not import Superset's desktop document store,
+Electron bridge, host client, or desktop settings. The editor currently shows
+shared/syncing/conflict state; remote cursor decorations and richer member UI
+remain follow-up work. Codex file-change events reconcile an open shared
+document when a turn completes and publish either the reconciled document or a
+non-destructive conflict.
+
+Before treating this slice as complete, verify in a real shared Gen 2
+workspace: concurrent edits by two members, viewer write denial, reconnect,
+revision conflict recovery, and an agent write that both cleanly reconciles
+and conflicts with an in-flight member edit.
 
 After files and the shared editor, add Superset's terminal, changes/Git and
 branch-worktree panels, then agent and subagent/session panels, then preview.
@@ -206,14 +275,20 @@ Do not include in the first browser slice:
 1. Keep the Gen 2 host and guest lifecycle reliable across create, open,
    restart, hibernation, restore, and deletion. The health endpoint only proves
    that the host service starts; it does not prove workspace operations.
-2. Ship the FilePane and CodeEditor slice, backed by the smallest authorized
-   CoDev file API and CoDev's Yjs/presence adapter.
-3. Ship the terminal slice, followed by Git status/diff and worktree selection,
-   with every panel scoped to the same selected branch.
-4. Ship agent, session, and subagent panels. A launch is scoped to the
-   requesting member's credential profile and a selected worktree.
-5. Add a second worktree and a second concurrent agent; verify the page can
-   show both branches, sessions, files, and diffs together.
+2. Verify the implemented file replacement in a real shared Gen 2 workspace:
+   the Superset file bridge, CoDev Yjs/presence adapter, revision recovery,
+   reconnect, role denial, and both clean and conflicting agent writes.
+3. Extend the Superset host bridge for terminal, Git status/diff, and worktree
+   selection. Replace the matching Gen 2 guest paths; do not build a second
+   implementation. Port the matching panels only after their host operations
+   are verified.
+4. Replace fresh `codex exec`/poll turns with Superset terminal-agent sessions.
+   CoDev persists the workspace/worktree/host-session mapping, selects the
+   requesting member's credential profile, authorizes and meters the launch,
+   and owns durable activity and recovery state.
+5. Add a second worktree and a second concurrent agent. Independent agents use
+   isolated worktrees; human coediting stays in the selected integration
+   worktree unless an explicit exclusive claim permits an agent write there.
 6. Add preview if it remains useful after the other panels, then verify host
    restart and Gen 2 snapshot/restore preserve files, worktrees, agent
    mappings, and recoverable session state.
