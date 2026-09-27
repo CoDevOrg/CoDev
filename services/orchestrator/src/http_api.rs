@@ -63,6 +63,7 @@ pub fn router(backend: SharedBackend, ide: IdeBackend) -> Router {
         )
         .route("/v1/sandboxes/{workspace_id}/resume", post(resume_sandbox))
         .route("/v1/sandboxes/{workspace_id}/activity", post(touch_sandbox))
+        .route("/v1/sandboxes/{workspace_id}/park", post(park_sandbox))
         .route(
             "/v1/sandboxes/{workspace_id}/ide",
             post(start_ide).get(get_ide).delete(stop_ide),
@@ -336,6 +337,15 @@ async fn touch_sandbox(
 ) -> Result<Json<serde_json::Value>> {
     validate_workspace_id(&workspace_id)?;
     let instance = backend.touch(&workspace_id).await?;
+    Ok(Json(serde_json::json!({ "sandbox": instance })))
+}
+
+async fn park_sandbox(
+    State(backend): State<SharedBackend>,
+    Path(workspace_id): Path<String>,
+) -> Result<Json<serde_json::Value>> {
+    validate_workspace_id(&workspace_id)?;
+    let instance = backend.park(&workspace_id).await?;
     Ok(Json(serde_json::json!({ "sandbox": instance })))
 }
 

@@ -47,7 +47,9 @@ function stubFetch(instance: () => Response) {
 
 const ready = () =>
   new Response(
-    JSON.stringify({ workspace: { ...workspace, status: "ready" } }),
+    JSON.stringify({
+      workspace: { ...workspace, status: "ready", sandboxId: "sandbox-1" },
+    }),
     { status: 200 },
   );
 

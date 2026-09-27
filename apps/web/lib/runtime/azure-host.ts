@@ -167,8 +167,8 @@ export async function getHostState(): Promise<HostState> {
  * right trade for a caller with no poll of its own, and the wrong one for the
  * workspace open path, which passes a small number and reports `host-starting`
  * instead. A returning member hits `stopping` routinely: the idle timer
- * deallocates at ten minutes, so coming back a moment later lands squarely on
- * it.
+ * deallocates after a one-minute quiet window, so coming back a moment later
+ * lands squarely on it.
  */
 const DEFAULT_STOPPING_ATTEMPTS = 30;
 

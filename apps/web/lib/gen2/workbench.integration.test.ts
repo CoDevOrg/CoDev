@@ -211,6 +211,25 @@ describe("gen2 workbench against the guest", () => {
     expect(second.chunks).toEqual([]);
   });
 
+  it("keeps terminal output at the next-sequence cursor", async () => {
+    const sessionId = await startGen2Terminal(workspaceId, userId, {
+      rows: 24,
+      columns: 80,
+    });
+    const first = await pollGen2Terminal(workspaceId, userId, sessionId, 0);
+
+    await sendGen2TerminalInput(workspaceId, userId, sessionId, "x");
+    const next = await pollGen2Terminal(
+      workspaceId,
+      userId,
+      sessionId,
+      first.nextSequence,
+    );
+
+    expect(next.chunks.map((chunk) => chunk.data).join("")).toContain("x");
+    await closeGen2Terminal(workspaceId, userId, sessionId);
+  });
+
   it("runs a Codex turn end to end and reduces it into activity", async () => {
     // The real command builder, the real exec transport, the real decoder and
     // the real reducer -- only the guest is doubled.

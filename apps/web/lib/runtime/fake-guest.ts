@@ -390,7 +390,9 @@ export function handleFakeGuestRequest(
       if (action === "/resize") return new Response(null, { status: 204 });
       if (action === "/poll") {
         const after = Number(input.after ?? 0);
-        const chunks = session.chunks.filter((chunk) => chunk.sequence > after);
+        const chunks = session.chunks.filter(
+          (chunk) => chunk.sequence >= after,
+        );
         return json({
           result: {
             chunks,

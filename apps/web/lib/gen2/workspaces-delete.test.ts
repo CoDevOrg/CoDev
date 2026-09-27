@@ -96,25 +96,18 @@ describe("Gen 2 workspace deletion", () => {
     mocks.databaseUpdateQuery.where.mockClear();
   });
 
-  it("wakes an unreachable host to purge workspace data before deleting", async () => {
-    mocks.destroySandbox
-      .mockRejectedValueOnce(new TypeError("fetch failed"))
-      .mockResolvedValueOnce(undefined);
-
+  it("readies the host before purging workspace data", async () => {
     await expect(
       deleteGen2Workspace("11111111-1111-4111-8111-111111111111", "user-1"),
     ).resolves.toBeUndefined();
 
     expect(mocks.ensureHostReady).toHaveBeenCalledOnce();
-    expect(mocks.destroySandbox).toHaveBeenCalledTimes(2);
+    expect(mocks.ensureHostReady).toHaveBeenCalledWith(120_000);
+    expect(mocks.destroySandbox).toHaveBeenCalledOnce();
     expect(mocks.discardSandboxSnapshot).toHaveBeenCalledOnce();
     expect(mocks.database.delete).toHaveBeenCalledOnce();
-    expect(mocks.logEvent).toHaveBeenCalledWith(
-      "warn",
-      "gen2.workspace.delete_host_unreachable",
-      expect.objectContaining({
-        workspaceId: "11111111-1111-4111-8111-111111111111",
-      }),
+    expect(mocks.ensureHostReady.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.destroySandbox.mock.invocationCallOrder[0]!,
     );
   });
 
@@ -129,6 +122,22 @@ describe("Gen 2 workspace deletion", () => {
       status: 502,
     });
 
+    expect(mocks.discardSandboxSnapshot).not.toHaveBeenCalled();
+    expect(mocks.database.delete).not.toHaveBeenCalled();
+    expect(mocks.database.update).toHaveBeenCalledOnce();
+  });
+
+  it("keeps deletion retryable when the host does not wake in time", async () => {
+    mocks.ensureHostReady.mockRejectedValue(
+      new Error("The Firecracker host is still starting."),
+    );
+
+    await expect(
+      deleteGen2Workspace("11111111-1111-4111-8111-111111111111", "user-1"),
+    ).rejects.toMatchObject({ status: 502 });
+
+    expect(mocks.ensureHostReady).toHaveBeenCalledWith(120_000);
+    expect(mocks.destroySandbox).not.toHaveBeenCalled();
     expect(mocks.discardSandboxSnapshot).not.toHaveBeenCalled();
     expect(mocks.database.delete).not.toHaveBeenCalled();
     expect(mocks.database.update).toHaveBeenCalledOnce();

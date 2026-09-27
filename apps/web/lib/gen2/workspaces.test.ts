@@ -226,6 +226,7 @@ describe("gen2 workspaces", () => {
     expect(mocks.events).toEqual([
       "lock-delete-row",
       "update:gen2_workspaces",
+      "wake-host",
       "destroy",
       "discard-snapshot",
       "delete-row",
@@ -242,14 +243,9 @@ describe("gen2 workspaces", () => {
     expect(mocks.ensureHostReady).not.toHaveBeenCalled();
   });
 
-  it("wakes an unreachable host and purges the snapshot before deletion", async () => {
+  it("wakes a stopped host before purging the snapshot", async () => {
     mocks.currentStatus = "stopped";
     mocks.memberStatus = "stopped";
-    mocks.destroySandbox
-      .mockRejectedValueOnce(new TypeError("fetch failed"))
-      .mockImplementationOnce(async () => {
-        mocks.events.push("destroy");
-      });
 
     await deleteGen2Workspace("11111111-1111-4111-8111-111111111111", "user-1");
 

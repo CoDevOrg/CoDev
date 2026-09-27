@@ -49,23 +49,25 @@ async function parseHealth(response: Response) {
 /**
  * Wait until the Firecracker host is running *and* its orchestrator answers.
  *
- * The host stops itself after ten minutes idle, so the first call after any
- * quiet period lands on a stopped instance. Starting it takes roughly ten
- * seconds before the orchestrator is even up, and longer before it serves --
- * far longer than a single provision attempt is willing to wait. Callers that
- * skip this see "Firecracker host unavailable" on the first click and success
- * on the second, which is the whole of that bug.
+ * The Azure Firecracker host deallocates after one quiet minute, so the first
+ * call after a quiet period can land on a stopped instance. Starting it takes
+ * roughly ten seconds before the orchestrator is even up, and longer before
+ * it serves -- far longer than a single provision attempt is willing to wait.
+ * Callers that skip this see "Firecracker host unavailable" on the first
+ * click and success on the second, which is the whole of that bug.
  *
- * `requestHostWake` absorbs transient EC2 failures itself and reports the host
- * as starting, so a capacity refusal or a mid-restart instance costs another
- * turn of this loop rather than failing the action outright.
+ * `requestHostWake` handles transient Azure start failures and reports the
+ * host as starting, so a capacity refusal or a mid-restart instance costs
+ * another turn of this loop rather than failing the action outright.
  */
 export async function ensureHostReady(timeoutMs = HOST_START_TIMEOUT_MS) {
   // The local stand-in has no host to wake.
   if (fakeGuestEnabled()) return;
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const state = await requestHostWake().catch(() => "starting" as const);
+    // This function owns its own poll loop; keep an individual Azure status
+    // check from spending the whole loop budget waiting out a stopping VM.
+    const state = await requestHostWake(1).catch(() => "starting" as const);
     if (state === "running") {
       try {
         await waitForOrchestrator(Math.min(45_000, deadline - Date.now()));

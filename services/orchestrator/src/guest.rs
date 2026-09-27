@@ -983,7 +983,7 @@ impl GuestService {
         while output
             .chunks
             .front()
-            .is_some_and(|chunk| chunk.sequence <= request.after)
+            .is_some_and(|chunk| chunk.sequence < request.after)
         {
             if let Some(chunk) = output.chunks.pop_front() {
                 output.buffered_bytes = output.buffered_bytes.saturating_sub(chunk.data.len());
@@ -2062,7 +2062,7 @@ impl GuestService {
         while output
             .chunks
             .front()
-            .is_some_and(|chunk| chunk.sequence <= request.after)
+            .is_some_and(|chunk| chunk.sequence < request.after)
         {
             if let Some(chunk) = output.chunks.pop_front() {
                 output.buffered_bytes = output.buffered_bytes.saturating_sub(chunk.data.len());
@@ -3246,7 +3246,7 @@ mod tests {
         assert!(TerminalUser::parse(passwd, "codev-shell").is_none());
     }
 
-    use std::process::Command;
+    use std::{process::Command, sync::atomic::AtomicBool};
 
     use tempfile::tempdir;
 
@@ -3936,6 +3936,97 @@ mod tests {
 
         let close = service.handle("DELETE", &format!("/v1/terminals/{session_id}"), b"");
         assert_eq!(close.status, 200);
+    }
+
+    #[test]
+    fn terminal_poll_keeps_a_chunk_at_the_next_sequence_cursor() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let start = service.handle("POST", "/v1/terminals", br#"{"rows":24,"columns":80}"#);
+        assert_eq!(start.status, 200);
+        let start_body: serde_json::Value =
+            serde_json::from_slice(&start.body).expect("terminal start");
+        let session_id = start_body["sessionId"].as_str().expect("session id");
+        let session = service.terminal(session_id).expect("terminal session");
+        let cursor = {
+            let mut output = session.output.lock().expect("terminal output lock");
+            let cursor = output.next_sequence;
+            output.chunks.push_back(TerminalChunk {
+                sequence: cursor,
+                data: "boundary-output".into(),
+            });
+            output.next_sequence += 1;
+            cursor
+        };
+
+        let poll = service.handle(
+            "POST",
+            &format!("/v1/terminals/{session_id}/poll"),
+            serde_json::to_vec(&serde_json::json!({
+                "after": cursor,
+                "waitMilliseconds": 0,
+            }))
+            .expect("poll request")
+            .as_slice(),
+        );
+        assert_eq!(poll.status, 200);
+        let result: TerminalPollResponse =
+            serde_json::from_slice(&poll.body).expect("terminal poll");
+        assert!(
+            result.chunks.iter().any(|chunk| {
+                chunk.sequence == cursor && chunk.data.contains("boundary-output")
+            })
+        );
+
+        let close = service.handle("DELETE", &format!("/v1/terminals/{session_id}"), b"");
+        assert_eq!(close.status, 200);
+    }
+
+    #[test]
+    fn codex_poll_keeps_a_chunk_at_the_next_sequence_cursor() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let session_id = "codex-cursor-test";
+        let cursor = 1;
+        let bytes = b"boundary-output".to_vec();
+        service.codex_execs.lock().expect("codex exec lock").insert(
+            session_id.into(),
+            Arc::new(CodexExecSession {
+                output: Mutex::new(CodexExecOutput {
+                    chunks: VecDeque::from([CodexExecRawChunk {
+                        sequence: cursor,
+                        data: bytes.clone(),
+                    }]),
+                    buffered_bytes: bytes.len(),
+                    next_sequence: cursor + 1,
+                    reader_closed: false,
+                    exit_code: None,
+                    codex_auth_cache_json: None,
+                }),
+                output_changed: Condvar::new(),
+                cancel_requested: AtomicBool::new(false),
+            }),
+        );
+
+        let poll = service.handle(
+            "POST",
+            &format!("/v1/codex-execs/{session_id}/poll"),
+            serde_json::to_vec(&serde_json::json!({
+                "after": cursor,
+                "waitMilliseconds": 0,
+            }))
+            .expect("poll request")
+            .as_slice(),
+        );
+        assert_eq!(poll.status, 200);
+        let result: CodexExecPollResponse =
+            serde_json::from_slice(&poll.body).expect("Codex exec poll");
+        assert!(result.chunks.iter().any(|chunk| {
+            chunk.sequence == cursor
+                && BASE64
+                    .decode(&chunk.data_base64)
+                    .is_ok_and(|data| data == bytes)
+        }));
     }
 
     #[test]

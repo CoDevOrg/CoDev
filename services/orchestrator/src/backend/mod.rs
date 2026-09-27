@@ -250,6 +250,14 @@ impl Backend {
         }
     }
 
+    pub async fn park(&self, workspace_id: &str) -> Result<Instance> {
+        match self {
+            Self::Fake(backend) => backend.park(workspace_id),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => backend.park(workspace_id).await,
+        }
+    }
+
     pub async fn destroy(&self, workspace_id: &str) -> Result<()> {
         match self {
             Self::Fake(backend) => backend.destroy(workspace_id),
@@ -816,6 +824,7 @@ pub type SharedBackend = Arc<Backend>;
 pub struct FakeBackend {
     instances: RwLock<HashMap<String, Instance>>,
     ephemeral: RwLock<HashSet<String>>,
+    parked: RwLock<HashSet<String>>,
     host_shutdown_pending: std::sync::atomic::AtomicBool,
     max: usize,
 }
@@ -831,6 +840,7 @@ impl FakeBackend {
         Self {
             instances: RwLock::new(HashMap::new()),
             ephemeral: RwLock::new(HashSet::new()),
+            parked: RwLock::new(HashSet::new()),
             host_shutdown_pending: std::sync::atomic::AtomicBool::new(false),
             max: MAX_ACTIVE_SESSIONS,
         }
@@ -868,6 +878,10 @@ impl FakeBackend {
             !ephemeral.contains(workspace_id) || instance.expires_at > now
         });
         ephemeral.retain(|workspace_id| instances.contains_key(workspace_id));
+        self.parked
+            .write()
+            .expect("fake backend lock")
+            .retain(|workspace_id| instances.contains_key(workspace_id));
         before - instances.len()
     }
 
@@ -881,11 +895,35 @@ impl FakeBackend {
                 "Firecracker host is shutting down".into(),
             ));
         }
-        if let Some(instance) = instances.get(&request.workspace_id) {
+        if let Some(instance) = instances.get_mut(&request.workspace_id) {
+            if request.ephemeral
+                && self
+                    .ephemeral
+                    .read()
+                    .expect("fake backend lock")
+                    .contains(&request.workspace_id)
+            {
+                instance.expires_at = request.expires_at;
+                instance.last_activity_at = Utc::now();
+                self.parked
+                    .write()
+                    .expect("fake backend lock")
+                    .remove(&request.workspace_id);
+            }
             return Ok(instance.clone());
         }
         if instances.len() >= self.max {
-            return Err(RuntimeError::CapacityExceeded);
+            let mut parked = self.parked.write().expect("fake backend lock");
+            if let Some(id) = parked.iter().next().cloned() {
+                parked.remove(&id);
+                instances.remove(&id);
+                self.ephemeral
+                    .write()
+                    .expect("fake backend lock")
+                    .remove(&id);
+            } else {
+                return Err(RuntimeError::CapacityExceeded);
+            }
         }
         let now = Utc::now();
         let instance = Instance {
@@ -927,6 +965,31 @@ impl FakeBackend {
         Ok(instance.clone())
     }
 
+    fn park(&self, workspace_id: &str) -> Result<Instance> {
+        let mut instances = self.instances.write().expect("fake backend lock");
+        if !self
+            .ephemeral
+            .read()
+            .expect("fake backend lock")
+            .contains(workspace_id)
+        {
+            return Err(RuntimeError::BadRequest(
+                "only ephemeral sandboxes can be parked".into(),
+            ));
+        }
+        let instance = instances
+            .get_mut(workspace_id)
+            .ok_or(RuntimeError::SandboxNotFound)?;
+        let now = Utc::now();
+        instance.last_activity_at = now;
+        instance.expires_at = now + Duration::minutes(3);
+        self.parked
+            .write()
+            .expect("fake backend lock")
+            .insert(workspace_id.to_owned());
+        Ok(instance.clone())
+    }
+
     fn destroy(&self, workspace_id: &str) -> Result<()> {
         let removed = self
             .instances
@@ -938,6 +1001,10 @@ impl FakeBackend {
             return Err(RuntimeError::SandboxNotFound);
         }
         self.ephemeral
+            .write()
+            .expect("fake backend lock")
+            .remove(workspace_id);
+        self.parked
             .write()
             .expect("fake backend lock")
             .remove(workspace_id);
@@ -1299,5 +1366,51 @@ mod tests {
             Err(RuntimeError::SandboxNotFound)
         ));
         assert!(backend.get("live-workspace").await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn parked_ephemeral_reuses_its_vm_and_yields_capacity() {
+        let backend = Backend::fake();
+        let mut request = create_request("private-profile");
+        request.ephemeral = true;
+        let first = backend.create(request.clone()).await.expect("first boot");
+        let parked = backend.park("private-profile").await.expect("park");
+        let idle = (parked.expires_at - Utc::now()).num_seconds();
+        assert!((175..=180).contains(&idle));
+
+        request.expires_at = Utc::now() + Duration::minutes(10);
+        let reused = backend.create(request).await.expect("reuse warm VM");
+        assert_eq!(reused.id, first.id);
+        assert!(reused.expires_at > parked.expires_at);
+
+        backend.park("private-profile").await.expect("park again");
+        for index in 1..MAX_ACTIVE_SESSIONS {
+            backend
+                .create(create_request(&format!("busy-{index}")))
+                .await
+                .expect("fill other slots");
+        }
+        backend
+            .create(create_request("new-active"))
+            .await
+            .expect("new work reclaims parked slot");
+        assert!(matches!(
+            backend.get("private-profile").await,
+            Err(RuntimeError::SandboxNotFound)
+        ));
+        assert_eq!(backend.active_count().await, MAX_ACTIVE_SESSIONS);
+    }
+
+    #[tokio::test]
+    async fn durable_workspace_cannot_be_parked() {
+        let backend = Backend::fake();
+        backend
+            .create(create_request("durable"))
+            .await
+            .expect("create durable workspace");
+        assert!(matches!(
+            backend.park("durable").await,
+            Err(RuntimeError::BadRequest(_))
+        ));
     }
 }

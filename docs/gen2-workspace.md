@@ -45,9 +45,10 @@ Opening a workspace is the intent to use it, so `ensureGen2Instance` runs on
 open and is safe for any member to call -- the person who follows a share link
 should not have to wait for the owner to press something. The composer is
 never disabled either: type into a cold workspace and the machine is brought
-up as part of sending. The orchestrator hibernates an idle guest after 15
-minutes, preserving its workspace disk while releasing its sandbox slot. A
-host with no active sandboxes deallocates after one quiet minute. Opening the
+up as part of sending. The orchestrator hibernates an idle guest after fifteen
+minutes, preserving its workspace disk while releasing its sandbox slot. Once
+no guest or recently used Orca IDE session keeps the host active, it deallocates
+after a one-minute quiet window checked every thirty seconds. Opening the
 workspace resumes it from the saved disk.
 
 ## Interface

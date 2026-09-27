@@ -370,6 +370,7 @@ pub struct TerminalResizeRequest {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TerminalPollRequest {
+    /// Exclusive cursor: the response includes chunks at this sequence and later.
     #[serde(default)]
     pub after: u64,
     #[serde(default)]
@@ -387,6 +388,7 @@ pub struct TerminalChunk {
 #[serde(rename_all = "camelCase")]
 pub struct TerminalPollResponse {
     pub chunks: Vec<TerminalChunk>,
+    /// Pass as `after` in the next poll; a chunk at this value may arrive later.
     pub next_sequence: u64,
     pub exited: bool,
     pub exit_code: Option<i32>,
@@ -415,6 +417,7 @@ pub struct CodexExecStartRequest {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CodexExecPollRequest {
+    /// Exclusive cursor: the response includes chunks at this sequence and later.
     #[serde(default)]
     pub after: u64,
     #[serde(default)]
@@ -436,6 +439,7 @@ pub struct CodexExecChunk {
 #[serde(rename_all = "camelCase")]
 pub struct CodexExecPollResponse {
     pub chunks: Vec<CodexExecChunk>,
+    /// Pass as `after` in the next poll; a chunk at this value may arrive later.
     pub next_sequence: u64,
     pub exited: bool,
     pub exit_code: Option<i32>,

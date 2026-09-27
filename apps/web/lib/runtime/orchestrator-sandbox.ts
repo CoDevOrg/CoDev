@@ -94,3 +94,14 @@ export async function touchSandbox(workspaceId: string) {
     .object({ sandbox: sandboxInstanceSchema })
     .parse(await response.json()).sandbox;
 }
+
+/** Park a checkpointed ephemeral VM for a short, reclaimable idle window. */
+export async function parkSandbox(workspaceId: string) {
+  const response = await orchestratorRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/park`,
+  );
+  return z
+    .object({ sandbox: sandboxInstanceSchema })
+    .parse(await response.json()).sandbox;
+}
