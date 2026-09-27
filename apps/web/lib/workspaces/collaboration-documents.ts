@@ -6,11 +6,8 @@ import * as Y from "yjs";
 
 import {
   classifyFilesystemReconciliation,
-  collaborativeConflictRevision,
-  decodeBase64,
   docFromUpdate,
   encodedDocument,
-  encodeBase64,
   replaceDocumentContents,
 } from "../collaboration/yjs-document";
 import { getDatabase } from "@/lib/platform/database";

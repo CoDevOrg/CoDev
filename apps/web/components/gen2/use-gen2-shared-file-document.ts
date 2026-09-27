@@ -68,7 +68,11 @@ export function useGen2SharedFileDocument(input: {
     onContentsChangeRef.current = input.onContentsChange;
   }, [input.onContentsChange]);
 
+  // This effect creates the Yjs resource keyed by the selected file, so its
+  // initial state must publish the newly created external resource handle.
+  // Subsequent state changes come from socket/document callbacks.
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
     if (!input.path) {
       setText(null);
       setAwareness(null);
@@ -195,6 +199,7 @@ export function useGen2SharedFileDocument(input: {
       nextAwareness.destroy();
       doc.destroy();
     };
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [input.workspaceId, input.path]);
 
   const updateCursor = useCallback(
