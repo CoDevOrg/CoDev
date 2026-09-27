@@ -1,11 +1,24 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const terminalMocks = vi.hoisted(() => ({
+  instances: [] as Array<{ onDataHandler?: (data: string) => void }>,
+}));
+
 vi.mock("@xterm/xterm", () => ({
   Terminal: class {
     rows = 24;
     cols = 80;
-    onData = vi.fn();
+    onDataHandler?: (data: string) => void;
+
+    constructor() {
+      terminalMocks.instances.push(this);
+    }
+
+    onData(handler: (data: string) => void) {
+      this.onDataHandler = handler;
+    }
+
     loadAddon() {}
     open() {}
     dispose() {}
@@ -25,6 +38,7 @@ const workspaceId = "11111111-1111-4111-8111-111111111111";
 
 describe("Gen2TerminalPane", () => {
   beforeEach(() => {
+    terminalMocks.instances.length = 0;
     class ResizeObserverStub {
       observe() {}
       disconnect() {}
@@ -70,5 +84,66 @@ describe("Gen2TerminalPane", () => {
 
     fireEvent.click(resume);
     await waitFor(() => expect(onResumeWorkspace).toHaveBeenCalledOnce());
+  });
+
+  it("serializes rapid terminal input so characters arrive in order", async () => {
+    let releaseFirstInput!: () => void;
+    const firstInput = new Promise<void>((resolve) => {
+      releaseFirstInput = resolve;
+    });
+    const inputCalls: string[] = [];
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const request = JSON.parse(String(init?.body ?? "{}")) as {
+          action?: string;
+          data?: string;
+        };
+        if (request.action === "start") {
+          return new Response(JSON.stringify({ sessionId: "terminal-1" }), {
+            status: 201,
+          });
+        }
+        if (request.action === "input") {
+          inputCalls.push(request.data ?? "");
+          if (inputCalls.length === 1) await firstInput;
+          return new Response(null, { status: 204 });
+        }
+        if (request.action === "poll") {
+          return new Promise<Response>(() => {});
+        }
+        return new Response(null, { status: 204 });
+      }),
+    );
+
+    const { unmount } = render(
+      <Gen2TerminalPane
+        workspaceId={workspaceId}
+        visible
+        canStart
+        onExit={vi.fn()}
+        onResumeWorkspace={vi.fn(async () => true)}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Start terminal" }));
+    await waitFor(() =>
+      expect(terminalMocks.instances[0]?.onDataHandler).toBeDefined(),
+    );
+    const sendInput = terminalMocks.instances[0]!.onDataHandler!;
+    sendInput("p");
+    sendInput("w");
+    sendInput("d");
+
+    try {
+      await waitFor(() => expect(inputCalls).toEqual(["p"]));
+      expect(inputCalls).toEqual(["p"]);
+    } finally {
+      releaseFirstInput();
+    }
+
+    await waitFor(() => expect(inputCalls).toEqual(["p", "w", "d"]));
+    unmount();
   });
 });

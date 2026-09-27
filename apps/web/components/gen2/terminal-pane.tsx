@@ -100,12 +100,20 @@ export function Gen2TerminalPane({
         setStatus("idle");
         return;
       }
-      sessionRef.current = payload.sessionId;
+      const sessionId = payload.sessionId;
+      sessionRef.current = sessionId;
       afterRef.current = 0;
       setStatus("live");
+      let inputQueue = Promise.resolve();
       term.onData((data) => {
-        void post({ action: "input", sessionId: payload.sessionId, data })
-          .then((inputResponse) => {
+        inputQueue = inputQueue
+          .then(async () => {
+            if (sessionRef.current !== sessionId) return;
+            const inputResponse = await post({
+              action: "input",
+              sessionId,
+              data,
+            });
             if ([404, 502, 503].includes(inputResponse.status)) {
               markWorkspacePaused();
             }
