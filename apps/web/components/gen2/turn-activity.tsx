@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Brain,
   Check,
-  ChevronDown,
   ChevronRight,
   FileDiff,
   Globe,
@@ -14,197 +13,303 @@ import {
 } from "lucide-react";
 import type { Gen2TurnItem } from "@codev/contracts";
 
+import {
+  formatWorkedDuration,
+  summarizeGen2Command,
+  unwrapShellCommand,
+} from "@/lib/gen2/turn-labels";
+
 /**
- * What Codex did, as it does it.
- *
- * Every card is keyed by the Codex item id, which is stable from
- * `item.started` through `item.completed`, so a command that streams output
- * updates in place instead of stacking up duplicates.
+ * What Codex did — Cursor-style: one muted “Worked for Xs ›” line, expanding
+ * into a compact timeline. No bordered command blobs.
  */
 export function Gen2TurnActivity({
   items,
   onOpenFile,
+  /** True while the turn is still streaming — keeps the timeline open. */
+  live = false,
 }: {
   items: Gen2TurnItem[];
   onOpenFile: (path: string) => void;
+  live?: boolean;
 }) {
-  if (items.length === 0) return null;
+  const visible = useMemo(
+    () => items.filter((item) => item.kind !== "message"),
+    [items],
+  );
+  const itemRunning = visible.some((item) => item.status === "running");
+  const active = live || itemRunning;
+  const [open, setOpen] = useState(active);
+  const [elapsed, setElapsed] = useState(0);
+  const startedAt = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (visible.length === 0) {
+      startedAt.current = null;
+      setElapsed(0);
+      return;
+    }
+    startedAt.current ??= Date.now();
+    if (!active) {
+      setElapsed(
+        Math.max(0, Math.round((Date.now() - startedAt.current) / 1000)),
+      );
+      // Done turns collapse to the Cursor-style summary line.
+      setOpen(false);
+      return;
+    }
+    setOpen(true);
+    const tick = () => {
+      if (startedAt.current == null) return;
+      setElapsed(
+        Math.max(0, Math.round((Date.now() - startedAt.current) / 1000)),
+      );
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [visible.length, active]);
+
+  useEffect(() => {
+    if (visible.length === 0) {
+      setOpen(false);
+      startedAt.current = null;
+    }
+  }, [visible.length]);
+
+  if (visible.length === 0) return null;
+
+  const summary = active
+    ? elapsed > 0
+      ? `Working · ${elapsed}s`
+      : "Working…"
+    : formatWorkedDuration(elapsed);
+
   return (
-    <ul className="gen2-activity">
-      {items.map((item) => (
-        <li key={item.id}>
-          <ActivityCard item={item} onOpenFile={onOpenFile} />
-        </li>
-      ))}
-    </ul>
+    <div className="gen2-steps">
+      <button
+        type="button"
+        className="gen2-steps-summary"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span>{summary}</span>
+        <ChevronRight
+          aria-hidden="true"
+          size={12}
+          className="gen2-steps-chevron"
+          data-open={open || undefined}
+        />
+      </button>
+
+      {open ? (
+        <ol className="gen2-steps-list">
+          {visible.map((item) => (
+            <li key={item.id} data-status={item.status}>
+              <StepRow item={item} onOpenFile={onOpenFile} />
+            </li>
+          ))}
+        </ol>
+      ) : null}
+    </div>
   );
 }
 
-function ActivityCard({
+function StepRow({
   item,
   onOpenFile,
 }: {
   item: Gen2TurnItem;
   onOpenFile: (path: string) => void;
 }) {
-  // A finished message is the reply itself; the thread renders that.
-  if (item.kind === "message") return null;
-
   switch (item.kind) {
+    case "message":
+      return null;
+
     case "reasoning":
       return (
-        <Collapsible
+        <StepDisclosure
           icon={<Brain aria-hidden="true" size={13} />}
-          label="Thinking"
+          label={item.status === "running" ? "Thinking" : "Thought"}
+          detail={
+            item.status === "running" ? "Reasoning…" : "Reasoning complete"
+          }
           status={item.status}
         >
-          <p className="gen2-card-reasoning">{item.text}</p>
-        </Collapsible>
+          {item.text.trim() ? (
+            <p className="gen2-steps-reasoning">{item.text}</p>
+          ) : (
+            <p className="gen2-steps-detail">No details.</p>
+          )}
+        </StepDisclosure>
       );
 
-    case "command":
+    case "command": {
+      const label = summarizeGen2Command(item.command);
+      const detail =
+        item.status === "running"
+          ? "Running…"
+          : item.exitCode === null
+            ? "Command finished"
+            : item.exitCode === 0
+              ? "Command completed"
+              : `Failed · exit ${item.exitCode}`;
       return (
-        <Collapsible
+        <StepDisclosure
           icon={<TerminalIcon aria-hidden="true" size={13} />}
-          label={<code className="gen2-card-command">{item.command}</code>}
+          label={label}
+          detail={detail}
           status={item.status}
-          badge={
-            item.exitCode === null ? null : (
-              <span
-                className="gen2-card-exit"
-                data-failed={item.exitCode !== 0}
-              >
-                exit {item.exitCode}
-              </span>
-            )
-          }
         >
+          <code className="gen2-steps-raw">
+            {unwrapShellCommand(item.command)}
+          </code>
           {item.output.trim() ? (
-            <pre className="gen2-card-output">{item.output}</pre>
+            <pre className="gen2-steps-output">{item.output}</pre>
           ) : (
-            <p className="gen2-wb-hint">No output.</p>
+            <p className="gen2-steps-detail">No output.</p>
           )}
-        </Collapsible>
+        </StepDisclosure>
       );
+    }
 
     case "fileChange":
       return (
-        <div className="gen2-card" data-status={item.status}>
-          <div className="gen2-card-head">
-            <FileDiff aria-hidden="true" size={13} />
-            <span className="gen2-card-label">
+        <div className="gen2-steps-row">
+          <span className="gen2-steps-icon" aria-hidden="true">
+            <FileDiff size={13} />
+          </span>
+          <div className="gen2-steps-body">
+            <p className="gen2-steps-label">
               {item.changes.length === 1
                 ? "Edited 1 file"
                 : `Edited ${item.changes.length} files`}
-            </span>
-          </div>
-          <ul className="gen2-card-files">
-            {item.changes.map((change) => (
-              <li key={change.path}>
-                <button
-                  type="button"
-                  className="gen2-card-file"
-                  onClick={() => onOpenFile(change.path)}
-                >
-                  <span
-                    className="gen2-card-change"
-                    data-change={change.change}
+            </p>
+            <ul className="gen2-steps-files">
+              {item.changes.map((change) => (
+                <li key={change.path}>
+                  <button
+                    type="button"
+                    className="gen2-steps-file"
+                    onClick={() => onOpenFile(change.path)}
                   >
-                    {change.change === "add"
-                      ? "+"
-                      : change.change === "delete"
-                        ? "−"
-                        : "~"}
-                  </span>
-                  {change.path}
-                </button>
-              </li>
-            ))}
-          </ul>
+                    <span
+                      className="gen2-steps-change"
+                      data-change={change.change}
+                    >
+                      {change.change === "add"
+                        ? "+"
+                        : change.change === "delete"
+                          ? "−"
+                          : "~"}
+                    </span>
+                    {change.path}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       );
 
     case "todoList":
       return (
-        <div className="gen2-card" data-status={item.status}>
-          <div className="gen2-card-head">
-            <ListChecks aria-hidden="true" size={13} />
-            <span className="gen2-card-label">Plan</span>
+        <div className="gen2-steps-row">
+          <span className="gen2-steps-icon" aria-hidden="true">
+            <ListChecks size={13} />
+          </span>
+          <div className="gen2-steps-body">
+            <p className="gen2-steps-label">Plan</p>
+            <ul className="gen2-steps-todos">
+              {item.todos.map((todo, index) => (
+                <li key={`${index}-${todo.text}`} data-done={todo.completed}>
+                  {todo.completed ? (
+                    <Check aria-hidden="true" size={12} />
+                  ) : (
+                    <span className="gen2-steps-todo-dot" aria-hidden="true" />
+                  )}
+                  {todo.text}
+                </li>
+              ))}
+            </ul>
           </div>
-          <ul className="gen2-card-todos">
-            {item.todos.map((todo, index) => (
-              <li key={`${index}-${todo.text}`} data-done={todo.completed}>
-                {todo.completed ? (
-                  <Check aria-hidden="true" size={12} />
-                ) : (
-                  <span className="gen2-card-todo-dot" aria-hidden="true" />
-                )}
-                {todo.text}
-              </li>
-            ))}
-          </ul>
         </div>
       );
 
     case "webSearch":
       return (
-        <div className="gen2-card" data-status={item.status}>
-          <div className="gen2-card-head">
-            <Globe aria-hidden="true" size={13} />
-            <span className="gen2-card-label">Searched “{item.query}”</span>
+        <div className="gen2-steps-row">
+          <span className="gen2-steps-icon" aria-hidden="true">
+            <Globe size={13} />
+          </span>
+          <div className="gen2-steps-body">
+            <p className="gen2-steps-label">Searched web</p>
+            <p className="gen2-steps-detail">“{item.query}”</p>
           </div>
         </div>
       );
 
     case "toolCall":
       return (
-        <div className="gen2-card" data-status={item.status}>
-          <div className="gen2-card-head">
-            <Wrench aria-hidden="true" size={13} />
-            <span className="gen2-card-label">
+        <div className="gen2-steps-row">
+          <span className="gen2-steps-icon" aria-hidden="true">
+            <Wrench size={13} />
+          </span>
+          <div className="gen2-steps-body">
+            <p className="gen2-steps-label">
               {item.server}/{item.tool}
-            </span>
+            </p>
+            <p className="gen2-steps-detail">
+              {item.status === "running" ? "Running…" : "Tool finished"}
+            </p>
           </div>
         </div>
       );
   }
 }
 
-function Collapsible({
+function StepDisclosure({
   icon,
   label,
+  detail,
   status,
-  badge,
   children,
 }: {
   icon: React.ReactNode;
-  label: React.ReactNode;
+  label: string;
+  detail: string;
   status: Gen2TurnItem["status"];
-  badge?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="gen2-card" data-status={status}>
-      <button
-        type="button"
-        className="gen2-card-head gen2-card-toggle"
-        aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
-      >
-        {open ? (
-          <ChevronDown aria-hidden="true" size={13} />
-        ) : (
-          <ChevronRight aria-hidden="true" size={13} />
-        )}
+    <div className="gen2-steps-row" data-status={status}>
+      <span className="gen2-steps-icon" aria-hidden="true">
         {icon}
-        <span className="gen2-card-label">{label}</span>
-        {badge}
-        {status === "running" ? (
-          <span className="gen2-card-spinner" aria-label="Running" />
-        ) : null}
-      </button>
-      {open ? <div className="gen2-card-body">{children}</div> : null}
+      </span>
+      <div className="gen2-steps-body">
+        <button
+          type="button"
+          className="gen2-steps-toggle"
+          aria-expanded={open}
+          onClick={() => setOpen((value) => !value)}
+        >
+          <span className="gen2-steps-label">
+            {label}
+            {status === "running" ? (
+              <span className="gen2-steps-pulse" aria-label="Running" />
+            ) : null}
+          </span>
+          <ChevronRight
+            aria-hidden="true"
+            size={11}
+            className="gen2-steps-chevron"
+            data-open={open || undefined}
+          />
+        </button>
+        <p className="gen2-steps-detail">{detail}</p>
+        {open ? <div className="gen2-steps-expand">{children}</div> : null}
+      </div>
     </div>
   );
 }

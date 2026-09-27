@@ -7,7 +7,7 @@ import { Gen2TurnActivity } from "./turn-activity";
 const noop = () => undefined;
 
 describe("Gen2TurnActivity", () => {
-  it("renders a command with its exit code and reveals output on demand", () => {
+  it("collapses steps behind a Worked summary and reveals command detail on demand", () => {
     const items: Gen2TurnItem[] = [
       {
         id: "c1",
@@ -19,15 +19,43 @@ describe("Gen2TurnActivity", () => {
       },
     ];
     render(<Gen2TurnActivity items={items} onOpenFile={noop} />);
-    expect(screen.getByText("pnpm test")).toBeInTheDocument();
-    expect(screen.getByText("exit 0")).toBeInTheDocument();
-    // Output is behind a disclosure so a long turn stays skimmable.
+
+    // Cursor-style: one muted summary, steps hidden until expanded.
+    expect(screen.getByRole("button", { name: /Worked/ })).toBeInTheDocument();
+    expect(screen.queryByText("Ran pnpm")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Worked/ }));
+    expect(screen.getByText("Ran pnpm")).toBeInTheDocument();
+    expect(screen.getByText("Command completed")).toBeInTheDocument();
     expect(screen.queryByText("3 passed")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { expanded: false }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Ran pnpm/ }));
     expect(screen.getByText("3 passed")).toBeInTheDocument();
+    expect(screen.getByText("pnpm test")).toBeInTheDocument();
   });
 
-  it("marks a failing command", () => {
+  it("humanizes bash wrappers instead of showing the raw blob", () => {
+    render(
+      <Gen2TurnActivity
+        items={[
+          {
+            id: "c1",
+            kind: "command",
+            status: "completed",
+            command: `/bin/bash -lc "sed -n '1,240p' .codev/uploads/CODEV_FEATURES.md"`,
+            output: "# Features",
+            exitCode: 0,
+          },
+        ]}
+        onOpenFile={noop}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Worked/ }));
+    expect(screen.getByText("Read CODEV_FEATURES.md")).toBeInTheDocument();
+    expect(screen.queryByText(/\/bin\/bash/)).not.toBeInTheDocument();
+  });
+
+  it("marks a failing command in the detail line", () => {
     render(
       <Gen2TurnActivity
         items={[
@@ -43,10 +71,11 @@ describe("Gen2TurnActivity", () => {
         onOpenFile={noop}
       />,
     );
-    expect(screen.getByText("exit 1")).toHaveAttribute("data-failed", "true");
+    fireEvent.click(screen.getByRole("button", { name: /Worked/ }));
+    expect(screen.getByText("Failed · exit 1")).toBeInTheDocument();
   });
 
-  it("opens the file a change card names", () => {
+  it("opens the file a change step names", () => {
     const onOpenFile = vi.fn();
     render(
       <Gen2TurnActivity
@@ -61,6 +90,7 @@ describe("Gen2TurnActivity", () => {
         onOpenFile={onOpenFile}
       />,
     );
+    fireEvent.click(screen.getByRole("button", { name: /Worked/ }));
     expect(screen.getByText("Edited 1 file")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /src\/a\.ts/ }));
     expect(onOpenFile).toHaveBeenCalledWith("src/a.ts");
@@ -83,6 +113,7 @@ describe("Gen2TurnActivity", () => {
         onOpenFile={noop}
       />,
     );
+    // Running turns stay open so live progress is visible.
     expect(screen.getByText("Read the repo").closest("li")).toHaveAttribute(
       "data-done",
       "true",

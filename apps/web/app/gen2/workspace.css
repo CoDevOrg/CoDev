@@ -506,84 +506,122 @@
   outline-offset: 2px;
 }
 
-/* ------------------------------------------------------- activity cards */
+/* ----------------------------------------------------- Cursor-style steps */
 
-.gen2-activity {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 0 0 10px;
-  padding: 0;
-  list-style: none;
+.gen2-steps {
+  margin: 0 0 12px;
+  max-width: 44rem;
 }
 
-.gen2-card {
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--gen2-panel);
-  font-size: 0.8125rem;
-  overflow: hidden;
-}
-
-.gen2-card[data-status="failed"] {
-  border-color: color-mix(in srgb, #1b63b3 50%, var(--line));
-}
-
-.gen2-card-head {
-  display: flex;
+.gen2-steps-summary {
+  display: inline-flex;
   align-items: center;
-  gap: 7px;
-  width: 100%;
-  padding: 7px 10px;
-  color: var(--muted);
-  text-align: left;
-}
-
-.gen2-card-toggle {
+  gap: 4px;
+  padding: 0;
   border: 0;
   background: none;
   color: var(--muted);
   cursor: pointer;
   font: inherit;
+  font-size: 0.8125rem;
+  line-height: 1.4;
 }
 
-.gen2-card-toggle:hover {
+.gen2-steps-summary:hover {
   color: var(--ink);
 }
 
-.gen2-card-toggle:focus-visible {
+.gen2-steps-summary:focus-visible {
   outline: 2px solid var(--gold);
-  outline-offset: -2px;
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
-.gen2-card-label {
+.gen2-steps-chevron {
+  flex-shrink: 0;
+  transition: transform 160ms ease;
+}
+
+.gen2-steps-chevron[data-open="true"] {
+  transform: rotate(90deg);
+}
+
+.gen2-steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 8px 0 0;
+  padding: 0 0 0 2px;
+  list-style: none;
+}
+
+.gen2-steps-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.gen2-steps-icon {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  color: var(--muted);
+}
+
+.gen2-steps-body {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  margin-left: -2px;
+  padding-left: 10px;
+  border-left: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
 }
 
-.gen2-card-command {
-  font-family: var(--font-geist-mono, ui-monospace, monospace);
-  font-size: 0.78125rem;
+.gen2-steps-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
 }
 
-.gen2-card-exit {
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--ink) 8%, transparent);
-  font-size: 0.6875rem;
+.gen2-steps-toggle:hover .gen2-steps-label {
+  color: var(--ink);
 }
 
-.gen2-card-exit[data-failed="true"] {
-  background: color-mix(in srgb, #1b63b3 22%, transparent);
-  color: #ffb3a6;
+.gen2-steps-toggle:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
-.gen2-card-spinner {
-  width: 8px;
-  height: 8px;
-  margin-left: auto;
+.gen2-steps-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.gen2-steps-detail {
+  margin: 2px 0 0;
+  color: color-mix(in srgb, var(--muted) 78%, transparent);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.gen2-steps-pulse {
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--gold);
   animation: gen2-pulse 1.4s ease-in-out infinite;
@@ -599,68 +637,86 @@
   }
 }
 
-.gen2-card-body {
-  padding: 0 10px 9px;
+.gen2-steps-expand {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
 }
 
-.gen2-card-output {
-  max-height: 260px;
-  margin: 0;
-  padding: 8px 10px;
-  border-radius: 7px;
-  background: color-mix(in srgb, #000 28%, transparent);
-  color: var(--ink);
+.gen2-steps-raw {
+  display: block;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  color: var(--muted);
   font-family: var(--font-geist-mono, ui-monospace, monospace);
-  font-size: 0.75rem;
-  line-height: 1.55;
+  font-size: 0.71875rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.gen2-steps-output {
+  max-height: 200px;
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  color: var(--muted);
+  font-family: var(--font-geist-mono, ui-monospace, monospace);
+  font-size: 0.71875rem;
+  line-height: 1.5;
   overflow: auto;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
-.gen2-card-reasoning {
+.gen2-steps-reasoning {
   margin: 0;
   color: var(--muted);
+  font-size: 0.75rem;
   font-style: italic;
-  line-height: 1.6;
+  line-height: 1.55;
   white-space: pre-wrap;
 }
 
-.gen2-card-files,
-.gen2-card-todos {
-  margin: 0;
-  padding: 0 10px 9px;
+.gen2-steps-files,
+.gen2-steps-todos {
+  margin: 4px 0 0;
+  padding: 0;
   list-style: none;
 }
 
-.gen2-card-todos li {
+.gen2-steps-todos li {
   display: flex;
   align-items: center;
   gap: 7px;
   padding: 2px 0;
   color: var(--muted);
+  font-size: 0.75rem;
 }
 
-.gen2-card-todos li[data-done="true"] {
-  color: var(--ink);
+.gen2-steps-todos li[data-done="true"] {
+  color: color-mix(in srgb, var(--ink) 70%, var(--muted));
 }
 
-.gen2-card-todo-dot {
+.gen2-steps-todo-dot {
   width: 10px;
   height: 10px;
   border: 1px solid var(--line);
   border-radius: 50%;
 }
 
-.gen2-card-file {
+.gen2-steps-file {
   display: flex;
   align-items: center;
   gap: 7px;
   width: 100%;
-  padding: 3px 0;
+  padding: 2px 0;
   border: 0;
   background: none;
-  color: var(--ink);
+  color: var(--muted);
   cursor: pointer;
   font: inherit;
   font-family: var(--font-geist-mono, ui-monospace, monospace);
@@ -668,27 +724,40 @@
   text-align: left;
 }
 
-.gen2-card-file:hover {
-  color: var(--gold);
+.gen2-steps-file:hover {
+  color: var(--ink);
 }
 
-.gen2-card-file:focus-visible {
+.gen2-steps-file:focus-visible {
   outline: 2px solid var(--gold);
   outline-offset: 1px;
 }
 
-.gen2-card-change {
+.gen2-steps-change {
   width: 12px;
   color: var(--muted);
   text-align: center;
 }
 
-.gen2-card-change[data-change="add"] {
+.gen2-steps-change[data-change="add"] {
   color: #9ad08a;
 }
 
-.gen2-card-change[data-change="delete"] {
+.gen2-steps-change[data-change="delete"] {
   color: #1b63b3;
+}
+
+.gen2-steps-row[data-status="failed"] .gen2-steps-label,
+.gen2-steps-row[data-status="failed"] .gen2-steps-detail {
+  color: color-mix(in srgb, #c45c4a 70%, var(--muted));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gen2-steps-chevron,
+  .gen2-steps-pulse {
+    transition: none;
+    animation: none;
+  }
 }
 
 /* ----------------------------------------------------------- workbench */
@@ -1754,11 +1823,6 @@
 
   .gen2-resizer::after {
     transition: none;
-  }
-
-  .gen2-card-spinner {
-    animation: none;
-    opacity: 0.7;
   }
 }
 

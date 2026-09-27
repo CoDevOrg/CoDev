@@ -148,8 +148,8 @@ describe("Gen2ChatPanel", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
-    // The command card is on screen before the turn has finished.
-    expect(await screen.findByText("ls")).toBeInTheDocument();
+    // Live turns keep the step timeline open with a short label.
+    expect(await screen.findByText("Listed files")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Stop/ })).toBeInTheDocument();
 
     releaseFirstPoll?.();
@@ -157,8 +157,9 @@ describe("Gen2ChatPanel", () => {
     // The reply comes back from the reloaded thread, which the server wrote
     // as the turn exited -- the client never posts it.
     expect(await screen.findByText("Listed them.")).toBeInTheDocument();
-    // The activity survives the turn because the server stored it too.
-    expect(screen.getByText("ls")).toBeInTheDocument();
+    // Completed turns collapse to the summary; expand to see the step.
+    fireEvent.click(screen.getByRole("button", { name: /Worked/ }));
+    expect(screen.getByText("Listed files")).toBeInTheDocument();
   });
 
   it("tells the workbench when the agent touched the filesystem", async () => {

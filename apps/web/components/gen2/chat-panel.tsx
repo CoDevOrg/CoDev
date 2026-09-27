@@ -640,7 +640,11 @@ export function Gen2ChatPanel({
               ))}
               {running ? (
                 <li data-role="assistant">
-                  <Gen2TurnActivity items={items} onOpenFile={onOpenFile} />
+                  <Gen2TurnActivity
+                    items={items}
+                    onOpenFile={onOpenFile}
+                    live
+                  />
                   {liveReply ? (
                     <MarkdownContent
                       text={liveReply}
