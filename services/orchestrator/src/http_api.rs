@@ -28,8 +28,7 @@ use crate::{
         SessionRestoreChunkRequest, SupersetCreateEntryRequest, SupersetDeleteEntryRequest,
         SupersetMoveEntryRequest, TerminalInputRequest, TerminalPollRequest, TerminalResizeRequest,
         TerminalStartRequest, WorktreeCheckpointRequest, WorktreeCreateRequest,
-        WorktreeMergeRequest,
-        WorktreeRebaseRequest, WriteFileRequest,
+        WorktreeMergeRequest, WorktreeRebaseRequest, WriteFileRequest,
     },
 };
 
