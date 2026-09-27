@@ -23,11 +23,14 @@ function messageLabel(message: ImportedConversationMessage) {
   return message.role.charAt(0).toUpperCase() + message.role.slice(1);
 }
 
-function messageAlignClass(message: ImportedConversationMessage) {
+// Only the user's own messages render as a bubble, matching how Claude/
+// ChatGPT style their own chat UIs — the assistant's reply reads as plain
+// text in the flow instead of being boxed in.
+function messageContainerClass(message: ImportedConversationMessage) {
   if (message.role === "user")
-    return "self-end rounded-br-sm border-primary/25 bg-primary/8";
-  if (message.role === "assistant") return "self-start rounded-bl-sm bg-card";
-  return "self-center w-[90%] bg-violet/8";
+    return "max-w-[78%] self-end rounded-2xl rounded-br-sm border border-primary/25 bg-primary/8 px-4 py-3";
+  if (message.role === "assistant") return "w-full max-w-none self-start py-1";
+  return "max-w-[90%] self-center rounded-2xl border border-border bg-violet/8 px-4 py-3";
 }
 
 function formatTime(createdAt: string | null | undefined) {
@@ -200,8 +203,8 @@ export function SharedChatTranscript({
               transition={{ duration: 0.22 }}
               aria-label={`${label} message ${message.sequence + 1}`}
               className={cn(
-                "flex max-w-[78%] items-start gap-2.5 rounded-2xl border border-border px-4 py-3",
-                messageAlignClass(message),
+                "flex items-start gap-2.5",
+                messageContainerClass(message),
               )}
             >
               <Avatar className="mt-0.5 size-7 shrink-0">
