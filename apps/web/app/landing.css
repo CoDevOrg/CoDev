@@ -1,15 +1,10 @@
 /* ==========================================================================
    Public landing page.
 
-   Scoped entirely under `.lp-page` so it can never leak into the product
-   surfaces in globals.css / app-theme.css. That scoping is what lets the
-   marketing page run a light cream-and-navy palette while every signed-in
-   surface stays on the dark product theme.
-
-   The palette is paper cream, deep navy ink and a vibrant blue accent, with a
-   teal and a terracotta carrying the two remaining agent identities. Token
-   names predate this palette and are kept so the 2,600 rules below did not
-   all have to be rewritten; read them as slots, not as colour words.
+   Scoped entirely under `.lp-page` so marketing-only flourishes (serifs,
+   parallax, the WebGL canvas) never leak into product CSS. The cream/navy
+   palette itself is shared with the product theme in app-theme.css /
+   globals.css — landing invented it; the signed-in surfaces now use it too.
    ========================================================================== */
 
 .lp-page {
@@ -53,10 +48,9 @@
   font-feature-settings: "ss01" on;
 }
 
-/* globals.css paints html/body the dark product surface and sets
-   `color-scheme: dark` on :root. The landing is the one light route, so it
-   repaints the document behind itself; without this, overscroll and the area
-   beyond the last section flash near-black. */
+/* globals.css paints html/body the cream product surface and sets
+   `color-scheme: light` on :root. Landing repaints the document behind
+   itself the same way so overscroll stays cream. */
 html:has(.lp-page),
 body:has(.lp-page) {
   background: #f2e9d6;
@@ -298,8 +292,8 @@ body:has(.lp-page) {
 }
 
 .lp-brand img {
-  filter: brightness(0) saturate(100%) invert(45%) sepia(51%) saturate(2559%)
-    hue-rotate(334deg) brightness(99%) contrast(91%);
+  filter: brightness(0) saturate(100%) invert(16%) sepia(80%) saturate(2200%)
+    hue-rotate(210deg) brightness(0.95) contrast(1.05);
 }
 
 .lp-nav nav {

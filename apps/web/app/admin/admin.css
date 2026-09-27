@@ -388,7 +388,7 @@ table.admin-table {
 
 .admin-btn.primary {
   background: var(--gold);
-  color: var(--codev-on-gold, #121417);
+  color: var(--codev-on-gold, #f7f3e8);
   border-color: transparent;
   font-weight: 560;
 }

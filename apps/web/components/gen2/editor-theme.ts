@@ -72,6 +72,6 @@ export const gen2Highlighting = syntaxHighlighting(
       color: "#7fc7f5",
       textDecoration: "underline",
     },
-    { tag: tags.invalid, color: "#f2604a" },
+    { tag: tags.invalid, color: "#1b63b3" },
   ]),
 );
