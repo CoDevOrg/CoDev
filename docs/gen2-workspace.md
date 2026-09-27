@@ -140,8 +140,17 @@ Not yet built here: a browser/preview tab (live port forwarding is deferred in
 `lib/runtime/preview.ts` and needs guest networking), Git staging and commit
 from the UI, and realtime fan-out between members. The feature-flagged
 `/superset` page supports nested file/folder creation, rename, and permanent
-delete through the Superset host filesystem service; two people in one
-workspace still see each other's writes only on refresh.
+delete through the Superset host filesystem service; that page is separate from
+the shared CodeMirror/Yjs editor and two people using it still see each other's
+writes only on refresh.
+
+The Superset host artifact and private guest bridge are real guest-side reuse,
+not a browser mock. Future Superset work must extend that host service to
+replace the matching Gen 2 terminal, Git/worktree, and agent mechanics; do not
+add duplicate `codev-guestd` implementations. CoDev continues to own member
+authorization, provider credentials, quotas, Yjs documents, conflicts, and
+durable product history. The adoption contract and stop/go gate live in
+[`SUPERSET_ADOPTION_MANIFEST.md`](./SUPERSET_ADOPTION_MANIFEST.md).
 
 ## Routes
 
