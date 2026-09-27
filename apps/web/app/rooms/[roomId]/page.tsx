@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import "../rooms-theme.css";
+import "@/app/product-theme.css";
 
 import { AppChrome } from "@/components/shell/app-chrome";
 import { SharedChatRoom } from "@/components/chat/shared-chat-room";

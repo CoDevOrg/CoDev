@@ -39,6 +39,14 @@ describe("CoDev product theme", () => {
     expect(appTheme).toContain(".workspace-card:hover {");
   });
 
+  it("ships a shared shadcn product theme for Rooms and the dashboard", () => {
+    const productTheme = readCss("product-theme.css");
+    expect(productTheme).toContain(".product-scope,");
+    expect(productTheme).toContain(".rooms-scope {");
+    expect(productTheme).toContain("--color-background: #f2e9d6;");
+    expect(productTheme).toContain("--color-primary: #1b63b3;");
+  });
+
   it("keeps every profile menu action legible on the light product surface", () => {
     expect(appTheme).toContain(
       ".app-page .profile-menu-link,\n.app-page .profile-menu-action {",

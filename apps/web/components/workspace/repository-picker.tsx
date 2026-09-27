@@ -242,16 +242,20 @@ export function RepositoryPicker({
   return (
     <>
       <button
-        className="new-workspace-tile"
         type="button"
         aria-haspopup="dialog"
         onClick={() => setOpen(true)}
+        style={{ color: "var(--color-muted-foreground)" }}
+        className="flex min-h-[148px] flex-col items-center justify-center gap-2.5 rounded-xl border-[1.5px] border-dashed border-input bg-transparent px-5 text-center text-[13px] font-semibold transition-colors hover:border-primary hover:bg-primary/5"
       >
-        <span className="new-workspace-plus" aria-hidden="true">
+        <span
+          aria-hidden="true"
+          className="grid size-10 place-items-center rounded-full border border-primary/40 bg-primary/10 text-[22px] leading-none text-primary"
+        >
           +
         </span>
-        <strong>New workspace</strong>
-        <span>
+        <strong className="text-[15px] text-foreground">New workspace</strong>
+        <span className="max-w-[220px] font-medium text-muted-foreground">
           Start a current workspace or a shareable Firecracker instance.
         </span>
       </button>

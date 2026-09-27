@@ -1,10 +1,9 @@
 /*
- * Tailwind for the Rooms page only. Rooms shares the product cream/navy
- * palette (same tokens as landing.css / app-theme.css) via a scoped theme
- * block the way orca-theme.css does for the settings shell: reset < theme <
- * utilities layering keeps this from touching any other route, and the
- * plain-element reset below stays inside `.rooms-scope` so nothing outside
- * a page that opts in is affected.
+ * Shared Tailwind theme for product surfaces that use shadcn primitives
+ * (Rooms, dashboard, and anything else that opts in). Scoped under
+ * `.product-scope` / `.rooms-scope` so utilities cannot leak into the plain
+ * CSS shell, IDE workspace, or landing page. Palette matches landing.css /
+ * app-theme.css: paper cream, deep navy ink, vibrant blue accent.
  */
 @layer reset, theme, utilities;
 
@@ -13,7 +12,8 @@
 
 @theme {
   --font-sans:
-    -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+    var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
   --radius: 1rem;
   --radius-sm: calc(var(--radius) * 0.55);
   --radius-md: calc(var(--radius) * 0.8);
@@ -46,9 +46,8 @@
 }
 
 @layer reset {
+  .product-scope,
   .rooms-scope {
-    /* Rooms and the app shell both run light cream/navy. This still opts
-       into light native-control rendering explicitly for the scoped route. */
     color-scheme: light;
     background:
       radial-gradient(
@@ -61,6 +60,8 @@
     font-family: var(--font-sans);
   }
 
+  .product-scope ul,
+  .product-scope ol,
   .rooms-scope ul,
   .rooms-scope ol {
     margin: 0;
@@ -68,12 +69,16 @@
     list-style: none;
   }
 
+  .product-scope button,
   .rooms-scope button {
     font: inherit;
     color: inherit;
   }
 
-  .rooms-scope input {
+  .product-scope input,
+  .product-scope select,
+  .rooms-scope input,
+  .rooms-scope select {
     font: inherit;
   }
 }

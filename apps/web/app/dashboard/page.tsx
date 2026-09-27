@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 
 import { isGitHubAuthConfigured } from "@codev/config";
 
+import "@/app/product-theme.css";
+
 import { AppChrome } from "@/components/shell/app-chrome";
 import { WorkspaceGrid } from "@/components/workspace/workspace-grid";
 import { listWorkspacePresence } from "@/lib/workspaces/collaboration-server";
@@ -22,17 +24,15 @@ export default async function DashboardPage() {
 
   return (
     <AppChrome user={user} sidebar>
-      <main className="dashboard-shell">
-        <WorkspaceGrid
-          appSlug={process.env.GITHUB_APP_SLUG}
-          githubAuthConfigured={isGitHubAuthConfigured()}
-          user={user}
-          workspaces={workspaceCards.map((workspace) => ({
-            ...workspace,
-            updatedAt: workspace.updatedAt.toISOString(),
-          }))}
-        />
-      </main>
+      <WorkspaceGrid
+        appSlug={process.env.GITHUB_APP_SLUG}
+        githubAuthConfigured={isGitHubAuthConfigured()}
+        user={user}
+        workspaces={workspaceCards.map((workspace) => ({
+          ...workspace,
+          updatedAt: workspace.updatedAt.toISOString(),
+        }))}
+      />
     </AppChrome>
   );
 }

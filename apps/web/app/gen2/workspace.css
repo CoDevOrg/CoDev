@@ -295,16 +295,25 @@
   background: var(--surface-2);
 }
 
+/* MarkdownContent reads --color-*; Gen 2 shells use --ink / --line / etc. */
+.gen2-chat {
+  --color-border: var(--line);
+  --color-muted: var(--surface-3, var(--surface-2));
+  --color-muted-foreground: var(--muted);
+  --color-primary: var(--gold);
+  --color-ring: var(--gold);
+}
+
 .gen2-message {
   margin: 0;
   font-size: 0.875rem;
   line-height: 1.65;
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
 .gen2-message-waiting {
   color: var(--muted);
+  white-space: pre-wrap;
 }
 
 /* One rounded field holding the textarea and its controls, so the composer
@@ -313,6 +322,72 @@
   margin: 0 auto;
   padding: 12px 16px 16px;
   width: min(44rem, 100%);
+  transition: box-shadow 160ms ease;
+}
+
+.gen2-composer[data-dragging="true"] {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 55%, transparent);
+}
+
+.gen2-composer-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 12px 0;
+  border: 1px solid var(--line);
+  border-bottom: 0;
+  border-radius: 14px 14px 0 0;
+  background: var(--surface-2);
+  list-style: none;
+}
+
+.gen2-composer-files + textarea {
+  border-radius: 0;
+  padding-top: 8px;
+}
+
+.gen2-composer-files li {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 4px 4px 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.75rem;
+  line-height: 1.2;
+}
+
+.gen2-composer-files li span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 12rem;
+}
+
+.gen2-composer-files button {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.gen2-composer-files button:hover {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+}
+
+.gen2-composer-files button:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
 }
 
 .gen2-composer textarea {
@@ -339,7 +414,8 @@
 }
 
 .gen2-composer:focus-within textarea,
-.gen2-composer:focus-within .gen2-composer-row {
+.gen2-composer:focus-within .gen2-composer-row,
+.gen2-composer:focus-within .gen2-composer-files {
   border-color: color-mix(in srgb, var(--gold) 55%, var(--line));
 }
 
@@ -347,11 +423,51 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 8px 8px 16px;
+  padding: 6px 8px 8px 8px;
   border: 1px solid var(--line);
   border-top: 0;
   border-radius: 0 0 14px 14px;
   background: var(--surface-2);
+}
+
+.gen2-composer-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.gen2-composer-attach {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.gen2-composer-attach:hover:not(:disabled) {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+.gen2-composer-attach:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.gen2-composer-attach:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
 }
 
 .gen2-composer-hint {

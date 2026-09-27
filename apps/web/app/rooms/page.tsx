@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import "./rooms-theme.css";
+import "@/app/product-theme.css";
 
 import { AppChrome } from "@/components/shell/app-chrome";
 import { RoomsView } from "@/components/rooms/rooms-view";

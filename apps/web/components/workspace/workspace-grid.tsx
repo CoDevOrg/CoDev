@@ -2,18 +2,25 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { motion } from "motion/react";
 import {
-  ChevronDown,
+  FolderGit2,
   Grid2X2,
   List,
   LogOut,
   Search,
-  SlidersHorizontal,
   Trash2,
 } from "lucide-react";
 
 import { RepositoryPicker } from "@/components/workspace/repository-picker";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { AppUser } from "@/lib/auth/identity";
+import { cn } from "@/lib/platform/utils";
 
 type WorkspaceItem = {
   id: string;
@@ -34,20 +41,10 @@ type WorkspaceItem = {
 
 type WorkspaceView = "grid" | "list";
 
-const statuses = [
-  "pending",
-  "provisioning",
-  "ready",
-  "hibernated",
-  "stopping",
-  "stopped",
-  "failed",
-] as const;
-
 const SCOPE_OPTIONS = [
-  { value: "all", label: "All workspaces" },
-  { value: "owner", label: "Owned by me" },
-  { value: "member", label: "Shared with me" },
+  { value: "all", label: "All" },
+  { value: "owner", label: "Owned" },
+  { value: "member", label: "Shared" },
 ] as const;
 
 type WorkspaceScope = (typeof SCOPE_OPTIONS)[number]["value"];
@@ -76,6 +73,22 @@ function collaboratorName(
   return collaborator.name || collaborator.login;
 }
 
+function accessLabel(workspace: WorkspaceItem) {
+  if (workspace.repositoryVisibility === "private") return "Private";
+  if (workspace.repository) return "Public";
+  return "Blank";
+}
+
+function statusClass(status: string) {
+  if (status === "ready" || status === "provisioning") {
+    return "border-teal/30 bg-teal/10 text-teal";
+  }
+  if (status === "failed") {
+    return "border-destructive/30 bg-destructive/10 text-destructive";
+  }
+  return "border-border bg-muted text-muted-foreground";
+}
+
 export function WorkspaceGrid({
   appSlug,
   githubAuthConfigured,
@@ -89,11 +102,8 @@ export function WorkspaceGrid({
 }) {
   const [workspaceList, setWorkspaceList] = useState(workspaces);
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("");
-  const [artifactType, setArtifactType] = useState("");
   const [view, setView] = useState<WorkspaceView>("grid");
   const [scope, setScope] = useState<WorkspaceScope>("all");
-  const scopeMenuRef = useRef<HTMLDetailsElement>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<{
     workspace: WorkspaceItem;
@@ -103,10 +113,6 @@ export function WorkspaceGrid({
 
   const greeting = useMemo(() => getGreeting(), []);
 
-  // Prewarm: nudge only the shared Orca host awake on hover/focus intent so
-  // host startup overlaps navigation. The wake route does not start an Orca
-  // process, clone a repository, or resolve member credentials; the workspace
-  // page still runs the real connect after navigation.
   const prewarmedRef = useRef<Set<string>>(new Set());
   const preparedRef = useRef<Set<string>>(new Set());
   const hoverIntentRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
@@ -164,15 +170,10 @@ export function WorkspaceGrid({
         (workspace.repository || "Untitled workspace")
           .toLowerCase()
           .includes(normalizedQuery);
-      const matchesStatus = !status || workspace.status === status;
-      const matchesType =
-        !artifactType ||
-        (artifactType === "repository" && Boolean(workspace.repository)) ||
-        (artifactType === "blank" && !workspace.repository);
       const matchesScope = scope === "all" || workspace.role === scope;
-      return matchesQuery && matchesStatus && matchesType && matchesScope;
+      return matchesQuery && matchesScope;
     });
-  }, [artifactType, query, scope, sortedWorkspaces, status]);
+  }, [query, scope, sortedWorkspaces]);
 
   const activeCount = useMemo(() => {
     return workspaceList.filter(
@@ -214,285 +215,272 @@ export function WorkspaceGrid({
   const firstName =
     user?.name?.split(" ")[0] || user?.githubLogin || "Developer";
 
-  const scopeLabel =
-    SCOPE_OPTIONS.find((option) => option.value === scope)?.label ??
-    "All workspaces";
-
   return (
-    <div className="home-hub-shell">
-      {/* Home Hero Greeting Banner */}
-      <section className="home-welcome-hero">
-        <div className="home-welcome-header">
-          <div className="home-welcome-text">
-            <span className="home-badge">Workspace Home</span>
-            <h1>
-              {greeting},{" "}
-              <span className="home-highlight-name">{firstName}</span>
+    <main className="product-scope min-h-dvh px-8 py-11 sm:px-12">
+      <div className="mx-auto flex max-w-[1160px] flex-col gap-7">
+        <div className="flex flex-wrap items-end justify-between gap-7">
+          <div>
+            <span className="mb-2 inline-block text-[11px] font-bold tracking-[0.12em] text-primary uppercase">
+              Workspace home
+            </span>
+            <h1 className="m-0 text-[42px] leading-[1.03] font-semibold tracking-tight">
+              {greeting}, {firstName}
             </h1>
-            <p>Build together with people and AI agents.</p>
+            <p className="mt-2.5 max-w-[460px] text-[14.5px] leading-relaxed text-muted-foreground">
+              Build together with people and AI agents.
+            </p>
           </div>
 
-          <div className="home-quick-stats">
-            <div className="stat-card">
-              <span className="stat-label">Workspaces</span>
-              <strong className="stat-value">{workspaceList.length}</strong>
-            </div>
-            <div className="stat-card">
-              <span className="stat-label">Active / Provisioning</span>
-              <strong className="stat-value stat-value-active">
+          <div className="flex flex-wrap gap-3">
+            <Card className="min-w-[108px] px-4 py-3">
+              <strong className="block text-[22px] font-semibold tracking-tight">
+                {workspaceList.length}
+              </strong>
+              <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                Workspaces
+              </span>
+            </Card>
+            <Card className="min-w-[108px] px-4 py-3">
+              <strong className="block text-[22px] font-semibold tracking-tight text-primary">
                 {activeCount}
               </strong>
-            </div>
+              <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                Active
+              </span>
+            </Card>
             {user?.githubLogin ? (
-              <div className="stat-card">
-                <span className="stat-label">Connected GitHub</span>
-                <strong className="stat-value">@{user.githubLogin}</strong>
-              </div>
+              <Card className="min-w-[108px] px-4 py-3">
+                <strong className="block text-[15px] font-semibold tracking-tight">
+                  @{user.githubLogin}
+                </strong>
+                <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                  GitHub
+                </span>
+              </Card>
             ) : null}
           </div>
         </div>
-      </section>
 
-      {/* Main Workspace Browser Section */}
-      <section className="workspace-browser" aria-label="Workspace browser">
-        <div className="home-section-header">
-          <div>
-            <h2>Your Workspaces</h2>
-            <p>Access and manage all your active repository workspaces.</p>
-          </div>
-        </div>
-
-        <div className="workspace-toolbar">
-          <label className="workspace-search">
-            <Search aria-hidden="true" />
-            <input
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex h-[42px] min-w-[240px] flex-1 items-center gap-2 rounded-full border border-border bg-card px-3.5 sm:max-w-[320px] sm:flex-none">
+            <Search
+              aria-hidden="true"
+              className="size-4 text-muted-foreground"
+            />
+            <Input
               type="search"
+              placeholder="Search workspaces…"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search workspaces..."
               aria-label="Search workspaces"
+              className="h-auto border-0 bg-transparent p-0 text-[13.5px] shadow-none focus-visible:ring-0"
             />
-          </label>
-          <label className="workspace-filter">
-            <select
-              value={status}
-              onChange={(event) => setStatus(event.target.value)}
-              aria-label="Filter by status"
-            >
-              <option value="">Any status</option>
-              {statuses.map((option) => (
-                <option value={option} key={option}>
-                  {option.charAt(0).toUpperCase() + option.slice(1)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="workspace-filter">
-            <select
-              value={artifactType}
-              onChange={(event) => setArtifactType(event.target.value)}
-              aria-label="Filter by type"
-            >
-              <option value="">Any type</option>
-              <option value="repository">GitHub repository</option>
-              <option value="blank">Blank workspace</option>
-            </select>
-          </label>
-        </div>
-
-        <div className="workspace-grid-heading">
-          <span>
-            {filteredWorkspaces.length}{" "}
-            {filteredWorkspaces.length === 1 ? "workspace" : "workspaces"}
-          </span>
-          <div className="workspace-view-controls">
-            <details className="workspace-scope-menu" ref={scopeMenuRef}>
-              <summary className="workspace-scope">
-                <SlidersHorizontal aria-hidden="true" />
-                {scopeLabel}
-                <ChevronDown aria-hidden="true" />
-              </summary>
-              <div className="workspace-scope-popover" role="menu">
-                {SCOPE_OPTIONS.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={scope === option.value}
-                    className="workspace-scope-option"
-                    onClick={() => {
-                      setScope(option.value);
-                      scopeMenuRef.current?.removeAttribute("open");
-                    }}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </details>
-            <div className="workspace-view-toggle" aria-label="Workspace view">
-              <button
-                className={view === "grid" ? "is-active" : ""}
-                type="button"
-                aria-label="Grid view"
-                aria-pressed={view === "grid"}
-                onClick={() => setView("grid")}
-              >
-                <Grid2X2 aria-hidden="true" />
-              </button>
-              <button
-                className={view === "list" ? "is-active" : ""}
-                type="button"
-                aria-label="List view"
-                aria-pressed={view === "list"}
-                onClick={() => setView("list")}
-              >
-                <List aria-hidden="true" />
-              </button>
-            </div>
           </div>
+
+          <ToggleGroup
+            type="single"
+            layoutId="workspace-scope-pill"
+            value={scope}
+            onValueChange={(value) =>
+              value && setScope(value as WorkspaceScope)
+            }
+          >
+            {SCOPE_OPTIONS.map((option) => (
+              <ToggleGroupItem key={option.value} value={option.value}>
+                {option.label}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+
+          <div className="flex-1" />
+
+          <ToggleGroup
+            type="single"
+            layoutId="workspace-view-pill"
+            value={view}
+            onValueChange={(value) => value && setView(value as WorkspaceView)}
+            aria-label="Workspace view"
+          >
+            <ToggleGroupItem value="grid" aria-label="Grid view">
+              <Grid2X2 aria-hidden="true" className="size-3.5" />
+            </ToggleGroupItem>
+            <ToggleGroupItem value="list" aria-label="List view">
+              <List aria-hidden="true" className="size-3.5" />
+            </ToggleGroupItem>
+          </ToggleGroup>
         </div>
 
         <div
-          className={`workspace-cards ${view === "list" ? "workspace-cards-list" : ""}`}
+          className={cn(
+            "grid gap-4.5",
+            view === "list"
+              ? "grid-cols-1"
+              : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
+          )}
         >
           <RepositoryPicker
             appSlug={appSlug}
             githubAuthConfigured={githubAuthConfigured}
             githubConnected={Boolean(user?.githubLogin)}
           />
-          {filteredWorkspaces.map((workspace) => (
-            <div
-              className="workspace-card-wrapper"
-              key={workspace.id}
-              style={{ position: "relative" }}
-            >
-              <Link
-                href={`/workspaces/${workspace.id}`}
-                className="workspace-card-link"
-                aria-label={`Open ${workspace.repository || "workspace"}`}
-                style={{ textDecoration: "none", color: "inherit" }}
-                onPointerEnter={() => armPrewarm(workspace.id)}
-                onPointerLeave={() => disarmPrewarm(workspace.id)}
-                onFocus={() => prewarmWorkspace(workspace.id)}
-                onPointerDown={() => prepareWorkspace(workspace.id)}
+
+          {filteredWorkspaces.map((workspace) => {
+            const mode =
+              workspace.role === "owner"
+                ? ("delete" as const)
+                : ("leave" as const);
+            const title = workspace.repository || "Untitled workspace";
+            const actionLabel = `${mode === "leave" ? "Leave" : "Delete"} ${title}`;
+
+            return (
+              <motion.div
+                key={workspace.id}
+                className="relative"
+                whileHover={{ y: -3 }}
+                whileTap={{ scale: 0.98 }}
               >
-                <article className="workspace-card">
-                  <div
-                    className="workspace-card-presence"
-                    aria-label={
-                      workspace.liveCollaborators?.length
-                        ? `${workspace.liveCollaborators.length} collaborator${workspace.liveCollaborators.length === 1 ? "" : "s"} live now`
-                        : "No collaborators live now"
-                    }
+                <Link
+                  href={`/workspaces/${workspace.id}`}
+                  className="block h-full"
+                  aria-label={`Open ${title}`}
+                  onPointerEnter={() => armPrewarm(workspace.id)}
+                  onPointerLeave={() => disarmPrewarm(workspace.id)}
+                  onFocus={() => prewarmWorkspace(workspace.id)}
+                  onPointerDown={() => prepareWorkspace(workspace.id)}
+                >
+                  <Card
+                    className={cn(
+                      "flex h-full flex-col gap-3.5 p-5 transition-colors hover:border-input hover:bg-secondary",
+                      view === "list" && "sm:flex-row sm:items-center sm:gap-5",
+                    )}
                   >
-                    <span className="workspace-card-presence-label">
-                      In this workspace
-                    </span>
-                    {workspace.liveCollaborators?.length ? (
-                      <div className="workspace-live-collaborators">
-                        {workspace.liveCollaborators.map((collaborator) =>
-                          collaborator.avatarUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element -- Presence avatars can originate from a member's identity provider, so they cannot use a fixed Next image allowlist.
-                            <img
-                              key={collaborator.id}
-                              src={collaborator.avatarUrl}
-                              alt={collaboratorName(collaborator)}
-                              title={`${collaboratorName(collaborator)} is active now`}
-                            />
-                          ) : (
-                            <span
-                              key={collaborator.id}
-                              aria-label={`${collaboratorName(collaborator)} is active now`}
-                              title={`${collaboratorName(collaborator)} is active now`}
-                            >
-                              {collaboratorName(collaborator).slice(0, 1)}
-                            </span>
-                          ),
-                        )}
-                        <small>Live now</small>
+                    <div
+                      className={cn(
+                        "rounded-xl border border-border bg-muted/60 p-3.5",
+                        view === "list" && "sm:min-w-[200px] sm:flex-none",
+                      )}
+                      aria-label={
+                        workspace.liveCollaborators?.length
+                          ? `${workspace.liveCollaborators.length} collaborator${workspace.liveCollaborators.length === 1 ? "" : "s"} live now`
+                          : "No collaborators live now"
+                      }
+                    >
+                      <span className="block text-[10px] font-bold tracking-[0.1em] text-muted-foreground uppercase">
+                        In this workspace
+                      </span>
+                      {workspace.liveCollaborators?.length ? (
+                        <div className="mt-2.5 flex items-center">
+                          {workspace.liveCollaborators.map((collaborator) =>
+                            collaborator.avatarUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element -- Presence avatars can originate from a member's identity provider, so they cannot use a fixed Next image allowlist.
+                              <img
+                                key={collaborator.id}
+                                src={collaborator.avatarUrl}
+                                alt={collaboratorName(collaborator)}
+                                title={`${collaboratorName(collaborator)} is active now`}
+                                className="-ml-2 size-8 rounded-full border-2 border-card object-cover first:ml-0"
+                              />
+                            ) : (
+                              <Avatar
+                                key={collaborator.id}
+                                className="-ml-2 size-8 border-2 border-card first:ml-0"
+                                title={`${collaboratorName(collaborator)} is active now`}
+                              >
+                                <AvatarFallback
+                                  aria-label={`${collaboratorName(collaborator)} is active now`}
+                                >
+                                  {collaboratorName(collaborator).slice(0, 1)}
+                                </AvatarFallback>
+                              </Avatar>
+                            ),
+                          )}
+                          <small className="ml-2.5 text-[11px] font-semibold text-foreground">
+                            Live now
+                          </small>
+                        </div>
+                      ) : (
+                        <p className="mt-2.5 mb-0 text-[13px] text-muted-foreground">
+                          No one is active right now
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge
+                          variant="outline"
+                          className={statusClass(workspace.status)}
+                        >
+                          {workspace.status}
+                        </Badge>
+                        <Badge variant="outline">
+                          {accessLabel(workspace)}
+                        </Badge>
                       </div>
-                    ) : (
-                      <p className="workspace-card-presence-empty">
-                        No one is active right now
+                      <h3 className="mt-2.5 mb-0 text-[16px] leading-tight font-semibold tracking-tight">
+                        {title}
+                      </h3>
+                      <p className="mt-1.5 mb-0 text-[12.5px] text-muted-foreground">
+                        {workspace.repository
+                          ? `${workspace.defaultBranch || "No branch"} · ${workspace.baseSha.slice(0, 7)}`
+                          : "No repository connected"}
                       </p>
-                    )}
-                  </div>
-                  <div>
-                    <strong>
-                      {workspace.repository || "Untitled workspace"}
-                    </strong>
-                    <span>
-                      {workspace.repository
-                        ? `${workspace.defaultBranch || "No branch"} · ${workspace.baseSha.slice(0, 7)}`
-                        : "No repository connected"}
-                    </span>
-                  </div>
-                  <div className="workspace-card-meta">
-                    <span className="workspace-card-access">
-                      {workspace.repositoryVisibility === "private"
-                        ? "Private"
-                        : workspace.repository
-                          ? "Public"
-                          : "Blank"}
-                    </span>
-                    <small>{formatUpdatedAt(workspace.updatedAt)}</small>
-                  </div>
-                </article>
-              </Link>
-              {(() => {
-                const mode =
-                  workspace.role === "owner"
-                    ? ("delete" as const)
-                    : ("leave" as const);
-                const label = `${mode === "leave" ? "Leave" : "Delete"} ${
-                  workspace.repository || "workspace"
-                }`;
-                return (
-                  <button
-                    type="button"
-                    className="workspace-card-action-button"
-                    aria-label={label}
-                    title={
-                      mode === "leave" ? "Leave workspace" : "Delete workspace"
-                    }
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setPendingAction({ workspace, mode });
-                    }}
-                    style={{
-                      position: "absolute",
-                      top: "12px",
-                      right: "12px",
-                      zIndex: 10,
-                      background: "transparent",
-                      border: "none",
-                      padding: "8px",
-                      borderRadius: "6px",
-                      color: "var(--workspace-faint, #888)",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    {mode === "leave" ? (
-                      <LogOut className="h-4 w-4" />
-                    ) : (
-                      <Trash2 className="h-4 w-4" />
-                    )}
-                  </button>
-                );
-              })()}
-            </div>
-          ))}
+                    </div>
+
+                    <div
+                      className={cn(
+                        "mt-auto flex items-center justify-between border-t border-border pt-3",
+                        view === "list" &&
+                          "sm:mt-0 sm:w-28 sm:flex-none sm:flex-col sm:items-end sm:border-0 sm:pt-0 sm:text-right",
+                      )}
+                    >
+                      <span className="text-[12px] text-muted-foreground">
+                        {formatUpdatedAt(workspace.updatedAt)}
+                      </span>
+                      <FolderGit2
+                        aria-hidden="true"
+                        className="size-4 text-muted-foreground"
+                      />
+                    </div>
+                  </Card>
+                </Link>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-sm"
+                  aria-label={actionLabel}
+                  title={
+                    mode === "leave" ? "Leave workspace" : "Delete workspace"
+                  }
+                  className="absolute top-3 right-3 z-10 rounded-full border-border bg-card/90 text-muted-foreground shadow-sm hover:text-foreground"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setPendingAction({ workspace, mode });
+                  }}
+                >
+                  {mode === "leave" ? (
+                    <LogOut aria-hidden="true" className="size-3.5" />
+                  ) : (
+                    <Trash2 aria-hidden="true" className="size-3.5" />
+                  )}
+                </Button>
+              </motion.div>
+            );
+          })}
         </div>
 
         {!filteredWorkspaces.length && sortedWorkspaces.length ? (
-          <p className="workspace-empty-state">
-            No workspaces match these filters.
-          </p>
+          <Card className="grid justify-items-center gap-3 border-dashed px-6 py-14 text-center">
+            <FolderGit2 aria-hidden="true" className="size-7 text-primary" />
+            <h2 className="m-0 text-[18px] font-semibold">
+              No workspaces match
+            </h2>
+            <p className="m-0 text-[13px] text-muted-foreground">
+              Try a different search or filter.
+            </p>
+          </Card>
         ) : null}
 
         {pendingAction
@@ -501,7 +489,6 @@ export function WorkspaceGrid({
               const busy = busyId === workspace.id;
               const name = workspace.repository || "this workspace";
               const isLeave = mode === "leave";
-              const title = isLeave ? "Leave workspace?" : "Delete workspace?";
               const cancel = () => {
                 if (!busy) {
                   setPendingAction(null);
@@ -510,56 +497,27 @@ export function WorkspaceGrid({
               };
               return (
                 <div
-                  className="delete-workspace-backdrop"
-                  style={{
-                    position: "fixed",
-                    inset: 0,
-                    zIndex: 1000,
-                    background: "rgba(0, 0, 0, 0.6)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
+                  className="fixed inset-0 z-[1000] flex items-center justify-center bg-foreground/28 p-4"
+                  role="presentation"
                   onClick={cancel}
                 >
-                  <div
-                    className="delete-workspace-modal"
+                  <Card
                     role="dialog"
                     aria-modal="true"
                     aria-labelledby="workspace-action-title"
-                    onKeyDown={(e) => {
-                      if (e.key === "Escape") cancel();
+                    className="w-full max-w-[420px] bg-popover p-6 shadow-xl"
+                    onClick={(event) => event.stopPropagation()}
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") cancel();
                     }}
-                    style={{
-                      background: "var(--workspace-surface, #1e1e1e)",
-                      color: "var(--workspace-ink, #fff)",
-                      border: "1px solid var(--workspace-line, #333)",
-                      borderRadius: "12px",
-                      padding: "24px",
-                      maxWidth: "420px",
-                      width: "90%",
-                      boxShadow: "0 10px 30px rgba(0,0,0,0.4)",
-                    }}
-                    onClick={(e) => e.stopPropagation()}
                   >
                     <h3
                       id="workspace-action-title"
-                      style={{
-                        margin: "0 0 8px",
-                        fontSize: "16px",
-                        fontWeight: 700,
-                      }}
+                      className="m-0 text-[16px] font-bold"
                     >
-                      {title}
+                      {isLeave ? "Leave workspace?" : "Delete workspace?"}
                     </h3>
-                    <p
-                      style={{
-                        margin: "0 0 16px",
-                        fontSize: "13px",
-                        opacity: 0.8,
-                        lineHeight: 1.5,
-                      }}
-                    >
+                    <p className="mt-2 mb-4 text-[13px] leading-relaxed text-muted-foreground">
                       {isLeave ? (
                         <>
                           You&rsquo;ll lose access to <strong>{name}</strong>{" "}
@@ -575,55 +533,37 @@ export function WorkspaceGrid({
                       )}
                     </p>
                     {actionError ? (
-                      <div
-                        style={{
-                          color: "#d66161",
-                          fontSize: "12px",
-                          marginBottom: "12px",
-                        }}
-                      >
+                      <p className="mb-3 text-[12px] text-destructive">
                         {actionError}
-                      </div>
+                      </p>
                     ) : null}
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "flex-end",
-                        gap: "10px",
-                      }}
-                    >
-                      <button
+                    <div className="flex justify-end gap-2.5">
+                      <Button
                         type="button"
+                        variant="outline"
                         autoFocus
                         disabled={busy}
                         onClick={cancel}
-                        style={{
-                          background: "transparent",
-                          border: "1px solid var(--workspace-line, #444)",
-                          color: "inherit",
-                          borderRadius: "6px",
-                          padding: "8px 14px",
-                          fontSize: "13px",
-                          cursor: "pointer",
-                        }}
+                        className="rounded-full"
                       >
                         Cancel
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
                         disabled={busy}
                         onClick={() => void runPendingAction()}
-                        style={{
-                          background: isLeave ? "#8a5a2b" : "#b33f3f",
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: "6px",
-                          padding: "8px 14px",
-                          fontSize: "13px",
-                          fontWeight: 600,
-                          cursor: "pointer",
-                          opacity: busy ? 0.6 : 1,
-                        }}
+                        className="rounded-full"
+                        style={
+                          isLeave
+                            ? {
+                                background: "var(--color-orange)",
+                                color: "var(--color-primary-foreground)",
+                              }
+                            : {
+                                background: "var(--color-destructive)",
+                                color: "var(--color-primary-foreground)",
+                              }
+                        }
                       >
                         {busy
                           ? isLeave
@@ -632,14 +572,14 @@ export function WorkspaceGrid({
                           : isLeave
                             ? "Leave workspace"
                             : "Delete workspace"}
-                      </button>
+                      </Button>
                     </div>
-                  </div>
+                  </Card>
                 </div>
               );
             })()
           : null}
-      </section>
-    </div>
+      </div>
+    </main>
   );
 }

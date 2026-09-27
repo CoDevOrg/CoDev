@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowUp, Plus, Square } from "lucide-react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { ArrowUp, Paperclip, Plus, Square, X } from "lucide-react";
 import type {
   Gen2Chat,
   Gen2ChatDetail,
@@ -10,7 +10,15 @@ import type {
   Gen2WorkspaceDetail,
 } from "@codev/contracts";
 
+import { MarkdownContent } from "@/components/markdown/markdown-content";
 import { canRunGen2Agent } from "@/lib/gen2/agent-policy";
+import {
+  formatGen2AttachmentPrompt,
+  gen2ChatUploadPath,
+  isNonTextFileContents,
+  MAX_GEN2_CHAT_ATTACHMENT_BYTES,
+  MAX_GEN2_CHAT_ATTACHMENTS,
+} from "@/lib/gen2/chat-attachments";
 import {
   decodeCodexExecOutput,
   mergeCodexExecChunks,
@@ -21,6 +29,7 @@ import { Gen2ConnectProvider, useGen2ProviderStatus } from "./connect-provider";
 import { Gen2TurnActivity } from "./turn-activity";
 
 type Thread = { messages: Gen2ChatMessage[] };
+type PendingFile = { id: string; file: File };
 
 const STORAGE_PREFIX = "codev-gen2-turn:";
 
@@ -81,18 +90,24 @@ export function Gen2ChatPanel({
   const [chatId, setChatId] = useState<string | null>(null);
   const [thread, setThread] = useState<Thread>({ messages: [] });
   const [prompt, setPrompt] = useState("");
+  const [attachments, setAttachments] = useState<PendingFile[]>([]);
   const [items, setItems] = useState<Gen2TurnItem[]>([]);
   const [liveReply, setLiveReply] = useState("");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
+  const [dragging, setDragging] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const sessionRef = useRef<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const dragDepthRef = useRef(0);
+  const attachInputId = useId();
   const [waking, setWaking] = useState(false);
   const { status: provider, refresh: refreshProvider } =
     useGen2ProviderStatus();
   const ready = canRunGen2Agent(workspace.status);
   const needsProvider = provider !== null && !provider.connected;
+  const canSend = Boolean(prompt.trim() || attachments.length > 0);
 
   useEffect(() => onRunningChange(running), [running, onRunningChange]);
 
@@ -236,11 +251,74 @@ export function Gen2ChatPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace.id]);
 
+  function queueFiles(list: FileList | File[] | null) {
+    if (!list) return;
+    const incoming = Array.from(list);
+    if (incoming.length === 0) return;
+    setError("");
+    setAttachments((current) => {
+      const room = MAX_GEN2_CHAT_ATTACHMENTS - current.length;
+      if (room <= 0) {
+        setError(`You can attach up to ${MAX_GEN2_CHAT_ATTACHMENTS} files.`);
+        return current;
+      }
+      const next = [...current];
+      for (const file of incoming.slice(0, room)) {
+        if (file.size > MAX_GEN2_CHAT_ATTACHMENT_BYTES) {
+          setError(`${file.name} is larger than 1 MB.`);
+          continue;
+        }
+        next.push({ id: crypto.randomUUID(), file });
+      }
+      if (incoming.length > room) {
+        setError(`You can attach up to ${MAX_GEN2_CHAT_ATTACHMENTS} files.`);
+      }
+      return next;
+    });
+  }
+
+  async function uploadAttachments(
+    pending: PendingFile[],
+  ): Promise<{ paths: string[]; error?: string }> {
+    const paths: string[] = [];
+    for (const { file } of pending) {
+      const contents = await file.text();
+      if (isNonTextFileContents(contents)) {
+        return {
+          paths,
+          error: `${file.name} is not a text file.`,
+        };
+      }
+      const path = gen2ChatUploadPath(file.name);
+      const response = await fetch(
+        `/api/gen2/workspaces/${workspace.id}/files`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path, contents, overwrite: true }),
+        },
+      );
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        return {
+          paths,
+          error: payload.error ?? `${file.name} could not be uploaded.`,
+        };
+      }
+      paths.push(path);
+    }
+    return { paths };
+  }
+
   async function send() {
     const text = prompt.trim();
-    if (!text || running) return;
+    const pending = attachments;
+    if ((!text && pending.length === 0) || running) return;
     setError("");
     setPrompt("");
+    setAttachments([]);
 
     // The composer is never disabled. If the machine is not up yet, say so
     // and bring it up rather than making the member find a button.
@@ -251,6 +329,7 @@ export function Gen2ChatPanel({
       if (!started) {
         setError("The machine could not start. Try again in a moment.");
         setPrompt(text);
+        setAttachments(pending);
         return;
       }
     }
@@ -263,10 +342,33 @@ export function Gen2ChatPanel({
       );
       if (!created.ok) {
         setError("Couldn't start a chat.");
+        setPrompt(text);
+        setAttachments(pending);
         return;
       }
       target = ((await created.json()) as { chat: Gen2Chat }).chat.id;
       setChatId(target);
+    }
+
+    let promptBody = text;
+    if (pending.length > 0) {
+      try {
+        const uploaded = await uploadAttachments(pending);
+        if (uploaded.error) {
+          setError(uploaded.error);
+          setPrompt(text);
+          setAttachments(pending);
+          return;
+        }
+        promptBody = formatGen2AttachmentPrompt(uploaded.paths, text);
+        // Files are now on the shared guest FS — refresh the tree.
+        onFilesChanged();
+      } catch {
+        setError("Couldn't upload those files. Try again.");
+        setPrompt(text);
+        setAttachments(pending);
+        return;
+      }
     }
 
     // Show the prompt immediately; the server writes it as the turn starts.
@@ -276,7 +378,7 @@ export function Gen2ChatPanel({
         {
           id: `pending-${Date.now()}`,
           role: "user",
-          body: text,
+          body: promptBody,
           items: null,
           createdAt: new Date().toISOString(),
         },
@@ -291,7 +393,7 @@ export function Gen2ChatPanel({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             chatId: target,
-            prompt: text,
+            prompt: promptBody,
             idempotencyKey: crypto.randomUUID(),
           }),
         },
@@ -339,11 +441,52 @@ export function Gen2ChatPanel({
   const composer = (
     <form
       className="gen2-composer"
+      data-dragging={dragging || undefined}
       onSubmit={(event) => {
         event.preventDefault();
         void send();
       }}
+      onDragEnter={(event) => {
+        event.preventDefault();
+        dragDepthRef.current += 1;
+        if (event.dataTransfer.types.includes("Files")) setDragging(true);
+      }}
+      onDragOver={(event) => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+      }}
+      onDragLeave={(event) => {
+        event.preventDefault();
+        dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+        if (dragDepthRef.current === 0) setDragging(false);
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        dragDepthRef.current = 0;
+        setDragging(false);
+        queueFiles(event.dataTransfer.files);
+      }}
     >
+      {attachments.length > 0 ? (
+        <ul className="gen2-composer-files" aria-label="Attached files">
+          {attachments.map(({ id, file }) => (
+            <li key={id}>
+              <span title={file.name}>{file.name}</span>
+              <button
+                type="button"
+                aria-label={`Remove ${file.name}`}
+                onClick={() =>
+                  setAttachments((current) =>
+                    current.filter((item) => item.id !== id),
+                  )
+                }
+              >
+                <X aria-hidden="true" size={12} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <textarea
         value={prompt}
         onChange={(event) => setPrompt(event.target.value)}
@@ -353,18 +496,43 @@ export function Gen2ChatPanel({
             void send();
           }
         }}
-        placeholder="Ask Codex to build something on this machine"
+        placeholder={
+          dragging
+            ? "Drop files to attach"
+            : "Ask Codex to build something on this machine"
+        }
         rows={empty ? 3 : 2}
         aria-label="Prompt"
       />
       <div className="gen2-composer-row">
+        <input
+          ref={fileInputRef}
+          id={attachInputId}
+          type="file"
+          multiple
+          className="gen2-composer-file-input"
+          aria-label="Choose files to attach"
+          onChange={(event) => {
+            queueFiles(event.target.files);
+            event.target.value = "";
+          }}
+        />
+        <button
+          type="button"
+          className="gen2-composer-attach"
+          aria-label="Attach files"
+          disabled={running}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <Paperclip aria-hidden="true" size={15} />
+        </button>
         <span className="gen2-composer-hint">
           {waking
             ? "Waking the machine…"
             : running
               ? "Codex is working"
               : ready
-                ? "Enter to send"
+                ? "Enter to send · text files only"
                 : "Starting the machine"}
         </span>
         {running ? (
@@ -380,7 +548,7 @@ export function Gen2ChatPanel({
           <button
             type="submit"
             className="gen2-composer-send"
-            disabled={!prompt.trim()}
+            disabled={!canSend}
             aria-label="Send"
           >
             <ArrowUp aria-hidden="true" size={15} />
@@ -464,14 +632,20 @@ export function Gen2ChatPanel({
                       onOpenFile={onOpenFile}
                     />
                   ) : null}
-                  <p className="gen2-message">{message.body}</p>
+                  <MarkdownContent
+                    text={message.body}
+                    className="gen2-message"
+                  />
                 </li>
               ))}
               {running ? (
                 <li data-role="assistant">
                   <Gen2TurnActivity items={items} onOpenFile={onOpenFile} />
                   {liveReply ? (
-                    <p className="gen2-message">{liveReply}</p>
+                    <MarkdownContent
+                      text={liveReply}
+                      className="gen2-message"
+                    />
                   ) : items.length === 0 ? (
                     <p
                       className="gen2-message gen2-message-waiting"

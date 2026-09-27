@@ -75,6 +75,9 @@ describe("Gen2ChatPanel", () => {
             ? json({ chat: CHAT })
             : json({ chats: [CHAT] });
         }
+        if (path.endsWith("/files") && init?.method === "PATCH") {
+          return json({ revision: "rev-1" });
+        }
         throw new Error(`unstubbed fetch: ${init?.method ?? "GET"} ${path}`);
       }),
     );
@@ -297,5 +300,58 @@ describe("Gen2ChatPanel", () => {
     );
     expect(await screen.findByLabelText("Prompt")).toBeInTheDocument();
     expect(screen.queryByText("Connect ChatGPT to run Codex")).toBeNull();
+  });
+
+  it("uploads attached text files onto the machine before starting the turn", async () => {
+    const onFilesChanged = vi.fn();
+    stubFetch({});
+    render(
+      <Gen2ChatPanel
+        workspace={workspace}
+        onRunningChange={vi.fn()}
+        onFilesChanged={onFilesChanged}
+        onOpenFile={vi.fn()}
+        onNeedsMachine={async () => true}
+      />,
+    );
+
+    const file = new File(["export const n = 1;\n"], "notes.ts", {
+      type: "text/typescript",
+    });
+    fireEvent.change(screen.getByLabelText("Choose files to attach"), {
+      target: { files: [file] },
+    });
+
+    expect(await screen.findByText("notes.ts")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Prompt"), {
+      target: { value: "review this" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => {
+      const fetchMock = vi.mocked(fetch);
+      const upload = fetchMock.mock.calls.find(
+        ([url, init]) =>
+          String(url).endsWith("/files") && init?.method === "PATCH",
+      );
+      expect(upload).toBeTruthy();
+      expect(JSON.parse(String(upload?.[1]?.body))).toMatchObject({
+        path: ".codev/uploads/notes.ts",
+        contents: "export const n = 1;\n",
+        overwrite: true,
+      });
+      const agent = fetchMock.mock.calls.find(
+        ([url, init]) =>
+          String(url).endsWith("/agent") && init?.method === "POST",
+      );
+      expect(JSON.parse(String(agent?.[1]?.body)).prompt).toContain(
+        ".codev/uploads/notes.ts",
+      );
+      expect(JSON.parse(String(agent?.[1]?.body)).prompt).toContain(
+        "review this",
+      );
+    });
+    expect(onFilesChanged).toHaveBeenCalled();
   });
 });
