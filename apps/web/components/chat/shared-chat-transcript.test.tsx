@@ -115,4 +115,45 @@ describe("SharedChatTranscript", () => {
       mergeRoomMessages([initialMessage], [initialMessage, liveMessage]),
     ).toEqual([initialMessage, liveMessage]);
   });
+
+  describe("a reply streaming in", () => {
+    const generation = {
+      status: "pending" as const,
+      provider: "claude" as const,
+      model: "sonnet",
+    };
+    const streaming = (text: string) => ({
+      ...liveMessage,
+      role: "assistant" as const,
+      text,
+      generation,
+    });
+
+    it("keeps live partial text when a poll returns the empty placeholder", () => {
+      // Postgres holds `body: ""` until the turn commits, so the polling
+      // fallback must not be allowed to blank out what SSE already delivered.
+      expect(
+        mergeRoomMessages([streaming("Half a th")], [streaming("")]),
+      ).toEqual([streaming("Half a th")]);
+    });
+
+    it("accepts each longer partial", () => {
+      expect(
+        mergeRoomMessages(
+          [streaming("Half a th")],
+          [streaming("Half a thought")],
+        ),
+      ).toEqual([streaming("Half a thought")]);
+    });
+
+    it("always accepts the committed reply, even when it is shorter", () => {
+      const completed = {
+        ...streaming("Trimmed."),
+        generation: { ...generation, status: "completed" as const },
+      };
+      expect(
+        mergeRoomMessages([streaming("A much longer draft")], [completed]),
+      ).toEqual([completed]);
+    });
+  });
 });

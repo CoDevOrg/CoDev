@@ -146,6 +146,22 @@ describe("private Claude execution", () => {
     await expect(cleanupClaudeExecution(id)).rejects.toThrow();
     expect(mocks.release).not.toHaveBeenCalled();
   });
+  it("appends a system prompt only when a caller asks for one", () => {
+    const plain = claudePrintArgs("sonnet");
+    expect(plain).not.toContain("--append-system-prompt");
+
+    const withPrompt = claudePrintArgs("sonnet", {
+      systemPrompt: "Room guardrails.",
+    });
+    expect(withPrompt).toContain("--append-system-prompt");
+    expect(withPrompt[withPrompt.indexOf("--append-system-prompt") + 1]).toBe(
+      "Room guardrails.",
+    );
+    // Appending must not disturb the lockdown the rooms executor relies on.
+    expect(withPrompt).not.toContain("--system-prompt");
+    for (const flag of ["--tools", "--setting-sources", "--strict-mcp-config"])
+      expect(withPrompt).toContain(flag);
+  });
   it("rejects unvalidated models, oversized context, and failed CLI output", async () => {
     expect(() => claudePrintArgs("--unsafe")).toThrow();
     await expect(

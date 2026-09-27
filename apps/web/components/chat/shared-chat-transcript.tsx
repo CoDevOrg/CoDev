@@ -44,7 +44,21 @@ export function mergeRoomMessages(
   const bySequence = new Map(
     current.map((message) => [message.sequence, message]),
   );
-  for (const message of incoming) bySequence.set(message.sequence, message);
+  for (const message of incoming) {
+    const existing = bySequence.get(message.sequence);
+    // A reply that is still generating streams in over SSE as a growing
+    // pending message, while Postgres still holds its empty placeholder. So
+    // when both sides are pending, keep whichever text is further along --
+    // otherwise a polling fallback tick would blank out live text mid-turn.
+    if (
+      existing &&
+      existing.generation?.status === "pending" &&
+      message.generation?.status === "pending" &&
+      message.text.length < existing.text.length
+    )
+      continue;
+    bySequence.set(message.sequence, message);
+  }
   return [...bySequence.values()].sort((a, b) => a.sequence - b.sequence);
 }
 

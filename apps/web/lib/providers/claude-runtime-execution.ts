@@ -70,7 +70,32 @@ function encode(run: Run) {
   );
 }
 
-export function claudePrintArgs(model: string, outputSchema?: object) {
+/**
+ * `systemPrompt` appends to the CLI's own persona rather than replacing it, so
+ * a caller that passes nothing keeps today's inherited coding-agent behavior.
+ * Only the rooms executor passes one; see `chat/room-reply-prompt.ts`.
+ */
+export type ClaudePrintOptions = {
+  outputSchema?: object | undefined;
+  systemPrompt?: string | undefined;
+  /**
+   * `"stream-json"` emits events as the turn runs so a caller can show partial
+   * text. The CLI requires `--verbose` alongside it under `--print`, and
+   * `--include-partial-messages` is what makes the events token-level rather
+   * than one whole message at the end. The final `{"type":"result"}` line is
+   * still emitted, so `parseClaudeResult` reads either format.
+   */
+  outputFormat?: "json" | "stream-json" | undefined;
+};
+
+export function claudePrintArgs(
+  model: string,
+  {
+    outputSchema,
+    systemPrompt,
+    outputFormat = "json",
+  }: ClaudePrintOptions = {},
+) {
   if (!CLAUDE_RUNTIME_MODELS.includes(model))
     throw new Error("Select an official Claude CLI model alias.");
   return [
@@ -78,7 +103,10 @@ export function claudePrintArgs(model: string, outputSchema?: object) {
     "--model",
     model,
     "--output-format",
-    "json",
+    outputFormat,
+    ...(outputFormat === "stream-json"
+      ? ["--verbose", "--include-partial-messages"]
+      : []),
     "--tools",
     "",
     "--strict-mcp-config",
@@ -89,6 +117,7 @@ export function claudePrintArgs(model: string, outputSchema?: object) {
     "--no-session-persistence",
     "--max-turns",
     "2",
+    ...(systemPrompt ? ["--append-system-prompt", systemPrompt] : []),
     ...(outputSchema ? ["--json-schema", JSON.stringify(outputSchema)] : []),
   ];
 }
@@ -98,11 +127,11 @@ export async function startClaudeExecution(
   model: string,
   prompt: string,
   requestId: string,
-  outputSchema?: object,
+  options: ClaudePrintOptions = {},
 ) {
   if (Buffer.byteLength(prompt) > 120_000)
     throw new Error("Claude context is too large; shorten the conversation.");
-  const args = claudePrintArgs(model, outputSchema);
+  const args = claudePrintArgs(model, options);
   const connection = await getConnectedClaudeRuntime(userId);
   if (!connection?.runnerId) throw new Error("Reconnect Claude in Settings.");
   const reference = decodeClaudeRuntimeReference(connection.runnerId);
@@ -360,13 +389,9 @@ export async function completeClaudeExecution(
   signal?: AbortSignal,
 ) {
   signal?.throwIfAborted();
-  const id = await startClaudeExecution(
-    userId,
-    model,
-    prompt,
-    randomUUID(),
+  const id = await startClaudeExecution(userId, model, prompt, randomUUID(), {
     outputSchema,
-  );
+  });
   try {
     let after = 0;
     const chunks: Buffer[] = [];

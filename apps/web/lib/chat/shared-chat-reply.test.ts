@@ -129,6 +129,8 @@ describe("room replies", () => {
     expect(await prepareRoomReply("reply")).toEqual({
       sessionId: "claude-exec",
       credentialId: "seat",
+      // The workflow needs it to pick a partial-output parser while streaming.
+      provider: "claude",
     });
     expect(mocks.resolve).toHaveBeenCalledWith("sender", "claude");
     expect(mocks.room).toHaveBeenCalledWith("room", "sender");
@@ -137,6 +139,13 @@ describe("room replies", () => {
       "chosen-model",
       expect.stringContaining("Continue"),
       "reply",
+      {
+        // The room persona replaces the CLI's inherited coding-agent one; the
+        // guardrails now live there rather than inside the quoted transcript.
+        systemPrompt: expect.stringContaining("CoDev room"),
+        // Streaming events, so the room can show the reply as it is written.
+        outputFormat: "stream-json",
+      },
     );
     expect(mocks.generate).not.toHaveBeenCalled();
     expect(mocks.set).not.toHaveBeenCalled();
@@ -190,9 +199,27 @@ describe("room replies", () => {
     expect(await prepareRoomReply("reply")).toEqual({
       sessionId: "exec",
       credentialId: "seat",
+      provider: "codex",
     });
     expect(mocks.provision).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId: "reply", repositoryUrl: null }),
+    );
+    // `codex exec` has no append-instructions flag, so the room persona rides
+    // in as the AGENTS.md it reads from its working directory.
+    const snapshot = mocks.provision.mock.calls[0]![0].repositorySnapshot;
+    const agents = snapshot.files.find(
+      (file: { path: string }) => file.path === "AGENTS.md",
+    );
+    expect(agents).toBeDefined();
+    expect(
+      Buffer.from(agents.contentBase64, "base64").toString("utf8"),
+    ).toContain("CoDev room");
+    expect(snapshot.totalBytes).toBe(
+      snapshot.files.reduce(
+        (total: number, file: { contentBase64: string }) =>
+          total + Buffer.from(file.contentBase64, "base64").byteLength,
+        0,
+      ),
     );
     expect(mocks.start).toHaveBeenCalledWith(
       "reply",
