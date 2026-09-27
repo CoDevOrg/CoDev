@@ -1,8 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import dynamic from "next/dynamic";
-import type { Gen2SupersetFile, Gen2SupersetFileEntry } from "@codev/contracts";
+import type {
+  Gen2SupersetEntry,
+  Gen2SupersetFile,
+  Gen2SupersetFileEntry,
+} from "@codev/contracts";
 import {
   Check,
   ChevronDown,
@@ -11,17 +21,23 @@ import {
   FilePlus,
   Folder,
   FolderPlus,
+  MoreHorizontal,
+  Pencil,
   RefreshCw,
   Search,
+  Trash2,
 } from "lucide-react";
 
 import {
-  listSupersetFileChanges,
   listSupersetFiles,
   readSupersetFile,
   saveSupersetFile,
+  createSupersetEntry,
+  deleteSupersetEntry,
+  moveSupersetEntry,
   SupersetFileApiError,
 } from "./superset-file-client";
+import { useGen2SharedFileDocument } from "./use-gen2-shared-file-document";
 
 const SupersetCodeEditor = dynamic(
   () =>
@@ -43,12 +59,13 @@ type FileTree = {
 
 type Notice = { kind: "error" | "info" | "success" | "conflict"; text: string };
 
-function buildFileTree(files: Gen2SupersetFileEntry[]): FileTree {
+function buildFileTree(entries: Gen2SupersetEntry[]): FileTree {
   const root: FileTree = { name: "", path: "", folders: new Map(), files: [] };
-  for (const file of files) {
-    const parts = file.path.split("/");
+  for (const entry of entries) {
+    const parts = entry.path.split("/");
     let folder = root;
-    for (const name of parts.slice(0, -1)) {
+    const folderParts = entry.kind === "directory" ? parts : parts.slice(0, -1);
+    for (const name of folderParts) {
       let child = folder.folders.get(name);
       if (!child) {
         child = {
@@ -61,13 +78,23 @@ function buildFileTree(files: Gen2SupersetFileEntry[]): FileTree {
       }
       folder = child;
     }
-    folder.files.push(file);
+    if (entry.kind === "file") folder.files.push(entry);
   }
   return root;
 }
 
 function fileName(path: string) {
   return path.split("/").at(-1) ?? path;
+}
+
+function parentPath(path: string) {
+  return path.includes("/")
+    ? (path.split("/").slice(0, -1).join("/") ?? "")
+    : "";
+}
+
+function isPathOrDescendant(path: string, ancestor: string) {
+  return path === ancestor || path.startsWith(`${ancestor}/`);
 }
 
 function errorMessage(error: unknown, fallback: string) {
@@ -82,7 +109,7 @@ export function SupersetFilePane({
   workspaceId: string;
   canEdit: boolean;
 }) {
-  const [files, setFiles] = useState<Gen2SupersetFileEntry[]>([]);
+  const [files, setFiles] = useState<Gen2SupersetEntry[]>([]);
   const [openFile, setOpenFile] = useState<Gen2SupersetFile | null>(null);
   const [contents, setContents] = useState("");
   const [openingPath, setOpeningPath] = useState<string | null>(null);
@@ -92,6 +119,24 @@ export function SupersetFilePane({
   const [notice, setNotice] = useState<Notice | null>(null);
   const [copied, setCopied] = useState(false);
   const [query, setQuery] = useState("");
+  const [createKind, setCreateKind] = useState<"file" | "directory" | null>(
+    null,
+  );
+  const [createParentPath, setCreateParentPath] = useState("");
+  const [createName, setCreateName] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [actionEntry, setActionEntry] = useState<Gen2SupersetEntry | null>(
+    null,
+  );
+  const [renameEntry, setRenameEntry] = useState<Gen2SupersetEntry | null>(
+    null,
+  );
+  const [renameName, setRenameName] = useState("");
+  const [renaming, setRenaming] = useState(false);
+  const [deleteEntry, setDeleteEntry] = useState<Gen2SupersetEntry | null>(
+    null,
+  );
+  const [deleting, setDeleting] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
     new Set(),
   );
@@ -101,6 +146,15 @@ export function SupersetFilePane({
   const openRequestId = useRef(0);
   const listRequestId = useRef(0);
   const dirty = openFile !== null && contents !== openFile.contents;
+  const sharedDocument = useGen2SharedFileDocument({
+    workspaceId,
+    path: openFile?.path ?? null,
+    canEdit,
+    onContentsChange: (next) => {
+      contentsRef.current = next;
+      setContents(next);
+    },
+  });
 
   useEffect(() => {
     openFileRef.current = openFile;
@@ -113,6 +167,15 @@ export function SupersetFilePane({
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
+
+  useEffect(() => {
+    if (!deleteEntry) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !deleting) setDeleteEntry(null);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [deleteEntry, deleting]);
 
   const openPath = useCallback(
     async (path: string, signal?: AbortSignal) => {
@@ -163,9 +226,13 @@ export function SupersetFilePane({
           const preferred =
             nextFiles.find(
               (file) =>
+                file.kind === "file" &&
                 file.size <= 2 * 1024 * 1024 &&
                 /\.(tsx?|jsx?|py|rs|md|json|css|html)$/i.test(file.path),
-            ) ?? nextFiles.find((file) => file.size <= 2 * 1024 * 1024);
+            ) ??
+            nextFiles.find(
+              (file) => file.kind === "file" && file.size <= 2 * 1024 * 1024,
+            );
           if (preferred) void openPath(preferred.path, signal);
         }
         if (!quiet)
@@ -202,92 +269,12 @@ export function SupersetFilePane({
     return () => controller.abort();
   }, [refreshFiles]);
 
-  const reconcileRemote = useCallback((remote: Gen2SupersetFile) => {
-    const current = openFileRef.current;
-    if (
-      !current ||
-      current.path !== remote.path ||
-      current.revision === remote.revision
-    )
-      return;
-    if (contentsRef.current !== current.contents || savingRef.current) {
-      setStale(true);
-      setNotice({
-        kind: "conflict",
-        text: "This file changed elsewhere while you were editing. Your changes are still here.",
-      });
-    } else {
-      openFileRef.current = remote;
-      contentsRef.current = remote.contents;
-      setOpenFile(remote);
-      setContents(remote.contents);
-      setStale(false);
-      setNotice({ kind: "info", text: "File updated from the workspace." });
-    }
-  }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    let polling = false;
-    const poll = async () => {
-      if (polling) return;
-      polling = true;
-      try {
-        const changes = await listSupersetFileChanges(
-          workspaceId,
-          controller.signal,
-        );
-        if (controller.signal.aborted || changes.length === 0) return;
-        void refreshFiles(false, true, controller.signal);
-        const current = openFileRef.current;
-        const changed = changes.find((change) => change.path === current?.path);
-        if (!current || !changed || changed.revision === current.revision)
-          return;
-        if (contentsRef.current !== current.contents || savingRef.current) {
-          setStale(true);
-          setNotice({
-            kind: "conflict",
-            text: "This file changed elsewhere while you were editing. Your changes are still here.",
-          });
-        } else {
-          const remote = await readSupersetFile(
-            workspaceId,
-            current.path,
-            controller.signal,
-          );
-          if (!controller.signal.aborted) reconcileRemote(remote);
-        }
-      } catch {
-        // Revision checking still protects saves; the next poll retries.
-      } finally {
-        polling = false;
-      }
-    };
-    const timer = window.setInterval(() => void poll(), 10_000);
-    // The host event journal is shared by callers. Rechecking the open file
-    // also catches a change consumed by another member's browser.
-    const verifyTimer = window.setInterval(() => {
-      const current = openFileRef.current;
-      if (!current || polling) return;
-      void readSupersetFile(workspaceId, current.path, controller.signal)
-        .then((remote) => {
-          if (!controller.signal.aborted) reconcileRemote(remote);
-        })
-        .catch(() => {});
-    }, 30_000);
-    return () => {
-      controller.abort();
-      window.clearInterval(timer);
-      window.clearInterval(verifyTimer);
-    };
-  }, [workspaceId, refreshFiles, reconcileRemote]);
-
   async function save() {
     const file = openFileRef.current;
     const draft = contentsRef.current;
     if (!canEdit || !file || draft === file.contents || savingRef.current)
       return;
-    if (stale) {
+    if (stale || sharedDocument.state === "conflict") {
       setNotice({
         kind: "conflict",
         text: "Reload the latest file before saving. Copy your changes first if you want to keep them.",
@@ -329,6 +316,165 @@ export function SupersetFilePane({
     } finally {
       savingRef.current = false;
       setSaving(false);
+    }
+  }
+
+  function startCreate(kind: "file" | "directory", parent = "") {
+    setCreateKind(kind);
+    setCreateParentPath(parent);
+    setCreateName(kind === "file" ? "untitled.txt" : "untitled-folder");
+    setActionEntry(null);
+    setRenameEntry(null);
+    setRenameName("");
+    setNotice(null);
+  }
+
+  async function createEntry(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const kind = createKind;
+    const name = createName.trim();
+    if (!kind || !name || creating) return;
+    setCreating(true);
+    setNotice(null);
+    try {
+      const entry = await createSupersetEntry(workspaceId, {
+        parentPath: createParentPath,
+        name,
+        kind,
+      });
+      setCreateKind(null);
+      setCreateParentPath("");
+      setCreateName("");
+      await refreshFiles(false, true);
+      const current = openFileRef.current;
+      const hasUnsavedChanges =
+        current !== null && contentsRef.current !== current.contents;
+      if (entry.kind === "file" && !hasUnsavedChanges) {
+        await openPath(entry.path);
+      }
+      setNotice({
+        kind: "success",
+        text:
+          entry.kind === "file" && hasUnsavedChanges
+            ? `File ${entry.path} created. Save or discard your current changes before opening it.`
+            : `${entry.kind === "file" ? "File" : "Folder"} ${entry.path} created.`,
+      });
+    } catch (error) {
+      setNotice({
+        kind: "error",
+        text: errorMessage(
+          error,
+          "Couldn’t create this entry. Try another name.",
+        ),
+      });
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  function startRename(entry: Gen2SupersetEntry) {
+    setActionEntry(null);
+    setCreateKind(null);
+    setCreateParentPath("");
+    setRenameEntry(entry);
+    setRenameName(fileName(entry.path));
+    setNotice(null);
+  }
+
+  async function renameEntrySubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const entry = renameEntry;
+    const name = renameName.trim();
+    if (!entry || !name || renaming) return;
+    const current = openFileRef.current;
+    if (
+      current &&
+      isPathOrDescendant(current.path, entry.path) &&
+      contentsRef.current !== current.contents
+    ) {
+      setNotice({
+        kind: "error",
+        text: "Save or discard unsaved changes before renaming this open file or folder.",
+      });
+      return;
+    }
+    setRenaming(true);
+    setNotice(null);
+    try {
+      const moved = await moveSupersetEntry(workspaceId, {
+        path: entry.path,
+        parentPath: parentPath(entry.path),
+        name,
+      });
+      setRenameEntry(null);
+      setRenameName("");
+      await refreshFiles(false, true);
+      if (current && isPathOrDescendant(current.path, entry.path)) {
+        const suffix = current.path.slice(entry.path.length);
+        await openPath(`${moved.path}${suffix}`);
+      }
+      setNotice({
+        kind: "success",
+        text: `${entry.kind === "file" ? "File" : "Folder"} renamed to ${moved.path}.`,
+      });
+    } catch (error) {
+      setNotice({
+        kind: "error",
+        text: errorMessage(
+          error,
+          "Couldn’t rename this entry. Try another name.",
+        ),
+      });
+    } finally {
+      setRenaming(false);
+    }
+  }
+
+  function requestDelete(entry: Gen2SupersetEntry) {
+    setActionEntry(null);
+    const current = openFileRef.current;
+    if (
+      current &&
+      isPathOrDescendant(current.path, entry.path) &&
+      contentsRef.current !== current.contents
+    ) {
+      setNotice({
+        kind: "error",
+        text: "Save or discard unsaved changes before deleting this open file or folder.",
+      });
+      return;
+    }
+    setDeleteEntry(entry);
+  }
+
+  async function confirmDelete() {
+    const entry = deleteEntry;
+    if (!entry || deleting) return;
+    setDeleting(true);
+    setNotice(null);
+    try {
+      await deleteSupersetEntry(workspaceId, entry.path);
+      const current = openFileRef.current;
+      if (current && isPathOrDescendant(current.path, entry.path)) {
+        openFileRef.current = null;
+        contentsRef.current = "";
+        setOpenFile(null);
+        setContents("");
+        setStale(false);
+      }
+      setDeleteEntry(null);
+      await refreshFiles(false, true);
+      setNotice({
+        kind: "success",
+        text: `${entry.kind === "file" ? "File" : "Folder"} ${entry.path} deleted.`,
+      });
+    } catch (error) {
+      setNotice({
+        kind: "error",
+        text: errorMessage(error, "Couldn’t delete this entry. Try again."),
+      });
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -379,8 +525,8 @@ export function SupersetFilePane({
   }
 
   const visibleFiles = query.trim()
-    ? files.filter((file) =>
-        file.path.toLowerCase().includes(query.trim().toLowerCase()),
+    ? files.filter((entry) =>
+        entry.path.toLowerCase().includes(query.trim().toLowerCase()),
       )
     : files;
   const tree = buildFileTree(visibleFiles);
@@ -396,33 +542,90 @@ export function SupersetFilePane({
             Boolean(query.trim()) || expandedFolders.has(child.path);
           return (
             <li role="none" key={child.path}>
-              <button
-                type="button"
-                className="gen2-superset-folder"
-                role="treeitem"
-                aria-expanded={expanded}
-                aria-level={level}
-                aria-selected={false}
-                title={child.path}
-                onClick={() =>
-                  setExpandedFolders((current) => {
-                    const next = new Set(current);
-                    if (next.has(child.path)) next.delete(child.path);
-                    else next.add(child.path);
-                    return next;
-                  })
-                }
-              >
-                <ChevronDown
-                  aria-hidden="true"
-                  size={14}
-                  className={
-                    expanded ? undefined : "gen2-superset-chevron-closed"
+              <div className="gen2-superset-tree-row">
+                <button
+                  type="button"
+                  className="gen2-superset-folder"
+                  role="treeitem"
+                  aria-expanded={expanded}
+                  aria-level={level}
+                  aria-selected={false}
+                  title={child.path}
+                  onClick={() =>
+                    setExpandedFolders((current) => {
+                      const next = new Set(current);
+                      if (next.has(child.path)) next.delete(child.path);
+                      else next.add(child.path);
+                      return next;
+                    })
                   }
-                />
-                <Folder aria-hidden="true" size={15} />
-                <span className="gen2-superset-tree-label">{child.name}</span>
-              </button>
+                >
+                  <ChevronDown
+                    aria-hidden="true"
+                    size={14}
+                    className={
+                      expanded ? undefined : "gen2-superset-chevron-closed"
+                    }
+                  />
+                  <Folder aria-hidden="true" size={15} />
+                  <span className="gen2-superset-tree-label">{child.name}</span>
+                </button>
+                {canEdit ? (
+                  <button
+                    type="button"
+                    className="gen2-superset-tree-action"
+                    aria-label={`Actions for ${child.path}`}
+                    aria-expanded={actionEntry?.path === child.path}
+                    title={`Actions for ${child.path}`}
+                    disabled={creating || renaming || deleting}
+                    onClick={() =>
+                      setActionEntry((current) =>
+                        current?.path === child.path
+                          ? null
+                          : { path: child.path, kind: "directory" },
+                      )
+                    }
+                  >
+                    <MoreHorizontal aria-hidden="true" size={15} />
+                  </button>
+                ) : null}
+              </div>
+              {actionEntry?.path === child.path ? (
+                <div
+                  className="gen2-superset-entry-actions"
+                  aria-label={`Actions for ${child.path}`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => startCreate("file", child.path)}
+                  >
+                    <FilePlus aria-hidden="true" size={13} /> New file
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => startCreate("directory", child.path)}
+                  >
+                    <FolderPlus aria-hidden="true" size={13} /> New folder
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      startRename({ path: child.path, kind: "directory" })
+                    }
+                  >
+                    <Pencil aria-hidden="true" size={13} /> Rename
+                  </button>
+                  <button
+                    type="button"
+                    className="gen2-superset-destructive"
+                    onClick={() =>
+                      requestDelete({ path: child.path, kind: "directory" })
+                    }
+                  >
+                    <Trash2 aria-hidden="true" size={13} /> Delete
+                  </button>
+                </div>
+              ) : null}
               {expanded ? (
                 <ul role="group">{renderTree(child, level + 1)}</ul>
               ) : null}
@@ -433,28 +636,64 @@ export function SupersetFilePane({
           const selected = file.path === openFile?.path;
           return (
             <li role="none" key={file.path}>
-              <button
-                type="button"
-                role="treeitem"
-                aria-level={level}
-                aria-selected={selected}
-                aria-current={selected ? "page" : undefined}
-                className="gen2-superset-file"
-                title={file.path}
-                disabled={saving}
-                onClick={() => selectFile(file.path)}
-              >
-                <FileCode2 aria-hidden="true" size={15} />
-                <span className="gen2-superset-tree-label">
-                  {fileName(file.path)}
-                </span>
-                {selected && dirty ? (
-                  <span
-                    className="gen2-superset-dirty"
-                    aria-label="Unsaved changes"
-                  />
+              <div className="gen2-superset-tree-row">
+                <button
+                  type="button"
+                  role="treeitem"
+                  aria-level={level}
+                  aria-selected={selected}
+                  aria-current={selected ? "page" : undefined}
+                  className="gen2-superset-file"
+                  title={file.path}
+                  disabled={saving}
+                  onClick={() => selectFile(file.path)}
+                >
+                  <FileCode2 aria-hidden="true" size={15} />
+                  <span className="gen2-superset-tree-label">
+                    {fileName(file.path)}
+                  </span>
+                  {selected && dirty ? (
+                    <span
+                      className="gen2-superset-dirty"
+                      aria-label="Unsaved changes"
+                    />
+                  ) : null}
+                </button>
+                {canEdit ? (
+                  <button
+                    type="button"
+                    className="gen2-superset-tree-action"
+                    aria-label={`Actions for ${file.path}`}
+                    aria-expanded={actionEntry?.path === file.path}
+                    title={`Actions for ${file.path}`}
+                    disabled={creating || renaming || deleting}
+                    onClick={() =>
+                      setActionEntry((current) =>
+                        current?.path === file.path ? null : file,
+                      )
+                    }
+                  >
+                    <MoreHorizontal aria-hidden="true" size={15} />
+                  </button>
                 ) : null}
-              </button>
+              </div>
+              {actionEntry?.path === file.path ? (
+                <div
+                  className="gen2-superset-entry-actions"
+                  aria-label={`Actions for ${file.path}`}
+                >
+                  <button type="button" onClick={() => startRename(file)}>
+                    <Pencil aria-hidden="true" size={13} /> Rename
+                  </button>
+                  <button
+                    type="button"
+                    className="gen2-superset-destructive"
+                    onClick={() => requestDelete(file)}
+                  >
+                    <Trash2 aria-hidden="true" size={13} /> Delete
+                  </button>
+                </div>
+              ) : null}
             </li>
           );
         })}
@@ -497,8 +736,26 @@ export function SupersetFilePane({
             className="gen2-superset-files-actions"
             aria-label="File actions"
           >
-            <UnavailableAction icon={FilePlus} label="New file" />
-            <UnavailableAction icon={FolderPlus} label="New folder" />
+            <button
+              type="button"
+              className="gen2-superset-icon-button"
+              aria-label="New file"
+              title="New file"
+              disabled={!canEdit || creating}
+              onClick={() => startCreate("file")}
+            >
+              <FilePlus aria-hidden="true" size={14} />
+            </button>
+            <button
+              type="button"
+              className="gen2-superset-icon-button"
+              aria-label="New folder"
+              title="New folder"
+              disabled={!canEdit || creating}
+              onClick={() => startCreate("directory")}
+            >
+              <FolderPlus aria-hidden="true" size={14} />
+            </button>
             <button
               type="button"
               className="gen2-superset-icon-button"
@@ -511,6 +768,89 @@ export function SupersetFilePane({
             </button>
           </div>
         </header>
+        {createKind ? (
+          <form className="gen2-superset-create-entry" onSubmit={createEntry}>
+            <label>
+              <span>
+                {createKind === "file" ? "New file name" : "New folder name"}
+              </span>
+              <input
+                autoFocus
+                value={createName}
+                onChange={(event) => setCreateName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape" && !creating) {
+                    event.preventDefault();
+                    setCreateKind(null);
+                    setCreateParentPath("");
+                  }
+                }}
+                disabled={creating}
+                aria-describedby="gen2-superset-create-entry-help"
+              />
+            </label>
+            <p id="gen2-superset-create-entry-help">
+              {createParentPath
+                ? `Created in ${createParentPath}.`
+                : "Created at the workspace root."}
+            </p>
+            <div>
+              <button
+                type="button"
+                disabled={creating}
+                onClick={() => {
+                  setCreateKind(null);
+                  setCreateParentPath("");
+                }}
+              >
+                Cancel
+              </button>
+              <button type="submit" disabled={!createName.trim() || creating}>
+                {creating ? "Creating…" : "Create"}
+              </button>
+            </div>
+          </form>
+        ) : null}
+        {renameEntry ? (
+          <form
+            className="gen2-superset-create-entry"
+            onSubmit={renameEntrySubmit}
+          >
+            <label>
+              <span>Rename {renameEntry.kind}</span>
+              <input
+                autoFocus
+                value={renameName}
+                onChange={(event) => setRenameName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape" && !renaming) {
+                    event.preventDefault();
+                    setRenameEntry(null);
+                    setRenameName("");
+                  }
+                }}
+                disabled={renaming}
+                aria-describedby="gen2-superset-rename-entry-help"
+              />
+            </label>
+            <p id="gen2-superset-rename-entry-help">{renameEntry.path}</p>
+            <div>
+              <button
+                type="button"
+                disabled={renaming}
+                onClick={() => {
+                  setRenameEntry(null);
+                  setRenameName("");
+                }}
+              >
+                Cancel
+              </button>
+              <button type="submit" disabled={!renameName.trim() || renaming}>
+                {renaming ? "Renaming…" : "Rename"}
+              </button>
+            </div>
+          </form>
+        ) : null}
         {loadingFiles ? (
           <p className="gen2-superset-list-state" role="status">
             Loading files…
@@ -541,11 +881,32 @@ export function SupersetFilePane({
             {openFile && !canEdit ? (
               <span className="gen2-superset-read-only">Read only</span>
             ) : null}
+            {openFile ? (
+              <span
+                className="gen2-superset-collaboration-state"
+                role="status"
+                aria-live="polite"
+              >
+                {sharedDocument.state === "connected"
+                  ? sharedDocument.members.length > 1
+                    ? `${sharedDocument.members.length - 1} collaborator${sharedDocument.members.length === 2 ? "" : "s"} editing`
+                    : "Shared editing"
+                  : sharedDocument.state === "conflict"
+                    ? "Resolve conflict"
+                    : "Syncing collaboration…"}
+              </span>
+            ) : null}
             <button
               type="button"
               className="gen2-superset-save"
               disabled={
-                !canEdit || !dirty || saving || Boolean(openingPath) || stale
+                !canEdit ||
+                !dirty ||
+                saving ||
+                Boolean(openingPath) ||
+                stale ||
+                sharedDocument.readOnly ||
+                sharedDocument.state === "conflict"
               }
               onClick={() => void save()}
             >
@@ -597,6 +958,15 @@ export function SupersetFilePane({
             ) : null}
           </div>
         ) : null}
+        {sharedDocument.notice ? (
+          <div
+            className="gen2-superset-notice gen2-superset-notice-info"
+            role={sharedDocument.state === "conflict" ? "alert" : "status"}
+            aria-live="polite"
+          >
+            <span>{sharedDocument.notice}</span>
+          </div>
+        ) : null}
         {openingPath ? (
           <p className="gen2-superset-empty-state" role="status">
             Opening {fileName(openingPath)}…
@@ -606,38 +976,66 @@ export function SupersetFilePane({
             key={openFile.path}
             path={openFile.path}
             value={contents}
-            readOnly={!canEdit}
+            sharedText={
+              sharedDocument.state === "connected" ? sharedDocument.text : null
+            }
+            readOnly={!canEdit || sharedDocument.readOnly}
             onChange={(next) => {
               contentsRef.current = next;
               setContents(next);
               if (!stale) setNotice(null);
             }}
+            onSelectionChange={sharedDocument.updateCursor}
             onSave={() => void save()}
           />
         ) : (
           <p className="gen2-superset-empty-state">Select a file to open it.</p>
         )}
       </section>
+      {deleteEntry ? (
+        <div
+          className="gen2-superset-dialog-backdrop"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target && !deleting) {
+              setDeleteEntry(null);
+            }
+          }}
+        >
+          <section
+            className="gen2-superset-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="gen2-superset-delete-title"
+            aria-describedby="gen2-superset-delete-description"
+          >
+            <h2 id="gen2-superset-delete-title">Delete {deleteEntry.kind}?</h2>
+            <p id="gen2-superset-delete-description">
+              Delete <strong>{deleteEntry.path}</strong> permanently?
+              {deleteEntry.kind === "directory"
+                ? " Every file and folder inside it will be deleted too."
+                : " This cannot be undone from this workspace."}
+            </p>
+            <div className="gen2-superset-dialog-actions">
+              <button
+                type="button"
+                autoFocus
+                disabled={deleting}
+                onClick={() => setDeleteEntry(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="gen2-superset-dialog-delete"
+                disabled={deleting}
+                onClick={() => void confirmDelete()}
+              >
+                {deleting ? "Deleting…" : "Delete permanently"}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </main>
-  );
-}
-
-function UnavailableAction({
-  icon: Icon,
-  label,
-}: {
-  icon: typeof FilePlus;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      className="gen2-superset-icon-button"
-      aria-label={label}
-      title={`${label} is coming soon`}
-      disabled
-    >
-      <Icon aria-hidden="true" size={14} />
-    </button>
   );
 }

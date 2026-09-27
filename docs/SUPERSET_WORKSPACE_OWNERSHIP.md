@@ -1,7 +1,7 @@
 # Superset-powered workspace ownership contract
 
 **Status:** Design; Phase 1 target, not a description of shipped behavior
-**Date:** 2026-09-24
+**Date:** 2026-09-27
 
 ## Decision
 
@@ -10,6 +10,15 @@ relevant interface components inside its hosted browser product. The first
 integration target is the Gen 2 Firecracker workspace, which already gives the
 editor, terminal, Git view, and Codex one filesystem. The existing workspace
 implementations remain available while the new path is proven.
+
+The fork is a guest-runtime replacement, not a reference library. A Superset
+capability is adopted only when its host-service implementation replaces the
+matching Gen 2 guest behavior through a CoDev-authorized adapter. During a
+feature-flagged transition the old path may remain as an explicit fallback, but
+new filesystem, PTY, Git, worktree, watcher, and agent-session mechanics must
+not be implemented in parallel on both sides. If terminal, Git/worktree, and
+agent replacement do not reduce duplication, stop the migration rather than
+maintaining the vendor tree for UI inspiration.
 
 One CoDev workspace is one shared page, one Firecracker VM, and one project
 repository. It can contain several branch contexts backed by Git worktrees.

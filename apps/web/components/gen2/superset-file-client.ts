@@ -1,10 +1,13 @@
 import {
+  gen2SupersetCreateEntryResponseSchema,
+  gen2SupersetDeleteEntryResponseSchema,
   gen2SupersetExternalFileChangesResponseSchema,
   gen2SupersetListFilesResponseSchema,
+  gen2SupersetMoveEntryResponseSchema,
   gen2SupersetReadFileResponseSchema,
   gen2SupersetSaveFileResponseSchema,
   type Gen2SupersetFile,
-  type Gen2SupersetFileEntry,
+  type Gen2SupersetEntry,
   type Gen2SupersetExternalFileChange,
 } from "@codev/contracts";
 
@@ -51,13 +54,61 @@ async function request<T>(
 export async function listSupersetFiles(
   workspaceId: string,
   signal?: AbortSignal,
-): Promise<Gen2SupersetFileEntry[]> {
-  const response = await request<{ files: Gen2SupersetFileEntry[] }>(
+): Promise<Gen2SupersetEntry[]> {
+  const response = await request<{ files: Gen2SupersetEntry[] }>(
     `${fileApiBase(workspaceId)}/files?worktreeId=${SUPERSET_WORKTREE_ID}`,
     (payload) => gen2SupersetListFilesResponseSchema.parse(payload),
     { signal: signal ?? null },
   );
   return response.files;
+}
+
+export async function createSupersetEntry(
+  workspaceId: string,
+  input: { parentPath: string; name: string; kind: "file" | "directory" },
+): Promise<Gen2SupersetEntry> {
+  const response = await request<{ entry: Gen2SupersetEntry }>(
+    `${fileApiBase(workspaceId)}/entry`,
+    (payload) => gen2SupersetCreateEntryResponseSchema.parse(payload),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ worktreeId: SUPERSET_WORKTREE_ID, ...input }),
+    },
+  );
+  return response.entry;
+}
+
+export async function moveSupersetEntry(
+  workspaceId: string,
+  input: { path: string; parentPath: string; name: string },
+): Promise<Gen2SupersetEntry> {
+  const response = await request<{ entry: Gen2SupersetEntry }>(
+    `${fileApiBase(workspaceId)}/entry`,
+    (payload) => gen2SupersetMoveEntryResponseSchema.parse(payload),
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ worktreeId: SUPERSET_WORKTREE_ID, ...input }),
+    },
+  );
+  return response.entry;
+}
+
+export async function deleteSupersetEntry(
+  workspaceId: string,
+  path: string,
+): Promise<string> {
+  const response = await request<{ path: string }>(
+    `${fileApiBase(workspaceId)}/entry`,
+    (payload) => gen2SupersetDeleteEntryResponseSchema.parse(payload),
+    {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ worktreeId: SUPERSET_WORKTREE_ID, path }),
+    },
+  );
+  return response.path;
 }
 
 export async function readSupersetFile(

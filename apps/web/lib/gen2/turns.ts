@@ -14,6 +14,7 @@ import {
   type CodexExecChunk,
 } from "./codex-output";
 import { reduceCodexTurn } from "./turn-events";
+import { reconcileGen2CollaborationPaths } from "./collaboration-events";
 
 /**
  * Server-side accumulation of a running Codex turn.
@@ -89,6 +90,22 @@ export async function recordGen2TurnChunks(input: {
     }
 
     const state = reduceCodexTurn(output);
+    const changedPaths = state.items.flatMap((item) =>
+      item.kind === "fileChange"
+        ? item.changes.map((change) => change.path)
+        : [],
+    );
+    if (changedPaths.length > 0) {
+      await reconcileGen2CollaborationPaths({
+        workspaceId: turn.workspaceId,
+        userId: turn.userId,
+        paths: changedPaths,
+      }).catch((error) => {
+        logEvent("error", "gen2.collaboration.reconcile_failed", {
+          detail: error instanceof Error ? error.message : "unknown",
+        });
+      });
+    }
     const body = state.reply || state.error || "";
     const message = body
       ? await appendGen2ChatMessage({

@@ -1,7 +1,7 @@
 # Gen 2 workspace
 
 **Status:** Current  
-**Date:** 2026-09-26
+**Date:** 2026-09-27
 
 Gen 2 is a new workspace, isolated from `lib/workspaces`. The product is:
 
@@ -57,6 +57,21 @@ rail and has three tabs: Files (tree + editor), Terminal, and Git. It is
 modelled on an agent UI, not an IDE: the chat is where the work is directed,
 and the workbench is how you watch and intervene.
 
+### Shared editor (implemented, pending two-member verification)
+
+The open Superset-style file editor now uses a CoDev-backed Yjs document rather
+than browser polling for filesystem changes. A Gen 2-scoped authenticated
+WebSocket carries document updates, awareness/presence, reconnects, and
+conflicts. CodeMirror binds directly to the document; the editor shows shared,
+syncing, and conflict state.
+
+Filesystem writes remain explicit, revision-checked saves. The Yjs snapshot is
+recoverability and collaboration state, not a replacement durable filesystem.
+When Codex reports that it changed an open file at turn completion, CoDev
+reconciles the shared document with the saved file; a concurrent member edit
+becomes a visible non-destructive conflict. Remote cursor decorations and
+richer member presence remain follow-up work.
+
 ## The guest serialises some calls behind a running turn
 
 `services/orchestrator/src/guest.rs` takes a mutation lock and waits for Codex
@@ -83,10 +98,10 @@ guest image without that account is detected at startup and falls back to the
 old close-on-turn behaviour, so an un-rebuilt host is safe rather than
 exposed.
 
-When a turn ends, the tree, the Git panel, and any open buffer refresh. A
-buffer with unsaved edits is never overwritten: it offers "Keep mine" or "Take
-theirs" instead. Saves carry `expectedRevision`, so a stale write is a 409 with
-the current revision rather than a silent clobber.
+When a turn ends, the tree and Git panel refresh. An open shared document is
+reconciled from Codex's reported file changes instead of a browser filesystem
+poll. Saves carry `expectedRevision`, so a stale write is a 409 with the
+current revision rather than a silent clobber.
 
 ## Turn transcripts live on the server
 
@@ -122,9 +137,20 @@ Concurrent agents: the guest serialises Codex (`start_codex_exec` waits on
 more workspaces.
 
 Not yet built here: a browser/preview tab (live port forwarding is deferred in
-`lib/runtime/preview.ts` and needs guest networking), file create/rename/delete,
-Git staging and commit from the UI, and realtime fan-out between members —
-two people in one workspace see each other's writes only on refresh.
+`lib/runtime/preview.ts` and needs guest networking), Git staging and commit
+from the UI, and realtime fan-out between members. The feature-flagged
+`/superset` page supports nested file/folder creation, rename, and permanent
+delete through the Superset host filesystem service; that page is separate from
+the shared CodeMirror/Yjs editor and two people using it still see each other's
+writes only on refresh.
+
+The Superset host artifact and private guest bridge are real guest-side reuse,
+not a browser mock. Future Superset work must extend that host service to
+replace the matching Gen 2 terminal, Git/worktree, and agent mechanics; do not
+add duplicate `codev-guestd` implementations. CoDev continues to own member
+authorization, provider credentials, quotas, Yjs documents, conflicts, and
+durable product history. The adoption contract and stop/go gate live in
+[`SUPERSET_ADOPTION_MANIFEST.md`](./SUPERSET_ADOPTION_MANIFEST.md).
 
 ## Routes
 
@@ -133,7 +159,7 @@ two people in one workspace see each other's writes only on refresh.
 - `/gen2/join/[token]` — accept a share link
 
 API under `/api/gen2/workspaces/[id]`: `instance`, `share`, `chats`, `agent`,
-`agent/poll`, `files`, `git`, `terminal`.
+`agent/poll`, `files`, `git`, `terminal`, `collaboration`.
 
 Code lives under `apps/web/lib/gen2`, `apps/web/components/gen2`, and
 `apps/web/app/gen2`.

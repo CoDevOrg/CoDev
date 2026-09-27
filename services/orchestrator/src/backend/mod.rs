@@ -13,6 +13,7 @@ use crate::model::{
     IdeSession, IdeStartRequest, IdeWriteFileRequest, Instance, PublicationExportRequest,
     PublicationExportResponse, Result, RuntimeError, SessionRestoreBeginRequest,
     SessionRestoreChunkRequest, SessionRestoreFinalizeResponse, SessionRestoreStatus,
+    SupersetCreateEntryRequest, SupersetDeleteEntryRequest, SupersetMoveEntryRequest,
     TerminalInputRequest, TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest,
     TerminalStartRequest, WorktreeCheckpointRequest, WorktreeCheckpointResponse,
     WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest,
@@ -345,6 +346,52 @@ impl Backend {
             )),
             #[cfg(target_os = "linux")]
             Self::Firecracker(backend) => backend.superset_write_file(workspace_id, request).await,
+        }
+    }
+
+    pub async fn superset_create_entry(
+        &self,
+        workspace_id: &str,
+        request: &SupersetCreateEntryRequest,
+    ) -> Result<serde_json::Value> {
+        match self {
+            Self::Fake(_) => Err(RuntimeError::Unavailable(
+                "Superset host service is unavailable in the fake backend".into(),
+            )),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => {
+                backend.superset_create_entry(workspace_id, request).await
+            }
+        }
+    }
+
+    pub async fn superset_move_entry(
+        &self,
+        workspace_id: &str,
+        request: &SupersetMoveEntryRequest,
+    ) -> Result<serde_json::Value> {
+        match self {
+            Self::Fake(_) => Err(RuntimeError::Unavailable(
+                "Superset host service is unavailable in the fake backend".into(),
+            )),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => backend.superset_move_entry(workspace_id, request).await,
+        }
+    }
+
+    pub async fn superset_delete_entry(
+        &self,
+        workspace_id: &str,
+        request: &SupersetDeleteEntryRequest,
+    ) -> Result<serde_json::Value> {
+        match self {
+            Self::Fake(_) => Err(RuntimeError::Unavailable(
+                "Superset host service is unavailable in the fake backend".into(),
+            )),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => {
+                backend.superset_delete_entry(workspace_id, request).await
+            }
         }
     }
 

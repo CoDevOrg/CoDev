@@ -138,6 +138,23 @@ Azure stack itself is `infra/azure/`.
   provider** and have nothing to do with the retired runtime. Do not remove
   those two, and do not add the rest back.
 
+## Focused investigation and execution
+
+Operate with a strict token budget. Before opening a file, determine whether it
+is necessary. Locate relevant code with repository search and inspect only the
+required ranges.
+
+- Use `rg` for symbol/text discovery, limited-range readers for files, targeted
+  `git diff -- <files>`, and targeted test files or cases.
+- Form a debugging hypothesis before gathering the minimum evidence needed to
+  confirm or reject it.
+- Do not read whole large files, recursively inspect directories without a
+  reason, reread unchanged files, print full diffs where a targeted diff is
+  enough, run verbose tests unless debugging, explain routine actions, research
+  alternatives after finding a satisfactory implementation, or modify adjacent
+  code merely because it could be improved.
+- Once the requested change is implemented and verified, stop.
+
 ## UI & Design (required skills)
 
 Every change that touches the interface — pages, components, layout, spacing,

@@ -36,10 +36,46 @@ const saveSchema = readSchema.extend({
 	contents: z.string().max(MAX_FILE_BYTES),
 	expectedRevision: z.string().min(1).max(255),
 });
+const entryNameSchema = z
+	.string()
+	.trim()
+	.min(1)
+	.max(255)
+	.refine(
+		(value) =>
+			value !== "." &&
+			value !== ".." &&
+			!value.includes("/") &&
+			!value.includes("\\") &&
+			!value.includes("\0") &&
+			![...value].some((character) => {
+				const code = character.charCodeAt(0);
+				return code < 32 || code === 127;
+			}),
+		{ message: "Name must be a single file or folder name." },
+	);
+const createEntrySchema = listSchema.extend({
+	parentPath: z.union([z.literal(""), pathSchema]).default(""),
+	name: entryNameSchema,
+	kind: z.enum(["file", "directory"]),
+});
+const moveEntrySchema = listSchema.extend({
+	path: pathSchema,
+	parentPath: z.union([z.literal(""), pathSchema]),
+	name: entryNameSchema,
+});
+const deleteEntrySchema = listSchema.extend({ path: pathSchema });
 
 type FileService = Pick<
 	FsHostService,
-	"getMetadata" | "listDirectory" | "readFile" | "watchPath" | "writeFile"
+	| "createUniqueEntry"
+	| "deletePath"
+	| "getMetadata"
+	| "listDirectory"
+	| "movePath"
+	| "readFile"
+	| "watchPath"
+	| "writeFile"
 >;
 
 export type CoDevExternalFileChange = {
@@ -108,7 +144,10 @@ function asRelativePath(root: string, absolutePath: string) {
 }
 
 async function listFiles(service: FileService, root: string) {
-	const files: Array<{ path: string; kind: "file"; size: number }> = [];
+	const files: Array<
+		| { path: string; kind: "directory" }
+		| { path: string; kind: "file"; size: number }
+	> = [];
 	const pending = [root];
 
 	while (pending.length > 0) {
@@ -117,7 +156,16 @@ async function listFiles(service: FileService, root: string) {
 		const { entries } = await service.listDirectory({ absolutePath: directory });
 		for (const entry of entries) {
 			if (entry.kind === "directory") {
-				if (!HIDDEN_DIRECTORIES.has(entry.name)) pending.push(entry.absolutePath);
+				if (!HIDDEN_DIRECTORIES.has(entry.name)) {
+					files.push({
+						path: asRelativePath(root, entry.absolutePath),
+						kind: "directory",
+					});
+					if (files.length > MAX_LISTED_FILES) {
+						throw new Error("Workspace contains too many files to display.");
+					}
+					pending.push(entry.absolutePath);
+				}
 				continue;
 			}
 			if (entry.kind !== "file") continue;
@@ -301,6 +349,77 @@ export function registerCoDevFileBridge({
 			return context.json({ file: await readTextFile(service, root, parsed.data.path) });
 		} catch (error) {
 			return context.json({ error: error instanceof Error ? error.message : "Could not save file." }, 400);
+		}
+	});
+
+	app.post("/codev/entry", async (context) => {
+		if (!requireBridge(context.req.raw)) return context.json({ error: "Unauthorized" }, 401);
+		const parsed = createEntrySchema.safeParse(await context.req.json().catch(() => undefined));
+		if (!parsed.success) return context.json({ error: "Invalid file creation request." }, 400);
+		try {
+			const root = await resolveCoDevWorktreeRoot(workspaceRoot, parsed.data.worktreeId);
+			await changes.start(parsed.data.worktreeId);
+			const service = filesystem.getServiceForRootPath(root);
+			const created = await service.createUniqueEntry({
+				parentAbsolutePath: resolve(root, parsed.data.parentPath),
+				baseName: parsed.data.name,
+				kind: parsed.data.kind,
+			});
+			if (!created.ok) {
+				return context.json({ error: "Could not create a unique file or folder name." }, 409);
+			}
+			const path = asRelativePath(root, created.absolutePath);
+			if (parsed.data.kind === "directory") {
+				return context.json({ entry: { path, kind: "directory" } });
+			}
+			const file = await readTextFile(service, root, path);
+			changes.markOwnWrite(parsed.data.worktreeId, path, file.revision);
+			return context.json({
+				entry: { path: file.path, kind: "file", size: file.size },
+			});
+		} catch (error) {
+			return context.json({ error: error instanceof Error ? error.message : "Could not create file." }, 400);
+		}
+	});
+
+	app.post("/codev/entry/move", async (context) => {
+		if (!requireBridge(context.req.raw)) return context.json({ error: "Unauthorized" }, 401);
+		const parsed = moveEntrySchema.safeParse(await context.req.json().catch(() => undefined));
+		if (!parsed.success) return context.json({ error: "Invalid file move request." }, 400);
+		try {
+			const root = await resolveCoDevWorktreeRoot(workspaceRoot, parsed.data.worktreeId);
+			await changes.start(parsed.data.worktreeId);
+			const service = filesystem.getServiceForRootPath(root);
+			const source = resolve(root, parsed.data.path);
+			const destination = resolve(root, parsed.data.parentPath, parsed.data.name);
+			await service.movePath({ sourceAbsolutePath: source, destinationAbsolutePath: destination });
+			const path = asRelativePath(root, destination);
+			const metadata = await service.getMetadata({ absolutePath: destination });
+			if (!metadata) throw new Error("Moved entry could not be read.");
+			return context.json({
+				entry:
+					metadata.kind === "directory"
+						? { path, kind: "directory" }
+						: { path, kind: "file", size: metadata.size ?? 0 },
+			});
+		} catch (error) {
+			return context.json({ error: error instanceof Error ? error.message : "Could not move file." }, 400);
+		}
+	});
+
+	app.post("/codev/entry/delete", async (context) => {
+		if (!requireBridge(context.req.raw)) return context.json({ error: "Unauthorized" }, 401);
+		const parsed = deleteEntrySchema.safeParse(await context.req.json().catch(() => undefined));
+		if (!parsed.success) return context.json({ error: "Invalid file deletion request." }, 400);
+		try {
+			const root = await resolveCoDevWorktreeRoot(workspaceRoot, parsed.data.worktreeId);
+			await changes.start(parsed.data.worktreeId);
+			await filesystem.getServiceForRootPath(root).deletePath({
+				absolutePath: resolve(root, parsed.data.path),
+			});
+			return context.json({ path: parsed.data.path });
+		} catch (error) {
+			return context.json({ error: error instanceof Error ? error.message : "Could not delete file." }, 400);
 		}
 	});
 
