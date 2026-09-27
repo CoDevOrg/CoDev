@@ -14,6 +14,14 @@ import { getDatabase } from "../platform/database";
  * connected rows are excluded from login-attempt expiry. The lease deadline
  * fences cleanup, so an old finalizer cannot unlock a newer invocation.
  */
+/**
+ * Do not shorten this without re-deriving the budget it has to cover. The lease
+ * is claimed *before* `ensureHostReady`, which waits up to four minutes on a
+ * cold Firecracker host, and `pollClaudeExecution` hard-fails once the deadline
+ * passes — so the window has to span host wake (<=4m) plus the CLI's own 240s
+ * timeout plus cleanup. Ten minutes is that worst case with a little margin,
+ * not padding; at six, a turn that lands on a stopped host dies mid-flight.
+ */
 const LEASE_MS = 10 * 60 * 1_000;
 
 /**

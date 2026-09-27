@@ -31,6 +31,20 @@ export async function pollReplyStep(
   }
 }
 
+export async function publishPartialReplyStep(id: string, text: string) {
+  "use step";
+  const { publishPartialRoomReply } =
+    await import("@/lib/chat/shared-chat-reply");
+  try {
+    await publishPartialRoomReply(id, text);
+  } catch (error) {
+    // Live preview only. A turn that is still running must not be failed
+    // because its optimistic fan-out did not land.
+    await logReplyStepError(id, "partial", error);
+  }
+}
+publishPartialReplyStep.maxRetries = 0;
+
 export async function finishReplyStep(
   id: string,
   output: string,
@@ -49,7 +63,7 @@ export async function finishReplyStep(
 /** Emit the real (redacted) cause of a reply-stage failure for operators. */
 async function logReplyStepError(
   id: string,
-  stage: "poll" | "finish",
+  stage: "poll" | "finish" | "partial",
   error: unknown,
   extra: Record<string, number | string> = {},
 ) {
