@@ -61,6 +61,20 @@ describe("gen2 terminal route", () => {
     expect(await response.json()).toEqual({ sessionId: "term-1-2" });
   });
 
+  it("forwards a selected worktree to the terminal service", async () => {
+    mocks.start.mockResolvedValue("term-1-2");
+    await POST(
+      post({ action: "start", rows: 24, columns: 80, worktreeId: "agent-a" }),
+      { params },
+    );
+    expect(mocks.start).toHaveBeenCalledWith(workspaceId, userId, {
+      action: "start",
+      rows: 24,
+      columns: 80,
+      worktreeId: "agent-a",
+    });
+  });
+
   it("refuses a viewport the guest would reject anyway", async () => {
     const response = await POST(
       post({ action: "start", rows: 24, columns: 501 }),
@@ -90,6 +104,7 @@ describe("gen2 terminal route", () => {
       userId,
       "term-1-2",
       "ls\n",
+      "main",
     );
 
     const resize = await POST(
@@ -120,6 +135,11 @@ describe("gen2 terminal route", () => {
       { params },
     );
     expect(response.status).toBe(204);
-    expect(mocks.close).toHaveBeenCalledWith(workspaceId, userId, "term-1-2");
+    expect(mocks.close).toHaveBeenCalledWith(
+      workspaceId,
+      userId,
+      "term-1-2",
+      "main",
+    );
   });
 });

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   requireMember: vi.fn(),
@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   git: vi.fn(),
   read: vi.fn(),
   write: vi.fn(),
+  supersetGit: vi.fn(),
 }));
 
 vi.mock("./workspaces", () => ({
@@ -17,6 +18,22 @@ vi.mock("../runtime/orchestrator-files", () => ({
   getSandboxGitOutput: (...args: unknown[]) => mocks.git(...args),
   readSandboxFile: (...args: unknown[]) => mocks.read(...args),
   writeSandboxFile: (...args: unknown[]) => mocks.write(...args),
+}));
+
+vi.mock("../runtime/orchestrator-superset-runtime", () => ({
+  getSupersetGitOutput: (...args: unknown[]) => mocks.supersetGit(...args),
+}));
+
+vi.mock("../runtime/orchestrator-request", () => ({
+  OrchestratorError: class OrchestratorError extends Error {
+    constructor(
+      message: string,
+      readonly status: number,
+    ) {
+      super(message);
+    }
+  },
+  orchestratorRequest: vi.fn(),
 }));
 
 const { OrchestratorError } = await import("../runtime/orchestrator-request");
@@ -32,10 +49,12 @@ const {
 
 const workspaceId = "11111111-1111-4111-8111-111111111111";
 const userId = "22222222-2222-4222-8222-222222222222";
+const originalSupersetRuntime = process.env.CODEV_SUPERSET_RUNTIME_ENABLED;
 
 describe("gen2 workbench", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    delete process.env.CODEV_SUPERSET_RUNTIME_ENABLED;
     mocks.requireMember.mockResolvedValue({
       id: workspaceId,
       status: "ready",
@@ -140,4 +159,26 @@ describe("gen2 workbench", () => {
       showGen2HeadFile(workspaceId, userId, "new.ts"),
     ).resolves.toEqual({ contents: "", exists: false });
   });
+
+  it("gets Git state from the Superset host when the runtime flag is enabled", async () => {
+    process.env.CODEV_SUPERSET_RUNTIME_ENABLED = "true";
+    mocks.supersetGit.mockResolvedValue("## main\n");
+    await expect(getGen2Git(workspaceId, userId, "status")).resolves.toBe(
+      "## main\n",
+    );
+    expect(mocks.supersetGit).toHaveBeenCalledWith(
+      workspaceId,
+      "main",
+      "status",
+    );
+    expect(mocks.git).not.toHaveBeenCalled();
+  });
+});
+
+afterEach(() => {
+  if (originalSupersetRuntime === undefined) {
+    delete process.env.CODEV_SUPERSET_RUNTIME_ENABLED;
+  } else {
+    process.env.CODEV_SUPERSET_RUNTIME_ENABLED = originalSupersetRuntime;
+  }
 });

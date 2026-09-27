@@ -15,6 +15,7 @@ import { cors } from "hono/cors";
 import { createApiClient } from "./api";
 import { createChatV3Mount, registerChatV3Routes } from "./chat-v3";
 import { registerCoDevFileBridge } from "./codev/files";
+import { registerCoDevRuntimeBridge } from "./codev/runtime";
 import { createDb, type HostDb } from "./db";
 import { EventBus, GitWatcher, registerEventBusRoute } from "./events";
 import { agentIsBusy, PageWatchManager } from "./page-watch/index.ts";
@@ -395,6 +396,14 @@ export function createApp(options: CreateAppOptions): CreateAppResult {
 		registerCoDevFileBridge({
 			app,
 			filesystem,
+			workspaceRoot: codevWorkspaceRoot,
+			bridgeSecret: codevBridgeSecret,
+		});
+		registerCoDevRuntimeBridge({
+			app,
+			db,
+			eventBus,
+			git,
 			workspaceRoot: codevWorkspaceRoot,
 			bridgeSecret: codevBridgeSecret,
 		});

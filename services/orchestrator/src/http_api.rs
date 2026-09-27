@@ -114,6 +114,12 @@ pub fn router(backend: SharedBackend, ide: IdeBackend) -> Router {
             "/v1/sandboxes/{workspace_id}/superset/file/changes",
             post(superset_file_changes),
         )
+        .route(
+            "/v1/sandboxes/{workspace_id}/superset/runtime/{*operation}",
+            get(superset_runtime_get)
+                .post(superset_runtime_post)
+                .delete(superset_runtime_delete),
+        )
         .route("/v1/sandboxes/{workspace_id}/files/write", post(write_file))
         .route("/v1/sandboxes/{workspace_id}/pty/exec", post(exec_pty))
         .route(
@@ -523,6 +529,67 @@ async fn superset_file_changes(
     Ok(Json(
         backend
             .superset_file_changes(&workspace_id, &request.worktree_id)
+            .await?,
+    ))
+}
+
+fn valid_superset_runtime_operation(method: &str, operation: &str) -> bool {
+    matches!(
+        (method, operation),
+        ("GET", "worktrees")
+            | ("POST", "git")
+            | ("POST", "worktrees")
+            | ("POST", "terminal/start")
+            | ("POST", "terminal/input")
+            | ("POST", "terminal/resize")
+            | ("POST", "terminal/poll")
+            | ("DELETE", "terminal")
+    )
+}
+
+async fn superset_runtime_get(
+    State(backend): State<SharedBackend>,
+    Path((workspace_id, operation)): Path<(String, String)>,
+) -> Result<Json<serde_json::Value>> {
+    validate_workspace_id(&workspace_id)?;
+    if !valid_superset_runtime_operation("GET", &operation) {
+        return Err(RuntimeError::BadRequest("invalid Superset runtime operation".into()));
+    }
+    Ok(Json(
+        backend
+            .superset_runtime(&workspace_id, "GET", &operation, None)
+            .await?,
+    ))
+}
+
+async fn superset_runtime_post(
+    State(backend): State<SharedBackend>,
+    Path((workspace_id, operation)): Path<(String, String)>,
+    Json(body): Json<serde_json::Value>,
+) -> Result<Json<serde_json::Value>> {
+    validate_workspace_id(&workspace_id)?;
+    if !valid_superset_runtime_operation("POST", &operation) {
+        return Err(RuntimeError::BadRequest("invalid Superset runtime operation".into()));
+    }
+    Ok(Json(
+        backend
+            .superset_runtime(&workspace_id, "POST", &operation, Some(&body))
+            .await?,
+    ))
+}
+
+async fn superset_runtime_delete(
+    State(backend): State<SharedBackend>,
+    Path((workspace_id, operation)): Path<(String, String)>,
+    Json(body): Json<serde_json::Value>,
+) -> Result<Json<serde_json::Value>> {
+    validate_workspace_id(&workspace_id)?;
+    if !valid_superset_runtime_operation("DELETE", &operation) {
+        return Err(RuntimeError::BadRequest("invalid Superset runtime operation".into()));
+    }
+    Ok(Json(
+        backend
+            .superset_runtime(&workspace_id, "DELETE", &operation, Some(&body))
             .await?,
     ))
 }

@@ -254,6 +254,9 @@ impl GuestService {
                 if path == "/v1/superset/file/changes" && method == "POST" {
                     return self.superset_file_changes(body);
                 }
+                if let Some(operation) = path.strip_prefix("/v1/superset/runtime/") {
+                    return self.superset_runtime(method, operation, body);
+                }
                 if let Some(worktree_id) = path.strip_prefix("/v1/worktrees/") {
                     let (worktree_id, action_and_query) =
                         worktree_id.split_once('/').unwrap_or((worktree_id, ""));
@@ -515,6 +518,131 @@ impl GuestService {
         )
     }
 
+    /// Fixed, guest-validated forwarding for Superset-owned terminal, Git and
+    /// worktree operations. The orchestrator never forwards an arbitrary host
+    /// URL, and the browser never receives the loopback bridge secret.
+    fn superset_runtime(&self, method: &str, operation: &str, body: &[u8]) -> GuestResponse {
+        let request = if body.is_empty() {
+            serde_json::Value::Null
+        } else {
+            match serde_json::from_slice::<serde_json::Value>(body) {
+                Ok(value) => value,
+                Err(_) => return GuestResponse::error(400, "invalid Superset runtime request"),
+            }
+        };
+        let worktree_id = || {
+            request
+                .get("worktreeId")
+                .and_then(serde_json::Value::as_str)
+                .ok_or_else(|| GuestResponse::error(400, "worktree ID is required"))
+        };
+        let terminal_id = || {
+            request
+                .get("sessionId")
+                .and_then(serde_json::Value::as_str)
+                .filter(|value| {
+                    !value.is_empty()
+                        && value.len() <= 128
+                        && value.chars().all(|character| character.is_ascii_alphanumeric() || character == '-')
+                })
+                .ok_or_else(|| GuestResponse::error(400, "invalid terminal session ID"))
+        };
+        match (method, operation) {
+            ("POST", "git") => {
+                let worktree_id = match worktree_id() {
+                    Ok(value) => value,
+                    Err(error) => return error,
+                };
+                if let Err(error) = validate_worktree_id(worktree_id) {
+                    return GuestResponse::error(400, error);
+                }
+                let Some(operation) = request.get("operation").and_then(serde_json::Value::as_str) else {
+                    return GuestResponse::error(400, "Git operation is required");
+                };
+                if !matches!(operation, "status" | "diff") {
+                    return GuestResponse::error(400, "invalid Git operation");
+                }
+                self.superset_bridge_request(
+                    "GET",
+                    &format!(
+                        "/codev/git?worktreeId={}&operation={}",
+                        percent_encode(worktree_id),
+                        percent_encode(operation),
+                    ),
+                    &[],
+                )
+            }
+            ("GET", "worktrees") => self.superset_bridge_request("GET", "/codev/worktrees", &[]),
+            ("POST", "worktrees") => {
+                let worktree_id = match worktree_id() {
+                    Ok(value) => value,
+                    Err(error) => return error,
+                };
+                if let Err(error) = validate_worktree_id(worktree_id) {
+                    return GuestResponse::error(400, error);
+                }
+                self.superset_bridge_request("POST", "/codev/worktrees", body)
+            }
+            ("POST", "terminal/start") => {
+                let worktree_id = match worktree_id() {
+                    Ok(value) => value,
+                    Err(error) => return error,
+                };
+                if let Err(error) = validate_worktree_id(worktree_id) {
+                    return GuestResponse::error(400, error);
+                }
+                self.superset_bridge_request("POST", "/codev/terminal", body)
+            }
+            ("POST", "terminal/input") | ("POST", "terminal/resize") | ("POST", "terminal/poll") => {
+                let worktree_id = match worktree_id() {
+                    Ok(value) => value,
+                    Err(error) => return error,
+                };
+                let terminal_id = match terminal_id() {
+                    Ok(value) => value,
+                    Err(error) => return error,
+                };
+                if let Err(error) = validate_worktree_id(worktree_id) {
+                    return GuestResponse::error(400, error);
+                }
+                let action = operation.strip_prefix("terminal/").expect("terminal action");
+                self.superset_bridge_request(
+                    "POST",
+                    &format!(
+                        "/codev/terminal/{}/{}?worktreeId={}",
+                        percent_encode(terminal_id),
+                        action,
+                        percent_encode(worktree_id),
+                    ),
+                    body,
+                )
+            }
+            ("DELETE", "terminal") => {
+                let worktree_id = match worktree_id() {
+                    Ok(value) => value,
+                    Err(error) => return error,
+                };
+                let terminal_id = match terminal_id() {
+                    Ok(value) => value,
+                    Err(error) => return error,
+                };
+                if let Err(error) = validate_worktree_id(worktree_id) {
+                    return GuestResponse::error(400, error);
+                }
+                self.superset_bridge_request(
+                    "DELETE",
+                    &format!(
+                        "/codev/terminal/{}?worktreeId={}",
+                        percent_encode(terminal_id),
+                        percent_encode(worktree_id),
+                    ),
+                    &[],
+                )
+            }
+            _ => GuestResponse::error(400, "invalid Superset runtime operation"),
+        }
+    }
+
     fn superset_bridge_request(&self, method: &str, path: &str, body: &[u8]) -> GuestResponse {
         let secret = match std::env::var("CODEV_SUPERSET_BRIDGE_SECRET") {
             Ok(secret) if !secret.is_empty() => secret,
@@ -559,7 +687,7 @@ impl GuestService {
             return GuestResponse::error(503, "Superset host returned an invalid response");
         };
         match status {
-            200 | 400 | 409 => GuestResponse {
+            200 | 201 | 400 | 409 => GuestResponse {
                 status,
                 body: raw[(headers_end + 4)..].to_vec(),
             },

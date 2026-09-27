@@ -8,9 +8,12 @@ import {
   gen2SupersetMoveEntryResponseSchema,
   gen2SupersetReadFileResponseSchema,
   gen2SupersetSaveFileResponseSchema,
+  gen2SupersetWorktreeCreateResponseSchema,
+  gen2SupersetWorktreeListResponseSchema,
   type Gen2SupersetFile,
   type Gen2SupersetExternalFileChange,
   type Gen2SupersetEntry,
+  type Gen2SupersetWorktree,
 } from "@codev/contracts";
 import { z } from "zod";
 
@@ -18,6 +21,10 @@ import {
   OrchestratorError,
   orchestratorRequest,
 } from "../runtime/orchestrator-request";
+import {
+  createSupersetWorktree,
+  listSupersetWorktrees,
+} from "../runtime/orchestrator-superset-runtime";
 import { canRunGen2Agent } from "./agent-policy";
 import {
   Gen2AccessError,
@@ -25,9 +32,16 @@ import {
   Gen2LifecycleError,
 } from "./errors";
 import { recordGen2DocumentSave } from "./collaboration-documents";
+import { isGen2SupersetRuntimeEnabled } from "./superset-runtime-feature";
 import { requireGen2Member } from "./workspaces";
 
 const healthSchema = z.object({ status: z.literal("ok") });
+
+function requireSupersetRuntime() {
+  if (!isGen2SupersetRuntimeEnabled()) {
+    throw new Gen2LifecycleError("The Superset runtime is not enabled.", 503);
+  }
+}
 
 /** Keep the Superset service private to the guest; expose only readiness. */
 export async function getGen2SupersetHealth(
@@ -236,4 +250,33 @@ export async function listGen2SupersetExternalFileChanges(
   return gen2SupersetExternalFileChangesResponseSchema.parse(
     await response.json(),
   ).changes;
+}
+
+export async function listGen2SupersetWorktrees(
+  workspaceId: string,
+  userId: string,
+): Promise<Gen2SupersetWorktree[]> {
+  requireSupersetRuntime();
+  await requireReadySupersetMember(workspaceId, userId);
+  return gen2SupersetWorktreeListResponseSchema.parse({
+    worktrees: await listSupersetWorktrees(workspaceId),
+  }).worktrees;
+}
+
+export async function createGen2SupersetWorktree(
+  workspaceId: string,
+  userId: string,
+  input: { worktreeId: string; branch: string; baseRef?: string | undefined },
+): Promise<Gen2SupersetWorktree> {
+  requireSupersetRuntime();
+  const membership = await requireReadySupersetMember(workspaceId, userId);
+  if (membership.role === "viewer") {
+    throw new Gen2AccessError(
+      "Edit permission is required to create a worktree.",
+      403,
+    );
+  }
+  return gen2SupersetWorktreeCreateResponseSchema.parse({
+    worktree: await createSupersetWorktree(workspaceId, input),
+  }).worktree;
 }

@@ -397,6 +397,41 @@ export const gen2SupersetExternalFileChangesResponseSchema = z.object({
   changes: z.array(gen2SupersetExternalFileChangeSchema),
 });
 
+/** A branch checkout owned by the Superset host service. */
+export const gen2SupersetWorktreeSchema = z.object({
+  worktreeId: gen2SupersetWorktreeIdSchema,
+  branch: z.string().min(1).max(255),
+});
+
+export const gen2SupersetWorktreeListResponseSchema = z.object({
+  worktrees: z.array(gen2SupersetWorktreeSchema),
+});
+
+export const gen2SupersetWorktreeCreateRequestSchema = z.object({
+  worktreeId: gen2SupersetWorktreeIdSchema.refine(
+    (value) => value !== "main",
+    "The primary worktree already exists.",
+  ),
+  branch: z
+    .string()
+    .min(1)
+    .max(255)
+    .refine(
+      (value) =>
+        !value.startsWith("-") &&
+        !value.includes("..") &&
+        !/[~^:?*\[\\\s]/.test(value) &&
+        !value.endsWith(".") &&
+        !value.endsWith("/"),
+      "Branch name is invalid.",
+    ),
+  baseRef: z.string().min(1).max(255).optional(),
+});
+
+export const gen2SupersetWorktreeCreateResponseSchema = z.object({
+  worktree: gen2SupersetWorktreeSchema,
+});
+
 export const gen2GitOperationSchema = z.enum(["status", "diff", "show"]);
 
 export const gen2GitResponseSchema = z.object({ output: z.string() });
@@ -411,22 +446,33 @@ const gen2TerminalDimensions = {
   columns: z.number().int().min(1).max(500),
 };
 
+const gen2TerminalWorktree = {
+  worktreeId: gen2SupersetWorktreeIdSchema.default("main"),
+};
+
 export const gen2TerminalActionSchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("start"), ...gen2TerminalDimensions }),
+  z.object({
+    action: z.literal("start"),
+    ...gen2TerminalDimensions,
+    ...gen2TerminalWorktree,
+  }),
   z.object({
     action: z.literal("input"),
     sessionId: gen2TerminalSessionIdSchema,
     data: z.string().max(64 * 1_024),
+    ...gen2TerminalWorktree,
   }),
   z.object({
     action: z.literal("resize"),
     sessionId: gen2TerminalSessionIdSchema,
     ...gen2TerminalDimensions,
+    ...gen2TerminalWorktree,
   }),
   z.object({
     action: z.literal("poll"),
     sessionId: gen2TerminalSessionIdSchema,
     after: z.number().int().nonnegative(),
+    ...gen2TerminalWorktree,
   }),
 ]);
 
@@ -478,6 +524,10 @@ export type Gen2SupersetCreateEntryRequest = z.infer<
 >;
 export type Gen2SupersetExternalFileChange = z.infer<
   typeof gen2SupersetExternalFileChangeSchema
+>;
+export type Gen2SupersetWorktree = z.infer<typeof gen2SupersetWorktreeSchema>;
+export type Gen2SupersetWorktreeCreateRequest = z.infer<
+  typeof gen2SupersetWorktreeCreateRequestSchema
 >;
 export type Gen2GitOperation = z.infer<typeof gen2GitOperationSchema>;
 export type Gen2TerminalAction = z.infer<typeof gen2TerminalActionSchema>;

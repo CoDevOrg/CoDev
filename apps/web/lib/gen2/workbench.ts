@@ -8,6 +8,7 @@ import {
   readSandboxFile,
   writeSandboxFile,
 } from "../runtime/orchestrator-files";
+import { getSupersetGitOutput } from "../runtime/orchestrator-superset-runtime";
 import { OrchestratorError } from "../runtime/orchestrator-request";
 import {
   attachGitStatus,
@@ -17,6 +18,7 @@ import {
 import { canRunGen2Agent } from "./agent-policy";
 import { Gen2FileConflictError, Gen2LifecycleError } from "./errors";
 import { requireGen2Member } from "./workspaces";
+import { isGen2SupersetRuntimeEnabled } from "./superset-runtime-feature";
 
 /**
  * Files and Git for a Gen 2 workspace, addressed against the same Firecracker
@@ -189,8 +191,17 @@ export async function getGen2Git(
   workspaceId: string,
   userId: string,
   operation: "status" | "diff",
+  worktreeId = "main",
 ) {
   await requireGen2Member(workspaceId, userId);
+  if (isGen2SupersetRuntimeEnabled()) {
+    return getSupersetGitOutput(workspaceId, worktreeId, operation);
+  }
+  if (worktreeId !== "main") {
+    throw new Gen2LifecycleError(
+      "Start the Superset runtime to inspect another worktree.",
+    );
+  }
   return getSandboxGitOutput(workspaceId, operation);
 }
 
