@@ -1019,6 +1019,18 @@
   gap: 2px;
 }
 
+/* A quiet, text-first live region keeps collaboration state visible without
+   competing with the file name or changing the editor's layout. */
+.gen2-superset-collaboration-state {
+  max-width: 12rem;
+  overflow: hidden;
+  color: var(--ss-muted-foreground);
+  font-size: 0.6875rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .gen2-superset-create-entry {
   display: grid;
   gap: 8px;

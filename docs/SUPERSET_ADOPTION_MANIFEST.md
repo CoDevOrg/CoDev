@@ -1,7 +1,7 @@
 # Superset adoption manifest
 
 **Status:** Design; incremental adoption plan, not an implementation guarantee
-**Date:** 2026-09-24
+**Date:** 2026-09-27
 
 ## Source pin
 
@@ -185,6 +185,27 @@ external-change notification, Yjs document binding, and shared presence.
 Finish that slice only when two members can edit the same file and an agent
 write is reconciled without silently losing either person's work.
 
+### Shared-editor implementation (awaiting real-workspace verification)
+
+The Gen 2 FilePane/CodeEditor adapter is implemented, but is not yet a shipped
+claim. It uses a Gen 2-scoped Yjs snapshot table and an authenticated CoDev
+WebSocket; it does not reuse the Gen 1 worktree snapshot identity. CodeMirror
+writes to the open file's `Y.Text`, while revision-checked file save remains
+the durable persistence boundary.
+
+The adapter reuses CoDev's browser-safe Yjs update, awareness, Redis fan-out,
+and conflict patterns. It does not import Superset's desktop document store,
+Electron bridge, host client, or desktop settings. The editor currently shows
+shared/syncing/conflict state; remote cursor decorations and richer member UI
+remain follow-up work. Codex file-change events reconcile an open shared
+document when a turn completes and publish either the reconciled document or a
+non-destructive conflict.
+
+Before treating this slice as complete, verify in a real shared Gen 2
+workspace: concurrent edits by two members, viewer write denial, reconnect,
+revision conflict recovery, and an agent write that both cleanly reconciles
+and conflicts with an in-flight member edit.
+
 After files and the shared editor, add Superset's terminal, changes/Git and
 branch-worktree panels, then agent and subagent/session panels, then preview.
 Each feature adds only the CoDev APIs it needs. The browser never receives a
@@ -206,8 +227,9 @@ Do not include in the first browser slice:
 1. Keep the Gen 2 host and guest lifecycle reliable across create, open,
    restart, hibernation, restore, and deletion. The health endpoint only proves
    that the host service starts; it does not prove workspace operations.
-2. Ship the FilePane and CodeEditor slice, backed by the smallest authorized
-   CoDev file API and CoDev's Yjs/presence adapter.
+2. Verify the implemented FilePane and CodeEditor slice in a real shared Gen 2
+   workspace, backed by the smallest authorized CoDev file API and CoDev's
+   Yjs/presence adapter.
 3. Ship the terminal slice, followed by Git status/diff and worktree selection,
    with every panel scoped to the same selected branch.
 4. Ship agent, session, and subagent panels. A launch is scoped to the

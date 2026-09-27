@@ -29,7 +29,6 @@ import {
 } from "lucide-react";
 
 import {
-  listSupersetFileChanges,
   listSupersetFiles,
   readSupersetFile,
   saveSupersetFile,
@@ -38,6 +37,7 @@ import {
   moveSupersetEntry,
   SupersetFileApiError,
 } from "./superset-file-client";
+import { useGen2SharedFileDocument } from "./use-gen2-shared-file-document";
 
 const SupersetCodeEditor = dynamic(
   () =>
@@ -146,6 +146,15 @@ export function SupersetFilePane({
   const openRequestId = useRef(0);
   const listRequestId = useRef(0);
   const dirty = openFile !== null && contents !== openFile.contents;
+  const sharedDocument = useGen2SharedFileDocument({
+    workspaceId,
+    path: openFile?.path ?? null,
+    canEdit,
+    onContentsChange: (next) => {
+      contentsRef.current = next;
+      setContents(next);
+    },
+  });
 
   useEffect(() => {
     openFileRef.current = openFile;
@@ -260,92 +269,12 @@ export function SupersetFilePane({
     return () => controller.abort();
   }, [refreshFiles]);
 
-  const reconcileRemote = useCallback((remote: Gen2SupersetFile) => {
-    const current = openFileRef.current;
-    if (
-      !current ||
-      current.path !== remote.path ||
-      current.revision === remote.revision
-    )
-      return;
-    if (contentsRef.current !== current.contents || savingRef.current) {
-      setStale(true);
-      setNotice({
-        kind: "conflict",
-        text: "This file changed elsewhere while you were editing. Your changes are still here.",
-      });
-    } else {
-      openFileRef.current = remote;
-      contentsRef.current = remote.contents;
-      setOpenFile(remote);
-      setContents(remote.contents);
-      setStale(false);
-      setNotice({ kind: "info", text: "File updated from the workspace." });
-    }
-  }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    let polling = false;
-    const poll = async () => {
-      if (polling) return;
-      polling = true;
-      try {
-        const changes = await listSupersetFileChanges(
-          workspaceId,
-          controller.signal,
-        );
-        if (controller.signal.aborted || changes.length === 0) return;
-        void refreshFiles(false, true, controller.signal);
-        const current = openFileRef.current;
-        const changed = changes.find((change) => change.path === current?.path);
-        if (!current || !changed || changed.revision === current.revision)
-          return;
-        if (contentsRef.current !== current.contents || savingRef.current) {
-          setStale(true);
-          setNotice({
-            kind: "conflict",
-            text: "This file changed elsewhere while you were editing. Your changes are still here.",
-          });
-        } else {
-          const remote = await readSupersetFile(
-            workspaceId,
-            current.path,
-            controller.signal,
-          );
-          if (!controller.signal.aborted) reconcileRemote(remote);
-        }
-      } catch {
-        // Revision checking still protects saves; the next poll retries.
-      } finally {
-        polling = false;
-      }
-    };
-    const timer = window.setInterval(() => void poll(), 10_000);
-    // The host event journal is shared by callers. Rechecking the open file
-    // also catches a change consumed by another member's browser.
-    const verifyTimer = window.setInterval(() => {
-      const current = openFileRef.current;
-      if (!current || polling) return;
-      void readSupersetFile(workspaceId, current.path, controller.signal)
-        .then((remote) => {
-          if (!controller.signal.aborted) reconcileRemote(remote);
-        })
-        .catch(() => {});
-    }, 30_000);
-    return () => {
-      controller.abort();
-      window.clearInterval(timer);
-      window.clearInterval(verifyTimer);
-    };
-  }, [workspaceId, refreshFiles, reconcileRemote]);
-
   async function save() {
     const file = openFileRef.current;
     const draft = contentsRef.current;
     if (!canEdit || !file || draft === file.contents || savingRef.current)
       return;
-    if (stale) {
+    if (stale || sharedDocument.state === "conflict") {
       setNotice({
         kind: "conflict",
         text: "Reload the latest file before saving. Copy your changes first if you want to keep them.",
@@ -952,11 +881,32 @@ export function SupersetFilePane({
             {openFile && !canEdit ? (
               <span className="gen2-superset-read-only">Read only</span>
             ) : null}
+            {openFile ? (
+              <span
+                className="gen2-superset-collaboration-state"
+                role="status"
+                aria-live="polite"
+              >
+                {sharedDocument.state === "connected"
+                  ? sharedDocument.members.length > 1
+                    ? `${sharedDocument.members.length - 1} collaborator${sharedDocument.members.length === 2 ? "" : "s"} editing`
+                    : "Shared editing"
+                  : sharedDocument.state === "conflict"
+                    ? "Resolve conflict"
+                    : "Syncing collaboration…"}
+              </span>
+            ) : null}
             <button
               type="button"
               className="gen2-superset-save"
               disabled={
-                !canEdit || !dirty || saving || Boolean(openingPath) || stale
+                !canEdit ||
+                !dirty ||
+                saving ||
+                Boolean(openingPath) ||
+                stale ||
+                sharedDocument.readOnly ||
+                sharedDocument.state === "conflict"
               }
               onClick={() => void save()}
             >
@@ -1008,6 +958,15 @@ export function SupersetFilePane({
             ) : null}
           </div>
         ) : null}
+        {sharedDocument.notice ? (
+          <div
+            className="gen2-superset-notice gen2-superset-notice-info"
+            role={sharedDocument.state === "conflict" ? "alert" : "status"}
+            aria-live="polite"
+          >
+            <span>{sharedDocument.notice}</span>
+          </div>
+        ) : null}
         {openingPath ? (
           <p className="gen2-superset-empty-state" role="status">
             Opening {fileName(openingPath)}…
@@ -1017,12 +976,16 @@ export function SupersetFilePane({
             key={openFile.path}
             path={openFile.path}
             value={contents}
-            readOnly={!canEdit}
+            sharedText={
+              sharedDocument.state === "connected" ? sharedDocument.text : null
+            }
+            readOnly={!canEdit || sharedDocument.readOnly}
             onChange={(next) => {
               contentsRef.current = next;
               setContents(next);
               if (!stale) setNotice(null);
             }}
+            onSelectionChange={sharedDocument.updateCursor}
             onSave={() => void save()}
           />
         ) : (

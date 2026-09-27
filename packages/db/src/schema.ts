@@ -2071,6 +2071,42 @@ export const gen2WorkspaceMembers = pgTable(
   ],
 );
 
+/**
+ * The collaborative editor's recoverable document snapshot for a Gen 2
+ * workspace. This is intentionally separate from `yjsSnapshots`: Gen 2 has
+ * one shared checkout, not the Gen 1 worktree aggregate that table belongs
+ * to. The sandbox file remains the durable source of truth; this record
+ * supplies Yjs state, revision fencing, and conflict recovery around it.
+ */
+export const gen2YjsDocuments = pgTable(
+  "gen2_yjs_documents",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .references(() => gen2Workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    path: text("path").notNull(),
+    revision: text("revision").notNull(),
+    update: text("update_base64").notNull(),
+    stateVector: text("state_vector_base64").default("").notNull(),
+    filesystemContents: text("filesystem_contents").default("").notNull(),
+    filesystemRevision: text("filesystem_revision"),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    hasConflict: boolean("has_conflict").default(false).notNull(),
+    conflictFilesystemRevision: text("conflict_filesystem_revision"),
+    conflictDetectedAt: timestamp("conflict_detected_at", {
+      withTimezone: true,
+    }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("gen2_yjs_documents_workspace_path_idx").on(
+      table.workspaceId,
+      table.path,
+    ),
+  ],
+);
+
 export const gen2Chats = pgTable(
   "gen2_chats",
   {

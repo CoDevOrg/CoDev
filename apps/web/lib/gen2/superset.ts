@@ -24,6 +24,7 @@ import {
   Gen2FileConflictError,
   Gen2LifecycleError,
 } from "./errors";
+import { recordGen2DocumentSave } from "./collaboration-documents";
 import { requireGen2Member } from "./workspaces";
 
 const healthSchema = z.object({ status: z.literal("ok") });
@@ -192,7 +193,18 @@ export async function saveGen2SupersetFile(
       input,
       35_000,
     );
-    return gen2SupersetSaveFileResponseSchema.parse(await response.json()).file;
+    const file = gen2SupersetSaveFileResponseSchema.parse(
+      await response.json(),
+    ).file;
+    // A snapshot is recoverability metadata, never a reason to report a
+    // successful revision-checked filesystem save as failed.
+    await recordGen2DocumentSave({
+      workspaceId,
+      path: file.path,
+      contents: file.contents,
+      revision: file.revision,
+    }).catch(() => undefined);
+    return file;
   } catch (error) {
     if (error instanceof OrchestratorError && error.status === 409) {
       throw new Gen2FileConflictError(
