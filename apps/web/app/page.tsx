@@ -21,9 +21,9 @@ import { getCurrentAppUser } from "@/lib/auth/identity";
 import "./landing.css";
 
 /**
- * The landing page runs its own type stack, loaded here rather than in the
- * root layout so the three extra families are only fetched on this route. The
- * product keeps Geist.
+ * The landing page loads Instrument Serif for display type. Body and mono
+ * fonts come from the root layout (Inter Tight + JetBrains Mono), shared
+ * with the product so the signed-in app matches the marketing surface.
  */
 const interTight = Inter_Tight({
   subsets: ["latin"],

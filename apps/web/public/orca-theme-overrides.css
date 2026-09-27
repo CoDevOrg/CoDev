@@ -3,8 +3,8 @@
  *
  * This file is first-party CoDev CSS (not part of the upstream Orca build).
  * It is injected at runtime into the Orca iframe by orca-workspace.tsx so the
- * IDE chrome picks up CoDev's unified black / ivory / dry-gold palette
- * without modifying apps/web/public/orca/.
+ * IDE chrome picks up CoDev's dark workspace surfaces with the shared blue
+ * accent, without modifying apps/web/public/orca/.
  *
  * Scope intentionally excludes Monaco/editor, terminal, and diff viewers so
  * code readability and semantic git status colors stay intact. Re-check this
@@ -17,8 +17,8 @@
   --codev-workspace-surface-3: #20242a;
   --codev-workspace-ink: #edeef0;
   --codev-workspace-muted: #9ba1ab;
-  --codev-accent: #f2604a;
-  --codev-accent-soft: rgba(242, 96, 74, 0.16);
+  --codev-accent: #1b63b3;
+  --codev-accent-soft: rgba(27, 99, 179, 0.16);
   --codev-secondary: #8b7cd8;
 }
 
@@ -37,7 +37,7 @@ html.dark {
   --orca-security-popover: var(--codev-workspace-surface-2);
   --orca-security-popover-foreground: var(--codev-workspace-ink);
   --orca-security-primary: var(--codev-accent);
-  --orca-security-primary-foreground: var(--codev-workspace-ink);
+  --orca-security-primary-foreground: #f7f3e8;
   --orca-security-secondary: var(--codev-workspace-surface-3);
   --orca-security-secondary-foreground: var(--codev-workspace-ink);
   --orca-security-muted: var(--codev-workspace-surface-3);
@@ -55,7 +55,7 @@ html.dark {
   --popover: var(--codev-workspace-surface-2);
   --popover-foreground: var(--codev-workspace-ink);
   --primary: var(--codev-accent);
-  --primary-foreground: var(--codev-workspace-ink);
+  --primary-foreground: #f7f3e8;
   --secondary: var(--codev-workspace-surface-3);
   --secondary-foreground: var(--codev-workspace-ink);
   --muted: var(--codev-workspace-surface-3);
@@ -75,7 +75,7 @@ html.dark {
   --sidebar: var(--codev-workspace-surface-2);
   --sidebar-foreground: var(--codev-workspace-ink);
   --sidebar-primary: var(--codev-accent);
-  --sidebar-primary-foreground: var(--codev-workspace-ink);
+  --sidebar-primary-foreground: #f7f3e8;
   --sidebar-accent: #2c3138;
   --sidebar-accent-foreground: var(--codev-workspace-ink);
   --sidebar-border: rgba(237, 238, 240, 0.1);
@@ -153,7 +153,7 @@ body,
   color: var(--codev-workspace-ink) !important;
 }
 
-/* Accent badges / primary actions: amber → dry gold. */
+/* Accent badges / primary actions: brand blue. */
 [class*="bg-amber-"],
 [class*="bg-yellow-"],
 [class*="bg-orange-"],
@@ -427,7 +427,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   font-weight: 650;
   letter-spacing: 0.13em;
   text-transform: uppercase;
-  color: var(--codev-gold-500, #f2604a);
+  color: var(--codev-gold-500, #1b63b3);
 }
 
 .codev-agents-dot {
@@ -506,7 +506,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 }
 
 .codev-agent-card.is-working {
-  border-color: rgba(242, 96, 74, 0.32);
+  border-color: rgba(27, 99, 179, 0.32);
 }
 
 .codev-agent-card.is-waiting {
@@ -543,7 +543,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 }
 
 .codev-agent-summary:focus-visible {
-  outline: 2px solid var(--codev-gold-500, #f2604a);
+  outline: 2px solid var(--codev-gold-500, #1b63b3);
   outline-offset: -2px;
   border-radius: 11px;
 }
@@ -588,7 +588,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 .codev-agents-page-toggle {
   padding: 3px 9px;
   border-radius: 6px;
-  border: 1px solid rgba(242, 96, 74, 0.34);
+  border: 1px solid rgba(27, 99, 179, 0.34);
   background: transparent;
   color: #e8d5a8;
   font-size: 10px;
@@ -597,8 +597,8 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 }
 
 .codev-agents-page-toggle:hover {
-  background: var(--codev-gold-500, #f2604a);
-  color: #121417;
+  background: var(--codev-gold-500, #1b63b3);
+  color: #f7f3e8;
 }
 
 .codev-agents-panel.is-expanded {
@@ -637,7 +637,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 }
 
 .codev-agents-create-btn:hover:not(:disabled) {
-  border-color: rgba(242, 96, 74, 0.4);
+  border-color: rgba(27, 99, 179, 0.4);
   background: var(--codev-accent-soft);
 }
 
@@ -764,7 +764,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 
 .codev-agent-status.is-working {
   color: #e0c48a;
-  background: rgba(242, 96, 74, 0.16);
+  background: rgba(27, 99, 179, 0.16);
 }
 
 .codev-agent-status.is-working i {
@@ -839,7 +839,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 }
 
 .codev-agent-progress .is-working {
-  background: #f2604a;
+  background: #1b63b3;
 }
 
 .codev-agent-progress .is-blocked {
@@ -892,7 +892,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 }
 
 .codev-agent-subagents i.is-working {
-  background: #f2604a;
+  background: #1b63b3;
 }
 .codev-agent-subagents i.is-blocked {
   background: #e8b44a;
@@ -902,7 +902,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   flex: none;
   width: 5px;
   height: 9px;
-  background: var(--codev-gold-500, #f2604a);
+  background: var(--codev-gold-500, #1b63b3);
   animation: codev-agents-caret 1s steps(2) infinite;
 }
 
@@ -929,7 +929,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   margin-left: auto;
   padding: 3px 9px;
   border-radius: 6px;
-  border: 1px solid rgba(242, 96, 74, 0.34);
+  border: 1px solid rgba(27, 99, 179, 0.34);
   background: transparent;
   color: #e8d5a8;
   font-size: 10px;
@@ -938,8 +938,8 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 }
 
 .codev-agent-open:hover {
-  background: var(--codev-gold-500, #f2604a);
-  color: #121417;
+  background: var(--codev-gold-500, #1b63b3);
+  color: #f7f3e8;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1096,7 +1096,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 }
 
 .codev-mc-card.is-working {
-  border-color: rgba(242, 96, 74, 0.36);
+  border-color: rgba(27, 99, 179, 0.36);
 }
 .codev-mc-card.is-testing {
   border-color: rgba(120, 170, 255, 0.32);
@@ -1138,7 +1138,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 }
 
 .codev-mc-card-open:focus-visible {
-  outline: 2px solid var(--codev-gold-500, #f2604a);
+  outline: 2px solid var(--codev-gold-500, #1b63b3);
   outline-offset: -2px;
 }
 
@@ -1197,7 +1197,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 
 .codev-mc-phase.is-working {
   color: #e0c48a;
-  background: rgba(242, 96, 74, 0.16);
+  background: rgba(27, 99, 179, 0.16);
 }
 .codev-mc-phase.is-working i {
   animation: codev-agents-pulse 1.6s ease-in-out infinite;
@@ -1310,7 +1310,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 }
 
 .codev-mc-card-actions button:hover:not(:disabled) {
-  background: rgba(242, 96, 74, 0.16);
+  background: rgba(27, 99, 179, 0.16);
   color: #e8d5a8;
   opacity: 1;
 }
@@ -1324,7 +1324,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 .codev-mc-drawer button:focus-visible {
   position: relative;
   z-index: 1;
-  outline: 2px solid var(--codev-gold-500, #f2604a);
+  outline: 2px solid var(--codev-gold-500, #1b63b3);
   outline-offset: -2px;
 }
 
@@ -1467,13 +1467,13 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 /* Stopping an agent discards its running session; it reads as destructive so a
    member does not confuse it with Pause sitting next to it. */
 .codev-mc-ghost.is-danger {
-  border-color: rgba(242, 96, 74, 0.45);
+  border-color: rgba(27, 99, 179, 0.45);
   color: rgb(242, 138, 120);
 }
 
 .codev-mc-ghost.is-danger:hover:not(:disabled) {
-  background: rgba(242, 96, 74, 0.12);
-  border-color: rgba(242, 96, 74, 0.7);
+  background: rgba(27, 99, 179, 0.12);
+  border-color: rgba(27, 99, 179, 0.7);
 }
 
 .codev-mc-steer {
@@ -1504,8 +1504,8 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 }
 
 .codev-mc-quick-chip:hover:not(:disabled) {
-  background: rgba(242, 96, 74, 0.16);
-  border-color: rgba(242, 96, 74, 0.4);
+  background: rgba(27, 99, 179, 0.16);
+  border-color: rgba(27, 99, 179, 0.4);
   color: #e8d5a8;
   opacity: 1;
 }
@@ -1533,7 +1533,7 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 }
 
 .codev-mc-steer-input:focus-visible {
-  outline: 2px solid var(--codev-gold-500, #f2604a);
+  outline: 2px solid var(--codev-gold-500, #1b63b3);
   outline-offset: 0;
 }
 
@@ -1543,8 +1543,8 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
   padding: 7px 14px;
   border-radius: 8px;
   border: 0;
-  background: var(--codev-gold-500, #f2604a);
-  color: #121417;
+  background: var(--codev-gold-500, #1b63b3);
+  color: #f7f3e8;
   font-size: 11px;
   font-weight: 700;
   cursor: pointer;
@@ -1728,8 +1728,8 @@ button[class*="rounded-full"][class*="border-amber-500/50"] {
 }
 
 .codev-chat-history-new:hover:not(:disabled) {
-  border-color: rgba(242, 96, 74, 0.45);
-  background: rgba(242, 96, 74, 0.12);
+  border-color: rgba(27, 99, 179, 0.45);
+  background: rgba(27, 99, 179, 0.12);
 }
 
 .codev-chat-history-new:disabled {

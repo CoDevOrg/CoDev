@@ -1,9 +1,7 @@
 /*
- * Tailwind for the Rooms page only. Rooms runs a light "paper cream + navy
- * ink" palette lifted from the landing page's landing.css (the marketing
- * site's own tokens, renamed to shadcn's --color-* convention here) instead
- * of the app shell's dark gold theme, so it needs its own scoped theme block
- * the way orca-theme.css does for the settings shell: reset < theme <
+ * Tailwind for the Rooms page only. Rooms shares the product cream/navy
+ * palette (same tokens as landing.css / app-theme.css) via a scoped theme
+ * block the way orca-theme.css does for the settings shell: reset < theme <
  * utilities layering keeps this from touching any other route, and the
  * plain-element reset below stays inside `.rooms-scope` so nothing outside
  * a page that opts in is affected.
@@ -49,11 +47,8 @@
 
 @layer reset {
   .rooms-scope {
-    /* The app shell sets `color-scheme: dark` on :root, which makes native
-       form controls (button/input/select) render with the browser's dark
-       UA colors — a mid-grey button face — even where no background is
-       authored. Rooms is the one light route, so it opts back into light
-       native-control rendering here. */
+    /* Rooms and the app shell both run light cream/navy. This still opts
+       into light native-control rendering explicitly for the scoped route. */
     color-scheme: light;
     background:
       radial-gradient(

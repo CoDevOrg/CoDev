@@ -210,7 +210,7 @@
 .gen2-status-ready .gen2-status-dot,
 .gen2-status-provisioning .gen2-status-dot {
   background: var(--gold);
-  box-shadow: 0 0 9px rgba(242, 96, 74, 0.55);
+  box-shadow: 0 0 9px rgba(27, 99, 179, 0.55);
 }
 
 .gen2-status-failed .gen2-status-dot {

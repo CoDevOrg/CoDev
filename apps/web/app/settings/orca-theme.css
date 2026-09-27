@@ -6,10 +6,8 @@
  * outside a route that opts in by importing this file — the rest of the app
  * stays on its own plain CSS. A component that uses these utilities must
  * render under one of those routes; the activity feed spent a release
- * unstyled because it did not. Color/radius values are Orca's own dark theme tokens
- * (src/renderer/src/assets/main.css upstream), so the settings shell
- * matches what the personal settings page looked like when it was
- * rendered inside a live Orca client.
+ * unstyled because it did not. Color tokens match the product cream/navy
+ * palette so settings reads as the same surface as the dashboard.
  */
 /* Declares layer order up front: reset < theme < utilities. Without this,
    the plain (unlayered) reset rules below would beat every Tailwind utility
@@ -23,36 +21,37 @@
 
 @theme {
   --font-sans:
-    "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    "Inter Tight", "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
   --radius: 0.625rem;
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) * 1.4);
 
-  --color-background: #121417;
-  --color-foreground: #edeef0;
-  --color-card: #1a1d21;
-  --color-card-foreground: #edeef0;
-  --color-primary: #f2604a;
-  --color-primary-foreground: #0c0e10;
-  --color-secondary: #20242a;
-  --color-secondary-foreground: #edeef0;
-  --color-muted: #20242a;
-  --color-muted-foreground: #9ba1ab;
-  --color-accent: #2c3138;
-  --color-accent-foreground: #edeef0;
-  --color-destructive: #ff6568;
-  --color-border: rgb(237 238 240 / 0.1);
-  --color-input: rgb(237 238 240 / 0.16);
-  --color-ring: #f2604a;
+  --color-background: #f2e9d6;
+  --color-foreground: #0e2f7e;
+  --color-card: #fffdf7;
+  --color-card-foreground: #0e2f7e;
+  --color-primary: #1b63b3;
+  --color-primary-foreground: #f7f3e8;
+  --color-secondary: #e8dcc0;
+  --color-secondary-foreground: #0e2f7e;
+  --color-muted: #e8dcc0;
+  --color-muted-foreground: #5a73a8;
+  --color-accent: #e8dcc0;
+  --color-accent-foreground: #0e2f7e;
+  --color-destructive: #b3261e;
+  --color-border: rgb(14 47 126 / 0.16);
+  --color-input: rgb(14 47 126 / 0.28);
+  --color-ring: #1b63b3;
 
-  --color-worktree-sidebar: #20242a;
-  --color-worktree-sidebar-foreground: #edeef0;
-  --color-worktree-sidebar-accent: #2c3138;
-  --color-worktree-sidebar-accent-foreground: #edeef0;
-  --color-worktree-sidebar-border: rgb(237 238 240 / 0.1);
-  --color-worktree-sidebar-ring: #f2604a;
+  --color-worktree-sidebar: #fffdf7;
+  --color-worktree-sidebar-foreground: #0e2f7e;
+  --color-worktree-sidebar-accent: #e8dcc0;
+  --color-worktree-sidebar-accent-foreground: #0e2f7e;
+  --color-worktree-sidebar-border: rgb(14 47 126 / 0.16);
+  --color-worktree-sidebar-ring: #1b63b3;
 }
 
 /* Scope root: the settings layout wraps its content in this class instead
@@ -62,6 +61,7 @@
    classes like Button's `text-primary-foreground`. */
 @layer reset {
   .orca-settings-scope {
+    color-scheme: light;
     background: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);

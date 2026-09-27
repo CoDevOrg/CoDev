@@ -1,21 +1,20 @@
 /*
  * Mission Control — the live multi-agent surface.
  *
- * Uses the CoDev product palette (warm black + dry gold) from
- * app-theme.css so it reads as the same product as the dashboard, not a
- * bolted-on dashboard of its own.
+ * Uses the CoDev product palette (paper cream + navy + blue) from
+ * app-theme.css so it reads as the same product as the dashboard.
  */
 
 .mc-root {
-  --mc-line: rgba(237, 238, 240, 0.09);
-  --mc-line-lit: rgba(242, 96, 74, 0.34);
-  --mc-panel: rgba(26, 29, 33, 0.72);
-  --mc-panel-lit: rgba(32, 36, 42, 0.9);
-  --mc-ink: var(--codev-beige-100, #edeef0);
-  --mc-muted: var(--codev-stone-300, #9ba1ab);
-  --mc-orange: var(--codev-gold-500, #f2604a);
-  --mc-green: #3fbf7a;
-  --mc-amber: #e8b44a;
+  --mc-line: rgba(14, 47, 126, 0.14);
+  --mc-line-lit: rgba(27, 99, 179, 0.34);
+  --mc-panel: rgba(255, 253, 247, 0.72);
+  --mc-panel-lit: rgba(255, 253, 247, 0.92);
+  --mc-ink: var(--codev-beige-100, #0e2f7e);
+  --mc-muted: var(--codev-stone-300, #5a73a8);
+  --mc-orange: var(--codev-gold-500, #1b63b3);
+  --mc-green: #2a6d62;
+  --mc-amber: #86590b;
 
   min-height: 100vh;
   padding: 32px clamp(20px, 4vw, 56px) 72px;
@@ -23,15 +22,15 @@
   background:
     radial-gradient(
       1100px 620px at 12% -8%,
-      rgba(242, 96, 74, 0.16),
+      rgba(27, 99, 179, 0.12),
       transparent 62%
     ),
     radial-gradient(
       900px 560px at 92% 4%,
-      rgba(139, 124, 216, 0.2),
+      rgba(91, 79, 168, 0.12),
       transparent 60%
     ),
-    var(--codev-black-950, #121417);
+    var(--codev-black-950, #f2e9d6);
   font-feature-settings: "tnum" 1;
 }
 
@@ -64,16 +63,16 @@
   height: 7px;
   border-radius: 50%;
   background: var(--mc-orange);
-  box-shadow: 0 0 0 0 rgba(242, 96, 74, 0.6);
+  box-shadow: 0 0 0 0 rgba(27, 99, 179, 0.6);
   animation: mc-pulse 2s infinite;
 }
 
 @keyframes mc-pulse {
   70% {
-    box-shadow: 0 0 0 9px rgba(242, 96, 74, 0);
+    box-shadow: 0 0 0 9px rgba(27, 99, 179, 0);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(242, 96, 74, 0);
+    box-shadow: 0 0 0 0 rgba(27, 99, 179, 0);
   }
 }
 
@@ -143,7 +142,7 @@
   font-weight: 700;
   letter-spacing: 0.02em;
   color: #fff;
-  border: 1.5px solid rgba(18, 20, 23, 0.85);
+  border: 1.5px solid rgba(255, 253, 247, 0.9);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
@@ -256,8 +255,8 @@
 .mc-phase-editing,
 .mc-phase-planning {
   color: var(--mc-orange);
-  background: rgba(242, 96, 74, 0.13);
-  border-color: rgba(242, 96, 74, 0.3);
+  background: rgba(27, 99, 179, 0.13);
+  border-color: rgba(27, 99, 179, 0.3);
 }
 
 .mc-phase-editing .mc-phase-dot,
@@ -306,7 +305,7 @@
   margin: 0;
   padding: 10px 11px;
   border-radius: 10px;
-  background: rgba(18, 20, 23, 0.62);
+  background: rgba(255, 253, 247, 0.72);
   border: 1px solid var(--mc-line);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
@@ -376,7 +375,7 @@
   height: 3px;
   flex: 1;
   border-radius: 2px;
-  background: rgba(237, 238, 240, 0.12);
+  background: rgba(14, 47, 126, 0.12);
 }
 
 .mc-progress-seg.is-done {
@@ -451,7 +450,7 @@
 
 .mc-provider-claude {
   color: #e8a882;
-  background: rgba(242, 96, 74, 0.16);
+  background: rgba(27, 99, 179, 0.16);
 }
 
 .mc-provider-codex {
@@ -507,7 +506,7 @@
   padding: 7px 15px;
   border-radius: 8px;
   border: 1px solid var(--mc-line-lit);
-  background: rgba(242, 96, 74, 0.14);
+  background: rgba(27, 99, 179, 0.14);
   color: #f0c3a4;
   font-size: 12.5px;
   font-weight: 650;
@@ -519,7 +518,7 @@
 
 .mc-step-in:hover {
   background: var(--mc-orange);
-  color: #121417;
+  color: #f7f3e8;
 }
 
 /* ---------- drawer ---------- */
@@ -527,7 +526,7 @@
 .mc-scrim {
   position: fixed;
   inset: 0;
-  background: rgba(12, 14, 16, 0.62);
+  background: rgba(14, 47, 126, 0.45);
   backdrop-filter: blur(2px);
   z-index: 40;
   animation: mc-fade 180ms ease;
@@ -553,7 +552,7 @@
   background: linear-gradient(
     180deg,
     var(--codev-black-900, #1a1d21),
-    var(--codev-black-950, #121417)
+    var(--codev-black-950, #f2e9d6)
   );
   border-left: 1px solid var(--mc-line-lit);
   box-shadow: -30px 0 70px rgba(0, 0, 0, 0.45);
@@ -658,7 +657,7 @@
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  border: 1.5px solid rgba(237, 238, 240, 0.24);
+  border: 1.5px solid rgba(14, 47, 126, 0.24);
   flex: none;
 }
 
@@ -698,7 +697,7 @@
   gap: 12px;
   padding: 8px 11px;
   border-radius: 9px;
-  background: rgba(18, 20, 23, 0.55);
+  background: rgba(255, 253, 247, 0.7);
   border: 1px solid var(--mc-line);
   font-size: 12px;
 }
@@ -748,7 +747,7 @@
   gap: 7px;
   padding: 12px 12px 14px;
   border-radius: 11px;
-  background: rgba(12, 14, 16, 0.62);
+  background: rgba(14, 47, 126, 0.45);
   scroll-behavior: smooth;
   border: 1px solid var(--mc-line);
   scrollbar-width: thin;
@@ -790,7 +789,7 @@
 .mc-log-line.is-steer .mc-log-text {
   padding: 3px 8px;
   border-radius: 6px;
-  background: rgba(242, 96, 74, 0.15);
+  background: rgba(27, 99, 179, 0.15);
 }
 
 .mc-log-line.is-warn {
@@ -808,7 +807,7 @@
   background: linear-gradient(
     180deg,
     transparent,
-    var(--codev-black-950, #121417) 22%
+    var(--codev-black-950, #f2e9d6) 22%
   );
 }
 
@@ -850,7 +849,7 @@
   padding: 11px 13px;
   border-radius: 10px;
   border: 1px solid var(--mc-line-lit);
-  background: rgba(18, 20, 23, 0.8);
+  background: rgba(255, 253, 247, 0.88);
   color: var(--mc-ink);
   font-size: 13.5px;
   outline: none;
@@ -862,7 +861,7 @@
 
 .mc-steer-input:focus {
   border-color: var(--mc-orange);
-  box-shadow: 0 0 0 3px rgba(242, 96, 74, 0.16);
+  box-shadow: 0 0 0 3px rgba(27, 99, 179, 0.16);
 }
 
 .mc-steer-send,
@@ -878,7 +877,7 @@
 
 .mc-steer-send {
   background: var(--mc-orange);
-  color: #121417;
+  color: #f7f3e8;
 }
 
 .mc-steer-send:disabled {

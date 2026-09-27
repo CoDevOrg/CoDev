@@ -22,21 +22,24 @@ const globals = readCss("globals.css");
 const landing = readCss("landing.css");
 
 describe("CoDev product theme", () => {
-  it("sets one dark palette for every AppChrome product page", () => {
+  it("sets one cream/navy palette for every AppChrome product page", () => {
     expect(appTheme).toContain(".app-page,\n.auth-page {");
     expect(appTheme).toContain("--surface: var(--codev-black-950);");
     expect(appTheme).toContain("--ink: var(--codev-beige-100);");
-    expect(appTheme).toContain("--codev-gold-500: #f2604a;");
-    expect(appTheme).toContain("--orange: var(--codev-gold-500);");
+    expect(appTheme).toContain("--codev-gold-500: #1b63b3;");
+    expect(appTheme).toContain("--codev-black-950: #f2e9d6;");
+    expect(appTheme).toContain("--codev-beige-100: #0e2f7e;");
+    expect(appTheme).toContain("color-scheme: light;");
+    expect(appTheme).toContain("--orange: var(--codev-terracotta);");
   });
 
-  it("uses the same dark surfaces for the dashboard workspace browser", () => {
+  it("uses the same light surfaces for the dashboard workspace browser", () => {
     expect(appTheme).toContain(".workspace-browser {");
-    expect(appTheme).toContain("background: rgba(26, 29, 33, 0.7);");
+    expect(appTheme).toContain("background: rgba(255, 253, 247, 0.72);");
     expect(appTheme).toContain(".workspace-card:hover {");
   });
 
-  it("keeps every profile menu action legible on the dark product surface", () => {
+  it("keeps every profile menu action legible on the light product surface", () => {
     expect(appTheme).toContain(
       ".app-page .profile-menu-link,\n.app-page .profile-menu-action {",
     );
@@ -49,7 +52,7 @@ describe("CoDev product theme", () => {
     expect(appTheme).toContain(".auth-page .auth-submit {");
   });
 
-  it("keeps auth password guidance readable on the dark card", () => {
+  it("keeps auth password guidance readable on the light card", () => {
     expect(appTheme).toContain(
       ".auth-page .auth-password-guidance,\n.auth-page .auth-password-guidance p,\n.auth-page .auth-password-guidance .unmet {",
     );
@@ -84,17 +87,24 @@ describe("CoDev product theme", () => {
     }
   });
 
-  it("runs the marketing page light without lightening the product", () => {
-    // The landing page is the one light surface: paper cream with deep navy
-    // ink. globals.css stays dark for every signed-in route, so the only way
-    // this is safe is the `.lp-page` scoping asserted above.
+  it("shares the cream/navy palette between landing and product", () => {
+    // Landing invented the paper cream + deep navy + blue accent palette;
+    // the product shell now uses the same tokens so the signed-in app
+    // matches the marketing surface. The IDE workspace stays dark.
     expect(landing).toContain("--lp-bg: #f2e9d6;");
     expect(landing).toContain("--lp-ink: #0e2f7e;");
     expect(landing).toContain("color-scheme: light;");
-    // The product theme must stay dark.
-    expect(globals).toContain("color-scheme: dark");
+    expect(globals).toContain("color-scheme: light");
+    expect(globals).toContain("--surface: #f2e9d6;");
+    expect(globals).toContain("--ink: #0e2f7e;");
+    expect(globals).toContain("--gold: #1b63b3;");
 
-    // The workspace demo stays a dark panel on the light page, so it
+    // The workspace IDE page keeps a dark document for coding chrome.
+    expect(globals).toContain(".workspace-page {");
+    expect(globals).toContain("--workspace-surface: #121417;");
+    expect(globals).toMatch(/\.workspace-page \{[^}]*color-scheme: dark;/s);
+
+    // The workspace demo stays a dark panel on the light landing page, so it
     // re-declares the ink tokens rather than inheriting the navy ones.
     const demo = landing.slice(landing.indexOf(".lp-demo {"));
     expect(demo).toContain("--lp-ink: #edeef0;");
