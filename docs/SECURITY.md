@@ -46,6 +46,11 @@ CoDev separates the Vercel control plane from untrusted Firecracker guests.
   treats an already-missing sandbox as success.
 - Quotas bound active workspaces, queued turns, daily turns, terminal sessions,
   publication size, and control-plane request rates.
+- A connected Claude subscription keeps its own credential-bound microVM for
+  three minutes after a reply. Each reply checkpoints that VM before releasing
+  the execution lease. An idle VM yields its host slot immediately when new
+  active work needs capacity; its private checkpoint remains available for the
+  same connection. Disconnect destroys the VM and its checkpoint.
 
 ## Design-partner feedback
 

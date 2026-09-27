@@ -43,6 +43,7 @@ use crate::{
 };
 
 const GUEST_PORT: u32 = 52;
+const EPHEMERAL_PARK_TTL: Duration = Duration::from_secs(3 * 60);
 
 /// Firecracker reserves CIDs 0-2, so guest CIDs start here and the slot index
 /// is recoverable as `guest_cid - GUEST_CID_BASE`.
@@ -197,6 +198,7 @@ struct RunningMachine {
     jail_dir: PathBuf,
     slot: u32,
     reap_on_expiry: bool,
+    parked: AtomicBool,
     hibernate_on_idle: bool,
     hibernating: AtomicBool,
     reaper_exempt_requests: AtomicUsize,
@@ -597,10 +599,20 @@ impl FirecrackerBackend {
             ));
         }
         if let Some(machine) = self.machines.read().await.get(&request.workspace_id) {
+            if request.ephemeral && machine.reap_on_expiry {
+                let mut instance = machine.instance.write().expect("machine lock");
+                instance.expires_at = request.expires_at;
+                instance.last_activity_at = Utc::now();
+                machine.parked.store(false, Ordering::Release);
+                return Ok(instance.clone());
+            }
             return Ok(machine.instance.read().expect("machine lock").clone());
         }
         if self.machines.read().await.len() >= self.config.max_sandboxes {
-            return Err(RuntimeError::CapacityExceeded);
+            self.reclaim_parked_slot().await?;
+            if self.machines.read().await.len() >= self.config.max_sandboxes {
+                return Err(RuntimeError::CapacityExceeded);
+            }
         }
 
         let machine = Arc::new(self.prepare_and_start(&request).await?);
@@ -610,6 +622,65 @@ impl FirecrackerBackend {
             .await
             .insert(request.workspace_id, machine);
         Ok(instance)
+    }
+
+    async fn reclaim_parked_slot(&self) -> Result<()> {
+        let candidate = {
+            let machines = self.machines.read().await;
+            machines
+                .iter()
+                .filter(|(_, machine)| {
+                    machine.parked.load(Ordering::Acquire) && Arc::strong_count(machine) == 1
+                })
+                .min_by_key(|(_, machine)| {
+                    machine.instance.read().expect("machine lock").expires_at
+                })
+                .map(|(id, machine)| (id.clone(), machine.clone()))
+        };
+        if let Some((workspace_id, machine)) = candidate {
+            self.stop_machine(machine).await?;
+            self.machines.write().await.remove(&workspace_id);
+            info!(%workspace_id, "reclaimed parked Firecracker sandbox slot");
+        }
+        Ok(())
+    }
+
+    /// Only a checkpointed credential-bound VM can enter the short idle window.
+    pub async fn park(&self, workspace_id: &str) -> Result<Instance> {
+        let _guard = self.provision.lock().await;
+        let machine = self
+            .machines
+            .read()
+            .await
+            .get(workspace_id)
+            .cloned()
+            .ok_or(RuntimeError::SandboxNotFound)?;
+        if !machine.reap_on_expiry {
+            return Err(RuntimeError::BadRequest(
+                "only ephemeral sandboxes can be parked".into(),
+            ));
+        }
+        if !matches!(
+            self.snapshot_metadata(workspace_id).await?,
+            Some((
+                _,
+                MicroVmSnapshotMetadata {
+                    kind: SnapshotKind::FullMachine,
+                    ..
+                }
+            ))
+        ) {
+            return Err(RuntimeError::Conflict(
+                "sandbox must have a complete VM checkpoint before parking".into(),
+            ));
+        }
+        let mut instance = machine.instance.write().expect("machine lock");
+        let now = Utc::now();
+        instance.last_activity_at = now;
+        instance.expires_at =
+            now + chrono::Duration::from_std(EPHEMERAL_PARK_TTL).map_err(RuntimeError::internal)?;
+        machine.parked.store(true, Ordering::Release);
+        Ok(instance.clone())
     }
 
     pub async fn get(&self, workspace_id: &str) -> Result<Instance> {
@@ -1156,7 +1227,9 @@ impl FirecrackerBackend {
                 .await
                 .map_err(RuntimeError::internal)?;
             for (name, source) in files {
-                link_or_copy(&source, &staging.join(name)).await?;
+                // This VM remains live after the checkpoint. A hard link
+                // would let later writes corrupt the durable snapshot.
+                clone_or_copy(&source, &staging.join(name)).await?;
             }
             let metadata = serde_json::to_vec(&MicroVmSnapshotMetadata {
                 head_sha: head_sha.to_owned(),
@@ -1168,10 +1241,27 @@ impl FirecrackerBackend {
                 .await
                 .map_err(RuntimeError::internal)?;
             let destination = self.snapshot_dir(&machine.workspace_id());
-            remove_directory_if_present(&destination).await?;
-            fs::rename(&staging, &destination)
-                .await
-                .map_err(RuntimeError::internal)?;
+            let previous = self.previous_snapshot_dir(&machine.workspace_id());
+            let had_previous = match fs::metadata(&destination).await {
+                Ok(_) => {
+                    remove_directory_if_present(&previous).await?;
+                    fs::rename(&destination, &previous)
+                        .await
+                        .map_err(RuntimeError::internal)?;
+                    true
+                }
+                Err(error) if error.kind() == ErrorKind::NotFound => false,
+                Err(error) => return Err(RuntimeError::internal(error)),
+            };
+            if let Err(error) = fs::rename(&staging, &destination).await {
+                if had_previous {
+                    let _ = fs::rename(&previous, &destination).await;
+                }
+                return Err(RuntimeError::internal(error));
+            }
+            if let Err(error) = remove_directory_if_present(&previous).await {
+                warn!(workspace_id = %machine.workspace_id(), %error, "could not remove prior VM checkpoint");
+            }
             Ok::<(), RuntimeError>(())
         }
         .await;
@@ -1187,6 +1277,7 @@ impl FirecrackerBackend {
             snapshot_ms = started_at.elapsed().as_millis() as u64,
             "firecracker snapshot persisted"
         );
+        api.resume().await?;
         Ok(())
     }
 
@@ -1512,6 +1603,7 @@ impl FirecrackerBackend {
             jail_dir,
             slot,
             reap_on_expiry: request.ephemeral,
+            parked: AtomicBool::new(false),
             hibernate_on_idle: request.hibernate_on_idle,
             hibernating: AtomicBool::new(false),
             reaper_exempt_requests: AtomicUsize::new(0),

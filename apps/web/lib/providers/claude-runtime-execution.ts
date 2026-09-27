@@ -25,8 +25,10 @@ import {
   pollCodexExecInSandbox,
   closeCodexExecInSandbox,
   snapshotWorkspace,
+  parkSandbox,
   destroySandbox,
 } from "../runtime/orchestrator";
+import { OrchestratorError } from "../runtime/orchestrator-request";
 
 // Official CLI aliases resolve on the signed-in account; do not claim specific
 // dated API models are available to every subscription.
@@ -324,8 +326,19 @@ export async function cleanupClaudeExecution(id: string) {
     if (connection?.id === run.connectionId) {
       const sandbox = await getSandbox(run.reference.profileId);
       await snapshotWorkspace(run.reference.profileId, sandbox.headSha);
+      try {
+        await parkSandbox(run.reference.profileId);
+      } catch (error) {
+        // During a staggered rollout, an older host lacks the park route.
+        // The checkpoint is already durable, so use the prior cleanup path.
+        if (!(error instanceof OrchestratorError && error.status === 404)) {
+          throw error;
+        }
+        await destroySandbox(run.reference.profileId);
+      }
+    } else {
+      await destroySandbox(run.reference.profileId);
     }
-    await destroySandbox(run.reference.profileId);
   }
   await releaseClaudeSubscriptionExecution(run.connectionId, run.leaseUntil);
 }

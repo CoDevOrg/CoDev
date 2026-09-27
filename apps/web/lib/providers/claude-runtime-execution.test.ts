@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   poll: vi.fn(),
   close: vi.fn(),
   snapshot: vi.fn(),
+  park: vi.fn(),
   destroy: vi.fn(),
 }));
 vi.mock("./claude-connection-session", () => ({
@@ -25,8 +26,10 @@ vi.mock("../runtime/orchestrator", () => ({
   pollCodexExecInSandbox: mocks.poll,
   closeCodexExecInSandbox: mocks.close,
   snapshotWorkspace: mocks.snapshot,
+  parkSandbox: mocks.park,
   destroySandbox: mocks.destroy,
 }));
+import { OrchestratorError } from "../runtime/orchestrator-request";
 import { encodeClaudeRuntimeReference } from "./claude-runtime-reference";
 import {
   startClaudeExecution,
@@ -101,6 +104,20 @@ describe("private Claude execution", () => {
     );
     await cleanupClaudeExecution(id);
     expect(mocks.snapshot).toHaveBeenCalledWith(profileId, "a".repeat(40));
+    expect(mocks.park).toHaveBeenCalledWith(profileId);
+    expect(mocks.destroy).not.toHaveBeenCalled();
+    expect(mocks.release).toHaveBeenCalledWith(connectionId, leaseUntil);
+  });
+  it("uses the checkpoint and destroys the VM while the old host lacks parking", async () => {
+    const id = await startClaudeExecution(
+      "sender",
+      "sonnet",
+      "Hello",
+      "request",
+    );
+    mocks.park.mockRejectedValueOnce(new OrchestratorError("Not found", 404));
+    await cleanupClaudeExecution(id);
+    expect(mocks.snapshot).toHaveBeenCalledOnce();
     expect(mocks.destroy).toHaveBeenCalledWith(profileId);
     expect(mocks.release).toHaveBeenCalledWith(connectionId, leaseUntil);
   });

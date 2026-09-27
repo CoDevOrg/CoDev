@@ -61,6 +61,7 @@ export {
   resumeSandbox,
   discardSandboxSnapshot,
   touchSandbox,
+  parkSandbox,
 } from "./orchestrator-sandbox";
 export {
   startSandboxTerminal,
