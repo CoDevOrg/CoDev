@@ -26,9 +26,9 @@ use crate::{
         IdeStartRequest, IdeWriteFileRequest, MAX_IDE_FILE_BYTES, PublicationExportRequest, Result,
         RuntimeError, SESSION_RESTORE_CHUNK_BYTES, SessionRestoreBeginRequest,
         SessionRestoreChunkRequest, SupersetCreateEntryRequest, SupersetDeleteEntryRequest,
-        SupersetMoveEntryRequest, TerminalInputRequest,
-        TerminalPollRequest, TerminalResizeRequest, TerminalStartRequest,
-        WorktreeCheckpointRequest, WorktreeCreateRequest, WorktreeMergeRequest,
+        SupersetMoveEntryRequest, TerminalInputRequest, TerminalPollRequest, TerminalResizeRequest,
+        TerminalStartRequest, WorktreeCheckpointRequest, WorktreeCreateRequest,
+        WorktreeMergeRequest,
         WorktreeRebaseRequest, WriteFileRequest,
     },
 };
@@ -508,7 +508,9 @@ async fn superset_delete_entry(
         ));
     }
     Ok(Json(
-        backend.superset_delete_entry(&workspace_id, &request).await?,
+        backend
+            .superset_delete_entry(&workspace_id, &request)
+            .await?,
     ))
 }
 
