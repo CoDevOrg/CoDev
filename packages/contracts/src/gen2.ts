@@ -420,7 +420,7 @@ export const gen2SupersetWorktreeCreateRequestSchema = z.object({
       (value) =>
         !value.startsWith("-") &&
         !value.includes("..") &&
-        !/[~^:?*\[\\\s]/.test(value) &&
+        !/[~^:?*[\\\s]/.test(value) &&
         !value.endsWith(".") &&
         !value.endsWith("/"),
       "Branch name is invalid.",

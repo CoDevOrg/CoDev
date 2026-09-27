@@ -543,7 +543,9 @@ impl GuestService {
                 .filter(|value| {
                     !value.is_empty()
                         && value.len() <= 128
-                        && value.chars().all(|character| character.is_ascii_alphanumeric() || character == '-')
+                        && value
+                            .chars()
+                            .all(|character| character.is_ascii_alphanumeric() || character == '-')
                 })
                 .ok_or_else(|| GuestResponse::error(400, "invalid terminal session ID"))
         };
@@ -556,7 +558,8 @@ impl GuestService {
                 if let Err(error) = validate_worktree_id(worktree_id) {
                     return GuestResponse::error(400, error);
                 }
-                let Some(operation) = request.get("operation").and_then(serde_json::Value::as_str) else {
+                let Some(operation) = request.get("operation").and_then(serde_json::Value::as_str)
+                else {
                     return GuestResponse::error(400, "Git operation is required");
                 };
                 if !matches!(operation, "status" | "diff") {
@@ -593,7 +596,9 @@ impl GuestService {
                 }
                 self.superset_bridge_request("POST", "/codev/terminal", body)
             }
-            ("POST", "terminal/input") | ("POST", "terminal/resize") | ("POST", "terminal/poll") => {
+            ("POST", "terminal/input")
+            | ("POST", "terminal/resize")
+            | ("POST", "terminal/poll") => {
                 let worktree_id = match worktree_id() {
                     Ok(value) => value,
                     Err(error) => return error,
@@ -605,7 +610,9 @@ impl GuestService {
                 if let Err(error) = validate_worktree_id(worktree_id) {
                     return GuestResponse::error(400, error);
                 }
-                let action = operation.strip_prefix("terminal/").expect("terminal action");
+                let action = operation
+                    .strip_prefix("terminal/")
+                    .expect("terminal action");
                 self.superset_bridge_request(
                     "POST",
                     &format!(

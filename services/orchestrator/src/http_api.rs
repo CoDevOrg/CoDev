@@ -553,7 +553,9 @@ async fn superset_runtime_get(
 ) -> Result<Json<serde_json::Value>> {
     validate_workspace_id(&workspace_id)?;
     if !valid_superset_runtime_operation("GET", &operation) {
-        return Err(RuntimeError::BadRequest("invalid Superset runtime operation".into()));
+        return Err(RuntimeError::BadRequest(
+            "invalid Superset runtime operation".into(),
+        ));
     }
     Ok(Json(
         backend
@@ -569,7 +571,9 @@ async fn superset_runtime_post(
 ) -> Result<Json<serde_json::Value>> {
     validate_workspace_id(&workspace_id)?;
     if !valid_superset_runtime_operation("POST", &operation) {
-        return Err(RuntimeError::BadRequest("invalid Superset runtime operation".into()));
+        return Err(RuntimeError::BadRequest(
+            "invalid Superset runtime operation".into(),
+        ));
     }
     Ok(Json(
         backend
@@ -585,7 +589,9 @@ async fn superset_runtime_delete(
 ) -> Result<Json<serde_json::Value>> {
     validate_workspace_id(&workspace_id)?;
     if !valid_superset_runtime_operation("DELETE", &operation) {
-        return Err(RuntimeError::BadRequest("invalid Superset runtime operation".into()));
+        return Err(RuntimeError::BadRequest(
+            "invalid Superset runtime operation".into(),
+        ));
     }
     Ok(Json(
         backend
