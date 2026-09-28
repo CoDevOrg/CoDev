@@ -99,10 +99,15 @@ export function SettingsSidebar() {
                   <Link
                     aria-current={isActive ? "page" : undefined}
                     className={cn(
-                      "flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[13px] transition-colors duration-150 outline-none focus-visible:ring-[3px] focus-visible:ring-worktree-sidebar-ring/50",
+                      "flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[13px] transition-colors duration-150 outline-none focus-visible:ring-[3px] focus-visible:ring-primary/50",
+                      // A soft accent tint, no solid fill or ring -- matches
+                      // the main app sidebar's active state (a translucent
+                      // wash, not a filled pill). The previous
+                      // bg-worktree-sidebar-accent + ring combination read as
+                      // a heavy, fully-opaque navy-blue block in dark mode.
                       isActive
-                        ? "bg-worktree-sidebar-accent font-medium text-worktree-sidebar-accent-foreground ring-1 ring-worktree-sidebar-ring/25"
-                        : "text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-accent/60 hover:text-worktree-sidebar-foreground",
+                        ? "bg-primary/10 font-medium text-primary"
+                        : "text-worktree-sidebar-foreground/60 hover:bg-primary/5 hover:text-worktree-sidebar-foreground",
                     )}
                     href={item.href}
                     key={item.href}
