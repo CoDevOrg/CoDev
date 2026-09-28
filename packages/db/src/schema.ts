@@ -2196,3 +2196,95 @@ export const gen2AgentTurns = pgTable(
     index("gen2_agent_turns_chat_idx").on(table.chatId, table.createdAt),
   ],
 );
+
+/**
+ * Durable mapping between a Gen 2 workspace and one Superset terminal-agent
+ * session, per docs/SUPERSET_AGENT_SESSION_PLAN.md. CoDev owns this row as
+ * the source of truth for identity, credential lease, and lifecycle state;
+ * Superset's own SQLite database is never queried for that state. No
+ * credential material is stored here -- `connectionId` points at the
+ * existing encrypted `provider_credentials` row and `credentialRevision` is
+ * a fingerprint only.
+ */
+export const gen2SupersetRunStatus = pgEnum("gen2_superset_run_status", [
+  "creating",
+  "running",
+  "stopping",
+  "finished",
+  "failed",
+  "recovery_required",
+]);
+
+export const gen2SupersetRuns = pgTable(
+  "gen2_superset_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .references(() => gen2Workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    chatId: uuid("chat_id").references(() => gen2Chats.id, {
+      onDelete: "set null",
+    }),
+    createdBy: uuid("created_by")
+      .references(() => users.id, { onDelete: "restrict" })
+      .notNull(),
+    /** Superset owns worktree identity host-side; see gen2SupersetWorktreeIdSchema. */
+    worktreeId: text("worktree_id").notNull(),
+    hostWorkspaceId: text("host_workspace_id"),
+    hostTerminalId: text("host_terminal_id"),
+    hostAgentSessionId: text("host_agent_session_id"),
+    provider: credentialProvider("provider").notNull(),
+    connectionId: uuid("connection_id").references(
+      () => providerCredentials.id,
+      { onDelete: "set null" },
+    ),
+    credentialRevision: text("credential_revision"),
+    status: gen2SupersetRunStatus("status").default("creating").notNull(),
+    leaseClaimed: boolean("lease_claimed").default(false).notNull(),
+    exitReason: text("exit_reason"),
+    recoveryCount: integer("recovery_count").default(0).notNull(),
+    /** Caller-supplied key; a retry with the same key returns the same run. */
+    idempotencyKey: text("idempotency_key").notNull(),
+    lastError: text("last_error"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("gen2_superset_runs_workspace_idempotency_idx").on(
+      table.workspaceId,
+      table.idempotencyKey,
+    ),
+    index("gen2_superset_runs_workspace_status_idx").on(
+      table.workspaceId,
+      table.status,
+    ),
+    index("gen2_superset_runs_chat_idx").on(table.chatId, table.createdAt),
+  ],
+);
+
+/** Append-only audit trail for a Superset run's lease and lifecycle events. */
+export const gen2SupersetRunEvents = pgTable(
+  "gen2_superset_run_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    runId: uuid("run_id")
+      .references(() => gen2SupersetRuns.id, { onDelete: "cascade" })
+      .notNull(),
+    workspaceId: uuid("workspace_id")
+      .references(() => gen2Workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    actorId: uuid("actor_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    type: text("type").notNull(),
+    result: text("result").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("gen2_superset_run_events_run_created_idx").on(
+      table.runId,
+      table.createdAt,
+    ),
+  ],
+);

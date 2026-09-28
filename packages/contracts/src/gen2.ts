@@ -492,6 +492,48 @@ export const gen2TerminalPollResponseSchema = z.object({
   exitCode: z.number().int().nullable(),
 });
 
+/*
+ * Superset agent-session mapping, per docs/SUPERSET_AGENT_SESSION_PLAN.md
+ * Phase 1. This is the durable run row CoDev owns as the source of truth;
+ * it is an internal/service-boundary shape, not what the browser receives --
+ * a redacted view is defined when the browser integration (Phase 6) lands.
+ * It never carries credential material, only a connection id and a
+ * revision fingerprint.
+ */
+export const gen2SupersetRunStatusSchema = z.enum([
+  "creating",
+  "running",
+  "stopping",
+  "finished",
+  "failed",
+  "recovery_required",
+]);
+
+export const gen2SupersetRunSchema = z.object({
+  id: identifierSchema,
+  workspaceId: identifierSchema,
+  chatId: identifierSchema.nullable(),
+  createdBy: identifierSchema,
+  worktreeId: gen2SupersetWorktreeIdSchema,
+  hostWorkspaceId: z.string().min(1).nullable(),
+  hostTerminalId: z.string().min(1).nullable(),
+  hostAgentSessionId: z.string().min(1).nullable(),
+  provider: z.string().min(1),
+  connectionId: identifierSchema.nullable(),
+  credentialRevision: z.string().min(1).nullable(),
+  status: gen2SupersetRunStatusSchema,
+  leaseClaimed: z.boolean(),
+  exitReason: z.string().nullable(),
+  recoveryCount: z.number().int().nonnegative(),
+  idempotencyKey: z.string().min(1),
+  lastError: z.string().nullable(),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
+});
+
+export type Gen2SupersetRunStatus = z.infer<typeof gen2SupersetRunStatusSchema>;
+export type Gen2SupersetRun = z.infer<typeof gen2SupersetRunSchema>;
+
 export type Gen2Repository = z.infer<typeof gen2RepositorySchema>;
 export type Gen2WorkspaceStatus = z.infer<typeof gen2WorkspaceStatusSchema>;
 export type Gen2WorkspaceRole = z.infer<typeof gen2WorkspaceRoleSchema>;
