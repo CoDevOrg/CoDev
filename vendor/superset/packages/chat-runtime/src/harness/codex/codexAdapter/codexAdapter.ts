@@ -82,6 +82,27 @@ const IGNORED_METHODS = new Set([
 	"item/autoApprovalReview/completed",
 ]);
 
+const CODEX_STDERR_LIMIT = 2_048;
+const CODEX_NOTICE_DIAGNOSTIC_LIMIT = 500;
+
+function safeCodexDiagnostic(stderr: string): string {
+	return stderr
+		.replace(/\bBearer\s+[^\s"'`]+/gi, "Bearer [redacted]")
+		.replace(/\bsk-(?:proj-)?[A-Za-z0-9_-]{8,}\b/g, "[redacted API key]")
+		.replace(
+			/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g,
+			"[redacted token]",
+		)
+		.replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g, "[redacted email]")
+		.split(/\r?\n/)
+		.map((line) => line.trim())
+		.filter(Boolean)
+		.slice(-3)
+		.join(" ")
+		.replace(/\s+/g, " ")
+		.slice(-CODEX_NOTICE_DIAGNOSTIC_LIMIT);
+}
+
 const APPROVAL_METHODS = new Set([
 	"item/commandExecution/requestApproval",
 	"item/fileChange/requestApproval",
@@ -132,6 +153,7 @@ export class CodexAdapter implements HarnessAdapter {
 	private modelId: string | undefined;
 	private currentTurn: Turn | null = null;
 	private usage: Turn["usage"];
+	private stderr = "";
 	private disposed = false;
 
 	constructor(private readonly options: CodexAdapterOptions = {}) {}
@@ -223,6 +245,9 @@ export class CodexAdapter implements HarnessAdapter {
 						"error",
 						`codex ${method} could not be read: ${error instanceof Error ? error.message : String(error)}`,
 					),
+				onStderr: (chunk) => {
+					this.stderr = `${this.stderr}${chunk}`.slice(-CODEX_STDERR_LIMIT);
+				},
 				onExit: (code) => this.handleExit(code),
 			});
 			this.client = client;
@@ -592,9 +617,10 @@ export class CodexAdapter implements HarnessAdapter {
 	private handleExit(code: number | null): void {
 		if (this.disposed) return;
 		this.stalePendingApprovals();
+		const diagnostic = safeCodexDiagnostic(this.stderr);
 		this.emitNotice(
 			"error",
-			`codex app-server exited (code ${code ?? "null"})`,
+			`codex app-server exited (code ${code ?? "null"})${diagnostic ? `: ${diagnostic}` : ""}`,
 		);
 		this.emitSession({ status: "dead" });
 		this.queue.close();

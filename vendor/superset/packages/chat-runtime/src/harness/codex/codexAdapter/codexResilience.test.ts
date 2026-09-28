@@ -87,6 +87,64 @@ function notices(events: AdapterEvent[]): Notice[] {
 }
 
 describe("codex adapter resilience", () => {
+	test("an app-server exit includes a bounded, redacted diagnostic", async () => {
+		const events: AdapterEvent[] = [];
+		const transport = { handlers: null as CodexTransportHandlers | null };
+		const adapter = new CodexAdapter({
+			createTransport: (_options, transportHandlers) => {
+				transport.handlers = transportHandlers;
+				return {
+					send: (line) => {
+						const frame = JSON.parse(line) as {
+							id?: number;
+							method?: string;
+						};
+						if (frame.method === "initialize") {
+							transport.handlers?.onLine(
+								JSON.stringify({
+									id: frame.id,
+									result: {
+										userAgent: "superset-chat-runtime/0.143.0 (Mac OS)",
+									},
+								}),
+							);
+							return;
+						}
+						if (frame.method === "thread/start") {
+							transport.handlers?.onLine(
+								JSON.stringify({
+									id: frame.id,
+									result: { thread: { id: THREAD_ID }, model: "gpt-5.5" },
+								}),
+							);
+						}
+					},
+					close: async () => undefined,
+				};
+			},
+		});
+
+		const pump = (async () => {
+			for await (const event of adapter.start({ cwd: "/tmp/workspace" })) {
+				events.push(event);
+			}
+		})();
+		for (let index = 0; index < 6; index += 1) {
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		}
+		transport.handlers?.onStderr(
+			"fatal: invalid auth Bearer secret-value sk-proj-1234567890 email test@example.test\\n",
+		);
+		transport.handlers?.onExit(1, null);
+		await pump;
+
+		const exitNotice = notices(events).at(-1);
+		expect(exitNotice?.text).toContain("fatal: invalid auth");
+		expect(exitNotice?.text).not.toContain("secret-value");
+		expect(exitNotice?.text).not.toContain("sk-proj-");
+		expect(exitNotice?.text).not.toContain("test@example.test");
+	});
+
 	test("a startup error notice always has a valid turn id", async () => {
 		const events: AdapterEvent[] = [];
 		let handlers: CodexTransportHandlers | null = null;
