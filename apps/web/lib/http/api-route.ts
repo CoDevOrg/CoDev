@@ -51,8 +51,18 @@ function hasOwnResponse(error: unknown): error is ResponseError {
  * body (`OrchestratorError` adds `conflictPaths`, `QuotaError` adds `code` and
  * `Retry-After`) provide `toResponse()`; everything else is `{ error }`.
  */
-export function errorResponse(error: unknown, fallbackStatus = 400) {
+export function errorResponse(
+  error: unknown,
+  fallbackStatus = 400,
+  sanitizeUnexpectedErrors = false,
+) {
   if (hasOwnResponse(error)) return error.toResponse();
+  if (sanitizeUnexpectedErrors && errorStatus(error, 0) === 0) {
+    return apiError(
+      new Error("The session request could not be completed."),
+      fallbackStatus,
+    );
+  }
   return apiError(error, errorStatus(error, fallbackStatus));
 }
 
@@ -98,6 +108,8 @@ export type RouteOptions = {
   anyAuth?: boolean;
   /** Status for errors that do not carry their own. Defaults to 400. */
   errorStatus?: number;
+  /** Hide unexpected internal error messages from clients. */
+  sanitizeUnexpectedErrors?: boolean;
 };
 
 export type UserRouteInput<P> = {
@@ -119,7 +131,11 @@ export function withUser<P extends RouteParams = Record<string, never>>(
       const params = ((await context?.params) ?? {}) as P;
       return await handler({ request, user, params });
     } catch (error) {
-      return errorResponse(error, options.errorStatus);
+      return errorResponse(
+        error,
+        options.errorStatus,
+        options.sanitizeUnexpectedErrors,
+      );
     }
   };
 }

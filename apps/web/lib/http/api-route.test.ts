@@ -152,6 +152,23 @@ describe("withUser", () => {
     expect(plain.status).toBe(502);
     expect(await plain.json()).toEqual({ error: "Runtime unreachable." });
   });
+
+  it("sanitizes unexpected errors while preserving typed API errors", async () => {
+    const options = { errorStatus: 500, sanitizeUnexpectedErrors: true };
+    const unexpected = await withUser(() => {
+      throw new Error('Failed query: select * from "private_table"');
+    }, options)(new Request("http://test"), context({}));
+    expect(unexpected.status).toBe(500);
+    expect(await unexpected.json()).toEqual({
+      error: "The session request could not be completed.",
+    });
+
+    const typed = await withUser(() => {
+      throw new ApiError("Invalid session operation.", 400);
+    }, options)(new Request("http://test"), context({}));
+    expect(typed.status).toBe(400);
+    expect(await typed.json()).toEqual({ error: "Invalid session operation." });
+  });
 });
 
 describe("withWorkspace", () => {

@@ -95,5 +95,5 @@ export const POST = withUser<Params>(
       );
     throw new ApiError("Invalid session operation.");
   },
-  { errorStatus: 500 },
+  { errorStatus: 500, sanitizeUnexpectedErrors: true },
 );
