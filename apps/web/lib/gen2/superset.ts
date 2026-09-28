@@ -214,6 +214,7 @@ export async function saveGen2SupersetFile(
     // successful revision-checked filesystem save as failed.
     await recordGen2DocumentSave({
       workspaceId,
+      worktreeId: input.worktreeId,
       path: file.path,
       contents: file.contents,
       revision: file.revision,

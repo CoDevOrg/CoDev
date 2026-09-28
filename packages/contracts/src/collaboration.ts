@@ -29,10 +29,22 @@ export const collaborationUserSchema = z.object({
   avatarUrl: z.url().nullable(),
 });
 
+// Gen 1 worktrees are database UUIDs; Gen 2 worktrees are safe host-service
+// identifiers such as "main". The common socket transport carries either;
+// each workspace adapter still validates and resolves its own identifier.
+const collaborationWorktreeIdSchema = z.union([
+  identifierSchema,
+  z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/),
+]);
+
 const joinMessageSchema = z
   .object({
     type: z.literal("join"),
-    worktreeId: identifierSchema.optional(),
+    worktreeId: collaborationWorktreeIdSchema.optional(),
     resumeFrom: z.string().min(1).max(128).optional(),
   })
   .strict();
@@ -93,7 +105,7 @@ const syncMessageSchema = z.object({
 
 const serverUpdateMessageSchema = z.object({
   type: z.literal("update"),
-  worktreeId: identifierSchema,
+  worktreeId: collaborationWorktreeIdSchema,
   path: collaborationPathSchema,
   update: yjsUpdateBase64Schema,
   revision: z.string().min(1),
@@ -102,7 +114,7 @@ const serverUpdateMessageSchema = z.object({
 });
 
 const serverAwarenessMessageSchema = awarenessMessageSchema.extend({
-  worktreeId: identifierSchema,
+  worktreeId: collaborationWorktreeIdSchema,
   actorId: identifierSchema,
   connectionId: z.string().min(1),
   streamId: z.string().min(1),
@@ -120,6 +132,7 @@ export const collaborationPresenceEntrySchema = z.object({
     .strict()
     .nullable()
     .default(null),
+  worktreeId: collaborationWorktreeIdSchema.nullable().default(null),
   lastSeenAt: timestampSchema,
 });
 
@@ -130,7 +143,7 @@ const presenceMessageSchema = z.object({
 
 const reconciledMessageSchema = z.object({
   type: z.literal("reconciled"),
-  worktreeId: identifierSchema,
+  worktreeId: collaborationWorktreeIdSchema,
   path: collaborationPathSchema,
   revision: z.string().min(1),
   source: z.enum(["collaboration", "filesystem"]),
@@ -139,7 +152,7 @@ const reconciledMessageSchema = z.object({
 
 const conflictMessageSchema = z.object({
   type: z.literal("conflict"),
-  worktreeId: identifierSchema,
+  worktreeId: collaborationWorktreeIdSchema,
   path: collaborationPathSchema,
   snapshotRevision: z.string().min(1),
   filesystemRevision: z.string().min(1),

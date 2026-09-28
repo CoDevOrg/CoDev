@@ -39,42 +39,30 @@ export function Gen2TurnActivity({
   );
   const itemRunning = visible.some((item) => item.status === "running");
   const active = live || itemRunning;
-  const [open, setOpen] = useState(active);
+  const [openOverride, setOpenOverride] = useState<{
+    active: boolean;
+    value: boolean;
+  } | null>(null);
+  const open = openOverride?.active === active ? openOverride.value : active;
   const [elapsed, setElapsed] = useState(0);
   const startedAt = useRef<number | null>(null);
 
   useEffect(() => {
     if (visible.length === 0) {
-      // No items left to show: reset so a fresh set of items later starts
-      // its own clean timer instead of inheriting a stale elapsed/open
-      // state. This subsumed a second, fully redundant effect that only
-      // ever fired on this same `visible.length === 0` transition.
+      // No items left to show: clear the timer's start so a fresh set of
+      // items later begins its own clean run instead of inheriting a stale
+      // startedAt.
       startedAt.current = null;
-      // Resets the wall-clock timer this effect owns when items disappear --
-      // not state derivable from props/state alone.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setElapsed(0);
-      setOpen(false);
       return;
     }
     startedAt.current ??= Date.now();
-    if (!active) {
+    if (!active) return;
+    const id = window.setInterval(() => {
+      if (startedAt.current === null) return;
       setElapsed(
         Math.max(0, Math.round((Date.now() - startedAt.current) / 1000)),
       );
-      // Done turns collapse to the Cursor-style summary line.
-      setOpen(false);
-      return;
-    }
-    setOpen(true);
-    const tick = () => {
-      if (startedAt.current == null) return;
-      setElapsed(
-        Math.max(0, Math.round((Date.now() - startedAt.current) / 1000)),
-      );
-    };
-    tick();
-    const id = window.setInterval(tick, 1000);
+    }, 1000);
     return () => window.clearInterval(id);
   }, [visible.length, active]);
 
@@ -92,7 +80,7 @@ export function Gen2TurnActivity({
         type="button"
         className="gen2-steps-summary"
         aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => setOpenOverride({ active, value: !open })}
       >
         <span>{summary}</span>
         <ChevronRight

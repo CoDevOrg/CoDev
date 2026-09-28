@@ -2085,6 +2085,10 @@ export const gen2YjsDocuments = pgTable(
     workspaceId: uuid("workspace_id")
       .references(() => gen2Workspaces.id, { onDelete: "cascade" })
       .notNull(),
+    // Superset owns the checkout names inside a Gen 2 VM. Keep that host
+    // identity on every snapshot so identical paths on separate branches can
+    // never share a Yjs document.
+    worktreeId: text("worktree_id").notNull().default("main"),
     path: text("path").notNull(),
     revision: text("revision").notNull(),
     update: text("update_base64").notNull(),
@@ -2100,8 +2104,9 @@ export const gen2YjsDocuments = pgTable(
     ...timestamps,
   },
   (table) => [
-    uniqueIndex("gen2_yjs_documents_workspace_path_idx").on(
+    uniqueIndex("gen2_yjs_documents_workspace_worktree_path_idx").on(
       table.workspaceId,
+      table.worktreeId,
       table.path,
     ),
   ],

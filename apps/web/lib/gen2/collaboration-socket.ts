@@ -21,6 +21,7 @@ import {
   encodeBase64,
   encodedDocument,
 } from "../collaboration/yjs-document";
+import { logEvent } from "../platform/observability";
 import {
   send,
   sendError,
@@ -57,7 +58,6 @@ import { gen2CollaborationRoom } from "./collaboration-events";
 export const gen2CollaborationSocketMaxPayload = MAX_SOCKET_PAYLOAD_BYTES;
 
 function roomConnection(
-  workspaceId: string,
   socket: WebSocket,
   user: CollaborationUser,
   canEdit: boolean,
@@ -67,10 +67,9 @@ function roomConnection(
     socket,
     user,
     joined: false,
-    // Compatibility envelope only: this is never read from the Gen 1
-    // worktrees table. It lets the existing room fan-out filter a Gen 2
-    // workspace's document updates without duplicating transport machinery.
-    worktreeId: workspaceId,
+    // Superset's host worktree ID is selected at join time. The common room
+    // transport uses it solely to filter per-document fan-out.
+    worktreeId: null,
     subscriptions: new Set(),
     activePath: null,
     cursor: null,
@@ -87,15 +86,24 @@ async function subscribe(
   path: string,
   stateVector?: string,
 ) {
+  if (!connection.worktreeId) {
+    sendError(connection, "not_joined", "Join a worktree first.", false, path);
+    return;
+  }
   const roomKey = gen2CollaborationRoom(workspaceId);
   const result = await withDocumentLock(
     roomKey,
-    workspaceId,
+    connection.worktreeId,
     path,
     async () => {
       const snapshot =
-        (await loadGen2Document(workspaceId, path)) ??
-        (await initializeGen2Document(workspaceId, connection.user.id, path));
+        (await loadGen2Document(workspaceId, connection.worktreeId!, path)) ??
+        (await initializeGen2Document(
+          workspaceId,
+          connection.user.id,
+          connection.worktreeId!,
+          path,
+        ));
       return reconcileGen2Document(workspaceId, connection.user.id, snapshot);
     },
   );
@@ -104,7 +112,7 @@ async function subscribe(
   if (result.event?.type === "reconciled") {
     await publish(roomKey, {
       type: "reconciled",
-      worktreeId: workspaceId,
+      worktreeId: connection.worktreeId,
       path,
       revision: result.event.revision,
       source: "filesystem",
@@ -113,7 +121,7 @@ async function subscribe(
   } else if (result.event?.type === "conflict") {
     await publish(roomKey, {
       type: "conflict",
-      worktreeId: workspaceId,
+      worktreeId: connection.worktreeId,
       path,
       snapshotRevision: result.event.snapshotRevision,
       filesystemRevision: result.event.filesystemRevision,
@@ -145,13 +153,21 @@ async function applyUpdate(
   path: string,
   update: string,
 ) {
+  if (!connection.worktreeId) {
+    sendError(connection, "not_joined", "Join a worktree first.", false, path);
+    return;
+  }
   const roomKey = gen2CollaborationRoom(workspaceId);
   const outcome = await withDocumentLock(
     roomKey,
-    workspaceId,
+    connection.worktreeId,
     path,
     async () => {
-      const loaded = await loadGen2Document(workspaceId, path);
+      const loaded = await loadGen2Document(
+        workspaceId,
+        connection.worktreeId!,
+        path,
+      );
       if (!loaded) throw new Error("The collaborative document was not found.");
       const reconciled = await reconcileGen2Document(
         workspaceId,
@@ -177,7 +193,7 @@ async function applyUpdate(
   if (outcome.conflict) {
     await publish(roomKey, {
       type: "conflict",
-      worktreeId: workspaceId,
+      worktreeId: connection.worktreeId,
       path,
       snapshotRevision: outcome.conflict.snapshotRevision,
       filesystemRevision: outcome.conflict.filesystemRevision,
@@ -189,7 +205,7 @@ async function applyUpdate(
   if (outcome.reconciled) {
     await publish(roomKey, {
       type: "reconciled",
-      worktreeId: workspaceId,
+      worktreeId: connection.worktreeId,
       path,
       revision: outcome.reconciled.revision,
       source: "filesystem",
@@ -207,11 +223,12 @@ async function applyUpdate(
     "payload",
     JSON.stringify({
       type: "update",
-      worktreeId: workspaceId,
+      worktreeId: connection.worktreeId,
       path,
       update,
       revision:
-        (await loadGen2Document(workspaceId, path))?.revision ?? "pending",
+        (await loadGen2Document(workspaceId, connection.worktreeId!, path))
+          ?.revision ?? "pending",
       actorId: connection.user.id,
       streamId: "pending",
     }),
@@ -220,11 +237,12 @@ async function applyUpdate(
     roomKey,
     {
       type: "update",
-      worktreeId: workspaceId,
+      worktreeId: connection.worktreeId,
       path,
       update,
       revision:
-        (await loadGen2Document(workspaceId, path))?.revision ?? "pending",
+        (await loadGen2Document(workspaceId, connection.worktreeId!, path))
+          ?.revision ?? "pending",
       actorId: connection.user.id,
       streamId: streamId ?? "0-0",
     },
@@ -274,7 +292,7 @@ async function publishAwareness(
   path: string,
   update: string,
 ) {
-  if (!connection.subscriptions.has(path)) {
+  if (!connection.worktreeId || !connection.subscriptions.has(path)) {
     sendError(
       connection,
       "not_subscribed",
@@ -298,7 +316,7 @@ async function publishAwareness(
     "payload",
     JSON.stringify({
       type: "awareness",
-      worktreeId: workspaceId,
+      worktreeId: connection.worktreeId,
       path,
       update: sanitized.update,
       actorId: connection.user.id,
@@ -310,7 +328,7 @@ async function publishAwareness(
     roomKey,
     {
       type: "awareness",
-      worktreeId: workspaceId,
+      worktreeId: connection.worktreeId,
       path,
       update: sanitized.update,
       actorId: connection.user.id,
@@ -359,6 +377,7 @@ async function handleMessage(
   }
   try {
     if (message.type === "join") {
+      connection.worktreeId = message.worktreeId ?? "main";
       connection.joined = true;
       connection.resumeFrom = message.resumeFrom ?? null;
       const roomKey = gen2CollaborationRoom(workspaceId);
@@ -423,7 +442,14 @@ async function handleMessage(
       connection.alive = true;
       await refreshPresence(gen2CollaborationRoom(workspaceId), connection);
     }
-  } catch {
+  } catch (error) {
+    logEvent("error", "gen2.collaboration.socket_operation_failed", {
+      workspaceId,
+      worktreeId: connection.worktreeId,
+      operation: message.type,
+      path: "path" in message ? message.path : null,
+      detail: error instanceof Error ? error.message : "unknown",
+    });
     sendError(
       connection,
       "internal_error",
@@ -442,7 +468,7 @@ export async function handleGen2CollaborationSocket(
 ) {
   const roomKey = gen2CollaborationRoom(workspaceId);
   const room = await startRoom(roomKey);
-  const connection = roomConnection(workspaceId, socket, user, options.canEdit);
+  const connection = roomConnection(socket, user, options.canEdit);
   room.connections.add(connection);
   const heartbeat = setInterval(() => {
     if (!connection.alive) return socket.terminate();

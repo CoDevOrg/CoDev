@@ -161,6 +161,7 @@ export async function refreshPresence(
     user: connection.user,
     path: connection.activePath,
     cursor: connection.cursor,
+    worktreeId: connection.worktreeId,
     lastSeenAt: new Date().toISOString(),
   };
   const now = Date.now();

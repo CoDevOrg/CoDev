@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 
 import {
   collaborationClientMessageSchema,
+  identifierSchema,
   presenceCursorSchema,
   type CollaborationUser,
 } from "@codev/contracts";
@@ -405,6 +406,13 @@ async function handleMessage(
 
   try {
     if (message.type === "join") {
+      if (
+        message.worktreeId &&
+        !identifierSchema.safeParse(message.worktreeId).success
+      ) {
+        sendError(connection, "not_found", "Active worktree not found.", false);
+        return;
+      }
       const worktreeId = await resolveWorktree(workspaceId, message.worktreeId);
       if (!worktreeId) {
         sendError(connection, "not_found", "Active worktree not found.", false);

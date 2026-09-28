@@ -28,6 +28,7 @@ kept for the record only.
 | [WORKSPACE_CONSOLIDATION.md](./WORKSPACE_CONSOLIDATION.md)                                 | Current | Sandbox/IDE consolidation; what shipped and what is still gated          |
 | [SUPERSET_WORKSPACE_OWNERSHIP.md](./SUPERSET_WORKSPACE_OWNERSHIP.md)                       | Design  | Phase 1 ownership contract for a first-party Superset-powered workspace  |
 | [SUPERSET_ADOPTION_MANIFEST.md](./SUPERSET_ADOPTION_MANIFEST.md)                           | Design  | Pinned Superset source, build boundary, and Phase 1 runtime/UI map       |
+| [SUPERSET_AGENT_SESSION_PLAN.md](./SUPERSET_AGENT_SESSION_PLAN.md)                         | Design  | Superset agent sessions, CoDev provider ownership, and rollout gates     |
 | [workspace-startup-performance-plan.md](./workspace-startup-performance-plan.md)           | Active  | Faster workspace startup, host pooling, persistence, and headless IDE    |
 | [branch-workspaces-plan.md](./branch-workspaces-plan.md)                                   | Current | Branches-first collaboration plan, phases 1 to 5                         |
 | [branch-workspaces-phase-5-verification.md](./branch-workspaces-phase-5-verification.md)   | Current | Verification record for the branch-workspaces rollout                    |

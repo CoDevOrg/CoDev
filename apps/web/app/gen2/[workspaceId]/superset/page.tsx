@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
-import { SupersetFilePane } from "@/components/gen2/superset-file-pane";
+import { SupersetWorkspaceShell } from "@/components/gen2/superset-workspace-shell";
 import { requireUser } from "@/lib/auth/session";
 import { Gen2AccessError } from "@/lib/gen2/errors";
 import { isGen2SupersetFilePaneEnabled } from "@/lib/gen2/superset-file-feature";
+import { isGen2SupersetRuntimeEnabled } from "@/lib/gen2/superset-runtime-feature";
 import { getGen2WorkspaceDetail } from "@/lib/gen2/workspaces";
 
 export const metadata: Metadata = { title: "Superset files" };
@@ -28,6 +29,10 @@ export default async function Gen2SupersetFilesPage({
   }
 
   return (
-    <SupersetFilePane workspaceId={workspaceId} canEdit={role !== "viewer"} />
+    <SupersetWorkspaceShell
+      workspaceId={workspaceId}
+      canEdit={role !== "viewer"}
+      runtimeEnabled={isGen2SupersetRuntimeEnabled()}
+    />
   );
 }
