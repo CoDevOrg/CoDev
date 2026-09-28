@@ -59,7 +59,69 @@
     color: var(--color-foreground);
     font-family: var(--font-sans);
   }
+}
 
+/* Dark-mode override, same pattern as settings/orca-theme.css: @theme
+   registers tokens at build time and can't itself be conditional, so this
+   redeclares the same --color-* custom properties as an ordinary rule on
+   the same selector, later in source order. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .product-scope,
+  :root:not([data-theme="light"]) .rooms-scope {
+    color-scheme: dark;
+    --color-background: #070c1a;
+    --color-background-2: #101a35;
+    --color-foreground: #f2e9d6;
+    --color-card: rgba(16, 26, 53, 0.62);
+    --color-card-foreground: #f2e9d6;
+    --color-popover: rgba(11, 18, 38, 0.94);
+    --color-popover-foreground: #f2e9d6;
+    --color-primary: #3d8fe0;
+    --color-primary-foreground: #070c1a;
+    --color-secondary: rgba(16, 26, 53, 0.9);
+    --color-secondary-foreground: #f2e9d6;
+    --color-muted: rgba(242, 233, 214, 0.1);
+    --color-muted-foreground: rgba(242, 233, 214, 0.65);
+    --color-accent: rgba(16, 26, 53, 0.9);
+    --color-accent-foreground: #f2e9d6;
+    --color-destructive: #e0574a;
+    --color-border: rgba(242, 233, 214, 0.16);
+    --color-input: rgba(242, 233, 214, 0.24);
+    --color-ring: #3d8fe0;
+    --color-teal: #3fae9c;
+    --color-orange: #e08a54;
+    --color-violet: #a08cf0;
+  }
+}
+
+[data-theme="dark"] .product-scope,
+[data-theme="dark"] .rooms-scope {
+  color-scheme: dark;
+  --color-background: #070c1a;
+  --color-background-2: #101a35;
+  --color-foreground: #f2e9d6;
+  --color-card: rgba(16, 26, 53, 0.62);
+  --color-card-foreground: #f2e9d6;
+  --color-popover: rgba(11, 18, 38, 0.94);
+  --color-popover-foreground: #f2e9d6;
+  --color-primary: #3d8fe0;
+  --color-primary-foreground: #070c1a;
+  --color-secondary: rgba(16, 26, 53, 0.9);
+  --color-secondary-foreground: #f2e9d6;
+  --color-muted: rgba(242, 233, 214, 0.1);
+  --color-muted-foreground: rgba(242, 233, 214, 0.65);
+  --color-accent: rgba(16, 26, 53, 0.9);
+  --color-accent-foreground: #f2e9d6;
+  --color-destructive: #e0574a;
+  --color-border: rgba(242, 233, 214, 0.16);
+  --color-input: rgba(242, 233, 214, 0.24);
+  --color-ring: #3d8fe0;
+  --color-teal: #3fae9c;
+  --color-orange: #e08a54;
+  --color-violet: #a08cf0;
+}
+
+@layer reset {
   .product-scope ul,
   .product-scope ol,
   .rooms-scope ul,

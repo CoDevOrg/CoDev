@@ -35,7 +35,11 @@ describe("CoDev product theme", () => {
 
   it("uses the same light surfaces for the dashboard workspace browser", () => {
     expect(appTheme).toContain(".workspace-browser {");
-    expect(appTheme).toContain("background: rgba(255, 253, 247, 0.72);");
+    // The glass-panel translucency is a --paper-rgb reference (16-26-53 in
+    // dark mode, 255-253-247 in light) rather than a bare literal, so it
+    // flips with the theme instead of staying stuck light everywhere else
+    // .workspace-browser is used.
+    expect(appTheme).toContain("background: rgba(var(--paper-rgb), 0.72);");
     expect(appTheme).toContain(".workspace-card:hover {");
   });
 
@@ -45,6 +49,26 @@ describe("CoDev product theme", () => {
     expect(productTheme).toContain(".rooms-scope {");
     expect(productTheme).toContain("--color-background: #f2e9d6;");
     expect(productTheme).toContain("--color-primary: #1b63b3;");
+  });
+
+  it("re-tunes every AppChrome token for Midnight Blueprint dark mode", () => {
+    // Applies automatically via prefers-color-scheme; [data-theme="dark"] is
+    // prepared for a manual toggle. The light theme's own paper cream is
+    // reused as the dark theme's ink color rather than a separate near-white.
+    expect(appTheme).toContain("@media (prefers-color-scheme: dark) {");
+    expect(appTheme).toContain('[data-theme="dark"] {');
+    expect(appTheme).toContain("--codev-beige-100: #f2e9d6;");
+    expect(appTheme).toContain("--codev-gold-500: #3d8fe0;");
+  });
+
+  it("gives the shared shadcn product theme the same dark override", () => {
+    const productTheme = readCss("product-theme.css");
+    expect(productTheme).toContain(
+      ':root:not([data-theme="light"]) .product-scope,',
+    );
+    expect(productTheme).toContain('[data-theme="dark"] .rooms-scope {');
+    expect(productTheme).toContain("--color-background: #070c1a;");
+    expect(productTheme).toContain("--color-primary: #3d8fe0;");
   });
 
   it("keeps every profile menu action legible on the light product surface", () => {
