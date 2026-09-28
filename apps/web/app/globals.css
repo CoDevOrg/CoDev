@@ -25,6 +25,54 @@
   color-scheme: light;
 }
 
+/* Dark-mode fallback for the semantic tokens above -- app-theme.css (loaded
+   after this file) re-declares the same tokens on `.app-page`/`.auth-page`
+   with a matching dark override and always wins there, so this block only
+   matters for the rare consumer of these tokens outside those two classes.
+   Kept in lockstep with app-theme.css's dark values; --workspace-* stays
+   untouched since the embedded IDE surface is intentionally dark already. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink: #f2e9d6;
+    --muted: #96918a;
+    --muted-2: #726d64;
+    --line: rgba(242, 233, 214, 0.14);
+    --line-strong: rgba(242, 233, 214, 0.24);
+    --surface: #070c1a;
+    --surface-2: #0b1226;
+    --surface-3: #101a35;
+    --navy: #f2e9d6;
+    --gold: #3d8fe0;
+    --gold-bright: #5aa6ec;
+    --gold-soft: rgba(61, 143, 224, 0.17);
+    --teal: #3fae9c;
+    --teal-soft: rgba(63, 174, 156, 0.16);
+    --orange: #e08a54;
+    --violet: #a08cf0;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --ink: #f2e9d6;
+  --muted: #96918a;
+  --muted-2: #726d64;
+  --line: rgba(242, 233, 214, 0.14);
+  --line-strong: rgba(242, 233, 214, 0.24);
+  --surface: #070c1a;
+  --surface-2: #0b1226;
+  --surface-3: #101a35;
+  --navy: #f2e9d6;
+  --gold: #3d8fe0;
+  --gold-bright: #5aa6ec;
+  --gold-soft: rgba(61, 143, 224, 0.17);
+  --teal: #3fae9c;
+  --teal-soft: rgba(63, 174, 156, 0.16);
+  --orange: #e08a54;
+  --violet: #a08cf0;
+  color-scheme: dark;
+}
+
 /* Shared product theme. App shell is light cream/navy; workspace IDE stays dark. */
 
 .app-page,
