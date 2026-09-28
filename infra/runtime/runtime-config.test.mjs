@@ -49,7 +49,6 @@ test("member Codex homes have a separate, traverse-only state directory", () => 
       source,
       /Environment=CODEV_MEMBER_HOME_ROOT=\/var\/lib\/codev-superset-members/,
     );
-    assert.match(source, /ExecStartPre=\/bin\/chmod 0711 \/var\/lib\/codev-superset-members/);
   }
 });
 

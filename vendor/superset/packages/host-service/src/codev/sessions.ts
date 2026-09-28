@@ -61,7 +61,6 @@ export function registerCoDevSessionBridge(options: {
 	app: Hono;
 	workspaceRoot: string;
 	bridgeSecret: string;
-	stateRoot: string;
 	memberHomeRoot: string;
 }) {
 	const runtimes = new Map<string, ChatRuntime>();
@@ -69,12 +68,10 @@ export function registerCoDevSessionBridge(options: {
 		string,
 		{ subscription: Subscription; text: Record<string, string> }
 	>();
-	const profilesRoot = join(options.memberHomeRoot, "codev-members");
+	const profilesRoot = ensureMemberProfilesRoot(options.memberHomeRoot);
 	const registryPath = join(profilesRoot, "uids.json");
 
 	function uidFor(id: string): number {
-		// Keep the host DB in stateRoot, which remains root-only.
-		ensureMemberProfilesRoot(profilesRoot);
 		const registry: UidRegistry = existsSync(registryPath)
 			? (JSON.parse(readFileSync(registryPath, "utf8")) as UidRegistry)
 			: { next: 30000, members: {} };

@@ -324,7 +324,6 @@ Environment=PORT=4879
 Environment=NODE_ENV=production
 StateDirectory=codev-superset codev-superset-members
 StateDirectoryMode=0700
-ExecStartPre=/bin/chmod 0711 /var/lib/codev-superset-members
 Restart=on-failure
 RestartSec=2
 NoNewPrivileges=true

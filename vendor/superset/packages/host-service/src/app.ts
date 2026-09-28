@@ -404,7 +404,6 @@ export function createApp(options: CreateAppOptions): CreateAppResult {
 			app,
 			workspaceRoot: codevWorkspaceRoot,
 			bridgeSecret: codevBridgeSecret,
-			stateRoot: process.env.SUPERSET_HOME_DIR ?? "/var/lib/codev-superset",
 			memberHomeRoot:
 				process.env.CODEV_MEMBER_HOME_ROOT ??
 				join(

@@ -12,11 +12,11 @@ afterEach(() => {
 	temporaryRoot = undefined;
 });
 
-test("member profiles root is traversable but cannot be listed", () => {
+test("member home parents are traversable but cannot be listed", () => {
 	temporaryRoot = mkdtempSync(join(tmpdir(), "codev-member-homes-"));
-	const profilesRoot = join(temporaryRoot, "codev-members");
 
-	ensureMemberProfilesRoot(profilesRoot);
+	const profilesRoot = ensureMemberProfilesRoot(temporaryRoot);
 
+	expect(statSync(temporaryRoot).mode & 0o777).toBe(0o711);
 	expect(statSync(profilesRoot).mode & 0o777).toBe(0o711);
 });
