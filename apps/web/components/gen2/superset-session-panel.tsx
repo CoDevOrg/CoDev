@@ -30,6 +30,7 @@ type Envelope = {
 const NOTICE_LABELS: Record<string, string> = {
   configWarning: "Codex reported a configuration warning.",
 };
+const SESSION_LIST_RETRY_DELAYS_MS = [500, 1_000, 2_000, 4_000, 8_000];
 
 export function SupersetSessionPanel({
   workspaceId,
@@ -93,13 +94,38 @@ export function SupersetSessionPanel({
 
   useEffect(() => {
     if (!ready) return;
+    let active = true;
+    let retryTimer: number | undefined;
+    let retries = 0;
+
+    const load = async () => {
+      try {
+        await loadSessions();
+        if (active) setError("");
+      } catch (cause) {
+        if (!active) return;
+        const message =
+          cause instanceof Error ? cause.message : "Could not load sessions.";
+        setError(message);
+        if (
+          message.includes("Superset host service is unavailable") &&
+          retries < SESSION_LIST_RETRY_DELAYS_MS.length
+        ) {
+          retryTimer = window.setTimeout(() => {
+            retries += 1;
+            void load();
+          }, SESSION_LIST_RETRY_DELAYS_MS[retries]);
+        }
+      }
+    };
+
     // Fetch-on-mount: state updates happen after the request resolves.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadSessions().catch((cause) =>
-      setError(
-        cause instanceof Error ? cause.message : "Could not load sessions.",
-      ),
-    );
+    void load();
+    return () => {
+      active = false;
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+    };
   }, [ready, loadSessions]);
 
   useEffect(() => {

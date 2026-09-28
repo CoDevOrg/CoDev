@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { SupersetSessionPanel } from "./superset-session-panel";
@@ -59,5 +59,45 @@ describe("SupersetSessionPanel", () => {
       await screen.findByText("Codex reported a configuration warning."),
     ).toBeInTheDocument();
     expect(screen.queryByText("configWarning")).not.toBeInTheDocument();
+  });
+
+  it("retries session loading after the Superset host startup race", async () => {
+    let listRequests = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (!url.endsWith("/sessions/list")) {
+          throw new Error(`Unexpected request: ${url}`);
+        }
+        listRequests += 1;
+        return listRequests === 1
+          ? new Response(
+              JSON.stringify({ error: "Superset host service is unavailable" }),
+              { status: 503 },
+            )
+          : new Response(JSON.stringify({ sessions: [] }), { status: 200 });
+      }),
+    );
+
+    render(
+      <SupersetSessionPanel
+        workspaceId={workspaceId}
+        ready
+        canEdit
+        onFilesChanged={vi.fn()}
+        onRunningChange={vi.fn()}
+      />,
+    );
+
+    expect(
+      await screen.findByText("Superset host service is unavailable"),
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.queryByText("Superset host service is unavailable"),
+      ).not.toBeInTheDocument();
+    });
+    expect(listRequests).toBe(2);
   });
 });
