@@ -246,6 +246,15 @@ cp -a "/usr/lib/${guest_lib_dir}/." \
 install -d -m 0755 "${work_dir}/rootfs/workspace"
 install -d -m 0755 "${work_dir}/rootfs/etc/systemd/system/multi-user.target.wants"
 
+# The interactive shell is unprivileged while CoDev assembles the checkout as
+# root. Trust this checkout and its managed worktrees without making every
+# path trusted for a terminal user.
+cat >>"${work_dir}/rootfs/etc/gitconfig" <<'GITCONFIG'
+[safe]
+	directory = /workspace
+	directory = /workspace/*
+GITCONFIG
+
 cat >"${work_dir}/rootfs/etc/systemd/system/workspace.mount" <<'UNIT'
 [Unit]
 Description=CoDev workspace disk

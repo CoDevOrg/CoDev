@@ -732,6 +732,16 @@ if ! grep -q '^codev-shell:' "${work_dir}/rootfs/etc/shadow"; then
   echo 'codev-shell:!:20000::::::' >>"${work_dir}/rootfs/etc/shadow"
 fi
 
+# Interactive terminals intentionally run as codev-shell while the checkout is
+# assembled by root. Trust only this workspace and its managed worktrees at the
+# protected system-config scope; a shell user must not have to weaken Git's
+# ownership protection with a global wildcard before `git status` can work.
+cat >>"${work_dir}/rootfs/etc/gitconfig" <<'GITCONFIG'
+[safe]
+	directory = /workspace
+	directory = /workspace/*
+GITCONFIG
+
 cat >"${work_dir}/rootfs/etc/systemd/system/workspace.mount" <<'UNIT'
 [Unit]
 Description=CoDev workspace disk

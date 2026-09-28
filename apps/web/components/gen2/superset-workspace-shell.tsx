@@ -341,42 +341,44 @@ export function SupersetWorkspaceShell({
           {notice}
         </p>
       ) : null}
-      <div
-        id="superset-panel-files"
-        role="tabpanel"
-        aria-labelledby="superset-tab-files"
-        hidden={tab !== "files"}
-        className="gen2-superset-files-panel"
-      >
-        <SupersetFilePane
-          key={worktreeId}
+      <div className="gen2-superset-workspace-content">
+        <div
+          id="superset-panel-files"
+          role="tabpanel"
+          aria-labelledby="superset-tab-files"
+          hidden={tab !== "files"}
+          className="gen2-superset-files-panel"
+        >
+          <SupersetFilePane
+            key={worktreeId}
+            workspaceId={workspaceId}
+            canEdit={canEdit}
+            worktreeId={worktreeId}
+            onDirtyChange={setDirty}
+          />
+        </div>
+        <SupersetChangesPane
           workspaceId={workspaceId}
-          canEdit={canEdit}
           worktreeId={worktreeId}
-          onDirtyChange={setDirty}
+          visible={tab === "changes"}
         />
+        <section
+          id="superset-panel-terminal"
+          role="tabpanel"
+          aria-labelledby="superset-tab-terminal"
+          hidden={tab !== "terminal"}
+          className="gen2-superset-tool-panel"
+        >
+          <Gen2TerminalPane
+            key={worktreeId}
+            workspaceId={workspaceId}
+            worktreeId={worktreeId}
+            visible={tab === "terminal"}
+            canStart
+            onExit={() => undefined}
+          />
+        </section>
       </div>
-      <SupersetChangesPane
-        workspaceId={workspaceId}
-        worktreeId={worktreeId}
-        visible={tab === "changes"}
-      />
-      <section
-        id="superset-panel-terminal"
-        role="tabpanel"
-        aria-labelledby="superset-tab-terminal"
-        hidden={tab !== "terminal"}
-        className="gen2-superset-tool-panel"
-      >
-        <Gen2TerminalPane
-          key={worktreeId}
-          workspaceId={workspaceId}
-          worktreeId={worktreeId}
-          visible={tab === "terminal"}
-          canStart
-          onExit={() => undefined}
-        />
-      </section>
     </main>
   );
 }
