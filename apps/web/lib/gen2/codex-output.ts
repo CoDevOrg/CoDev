@@ -161,3 +161,32 @@ export function encodePendingBytes(pending: Uint8Array): string {
 export function decodePendingBytes(value: string): Uint8Array {
   return value ? decodeBase64(value) : new Uint8Array(0);
 }
+
+function encodeBase64(text: string): string {
+  const bytes = new TextEncoder().encode(text);
+  if (typeof Buffer !== "undefined") {
+    return Buffer.from(bytes).toString("base64");
+  }
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+/**
+ * Adapts a Superset terminal-agent poll's plain-text, full-snapshot chunks
+ * (see `superset-agent-orchestrator-client.ts`) into the `CodexExecChunk[]`
+ * shape the browser's `chat-panel.tsx` already merges by `sequence` and
+ * decodes for a live in-progress reply. Always emitting `sequence: 0` -- one
+ * chunk representing "the current full snapshot" -- makes `mergeCodexExecChunks`
+ * overwrite that one entry each poll instead of concatenating an
+ * ever-growing series of duplicate snapshots.
+ */
+export function toCodexExecChunks(
+  chunks: { sequence: number; data: string }[],
+): CodexExecChunk[] {
+  if (chunks.length === 0) return [];
+  const latest = chunks.reduce((max, chunk) =>
+    chunk.sequence > max.sequence ? chunk : max,
+  );
+  return [{ sequence: 0, dataBase64: encodeBase64(latest.data) }];
+}

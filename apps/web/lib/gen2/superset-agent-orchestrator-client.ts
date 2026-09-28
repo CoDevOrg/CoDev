@@ -11,13 +11,11 @@ import { codexExecRequest } from "../runtime/orchestrator-request";
  * private bridge). Named to match the existing `/v1/sandboxes/{id}/
  * codex-execs` convention in `orchestrator-codex-exec.ts`.
  *
- * PROVISIONAL: `services/orchestrator/src/http_api.rs` does not implement
- * these routes yet -- only the apps/web side of Phase 3 has landed so far.
- * Every call here will fail (404, or whatever `fakeGuestEnabled()` does
- * with an unmodelled path) until that Rust work exists. The request/
- * response shapes below are this adapter's best-effort match to the plan
- * text and the existing Codex-exec routes' conventions, not a confirmed
- * wire contract -- expect to revise them once the Rust routes are real.
+ * The orchestrator (`services/orchestrator/src/guest.rs`) and
+ * `vendor/superset/.../codev/agents.ts` routes this calls now exist
+ * (Phase 3), but neither has run against a real bun toolchain or a live
+ * Firecracker guest -- treat the wire shapes below as unverified until a
+ * real end-to-end run exercises them.
  */
 
 const supersetAgentStartResponseSchema = z.object({
@@ -30,7 +28,13 @@ const supersetAgentPollResponseSchema = z.object({
   chunks: z.array(
     z.object({
       sequence: z.number().int().nonnegative(),
-      dataBase64: z.string(),
+      // Plain text, not base64: matches the terminal-snapshot convention
+      // `orchestrator-superset-runtime.ts`'s `terminalPollSchema` already
+      // uses for this same host-service poll shape, and what
+      // `vendor/superset/.../codev/agents.ts` actually returns. Each chunk is
+      // a full buffer snapshot (prefixed with a clear-screen escape), not an
+      // incremental append -- see `recordGen2SupersetRunOutput` in turns.ts.
+      data: z.string(),
     }),
   ),
   nextSequence: z.number().int().nonnegative(),
@@ -43,6 +47,10 @@ const supersetAgentPollResponseSchema = z.object({
 const supersetAgentRecoveryResponseSchema = z.object({
   adoptable: z.boolean(),
 });
+
+export type SupersetAgentPollChunk = z.infer<
+  typeof supersetAgentPollResponseSchema
+>["chunks"][number];
 
 export type SupersetAgentStartInput = {
   worktreeId: string;

@@ -9,7 +9,6 @@ import {
   updateHostedCodexAuthCache,
 } from "../providers/hosted-codex-subscription-credentials";
 import { resolveGen2Codex } from "./providers";
-import { getAgentModel } from "../providers/ai-model";
 import { OrchestratorError } from "../runtime/orchestrator-request";
 import { ensureHostReady } from "../runtime/orchestrator-health";
 import {
@@ -25,41 +24,18 @@ import {
   listGen2ChatMessages,
   requireGen2Chat,
 } from "./chats";
-import { formatGen2TurnPrompt } from "./chats-format";
+import { buildGen2CodexCommand } from "./codex-command";
 import { createGen2Turn, recordGen2TurnChunks } from "./turns";
+import { isGen2SupersetAgentSessionsEnabled } from "./superset-agent-sessions-feature";
+import {
+  cancelGen2SupersetAgentTurn,
+  pollGen2SupersetAgentTurn,
+  startGen2SupersetAgentTurn,
+} from "./superset-agent-runtime";
 import { requireGen2Member } from "./workspaces";
 
 export { canRunGen2Agent } from "./agent-policy";
-
-export function buildGen2CodexCommand(
-  prompt: string,
-  history: Array<{ role: "user" | "assistant"; body: string }> = [],
-) {
-  return [
-    "codex",
-    "exec",
-    "--json",
-    "--ephemeral",
-    "--ignore-user-config",
-    "--skip-git-repo-check",
-    "--sandbox",
-    "danger-full-access",
-    "-c",
-    'approval_policy="never"',
-    "--model",
-    getAgentModel("openai"),
-    "--cd",
-    ".",
-    [
-      "You are Codex on this workspace's Firecracker machine.",
-      "The working directory is /workspace. Use the shell to inspect and change files there.",
-      "Answer the user. If they ask for code changes, make them in the current directory.",
-      "Do not inspect CODEX_HOME or authentication files.",
-      "",
-      formatGen2TurnPrompt(prompt, history),
-    ].join("\n"),
-  ];
-}
+export { buildGen2CodexCommand } from "./codex-command";
 
 async function requireReadyMember(workspaceId: string, userId: string) {
   const membership = await requireGen2Member(workspaceId, userId);
@@ -82,6 +58,11 @@ export async function startGen2AgentTurn(input: {
 }) {
   await requireReadyMember(input.workspaceId, input.userId);
   await requireGen2Chat(input.workspaceId, input.chatId);
+
+  if (isGen2SupersetAgentSessionsEnabled()) {
+    return startGen2AgentTurnViaSuperset(input);
+  }
+
   const history = await listGen2ChatMessages(input.chatId);
   const credential = await resolveGen2Codex(input.userId);
 
@@ -164,6 +145,41 @@ export async function startGen2AgentTurn(input: {
   }
 }
 
+/**
+ * Phase 4's Superset flow: same failure translation as the direct sandbox
+ * path above, delegated to `startGen2SupersetAgentTurn` (which owns the
+ * credential claim, worktree selection, durable run row, and chat/turn
+ * persistence -- see superset-agent-runtime.ts).
+ */
+async function startGen2AgentTurnViaSuperset(input: {
+  workspaceId: string;
+  userId: string;
+  chatId: string;
+  prompt: string;
+  idempotencyKey: string;
+}) {
+  try {
+    return await startGen2SupersetAgentTurn(input);
+  } catch (error) {
+    logEvent("error", "gen2.agent.start_failed", {
+      detail: error instanceof Error ? error.message : "unknown",
+    });
+    if (error instanceof OrchestratorError && error.status === 404) {
+      throw new Gen2LifecycleError(
+        "The instance is not running. Start it and try again.",
+      );
+    }
+    if (
+      error instanceof Gen2AccessError ||
+      error instanceof Gen2LifecycleError ||
+      error instanceof HostedCodexSubscriptionError
+    ) {
+      throw error;
+    }
+    throw new Gen2LifecycleError(describeGen2RuntimeFailure(error), 502);
+  }
+}
+
 export async function pollGen2AgentTurn(input: {
   workspaceId: string;
   userId: string;
@@ -172,6 +188,11 @@ export async function pollGen2AgentTurn(input: {
   after: number;
 }) {
   await requireGen2Member(input.workspaceId, input.userId);
+
+  if (isGen2SupersetAgentSessionsEnabled()) {
+    return pollGen2AgentTurnViaSuperset(input);
+  }
+
   let result;
   try {
     result = await pollCodexExecInSandbox(
@@ -229,12 +250,54 @@ export async function pollGen2AgentTurn(input: {
   };
 }
 
+/**
+ * Phase 4's Superset flow for polling. `pollGen2SupersetAgentTurn` owns the
+ * durable run lookup, output recording, and lease release on exit -- see
+ * superset-agent-runtime.ts.
+ */
+async function pollGen2AgentTurnViaSuperset(input: {
+  workspaceId: string;
+  userId: string;
+  sessionId: string;
+  after: number;
+}) {
+  try {
+    return await pollGen2SupersetAgentTurn(input);
+  } catch (error) {
+    logEvent("error", "gen2.agent.poll_failed", {
+      detail: error instanceof Error ? error.message : "unknown",
+    });
+    if (error instanceof Gen2LifecycleError) {
+      throw error;
+    }
+    if (error instanceof OrchestratorError && error.status === 404) {
+      throw new Gen2LifecycleError(
+        "This Codex turn is no longer running. Send the prompt again.",
+      );
+    }
+    throw new Gen2LifecycleError(describeGen2RuntimeFailure(error), 502);
+  }
+}
+
 export async function cancelGen2AgentTurn(input: {
   workspaceId: string;
   userId: string;
   sessionId: string;
 }) {
   await requireGen2Member(input.workspaceId, input.userId);
+
+  if (isGen2SupersetAgentSessionsEnabled()) {
+    try {
+      await cancelGen2SupersetAgentTurn(input);
+    } catch (error) {
+      if (error instanceof Gen2LifecycleError) {
+        throw error;
+      }
+      throw new Gen2LifecycleError(describeGen2RuntimeFailure(error), 502);
+    }
+    return;
+  }
+
   try {
     await closeCodexExecInSandbox(input.workspaceId, input.sessionId);
   } catch (error) {

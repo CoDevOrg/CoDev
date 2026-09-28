@@ -14,6 +14,7 @@ import {
   type CodexExecChunk,
 } from "./codex-output";
 import { reduceCodexTurn } from "./turn-events";
+import type { SupersetAgentPollChunk } from "./superset-agent-orchestrator-client";
 import { reconcileGen2CollaborationPaths } from "./collaboration-events";
 
 /**
@@ -120,6 +121,96 @@ export async function recordGen2TurnChunks(input: {
       .set({
         output,
         pendingBase64: "",
+        exited: true,
+        replyMessageId: message?.id ?? null,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.gen2AgentTurns.sessionId, input.sessionId));
+    return message ? { reply: message.body, messageId: message.id } : null;
+  } catch (error) {
+    logEvent("error", "gen2.turn.record_failed", {
+      detail: error instanceof Error ? error.message : "unknown",
+    });
+    return null;
+  }
+}
+
+/**
+ * Same accumulation as `recordGen2TurnChunks`, for a Superset terminal-agent
+ * run instead of a direct `codex exec` sandbox session (Superset Agent
+ * Session Plan Phase 4). Uses the run's `hostAgentSessionId` as the
+ * `gen2AgentTurns.sessionId` key -- that column is a bare `text` primary key,
+ * not tied to the `codex exec` sandbox session format.
+ *
+ * Superset's poll snapshots the whole terminal buffer on every change (see
+ * `vendor/superset/.../codev/agents.ts`'s `/poll` route) rather than
+ * streaming an incremental append, so each chunk here already is the
+ * complete current text -- it *replaces* `turn.output` instead of extending
+ * it. `reduceCodexTurn` re-parses the whole accumulated text on every call by
+ * design (see turn-events.ts), so replaying the same `codex exec --json`
+ * lines inside a growing snapshot still yields stable item ids and the same
+ * reply.
+ */
+export async function recordGen2SupersetRunOutput(input: {
+  sessionId: string;
+  chunks: SupersetAgentPollChunk[];
+  exited: boolean;
+}): Promise<{ reply: string; messageId: string } | null> {
+  try {
+    const database = getDatabase();
+    const [turn] = await database
+      .select()
+      .from(schema.gen2AgentTurns)
+      .where(eq(schema.gen2AgentTurns.sessionId, input.sessionId))
+      .limit(1);
+    if (!turn || turn.exited) return null;
+
+    const latest = [...input.chunks].sort(
+      (left, right) => left.sequence - right.sequence,
+    );
+    const output = latest.length
+      ? capTurnOutput(latest[latest.length - 1]!.data)
+      : turn.output;
+
+    if (!input.exited) {
+      if (output === turn.output) return null;
+      await database
+        .update(schema.gen2AgentTurns)
+        .set({ output, updatedAt: new Date() })
+        .where(eq(schema.gen2AgentTurns.sessionId, input.sessionId));
+      return null;
+    }
+
+    const state = reduceCodexTurn(output);
+    const changedPaths = state.items.flatMap((item) =>
+      item.kind === "fileChange"
+        ? item.changes.map((change) => change.path)
+        : [],
+    );
+    if (changedPaths.length > 0) {
+      await reconcileGen2CollaborationPaths({
+        workspaceId: turn.workspaceId,
+        userId: turn.userId,
+        paths: changedPaths,
+      }).catch((error) => {
+        logEvent("error", "gen2.collaboration.reconcile_failed", {
+          detail: error instanceof Error ? error.message : "unknown",
+        });
+      });
+    }
+    const body = state.reply || state.error || "";
+    const message = body
+      ? await appendGen2ChatMessage({
+          chatId: turn.chatId,
+          role: "assistant",
+          body,
+          items: state.items,
+        })
+      : null;
+    await database
+      .update(schema.gen2AgentTurns)
+      .set({
+        output,
         exited: true,
         replyMessageId: message?.id ?? null,
         updatedAt: new Date(),

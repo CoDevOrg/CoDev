@@ -19,6 +19,13 @@ const mocks = vi.hoisted(() => ({
   stop: vi.fn(),
   sendInput: vi.fn(),
   checkRecovery: vi.fn(),
+  requireChat: vi.fn(),
+  listMessages: vi.fn(),
+  appendMessage: vi.fn(),
+  listWorktrees: vi.fn(),
+  createWorktree: vi.fn(),
+  createTurn: vi.fn(),
+  recordOutput: vi.fn(),
 }));
 
 vi.mock("./workspaces", () => ({
@@ -27,6 +34,23 @@ vi.mock("./workspaces", () => ({
 
 vi.mock("./providers", () => ({
   resolveGen2Codex: (...args: unknown[]) => mocks.resolveCredential(...args),
+}));
+
+vi.mock("./chats", () => ({
+  requireGen2Chat: (...args: unknown[]) => mocks.requireChat(...args),
+  listGen2ChatMessages: (...args: unknown[]) => mocks.listMessages(...args),
+  appendGen2ChatMessage: (...args: unknown[]) => mocks.appendMessage(...args),
+}));
+
+vi.mock("../runtime/orchestrator-superset-runtime", () => ({
+  listSupersetWorktrees: (...args: unknown[]) => mocks.listWorktrees(...args),
+  createSupersetWorktree: (...args: unknown[]) => mocks.createWorktree(...args),
+}));
+
+vi.mock("./turns", () => ({
+  createGen2Turn: (...args: unknown[]) => mocks.createTurn(...args),
+  recordGen2SupersetRunOutput: (...args: unknown[]) =>
+    mocks.recordOutput(...args),
 }));
 
 vi.mock("../providers/hosted-codex-subscription-credentials", () => {
@@ -77,15 +101,19 @@ import { HostedCodexSubscriptionError } from "../providers/hosted-codex-subscrip
 import { Gen2LifecycleError } from "./errors";
 import {
   cancelGen2SupersetAgentSession,
+  cancelGen2SupersetAgentTurn,
   pollGen2SupersetAgentSession,
+  pollGen2SupersetAgentTurn,
   reconcileGen2SupersetAgentSession,
   startGen2SupersetAgentSession,
+  startGen2SupersetAgentTurn,
 } from "./superset-agent-runtime";
 
 const workspaceId = "11111111-1111-4111-8111-111111111111";
 const userId = "22222222-2222-4222-8222-222222222222";
 const runId = "33333333-3333-4333-8333-333333333333";
 const credentialId = "44444444-4444-4444-8444-444444444444";
+const chatId = "55555555-5555-4555-8555-555555555555";
 
 const RUN = {
   id: runId,
@@ -104,6 +132,13 @@ describe("gen2 Superset agent runtime adapter", () => {
       credentialId,
       authCacheJson: "{}",
       via: "subscription",
+    });
+    mocks.requireChat.mockResolvedValue({ id: chatId });
+    mocks.listMessages.mockResolvedValue([]);
+    mocks.listWorktrees.mockResolvedValue([]);
+    mocks.createWorktree.mockResolvedValue({
+      worktreeId: "agent-chat",
+      branch: "codev/agent-chat",
     });
   });
 
@@ -319,5 +354,139 @@ describe("gen2 Superset agent runtime adapter", () => {
     await reconcileGen2SupersetAgentSession({ workspaceId, userId, runId });
 
     expect(mocks.markRecoveryRequired).not.toHaveBeenCalled();
+  });
+});
+
+describe("gen2 Superset agent turn (Phase 4 browser-facing delegate)", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    process.env.CODEV_SUPERSET_AGENT_SESSIONS_ENABLED = "true";
+    mocks.requireMember.mockResolvedValue({ status: "ready" });
+    mocks.resolveCredential.mockResolvedValue({
+      credentialId,
+      authCacheJson: "{}",
+      via: "subscription",
+    });
+    mocks.requireChat.mockResolvedValue({ id: chatId });
+    mocks.listMessages.mockResolvedValue([]);
+    mocks.listWorktrees.mockResolvedValue([]);
+    mocks.createWorktree.mockResolvedValue({
+      worktreeId: "agent-chat",
+      branch: "codev/agent-chat",
+    });
+    mocks.getRunById.mockResolvedValue({
+      id: runId,
+      workspaceId,
+      hostAgentSessionId: "agent-1",
+      connectionId: credentialId,
+      leaseClaimed: true,
+    });
+  });
+
+  it("provisions a per-chat worktree, starts the run, and persists the prompt", async () => {
+    mocks.register.mockResolvedValue({
+      runId,
+      status: "creating",
+      created: true,
+    });
+    mocks.start.mockResolvedValue({
+      hostWorkspaceId: "host-ws-1",
+      hostTerminalId: "term-1",
+      hostAgentSessionId: "agent-1",
+    });
+
+    const result = await startGen2SupersetAgentTurn({
+      workspaceId,
+      userId,
+      chatId,
+      prompt: "hello",
+      idempotencyKey: "key-1",
+    });
+
+    expect(result).toEqual({ sessionId: runId });
+    expect(mocks.createWorktree).toHaveBeenCalledWith(
+      workspaceId,
+      expect.objectContaining({ worktreeId: expect.any(String) }),
+    );
+    expect(mocks.register).toHaveBeenCalledWith(
+      expect.objectContaining({ worktreeId: expect.any(String) }),
+    );
+    expect(mocks.appendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chatId,
+        role: "user",
+        body: "hello",
+      }),
+    );
+    expect(mocks.createTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: runId, chatId, workspaceId }),
+    );
+  });
+
+  it("reuses an existing chat worktree instead of creating a second one", async () => {
+    mocks.listWorktrees.mockResolvedValue([
+      { worktreeId: `agent-${chatId.replace(/-/g, "")}`, branch: "x" },
+    ]);
+    mocks.register.mockResolvedValue({
+      runId,
+      status: "creating",
+      created: true,
+    });
+    mocks.start.mockResolvedValue({
+      hostWorkspaceId: "host-ws-1",
+      hostTerminalId: "term-1",
+      hostAgentSessionId: "agent-1",
+    });
+
+    await startGen2SupersetAgentTurn({
+      workspaceId,
+      userId,
+      chatId,
+      prompt: "hello",
+      idempotencyKey: "key-1",
+    });
+
+    expect(mocks.createWorktree).not.toHaveBeenCalled();
+  });
+
+  it("polls the run, records output, and reports the persisted reply", async () => {
+    mocks.poll.mockResolvedValue({
+      chunks: [{ sequence: 1, data: "hi" }],
+      nextSequence: 1,
+      exited: true,
+      exitCode: 0,
+      refreshReady: true,
+    });
+    mocks.recordOutput.mockResolvedValue({
+      reply: "hi there",
+      messageId: "msg-1",
+    });
+
+    const result = await pollGen2SupersetAgentTurn({
+      workspaceId,
+      userId,
+      sessionId: runId,
+      after: 0,
+    });
+
+    expect(mocks.recordOutput).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: runId, exited: true }),
+    );
+    expect(result.reply).toBe("hi there");
+    expect(result.persistedMessageId).toBe("msg-1");
+    expect(result.chunks).toEqual([
+      { sequence: 0, dataBase64: Buffer.from("hi").toString("base64") },
+    ]);
+  });
+
+  it("cancels through the run id", async () => {
+    await cancelGen2SupersetAgentTurn({
+      workspaceId,
+      userId,
+      sessionId: runId,
+    });
+
+    expect(mocks.markStopping).toHaveBeenCalled();
+    expect(mocks.stop).toHaveBeenCalledWith(workspaceId, "agent-1");
   });
 });
