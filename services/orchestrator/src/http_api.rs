@@ -1904,7 +1904,7 @@ mod tests {
                 Request::builder()
                     .method("DELETE")
                     .uri(format!(
-                        "/v1/sandboxes/{workspace_id}/superset-agents/not a safe id"
+                        "/v1/sandboxes/{workspace_id}/superset-agents/not%20a%20safe%20id"
                     ))
                     .body(Body::empty())
                     .expect("request"),
