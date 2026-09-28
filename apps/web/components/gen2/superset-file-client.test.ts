@@ -25,10 +25,10 @@ describe("Superset file client", () => {
       );
     vi.stubGlobal("fetch", fetchMock);
 
-    const loaded = await readSupersetFile(workspaceId, file.path);
+    const loaded = await readSupersetFile(workspaceId, "main", file.path);
     const readCall = fetchMock.mock.calls.at(0);
     expect(readCall?.[0]).toContain("path=src%2Fa+file.ts");
-    const saved = await saveSupersetFile(workspaceId, loaded, "edited");
+    const saved = await saveSupersetFile(workspaceId, "main", loaded, "edited");
     expect(saved.revision).toBe("rev-2");
     const saveCall = fetchMock.mock.calls.at(1);
     expect(saveCall?.[1]).toMatchObject({ method: "PUT" });
@@ -53,7 +53,9 @@ describe("Superset file client", () => {
         ),
     );
 
-    await expect(saveSupersetFile(workspaceId, file, "edited")).rejects.toEqual(
+    await expect(
+      saveSupersetFile(workspaceId, "main", file, "edited"),
+    ).rejects.toEqual(
       expect.objectContaining({
         status: 409,
         currentRevision: "rev-2",

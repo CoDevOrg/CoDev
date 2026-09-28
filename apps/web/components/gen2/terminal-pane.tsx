@@ -14,16 +14,18 @@ import type { FitAddon } from "@xterm/addon-fit";
  */
 export function Gen2TerminalPane({
   workspaceId,
+  worktreeId = "main",
   visible,
   canStart,
   onExit,
   onResumeWorkspace,
 }: {
   workspaceId: string;
+  worktreeId?: string;
   visible: boolean;
   canStart: boolean;
   onExit: () => void;
-  onResumeWorkspace: () => Promise<boolean>;
+  onResumeWorkspace?: () => Promise<boolean>;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -44,13 +46,13 @@ export function Gen2TerminalPane({
   }, []);
 
   const post = useCallback(
-    (body: unknown) =>
+    (body: Record<string, unknown>) =>
       fetch(`/api/gen2/workspaces/${workspaceId}/terminal`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, worktreeId }),
       }),
-    [workspaceId],
+    [workspaceId, worktreeId],
   );
 
   const start = useCallback(async () => {
@@ -221,13 +223,13 @@ export function Gen2TerminalPane({
       const sessionId = sessionRef.current;
       if (sessionId) {
         void fetch(
-          `/api/gen2/workspaces/${workspaceId}/terminal?sessionId=${sessionId}`,
+          `/api/gen2/workspaces/${workspaceId}/terminal?sessionId=${sessionId}&worktreeId=${encodeURIComponent(worktreeId)}`,
           { method: "DELETE", keepalive: true },
         );
       }
       termRef.current?.dispose();
     },
-    [workspaceId],
+    [workspaceId, worktreeId],
   );
 
   return (
@@ -237,13 +239,15 @@ export function Gen2TerminalPane({
           <p className="gen2-wb-banner gen2-wb-banner-error" role="alert">
             {error} Resume the workspace to reconnect.
           </p>
-          <button
-            type="button"
-            className="gen2-wb-button"
-            onClick={() => void onResumeWorkspace()}
-          >
-            Resume workspace
-          </button>
+          {onResumeWorkspace ? (
+            <button
+              type="button"
+              className="gen2-wb-button"
+              onClick={() => void onResumeWorkspace()}
+            >
+              Resume workspace
+            </button>
+          ) : null}
         </div>
       ) : status === "idle" || status === "ended" ? (
         <div className="gen2-term-start">

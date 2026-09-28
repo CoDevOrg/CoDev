@@ -1090,6 +1090,212 @@
 
 /* --------------------------------------------------- Superset file slice */
 
+.gen2-superset-workspace-shell {
+  --ss-background: #151110;
+  --ss-foreground: #eae8e6;
+  --ss-card: #201e1c;
+  --ss-secondary: #2a2827;
+  --ss-muted: #2a2827;
+  --ss-muted-foreground: #a8a5a3;
+  --ss-border: #2a2827;
+  min-height: 100dvh;
+  background: var(--ss-background);
+  color: var(--ss-foreground);
+  font-family: var(--font-geist-sans), Arial, sans-serif;
+  color-scheme: dark;
+}
+
+.gen2-superset-workspace-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--ss-border);
+  background: color-mix(in srgb, var(--ss-muted) 45%, var(--ss-background));
+}
+
+.gen2-superset-workspace-header select,
+.gen2-superset-worktree-create,
+.gen2-superset-workspace-tabs button,
+.gen2-superset-worktree-form button {
+  min-height: 32px;
+  border: 1px solid var(--ss-border);
+  border-radius: 6px;
+  background: var(--ss-secondary);
+  color: var(--ss-foreground);
+  font: inherit;
+  font-size: 0.8125rem;
+}
+
+.gen2-superset-workspace-header select {
+  min-width: 10rem;
+  padding: 0 8px;
+}
+
+.gen2-superset-worktree-create,
+.gen2-superset-workspace-tabs button,
+.gen2-superset-worktree-form button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.gen2-superset-workspace-tabs {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.gen2-superset-workspace-tabs button[aria-selected="true"] {
+  border-color: color-mix(in srgb, var(--ss-highlight) 65%, var(--ss-border));
+  background: var(--ss-card);
+}
+
+.gen2-superset-workspace-header select:focus-visible,
+.gen2-superset-worktree-create:focus-visible,
+.gen2-superset-workspace-tabs button:focus-visible,
+.gen2-superset-worktree-form input:focus-visible,
+.gen2-superset-worktree-form button:focus-visible {
+  outline: 2px solid var(--ss-highlight);
+  outline-offset: 2px;
+}
+
+.gen2-superset-worktree-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--ss-border);
+  background: var(--ss-card);
+}
+
+.gen2-superset-worktree-form label {
+  display: grid;
+  gap: 4px;
+  color: var(--ss-muted-foreground);
+  font-size: 0.75rem;
+}
+
+.gen2-superset-worktree-form label span {
+  font-size: 0.6875rem;
+}
+
+.gen2-superset-worktree-form input {
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--ss-border);
+  border-radius: 6px;
+  background: var(--ss-background);
+  color: var(--ss-foreground);
+  font: inherit;
+}
+
+.gen2-superset-runtime-notice {
+  margin: 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--ss-border);
+  background: color-mix(in srgb, var(--ss-highlight) 11%, var(--ss-background));
+  color: var(--ss-foreground);
+  font-size: 0.8125rem;
+}
+
+.gen2-superset-files-panel .gen2-superset-file-pane {
+  min-height: calc(100dvh - 48px);
+}
+
+.gen2-superset-tool-panel {
+  min-height: calc(100dvh - 48px);
+  padding: 16px;
+  background: var(--ss-background);
+}
+
+.gen2-superset-tool-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--ss-border);
+}
+
+.gen2-superset-tool-header h2,
+.gen2-superset-tool-header p {
+  margin: 0;
+}
+
+.gen2-superset-tool-header h2 {
+  font-size: 1rem;
+}
+
+.gen2-superset-tool-header p,
+.gen2-superset-tool-empty {
+  color: var(--ss-muted-foreground);
+  font-size: 0.8125rem;
+}
+
+.gen2-superset-tool-error {
+  max-width: 72rem;
+  margin: 12px auto;
+  color: #ffb4a0;
+}
+
+.gen2-superset-change-list,
+.gen2-superset-diff {
+  box-sizing: border-box;
+  width: min(72rem, 100%);
+  margin: 16px auto;
+  border: 1px solid var(--ss-border);
+  border-radius: 8px;
+  background: var(--ss-card);
+}
+
+.gen2-superset-change-list {
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+}
+
+.gen2-superset-change-list li {
+  display: flex;
+  gap: 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ss-border);
+  font:
+    0.8125rem var(--font-geist-mono),
+    monospace;
+}
+
+.gen2-superset-change-list li:last-child {
+  border-bottom: 0;
+}
+
+.gen2-superset-change-list code {
+  min-width: 1.5rem;
+  color: var(--ss-highlight);
+}
+
+.gen2-superset-diff {
+  min-height: 16rem;
+  padding: 12px;
+  overflow: auto;
+  color: var(--ss-foreground);
+  font:
+    0.75rem/1.55 var(--font-geist-mono),
+    monospace;
+  white-space: pre-wrap;
+}
+
+.gen2-superset-tool-empty {
+  width: min(72rem, 100%);
+  margin: 16px auto;
+}
+
 .gen2-superset-file-pane {
   --ss-background: #151110;
   --ss-foreground: #eae8e6;
@@ -1809,6 +2015,27 @@
 }
 
 @media (max-width: 600px) {
+  .gen2-superset-workspace-header {
+    flex-wrap: wrap;
+    min-height: 52px;
+  }
+
+  .gen2-superset-workspace-tabs {
+    order: 3;
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .gen2-superset-workspace-tabs button {
+    flex: 1;
+    justify-content: center;
+    min-height: 40px;
+  }
+
+  .gen2-superset-worktree-form {
+    grid-template-columns: 1fr;
+  }
+
   .gen2-superset-files-actions .gen2-superset-icon-button:disabled {
     display: none;
   }

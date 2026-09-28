@@ -69,11 +69,17 @@ const secondFile = {
 describe("SupersetFilePane", () => {
   beforeEach(() => {
     mocks.list.mockResolvedValue([firstFile, secondFile]);
-    mocks.read.mockImplementation(async (_id: string, path: string) =>
-      path === firstFile.path ? firstFile : secondFile,
+    mocks.read.mockImplementation(
+      async (_id: string, _worktree: string, path: string) =>
+        path === firstFile.path ? firstFile : secondFile,
     );
     mocks.save.mockImplementation(
-      async (_id: string, file: typeof firstFile, contents: string) => ({
+      async (
+        _id: string,
+        _worktree: string,
+        file: typeof firstFile,
+        contents: string,
+      ) => ({
         ...file,
         contents,
         revision: "rev-2",
@@ -82,6 +88,7 @@ describe("SupersetFilePane", () => {
     mocks.create.mockImplementation(
       async (
         _id: string,
+        _worktree: string,
         input: {
           parentPath: string;
           name: string;
@@ -107,10 +114,12 @@ describe("SupersetFilePane", () => {
     );
     expect(mocks.list).toHaveBeenCalledWith(
       workspaceId,
+      "main",
       expect.any(AbortSignal),
     );
     expect(mocks.read).toHaveBeenCalledWith(
       workspaceId,
+      "main",
       firstFile.path,
       expect.any(AbortSignal),
     );
@@ -126,12 +135,36 @@ describe("SupersetFilePane", () => {
     await waitFor(() =>
       expect(mocks.save).toHaveBeenCalledWith(
         workspaceId,
+        "main",
         expect.objectContaining({ path: firstFile.path, revision: "rev-1" }),
         "export const live = true;",
       ),
     );
     expect(await screen.findByText("File saved.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+
+  it("scopes file requests and the shared document to the selected worktree", async () => {
+    render(
+      <SupersetFilePane
+        workspaceId={workspaceId}
+        canEdit
+        worktreeId="feature-auth"
+      />,
+    );
+
+    await screen.findByLabelText("Code");
+    expect(mocks.list).toHaveBeenCalledWith(
+      workspaceId,
+      "feature-auth",
+      expect.any(AbortSignal),
+    );
+    expect(mocks.read).toHaveBeenCalledWith(
+      workspaceId,
+      "feature-auth",
+      firstFile.path,
+      expect.any(AbortSignal),
+    );
   });
 
   it("preserves the draft and offers recovery when a save conflicts", async () => {
@@ -180,12 +213,13 @@ describe("SupersetFilePane", () => {
       contents: "",
       revision: "rev-new",
     };
-    mocks.read.mockImplementation(async (_id: string, path: string) =>
-      path === newFile.path
-        ? newFile
-        : path === firstFile.path
-          ? firstFile
-          : secondFile,
+    mocks.read.mockImplementation(
+      async (_id: string, _worktree: string, path: string) =>
+        path === newFile.path
+          ? newFile
+          : path === firstFile.path
+            ? firstFile
+            : secondFile,
     );
     render(<SupersetFilePane workspaceId={workspaceId} canEdit />);
     await screen.findByLabelText("Code");
@@ -197,7 +231,7 @@ describe("SupersetFilePane", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
 
     await waitFor(() =>
-      expect(mocks.create).toHaveBeenCalledWith(workspaceId, {
+      expect(mocks.create).toHaveBeenCalledWith(workspaceId, "main", {
         parentPath: "",
         name: newFile.path,
         kind: "file",
@@ -206,6 +240,7 @@ describe("SupersetFilePane", () => {
     await waitFor(() =>
       expect(mocks.read).toHaveBeenLastCalledWith(
         workspaceId,
+        "main",
         newFile.path,
         undefined,
       ),
@@ -228,7 +263,7 @@ describe("SupersetFilePane", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
 
     await waitFor(() =>
-      expect(mocks.create).toHaveBeenCalledWith(workspaceId, {
+      expect(mocks.create).toHaveBeenCalledWith(workspaceId, "main", {
         parentPath: "",
         name: "notes",
         kind: "directory",

@@ -15,6 +15,7 @@ import { readGen2SupersetFile } from "./superset";
 
 export interface Gen2DocumentSnapshot {
   workspaceId: string;
+  worktreeId: string;
   path: string;
   revision: string;
   update: string;
@@ -27,11 +28,13 @@ export interface Gen2DocumentSnapshot {
 
 export async function loadGen2Document(
   workspaceId: string,
+  worktreeId: string,
   path: string,
 ): Promise<Gen2DocumentSnapshot | null> {
   const [snapshot] = await getDatabase()
     .select({
       workspaceId: schema.gen2YjsDocuments.workspaceId,
+      worktreeId: schema.gen2YjsDocuments.worktreeId,
       path: schema.gen2YjsDocuments.path,
       revision: schema.gen2YjsDocuments.revision,
       update: schema.gen2YjsDocuments.update,
@@ -46,6 +49,7 @@ export async function loadGen2Document(
     .where(
       and(
         eq(schema.gen2YjsDocuments.workspaceId, workspaceId),
+        eq(schema.gen2YjsDocuments.worktreeId, worktreeId),
         eq(schema.gen2YjsDocuments.path, path),
       ),
     )
@@ -71,6 +75,7 @@ export async function saveGen2Document(
     .onConflictDoUpdate({
       target: [
         schema.gen2YjsDocuments.workspaceId,
+        schema.gen2YjsDocuments.worktreeId,
         schema.gen2YjsDocuments.path,
       ],
       set: {
@@ -91,13 +96,20 @@ export async function saveGen2Document(
 export async function initializeGen2Document(
   workspaceId: string,
   userId: string,
+  worktreeId: string,
   path: string,
 ) {
-  const file = await readGen2SupersetFile(workspaceId, userId, "main", path);
+  const file = await readGen2SupersetFile(
+    workspaceId,
+    userId,
+    worktreeId,
+    path,
+  );
   const doc = new Y.Doc();
   doc.getText("content").insert(0, file.contents);
   const snapshot: Gen2DocumentSnapshot = {
     workspaceId,
+    worktreeId,
     path,
     revision: file.revision,
     ...encodedDocument(doc),
@@ -113,11 +125,16 @@ export async function initializeGen2Document(
 /** Records a completed revision-checked filesystem save without replacing a newer Yjs edit. */
 export async function recordGen2DocumentSave(input: {
   workspaceId: string;
+  worktreeId: string;
   path: string;
   contents: string;
   revision: string;
 }) {
-  const snapshot = await loadGen2Document(input.workspaceId, input.path);
+  const snapshot = await loadGen2Document(
+    input.workspaceId,
+    input.worktreeId,
+    input.path,
+  );
   if (!snapshot) return;
   await saveGen2Document({
     ...snapshot,
@@ -141,7 +158,7 @@ export async function reconcileGen2Document(
   const file = await readGen2SupersetFile(
     workspaceId,
     userId,
-    "main",
+    snapshot.worktreeId,
     snapshot.path,
   );
   const previousRevision = snapshot.filesystemRevision ?? snapshot.revision;
