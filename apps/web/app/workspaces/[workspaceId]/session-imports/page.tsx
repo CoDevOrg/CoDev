@@ -14,7 +14,8 @@ import {
   SessionImportTranscript,
   sessionMessagePreview,
 } from "@/components/workspace/session-import-transcript";
-import { OrcaCard, OrcaPageShell } from "@/components/settings/orca-style";
+import { OrcaPageShell } from "@/components/settings/orca-style";
+import { Card } from "@/components/ui/card";
 import {
   listStoredSessionImports,
   readStoredSessionImportView,
@@ -125,10 +126,10 @@ export default async function WorkspaceSessionImportsPage({
             Recent imports
           </p>
           {imports.length === 0 ? (
-            <OrcaCard className="p-5 text-sm leading-6 text-muted-foreground">
+            <Card className="p-5 text-sm leading-6 text-muted-foreground">
               No imported sessions yet. Choose a session file above to get
               started.
-            </OrcaCard>
+            </Card>
           ) : (
             <ul className="space-y-0.5 lg:sticky lg:top-6">
               {imports.map((item) => (
@@ -321,9 +322,9 @@ export default async function WorkspaceSessionImportsPage({
               </section>
             </>
           ) : (
-            <OrcaCard className="p-5 text-sm leading-6 text-muted-foreground">
+            <Card className="p-5 text-sm leading-6 text-muted-foreground">
               Select an import to review its conversation and continue from it.
-            </OrcaCard>
+            </Card>
           )}
         </section>
       </div>

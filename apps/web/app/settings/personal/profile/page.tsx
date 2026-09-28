@@ -6,12 +6,12 @@ import { Button } from "@/components/ui/button";
 import { GithubMark } from "@/components/settings/github-mark";
 import { GoogleMark } from "@/components/settings/google-mark";
 import {
-  OrcaCard,
   OrcaPageHeader,
   OrcaPageShell,
   OrcaSubsectionHeader,
 } from "@/components/settings/orca-style";
 import { SetPasswordForm } from "@/components/settings/set-password-form";
+import { Card } from "@/components/ui/card";
 import { getConnectedAccounts } from "@/lib/auth/identity";
 import { requireUser } from "@/lib/auth/session";
 import { cn } from "@/lib/platform/utils";
@@ -99,7 +99,7 @@ export default async function PersonalProfilePage({
         title="Profile"
       />
 
-      <OrcaCard className="flex items-center gap-4 px-6 py-5">
+      <Card className="flex items-center gap-4 px-6 py-5">
         <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-foreground text-lg font-semibold text-background">
           {initials(user.name, user.email)}
         </span>
@@ -112,9 +112,9 @@ export default async function PersonalProfilePage({
             {user.email || "No email on file"}
           </p>
         </div>
-      </OrcaCard>
+      </Card>
 
-      <OrcaCard className="space-y-4 px-6 py-5">
+      <Card className="space-y-4 px-6 py-5">
         <OrcaSubsectionHeader
           description="Sign in with any of these, or link more."
           title="Sign-in methods"
@@ -172,10 +172,10 @@ export default async function PersonalProfilePage({
             Google and GitHub are connected to this same CoDev account.
           </p>
         ) : null}
-      </OrcaCard>
+      </Card>
 
       {connectedAccounts.hasPassword ? null : (
-        <OrcaCard className="space-y-4 px-6 py-5">
+        <Card className="space-y-4 px-6 py-5">
           <OrcaSubsectionHeader
             description="You signed in with Google or GitHub, so this account has no password yet. Set one to also be able to sign in with your email."
             title="Set a password"
@@ -194,7 +194,7 @@ export default async function PersonalProfilePage({
               <SetPasswordForm redirectTo="/settings/personal/profile" />
             </>
           )}
-        </OrcaCard>
+        </Card>
       )}
     </OrcaPageShell>
   );

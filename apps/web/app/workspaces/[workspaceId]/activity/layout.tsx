@@ -2,8 +2,9 @@ import "../../../settings/orca-theme.css";
 
 /**
  * The activity feed is built entirely from the Orca design-system components
- * (`OrcaPageShell`, `OrcaPageHeader`, `OrcaCard`) and the Tailwind utilities
- * they expect — but it lives under `/workspaces`, which is plain-CSS territory
+ * (`OrcaPageShell`, `OrcaPageHeader`) plus the shared `Card` from
+ * components/ui/card and the Tailwind utilities they expect — but it lives
+ * under `/workspaces`, which is plain-CSS territory
  * and loads none of them. Every utility class on the page was inert, so it
  * rendered as unstyled markup at default browser sizes.
  *

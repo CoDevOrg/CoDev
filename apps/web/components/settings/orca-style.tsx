@@ -51,30 +51,6 @@ export function OrcaPageHeader({
   );
 }
 
-export function OrcaCard({
-  children,
-  className,
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  // Same border/background/text treatment as the shared <Card> in
-  // components/ui/card.tsx (Rooms, the dashboard) -- this used to be a
-  // half-opacity bg-card/50 with its own border-border/50 and shadow-xs,
-  // which faded to a visibly different, muddier card color than everywhere
-  // else in the product. Padding stays its own choice; the look doesn't.
-  return (
-    <div
-      className={cn(
-        "rounded-xl border border-border bg-card px-7 py-6 text-card-foreground",
-        className,
-      )}
-    >
-      {children}
-    </div>
-  );
-}
-
 export function OrcaSubsectionHeader({
   title,
   description,
