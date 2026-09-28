@@ -29,7 +29,12 @@ export default async function Gen2WorkspacePage({
 
   return (
     <AppChrome user={user} sidebar>
-      <Gen2WorkspaceRoom workspace={workspace} />
+      <Gen2WorkspaceRoom
+        workspace={workspace}
+        supersetSessionsEnabled={
+          process.env.CODEV_SUPERSET_SESSIONS_ENABLED === "true"
+        }
+      />
     </AppChrome>
   );
 }

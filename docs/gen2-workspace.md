@@ -58,6 +58,16 @@ rail and has three tabs: Files (tree + editor), Terminal, and Git. It is
 modelled on an agent UI, not an IDE: the chat is where the work is directed,
 and the workbench is how you watch and intervene.
 
+With `CODEV_SUPERSET_SESSIONS_ENABLED=true`, the primary chat column uses
+Superset ChatV3 Codex sessions. Members can create sessions, prompt, review
+the durable event timeline, cancel a turn, and answer approvals. A classic
+chat switch remains available during rollout. The browser calls CoDev's
+authenticated API; the guest forwards a fixed set of private operations to
+the Superset host. The host keeps each member's Codex home and chat journal
+under a separate Unix uid. Session IDs are durable in the host journal and
+scoped to the initiating member; no legacy chat history is imported. The
+local `CODEV_FAKE_GUEST=1` contract double exercises this flow without Azure.
+
 ### Shared editor (implemented, pending two-member verification)
 
 The open Superset-style file editor now uses a CoDev-backed Yjs document rather

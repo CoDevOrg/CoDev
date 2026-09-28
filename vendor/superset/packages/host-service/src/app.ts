@@ -16,6 +16,7 @@ import { createApiClient } from "./api";
 import { createChatV3Mount, registerChatV3Routes } from "./chat-v3";
 import { registerCoDevFileBridge } from "./codev/files";
 import { registerCoDevRuntimeBridge } from "./codev/runtime";
+import { registerCoDevSessionBridge } from "./codev/sessions";
 import { createDb, type HostDb } from "./db";
 import { EventBus, GitWatcher, registerEventBusRoute } from "./events";
 import { agentIsBusy, PageWatchManager } from "./page-watch/index.ts";
@@ -389,10 +390,21 @@ export function createApp(options: CreateAppOptions): CreateAppResult {
 		eventBus,
 		upgradeWebSocket,
 	});
-	registerChatV3Routes({ app, db, mount: chatV3, upgradeWebSocket });
+	// CoDev guests accept only the private bridge. Their static local host token
+	// must not grant a second, unscoped path into ChatV3.
+	if (!process.env.CODEV_WORKSPACE_ROOT) {
+		registerChatV3Routes({ app, db, mount: chatV3, upgradeWebSocket });
+	}
 	const codevWorkspaceRoot = process.env.CODEV_WORKSPACE_ROOT;
 	const codevBridgeSecret = process.env.CODEV_SUPERSET_BRIDGE_SECRET;
+	let disposeCoDevSessions: (() => Promise<void>) | undefined;
 	if (codevWorkspaceRoot && codevBridgeSecret) {
+		disposeCoDevSessions = registerCoDevSessionBridge({
+			app,
+			workspaceRoot: codevWorkspaceRoot,
+			bridgeSecret: codevBridgeSecret,
+			stateRoot: process.env.SUPERSET_HOME_DIR ?? "/var/lib/codev-superset",
+		});
 		registerCoDevFileBridge({
 			app,
 			filesystem,
@@ -458,6 +470,11 @@ export function createApp(options: CreateAppOptions): CreateAppResult {
 			pageWatch.stop();
 		} catch (err) {
 			console.warn("[host-service] pageWatch.stop failed:", err);
+		}
+		try {
+			await disposeCoDevSessions?.();
+		} catch (err) {
+			console.warn("[host-service] CoDev sessions dispose failed:", err);
 		}
 		try {
 			await chatV3.dispose();

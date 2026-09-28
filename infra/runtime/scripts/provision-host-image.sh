@@ -268,6 +268,9 @@ install -d -m 0700 "${work_dir}/rootfs/etc/codev"
 superset_bridge_secret="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
 printf 'CODEV_SUPERSET_BRIDGE_SECRET=%s\n' "${superset_bridge_secret}" \
   >"${work_dir}/rootfs/etc/codev/superset-bridge.env"
+superset_auth_token="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
+printf 'AUTH_TOKEN=%s\n' "${superset_auth_token}" \
+  >>"${work_dir}/rootfs/etc/codev/superset-bridge.env"
 chmod 0600 "${work_dir}/rootfs/etc/codev/superset-bridge.env"
 
 cat >"${work_dir}/rootfs/etc/systemd/system/codev-guestd.service" <<'UNIT'
@@ -315,7 +318,6 @@ Environment=SUPERSET_CHAT_V3_MIGRATIONS=/opt/codev/superset-host/chat-migrations
 Environment=SUPERSET_AGENT_TEMPLATES_DIR=/opt/codev/superset-host/agent-templates
 Environment=SUPERSET_PTY_DAEMON_SCRIPT_PATH=/opt/codev/superset-host/pty-daemon.js
 Environment=ORGANIZATION_ID=00000000-0000-4000-8000-000000000001
-Environment=AUTH_TOKEN=codev-guest-local
 Environment=SUPERSET_API_URL=http://127.0.0.1:9
 Environment=PORT=4879
 Environment=NODE_ENV=production

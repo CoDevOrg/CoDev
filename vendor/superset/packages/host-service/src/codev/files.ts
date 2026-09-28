@@ -130,6 +130,8 @@ function requestSecretMatches(actual: string | undefined, expected: string) {
 	);
 }
 
+function queryInput(request: Request, schema: typeof readSchema): ReturnType<typeof readSchema.safeParse>;
+function queryInput(request: Request, schema: typeof listSchema): ReturnType<typeof listSchema.safeParse>;
 function queryInput(request: Request, schema: typeof listSchema | typeof readSchema) {
 	const query = new URL(request.url).searchParams;
 	return schema.safeParse({

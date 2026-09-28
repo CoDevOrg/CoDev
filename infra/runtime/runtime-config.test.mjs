@@ -34,6 +34,14 @@ const azureDeploy = read("../azure/deploy.sh");
 const azureImageBuilder = read("../azure/image-builder.bicep");
 const azureImageBuild = read("../azure/build-host-image.sh");
 
+test("Superset host tokens stay in the guest's root-only env file", () => {
+  for (const source of [bootstrap, imageProvision]) {
+    assert.match(source, /printf 'AUTH_TOKEN=%s\\n' .*superset_auth_token/);
+    assert.match(source, /chmod 0600 .*superset-bridge\.env/);
+    assert.doesNotMatch(source, /Environment=AUTH_TOKEN=/);
+  }
+});
+
 // Firecracker needs /dev/kvm, and not every Azure size exposes it: a size
 // without nested virtualization provisions perfectly and then cannot start a
 // single microVM. The Dsv7 Intel series supports nested virtualization and

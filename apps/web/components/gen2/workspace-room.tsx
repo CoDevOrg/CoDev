@@ -8,6 +8,7 @@ import type { Gen2WorkspaceDetail } from "@codev/contracts";
 import { Gen2ChatPanel } from "./chat-panel";
 import { ensureGen2WorkspaceReady } from "@/lib/gen2/startup-client";
 import { Gen2Workbench, type Gen2WorkbenchHandle } from "./workbench";
+import { SupersetSessionPanel } from "./superset-session-panel";
 
 const STATUS_LABEL: Record<Gen2WorkspaceDetail["status"], string> = {
   pending: "Starting",
@@ -20,8 +21,10 @@ const STATUS_LABEL: Record<Gen2WorkspaceDetail["status"], string> = {
 
 export function Gen2WorkspaceRoom({
   workspace,
+  supersetSessionsEnabled = false,
 }: {
   workspace: Gen2WorkspaceDetail;
+  supersetSessionsEnabled?: boolean;
 }) {
   const [current, setCurrent] = useState(workspace);
   const [inviteUrl, setInviteUrl] = useState("");
@@ -29,6 +32,7 @@ export function Gen2WorkspaceRoom({
   const [agentRunning, setAgentRunning] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
   const [runtimeReady, setRuntimeReady] = useState(false);
+  const [classicChat, setClassicChat] = useState(false);
   const workbenchRef = useRef<Gen2WorkbenchHandle | null>(null);
   const startupInFlightRef = useRef<Promise<boolean> | null>(null);
   const ready = current.status === "ready" && runtimeReady;
@@ -95,6 +99,16 @@ export function Gen2WorkspaceRoom({
     window.setTimeout(() => setCopied(false), 2_500);
   }
 
+  const classicPanel = (
+    <Gen2ChatPanel
+      workspace={current}
+      onRunningChange={setAgentRunning}
+      onFilesChanged={refresh}
+      onOpenFile={openFile}
+      onNeedsMachine={ensureRunning}
+    />
+  );
+
   return (
     <div className="gen2-ws">
       <header className="gen2-ws-bar">
@@ -160,13 +174,37 @@ export function Gen2WorkspaceRoom({
       ) : null}
 
       <div className="gen2-ws-body">
-        <Gen2ChatPanel
-          workspace={current}
-          onRunningChange={setAgentRunning}
-          onFilesChanged={refresh}
-          onOpenFile={openFile}
-          onNeedsMachine={ensureRunning}
-        />
+        {supersetSessionsEnabled && !classicChat ? (
+          <div className="gen2-sessions-wrap">
+            <button
+              type="button"
+              className="gen2-sessions-fallback"
+              onClick={() => setClassicChat(true)}
+            >
+              Use classic chat
+            </button>
+            <SupersetSessionPanel
+              workspaceId={current.id}
+              ready={ready}
+              canEdit={current.role !== "viewer"}
+              onRunningChange={setAgentRunning}
+              onFilesChanged={refresh}
+            />
+          </div>
+        ) : supersetSessionsEnabled ? (
+          <div className="gen2-sessions-wrap">
+            <button
+              type="button"
+              className="gen2-sessions-fallback"
+              onClick={() => setClassicChat(false)}
+            >
+              Use Superset sessions
+            </button>
+            {classicPanel}
+          </div>
+        ) : (
+          classicPanel
+        )}
         <Gen2Workbench
           workspaceId={current.id}
           ready={ready}

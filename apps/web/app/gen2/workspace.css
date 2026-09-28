@@ -25,6 +25,162 @@
   height: 100%;
 }
 
+.gen2-sessions-wrap {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--line);
+}
+
+.gen2-sessions-wrap > .gen2-chat,
+.gen2-sessions-wrap > .gen2-sessions {
+  min-height: 0;
+  flex: 1;
+}
+
+.gen2-sessions-fallback {
+  align-self: flex-start;
+  margin: 7px 12px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.gen2-sessions {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.gen2-sessions-bar,
+.gen2-sessions-tabs,
+.gen2-sessions-compose {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.gen2-sessions-bar strong {
+  font-size: 0.875rem;
+}
+.gen2-sessions-bar button {
+  margin-left: auto;
+}
+.gen2-sessions-tabs {
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.gen2-sessions-tabs button {
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gen2-sessions-tabs button[aria-current="page"] {
+  color: var(--ink);
+  border-bottom-color: var(--gold);
+}
+.gen2-sessions-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 16px;
+}
+.gen2-sessions-empty {
+  max-width: 300px;
+  margin: 15vh auto 0;
+  text-align: center;
+}
+.gen2-sessions-empty h2 {
+  font-size: 1.125rem;
+}
+.gen2-sessions-empty p {
+  color: var(--muted);
+}
+.gen2-sessions-user {
+  margin: 16px 0 16px auto;
+  max-width: 85%;
+  width: fit-content;
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: var(--surface-2);
+  white-space: pre-wrap;
+}
+.gen2-sessions-reply {
+  margin: 18px 0;
+  line-height: 1.55;
+}
+.gen2-sessions-activity {
+  margin: 8px 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.gen2-sessions-activity > div {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.gen2-sessions-error {
+  margin: 0;
+  padding: 8px 14px;
+  color: var(--red, #b42318);
+  font-size: 0.8rem;
+}
+.gen2-sessions-compose {
+  border-top: 1px solid var(--line);
+  border-bottom: 0;
+  align-items: flex-end;
+}
+.gen2-sessions-compose textarea {
+  flex: 1;
+  min-width: 0;
+  resize: vertical;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+}
+.gen2-sessions-compose textarea:focus {
+  outline: none;
+}
+.gen2-sessions button:not(.gen2-sessions-tabs button),
+.gen2-sessions-fallback {
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 9px;
+}
+.gen2-sessions button {
+  border: 0;
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+.gen2-sessions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.gen2-sessions button:focus-visible,
+.gen2-sessions-fallback:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gen2-sessions *,
+  .gen2-sessions-fallback {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
 .gen2-ws-bar {
   display: flex;
   align-items: center;

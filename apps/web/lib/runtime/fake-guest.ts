@@ -35,6 +35,23 @@ type FakeSandbox = {
   files: Map<string, FakeFile>;
   terminals: Map<string, FakeTerminal>;
   execs: Map<string, FakeCodexExec>;
+  supersetSessions: Map<
+    string,
+    {
+      memberId: string;
+      status: string;
+      envelopes: unknown[];
+      title: string;
+      epoch: string;
+      turnId: string | null;
+      pending: {
+        itemId: string;
+        text: string;
+        polls: number;
+        startedAtMs: number;
+      } | null;
+    }
+  >;
   counter: number;
 };
 
@@ -72,6 +89,7 @@ function seed(workspaceId: string): FakeSandbox {
     files,
     terminals: new Map(),
     execs: new Map(),
+    supersetSessions: new Map(),
     counter: 0,
   };
   sandboxes.set(workspaceId, sandbox);
@@ -303,6 +321,160 @@ export function handleFakeGuestRequest(
 
     const sandbox = require(workspaceId);
     const input = payload as Record<string, string & number>;
+
+    const sessionOperation =
+      /^\/superset\/runtime\/session\/(create|list|get|events|prompt|cancel|approve)$/.exec(
+        rest,
+      )?.[1];
+    if (method === "POST" && sessionOperation) {
+      const memberId = String(input.memberId ?? "");
+      if (sessionOperation === "create") {
+        const sessionId = crypto.randomUUID();
+        sandbox.supersetSessions.set(sessionId, {
+          memberId,
+          status: "idle",
+          envelopes: [],
+          title: "New session",
+          epoch: crypto.randomUUID(),
+          turnId: null,
+          pending: null,
+        });
+        return json({
+          sessionId,
+          epoch: sandbox.supersetSessions.get(sessionId)!.epoch,
+        });
+      }
+      if (sessionOperation === "list")
+        return json({
+          sessions: [...sandbox.supersetSessions]
+            .filter(([, session]) => session.memberId === memberId)
+            .map(([id, session]) => ({
+              sessionId: id,
+              scopeId: memberId,
+              status: session.status,
+              title: session.title,
+            })),
+        });
+      const sessionId = String(input.sessionId ?? "");
+      const session = sandbox.supersetSessions.get(sessionId);
+      if (!session || session.memberId !== memberId)
+        return json({ error: "Session not found." }, 404);
+      if (sessionOperation === "get")
+        return json({
+          session: {
+            sessionId,
+            scopeId: memberId,
+            status: session.status,
+            title: session.title,
+          },
+          cursor: { epoch: session.epoch, seq: session.envelopes.length },
+        });
+      const add = (event: unknown) =>
+        session.envelopes.push({
+          v: 1,
+          sessionId,
+          ts: Date.now(),
+          cursor: { epoch: session.epoch, seq: session.envelopes.length + 1 },
+          event,
+        });
+      if (sessionOperation === "events") {
+        const pending = session.pending;
+        if (pending) {
+          pending.polls += 1;
+          if (pending.polls >= 2) {
+            add({
+              type: "item",
+              turnId: session.turnId,
+              item: {
+                id: pending.itemId,
+                kind: "agent_message",
+                text: pending.text,
+                startedAtMs: pending.startedAtMs,
+                completedAtMs: Date.now(),
+              },
+            });
+            add({
+              type: "turn",
+              turn: {
+                id: session.turnId,
+                status: "completed",
+                startedAtMs: pending.startedAtMs,
+                completedAtMs: Date.now(),
+              },
+            });
+            session.pending = null;
+            session.status = "idle";
+          }
+        }
+        return json({
+          ok: true,
+          envelopes: session.envelopes,
+          liveText:
+            pending && session.pending
+              ? {
+                  [pending.itemId]: pending.text.slice(
+                    0,
+                    Math.ceil(pending.text.length / 2),
+                  ),
+                }
+              : {},
+          nextBefore: null,
+        });
+      }
+      if (sessionOperation === "prompt") {
+        const text = String(input.text ?? "");
+        const now = Date.now();
+        session.title = text.slice(0, 50);
+        session.status = "running";
+        session.turnId = crypto.randomUUID();
+        const itemId = crypto.randomUUID();
+        session.pending = {
+          itemId,
+          text: `Local Superset guest received: ${text}`,
+          polls: 0,
+          startedAtMs: now,
+        };
+        add({
+          type: "item",
+          turnId: session.turnId,
+          item: {
+            id: crypto.randomUUID(),
+            kind: "user_message",
+            clientId: String(input.commandId ?? ""),
+            content: [{ type: "text", text }],
+            startedAtMs: now,
+          },
+        });
+        add({
+          type: "turn",
+          turn: { id: session.turnId, status: "running", startedAtMs: now },
+        });
+        add({
+          type: "item",
+          turnId: session.turnId,
+          item: {
+            id: itemId,
+            kind: "agent_message",
+            text: "",
+            startedAtMs: now,
+          },
+        });
+      }
+      if (sessionOperation === "cancel") {
+        session.pending = null;
+        session.status = "idle";
+        add({
+          type: "turn",
+          turn: {
+            id: session.turnId,
+            status: "interrupted",
+            startedAtMs: Date.now(),
+            completedAtMs: Date.now(),
+          },
+        });
+      }
+      return json({ ok: true });
+    }
 
     if (rest === "/files/read") {
       const file = sandbox.files.get(String(input.path));

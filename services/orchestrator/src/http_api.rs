@@ -554,6 +554,14 @@ fn valid_superset_runtime_operation(method: &str, operation: &str) -> bool {
             | ("POST", "terminal/resize")
             | ("POST", "terminal/poll")
             | ("DELETE", "terminal")
+            | ("POST", "session/create")
+            | ("POST", "session/list")
+            | ("POST", "session/get")
+            | ("POST", "session/events")
+            | ("POST", "session/auth")
+            | ("POST", "session/prompt")
+            | ("POST", "session/cancel")
+            | ("POST", "session/approve")
     )
 }
 

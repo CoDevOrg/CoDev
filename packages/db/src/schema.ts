@@ -2191,3 +2191,26 @@ export const gen2AgentTurns = pgTable(
     index("gen2_agent_turns_chat_idx").on(table.chatId, table.createdAt),
   ],
 );
+
+/** Tracks subscription seats held by Superset ChatV3 turns across web workers. */
+export const gen2SupersetTurnLeases = pgTable(
+  "gen2_superset_turn_leases",
+  {
+    sessionId: uuid("session_id").primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .references(() => gen2Workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    userId: uuid("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    credentialId: uuid("credential_id")
+      .references(() => providerCredentials.id, { onDelete: "cascade" })
+      .notNull(),
+    commandId: uuid("command_id").notNull(),
+    active: boolean("active").default(true).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    index("gen2_superset_turn_leases_user_idx").on(table.userId, table.active),
+  ],
+);

@@ -646,6 +646,40 @@ impl GuestService {
                     &[],
                 )
             }
+            ("POST", "session/create")
+            | ("POST", "session/list")
+            | ("POST", "session/get")
+            | ("POST", "session/events")
+            | ("POST", "session/auth")
+            | ("POST", "session/prompt")
+            | ("POST", "session/cancel")
+            | ("POST", "session/approve") => {
+                let valid_id = |key: &str| {
+                    request
+                        .get(key)
+                        .and_then(serde_json::Value::as_str)
+                        .map(|value| {
+                            value.len() == 36
+                                && value.chars().enumerate().all(|(index, ch)| {
+                                    if matches!(index, 8 | 13 | 18 | 23) {
+                                        ch == '-'
+                                    } else {
+                                        ch.is_ascii_hexdigit()
+                                    }
+                                })
+                        })
+                        .unwrap_or(false)
+                };
+                if !valid_id("memberId") {
+                    return GuestResponse::error(400, "invalid member ID");
+                }
+                if !matches!(operation, "session/create" | "session/list") && !valid_id("sessionId")
+                {
+                    return GuestResponse::error(400, "invalid session ID");
+                }
+                let action = operation.strip_prefix("session/").expect("session action");
+                self.superset_bridge_request("POST", &format!("/codev/session/{action}"), body)
+            }
             _ => GuestResponse::error(400, "invalid Superset runtime operation"),
         }
     }
