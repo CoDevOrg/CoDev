@@ -690,7 +690,7 @@ export class CodexAdapter implements HarnessAdapter {
 				completedAtMs: this.now(),
 				...(text ? { text } : {}),
 			},
-			this.currentTurn?.id ?? "",
+			this.currentTurn?.id ?? this.mintId(),
 		);
 	}
 

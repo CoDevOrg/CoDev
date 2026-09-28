@@ -87,6 +87,64 @@ function notices(events: AdapterEvent[]): Notice[] {
 }
 
 describe("codex adapter resilience", () => {
+	test("a startup error notice always has a valid turn id", async () => {
+		const events: AdapterEvent[] = [];
+		let handlers: CodexTransportHandlers | null = null;
+		const adapter = new CodexAdapter({
+			mintId: () => "startup-notice-turn",
+			createTransport: (_options, transportHandlers) => {
+				handlers = transportHandlers;
+				return {
+					send: (line) => {
+						const frame = JSON.parse(line) as {
+							id?: number;
+							method?: string;
+						};
+						if (frame.method === "initialize") {
+							handlers?.onLine(
+								JSON.stringify({
+									id: frame.id,
+									result: {
+										userAgent: "superset-chat-runtime/0.143.0 (Mac OS)",
+									},
+								}),
+							);
+							return;
+						}
+						if (frame.method === "thread/start") {
+							handlers?.onLine(
+								JSON.stringify({
+									id: frame.id,
+									error: { code: -32000, message: "Codex failed to start." },
+								}),
+							);
+						}
+					},
+					close: async () => undefined,
+				};
+			},
+		});
+
+		const pump = (async () => {
+			for await (const event of adapter.start({ cwd: "/tmp/workspace" })) {
+				events.push(event);
+			}
+		})();
+		await pump;
+
+		const noticeEvent = events.find(
+			(event) => event.kind === "item" && event.item.kind === "notice",
+		);
+		expect(noticeEvent).toMatchObject({
+			kind: "item",
+			turnId: "startup-notice-turn",
+			item: {
+				noticeKind: "error",
+				text: "thread/start: Codex failed to start.",
+			},
+		});
+	});
+
 	test("an unreadable notification becomes a notice, not a thrown frame", async () => {
 		const harness = startAdapter();
 		await harness.settle();
