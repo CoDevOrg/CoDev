@@ -50,6 +50,7 @@ export function buildBlankSandboxSource() {
       totalBytes: Buffer.byteLength(BLANK_README),
     },
     baseSha: GEN2_BLANK_BASE_SHA,
+    baseBranch: "main",
   };
 }
 
@@ -93,7 +94,11 @@ export function describeGen2RuntimeFailure(error: unknown): string {
  */
 export async function buildGen2SandboxSource(
   userId: string,
-  repository: { fullName: string; private: boolean } | null,
+  repository: {
+    fullName: string;
+    private: boolean;
+    defaultBranch: string;
+  } | null,
   baseSha: string | null,
 ) {
   if (!repository || !baseSha) return buildBlankSandboxSource();
@@ -101,6 +106,7 @@ export async function buildGen2SandboxSource(
     return {
       repositoryUrl: `https://github.com/${repository.fullName}.git`,
       baseSha,
+      baseBranch: repository.defaultBranch,
     };
   }
   return {
@@ -111,6 +117,7 @@ export async function buildGen2SandboxSource(
       baseSha,
     ),
     baseSha,
+    baseBranch: repository.defaultBranch,
   };
 }
 

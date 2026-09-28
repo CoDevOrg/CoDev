@@ -1300,6 +1300,7 @@ mod tests {
             repository_url: Some("https://github.com/yousef20920/CoDev.git".into()),
             repository_snapshot: None,
             base_sha: "fc1ba2947ffdaf8c1961e5342387e1079afface6".into(),
+            base_branch: Some("main".into()),
             expires_at: Utc::now() + Duration::hours(1),
             resume_from_snapshot: false,
             persistent_disk_lun: None,

@@ -245,14 +245,15 @@ cp -a "/usr/lib/${guest_lib_dir}/." \
   "${work_dir}/rootfs/usr/lib/${guest_lib_dir}/" 2>/dev/null || true
 install -d -m 0755 "${work_dir}/rootfs/workspace"
 install -d -m 0755 "${work_dir}/rootfs/etc/systemd/system/multi-user.target.wants"
-
-# The interactive shell is unprivileged while CoDev assembles the checkout as
-# root. Trust this checkout and its managed worktrees without making every
-# path trusted for a terminal user.
+install -d -m 0700 -o 2000 -g 2000 "${work_dir}/rootfs/var/lib/codev-shell/config"
+install -d -m 0700 -o 2000 -g 2000 "${work_dir}/rootfs/var/lib/codev-shell/cache"
+printf 'lost+found/\n' >"${work_dir}/rootfs/etc/gitignore-codev"
 cat >>"${work_dir}/rootfs/etc/gitconfig" <<'GITCONFIG'
 [safe]
 	directory = /workspace
 	directory = /workspace/*
+[core]
+	excludesFile = /etc/gitignore-codev
 GITCONFIG
 
 cat >"${work_dir}/rootfs/etc/systemd/system/workspace.mount" <<'UNIT'
@@ -336,7 +337,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
-ReadWritePaths=/workspace /var/lib/codev-superset
+ReadWritePaths=/workspace /var/lib/codev-superset /var/lib/codev-shell
 TasksMax=256
 
 [Install]

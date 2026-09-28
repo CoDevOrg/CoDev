@@ -12,6 +12,8 @@ export interface ProvisionSandboxInput {
   repositoryUrl: string | null;
   repositorySnapshot?: RepositorySnapshot;
   baseSha: string;
+  /** Named branch to check out at the supplied base commit. */
+  baseBranch?: string;
   expiresAt: string;
   resumeFromSnapshot: boolean;
   /** Azure managed-disk LUN carrying the workspace.ext4 image, when enabled. */

@@ -81,6 +81,9 @@ pub struct CreateRequest {
     pub repository_url: Option<String>,
     pub repository_snapshot: Option<RepositorySnapshot>,
     pub base_sha: String,
+    /// Named branch for the primary checkout at `base_sha`.
+    #[serde(default)]
+    pub base_branch: Option<String>,
     pub expires_at: DateTime<Utc>,
     #[serde(default)]
     pub resume_from_snapshot: bool,

@@ -1787,19 +1787,32 @@ impl FirecrackerBackend {
                     .arg(&request.base_sha);
                 run_command(fetch, "fetch repository revision").await?;
                 let mut checkout = Command::new("git");
-                checkout.arg("-C").arg(&repository).args([
-                    "checkout",
-                    "--quiet",
-                    "--detach",
-                    "FETCH_HEAD",
-                ]);
+                checkout
+                    .arg("-C")
+                    .arg(&repository)
+                    .args(["checkout", "--quiet"]);
+                if let Some(base_branch) = request.base_branch.as_deref() {
+                    checkout.args(["-B", base_branch]);
+                } else {
+                    checkout.arg("--detach");
+                }
+                checkout.arg("FETCH_HEAD");
                 run_command(checkout, "checkout repository revision").await?;
                 request.base_sha.clone()
             } else {
                 let snapshot = request.repository_snapshot.as_ref().ok_or_else(|| {
                     RuntimeError::BadRequest("repository snapshot is required".into())
                 })?;
-                materialize_snapshot(&repository, snapshot).await?
+                let head_sha = materialize_snapshot(&repository, snapshot).await?;
+                if let Some(base_branch) = request.base_branch.as_deref() {
+                    let mut branch = Command::new("git");
+                    branch
+                        .arg("-C")
+                        .arg(&repository)
+                        .args(["branch", "--quiet", "-M", base_branch]);
+                    run_command(branch, "name snapshot branch").await?;
+                }
+                head_sha
             };
 
             let mut truncate = Command::new("truncate");

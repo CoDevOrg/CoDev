@@ -732,14 +732,19 @@ if ! grep -q '^codev-shell:' "${work_dir}/rootfs/etc/shadow"; then
   echo 'codev-shell:!:20000::::::' >>"${work_dir}/rootfs/etc/shadow"
 fi
 
-# Interactive terminals intentionally run as codev-shell while the checkout is
-# assembled by root. Trust only this workspace and its managed worktrees at the
-# protected system-config scope; a shell user must not have to weaken Git's
-# ownership protection with a global wildcard before `git status` can work.
+# Terminal shells cannot use the Superset host service's private HOME after
+# dropping to codev-shell. Keep their tool state off the repository and out of
+# the host-service account, which avoids Git warnings and accidental untracked
+# configuration files.
+install -d -m 0700 -o 2000 -g 2000 "${work_dir}/rootfs/var/lib/codev-shell/config"
+install -d -m 0700 -o 2000 -g 2000 "${work_dir}/rootfs/var/lib/codev-shell/cache"
+printf 'lost+found/\n' >"${work_dir}/rootfs/etc/gitignore-codev"
 cat >>"${work_dir}/rootfs/etc/gitconfig" <<'GITCONFIG'
 [safe]
 	directory = /workspace
 	directory = /workspace/*
+[core]
+	excludesFile = /etc/gitignore-codev
 GITCONFIG
 
 cat >"${work_dir}/rootfs/etc/systemd/system/workspace.mount" <<'UNIT'
@@ -831,7 +836,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
-ReadWritePaths=/workspace /var/lib/codev-superset
+ReadWritePaths=/workspace /var/lib/codev-superset /var/lib/codev-shell
 TasksMax=256
 
 [Install]

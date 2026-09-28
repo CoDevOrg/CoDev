@@ -13,6 +13,7 @@ describe("gen2 Firecracker instance policy", () => {
     const source = buildBlankSandboxSource();
     expect(source.repositoryUrl).toBeNull();
     expect(source.baseSha).toBe(GEN2_BLANK_BASE_SHA);
+    expect(source.baseBranch).toBe("main");
     expect(source.baseSha).toHaveLength(40);
     expect(source.repositorySnapshot.files).toEqual([
       expect.objectContaining({ path: "README.md", mode: "100644" }),

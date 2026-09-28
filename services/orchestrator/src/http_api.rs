@@ -1199,6 +1199,14 @@ fn validate_create(request: &CreateRequest) -> Result<()> {
     if !commit_sha_pattern().is_match(&request.base_sha) {
         return Err(RuntimeError::BadRequest("invalid base SHA".into()));
     }
+    if let Some(branch) = &request.base_branch
+        && (!branch_name_pattern().is_match(branch)
+            || branch.contains("..")
+            || branch.ends_with('/')
+            || branch.ends_with('.'))
+    {
+        return Err(RuntimeError::BadRequest("invalid base branch".into()));
+    }
     if request.repository_url.is_some() == request.repository_snapshot.is_some() {
         return Err(RuntimeError::BadRequest(
             "provide exactly one repository source".into(),
@@ -1362,6 +1370,13 @@ fn commit_sha_pattern() -> &'static Regex {
     PATTERN.get_or_init(|| Regex::new(r"^[0-9a-f]{40}$").expect("commit regex"))
 }
 
+fn branch_name_pattern() -> &'static Regex {
+    static PATTERN: OnceLock<Regex> = OnceLock::new();
+    PATTERN.get_or_init(|| {
+        Regex::new(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,255}$").expect("branch regex")
+    })
+}
+
 fn terminal_id_pattern() -> &'static Regex {
     static PATTERN: OnceLock<Regex> = OnceLock::new();
     PATTERN.get_or_init(|| Regex::new(r"^term-[0-9]+-[0-9]+$").expect("terminal regex"))
@@ -1422,6 +1437,7 @@ mod tests {
                 total_bytes: 9,
             }),
             base_sha: "fc1ba2947ffdaf8c1961e5342387e1079afface6".into(),
+            base_branch: Some("main".into()),
             expires_at: Utc::now() + Duration::hours(1),
             resume_from_snapshot: false,
             persistent_disk_lun: None,
@@ -1438,6 +1454,10 @@ mod tests {
         let mut lifecycle_request = request.clone();
         lifecycle_request.lifecycle.lifecycle.auto_resume = false;
         assert!(validate_create(&lifecycle_request).is_err());
+
+        let mut invalid_branch_request = request.clone();
+        invalid_branch_request.base_branch = Some("../outside".into());
+        assert!(validate_create(&invalid_branch_request).is_err());
 
         let missing_lifecycle = serde_json::json!({
             "workspaceId": "e010bd2c-a3c1-438f-acef-166287a3b1cb",
