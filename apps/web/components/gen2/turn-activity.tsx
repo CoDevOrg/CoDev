@@ -45,8 +45,16 @@ export function Gen2TurnActivity({
 
   useEffect(() => {
     if (visible.length === 0) {
+      // No items left to show: reset so a fresh set of items later starts
+      // its own clean timer instead of inheriting a stale elapsed/open
+      // state. This subsumed a second, fully redundant effect that only
+      // ever fired on this same `visible.length === 0` transition.
       startedAt.current = null;
+      // Resets the wall-clock timer this effect owns when items disappear --
+      // not state derivable from props/state alone.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setElapsed(0);
+      setOpen(false);
       return;
     }
     startedAt.current ??= Date.now();
@@ -69,13 +77,6 @@ export function Gen2TurnActivity({
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
   }, [visible.length, active]);
-
-  useEffect(() => {
-    if (visible.length === 0) {
-      setOpen(false);
-      startedAt.current = null;
-    }
-  }, [visible.length]);
 
   if (visible.length === 0) return null;
 
