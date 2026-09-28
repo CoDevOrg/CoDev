@@ -64,6 +64,15 @@ const NOTICE_METHODS: Record<string, "info" | "error" | "config_change"> = {
 	"model/verification": "info",
 };
 
+const NOTICE_FALLBACKS: Record<string, string> = {
+	warning: "Codex reported a warning.",
+	configWarning: "Codex reported a configuration warning.",
+	guardianWarning: "Codex reported a safety warning.",
+	deprecationNotice: "Codex reported a deprecation notice.",
+	"model/rerouted": "Codex switched models.",
+	"model/verification": "Codex reported a model verification notice.",
+};
+
 const IGNORED_METHODS = new Set([
 	"thread/started",
 	"turn/diff/updated",
@@ -428,7 +437,9 @@ export class CodexAdapter implements HarnessAdapter {
 			const parsed = warningNotificationSchema.safeParse(params);
 			this.emitNotice(
 				noticeKind,
-				parsed.success ? parsed.data.message : method,
+				parsed.success
+					? parsed.data.message
+					: (NOTICE_FALLBACKS[method] ?? "Codex reported a notice."),
 			);
 			return;
 		}

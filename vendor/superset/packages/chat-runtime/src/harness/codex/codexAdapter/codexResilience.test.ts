@@ -87,6 +87,23 @@ function notices(events: AdapterEvent[]): Notice[] {
 }
 
 describe("codex adapter resilience", () => {
+	test("a config warning without a message gets readable fallback text", async () => {
+		const harness = startAdapter();
+		await harness.settle();
+
+		harness.receive({
+			method: "configWarning",
+			params: { threadId: THREAD_ID },
+		});
+		await harness.settle();
+
+		expect(notices(harness.events).at(-1)).toMatchObject({
+			noticeKind: "info",
+			text: "Codex reported a configuration warning.",
+		});
+		await harness.adapter.dispose();
+	});
+
 	test("an app-server exit includes a bounded, redacted diagnostic", async () => {
 		const events: AdapterEvent[] = [];
 		const transport = { handlers: null as CodexTransportHandlers | null };
