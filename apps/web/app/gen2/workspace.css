@@ -1098,7 +1098,10 @@
   --ss-muted: #2a2827;
   --ss-muted-foreground: #a8a5a3;
   --ss-border: #2a2827;
-  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  min-height: 0;
   background: var(--ss-background);
   color: var(--ss-foreground);
   font-family: var(--font-geist-sans), Arial, sans-serif;
@@ -1203,12 +1206,20 @@
   font-size: 0.8125rem;
 }
 
+.gen2-superset-workspace-content {
+  flex: 1;
+  min-height: 0;
+}
+
 .gen2-superset-files-panel .gen2-superset-file-pane {
-  min-height: calc(100dvh - 48px);
+  height: 100%;
+  min-height: 0;
 }
 
 .gen2-superset-tool-panel {
-  min-height: calc(100dvh - 48px);
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 0;
   padding: 16px;
   background: var(--ss-background);
 }

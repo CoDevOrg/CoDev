@@ -32,6 +32,7 @@ export function Gen2TerminalPane({
   const fitRef = useRef<FitAddon | null>(null);
   const sessionRef = useRef<string | null>(null);
   const afterRef = useRef(0);
+  const dimensionsRef = useRef("");
   const [status, setStatus] = useState<"idle" | "starting" | "live" | "ended">(
     "idle",
   );
@@ -80,6 +81,7 @@ export function Gen2TerminalPane({
     term.loadAddon(fit);
     term.open(host);
     if (host.clientWidth > 0 && host.clientHeight > 0) fit.fit();
+    dimensionsRef.current = `${term.rows}:${term.cols}`;
     termRef.current = term;
     fitRef.current = fit;
 
@@ -170,6 +172,12 @@ export function Gen2TerminalPane({
             onExit();
             return;
           }
+          // The legacy guest endpoint parks this request, while the Superset
+          // bridge returns an immediate snapshot. Yield between idle snapshots
+          // so an open shell cannot turn into a tight browser request loop.
+          if (result.chunks.length === 0) {
+            await new Promise((resolve) => setTimeout(resolve, 150));
+          }
         } catch {
           if (cancelled) return;
           networkFailures += 1;
@@ -203,6 +211,9 @@ export function Gen2TerminalPane({
         // A hidden pane measures zero; fitting against that throws.
         if (host.clientWidth === 0 || host.clientHeight === 0) return;
         fitRef.current?.fit();
+        const dimensions = `${term.rows}:${term.cols}`;
+        if (dimensions === dimensionsRef.current) return;
+        dimensionsRef.current = dimensions;
         void post({
           action: "resize",
           sessionId,
