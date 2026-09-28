@@ -36,6 +36,7 @@ import {
   deleteSupersetEntry,
   moveSupersetEntry,
   SupersetFileApiError,
+  DEFAULT_SUPERSET_WORKTREE_ID,
 } from "./superset-file-client";
 import { useGen2SharedFileDocument } from "./use-gen2-shared-file-document";
 
@@ -105,9 +106,13 @@ function errorMessage(error: unknown, fallback: string) {
 export function SupersetFilePane({
   workspaceId,
   canEdit,
+  worktreeId = DEFAULT_SUPERSET_WORKTREE_ID,
+  onDirtyChange,
 }: {
   workspaceId: string;
   canEdit: boolean;
+  worktreeId?: string;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const [files, setFiles] = useState<Gen2SupersetEntry[]>([]);
   const [openFile, setOpenFile] = useState<Gen2SupersetFile | null>(null);
@@ -148,6 +153,7 @@ export function SupersetFilePane({
   const dirty = openFile !== null && contents !== openFile.contents;
   const sharedDocument = useGen2SharedFileDocument({
     workspaceId,
+    worktreeId,
     path: openFile?.path ?? null,
     canEdit,
     onContentsChange: (next) => {
@@ -169,6 +175,11 @@ export function SupersetFilePane({
   }, [dirty]);
 
   useEffect(() => {
+    onDirtyChange?.(dirty);
+    return () => onDirtyChange?.(false);
+  }, [dirty, onDirtyChange]);
+
+  useEffect(() => {
     if (!deleteEntry) return;
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !deleting) setDeleteEntry(null);
@@ -182,7 +193,12 @@ export function SupersetFilePane({
       const requestId = ++openRequestId.current;
       setOpeningPath(path);
       try {
-        const file = await readSupersetFile(workspaceId, path, signal);
+        const file = await readSupersetFile(
+          workspaceId,
+          worktreeId,
+          path,
+          signal,
+        );
         if (signal?.aborted || requestId !== openRequestId.current) return;
         openFileRef.current = file;
         contentsRef.current = file.contents;
@@ -211,7 +227,7 @@ export function SupersetFilePane({
         }
       }
     },
-    [workspaceId],
+    [workspaceId, worktreeId],
   );
 
   const refreshFiles = useCallback(
@@ -219,7 +235,11 @@ export function SupersetFilePane({
       const requestId = ++listRequestId.current;
       if (!quiet) setLoadingFiles(true);
       try {
-        const nextFiles = await listSupersetFiles(workspaceId, signal);
+        const nextFiles = await listSupersetFiles(
+          workspaceId,
+          worktreeId,
+          signal,
+        );
         if (signal?.aborted || requestId !== listRequestId.current) return;
         setFiles(nextFiles);
         if (selectFirst && !openFileRef.current && nextFiles.length > 0) {
@@ -258,7 +278,7 @@ export function SupersetFilePane({
         }
       }
     },
-    [workspaceId, openPath],
+    [workspaceId, worktreeId, openPath],
   );
 
   useEffect(() => {
@@ -285,7 +305,12 @@ export function SupersetFilePane({
     setSaving(true);
     setNotice(null);
     try {
-      const saved = await saveSupersetFile(workspaceId, file, draft);
+      const saved = await saveSupersetFile(
+        workspaceId,
+        worktreeId,
+        file,
+        draft,
+      );
       const editedDuringSave = contentsRef.current !== draft;
       openFileRef.current = saved;
       setOpenFile(saved);
@@ -337,7 +362,7 @@ export function SupersetFilePane({
     setCreating(true);
     setNotice(null);
     try {
-      const entry = await createSupersetEntry(workspaceId, {
+      const entry = await createSupersetEntry(workspaceId, worktreeId, {
         parentPath: createParentPath,
         name,
         kind,
@@ -401,7 +426,7 @@ export function SupersetFilePane({
     setRenaming(true);
     setNotice(null);
     try {
-      const moved = await moveSupersetEntry(workspaceId, {
+      const moved = await moveSupersetEntry(workspaceId, worktreeId, {
         path: entry.path,
         parentPath: parentPath(entry.path),
         name,
@@ -453,7 +478,7 @@ export function SupersetFilePane({
     setDeleting(true);
     setNotice(null);
     try {
-      await deleteSupersetEntry(workspaceId, entry.path);
+      await deleteSupersetEntry(workspaceId, worktreeId, entry.path);
       const current = openFileRef.current;
       if (current && isPathOrDescendant(current.path, entry.path)) {
         openFileRef.current = null;

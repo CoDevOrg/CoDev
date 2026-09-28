@@ -6,7 +6,7 @@ import {
   reconcileGen2Document,
 } from "./collaboration-documents";
 
-/** Redis room namespace; unlike Gen 1 it never identifies a worktree. */
+/** One workspace room carries events for all worktrees; fan-out filters them. */
 export function gen2CollaborationRoom(workspaceId: string) {
   return `gen2:${workspaceId}`;
 }
@@ -19,10 +19,16 @@ export function gen2CollaborationRoom(workspaceId: string) {
 export async function reconcileGen2CollaborationPaths(input: {
   workspaceId: string;
   userId: string;
+  worktreeId?: string;
   paths: string[];
 }) {
+  const worktreeId = input.worktreeId ?? "main";
   for (const path of [...new Set(input.paths)]) {
-    const snapshot = await loadGen2Document(input.workspaceId, path);
+    const snapshot = await loadGen2Document(
+      input.workspaceId,
+      worktreeId,
+      path,
+    );
     if (!snapshot) continue;
     const result = await reconcileGen2Document(
       input.workspaceId,
@@ -33,10 +39,7 @@ export async function reconcileGen2CollaborationPaths(input: {
     if (result.event.type === "reconciled") {
       await publish(gen2CollaborationRoom(input.workspaceId), {
         type: "reconciled",
-        // The shared collaboration wire format predates Gen 2. This carries
-        // the workspace ID solely for per-document event filtering; it is not
-        // looked up as a Gen 1 worktree.
-        worktreeId: input.workspaceId,
+        worktreeId,
         path: result.event.path,
         revision: result.event.revision,
         source: "filesystem",
@@ -45,7 +48,7 @@ export async function reconcileGen2CollaborationPaths(input: {
     } else {
       await publish(gen2CollaborationRoom(input.workspaceId), {
         type: "conflict",
-        worktreeId: input.workspaceId,
+        worktreeId,
         path: result.event.path,
         snapshotRevision: result.event.snapshotRevision,
         filesystemRevision: result.event.filesystemRevision,

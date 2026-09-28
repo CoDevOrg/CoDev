@@ -39,43 +39,29 @@ export function Gen2TurnActivity({
   );
   const itemRunning = visible.some((item) => item.status === "running");
   const active = live || itemRunning;
-  const [open, setOpen] = useState(active);
+  const [openOverride, setOpenOverride] = useState<{
+    active: boolean;
+    value: boolean;
+  } | null>(null);
+  const open = openOverride?.active === active ? openOverride.value : active;
   const [elapsed, setElapsed] = useState(0);
   const startedAt = useRef<number | null>(null);
 
   useEffect(() => {
     if (visible.length === 0) {
       startedAt.current = null;
-      setElapsed(0);
       return;
     }
     startedAt.current ??= Date.now();
-    if (!active) {
+    if (!active) return;
+    const id = window.setInterval(() => {
+      if (startedAt.current === null) return;
       setElapsed(
         Math.max(0, Math.round((Date.now() - startedAt.current) / 1000)),
       );
-      // Done turns collapse to the Cursor-style summary line.
-      setOpen(false);
-      return;
-    }
-    setOpen(true);
-    const tick = () => {
-      if (startedAt.current == null) return;
-      setElapsed(
-        Math.max(0, Math.round((Date.now() - startedAt.current) / 1000)),
-      );
-    };
-    tick();
-    const id = window.setInterval(tick, 1000);
+    }, 1000);
     return () => window.clearInterval(id);
   }, [visible.length, active]);
-
-  useEffect(() => {
-    if (visible.length === 0) {
-      setOpen(false);
-      startedAt.current = null;
-    }
-  }, [visible.length]);
 
   if (visible.length === 0) return null;
 
@@ -91,7 +77,7 @@ export function Gen2TurnActivity({
         type="button"
         className="gen2-steps-summary"
         aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => setOpenOverride({ active, value: !open })}
       >
         <span>{summary}</span>
         <ChevronRight

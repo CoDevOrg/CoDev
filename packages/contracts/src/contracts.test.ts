@@ -329,6 +329,13 @@ describe("collaboration contracts", () => {
   it("accepts document subscriptions and bounded Yjs updates", () => {
     expect(
       collaborationClientMessageSchema.parse({
+        type: "join",
+        worktreeId: "feature-auth",
+      }),
+    ).toMatchObject({ type: "join", worktreeId: "feature-auth" });
+
+    expect(
+      collaborationClientMessageSchema.parse({
         type: "subscribe",
         path: "src/index.ts",
         stateVector: "AQID",

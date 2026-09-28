@@ -51,6 +51,7 @@ export type Gen2DocumentConnectionState =
  */
 export function useGen2SharedFileDocument(input: {
   workspaceId: string;
+  worktreeId: string;
   path: string | null;
   canEdit: boolean;
   onContentsChange: (contents: string) => void;
@@ -88,6 +89,7 @@ export function useGen2SharedFileDocument(input: {
     const nextText = doc.getText("content");
     const nextAwareness = new Awareness(doc);
     const path = input.path;
+    const worktreeId = input.worktreeId;
     syncedRef.current = false;
     setText(nextText);
     setAwareness(nextAwareness);
@@ -132,7 +134,7 @@ export function useGen2SharedFileDocument(input: {
       setState(syncedRef.current ? "syncing" : "connecting");
       const socket = new WebSocket(socketUrl(input.workspaceId));
       socketRef.current = socket;
-      socket.onopen = () => send({ type: "join" });
+      socket.onopen = () => send({ type: "join", worktreeId });
       socket.onmessage = (event) => {
         if (typeof event.data !== "string") return;
         let payload: unknown;
@@ -152,22 +154,43 @@ export function useGen2SharedFileDocument(input: {
           syncedRef.current = true;
           setState("connected");
           setNotice(null);
-        } else if (message.type === "update" && message.path === path) {
+        } else if (
+          message.type === "update" &&
+          message.worktreeId === worktreeId &&
+          message.path === path
+        ) {
           Y.applyUpdate(doc, decodeBase64(message.update), REMOTE_ORIGIN);
-        } else if (message.type === "awareness" && message.path === path) {
+        } else if (
+          message.type === "awareness" &&
+          message.worktreeId === worktreeId &&
+          message.path === path
+        ) {
           applyAwarenessUpdate(
             nextAwareness,
             decodeBase64(message.update),
             REMOTE_ORIGIN,
           );
         } else if (message.type === "presence") {
-          setMembers(message.members.filter((member) => member.path === path));
-        } else if (message.type === "reconciled" && message.path === path) {
+          setMembers(
+            message.members.filter(
+              (member) =>
+                member.worktreeId === worktreeId && member.path === path,
+            ),
+          );
+        } else if (
+          message.type === "reconciled" &&
+          message.worktreeId === worktreeId &&
+          message.path === path
+        ) {
           if (message.update) {
             Y.applyUpdate(doc, decodeBase64(message.update), REMOTE_ORIGIN);
           }
           setNotice("An agent updated this file from the workspace.");
-        } else if (message.type === "conflict" && message.path === path) {
+        } else if (
+          message.type === "conflict" &&
+          message.worktreeId === worktreeId &&
+          message.path === path
+        ) {
           setState("conflict");
           setNotice(message.message);
         } else if (
@@ -200,7 +223,7 @@ export function useGen2SharedFileDocument(input: {
       doc.destroy();
     };
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [input.workspaceId, input.path]);
+  }, [input.workspaceId, input.worktreeId, input.path]);
 
   const updateCursor = useCallback(
     (cursor: { anchor: number; head: number } | null) => {
