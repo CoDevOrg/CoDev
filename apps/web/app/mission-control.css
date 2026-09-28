@@ -6,14 +6,14 @@
  */
 
 .mc-root {
-  --mc-line: rgba(14, 47, 126, 0.14);
-  --mc-line-lit: rgba(27, 99, 179, 0.34);
-  --mc-panel: rgba(255, 253, 247, 0.72);
-  --mc-panel-lit: rgba(255, 253, 247, 0.92);
+  --mc-line: rgba(var(--ink-rgb, 14, 47, 126), 0.14);
+  --mc-line-lit: rgba(var(--accent-rgb, 27, 99, 179), 0.34);
+  --mc-panel: rgba(var(--paper-rgb, 255, 253, 247), 0.72);
+  --mc-panel-lit: rgba(var(--paper-rgb, 255, 253, 247), 0.92);
   --mc-ink: var(--codev-beige-100, #0e2f7e);
   --mc-muted: var(--codev-stone-300, #5a73a8);
   --mc-orange: var(--codev-gold-500, #1b63b3);
-  --mc-green: #2a6d62;
+  --mc-green: var(--codev-teal, #2a6d62);
   --mc-amber: #86590b;
 
   min-height: 100vh;
@@ -22,7 +22,7 @@
   background:
     radial-gradient(
       1100px 620px at 12% -8%,
-      rgba(27, 99, 179, 0.12),
+      rgba(var(--accent-rgb), 0.12),
       transparent 62%
     ),
     radial-gradient(
@@ -63,16 +63,16 @@
   height: 7px;
   border-radius: 50%;
   background: var(--mc-orange);
-  box-shadow: 0 0 0 0 rgba(27, 99, 179, 0.6);
+  box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0.6);
   animation: mc-pulse 2s infinite;
 }
 
 @keyframes mc-pulse {
   70% {
-    box-shadow: 0 0 0 9px rgba(27, 99, 179, 0);
+    box-shadow: 0 0 0 9px rgba(var(--accent-rgb), 0);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(27, 99, 179, 0);
+    box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0);
   }
 }
 
@@ -142,7 +142,7 @@
   font-weight: 700;
   letter-spacing: 0.02em;
   color: #fff;
-  border: 1.5px solid rgba(255, 253, 247, 0.9);
+  border: 1.5px solid rgba(var(--paper-rgb), 0.9);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
@@ -255,8 +255,8 @@
 .mc-phase-editing,
 .mc-phase-planning {
   color: var(--mc-orange);
-  background: rgba(27, 99, 179, 0.13);
-  border-color: rgba(27, 99, 179, 0.3);
+  background: rgba(var(--accent-rgb), 0.13);
+  border-color: rgba(var(--accent-rgb), 0.3);
 }
 
 .mc-phase-editing .mc-phase-dot,
@@ -305,7 +305,7 @@
   margin: 0;
   padding: 10px 11px;
   border-radius: 10px;
-  background: rgba(255, 253, 247, 0.72);
+  background: rgba(var(--paper-rgb), 0.72);
   border: 1px solid var(--mc-line);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
@@ -375,7 +375,7 @@
   height: 3px;
   flex: 1;
   border-radius: 2px;
-  background: rgba(14, 47, 126, 0.12);
+  background: rgba(var(--ink-rgb), 0.12);
 }
 
 .mc-progress-seg.is-done {
@@ -450,7 +450,7 @@
 
 .mc-provider-claude {
   color: #e8a882;
-  background: rgba(27, 99, 179, 0.16);
+  background: rgba(var(--accent-rgb), 0.16);
 }
 
 .mc-provider-codex {
@@ -506,7 +506,7 @@
   padding: 7px 15px;
   border-radius: 8px;
   border: 1px solid var(--mc-line-lit);
-  background: rgba(27, 99, 179, 0.14);
+  background: rgba(var(--accent-rgb), 0.14);
   color: #f0c3a4;
   font-size: 12.5px;
   font-weight: 650;
@@ -518,7 +518,7 @@
 
 .mc-step-in:hover {
   background: var(--mc-orange);
-  color: #f7f3e8;
+  color: var(--codev-on-gold);
 }
 
 /* ---------- drawer ---------- */
@@ -526,6 +526,8 @@
 .mc-scrim {
   position: fixed;
   inset: 0;
+  /* A dimming scrim, not an ink wash -- stays dark in both themes rather
+     than flipping to a light glow when --ink-rgb becomes cream. */
   background: rgba(14, 47, 126, 0.45);
   backdrop-filter: blur(2px);
   z-index: 40;
@@ -657,7 +659,7 @@
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  border: 1.5px solid rgba(14, 47, 126, 0.24);
+  border: 1.5px solid rgba(var(--ink-rgb), 0.24);
   flex: none;
 }
 
@@ -697,7 +699,7 @@
   gap: 12px;
   padding: 8px 11px;
   border-radius: 9px;
-  background: rgba(255, 253, 247, 0.7);
+  background: rgba(var(--paper-rgb), 0.7);
   border: 1px solid var(--mc-line);
   font-size: 12px;
 }
@@ -747,7 +749,7 @@
   gap: 7px;
   padding: 12px 12px 14px;
   border-radius: 11px;
-  background: rgba(14, 47, 126, 0.45);
+  background: rgba(var(--ink-rgb), 0.45);
   scroll-behavior: smooth;
   border: 1px solid var(--mc-line);
   scrollbar-width: thin;
@@ -789,7 +791,7 @@
 .mc-log-line.is-steer .mc-log-text {
   padding: 3px 8px;
   border-radius: 6px;
-  background: rgba(27, 99, 179, 0.15);
+  background: rgba(var(--accent-rgb), 0.15);
 }
 
 .mc-log-line.is-warn {
@@ -849,7 +851,7 @@
   padding: 11px 13px;
   border-radius: 10px;
   border: 1px solid var(--mc-line-lit);
-  background: rgba(255, 253, 247, 0.88);
+  background: rgba(var(--paper-rgb), 0.88);
   color: var(--mc-ink);
   font-size: 13.5px;
   outline: none;
@@ -861,7 +863,7 @@
 
 .mc-steer-input:focus {
   border-color: var(--mc-orange);
-  box-shadow: 0 0 0 3px rgba(27, 99, 179, 0.16);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.16);
 }
 
 .mc-steer-send,
@@ -877,7 +879,7 @@
 
 .mc-steer-send {
   background: var(--mc-orange);
-  color: #f7f3e8;
+  color: var(--codev-on-gold);
 }
 
 .mc-steer-send:disabled {

@@ -66,7 +66,67 @@
     color: var(--color-foreground);
     font-family: var(--font-sans);
   }
+}
 
+/* Dark-mode override. Left outside @theme deliberately -- @theme registers
+   design tokens at build time, but a conditional override is just a normal
+   custom-property cascade, so it's written as a plain rule that redeclares
+   the same --color-* names on the same selector, later in source order. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .orca-settings-scope {
+    color-scheme: dark;
+    --color-background: #070c1a;
+    --color-foreground: #f2e9d6;
+    --color-card: #0b1226;
+    --color-card-foreground: #f2e9d6;
+    --color-primary: #3d8fe0;
+    --color-primary-foreground: #070c1a;
+    --color-secondary: #101a35;
+    --color-secondary-foreground: #f2e9d6;
+    --color-muted: #101a35;
+    --color-muted-foreground: #96918a;
+    --color-accent: #172244;
+    --color-accent-foreground: #f2e9d6;
+    --color-destructive: #e0574a;
+    --color-border: rgb(242 233 214 / 0.16);
+    --color-input: rgb(242 233 214 / 0.24);
+    --color-ring: #3d8fe0;
+    --color-worktree-sidebar: #0b1226;
+    --color-worktree-sidebar-foreground: #f2e9d6;
+    --color-worktree-sidebar-accent: #101a35;
+    --color-worktree-sidebar-accent-foreground: #f2e9d6;
+    --color-worktree-sidebar-border: rgb(242 233 214 / 0.16);
+    --color-worktree-sidebar-ring: #3d8fe0;
+  }
+}
+
+[data-theme="dark"] .orca-settings-scope {
+  color-scheme: dark;
+  --color-background: #070c1a;
+  --color-foreground: #f2e9d6;
+  --color-card: #0b1226;
+  --color-card-foreground: #f2e9d6;
+  --color-primary: #3d8fe0;
+  --color-primary-foreground: #070c1a;
+  --color-secondary: #101a35;
+  --color-secondary-foreground: #f2e9d6;
+  --color-muted: #101a35;
+  --color-muted-foreground: #96918a;
+  --color-accent: #172244;
+  --color-accent-foreground: #f2e9d6;
+  --color-destructive: #e0574a;
+  --color-border: rgb(242 233 214 / 0.16);
+  --color-input: rgb(242 233 214 / 0.24);
+  --color-ring: #3d8fe0;
+  --color-worktree-sidebar: #0b1226;
+  --color-worktree-sidebar-foreground: #f2e9d6;
+  --color-worktree-sidebar-accent: #101a35;
+  --color-worktree-sidebar-accent-foreground: #f2e9d6;
+  --color-worktree-sidebar-border: rgb(242 233 214 / 0.16);
+  --color-worktree-sidebar-ring: #3d8fe0;
+}
+
+@layer reset {
   .orca-settings-scope ul,
   .orca-settings-scope ol {
     margin: 0;

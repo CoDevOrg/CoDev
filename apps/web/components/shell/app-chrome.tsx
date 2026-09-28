@@ -7,6 +7,7 @@ import { isGitHubAuthConfigured } from "@codev/config";
 import { AppSidebarNav } from "@/components/shell/app-sidebar-nav";
 import { FeedbackWidget } from "@/components/shell/feedback-widget";
 import { ProfileMenu } from "@/components/shell/profile-menu";
+import { ThemeToggle } from "@/components/shell/theme-toggle";
 import { isUserAdmin } from "@/lib/admin/admin";
 import { isAdminHostname, publicAppHref } from "@/lib/platform/site-hosts";
 
@@ -59,6 +60,7 @@ export async function AppChrome({
           </div>
           <AppSidebarNav showAdmin={showAdmin} isAdminHost={isAdminHost} />
           <div className="app-sidebar-footer">
+            <ThemeToggle compact />
             <ProfileMenu
               user={user}
               showConnectGitHub={showConnectGitHub}
@@ -84,6 +86,7 @@ export async function AppChrome({
           </Link>
         </nav>
         <div className="user-menu">
+          <ThemeToggle />
           <ProfileMenu
             user={user}
             showConnectGitHub={showConnectGitHub}
