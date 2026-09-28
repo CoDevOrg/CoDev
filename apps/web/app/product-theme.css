@@ -2,8 +2,18 @@
  * Shared Tailwind theme for product surfaces that use shadcn primitives
  * (Rooms, dashboard, and anything else that opts in). Scoped under
  * `.product-scope` / `.rooms-scope` so utilities cannot leak into the plain
- * CSS shell, IDE workspace, or landing page. Palette matches landing.css /
- * app-theme.css: paper cream, deep navy ink, vibrant blue accent.
+ * CSS shell, IDE workspace, or landing page.
+ *
+ * Every --color-* value below is a var() reference into theme-tokens.css's
+ * shared --brand-* swatches rather than its own literal -- that file is now
+ * the only place an actual hex/rgba value for this palette is written, and
+ * dark mode Just Works here because the swatches it references already flip
+ * (no separate dark-mode block needed in this file at all). Translucent
+ * card/secondary/accent/muted values are this file's own design choice --
+ * Rooms and the dashboard have an animated gradient backdrop that glass
+ * panels should let show through, unlike Settings' opaque cards in
+ * settings/orca-theme.css -- so they stay expressed as alpha washes over the
+ * shared paper/ink swatches rather than forced to match Settings exactly.
  */
 @layer reset, theme, utilities;
 
@@ -20,35 +30,35 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) * 1.35);
 
-  --color-background: #f2e9d6;
-  --color-background-2: #e8dcc0;
-  --color-foreground: #0e2f7e;
-  --color-card: rgba(255, 253, 247, 0.62);
-  --color-card-foreground: #0e2f7e;
-  --color-popover: rgba(255, 253, 247, 0.94);
-  --color-popover-foreground: #0e2f7e;
-  --color-primary: #1b63b3;
-  --color-primary-foreground: #f7f3e8;
-  --color-secondary: rgba(255, 253, 247, 0.9);
-  --color-secondary-foreground: #0e2f7e;
-  --color-muted: rgba(14, 47, 126, 0.08);
-  --color-muted-foreground: rgba(14, 47, 126, 0.65);
-  --color-accent: rgba(255, 253, 247, 0.9);
-  --color-accent-foreground: #0e2f7e;
-  --color-destructive: #b3261e;
-  --color-border: rgba(14, 47, 126, 0.16);
-  --color-input: rgba(14, 47, 126, 0.28);
-  --color-ring: #1b63b3;
+  --color-background: var(--brand-paper);
+  --color-background-2: var(--brand-paper-tan);
+  --color-foreground: var(--brand-ink);
+  --color-card: rgba(var(--brand-paper-rgb), 0.62);
+  --color-card-foreground: var(--brand-ink);
+  --color-popover: rgba(var(--brand-paper-rgb), 0.94);
+  --color-popover-foreground: var(--brand-ink);
+  --color-primary: var(--brand-accent);
+  --color-primary-foreground: var(--brand-on-accent);
+  --color-secondary: rgba(var(--brand-paper-rgb), 0.9);
+  --color-secondary-foreground: var(--brand-ink);
+  --color-muted: rgba(var(--brand-ink-rgb), 0.08);
+  --color-muted-foreground: rgba(var(--brand-ink-rgb), 0.65);
+  --color-accent: rgba(var(--brand-paper-rgb), 0.9);
+  --color-accent-foreground: var(--brand-ink);
+  --color-destructive: var(--brand-destructive);
+  --color-border: rgba(var(--brand-ink-rgb), 0.16);
+  --color-input: rgba(var(--brand-ink-rgb), 0.28);
+  --color-ring: var(--brand-accent);
 
-  --color-teal: #2a6d62;
-  --color-orange: #9e4a2a;
-  --color-violet: #5b4fa8;
+  --color-teal: var(--brand-teal);
+  --color-orange: var(--brand-orange);
+  --color-violet: var(--brand-violet);
 }
 
 @layer reset {
   .product-scope,
   .rooms-scope {
-    color-scheme: light;
+    color-scheme: var(--brand-color-scheme);
     background:
       radial-gradient(
         120% 60% at 30% -10%,
@@ -59,7 +69,6 @@
     color: var(--color-foreground);
     font-family: var(--font-sans);
   }
-
   .product-scope ul,
   .product-scope ol,
   .rooms-scope ul,

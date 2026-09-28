@@ -1,0 +1,125 @@
+/*
+ * CoDev's single source of truth for color. Every other product theme file
+ * -- app-theme.css (plain CSS custom properties for gen2/sign-in/AppChrome),
+ * product-theme.css (Tailwind @theme for Rooms + dashboard), and
+ * settings/orca-theme.css (Tailwind @theme for Settings) -- derives its
+ * tokens from the raw swatches declared here via var(), instead of each
+ * holding its own copy of the same hex codes under its own role names. That
+ * duplication is exactly what let three separate redesign passes drift out
+ * of sync and left Rooms stuck in light mode after everything else went
+ * dark: fixing the shared source here is what makes that class of bug
+ * impossible to reintroduce, rather than just fixing today's instance of it.
+ *
+ * Names are raw swatches, not roles -- each consumer still decides which
+ * swatch plays which role for its own surface (e.g. Settings uses opaque
+ * cards while Rooms/dashboard use translucent glass cards over a gradient
+ * backdrop; both are legitimate, so both stay expressed differently even
+ * though they now share the same underlying color values).
+ *
+ * Deliberately NOT covered here: `.workspace-page` in globals.css (the
+ * embedded IDE surface, permanently dark by design, its own palette) and
+ * `.lp-page` in landing.css (the marketing page, its own richer multi-hue
+ * palette, not meant to follow light/dark at all). Both stay independent on
+ * purpose -- this file is the authenticated product's shared palette only.
+ *
+ * Dark mode ("Midnight Blueprint") applies automatically via
+ * prefers-color-scheme; [data-theme="dark"] / [data-theme="light"] are
+ * prepared for a manual toggle (see components/shell/theme-toggle.tsx).
+ */
+:root {
+  --brand-paper: #f2e9d6;
+  --brand-paper-bright: #fffdf7;
+  --brand-paper-tan: #e8dcc0;
+  --brand-paper-deep: #ddd0b0;
+  --brand-ink: #0e2f7e;
+  --brand-ink-2: #3d5a9e;
+  --brand-ink-muted: #5a73a8;
+  --brand-ink-faint: #7a8bb0;
+  --brand-accent: #1b63b3;
+  --brand-accent-bright: #2a7fd4;
+  --brand-on-accent: #f7f3e8;
+  --brand-teal: #2a6d62;
+  --brand-orange: #9e4a2a;
+  --brand-violet: #5b4fa8;
+  --brand-destructive: #b3261e;
+
+  /* RGB channel triplets (no alpha), for rgba()/rgb() call sites that need
+     to flip a translucent wash or glass-panel tint with the theme -- borders,
+     hover states, badges. Never used for box-shadows, which stay a dark
+     navy wash in both themes rather than inverting to a light glow when
+     --brand-ink-rgb becomes cream. --brand-paper-rgb is --brand-paper-bright
+     as channels, since that's the tier every glass panel tints from. */
+  --brand-paper-rgb: 255, 253, 247;
+  --brand-ink-rgb: 14, 47, 126;
+  --brand-accent-rgb: 27, 99, 179;
+  --brand-teal-rgb: 42, 109, 98;
+
+  /* A var, not just a bare `color-scheme: light` here, so every consumer
+     (app-theme.css, product-theme.css, orca-theme.css) can write
+     `color-scheme: var(--brand-color-scheme);` on its own scoped element
+     and inherit the flip, instead of each needing its own dark override
+     just for this one property. */
+  --brand-color-scheme: light;
+  color-scheme: light;
+
+  /* The wordmark logo asset is recolored from a black source via filter
+     rather than a mask, so it needs its own chain per theme instead of
+     inheriting a color directly. Approximate; may want a visual tweak once
+     seen against the real asset. */
+  --brand-logo-filter: brightness(0) saturate(100%) invert(16%) sepia(80%)
+    saturate(2200%) hue-rotate(210deg) brightness(0.95) contrast(1.05);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --brand-paper: #070c1a;
+    --brand-paper-bright: #0b1226;
+    --brand-paper-tan: #101a35;
+    --brand-paper-deep: #172244;
+    --brand-ink: #f2e9d6;
+    --brand-ink-2: #c9ba95;
+    --brand-ink-muted: #96918a;
+    --brand-ink-faint: #726d64;
+    --brand-accent: #3d8fe0;
+    --brand-accent-bright: #5aa6ec;
+    --brand-on-accent: #070c1a;
+    --brand-teal: #3fae9c;
+    --brand-orange: #e08a54;
+    --brand-violet: #a08cf0;
+    --brand-destructive: #e0574a;
+    --brand-paper-rgb: 16, 26, 53;
+    --brand-ink-rgb: 242, 233, 214;
+    --brand-accent-rgb: 61, 143, 224;
+    --brand-teal-rgb: 63, 174, 156;
+    --brand-color-scheme: dark;
+    color-scheme: dark;
+    --brand-logo-filter: brightness(0) saturate(100%) invert(92%) sepia(24%)
+      saturate(320%) hue-rotate(345deg) brightness(1.02) contrast(0.94);
+  }
+}
+
+:root[data-theme="dark"] {
+  --brand-paper: #070c1a;
+  --brand-paper-bright: #0b1226;
+  --brand-paper-tan: #101a35;
+  --brand-paper-deep: #172244;
+  --brand-ink: #f2e9d6;
+  --brand-ink-2: #c9ba95;
+  --brand-ink-muted: #96918a;
+  --brand-ink-faint: #726d64;
+  --brand-accent: #3d8fe0;
+  --brand-accent-bright: #5aa6ec;
+  --brand-on-accent: #070c1a;
+  --brand-teal: #3fae9c;
+  --brand-orange: #e08a54;
+  --brand-violet: #a08cf0;
+  --brand-destructive: #e0574a;
+  --brand-paper-rgb: 16, 26, 53;
+  --brand-ink-rgb: 242, 233, 214;
+  --brand-accent-rgb: 61, 143, 224;
+  --brand-teal-rgb: 63, 174, 156;
+  --brand-color-scheme: dark;
+  color-scheme: dark;
+  --brand-logo-filter: brightness(0) saturate(100%) invert(92%) sepia(24%)
+    saturate(320%) hue-rotate(345deg) brightness(1.02) contrast(0.94);
+}

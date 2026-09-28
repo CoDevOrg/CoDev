@@ -15,10 +15,10 @@ import {
 } from "lucide-react";
 
 import {
-  OrcaCard,
   OrcaPageHeader,
   OrcaPageShell,
 } from "@/components/settings/orca-style";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import type { ActivityAuditSnapshot } from "@/lib/workspaces/activity-audit-server";
 import {
@@ -218,7 +218,7 @@ export function WorkspaceActivityFeed({
       ) : null}
 
       <div className="grid gap-3 md:grid-cols-3">
-        <OrcaCard className="space-y-2 p-5">
+        <Card className="space-y-2 p-5">
           <div className="flex items-center gap-2 text-muted-foreground">
             <History aria-hidden size={16} />
             <span className="text-xs font-medium uppercase tracking-[0.14em]">
@@ -231,8 +231,8 @@ export function WorkspaceActivityFeed({
           <p className="text-sm text-muted-foreground">
             {cursor == null ? "Complete history loaded" : "Most recent events"}
           </p>
-        </OrcaCard>
-        <OrcaCard className="space-y-2 p-5">
+        </Card>
+        <Card className="space-y-2 p-5">
           <div className="flex items-center gap-2 text-muted-foreground">
             <Users aria-hidden size={16} />
             <span className="text-xs font-medium uppercase tracking-[0.14em]">
@@ -245,8 +245,8 @@ export function WorkspaceActivityFeed({
           <p className="text-sm text-muted-foreground">
             {categories} activity {categories === 1 ? "area" : "areas"}
           </p>
-        </OrcaCard>
-        <OrcaCard className="space-y-2 p-5">
+        </Card>
+        <Card className="space-y-2 p-5">
           <div className="flex items-center gap-2 text-muted-foreground">
             <CalendarDays aria-hidden size={16} />
             <span className="text-xs font-medium uppercase tracking-[0.14em]">
@@ -263,10 +263,10 @@ export function WorkspaceActivityFeed({
               ? `${latestEvent.actor} · ${activityAction(latestEvent)}`
               : "Waiting for the first event"}
           </p>
-        </OrcaCard>
+        </Card>
       </div>
 
-      <OrcaCard className="space-y-4 p-5">
+      <Card className="space-y-4 p-5">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-base font-semibold text-foreground">
@@ -410,7 +410,7 @@ export function WorkspaceActivityFeed({
             That&rsquo;s the beginning of this workspace&rsquo;s history.
           </p>
         )}
-      </OrcaCard>
+      </Card>
     </OrcaPageShell>
   );
 }

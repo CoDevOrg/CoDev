@@ -12,7 +12,7 @@
 .team-rail {
   --team-line: rgba(237, 238, 240, 0.09);
   --team-line-strong: rgba(237, 238, 240, 0.16);
-  --team-accent: #1b63b3;
+  --team-accent: var(--gold, #1b63b3);
   --team-online: #3fbf7a;
   display: flex;
   flex-direction: column;
@@ -57,7 +57,7 @@
 
 .team-rail-expand:hover {
   border-color: var(--team-accent);
-  background: rgba(27, 99, 179, 0.16);
+  background: rgba(var(--accent-rgb), 0.16);
 }
 
 .team-rail-expand-badge {
@@ -68,7 +68,7 @@
   padding: 0 4px;
   border-radius: 999px;
   background: var(--team-accent);
-  color: #f7f3e8;
+  color: var(--codev-on-gold);
   font-size: 10px;
   font-weight: 700;
   line-height: 16px;
@@ -135,9 +135,9 @@
 .team-rail-error {
   margin: 0;
   padding: 6px 8px;
-  border: 1px solid rgba(27, 99, 179, 0.35);
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
   border-radius: 7px;
-  background: rgba(27, 99, 179, 0.1);
+  background: rgba(var(--accent-rgb), 0.1);
   color: #f2c3a6;
   font-size: 11px;
 }
@@ -221,7 +221,7 @@
 
 .team-status-emoji-option.is-selected {
   border-color: var(--team-accent);
-  background: rgba(27, 99, 179, 0.18);
+  background: rgba(var(--accent-rgb), 0.18);
 }
 
 .team-status-row {
@@ -246,7 +246,7 @@
 .team-composer textarea:focus-visible {
   border-color: var(--team-accent);
   outline: none;
-  box-shadow: 0 0 0 2px rgba(27, 99, 179, 0.2);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.2);
 }
 
 .team-status-save {
@@ -331,9 +331,9 @@
   place-items: center;
   width: 26px;
   height: 26px;
-  border: 1px solid rgba(27, 99, 179, 0.4);
+  border: 1px solid rgba(var(--accent-rgb), 0.4);
   border-radius: 50%;
-  background: rgba(27, 99, 179, 0.16);
+  background: rgba(var(--accent-rgb), 0.16);
   color: #f0b28c;
 }
 
@@ -437,8 +437,8 @@
 }
 
 .team-channel.is-active {
-  border-color: rgba(27, 99, 179, 0.45);
-  background: rgba(27, 99, 179, 0.14);
+  border-color: rgba(var(--accent-rgb), 0.45);
+  background: rgba(var(--accent-rgb), 0.14);
 }
 
 .team-channel-name {
@@ -465,7 +465,7 @@
   padding: 0 5px;
   border-radius: 999px;
   background: var(--team-accent);
-  color: #f7f3e8;
+  color: var(--codev-on-gold);
   font-size: 9.5px;
   font-weight: 700;
   line-height: 15px;
@@ -540,7 +540,7 @@
   border: none;
   border-radius: 6px;
   background: var(--team-accent);
-  color: #f7f3e8;
+  color: var(--codev-on-gold);
   cursor: pointer;
   font-size: 10px;
   font-weight: 700;
@@ -562,7 +562,7 @@
 .team-rail-foot code {
   padding: 0 3px;
   border-radius: 4px;
-  background: rgba(27, 99, 179, 0.18);
+  background: rgba(var(--accent-rgb), 0.18);
   color: #f0b28c;
   font-size: 9.5px;
 }
@@ -639,9 +639,9 @@
   align-items: center;
   gap: 4px;
   padding: 1px 6px;
-  border: 1px solid rgba(27, 99, 179, 0.35);
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
   border-radius: 999px;
-  background: rgba(27, 99, 179, 0.12);
+  background: rgba(var(--accent-rgb), 0.12);
   color: #f0b28c;
   font-size: 9.5px;
   font-weight: 600;
@@ -687,7 +687,7 @@
 .team-conversation-notice code {
   padding: 0 3px;
   border-radius: 4px;
-  background: rgba(27, 99, 179, 0.18);
+  background: rgba(var(--accent-rgb), 0.18);
   color: #f0b28c;
 }
 
@@ -729,7 +729,7 @@
 .team-message-tag {
   padding: 0 5px;
   border-radius: 999px;
-  background: rgba(27, 99, 179, 0.2);
+  background: rgba(var(--accent-rgb), 0.2);
   color: #f0b28c;
   font-size: 8.5px;
   font-weight: 700;
@@ -747,9 +747,9 @@
 
 .team-message.is-agent .team-message-body {
   padding: 7px 9px;
-  border-left: 2px solid rgba(27, 99, 179, 0.5);
+  border-left: 2px solid rgba(var(--accent-rgb), 0.5);
   border-radius: 0 8px 8px 0;
-  background: rgba(27, 99, 179, 0.08);
+  background: rgba(var(--accent-rgb), 0.08);
 }
 
 .team-mention {
@@ -761,7 +761,7 @@
 }
 
 .team-mention.is-agent {
-  background: rgba(27, 99, 179, 0.22);
+  background: rgba(var(--accent-rgb), 0.22);
   color: #f4bd99;
 }
 
@@ -810,9 +810,9 @@
   align-items: center;
   gap: 5px;
   padding: 4px 8px;
-  border: 1px solid rgba(27, 99, 179, 0.35);
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
   border-radius: 999px;
-  background: rgba(27, 99, 179, 0.1);
+  background: rgba(var(--accent-rgb), 0.1);
   color: #f0b28c;
   cursor: pointer;
   font-size: 10.5px;
@@ -820,7 +820,7 @@
 }
 
 .team-composer-mention:hover {
-  background: rgba(27, 99, 179, 0.2);
+  background: rgba(var(--accent-rgb), 0.2);
 }
 
 .team-composer-send {
@@ -831,7 +831,7 @@
   border: none;
   border-radius: 8px;
   background: var(--team-accent);
-  color: #f7f3e8;
+  color: var(--codev-on-gold);
   cursor: pointer;
   transition: opacity 0.15s ease;
 }

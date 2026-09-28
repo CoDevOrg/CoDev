@@ -3,11 +3,13 @@ import type { Metadata } from "next";
 import { Inter_Tight, JetBrains_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 
+import "./theme-tokens.css";
 import "./globals.css";
 import "./app-theme.css";
 import "./team-chat.css";
 
 import { VisitTracker } from "@/components/landing/visit-tracker";
+import { THEME_INIT_SCRIPT } from "@/components/shell/theme-toggle";
 
 const sans = Inter_Tight({
   variable: "--font-geist-sans",
@@ -54,6 +56,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Stamps an explicit stored theme choice before first paint, so a
+            returning dark-mode visitor never sees a light flash. Nothing to
+            do when no choice is stored -- the CSS `prefers-color-scheme`
+            query already handles that case without JS. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body className={`${sans.variable} ${mono.variable}`}>
         {children}
         <Analytics />

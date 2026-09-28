@@ -9,22 +9,27 @@
  * Palette matches the public landing page: paper cream, deep navy ink, and a
  * vibrant blue accent, with teal / terracotta / violet for agent identities.
  * Legacy token names (`--codev-gold-*`, `--codev-black-*`) are kept as slots
- * so existing rules did not all need renaming.
+ * so existing rules did not all need renaming -- but the actual color values
+ * live in theme-tokens.css now, not here. Every `--codev-*` name below is a
+ * thin alias onto a `--brand-*` raw swatch, so this file never needs its own
+ * light/dark switch: it inherits whichever swatch theme-tokens.css is
+ * currently serving. See that file for the dark-mode ("Midnight Blueprint")
+ * values and rationale.
  */
 :root {
-  --codev-black-950: #f2e9d6;
-  --codev-black-900: #fffdf7;
-  --codev-black-800: #e8dcc0;
-  --codev-black-700: #ddd0b0;
-  --codev-beige-100: #0e2f7e;
-  --codev-beige-200: #3d5a9e;
-  --codev-stone-300: #5a73a8;
-  --codev-stone-500: #5b4fa8;
-  --codev-gold-500: #1b63b3;
-  --codev-gold-400: #2a7fd4;
-  --codev-on-gold: #f7f3e8;
-  --codev-terracotta: #9e4a2a;
-  --codev-teal: #2a6d62;
+  --codev-black-950: var(--brand-paper);
+  --codev-black-900: var(--brand-paper-bright);
+  --codev-black-800: var(--brand-paper-tan);
+  --codev-black-700: var(--brand-paper-deep);
+  --codev-beige-100: var(--brand-ink);
+  --codev-beige-200: var(--brand-ink-2);
+  --codev-stone-300: var(--brand-ink-muted);
+  --codev-stone-500: var(--brand-violet);
+  --codev-gold-500: var(--brand-accent);
+  --codev-gold-400: var(--brand-accent-bright);
+  --codev-on-gold: var(--brand-on-accent);
+  --codev-terracotta: var(--brand-orange);
+  --codev-teal: var(--brand-teal);
 
   /* Compatibility aliases for older token names. */
   --codev-forest-950: var(--codev-black-950);
@@ -35,24 +40,32 @@
   --codev-sage-500: var(--codev-stone-500);
   --codev-orange-500: var(--codev-terracotta);
   --codev-orange-400: var(--codev-terracotta);
+
+  /* Local names for the shared RGB triplets, kept so the many rgba() call
+     sites elsewhere in this file and in globals.css / mission-control.css /
+     team-chat.css don't need renaming. Values come from theme-tokens.css. */
+  --paper-rgb: var(--brand-paper-rgb);
+  --ink-rgb: var(--brand-ink-rgb);
+  --accent-rgb: var(--brand-accent-rgb);
+  --teal-rgb: var(--brand-teal-rgb);
 }
 
 .app-page,
 .auth-page {
   --ink: var(--codev-beige-100);
   --muted: var(--codev-stone-300);
-  --muted-2: #7a8bb0;
-  --line: rgba(14, 47, 126, 0.16);
-  --line-strong: rgba(14, 47, 126, 0.28);
+  --muted-2: var(--brand-ink-faint);
+  --line: rgba(var(--ink-rgb), 0.16);
+  --line-strong: rgba(var(--ink-rgb), 0.28);
   --surface: var(--codev-black-950);
   --surface-2: var(--codev-black-900);
   --surface-3: var(--codev-black-800);
   --navy: var(--codev-beige-100);
   --gold: var(--codev-gold-500);
   --gold-bright: var(--codev-gold-400);
-  --gold-soft: rgba(27, 99, 179, 0.12);
+  --gold-soft: rgba(var(--accent-rgb), 0.12);
   --teal: var(--codev-teal);
-  --teal-soft: rgba(42, 109, 98, 0.12);
+  --teal-soft: rgba(var(--teal-rgb), 0.12);
   --orange: var(--codev-terracotta);
   --violet: var(--codev-stone-500);
   min-height: 100dvh;
@@ -64,24 +77,24 @@
     ),
     radial-gradient(
       circle at 82% 0,
-      rgba(27, 99, 179, 0.12),
+      rgba(var(--accent-rgb), 0.12),
       transparent 28rem
     ),
     radial-gradient(
       circle at 8% 15%,
-      rgba(42, 109, 98, 0.08),
+      rgba(var(--teal-rgb), 0.08),
       transparent 32rem
     ),
     var(--surface);
   color: var(--ink);
-  color-scheme: light;
+  color-scheme: var(--brand-color-scheme, light);
   font-family: var(--font-geist-sans), Arial, sans-serif;
   font-feature-settings: "ss01" on;
 }
 
 .app-page .app-nav {
   border-color: var(--line);
-  background: rgba(255, 253, 247, 0.78);
+  background: rgba(var(--paper-rgb), 0.78);
   color: var(--ink);
   backdrop-filter: blur(14px) saturate(160%);
 }
@@ -93,8 +106,7 @@
 }
 
 .app-page .brand-image {
-  filter: brightness(0) saturate(100%) invert(16%) sepia(80%) saturate(2200%)
-    hue-rotate(210deg) brightness(0.95) contrast(1.05);
+  filter: var(--brand-logo-filter);
 }
 
 .auth-page {
@@ -108,12 +120,12 @@
     ),
     radial-gradient(
       circle at 78% 10%,
-      rgba(27, 99, 179, 0.14),
+      rgba(var(--accent-rgb), 0.14),
       transparent 26rem
     ),
     radial-gradient(
       circle at 12% 42%,
-      rgba(42, 109, 98, 0.1),
+      rgba(var(--teal-rgb), 0.1),
       transparent 30rem
     ),
     var(--surface);
@@ -124,8 +136,8 @@
   inset: 0;
   background-image: repeating-linear-gradient(
     115deg,
-    rgba(14, 47, 126, 0.035) 0,
-    rgba(14, 47, 126, 0.035) 1px,
+    rgba(var(--ink-rgb), 0.035) 0,
+    rgba(var(--ink-rgb), 0.035) 1px,
     transparent 1px,
     transparent 7px
   );
@@ -137,7 +149,7 @@
   position: relative;
   z-index: 1;
   border-color: var(--line);
-  background: rgba(255, 253, 247, 0.78);
+  background: rgba(var(--paper-rgb), 0.78);
   color: var(--ink);
   backdrop-filter: blur(14px) saturate(160%);
 }
@@ -148,8 +160,7 @@
 }
 
 .auth-page .brand-image {
-  filter: brightness(0) saturate(100%) invert(16%) sepia(80%) saturate(2200%)
-    hue-rotate(210deg) brightness(0.95) contrast(1.05);
+  filter: var(--brand-logo-filter);
 }
 
 .auth-page .auth-card {
@@ -158,8 +169,8 @@
   border-color: var(--line-strong);
   background: linear-gradient(
     145deg,
-    rgba(255, 253, 247, 0.94),
-    rgba(255, 253, 247, 0.82)
+    rgba(var(--paper-rgb), 0.94),
+    rgba(var(--paper-rgb), 0.82)
   );
   box-shadow: 0 28px 90px rgba(14, 47, 126, 0.12);
 }
@@ -299,6 +310,53 @@
   box-shadow: 0 18px 50px rgba(14, 47, 126, 0.14);
 }
 
+/* Theme toggle: a standalone icon button next to the profile menu, not a
+   menu item -- it should be visible without opening anything. Sized and
+   shaped like .profile-menu-trigger so the two sit together as one group. */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+
+.app-sidebar-footer .theme-toggle {
+  width: 100%;
+  height: auto;
+  padding: 8px 6px;
+  border-radius: 8px;
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.app-sidebar-footer .theme-toggle::after {
+  content: "Theme";
+  font-size: 13px;
+}
+
+.auth-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
 .app-page .profile-menu-heading strong,
 .app-page .profile-menu-link:hover,
 .app-page .profile-menu-action:hover {
@@ -335,8 +393,8 @@
   z-index: 0;
   background-image: repeating-linear-gradient(
     0deg,
-    rgba(14, 47, 126, 0.04) 0,
-    rgba(14, 47, 126, 0.04) 1px,
+    rgba(var(--ink-rgb), 0.04) 0,
+    rgba(var(--ink-rgb), 0.04) 1px,
     transparent 1px,
     transparent 14px
   );
@@ -358,7 +416,7 @@
   top: 0;
   padding: 20px 12px;
   border-right: 1px solid var(--line);
-  background: rgba(255, 253, 247, 0.82);
+  background: rgba(var(--paper-rgb), 0.82);
   backdrop-filter: blur(14px) saturate(160%);
   overflow-y: auto;
 }
@@ -390,12 +448,12 @@
 }
 
 .app-sidebar-link:hover {
-  background: rgba(14, 47, 126, 0.06);
+  background: rgba(var(--ink-rgb), 0.06);
   color: var(--ink);
 }
 
 .app-sidebar-link.is-active {
-  background: rgba(27, 99, 179, 0.12);
+  background: rgba(var(--accent-rgb), 0.12);
   color: var(--codev-gold-500);
 }
 
@@ -426,7 +484,7 @@
 }
 
 .app-sidebar-footer .profile-menu-trigger:hover {
-  background: rgba(14, 47, 126, 0.06);
+  background: rgba(var(--ink-rgb), 0.06);
   color: var(--ink);
 }
 
@@ -460,11 +518,11 @@
   overflow: hidden;
   border-color: var(--line);
   background:
-    linear-gradient(118deg, rgba(27, 99, 179, 0.1), transparent 38%),
+    linear-gradient(118deg, rgba(var(--accent-rgb), 0.1), transparent 38%),
     linear-gradient(
       145deg,
-      rgba(255, 253, 247, 0.94),
-      rgba(255, 253, 247, 0.82)
+      rgba(var(--paper-rgb), 0.94),
+      rgba(var(--paper-rgb), 0.82)
     );
   box-shadow: 0 20px 48px rgba(14, 47, 126, 0.1);
 }
@@ -478,8 +536,8 @@
   border-radius: 50%;
   background: radial-gradient(
     circle,
-    rgba(42, 127, 212, 0.22) 0%,
-    rgba(27, 99, 179, 0.1) 30%,
+    rgba(var(--accent-rgb), 0.22) 0%,
+    rgba(var(--accent-rgb), 0.1) 30%,
     transparent 70%
   );
   content: "";
@@ -500,8 +558,8 @@
 }
 
 .home-badge {
-  border-color: rgba(27, 99, 179, 0.32);
-  background: rgba(27, 99, 179, 0.12);
+  border-color: rgba(var(--accent-rgb), 0.32);
+  background: rgba(var(--accent-rgb), 0.12);
   color: var(--codev-gold-500);
 }
 
@@ -524,7 +582,7 @@
 .stat-card {
   min-width: 145px;
   border-color: var(--line);
-  background: rgba(255, 253, 247, 0.72);
+  background: rgba(var(--paper-rgb), 0.72);
 }
 
 .stat-value-active {
@@ -535,7 +593,7 @@
   padding: clamp(20px, 3vw, 32px);
   border: 1px solid var(--line);
   border-radius: 18px;
-  background: rgba(255, 253, 247, 0.72);
+  background: rgba(var(--paper-rgb), 0.72);
   box-shadow: 0 18px 44px rgba(14, 47, 126, 0.08);
 }
 
@@ -577,9 +635,9 @@
 }
 
 .new-workspace-plus {
-  border-color: rgba(27, 99, 179, 0.4);
+  border-color: rgba(var(--accent-rgb), 0.4);
   background:
-    linear-gradient(135deg, rgba(27, 99, 179, 0.12), transparent 60%),
+    linear-gradient(135deg, rgba(var(--accent-rgb), 0.12), transparent 60%),
     var(--surface-3);
   color: var(--codev-gold-500);
 }
@@ -588,7 +646,11 @@
   min-height: 108px;
   padding: 18px 16px;
   border-bottom: 1px solid var(--line);
-  background: linear-gradient(135deg, rgba(27, 99, 179, 0.1), transparent 66%);
+  background: linear-gradient(
+    135deg,
+    rgba(var(--accent-rgb), 0.1),
+    transparent 66%
+  );
 }
 
 .workspace-card-presence-label {
@@ -709,7 +771,7 @@
 
 .workspace-card-access {
   border-color: var(--line);
-  background: rgba(27, 99, 179, 0.1);
+  background: rgba(var(--accent-rgb), 0.1);
 }
 
 .workspace-create-overlay,

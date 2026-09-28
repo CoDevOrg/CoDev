@@ -51,25 +51,6 @@ export function OrcaPageHeader({
   );
 }
 
-export function OrcaCard({
-  children,
-  className,
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <div
-      className={cn(
-        "rounded-xl border border-border/50 bg-card/50 px-7 py-6 shadow-xs",
-        className,
-      )}
-    >
-      {children}
-    </div>
-  );
-}
-
 export function OrcaSubsectionHeader({
   title,
   description,

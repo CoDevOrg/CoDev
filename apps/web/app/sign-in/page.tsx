@@ -8,6 +8,7 @@ import { isGitHubAuthConfigured, isGoogleAuthConfigured } from "@codev/config";
 
 import { auth, signIn } from "@/auth";
 import { Brand } from "@/components/shell/app-chrome";
+import { ThemeToggle } from "@/components/shell/theme-toggle";
 import { CredentialsSignInForm } from "@/components/auth/credentials-sign-in-form";
 import {
   assertCanRegister,
@@ -115,7 +116,10 @@ export default async function SignInPage({
     <main className="auth-page">
       <div className="auth-nav">
         <Brand />
-        <Link href="/">Back</Link>
+        <div className="auth-nav-actions">
+          <ThemeToggle />
+          <Link href="/">Back</Link>
+        </div>
       </div>
       <section className="auth-card">
         <p className="eyebrow">Sign in</p>

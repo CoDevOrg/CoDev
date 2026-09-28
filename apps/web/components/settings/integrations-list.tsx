@@ -3,8 +3,8 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Search } from "lucide-react";
 
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { OrcaCard } from "@/components/settings/orca-style";
 import { cn } from "@/lib/platform/utils";
 
 export type IntegrationRow = {
@@ -51,7 +51,7 @@ export function IntegrationsList({ rows }: { rows: IntegrationRow[] }) {
         ) : (
           <div className="space-y-2">
             {filtered.map((row) => (
-              <OrcaCard
+              <Card
                 className="flex items-center justify-between gap-3 px-4 py-3"
                 key={row.id}
               >
@@ -75,7 +75,7 @@ export function IntegrationsList({ rows }: { rows: IntegrationRow[] }) {
                   </div>
                 </div>
                 {row.action}
-              </OrcaCard>
+              </Card>
             ))}
           </div>
         )}

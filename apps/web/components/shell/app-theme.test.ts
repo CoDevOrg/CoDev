@@ -20,31 +20,81 @@ function readCss(name: string): string {
 const appTheme = readCss("app-theme.css");
 const globals = readCss("globals.css");
 const landing = readCss("landing.css");
+const themeTokens = readCss("theme-tokens.css");
+const productTheme = readCss("product-theme.css");
+const orcaTheme = readCss("settings/orca-theme.css");
 
 describe("CoDev product theme", () => {
+  it("keeps every actual color literal in one file: theme-tokens.css", () => {
+    // app-theme.css, product-theme.css and settings/orca-theme.css each used
+    // to hold their own copy of this palette under their own token names,
+    // which is exactly what let Rooms stay light after everything else went
+    // dark. Now only this file has a real hex/rgba value; everything else is
+    // a var() reference into it, checked in the tests below.
+    expect(themeTokens).toContain("--brand-paper: #f2e9d6;");
+    expect(themeTokens).toContain("--brand-ink: #0e2f7e;");
+    expect(themeTokens).toContain("--brand-accent: #1b63b3;");
+    expect(themeTokens).toContain("@media (prefers-color-scheme: dark) {");
+    expect(themeTokens).toContain('[data-theme="dark"] {');
+    expect(themeTokens).toContain("--brand-paper: #070c1a;");
+    expect(themeTokens).toContain("--brand-ink: #f2e9d6;");
+    expect(themeTokens).toContain("--brand-accent: #3d8fe0;");
+  });
+
   it("sets one cream/navy palette for every AppChrome product page", () => {
     expect(appTheme).toContain(".app-page,\n.auth-page {");
     expect(appTheme).toContain("--surface: var(--codev-black-950);");
     expect(appTheme).toContain("--ink: var(--codev-beige-100);");
-    expect(appTheme).toContain("--codev-gold-500: #1b63b3;");
-    expect(appTheme).toContain("--codev-black-950: #f2e9d6;");
-    expect(appTheme).toContain("--codev-beige-100: #0e2f7e;");
-    expect(appTheme).toContain("color-scheme: light;");
+    expect(appTheme).toContain("--codev-gold-500: var(--brand-accent);");
+    expect(appTheme).toContain("--codev-black-950: var(--brand-paper);");
+    expect(appTheme).toContain("--codev-beige-100: var(--brand-ink);");
+    expect(appTheme).toContain(
+      "color-scheme: var(--brand-color-scheme, light);",
+    );
     expect(appTheme).toContain("--orange: var(--codev-terracotta);");
+    // No hex/rgba literal for this palette should remain in app-theme.css --
+    // everything routes through theme-tokens.css's --brand-* swatches now.
+    expect(appTheme).not.toContain("#f2e9d6");
+    expect(appTheme).not.toContain("#0e2f7e");
+    expect(appTheme).not.toContain("#1b63b3");
   });
 
   it("uses the same light surfaces for the dashboard workspace browser", () => {
     expect(appTheme).toContain(".workspace-browser {");
-    expect(appTheme).toContain("background: rgba(255, 253, 247, 0.72);");
+    // The glass-panel translucency is a --paper-rgb reference (itself an
+    // alias onto theme-tokens.css's --brand-paper-rgb) rather than a bare
+    // literal, so it flips with the theme instead of staying stuck light
+    // everywhere else .workspace-browser is used.
+    expect(appTheme).toContain("background: rgba(var(--paper-rgb), 0.72);");
     expect(appTheme).toContain(".workspace-card:hover {");
   });
 
   it("ships a shared shadcn product theme for Rooms and the dashboard", () => {
-    const productTheme = readCss("product-theme.css");
     expect(productTheme).toContain(".product-scope,");
     expect(productTheme).toContain(".rooms-scope {");
-    expect(productTheme).toContain("--color-background: #f2e9d6;");
-    expect(productTheme).toContain("--color-primary: #1b63b3;");
+    expect(productTheme).toContain("--color-background: var(--brand-paper);");
+    expect(productTheme).toContain("--color-primary: var(--brand-accent);");
+    // Glass panels over the animated gradient backdrop, unlike Settings'
+    // opaque cards -- a real design difference, kept as its own alpha wash
+    // rather than forced to match settings/orca-theme.css.
+    expect(productTheme).toContain(
+      "--color-card: rgba(var(--brand-paper-rgb), 0.62);",
+    );
+    // No separate dark-mode block needed: every value above already flips
+    // because theme-tokens.css's swatches do.
+    expect(productTheme).not.toContain("@media (prefers-color-scheme: dark)");
+    expect(productTheme).not.toContain("#070c1a");
+  });
+
+  it("gives Settings the same shared theme, with its own opaque surfaces", () => {
+    expect(orcaTheme).toContain(".orca-settings-scope {");
+    expect(orcaTheme).toContain("--color-background: var(--brand-paper);");
+    expect(orcaTheme).toContain("--color-primary: var(--brand-accent);");
+    // Solid surfaces, not glass -- Settings has no gradient backdrop behind
+    // it for a translucent card to let show through.
+    expect(orcaTheme).toContain("--color-card: var(--brand-paper-bright);");
+    expect(orcaTheme).not.toContain("@media (prefers-color-scheme: dark)");
+    expect(orcaTheme).not.toContain("#070c1a");
   });
 
   it("keeps every profile menu action legible on the light product surface", () => {

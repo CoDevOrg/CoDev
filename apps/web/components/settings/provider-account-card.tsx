@@ -11,10 +11,10 @@ import {
 import { Check, ChevronDown, Copy, KeyRound, Terminal } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ClaudeHostedConnect } from "@/components/settings/claude-hosted-connect";
 import { CodexHostedConnect } from "@/components/settings/codex-hosted-connect";
-import { OrcaCard } from "@/components/settings/orca-style";
 import type {
   ClaudeCliTokenRecord,
   CliSubscriptionRecord,
@@ -512,7 +512,7 @@ export function ProviderAccountCard({
           : "Connect with an API key or the CoDev CLI below";
 
   return (
-    <OrcaCard className="px-4 py-3.5">
+    <Card className="px-4 py-3.5">
       <div className="flex items-center gap-2.5">
         <span className="flex size-6 items-center justify-center text-foreground">
           {logo}
@@ -797,6 +797,6 @@ export function ProviderAccountCard({
           {message}
         </p>
       ) : null}
-    </OrcaCard>
+    </Card>
   );
 }
