@@ -27,6 +27,10 @@ type Envelope = {
   event: { type: string; item?: Item; turn?: { id: string; status: string } };
 };
 
+const NOTICE_LABELS: Record<string, string> = {
+  configWarning: "Codex reported a configuration warning.",
+};
+
 export function SupersetSessionPanel({
   workspaceId,
   ready,
@@ -393,7 +397,10 @@ export function SupersetSessionPanel({
           if (item.kind === "notice" || item.kind === "reasoning")
             return (
               <div key={seq} className="gen2-sessions-activity">
-                {item.title || item.text || item.kind}
+                {item.title ||
+                  (item.text && NOTICE_LABELS[item.text]) ||
+                  item.text ||
+                  item.kind}
                 {item.status ? ` · ${item.status}` : ""}
               </div>
             );
