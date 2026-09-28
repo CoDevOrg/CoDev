@@ -28,7 +28,8 @@ use crate::model::{
     PublicationExportResponse, PublicationFile, RuntimeError, SESSION_RESTORE_CHUNK_BYTES,
     SESSION_RESTORE_FILE_BYTES, SESSION_RESTORE_TOTAL_BYTES, SessionRestoreBeginRequest,
     SessionRestoreChunkRequest, SessionRestoreFileKind, SessionRestoreFinalizeResponse,
-    SessionRestoreStatus, SupersetCreateEntryRequest, SupersetDeleteEntryRequest,
+    SessionRestoreStatus, SupersetAgentInputRequest, SupersetAgentPollRequest,
+    SupersetAgentStartRequest, SupersetCreateEntryRequest, SupersetDeleteEntryRequest,
     SupersetMoveEntryRequest, TerminalChunk, TerminalInputRequest, TerminalPollRequest,
     TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
     WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse,
@@ -256,6 +257,18 @@ impl GuestService {
                 }
                 if let Some(operation) = path.strip_prefix("/v1/superset/runtime/") {
                     return self.superset_runtime(method, operation, body);
+                }
+                if path == "/v1/superset-agents" && method == "POST" {
+                    return self.start_superset_agent(body);
+                }
+                if let Some((agent_id, action)) = superset_agent_route(path) {
+                    return match (method, action) {
+                        ("POST", "input") => self.input_superset_agent(agent_id, body),
+                        ("POST", "poll") => self.poll_superset_agent(agent_id, body),
+                        ("DELETE", "") => self.close_superset_agent(agent_id),
+                        ("GET", "recovery") => self.recover_superset_agent(agent_id),
+                        _ => GuestResponse::error(400, "invalid Superset agent action"),
+                    };
                 }
                 if let Some(worktree_id) = path.strip_prefix("/v1/worktrees/") {
                     let (worktree_id, action_and_query) =
@@ -648,6 +661,81 @@ impl GuestService {
             }
             _ => GuestResponse::error(400, "invalid Superset runtime operation"),
         }
+    }
+
+    /// Validates and forwards a Superset agent-session launch request over
+    /// the bridge. This guest does not exec the provider process itself for
+    /// these sessions -- Superset's host-service does, on the other side of
+    /// this loopback bridge -- so unlike `start_codex_exec` there is no
+    /// local session table or process handle to keep here.
+    ///
+    /// The launch profile primitive in `provider_profile.rs` intentionally
+    /// is not used on this path: it materializes credentials under this
+    /// guest daemon's *private* `/tmp` (`PrivateTmp=true` in the
+    /// `codev-guestd` systemd unit), which is a separate mount namespace
+    /// Superset's own service cannot see. Forwarding the validated request
+    /// body once, over this bridge-secret-authenticated, guest-internal-only
+    /// channel, is itself the "trusted guest/host launch path" Superset
+    /// Agent Session Plan Phase 2 allows to see a credential -- see that
+    /// plan's Phase 2 for the isolation guarantees this relies on.
+    fn start_superset_agent(&self, body: &[u8]) -> GuestResponse {
+        let request: SupersetAgentStartRequest = match decode(body) {
+            Ok(request) => request,
+            Err(error) => return GuestResponse::error(400, error),
+        };
+        if let Err(error) = validate_worktree_id(&request.worktree_id) {
+            return GuestResponse::error(400, error);
+        }
+        if request.command.is_empty() || request.command.len() > 32 {
+            return GuestResponse::error(400, "command must contain between 1 and 32 arguments");
+        }
+        if request.idempotency_key.is_empty() || request.idempotency_key.len() > 128 {
+            return GuestResponse::error(400, "invalid idempotency key");
+        }
+        self.superset_bridge_request("POST", "/codev/agents", body)
+    }
+
+    fn input_superset_agent(&self, agent_id: &str, body: &[u8]) -> GuestResponse {
+        let request: SupersetAgentInputRequest = match decode(body) {
+            Ok(request) => request,
+            Err(error) => return GuestResponse::error(400, error),
+        };
+        if request.data.len() > MAX_TERMINAL_INPUT_BYTES {
+            return GuestResponse::error(400, "input exceeds 64 KiB");
+        }
+        self.superset_bridge_request(
+            "POST",
+            &format!("/codev/agents/{}/input", percent_encode(agent_id)),
+            body,
+        )
+    }
+
+    fn poll_superset_agent(&self, agent_id: &str, body: &[u8]) -> GuestResponse {
+        let _request: SupersetAgentPollRequest = match decode(body) {
+            Ok(request) => request,
+            Err(error) => return GuestResponse::error(400, error),
+        };
+        self.superset_bridge_request(
+            "POST",
+            &format!("/codev/agents/{}/poll", percent_encode(agent_id)),
+            body,
+        )
+    }
+
+    fn close_superset_agent(&self, agent_id: &str) -> GuestResponse {
+        self.superset_bridge_request(
+            "DELETE",
+            &format!("/codev/agents/{}", percent_encode(agent_id)),
+            &[],
+        )
+    }
+
+    fn recover_superset_agent(&self, agent_id: &str) -> GuestResponse {
+        self.superset_bridge_request(
+            "GET",
+            &format!("/codev/agents/{}/recovery", percent_encode(agent_id)),
+            &[],
+        )
     }
 
     fn superset_bridge_request(&self, method: &str, path: &str, body: &[u8]) -> GuestResponse {
@@ -3063,6 +3151,12 @@ fn codex_exec_route(path: &str) -> Option<(&str, &str)> {
     (!session_id.is_empty()).then_some((session_id, action))
 }
 
+fn superset_agent_route(path: &str) -> Option<(&str, &str)> {
+    let suffix = path.strip_prefix("/v1/superset-agents/")?;
+    let (agent_id, action) = suffix.split_once('/').unwrap_or((suffix, ""));
+    (!agent_id.is_empty()).then_some((agent_id, action))
+}
+
 fn session_restore_route(path: &str) -> Option<(&str, &str)> {
     let suffix = path.strip_prefix("/v1/session-restores/")?;
     let (operation_id, action) = suffix.split_once('/').unwrap_or((suffix, ""));
@@ -3534,6 +3628,106 @@ mod tests {
         );
         assert!(service.terminals.lock().expect("terminals").is_empty());
         assert!(!Path::new(result.output.trim()).exists());
+    }
+
+    #[test]
+    fn superset_agent_start_rejects_an_invalid_worktree_id() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let request = serde_json::json!({
+            "worktreeId": "../escape",
+            "provider": "openai",
+            "command": ["codex", "exec"],
+            "idempotencyKey": "key-1",
+        });
+        let response = service.handle(
+            "POST",
+            "/v1/superset-agents",
+            serde_json::to_vec(&request).expect("request").as_slice(),
+        );
+        assert_eq!(response.status, 400);
+    }
+
+    #[test]
+    fn superset_agent_start_rejects_an_empty_command() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let request = serde_json::json!({
+            "worktreeId": "main",
+            "provider": "openai",
+            "command": [],
+            "idempotencyKey": "key-1",
+        });
+        let response = service.handle(
+            "POST",
+            "/v1/superset-agents",
+            serde_json::to_vec(&request).expect("request").as_slice(),
+        );
+        assert_eq!(response.status, 400);
+    }
+
+    #[test]
+    fn superset_agent_start_rejects_a_missing_idempotency_key() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let request = serde_json::json!({
+            "worktreeId": "main",
+            "provider": "openai",
+            "command": ["codex", "exec"],
+            "idempotencyKey": "",
+        });
+        let response = service.handle(
+            "POST",
+            "/v1/superset-agents",
+            serde_json::to_vec(&request).expect("request").as_slice(),
+        );
+        assert_eq!(response.status, 400);
+    }
+
+    #[test]
+    fn superset_agent_input_rejects_oversized_input() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let request = serde_json::json!({ "data": "x".repeat(MAX_TERMINAL_INPUT_BYTES + 1) });
+        let response = service.handle(
+            "POST",
+            "/v1/superset-agents/agent-1/input",
+            serde_json::to_vec(&request).expect("request").as_slice(),
+        );
+        assert_eq!(response.status, 400);
+    }
+
+    #[test]
+    fn superset_agent_unknown_action_is_a_bad_request() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let response = service.handle("POST", "/v1/superset-agents/agent-1/bogus", b"{}");
+        assert_eq!(response.status, 400);
+    }
+
+    #[test]
+    fn superset_agent_routes_reach_the_bridge_once_validated() {
+        // No CODEV_SUPERSET_BRIDGE_SECRET is set in this test process, so a
+        // well-formed request should fail closed at the bridge call rather
+        // than at request validation -- proving these routes actually
+        // forward instead of silently succeeding.
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let start = serde_json::json!({
+            "worktreeId": "main",
+            "provider": "openai",
+            "command": ["codex", "exec"],
+            "idempotencyKey": "key-1",
+        });
+        let response = service.handle(
+            "POST",
+            "/v1/superset-agents",
+            serde_json::to_vec(&start).expect("request").as_slice(),
+        );
+        assert_eq!(response.status, 503);
+
+        let recovery = service.handle("GET", "/v1/superset-agents/agent-1/recovery", &[]);
+        assert_eq!(recovery.status, 503);
     }
 
     #[test]

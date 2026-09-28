@@ -13,6 +13,8 @@ use crate::model::{
     IdeSession, IdeStartRequest, IdeWriteFileRequest, Instance, PublicationExportRequest,
     PublicationExportResponse, Result, RuntimeError, SessionRestoreBeginRequest,
     SessionRestoreChunkRequest, SessionRestoreFinalizeResponse, SessionRestoreStatus,
+    SupersetAgentInputRequest, SupersetAgentPollRequest, SupersetAgentPollResponse,
+    SupersetAgentRecoveryResponse, SupersetAgentStartRequest, SupersetAgentStartResponse,
     SupersetCreateEntryRequest, SupersetDeleteEntryRequest, SupersetMoveEntryRequest,
     TerminalInputRequest, TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest,
     TerminalStartRequest, WorktreeCheckpointRequest, WorktreeCheckpointResponse,
@@ -579,6 +581,84 @@ impl Backend {
         }
     }
 
+    pub async fn start_superset_agent(
+        &self,
+        workspace_id: &str,
+        request: SupersetAgentStartRequest,
+    ) -> Result<SupersetAgentStartResponse> {
+        #[cfg(not(target_os = "linux"))]
+        let _ = &request;
+        match self {
+            Self::Fake(backend) => backend.start_superset_agent(workspace_id),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => {
+                backend.start_superset_agent(workspace_id, request).await
+            }
+        }
+    }
+
+    pub async fn input_superset_agent(
+        &self,
+        workspace_id: &str,
+        agent_id: &str,
+        request: SupersetAgentInputRequest,
+    ) -> Result<()> {
+        #[cfg(not(target_os = "linux"))]
+        let _ = &request;
+        match self {
+            Self::Fake(backend) => backend.input_superset_agent(workspace_id, agent_id),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => {
+                backend
+                    .input_superset_agent(workspace_id, agent_id, request)
+                    .await
+            }
+        }
+    }
+
+    pub async fn poll_superset_agent(
+        &self,
+        workspace_id: &str,
+        agent_id: &str,
+        request: SupersetAgentPollRequest,
+    ) -> Result<SupersetAgentPollResponse> {
+        #[cfg(not(target_os = "linux"))]
+        let _ = &request;
+        match self {
+            Self::Fake(backend) => backend.poll_superset_agent(workspace_id, agent_id),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => {
+                backend
+                    .poll_superset_agent(workspace_id, agent_id, request)
+                    .await
+            }
+        }
+    }
+
+    pub async fn close_superset_agent(&self, workspace_id: &str, agent_id: &str) -> Result<()> {
+        match self {
+            Self::Fake(backend) => backend.close_superset_agent(workspace_id, agent_id),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => {
+                backend.close_superset_agent(workspace_id, agent_id).await
+            }
+        }
+    }
+
+    pub async fn recover_superset_agent(
+        &self,
+        workspace_id: &str,
+        agent_id: &str,
+    ) -> Result<SupersetAgentRecoveryResponse> {
+        match self {
+            Self::Fake(backend) => backend.recover_superset_agent(workspace_id, agent_id),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => {
+                backend.recover_superset_agent(workspace_id, agent_id).await
+            }
+        }
+    }
+
     pub async fn start_claude_setup(
         &self,
         workspace_id: &str,
@@ -1115,6 +1195,51 @@ impl FakeBackend {
     fn close_codex_exec(&self, workspace_id: &str, _session_id: &str) -> Result<()> {
         self.get(workspace_id)?;
         Ok(())
+    }
+
+    fn start_superset_agent(&self, workspace_id: &str) -> Result<SupersetAgentStartResponse> {
+        self.get(workspace_id)?;
+        Ok(SupersetAgentStartResponse {
+            host_workspace_id: "fake-host-workspace".into(),
+            host_terminal_id: "fake-terminal-1".into(),
+            host_agent_session_id: "fake-agent-1".into(),
+        })
+    }
+
+    fn input_superset_agent(&self, workspace_id: &str, _agent_id: &str) -> Result<()> {
+        self.get(workspace_id)?;
+        Ok(())
+    }
+
+    fn poll_superset_agent(
+        &self,
+        workspace_id: &str,
+        _agent_id: &str,
+    ) -> Result<SupersetAgentPollResponse> {
+        self.get(workspace_id)?;
+        Ok(SupersetAgentPollResponse {
+            chunks: Vec::new(),
+            next_sequence: 1,
+            exited: true,
+            exit_code: Some(0),
+            refresh_ready: true,
+        })
+    }
+
+    fn close_superset_agent(&self, workspace_id: &str, _agent_id: &str) -> Result<()> {
+        self.get(workspace_id)?;
+        Ok(())
+    }
+
+    fn recover_superset_agent(
+        &self,
+        workspace_id: &str,
+        _agent_id: &str,
+    ) -> Result<SupersetAgentRecoveryResponse> {
+        self.get(workspace_id)?;
+        // No real Superset host backs the fake backend, so there is never
+        // anything to adopt.
+        Ok(SupersetAgentRecoveryResponse { adoptable: false })
     }
 
     fn start_claude_setup(&self, workspace_id: &str) -> Result<serde_json::Value> {

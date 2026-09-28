@@ -447,6 +447,68 @@ pub struct CodexExecPollResponse {
     pub codex_auth_cache_json: Option<String>,
 }
 
+/// A terminal-agent session launched through Superset rather than executed
+/// directly by the guest, per docs/SUPERSET_AGENT_SESSION_PLAN.md Phase 3.
+/// `codev-guestd` validates and forwards this to Superset's host-service
+/// bridge rather than running the provider process itself -- see
+/// `GuestService::start_superset_agent` in guest.rs.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupersetAgentStartRequest {
+    pub worktree_id: String,
+    pub provider: String,
+    #[serde(default)]
+    pub codex_auth_cache_json: Option<String>,
+    pub command: Vec<String>,
+    /// A retried "start" call with the same key reattaches to the run
+    /// Superset already has in flight, matching `CodexExecStartRequest`'s
+    /// idempotency contract.
+    pub idempotency_key: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupersetAgentStartResponse {
+    pub host_workspace_id: String,
+    pub host_terminal_id: String,
+    pub host_agent_session_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupersetAgentInputRequest {
+    pub data: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupersetAgentPollRequest {
+    /// Exclusive cursor: the response includes chunks at this sequence and later.
+    #[serde(default)]
+    pub after: u64,
+    #[serde(default)]
+    pub wait_milliseconds: u64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupersetAgentPollResponse {
+    pub chunks: Vec<CodexExecChunk>,
+    /// Pass as `after` in the next poll; a chunk at this value may arrive later.
+    pub next_sequence: u64,
+    pub exited: bool,
+    pub exit_code: Option<i32>,
+    /// Set once the launched process has exited and a refresh capture is safe.
+    #[serde(default)]
+    pub refresh_ready: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupersetAgentRecoveryResponse {
+    pub adoptable: bool,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClaudeSetupStartRequest {
