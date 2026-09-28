@@ -591,9 +591,7 @@ impl Backend {
         match self {
             Self::Fake(backend) => backend.start_superset_agent(workspace_id),
             #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => {
-                backend.start_superset_agent(workspace_id, request).await
-            }
+            Self::Firecracker(backend) => backend.start_superset_agent(workspace_id, request).await,
         }
     }
 

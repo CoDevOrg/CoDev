@@ -980,10 +980,7 @@ impl FirecrackerBackend {
         // matches poll_terminal's reasoning for not marking activity here.
         let machine = self.machine_without_activity(workspace_id).await?;
         let _reaper_exempt = ReaperExemptRequest::new(&machine.reaper_exempt_requests);
-        machine
-            .guest
-            .poll_superset_agent(agent_id, &request)
-            .await
+        machine.guest.poll_superset_agent(agent_id, &request).await
     }
 
     pub async fn close_superset_agent(&self, workspace_id: &str, agent_id: &str) -> Result<()> {
