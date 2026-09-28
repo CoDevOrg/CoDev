@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Inter_Tight, JetBrains_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 
+import "./theme-tokens.css";
 import "./globals.css";
 import "./app-theme.css";
 import "./team-chat.css";

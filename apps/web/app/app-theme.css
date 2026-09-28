@@ -9,28 +9,27 @@
  * Palette matches the public landing page: paper cream, deep navy ink, and a
  * vibrant blue accent, with teal / terracotta / violet for agent identities.
  * Legacy token names (`--codev-gold-*`, `--codev-black-*`) are kept as slots
- * so existing rules did not all need renaming.
- *
- * Dark mode ("Midnight Blueprint"): same identity hues, re-tuned for a dark
- * navy surface, with the light theme's paper cream reused as the dark
- * theme's ink color instead of a separate near-white. Applies automatically
- * from `prefers-color-scheme`; the `[data-theme]` selectors are prepared for
- * a manual toggle, though no toggle UI exists yet.
+ * so existing rules did not all need renaming -- but the actual color values
+ * live in theme-tokens.css now, not here. Every `--codev-*` name below is a
+ * thin alias onto a `--brand-*` raw swatch, so this file never needs its own
+ * light/dark switch: it inherits whichever swatch theme-tokens.css is
+ * currently serving. See that file for the dark-mode ("Midnight Blueprint")
+ * values and rationale.
  */
 :root {
-  --codev-black-950: #f2e9d6;
-  --codev-black-900: #fffdf7;
-  --codev-black-800: #e8dcc0;
-  --codev-black-700: #ddd0b0;
-  --codev-beige-100: #0e2f7e;
-  --codev-beige-200: #3d5a9e;
-  --codev-stone-300: #5a73a8;
-  --codev-stone-500: #5b4fa8;
-  --codev-gold-500: #1b63b3;
-  --codev-gold-400: #2a7fd4;
-  --codev-on-gold: #f7f3e8;
-  --codev-terracotta: #9e4a2a;
-  --codev-teal: #2a6d62;
+  --codev-black-950: var(--brand-paper);
+  --codev-black-900: var(--brand-paper-bright);
+  --codev-black-800: var(--brand-paper-tan);
+  --codev-black-700: var(--brand-paper-deep);
+  --codev-beige-100: var(--brand-ink);
+  --codev-beige-200: var(--brand-ink-2);
+  --codev-stone-300: var(--brand-ink-muted);
+  --codev-stone-500: var(--brand-violet);
+  --codev-gold-500: var(--brand-accent);
+  --codev-gold-400: var(--brand-accent-bright);
+  --codev-on-gold: var(--brand-on-accent);
+  --codev-terracotta: var(--brand-orange);
+  --codev-teal: var(--brand-teal);
 
   /* Compatibility aliases for older token names. */
   --codev-forest-950: var(--codev-black-950);
@@ -42,81 +41,31 @@
   --codev-orange-500: var(--codev-terracotta);
   --codev-orange-400: var(--codev-terracotta);
 
-  /* RGB channel triplets (no alpha) so the one-off rgba() literals below can
-     flip with the theme instead of staying baked to the light palette.
-     --paper-rgb is the translucent "glass" panel base (nav, sidebar, cards);
-     --ink-rgb is the low-opacity ink wash used for hover states and texture
-     patterns, never for box-shadows -- shadows stay dark in both themes. */
-  --paper-rgb: 255, 253, 247;
-  --ink-rgb: 14, 47, 126;
-
-  /* RGB triplets for the accent and teal identity colors, so the many
-     one-off rgba(27, 99, 179, X) / rgba(42, 109, 98, X) badges, borders and
-     glows scattered across globals.css, mission-control.css and
-     team-chat.css can flip with the theme too, instead of only the
-     property that happens to read --gold/--teal directly. */
-  --accent-rgb: 27, 99, 179;
-  --teal-rgb: 42, 109, 98;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --codev-black-950: #070c1a;
-    --codev-black-900: #0b1226;
-    --codev-black-800: #101a35;
-    --codev-black-700: #172244;
-    --codev-beige-100: #f2e9d6;
-    --codev-beige-200: #c9ba95;
-    --codev-stone-300: #96918a;
-    --codev-stone-500: #a08cf0;
-    --codev-gold-500: #3d8fe0;
-    --codev-gold-400: #5aa6ec;
-    --codev-on-gold: #070c1a;
-    --codev-terracotta: #e08a54;
-    --codev-teal: #3fae9c;
-    --paper-rgb: 16, 26, 53;
-    --ink-rgb: 242, 233, 214;
-    --accent-rgb: 61, 143, 224;
-    --teal-rgb: 63, 174, 156;
-  }
-}
-
-:root[data-theme="dark"] {
-  --codev-black-950: #070c1a;
-  --codev-black-900: #0b1226;
-  --codev-black-800: #101a35;
-  --codev-black-700: #172244;
-  --codev-beige-100: #f2e9d6;
-  --codev-beige-200: #c9ba95;
-  --codev-stone-300: #96918a;
-  --codev-stone-500: #a08cf0;
-  --codev-gold-500: #3d8fe0;
-  --codev-gold-400: #5aa6ec;
-  --codev-on-gold: #070c1a;
-  --codev-terracotta: #e08a54;
-  --codev-teal: #3fae9c;
-  --paper-rgb: 16, 26, 53;
-  --ink-rgb: 242, 233, 214;
-  --accent-rgb: 61, 143, 224;
-  --teal-rgb: 63, 174, 156;
+  /* Local names for the shared RGB triplets, kept so the many rgba() call
+     sites elsewhere in this file and in globals.css / mission-control.css /
+     team-chat.css don't need renaming. Values come from theme-tokens.css. */
+  --paper-rgb: var(--brand-paper-rgb);
+  --ink-rgb: var(--brand-ink-rgb);
+  --accent-rgb: var(--brand-accent-rgb);
+  --teal-rgb: var(--brand-teal-rgb);
 }
 
 .app-page,
 .auth-page {
   --ink: var(--codev-beige-100);
   --muted: var(--codev-stone-300);
-  --muted-2: #7a8bb0;
-  --line: rgba(14, 47, 126, 0.16);
-  --line-strong: rgba(14, 47, 126, 0.28);
+  --muted-2: var(--brand-ink-faint);
+  --line: rgba(var(--ink-rgb), 0.16);
+  --line-strong: rgba(var(--ink-rgb), 0.28);
   --surface: var(--codev-black-950);
   --surface-2: var(--codev-black-900);
   --surface-3: var(--codev-black-800);
   --navy: var(--codev-beige-100);
   --gold: var(--codev-gold-500);
   --gold-bright: var(--codev-gold-400);
-  --gold-soft: rgba(27, 99, 179, 0.12);
+  --gold-soft: rgba(var(--accent-rgb), 0.12);
   --teal: var(--codev-teal);
-  --teal-soft: rgba(42, 109, 98, 0.12);
+  --teal-soft: rgba(var(--teal-rgb), 0.12);
   --orange: var(--codev-terracotta);
   --violet: var(--codev-stone-500);
   min-height: 100dvh;
@@ -128,41 +77,19 @@
     ),
     radial-gradient(
       circle at 82% 0,
-      rgba(27, 99, 179, 0.12),
+      rgba(var(--accent-rgb), 0.12),
       transparent 28rem
     ),
     radial-gradient(
       circle at 8% 15%,
-      rgba(42, 109, 98, 0.08),
+      rgba(var(--teal-rgb), 0.08),
       transparent 32rem
     ),
     var(--surface);
   color: var(--ink);
-  color-scheme: light;
+  color-scheme: var(--brand-color-scheme, light);
   font-family: var(--font-geist-sans), Arial, sans-serif;
   font-feature-settings: "ss01" on;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .app-page,
-  :root:not([data-theme="light"]) .auth-page {
-    --muted-2: #726d64;
-    --line: rgba(var(--ink-rgb), 0.14);
-    --line-strong: rgba(var(--ink-rgb), 0.24);
-    --gold-soft: rgba(61, 143, 224, 0.17);
-    --teal-soft: rgba(63, 174, 156, 0.16);
-    color-scheme: dark;
-  }
-}
-
-[data-theme="dark"] .app-page,
-[data-theme="dark"] .auth-page {
-  --muted-2: #726d64;
-  --line: rgba(var(--ink-rgb), 0.14);
-  --line-strong: rgba(var(--ink-rgb), 0.24);
-  --gold-soft: rgba(61, 143, 224, 0.17);
-  --teal-soft: rgba(63, 174, 156, 0.16);
-  color-scheme: dark;
 }
 
 .app-page .app-nav {
@@ -179,26 +106,7 @@
 }
 
 .app-page .brand-image {
-  filter: brightness(0) saturate(100%) invert(16%) sepia(80%) saturate(2200%)
-    hue-rotate(210deg) brightness(0.95) contrast(1.05);
-}
-
-/* The logo asset is recolored from a black source via filter rather than a
-   mask, so dark mode needs its own chain rather than inheriting --ink. This
-   one is a close approximation of the cream ink and may want a visual
-   tweak once seen against the real asset. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .app-page .brand-image,
-  :root:not([data-theme="light"]) .auth-page .brand-image {
-    filter: brightness(0) saturate(100%) invert(92%) sepia(24%) saturate(320%)
-      hue-rotate(345deg) brightness(1.02) contrast(0.94);
-  }
-}
-
-[data-theme="dark"] .app-page .brand-image,
-[data-theme="dark"] .auth-page .brand-image {
-  filter: brightness(0) saturate(100%) invert(92%) sepia(24%) saturate(320%)
-    hue-rotate(345deg) brightness(1.02) contrast(0.94);
+  filter: var(--brand-logo-filter);
 }
 
 .auth-page {
@@ -212,12 +120,12 @@
     ),
     radial-gradient(
       circle at 78% 10%,
-      rgba(27, 99, 179, 0.14),
+      rgba(var(--accent-rgb), 0.14),
       transparent 26rem
     ),
     radial-gradient(
       circle at 12% 42%,
-      rgba(42, 109, 98, 0.1),
+      rgba(var(--teal-rgb), 0.1),
       transparent 30rem
     ),
     var(--surface);
@@ -252,8 +160,7 @@
 }
 
 .auth-page .brand-image {
-  filter: brightness(0) saturate(100%) invert(16%) sepia(80%) saturate(2200%)
-    hue-rotate(210deg) brightness(0.95) contrast(1.05);
+  filter: var(--brand-logo-filter);
 }
 
 .auth-page .auth-card {
@@ -546,7 +453,7 @@
 }
 
 .app-sidebar-link.is-active {
-  background: rgba(27, 99, 179, 0.12);
+  background: rgba(var(--accent-rgb), 0.12);
   color: var(--codev-gold-500);
 }
 
@@ -611,7 +518,7 @@
   overflow: hidden;
   border-color: var(--line);
   background:
-    linear-gradient(118deg, rgba(27, 99, 179, 0.1), transparent 38%),
+    linear-gradient(118deg, rgba(var(--accent-rgb), 0.1), transparent 38%),
     linear-gradient(
       145deg,
       rgba(var(--paper-rgb), 0.94),
@@ -629,8 +536,8 @@
   border-radius: 50%;
   background: radial-gradient(
     circle,
-    rgba(42, 127, 212, 0.22) 0%,
-    rgba(27, 99, 179, 0.1) 30%,
+    rgba(var(--accent-rgb), 0.22) 0%,
+    rgba(var(--accent-rgb), 0.1) 30%,
     transparent 70%
   );
   content: "";
@@ -651,8 +558,8 @@
 }
 
 .home-badge {
-  border-color: rgba(27, 99, 179, 0.32);
-  background: rgba(27, 99, 179, 0.12);
+  border-color: rgba(var(--accent-rgb), 0.32);
+  background: rgba(var(--accent-rgb), 0.12);
   color: var(--codev-gold-500);
 }
 
@@ -728,9 +635,9 @@
 }
 
 .new-workspace-plus {
-  border-color: rgba(27, 99, 179, 0.4);
+  border-color: rgba(var(--accent-rgb), 0.4);
   background:
-    linear-gradient(135deg, rgba(27, 99, 179, 0.12), transparent 60%),
+    linear-gradient(135deg, rgba(var(--accent-rgb), 0.12), transparent 60%),
     var(--surface-3);
   color: var(--codev-gold-500);
 }
@@ -739,7 +646,11 @@
   min-height: 108px;
   padding: 18px 16px;
   border-bottom: 1px solid var(--line);
-  background: linear-gradient(135deg, rgba(27, 99, 179, 0.1), transparent 66%);
+  background: linear-gradient(
+    135deg,
+    rgba(var(--accent-rgb), 0.1),
+    transparent 66%
+  );
 }
 
 .workspace-card-presence-label {
@@ -860,7 +771,7 @@
 
 .workspace-card-access {
   border-color: var(--line);
-  background: rgba(27, 99, 179, 0.1);
+  background: rgba(var(--accent-rgb), 0.1);
 }
 
 .workspace-create-overlay,
