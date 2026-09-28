@@ -149,9 +149,9 @@ impl ProviderProfile {
     /// guard the workspace file routes apply elsewhere in this crate.
     fn credential_path(&self, relative_path: &str) -> io::Result<PathBuf> {
         let candidate = Path::new(relative_path);
-        let escapes = candidate.components().any(|component| {
-            !matches!(component, Component::Normal(part) if !part.is_empty())
-        });
+        let escapes = candidate
+            .components()
+            .any(|component| !matches!(component, Component::Normal(part) if !part.is_empty()));
         if candidate.as_os_str().is_empty() || escapes {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -195,7 +195,10 @@ impl ProviderLaunchRecipe {
     /// path.
     pub fn codex(profile: &ProviderProfile, handle: ProfileHandle, args: Vec<String>) -> Self {
         let mut env = HashMap::new();
-        env.insert("CODEX_HOME".to_string(), profile.dir().display().to_string());
+        env.insert(
+            "CODEX_HOME".to_string(),
+            profile.dir().display().to_string(),
+        );
         env.insert("PATH".to_string(), PROFILE_PATH.to_string());
         Self {
             kind: ProviderKind::Codex,
@@ -270,7 +273,10 @@ impl ProviderProfileRegistry {
     /// final credential capture, on cancellation, on a failed launch, or
     /// from `reap_older_than` for anything a VM restart left behind.
     pub fn remove(&self, handle: &ProfileHandle) {
-        self.profiles.lock().expect("profile registry lock").remove(handle);
+        self.profiles
+            .lock()
+            .expect("profile registry lock")
+            .remove(handle);
     }
 
     /// Removes every profile materialized more than `max_age` ago --
@@ -286,7 +292,10 @@ impl ProviderProfileRegistry {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.profiles.lock().expect("profile registry lock").is_empty()
+        self.profiles
+            .lock()
+            .expect("profile registry lock")
+            .is_empty()
     }
 }
 
@@ -351,7 +360,10 @@ mod tests {
         let profile = registry.get(&handle).expect("profile");
         let recipe = ProviderLaunchRecipe::codex(&profile, handle, vec!["exec".into()]);
 
-        assert_eq!(recipe.env()["CODEX_HOME"], profile.dir().display().to_string());
+        assert_eq!(
+            recipe.env()["CODEX_HOME"],
+            profile.dir().display().to_string()
+        );
         assert!(recipe.env_names().collect::<Vec<_>>().contains(&"PATH"));
         // The recipe's environment is a directory reference, not the
         // credential itself.
@@ -398,6 +410,9 @@ mod tests {
             .materialize(ProviderKind::Codex, "auth.json", b"{}")
             .expect("materialize");
         let profile = registry.get(&handle).expect("profile");
-        assert_eq!(profile.read_credential("refreshed.json").expect("read"), None);
+        assert_eq!(
+            profile.read_credential("refreshed.json").expect("read"),
+            None
+        );
     }
 }
