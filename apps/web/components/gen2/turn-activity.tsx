@@ -49,6 +49,9 @@ export function Gen2TurnActivity({
 
   useEffect(() => {
     if (visible.length === 0) {
+      // No items left to show: clear the timer's start so a fresh set of
+      // items later begins its own clean run instead of inheriting a stale
+      // startedAt.
       startedAt.current = null;
       return;
     }
