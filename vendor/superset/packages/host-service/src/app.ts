@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { createNodeWebSocket } from "@hono/node-ws";
 import { trpcServer } from "@hono/trpc-server";
 import { Octokit } from "@octokit/rest";
@@ -404,6 +405,12 @@ export function createApp(options: CreateAppOptions): CreateAppResult {
 			workspaceRoot: codevWorkspaceRoot,
 			bridgeSecret: codevBridgeSecret,
 			stateRoot: process.env.SUPERSET_HOME_DIR ?? "/var/lib/codev-superset",
+			memberHomeRoot:
+				process.env.CODEV_MEMBER_HOME_ROOT ??
+				join(
+					process.env.SUPERSET_HOME_DIR ?? "/var/lib/codev-superset",
+					"member-homes",
+				),
 		});
 		registerCoDevFileBridge({
 			app,

@@ -42,6 +42,17 @@ test("Superset host tokens stay in the guest's root-only env file", () => {
   }
 });
 
+test("member Codex homes have a separate, traverse-only state directory", () => {
+  for (const source of [bootstrap, imageProvision]) {
+    assert.match(source, /StateDirectory=codev-superset codev-superset-members/);
+    assert.match(
+      source,
+      /Environment=CODEV_MEMBER_HOME_ROOT=\/var\/lib\/codev-superset-members/,
+    );
+    assert.match(source, /ExecStartPre=\/bin\/chmod 0711 \/var\/lib\/codev-superset-members/);
+  }
+});
+
 // Firecracker needs /dev/kvm, and not every Azure size exposes it: a size
 // without nested virtualization provisions perfectly and then cannot start a
 // single microVM. The Dsv7 Intel series supports nested virtualization and

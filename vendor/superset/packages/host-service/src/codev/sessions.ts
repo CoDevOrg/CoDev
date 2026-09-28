@@ -20,6 +20,7 @@ import {
 	type Subscription,
 } from "@superset/chat-runtime";
 import { resolveCoDevWorktreeRoot } from "./files";
+import { ensureMemberProfilesRoot } from "./member-home-root";
 
 const memberId = z.string().uuid();
 const sessionId = z.string().uuid();
@@ -61,17 +62,19 @@ export function registerCoDevSessionBridge(options: {
 	workspaceRoot: string;
 	bridgeSecret: string;
 	stateRoot: string;
+	memberHomeRoot: string;
 }) {
 	const runtimes = new Map<string, ChatRuntime>();
 	const liveText = new Map<
 		string,
 		{ subscription: Subscription; text: Record<string, string> }
 	>();
-	const profilesRoot = join(options.stateRoot, "codev-members");
+	const profilesRoot = join(options.memberHomeRoot, "codev-members");
 	const registryPath = join(profilesRoot, "uids.json");
 
 	function uidFor(id: string): number {
-		mkdirSync(profilesRoot, { recursive: true, mode: 0o700 });
+		// Keep the host DB in stateRoot, which remains root-only.
+		ensureMemberProfilesRoot(profilesRoot);
 		const registry: UidRegistry = existsSync(registryPath)
 			? (JSON.parse(readFileSync(registryPath, "utf8")) as UidRegistry)
 			: { next: 30000, members: {} };

@@ -312,6 +312,7 @@ Environment=HOME=/var/lib/codev-superset
 Environment=CODEV_WORKSPACE_ROOT=/workspace
 EnvironmentFile=/etc/codev/superset-bridge.env
 Environment=SUPERSET_HOME_DIR=/var/lib/codev-superset
+Environment=CODEV_MEMBER_HOME_ROOT=/var/lib/codev-superset-members
 Environment=HOST_DB_PATH=/var/lib/codev-superset/host.db
 Environment=HOST_MIGRATIONS_FOLDER=/opt/codev/superset-host/host-migrations
 Environment=SUPERSET_CHAT_V3_MIGRATIONS=/opt/codev/superset-host/chat-migrations
@@ -321,8 +322,9 @@ Environment=ORGANIZATION_ID=00000000-0000-4000-8000-000000000001
 Environment=SUPERSET_API_URL=http://127.0.0.1:9
 Environment=PORT=4879
 Environment=NODE_ENV=production
-StateDirectory=codev-superset
+StateDirectory=codev-superset codev-superset-members
 StateDirectoryMode=0700
+ExecStartPre=/bin/chmod 0711 /var/lib/codev-superset-members
 Restart=on-failure
 RestartSec=2
 NoNewPrivileges=true
