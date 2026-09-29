@@ -15,14 +15,11 @@ import {
   exchangeCursorApiKey,
   exchangeOAuthCode,
   getOAuthConfiguration,
-  getOAuthFlowMode,
   oauthCallbackPath,
   oauthCookieName,
   OAuthConfigurationError,
   openOAuthState,
-  parseManualAuthorizationCode,
   persistCursorTokens,
-  persistOAuthTokens,
   pollCodexDeviceCode,
   pollCursorLogin,
   requestCodexDeviceCode,
@@ -169,29 +166,6 @@ async function authorizeScope(input: {
       );
     }
 
-    if (configuration.flowMode === "manual_code") {
-      const authorizeUrl = buildAuthorizationUrl(
-        configuration,
-        state,
-      ).toString();
-      if (asJson) {
-        return setOAuthCookie(
-          NextResponse.json({
-            mode: configuration.flowMode,
-            provider,
-            authorizeUrl,
-          }),
-          provider,
-          state,
-        );
-      }
-      return setOAuthCookie(
-        NextResponse.redirect(authorizeUrl),
-        provider,
-        state,
-      );
-    }
-
     const authorizeUrl = buildAuthorizationUrl(configuration, state);
     if (asJson) {
       return setOAuthCookie(
@@ -270,26 +244,6 @@ async function parseSessionInput(request: Request) {
   } as const;
 }
 
-export async function startOAuth(request: Request, provider: OAuthProvider) {
-  const resolved = await parseSessionInput(request);
-  if ("error" in resolved) return resolved.error;
-
-  const flowMode = getOAuthFlowMode(provider);
-  if (request.method === "GET" && flowMode !== "app_callback") {
-    // Hosted Claude/Codex flows need the interactive settings UI.
-    return redirectToSettings(request, provider, "error", resolved.returnTo);
-  }
-
-  return authorizeScope({
-    request,
-    provider,
-    scopeType: resolved.scopeType,
-    scopeId: resolved.scopeId,
-    returnTo: resolved.returnTo,
-    asJson: false,
-  });
-}
-
 export async function startOAuthSession(
   request: Request,
   provider: OAuthProvider,
@@ -317,74 +271,6 @@ async function readOAuthState(
     return openOAuthState(stateCookie);
   } catch {
     return null;
-  }
-}
-
-export async function completeManualOAuth(
-  request: Request,
-  provider: OAuthProvider,
-) {
-  if (provider !== "claude") {
-    return NextResponse.json(
-      { error: "Manual code completion is only supported for Claude Code." },
-      { status: 400 },
-    );
-  }
-
-  const state = await readOAuthState(provider);
-  if (!state) {
-    return NextResponse.json(
-      { error: "OAuth session expired. Start the connection again." },
-      { status: 400 },
-    );
-  }
-
-  const parsed = sessionBodySchema.safeParse(
-    await request.json().catch(() => ({})),
-  );
-  const codeRaw = parsed.success ? (parsed.data.code ?? "") : "";
-  if (!codeRaw.trim()) {
-    return NextResponse.json(
-      { error: "Authorization code is required." },
-      { status: 400 },
-    );
-  }
-
-  try {
-    const { code, returnedState } = parseManualAuthorizationCode(codeRaw);
-    if (returnedState && returnedState !== state.state) {
-      throw new Error("OAuth state mismatch.");
-    }
-    const user = await getApiUser();
-    if (!user || user.id !== state.userId) {
-      throw new Error("OAuth user mismatch.");
-    }
-    if (state.scopeType === "WORKSPACE") {
-      await requireOrganizationSettingsWrite(user.id, state.scopeId);
-    }
-    const configuration = getOAuthConfiguration(
-      provider,
-      new URL(request.url).origin,
-    );
-    const tokens = await exchangeOAuthCode(
-      configuration,
-      code,
-      state.codeVerifier,
-      state.state,
-    );
-    await persistOAuthTokens(state, configuration, tokens);
-    return clearOAuthCookie(
-      NextResponse.json({ status: "connected", provider }),
-      provider,
-    );
-  } catch (error) {
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "OAuth completion failed.",
-      },
-      { status: 400 },
-    );
   }
 }
 
@@ -551,82 +437,6 @@ export async function pollDeviceOAuth(
             : "Device authorization failed.",
       },
       { status: 400 },
-    );
-  }
-}
-
-export async function finishOAuth(request: Request, provider: OAuthProvider) {
-  const cookieStore = await cookies();
-  const cookieName = oauthCookieName(provider);
-  const stateCookie = cookieStore.get(cookieName)?.value;
-  if (!stateCookie) return redirectToSettings(request, provider, "error");
-  let state: OAuthState | null = null;
-  try {
-    state = openOAuthState(stateCookie);
-  } catch {
-    return redirectToSettings(request, provider, "error");
-  }
-  const returnTo = state.returnTo;
-  const query = new URL(request.url).searchParams;
-  if (query.get("error")) {
-    return clearOAuthCookie(
-      redirectToSettings(request, provider, "denied", returnTo),
-      provider,
-    );
-  }
-
-  const code = query.get("code");
-  const returnedState = query.get("state");
-  if (!code || !returnedState) {
-    return clearOAuthCookie(
-      redirectToSettings(request, provider, "error", returnTo),
-      provider,
-    );
-  }
-
-  try {
-    if (state.state !== returnedState) throw new Error("OAuth state mismatch.");
-    const user = await getApiUser();
-    if (!user || user.id !== state.userId)
-      throw new Error("OAuth user mismatch.");
-    if (state.scopeType === "WORKSPACE") {
-      await requireOrganizationSettingsWrite(user.id, state.scopeId);
-    }
-    const configuration = getOAuthConfiguration(
-      provider,
-      new URL(request.url).origin,
-    );
-    const tokens = await exchangeOAuthCode(
-      configuration,
-      code,
-      state.codeVerifier,
-      state.state,
-    );
-    if (provider === "codex") {
-      // Match the device-code path: Codex needs a `~/.codex/auth.json`, so
-      // persist the hosted subscription rather than a bare OAUTH_TOKEN.
-      await persistCodexSubscriptionFromOAuth({
-        userId: user.id,
-        scopeType: state.scopeType,
-        scopeId: state.scopeId,
-        tokens,
-      });
-    } else {
-      await persistOAuthTokens(state, configuration, tokens);
-    }
-    return clearOAuthCookie(
-      redirectToSettings(request, provider, "connected", returnTo),
-      provider,
-    );
-  } catch (error) {
-    return clearOAuthCookie(
-      redirectToSettings(
-        request,
-        provider,
-        error instanceof OAuthConfigurationError ? "not_configured" : "error",
-        returnTo,
-      ),
-      provider,
     );
   }
 }

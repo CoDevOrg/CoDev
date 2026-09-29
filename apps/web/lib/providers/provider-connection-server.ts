@@ -120,7 +120,9 @@ export async function loadProviderConnectionSnapshot(
     claudeCliToken,
     connectModes: {
       codex: getOAuthFlowMode("codex"),
-      claude: getOAuthFlowMode("claude"),
+      // Claude has no CoDev-run OAuth flow: the in-app button drives the
+      // official login runtime, and the fallback is `codev claude-auth`.
+      claude: "manual_code",
       cursor: "cursor_deeplink",
     },
     hostedClaudeConnect: isHostedClaudeConnectEnabled(),

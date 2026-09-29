@@ -7,6 +7,15 @@ const alias = {
   "server-only": fileURLToPath(
     new URL("./test-support/server-only.ts", import.meta.url),
   ),
+  "@azure/keyvault-keys": fileURLToPath(
+    new URL("./test-support/azure-keyvault-keys.ts", import.meta.url),
+  ),
+  "@azure/identity": fileURLToPath(
+    new URL("./test-support/azure-identity.ts", import.meta.url),
+  ),
+  "@azure/arm-compute": fileURLToPath(
+    new URL("./test-support/azure-arm-compute.ts", import.meta.url),
+  ),
 };
 
 /**
