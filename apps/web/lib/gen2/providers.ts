@@ -6,7 +6,8 @@ import {
   resolveCredential,
 } from "../providers/resolve";
 import { codexApiKeyAuthCache, launchProfileFor } from "../providers/registry";
-import type { ProviderId } from "../providers/registry";
+import type { LaunchProfile, ProviderId } from "../providers/registry";
+import { listDecryptedUserEnvironmentVariables } from "../providers/user-environment";
 import { Gen2LifecycleError } from "./errors";
 
 /**
@@ -28,6 +29,10 @@ export type Gen2Credential = {
   /** Set only for a subscription, which holds a one-turn-at-a-time lease. */
   credentialId: string | null;
   authCacheJson: string;
+  /** The same credential in the provider-neutral shape, plus the member's
+   *  own environment variables. Sent alongside `authCacheJson` so the turn
+   *  runs whichever guest image the host happens to have. */
+  launchProfile: LaunchProfile;
   via: "subscription" | "api-key";
 };
 
@@ -43,15 +48,15 @@ export const buildApiKeyAuthCache = codexApiKeyAuthCache;
 const GEN2_PROVIDER: ProviderId = "codex";
 
 /**
- * The guest still takes `codexAuthCacheJson` as a named field, so the neutral
- * launch profile is unwrapped back into it here. When the guest accepts a
- * profile (files + env) this shim is what goes away, not the resolver.
+ * The Codex auth cache inside a launch profile.
+ *
+ * Both are sent: a guest that understands `launchProfile` uses it, and one
+ * that has not been redeployed yet falls back to the named field it has
+ * always taken. That is what makes turning the profile on safe without first
+ * proving which image every host is running. The legacy field goes once the
+ * new guest is everywhere.
  */
-function authCacheFromProfile(
-  provider: ProviderId,
-  secret: Parameters<typeof launchProfileFor>[1],
-): string | null {
-  const profile = launchProfileFor(provider, secret);
+function authCacheFromProfile(profile: LaunchProfile): string | null {
   return (
     profile.files?.find((file) => file.path === ".codex/auth.json")?.contents ??
     null
@@ -78,19 +83,31 @@ export async function resolveGen2Codex(
     throw error;
   }
 
-  const authCacheJson = authCacheFromProfile(GEN2_PROVIDER, resolved.secret);
+  const credentialProfile = launchProfileFor(GEN2_PROVIDER, resolved.secret);
+  const authCacheJson = authCacheFromProfile(credentialProfile);
   if (!authCacheJson) {
     throw new Gen2LifecycleError(
       "Reconnect Codex; the stored connection uses an obsolete format.",
       409,
     );
   }
+
+  // The member's own environment variables ride the same channel. They are
+  // listed first so a variable named after one the credential needs — say
+  // CODEX_HOME — cannot displace it and point the CLI somewhere else.
+  const memberEnvironment = await listDecryptedUserEnvironmentVariables(userId);
+  const launchProfile: LaunchProfile = {
+    ...credentialProfile,
+    env: { ...memberEnvironment, ...credentialProfile.env },
+  };
+
   return {
     // Only a subscription holds a seat; an API key has no one-turn-at-a-time
     // limit, so it carries no lease for the caller to claim.
     credentialId:
       resolved.kind === "codex_auth_cache" ? resolved.credentialId : null,
     authCacheJson,
+    launchProfile,
     via: resolved.kind === "codex_auth_cache" ? "subscription" : "api-key",
   };
 }

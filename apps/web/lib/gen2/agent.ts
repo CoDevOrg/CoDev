@@ -93,6 +93,7 @@ export async function startGen2AgentTurn(input: {
   const execInput = {
     command: buildGen2CodexCommand(input.prompt, history),
     codexAuthCacheJson: credential.authCacheJson,
+    launchProfile: credential.launchProfile,
     idempotencyKey: input.idempotencyKey,
   };
   try {

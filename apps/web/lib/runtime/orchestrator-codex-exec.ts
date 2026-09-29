@@ -48,7 +48,13 @@ export async function executeCodexInSandbox(
 export async function startCodexExecInSandbox(
   workspaceId: string,
   input: SandboxExecInput & {
+    /** Superseded by `launchProfile`; both are sent while guest images that
+     *  predate the profile may still be running. */
     codexAuthCacheJson?: string;
+    launchProfile?: {
+      files?: Array<{ path: string; contents: string }>;
+      env?: Record<string, string>;
+    };
     idempotencyKey: string;
   },
 ) {

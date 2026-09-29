@@ -132,6 +132,7 @@ export async function startGen2SupersetAgentSession(input: {
       worktreeId: input.worktreeId,
       provider: "openai",
       codexAuthCacheJson: credential.authCacheJson,
+      launchProfile: credential.launchProfile,
       command: input.command,
       idempotencyKey: input.idempotencyKey,
     });
