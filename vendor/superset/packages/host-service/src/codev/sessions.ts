@@ -24,9 +24,11 @@ import { ensureMemberProfilesRoot } from "./member-home-root";
 
 const memberId = z.string().uuid();
 const sessionId = z.string().uuid();
+const worktreeId = z.string().min(1).max(64).regex(/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/);
 const base = z.object({ memberId });
 const createInput = base.extend({
 	authCacheJson: z.string().min(1).max(256_000),
+	worktreeId: worktreeId.default("main"),
 });
 const target = base.extend({ sessionId });
 const eventsInput = target.extend({
@@ -35,6 +37,7 @@ const eventsInput = target.extend({
 		.optional(),
 });
 const promptInput = target.extend({
+	worktreeId: worktreeId.default("main"),
 	text: z.string().trim().min(1).max(100_000),
 	commandId: z.string().uuid(),
 });
@@ -56,6 +59,23 @@ const approvalInput = target.extend({
 
 type UidRegistry = { next: number; members: Record<string, number> };
 
+export function buildCodexLiveSessionOptions(input: {
+	sessionId: string;
+	scopeId: string;
+	cwd: string;
+	harnessSessionId?: string | null;
+}) {
+	return {
+		sessionId: input.sessionId,
+		scopeId: input.scopeId,
+		harness: "codex",
+		cwd: input.cwd,
+		...(input.harnessSessionId
+			? { resume: { harnessSessionId: input.harnessSessionId } }
+			: {}),
+	};
+}
+
 /** Each member gets a separate Codex process uid, auth.json, and chat journal. */
 export function registerCoDevSessionBridge(options: {
 	app: Hono;
@@ -70,6 +90,7 @@ export function registerCoDevSessionBridge(options: {
 	>();
 	const profilesRoot = ensureMemberProfilesRoot(options.memberHomeRoot);
 	const registryPath = join(profilesRoot, "uids.json");
+	const sessionWorktreesPath = join(profilesRoot, "session-worktrees.json");
 
 	function uidFor(id: string): number {
 		const registry: UidRegistry = existsSync(registryPath)
@@ -91,6 +112,24 @@ export function registerCoDevSessionBridge(options: {
 		chownSync(directory, uid, 2000);
 		chmodSync(directory, 0o700);
 		return { uid, directory };
+	}
+
+	function sessionWorktrees(id: string): Record<string, string> {
+		const all = existsSync(sessionWorktreesPath)
+			? (JSON.parse(readFileSync(sessionWorktreesPath, "utf8")) as Record<string, string>)
+			: {};
+		return Object.fromEntries(Object.entries(all)
+			.filter(([key]) => key.startsWith(`${id}:`))
+			.map(([key, value]) => [key.slice(id.length + 1), value]));
+	}
+
+	function recordSessionWorktree(id: string, session: string, worktree: string) {
+		const all = existsSync(sessionWorktreesPath)
+			? (JSON.parse(readFileSync(sessionWorktreesPath, "utf8")) as Record<string, string>)
+			: {};
+		const temporary = `${sessionWorktreesPath}.${randomUUID()}`;
+		writeFileSync(temporary, JSON.stringify({ ...all, [`${id}:${session}`]: worktree }), { mode: 0o600 });
+		renameSync(temporary, sessionWorktreesPath);
 	}
 
 	function runtimeFor(id: string): ChatRuntime {
@@ -209,7 +248,7 @@ export function registerCoDevSessionBridge(options: {
 				chmodSync(authPath, 0o600);
 				const cwd = await resolveCoDevWorktreeRoot(
 					options.workspaceRoot,
-					"main",
+					credential.worktreeId,
 				);
 				const created = runtime.commands.createSession({
 					commandId: randomUUID(),
@@ -217,13 +256,19 @@ export function registerCoDevSessionBridge(options: {
 					harness: "codex",
 					cwd,
 				});
+				recordSessionWorktree(id, created.sessionId, credential.worktreeId);
 				watchSession(runtime, created.sessionId);
-				return context.json(created);
+				return context.json({ ...created, worktreeId: credential.worktreeId });
 			}
-			if (operation === "list")
+			if (operation === "list") {
+				const mapped = sessionWorktrees(id);
 				return context.json({
-					sessions: runtime.commands.listSessions({ scopeId: id, limit: 100 }),
+					sessions: runtime.commands.listSessions({ scopeId: id, limit: 100 }).map((session) => ({
+						...session,
+						worktreeId: mapped[session.sessionId] ?? "main",
+					})),
 				});
+			}
 			const input = target.parse(raw);
 			const own = runtime.commands.getSession({ sessionId: input.sessionId });
 			if (!own.session || own.session.scopeId !== id)
@@ -234,7 +279,7 @@ export function registerCoDevSessionBridge(options: {
 					authCacheJson: readFileSync(join(directory, "auth.json"), "utf8"),
 				});
 			}
-			if (operation === "get") return context.json(own);
+			if (operation === "get") return context.json({ ...own, session: { ...own.session, worktreeId: sessionWorktrees(id)[input.sessionId] ?? "main" } });
 			if (operation === "events") {
 				const query = eventsInput.parse(raw);
 				return context.json({
@@ -248,24 +293,23 @@ export function registerCoDevSessionBridge(options: {
 			}
 			if (operation === "prompt") {
 				const prompt = promptInput.parse(raw);
+				const storedWorktree = sessionWorktrees(id)[prompt.sessionId] ?? "main";
+				if (prompt.worktreeId !== storedWorktree)
+					return context.json({ error: "Session worktree does not match." }, 409);
 				watchSession(runtime, prompt.sessionId);
 				if (!runtime.live.get(prompt.sessionId)) {
-					if (!own.session.harnessSessionId)
-						return context.json(
-							{ error: "This Codex session cannot be resumed." },
-							409,
-						);
 					const cwd = await resolveCoDevWorktreeRoot(
 						options.workspaceRoot,
-						"main",
+						storedWorktree,
 					);
-					runtime.live.create({
-						sessionId: prompt.sessionId,
-						scopeId: id,
-						harness: "codex",
-						cwd,
-						resume: { harnessSessionId: own.session.harnessSessionId },
-					});
+					runtime.live.create(
+						buildCodexLiveSessionOptions({
+							sessionId: prompt.sessionId,
+							scopeId: id,
+							cwd,
+							harnessSessionId: own.session.harnessSessionId,
+						}),
+					);
 				}
 				return context.json(
 					runtime.commands.prompt({
