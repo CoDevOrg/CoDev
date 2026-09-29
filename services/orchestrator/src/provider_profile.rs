@@ -47,12 +47,14 @@ const PROFILE_PATH: &str = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/s
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ProviderKind {
     Codex,
+    Claude,
 }
 
 impl ProviderKind {
     fn label(self) -> &'static str {
         match self {
             ProviderKind::Codex => "codex",
+            ProviderKind::Claude => "claude",
         }
     }
 }
@@ -71,6 +73,15 @@ impl RefreshCollector {
     fn codex() -> Self {
         Self {
             relative_path: "auth.json".to_string(),
+        }
+    }
+
+    /// Claude authenticates from `CLAUDE_CODE_OAUTH_TOKEN`, a long-lived
+    /// token the CLI never rewrites, so there is no refreshed credential to
+    /// collect. The empty path says "nothing to read back".
+    fn claude() -> Self {
+        Self {
+            relative_path: String::new(),
         }
     }
 }
@@ -210,6 +221,24 @@ impl ProviderLaunchRecipe {
         }
     }
 
+    /// `claude -p ...`, authenticated from `CLAUDE_CODE_OAUTH_TOKEN` — the
+    /// setup-token a member uploads with `codev claude-auth`. Unlike Codex
+    /// there is no on-disk auth cache, which is exactly why the launch
+    /// contract needs an environment channel and not just files.
+    pub fn claude(handle: ProfileHandle, token: String, args: Vec<String>) -> Self {
+        let mut env = HashMap::new();
+        env.insert("CLAUDE_CODE_OAUTH_TOKEN".to_string(), token);
+        env.insert("PATH".to_string(), PROFILE_PATH.to_string());
+        Self {
+            kind: ProviderKind::Claude,
+            executable: "claude".to_string(),
+            args,
+            profile: handle,
+            refresh: RefreshCollector::claude(),
+            env,
+        }
+    }
+
     /// The fixed set of environment variable names this recipe allows
     /// through to the launched process.
     pub fn env_names(&self) -> impl Iterator<Item = &str> {
@@ -222,6 +251,117 @@ impl ProviderLaunchRecipe {
     pub fn env(&self) -> &HashMap<String, String> {
         &self.env
     }
+}
+
+/// Caps on a caller-supplied launch profile. Small on purpose: a profile
+/// carries credentials, not a payload, and anything larger is a mistake or
+/// an attempt to use the exec route as a file-transfer channel.
+pub const MAX_PROFILE_FILES: usize = 8;
+pub const MAX_PROFILE_FILE_BYTES: usize = 128 << 10;
+pub const MAX_PROFILE_ENV_VARS: usize = 16;
+pub const MAX_PROFILE_ENV_VALUE_BYTES: usize = 32 << 10;
+
+/// The token an environment value may use to refer to the profile
+/// directory the guest created. See `LaunchProfile` in `model.rs`.
+pub const PROFILE_DIR_TOKEN: &str = "{{profileDir}}";
+
+fn valid_env_character(character: char) -> bool {
+    character.is_ascii_uppercase() || character.is_ascii_digit() || character == '_'
+}
+
+fn valid_env_name(name: &str) -> bool {
+    let mut characters = name.chars();
+    let Some(first) = characters.next() else {
+        return false;
+    };
+    if first.is_ascii_digit() {
+        return false;
+    }
+    name.chars().all(valid_env_character)
+}
+
+/// Checks a caller-supplied profile before anything is written.
+///
+/// Error strings name the offending *key* or path but never a value: a
+/// profile holds credentials, and a rejection message is the one place
+/// they could otherwise leak into a log or an HTTP response.
+pub fn validate_launch_profile<'a>(
+    files: impl IntoIterator<Item = (&'a str, &'a str)>,
+    env: impl IntoIterator<Item = (&'a str, &'a str)>,
+) -> Result<(), String> {
+    let mut seen = std::collections::HashSet::new();
+    let mut count = 0usize;
+    for (path, contents) in files {
+        count += 1;
+        if count > MAX_PROFILE_FILES {
+            return Err(format!(
+                "launch profile may contain at most {MAX_PROFILE_FILES} files"
+            ));
+        }
+        let candidate = Path::new(path);
+        let escapes = candidate
+            .components()
+            .any(|component| !matches!(component, Component::Normal(part) if !part.is_empty()));
+        if candidate.as_os_str().is_empty() || escapes {
+            return Err("launch profile file paths must be relative to the profile".to_string());
+        }
+        if !seen.insert(path.to_string()) {
+            return Err("launch profile contains a duplicate file path".to_string());
+        }
+        if contents.len() > MAX_PROFILE_FILE_BYTES {
+            return Err(format!("launch profile file {path} is too large"));
+        }
+    }
+
+    let mut env_count = 0usize;
+    for (name, value) in env {
+        env_count += 1;
+        if env_count > MAX_PROFILE_ENV_VARS {
+            return Err(format!(
+                "launch profile may set at most {MAX_PROFILE_ENV_VARS} environment variables"
+            ));
+        }
+        if !valid_env_name(name) {
+            return Err("launch profile environment names must be A-Z, 0-9 and _".to_string());
+        }
+        if value.len() > MAX_PROFILE_ENV_VALUE_BYTES {
+            return Err(format!("launch profile value for {name} is too large"));
+        }
+    }
+    Ok(())
+}
+
+/// Writes a validated profile's files into `dir` (0600 each, creating any
+/// parent directories 0700) and returns the environment to launch with,
+/// every `{{profileDir}}` expanded to `dir`.
+///
+/// `dir` must already exist and be 0700; the caller owns its lifetime,
+/// which is what lets the existing exec path keep its `TemporaryCodexHome`
+/// cleanup semantics unchanged.
+pub fn materialize_launch_profile<'a>(
+    dir: &Path,
+    files: impl IntoIterator<Item = (&'a str, &'a str)>,
+    env: impl IntoIterator<Item = (&'a str, &'a str)>,
+) -> io::Result<Vec<(String, String)>> {
+    for (path, contents) in files {
+        let target = dir.join(path);
+        if let Some(parent) = target.parent().filter(|parent| *parent != dir) {
+            fs::create_dir_all(parent)?;
+            fs::set_permissions(parent, fs::Permissions::from_mode(0o700))?;
+        }
+        fs::write(&target, contents)?;
+        fs::set_permissions(&target, fs::Permissions::from_mode(0o600))?;
+    }
+    let directory = dir.display().to_string();
+    Ok(env
+        .into_iter()
+        .map(|(name, value)| {
+            (
+                name.to_string(),
+                value.replace(PROFILE_DIR_TOKEN, &directory),
+            )
+        })
+        .collect())
 }
 
 /// Registry of this guestd process's live profiles, keyed by handle.
@@ -414,5 +554,103 @@ mod tests {
             profile.read_credential("refreshed.json").expect("read"),
             None
         );
+    }
+    #[test]
+    fn a_launch_profile_writes_private_files_and_expands_the_profile_dir() {
+        let registry = ProviderProfileRegistry::new();
+        let handle = registry
+            .materialize(ProviderKind::Codex, "placeholder", b"")
+            .expect("materialize");
+        let profile = registry.get(&handle).expect("profile present");
+
+        let env = materialize_launch_profile(
+            profile.dir(),
+            [(".codex/auth.json", r#"{"auth_mode":"chatgpt"}"#)],
+            [("CODEX_HOME", "{{profileDir}}/.codex")],
+        )
+        .expect("materialize profile");
+
+        let written = profile.dir().join(".codex/auth.json");
+        assert_eq!(
+            fs::read_to_string(&written).expect("read"),
+            r#"{"auth_mode":"chatgpt"}"#
+        );
+        // The credential is readable only by the process that owns it, and
+        // the directory the guest created for it stays 0700.
+        let file_mode = fs::metadata(&written).expect("meta").permissions().mode();
+        assert_eq!(file_mode & 0o777, 0o600);
+        let nested = fs::metadata(profile.dir().join(".codex")).expect("meta");
+        assert_eq!(nested.permissions().mode() & 0o777, 0o700);
+        assert_eq!(
+            env,
+            vec![(
+                "CODEX_HOME".to_string(),
+                format!("{}/.codex", profile.dir().display()),
+            )]
+        );
+    }
+
+    #[test]
+    fn a_launch_profile_cannot_escape_its_directory() {
+        for path in ["../escape", "/etc/passwd", "a/../../b", ""] {
+            assert!(
+                validate_launch_profile([(path, "x")], []).is_err(),
+                "{path} should be rejected"
+            );
+        }
+        assert!(validate_launch_profile([(".codex/auth.json", "x")], []).is_ok());
+    }
+
+    #[test]
+    fn a_launch_profile_is_capped_and_its_names_checked() {
+        let names: Vec<String> = (0..=MAX_PROFILE_FILES)
+            .map(|index| format!("file-{index}"))
+            .collect();
+        let too_many: Vec<(&str, &str)> =
+            names.iter().map(|name| (name.as_str(), "")).collect();
+        assert!(validate_launch_profile(too_many, []).is_err());
+
+        let oversized = "x".repeat(MAX_PROFILE_FILE_BYTES + 1);
+        let files = [("auth.json", oversized.as_str())];
+        assert!(validate_launch_profile(files, []).is_err());
+
+        assert!(validate_launch_profile([], [("lower_case", "v")]).is_err());
+        assert!(validate_launch_profile([], [("WITH-DASH", "v")]).is_err());
+        assert!(validate_launch_profile([], [("0LEADING", "v")]).is_err());
+        assert!(validate_launch_profile([], [("CLAUDE_CODE_OAUTH_TOKEN", "v")]).is_ok());
+    }
+
+    #[test]
+    fn a_rejection_never_names_the_credential_value() {
+        let secret = "sk-ant-oat01-super-secret";
+        let error = validate_launch_profile([("../escape", secret)], [])
+            .expect_err("path should be rejected");
+        assert!(!error.contains(secret));
+
+        let oversized = "y".repeat(MAX_PROFILE_ENV_VALUE_BYTES + 1);
+        let env = [("TOKEN", oversized.as_str())];
+        let error =
+            validate_launch_profile([], env).expect_err("value should be rejected");
+        assert!(!error.contains(&oversized));
+        assert!(error.contains("TOKEN"));
+    }
+
+    #[test]
+    fn claude_launches_from_an_environment_variable_not_a_file() {
+        let registry = ProviderProfileRegistry::new();
+        let handle = registry
+            .materialize(ProviderKind::Claude, "placeholder", b"")
+            .expect("materialize");
+        let recipe = ProviderLaunchRecipe::claude(
+            handle,
+            "sk-ant-oat01-token".to_string(),
+            vec!["-p".to_string()],
+        );
+        assert_eq!(recipe.executable, "claude");
+        let token = recipe.env().get("CLAUDE_CODE_OAUTH_TOKEN");
+        assert_eq!(token.map(String::as_str), Some("sk-ant-oat01-token"));
+        // Nothing to read back: the setup-token is long lived and the CLI
+        // never rewrites it.
+        assert!(recipe.refresh.relative_path.is_empty());
     }
 }

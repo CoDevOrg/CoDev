@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{BTreeMap, HashMap, HashSet, VecDeque},
     fs::{self, OpenOptions},
     io::{BufRead, BufReader, Read, Write},
     net::{SocketAddr, TcpStream},
@@ -24,7 +24,8 @@ use wait_timeout::ChildExt;
 use crate::model::{
     ClaudeSetupCodeRequest, ClaudeSetupPollRequest, ClaudeSetupPollResponse,
     ClaudeSetupStartRequest, CodexExecChunk, CodexExecPollRequest, CodexExecPollResponse,
-    CodexExecStartRequest, ExecRequest, ExecResponse, FileResponse, PublicationExportRequest,
+    CodexExecStartRequest, ExecRequest, ExecResponse, FileResponse, LaunchProfile,
+    LaunchProfileFile, PublicationExportRequest,
     PublicationExportResponse, PublicationFile, RuntimeError, SESSION_RESTORE_CHUNK_BYTES,
     SESSION_RESTORE_FILE_BYTES, SESSION_RESTORE_TOTAL_BYTES, SessionRestoreBeginRequest,
     SessionRestoreChunkRequest, SessionRestoreFileKind, SessionRestoreFinalizeResponse,
@@ -34,6 +35,9 @@ use crate::model::{
     TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
     WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse,
     WorktreeRebaseRequest, WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
+};
+use crate::provider_profile::{
+    PROFILE_DIR_TOKEN, materialize_launch_profile, validate_launch_profile,
 };
 
 const MAX_BODY_BYTES: usize = 2 << 20;
@@ -61,6 +65,41 @@ struct TemporaryCodexHome(PathBuf);
 impl Drop for TemporaryCodexHome {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+/// The profile a caller that still sends `codexAuthCacheJson` means: the
+/// auth cache at the root of the profile directory, with `CODEX_HOME`
+/// pointing at it — byte for byte what this route did before profiles
+/// existed, including reading the refreshed cache back from the same path
+/// once the process exits.
+fn launch_profile_files(profile: &LaunchProfile) -> impl Iterator<Item = (&str, &str)> {
+    profile
+        .files
+        .iter()
+        .map(|file| (file.path.as_str(), file.contents.as_str()))
+}
+
+fn launch_profile_env(profile: &LaunchProfile) -> impl Iterator<Item = (&str, &str)> {
+    profile
+        .env
+        .iter()
+        .map(|(name, value)| (name.as_str(), value.as_str()))
+}
+
+fn legacy_codex_launch_profile(auth_cache_json: &str) -> LaunchProfile {
+    let mut env = BTreeMap::new();
+    env.insert("CODEX_HOME".to_string(), PROFILE_DIR_TOKEN.to_string());
+    LaunchProfile {
+        files: if auth_cache_json.is_empty() {
+            Vec::new()
+        } else {
+            vec![LaunchProfileFile {
+                path: "auth.json".to_string(),
+                contents: auth_cache_json.to_string(),
+            }]
+        },
+        env,
     }
 }
 
@@ -691,6 +730,15 @@ impl GuestService {
         }
         if request.idempotency_key.is_empty() || request.idempotency_key.len() > 128 {
             return GuestResponse::error(400, "invalid idempotency key");
+        }
+        // The body is forwarded verbatim, so this is the only place a
+        // malformed profile can be rejected before Superset sees it.
+        if let Some(profile) = request.launch_profile.as_ref() {
+            let checked =
+                validate_launch_profile(launch_profile_files(profile), launch_profile_env(profile));
+            if let Err(error) = checked {
+                return GuestResponse::error(400, &error);
+            }
         }
         self.superset_bridge_request("POST", "/codev/agents", body)
     }
@@ -2056,6 +2104,18 @@ impl GuestService {
                 "Codex auth cache is invalid or too large".into(),
             ));
         }
+        // One code path below: a caller that still sends the Codex-shaped
+        // field gets it converted into the same profile a caller sending
+        // `launchProfile` supplies directly.
+        let launch_profile = match request.launch_profile.clone() {
+            Some(profile) => profile,
+            None => legacy_codex_launch_profile(&request.codex_auth_cache_json),
+        };
+        validate_launch_profile(
+            launch_profile_files(&launch_profile),
+            launch_profile_env(&launch_profile),
+        )
+        .map_err(RuntimeError::BadRequest)?;
         let _mutation = self.mutations.lock().expect("mutation lock");
         // Fast path: reattach to an existing session for this idempotency
         // key, without waiting on codex_busy first — the run this key
@@ -2126,13 +2186,22 @@ impl GuestService {
         fs::create_dir(&codex_home_path).map_err(RuntimeError::internal)?;
         fs::set_permissions(&codex_home_path, fs::Permissions::from_mode(0o700))
             .map_err(RuntimeError::internal)?;
-        let auth_path = codex_home_path.join("auth.json");
-        if !request.codex_auth_cache_json.is_empty() {
-            fs::write(&auth_path, &request.codex_auth_cache_json)
-                .map_err(RuntimeError::internal)?;
-            fs::set_permissions(&auth_path, fs::Permissions::from_mode(0o600))
-                .map_err(RuntimeError::internal)?;
-        }
+        let profile_env = materialize_launch_profile(
+            &codex_home_path,
+            launch_profile_files(&launch_profile),
+            launch_profile_env(&launch_profile),
+        )
+        .map_err(RuntimeError::internal)?;
+        // Where to read a refreshed Codex cache back from once the process
+        // exits. It follows the profile rather than assuming the root, so a
+        // caller that places the cache under a `CODEX_HOME` subdirectory
+        // still has its refresh captured.
+        let refresh_relative_path = launch_profile
+            .files
+            .iter()
+            .map(|file| file.path.clone())
+            .find(|path| path.ends_with("auth.json"))
+            .unwrap_or_else(|| "auth.json".to_string());
         let codex_home = TemporaryCodexHome(codex_home_path);
 
         let pty = native_pty_system()
@@ -2152,7 +2221,11 @@ impl GuestService {
         command.env("TERM", "xterm-256color");
         command.env("HISTFILE", "/dev/null");
         command.env("HISTSIZE", "0");
-        command.env("CODEX_HOME", &codex_home.0);
+        // Last, so a profile that names a variable wins over the defaults
+        // above. Values are never logged: this is the credential.
+        for (name, value) in &profile_env {
+            command.env(name, value);
+        }
         let mut child = match pty.slave.spawn_command(command) {
             Ok(child) => child,
             Err(error) => {
@@ -2250,7 +2323,7 @@ impl GuestService {
                 thread::sleep(Duration::from_millis(25));
             };
             drop(pty.master);
-            let updated_auth_cache = fs::read_to_string(codex_home.0.join("auth.json"))
+            let updated_auth_cache = fs::read_to_string(codex_home.0.join(&refresh_relative_path))
                 .ok()
                 .filter(|value| {
                     value.len() <= (128 << 10)
@@ -4695,6 +4768,72 @@ sleep 5
             Some("{\"tokens\":{}}")
         );
         assert!(service.terminals.lock().expect("terminals").is_empty());
+    }
+
+    #[test]
+    fn codex_exec_accepts_a_provider_neutral_launch_profile() {
+        // The point of the profile: the guest is told what files and
+        // environment the process needs, and has to know nothing about
+        // which provider they belong to.
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let request = serde_json::json!({
+            "command": [
+                "/bin/sh",
+                "-c",
+                "test -f \"$CODEX_HOME/auth.json\"; printf '%s' \"$AGENT_MARKER\""
+            ],
+            "launchProfile": {
+                "files": [
+                    { "path": "home/auth.json", "contents": "{\"tokens\":{}}" }
+                ],
+                "env": {
+                    "CODEX_HOME": "{{profileDir}}/home",
+                    "AGENT_MARKER": "profile-ok"
+                }
+            },
+            "idempotencyKey": "profile-key",
+        });
+        let start = service.handle(
+            "POST",
+            "/v1/codex-execs",
+            serde_json::to_vec(&request).expect("request").as_slice(),
+        );
+        assert_eq!(
+            start.status,
+            200,
+            "{}",
+            String::from_utf8_lossy(&start.body)
+        );
+        let body: serde_json::Value =
+            serde_json::from_slice(&start.body).expect("json");
+        let session_id = body["sessionId"].as_str().expect("session id").to_string();
+        let result = poll_codex_exec_until_exited(
+            &service,
+            &session_id,
+            Instant::now() + Duration::from_secs(5),
+        );
+        assert_eq!(result.exit_code, Some(0));
+        assert!(result.output.contains("profile-ok"));
+    }
+
+    #[test]
+    fn codex_exec_rejects_a_launch_profile_that_escapes_its_directory() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let request = serde_json::json!({
+            "command": ["/bin/true"],
+            "launchProfile": {
+                "files": [{ "path": "../escape.json", "contents": "{}" }],
+            },
+            "idempotencyKey": "escape-key",
+        });
+        let start = service.handle(
+            "POST",
+            "/v1/codex-execs",
+            serde_json::to_vec(&request).expect("request").as_slice(),
+        );
+        assert_eq!(start.status, 400);
     }
 
     #[test]

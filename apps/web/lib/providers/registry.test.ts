@@ -58,6 +58,9 @@ describe("provider registry", () => {
       files: [
         { path: ".codex/auth.json", contents: '{"auth_mode":"chatgpt"}' },
       ],
+      // The guest expands this to the profile directory it created, which
+      // is how the caller names CODEX_HOME without knowing the path.
+      env: { CODEX_HOME: "{{profileDir}}/.codex" },
     });
 
     expect(
@@ -73,7 +76,7 @@ describe("provider registry", () => {
       kind: "api_key",
       apiKey: "sk-test",
     });
-    expect(codexKey.env).toBeUndefined();
+    expect(codexKey.env).toEqual({ CODEX_HOME: "{{profileDir}}/.codex" });
     expect(JSON.parse(codexKey.files![0]!.contents)).toMatchObject({
       auth_mode: "apikey",
       OPENAI_API_KEY: "sk-test",

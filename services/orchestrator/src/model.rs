@@ -394,6 +394,39 @@ pub struct TerminalPollResponse {
     pub exit_code: Option<i32>,
 }
 
+/// One file a launched agent process needs inside its private credential
+/// profile. `path` is relative to the profile directory and may not escape
+/// it; the guest writes the file 0600 inside a 0700 directory it owns.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LaunchProfileFile {
+    pub path: String,
+    pub contents: String,
+}
+
+/// What a launched agent process needs in order to authenticate as the
+/// member, in a form that names no provider.
+///
+/// The exec route used to take `codexAuthCacheJson` by name, so every new
+/// provider meant a new field here, in the guest, and in the host request
+/// that carries it -- the Gen 1 IDE start request already carries six such
+/// fields. A profile is files plus environment instead, which is the whole
+/// of what a CLI needs: Codex reads an `auth.json`, Claude reads
+/// `CLAUDE_CODE_OAUTH_TOKEN`, and the guest has to know neither.
+///
+/// Environment values may contain `{{profileDir}}`, which the guest expands
+/// to the absolute path of the profile directory it created. That single
+/// substitution is what lets the caller say `CODEX_HOME` without knowing
+/// where the guest puts the profile.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LaunchProfile {
+    #[serde(default)]
+    pub files: Vec<LaunchProfileFile>,
+    #[serde(default)]
+    pub env: std::collections::BTreeMap<String, String>,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CodexExecStartRequest {
@@ -406,8 +439,13 @@ pub struct CodexExecStartRequest {
     pub rows: u16,
     #[serde(default)]
     pub columns: u16,
+    /// Superseded by `launch_profile`; kept so a control plane that has not
+    /// been redeployed yet keeps working. The guest converts it into a
+    /// profile at the edge, so there is only one code path below.
     #[serde(default)]
     pub codex_auth_cache_json: String,
+    #[serde(default)]
+    pub launch_profile: Option<LaunchProfile>,
     /// The caller's Vercel Workflow DevKit step id. A retried "start" step
     /// reuses the same id, letting the guest reattach to the still-running
     /// session instead of spawning a second Codex process.
@@ -457,8 +495,11 @@ pub struct CodexExecPollResponse {
 pub struct SupersetAgentStartRequest {
     pub worktree_id: String,
     pub provider: String,
+    /// Superseded by `launch_profile`; see `CodexExecStartRequest`.
     #[serde(default)]
     pub codex_auth_cache_json: Option<String>,
+    #[serde(default)]
+    pub launch_profile: Option<LaunchProfile>,
     pub command: Vec<String>,
     /// A retried "start" call with the same key reattaches to the run
     /// Superset already has in flight, matching `CodexExecStartRequest`'s

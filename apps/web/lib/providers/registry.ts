@@ -56,12 +56,19 @@ export type CredentialKind =
 /** What a launched process needs in order to authenticate as the member.
  *  The neutral replacement for passing `codexAuthCacheJson` by name. */
 export type LaunchProfile = {
-  /** Written into the process's private profile directory, mode 0600. */
+  /** Written into the process's private profile directory, mode 0600.
+   *  Paths are relative to it and may not escape it. */
   files?: Array<{ path: string; contents: string }>;
   /** Injected into the process environment; never onto the command line,
-   *  where another member's shell could read it out of `ps`. */
+   *  where another member's shell could read it out of `ps`. A value may
+   *  contain `{{profileDir}}`, which the guest expands to the directory it
+   *  created — how a caller names `CODEX_HOME` without knowing the path. */
   env?: Record<string, string>;
 };
+
+/** The guest substitutes this for the profile directory it created; see
+ *  `LaunchProfile` in `services/orchestrator/src/model.rs`. */
+export const PROFILE_DIR_TOKEN = "{{profileDir}}";
 
 /** A resolved credential's secret material, discriminated by kind. */
 export type ResolvedSecret =
@@ -248,6 +255,7 @@ export function launchProfileFor(
     case "codex_auth_cache":
       return {
         files: [{ path: ".codex/auth.json", contents: secret.authCacheJson }],
+        env: { CODEX_HOME: `${PROFILE_DIR_TOKEN}/.codex` },
       };
     case "claude_setup_token":
       return { env: { CLAUDE_CODE_OAUTH_TOKEN: secret.token } };
@@ -272,6 +280,7 @@ export function launchProfileFor(
                 contents: codexApiKeyAuthCache(secret.apiKey),
               },
             ],
+            env: { CODEX_HOME: `${PROFILE_DIR_TOKEN}/.codex` },
           }
         : { env: { [API_KEY_ENV[id]]: secret.apiKey } };
     case "claude_runtime":
