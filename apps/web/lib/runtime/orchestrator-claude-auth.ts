@@ -6,7 +6,11 @@ import { claudeSetupRequest } from "./orchestrator-request";
 
 const claudeSetupPollSchema = z.discriminatedUnion("status", [
   z.object({ status: z.literal("pending") }),
-  z.object({ status: z.literal("ready") }).strict(),
+  // `token` is the `claude setup-token` the login printed. It is optional
+  // because a guest image that predates the capture returns none, and the
+  // `.strict()` this replaces would have rejected the field outright — so
+  // the schema had to be widened before the guest could ever send it.
+  z.object({ status: z.literal("ready"), token: z.string().optional() }),
   z.object({ status: z.literal("failed"), reason: z.string() }),
 ]);
 

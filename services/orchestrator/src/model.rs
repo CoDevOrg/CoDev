@@ -578,8 +578,25 @@ pub struct ClaudeSetupPollRequest {
 #[serde(rename_all = "camelCase", tag = "status")]
 pub enum ClaudeSetupPollResponse {
     Pending,
-    Ready,
-    Failed { reason: String },
+    /// `token` is the `claude setup-token` the login printed, when the CLI
+    /// was asked for one.
+    ///
+    /// Without it the only credential a login produced was the signed-in
+    /// profile left behind in the guest, which is why connecting Claude
+    /// required keeping a Firecracker snapshot per member and resuming it
+    /// for every turn. A token can be stored like any other credential, so
+    /// the sandbox that produced it is destroyed immediately.
+    ///
+    /// Optional because a guest may still be running the profile-only login,
+    /// and because the control plane must not fail a connection it cannot
+    /// improve.
+    Ready {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        token: Option<String>,
+    },
+    Failed {
+        reason: String,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize)]

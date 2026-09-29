@@ -3033,6 +3033,8 @@ struct ClaudeSetupSession {
 struct ClaudeSetupOutput {
     buffer: String,
     authorize_url: Option<String>,
+    /// Captured before the buffer is redacted; see `absorb`.
+    token: Option<String>,
     authenticated: bool,
     failure: Option<String>,
     reader_closed: bool,
@@ -3063,6 +3065,15 @@ impl ClaudeSetupOutput {
                     .into(),
             );
         }
+        // Read the token out before redacting, and only ever from here: the
+        // buffer is what the member and the logs see, so it keeps leaving
+        // redacted. The pattern is the one redaction already matches on, so
+        // the two cannot disagree about what a token looks like.
+        if self.token.is_none()
+            && let Some(match_) = claude_token_pattern().find(&self.buffer)
+        {
+            self.token = Some(match_.as_str().to_owned());
+        }
         self.buffer = redact_claude_secrets(&self.buffer);
         if self.buffer.len() > MAX_OUTPUT_BYTES {
             let mut overflow = self.buffer.len() - MAX_OUTPUT_BYTES;
@@ -3079,7 +3090,9 @@ impl ClaudeSetupOutput {
 
     fn poll_response(&self) -> ClaudeSetupPollResponse {
         if self.terminal() && self.authenticated {
-            return ClaudeSetupPollResponse::Ready;
+            return ClaudeSetupPollResponse::Ready {
+                token: self.token.clone(),
+            };
         }
         if let Some(reason) = &self.failure {
             return ClaudeSetupPollResponse::Failed {
@@ -4639,10 +4652,15 @@ exit 1
                 "claude auth login never verified sign-in"
             );
         };
-        assert!(matches!(result, ClaudeSetupPollResponse::Ready));
+        // The token the login printed comes back, so the control plane can
+        // store it and destroy the sandbox instead of keeping a per-member
+        // snapshot alive to hold a signed-in profile.
         assert_eq!(
             serde_json::to_value(&result).unwrap(),
-            serde_json::json!({"status":"ready"})
+            serde_json::json!({
+                "status": "ready",
+                "token": "sk-ant-oat01-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            })
         );
         let profile = service
             .claude_setup(session_id)
