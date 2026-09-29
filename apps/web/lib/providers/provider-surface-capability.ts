@@ -15,7 +15,9 @@ import type {
  *    because it yields the same auth cache as `codex login`; other browser
  *    subscription runtimes remain rooms-only.
  *  - A chat room runs on the member's own credential, so it accepts a browser
- *    or local-CLI subscription the member enabled for rooms.
+ *    or local-CLI subscription the member enabled for rooms — but only one the
+ *    rooms executor can actually run: Codex's auth cache, or Claude's browser
+ *    runtime. Claude's `codev claude-auth` setup-token is workspace-only.
  *
  * `ROOMS_ACCEPT_API_KEY` is off: the rooms executor (shared-chat-reply)
  * currently runs only the two subscription forms. Flip it once the executor
@@ -59,8 +61,12 @@ export function providerSurfaceCapability(
   );
   const keyConnected = apiKey?.status === "connected";
   const subConnected = subscription?.status === "connected";
-  // Claude's CLI setup-token is a second, workspace-capable login kept in its
-  // own slot; the browser runtime in `cliSubscriptions` is rooms-only.
+  // Claude's CLI setup-token is a second, *workspace-only* login kept in its
+  // own slot. It is not a rooms credential: the rooms executor resolves Claude
+  // through `getConnectedClaudeRuntime` alone (see
+  // `resolvePersonalChatSubscription`), so counting this token towards rooms
+  // readiness reported a green "Ready for chat rooms" for a member whose every
+  // reply then failed. The browser runtime in `cliSubscriptions` is rooms-only.
   const claudeCli =
     provider === "anthropic" && snapshot.claudeCliToken.status === "connected"
       ? snapshot.claudeCliToken
@@ -70,7 +76,6 @@ export function providerSurfaceCapability(
   if (subConnected && subscription.enabledForRooms && subscription.provenance) {
     rooms.push(subscription.provenance);
   }
-  if (claudeCli?.enabledForRooms) rooms.push("cli");
   if (ROOMS_ACCEPT_API_KEY && keyConnected && apiKey.enabledForRooms) {
     rooms.push("api_key");
   }

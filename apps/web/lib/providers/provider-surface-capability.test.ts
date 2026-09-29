@@ -143,6 +143,24 @@ describe("providerSurfaceCapability", () => {
     });
   });
 
+  it("does not report rooms readiness from the Claude setup-token alone", () => {
+    // The rooms executor resolves Claude only through the browser runtime, so
+    // a member whose sole Claude login is `codev claude-auth` must not be told
+    // rooms are ready — every reply would fail with "Reconnect Claude".
+    const view = snapshot({
+      cliSubscriptions: [sub("claude", { status: "not_connected" })],
+      claudeCliToken: {
+        status: "connected",
+        lastFour: "wxyz",
+        enabledForRooms: true,
+        enabledForWorkspace: true,
+      },
+    });
+    const capability = providerSurfaceCapability(view, "anthropic");
+    expect(capability.rooms).toEqual({ ready: false, via: [] });
+    expect(capability.workspace.ready).toBe(true);
+  });
+
   it("honours the member's per-surface toggles", () => {
     const view = snapshot({
       connections: [key("openai", { enabledForWorkspace: false })],
