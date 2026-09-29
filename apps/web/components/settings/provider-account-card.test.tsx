@@ -62,13 +62,6 @@ const NO_CLI_TOKEN = {
   allowInSharedWorkspaces: true,
 } as const;
 
-function capability(input: { rooms?: boolean; workspace?: boolean }) {
-  return {
-    rooms: { ready: input.rooms ?? false, via: [] },
-    workspace: { ready: input.workspace ?? false, via: [] },
-  };
-}
-
 function jsonResponse(body: unknown, ok = true) {
   return { ok, json: async () => body } as Response;
 }
@@ -101,6 +94,7 @@ describe("ProviderAccountCard", () => {
         connection={connection()}
         label="Cursor"
         logo={null}
+        runsIn={[]}
         subscription={subscription()}
       />,
     );
@@ -135,6 +129,7 @@ describe("ProviderAccountCard", () => {
         connection={connection()}
         label="Cursor"
         logo={null}
+        runsIn={[]}
         subscription={subscription()}
       />,
     );
@@ -163,6 +158,7 @@ describe("ProviderAccountCard", () => {
         connection={connection({ provider: "anthropic", label: "Anthropic" })}
         label="Claude"
         logo={null}
+        runsIn={[]}
         subscription={subscription({
           provider: "claude",
           label: "Claude Code",
@@ -209,6 +205,7 @@ describe("ProviderAccountCard", () => {
         hostedClaudeConnect
         label="Claude"
         logo={null}
+        runsIn={[]}
         subscription={subscription({
           provider: "claude",
           label: "Claude Code",
@@ -270,6 +267,7 @@ describe("ProviderAccountCard", () => {
         hostedClaudeConnect
         label="Claude"
         logo={null}
+        runsIn={[]}
         subscription={subscription({
           provider: "claude",
           label: "Claude Code",
@@ -319,6 +317,7 @@ describe("ProviderAccountCard", () => {
         hostedOpenAIConnect
         label="Codex"
         logo={null}
+        runsIn={[]}
         subscription={subscription({
           provider: "codex",
           label: "Codex",
@@ -365,6 +364,7 @@ describe("ProviderAccountCard", () => {
         connection={connection({ provider: "openai", label: "OpenAI" })}
         label="Codex"
         logo={null}
+        runsIn={[]}
         subscription={subscription({
           provider: "codex",
           label: "Codex",
@@ -416,6 +416,7 @@ describe("ProviderAccountCard", () => {
         hostedClaudeConnect
         label="Claude"
         logo={null}
+        runsIn={[]}
         subscription={subscription({
           provider: "claude",
           label: "Claude Code",
@@ -466,6 +467,7 @@ describe("ProviderAccountCard", () => {
         connection={connection({ provider: "openai", label: "OpenAI" })}
         label="Codex"
         logo={null}
+        runsIn={[]}
         subscription={subscription({
           provider: "codex",
           label: "Codex",
@@ -486,6 +488,7 @@ describe("ProviderAccountCard", () => {
         connection={connection({ provider: "openai", label: "OpenAI" })}
         label="Codex"
         logo={null}
+        runsIn={[]}
         subscription={subscription({
           provider: "codex",
           label: "Codex",
@@ -508,6 +511,7 @@ describe("ProviderAccountCard", () => {
         connection={connection()}
         label="Cursor"
         logo={null}
+        runsIn={[]}
         subscription={subscription()}
       />,
     );
@@ -524,6 +528,7 @@ describe("ProviderAccountCard", () => {
         connection={connection()}
         label="Cursor"
         logo={null}
+        runsIn={[]}
         subscription={subscription({ status: "connected" })}
       />,
     );
@@ -541,196 +546,55 @@ describe("ProviderAccountCard", () => {
     });
   });
 
-  describe("surface sections", () => {
-    it("the workspace section offers no browser sign-in, only an API key and the CLI", () => {
+  describe("where a connection runs", () => {
+    it("names the surfaces the registry reports, not a section it sits in", () => {
       render(
         <ProviderAccountCard
-          capability={capability({})}
-          claudeCliToken={NO_CLI_TOKEN}
-          connection={connection({ provider: "anthropic", label: "Anthropic" })}
-          hostedClaudeConnect
-          label="Claude"
-          logo={null}
-          subscription={subscription({
-            provider: "claude",
-            label: "Claude Code",
-            connectMode: "manual_code",
-            command: "codev claude-auth",
-          })}
-          surface="workspace"
-        />,
-      );
-
-      expect(
-        screen.queryByRole("button", { name: "Connect Claude" }),
-      ).toBeNull();
-      expect(screen.getByText("Use an API key instead")).toBeInTheDocument();
-      expect(screen.getByText("Connect from a terminal")).toBeInTheDocument();
-      expect(
-        screen.getByText("Connect with an API key or from your terminal below"),
-      ).toBeInTheDocument();
-    });
-
-    it("the rooms section offers the browser sign-in and the CLI, but no API key", () => {
-      render(
-        <ProviderAccountCard
-          capability={capability({})}
-          claudeCliToken={NO_CLI_TOKEN}
-          connection={connection({ provider: "anthropic", label: "Anthropic" })}
-          hostedClaudeConnect
-          label="Claude"
-          logo={null}
-          subscription={subscription({
-            provider: "claude",
-            label: "Claude Code",
-            connectMode: "manual_code",
-            command: "codev claude-auth",
-          })}
-          surface="rooms"
-        />,
-      );
-
-      expect(
-        screen.getByRole("button", { name: "Connect Claude" }),
-      ).toBeInTheDocument();
-      expect(screen.queryByText("Use an API key instead")).toBeNull();
-      expect(screen.getByText("Connect from a terminal")).toBeInTheDocument();
-    });
-
-    /**
-     * Claude's browser runtime lives in the member's own sandbox and never
-     * reaches the shared workspace host, so there is nothing to enable — the
-     * card says so instead of offering a toggle that `providerSurfaceCapability`
-     * would refuse to honour.
-     */
-    it("explains that a Claude browser sign-in cannot be enabled for workspaces", () => {
-      render(
-        <ProviderAccountCard
-          capability={capability({ rooms: true })}
-          claudeCliToken={NO_CLI_TOKEN}
-          connection={connection({ provider: "anthropic", label: "Anthropic" })}
-          label="Claude"
-          logo={null}
-          subscription={subscription({
-            provider: "claude",
-            label: "Claude Code",
-            status: "connected",
-            connectMode: "manual_code",
-            command: "codev claude-auth",
-            provenance: "browser",
-            enabledForRooms: true,
-            enabledForWorkspace: false,
-            allowInSharedWorkspaces: true,
-          })}
-          surface="rooms"
-        />,
-      );
-
-      expect(screen.queryByRole("switch")).toBeNull();
-      expect(
-        screen.getByText(/Browser sign-ins stay in chat rooms/),
-      ).toBeInTheDocument();
-    });
-
-    /**
-     * Codex is the exception, and the card must track it: a browser OAuth
-     * login and a local CLI login materialize the same auth cache, so
-     * `providerSurfaceCapability` accepts either for a workspace
-     * (`provenance === "cli" || provider === "openai"`). Offering the toggle
-     * here is only correct for as long as that stays true.
-     */
-    it("tells a Codex browser sign-in it already reaches workspaces", () => {
-      // Codex is the one browser sign-in that does: it yields the same
-      // auth cache as `codev codex-auth`, so there is nothing to opt into.
-      render(
-        <ProviderAccountCard
-          capability={capability({ rooms: true })}
           claudeCliToken={NO_CLI_TOKEN}
           connection={connection({ provider: "openai", label: "OpenAI" })}
           label="Codex"
           logo={null}
+          runsIn={["workspace", "gen2", "rooms"]}
           subscription={subscription({
             provider: "codex",
             label: "Codex",
             status: "connected",
-            connectMode: "device_code",
-            command: "codev codex-auth",
-            provenance: "browser",
-            enabledForRooms: true,
-            enabledForWorkspace: true,
-            allowInSharedWorkspaces: true,
-          })}
-          surface="rooms"
-        />,
-      );
-
-      expect(
-        screen.getByText(/also runs in coding workspaces/),
-      ).toBeInTheDocument();
-      expect(
-        screen.queryByText(/Browser sign-ins stay in chat rooms/),
-      ).toBeNull();
-    });
-
-    it("keeps a login out of shared workspaces when the member says so", async () => {
-      const fetchMock = vi
-        .fn()
-        .mockResolvedValue(jsonResponse({ connections: [] }));
-      vi.stubGlobal("fetch", fetchMock);
-
-      render(
-        <ProviderAccountCard
-          capability={capability({ rooms: true, workspace: true })}
-          claudeCliToken={NO_CLI_TOKEN}
-          connection={connection({ provider: "openai", label: "OpenAI" })}
-          label="Codex"
-          logo={null}
-          subscription={subscription({
-            provider: "codex",
-            label: "Codex",
-            status: "connected",
-            connectMode: "device_code",
-            command: "codev codex-auth",
             provenance: "cli",
-            enabledForRooms: true,
-            enabledForWorkspace: true,
-            allowInSharedWorkspaces: true,
           })}
-          surface="workspace"
         />,
       );
 
-      const toggle = screen.getByRole("switch", {
-        name: "Allow in shared workspaces",
-      });
-      expect(toggle).toHaveAttribute("aria-checked", "true");
-      fireEvent.click(toggle);
-
-      await waitFor(() => {
-        expect(fetchMock).toHaveBeenCalledWith(
-          "/api/personal/connections",
-          expect.objectContaining({ method: "PATCH" }),
-        );
-      });
-      expect(
-        JSON.parse(
-          (fetchMock.mock.calls[0]?.[1] as RequestInit).body as string,
-        ),
-      ).toEqual({
-        provider: "openai",
-        kind: "subscription",
-        surface: "workspace",
-        enabled: false,
-      });
+      // Named the way the sidebar names them, so "where does this work" is
+      // answered in the member's own vocabulary.
+      expect(screen.getByText("Workspaces")).toBeInTheDocument();
+      expect(screen.getByText("Gen 2")).toBeInTheDocument();
+      expect(screen.getByText("Rooms")).toBeInTheDocument();
     });
 
-    it("shows and revokes Claude's CLI login in the workspace section", async () => {
-      const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
-      vi.stubGlobal("fetch", fetchMock);
-
+    it("states the surfaces in text, not by the colour of a dot", () => {
       render(
         <ProviderAccountCard
-          capability={capability({ workspace: true })}
+          claudeCliToken={NO_CLI_TOKEN}
+          connection={connection({ provider: "anthropic", label: "Anthropic" })}
+          label="Claude"
+          logo={null}
+          runsIn={["rooms"]}
+          subscription={subscription({
+            provider: "claude",
+            label: "Claude Code",
+            status: "connected",
+            provenance: "browser",
+          })}
+        />,
+      );
+
+      // A member who cannot tell the dot's colour apart still reads it.
+      expect(screen.getByText("Runs in Rooms")).toBeInTheDocument();
+    });
+
+    it("distinguishes connected-but-unrunnable from not connected", () => {
+      const { unmount } = render(
+        <ProviderAccountCard
           claudeCliToken={{
             status: "connected",
             lastFour: "wxyz",
@@ -741,67 +605,156 @@ describe("ProviderAccountCard", () => {
           connection={connection({ provider: "anthropic", label: "Anthropic" })}
           label="Claude"
           logo={null}
+          runsIn={[]}
           subscription={subscription({
             provider: "claude",
             label: "Claude Code",
-            connectMode: "manual_code",
-            command: "codev claude-auth",
+            status: "not_connected",
           })}
-          surface="workspace"
+        />,
+      );
+      expect(
+        screen.getByText("Connected, but nothing here can run it yet"),
+      ).toBeInTheDocument();
+      unmount();
+
+      render(
+        <ProviderAccountCard
+          claudeCliToken={NO_CLI_TOKEN}
+          connection={connection({
+            provider: "anthropic",
+            label: "Anthropic",
+            status: "not_connected",
+          })}
+          label="Claude"
+          logo={null}
+          runsIn={[]}
+          subscription={subscription({
+            provider: "claude",
+            label: "Claude Code",
+            status: "not_connected",
+          })}
+        />,
+      );
+      expect(screen.getByText("Not connected")).toBeInTheDocument();
+    });
+
+    it("offers every connect method on one card", () => {
+      // The two sections this replaced each hid half of these.
+      render(
+        <ProviderAccountCard
+          claudeCliToken={NO_CLI_TOKEN}
+          connection={connection({ provider: "openai", label: "OpenAI" })}
+          hostedOpenAIConnect
+          label="Codex"
+          logo={null}
+          runsIn={[]}
+          subscription={subscription({
+            provider: "codex",
+            label: "Codex",
+            connectMode: "device_code",
+            command: "codev codex-auth",
+            status: "not_connected",
+          })}
         />,
       );
 
       expect(
-        screen.getByText("Ready for coding workspaces"),
+        screen.getByRole("button", { name: /Connect ChatGPT/ }),
       ).toBeInTheDocument();
+      expect(screen.getByText("Connect from a terminal")).toBeInTheDocument();
+      expect(screen.getByText("Use an API key instead")).toBeInTheDocument();
+    });
+
+    it("asks about shared workspaces only for a login a workspace can run", async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue(jsonResponse({ connections: [] }));
+      vi.stubGlobal("fetch", fetchMock);
+
+      const { unmount } = render(
+        <ProviderAccountCard
+          claudeCliToken={NO_CLI_TOKEN}
+          connection={connection({ provider: "anthropic", label: "Anthropic" })}
+          label="Claude"
+          logo={null}
+          runsIn={["rooms"]}
+          subscription={subscription({
+            provider: "claude",
+            label: "Claude Code",
+            status: "connected",
+            provenance: "browser",
+          })}
+        />,
+      );
+      // Rooms run in the member's own session, so there is nothing to ask.
       expect(
-        screen.getByText(/Connected via codev claude-auth · ending wxyz/),
-      ).toBeInTheDocument();
-      fireEvent.click(screen.getByRole("button", { name: "Revoke CLI login" }));
+        screen.queryByRole("switch", { name: "Allow in shared workspaces" }),
+      ).toBeNull();
+      unmount();
+
+      render(
+        <ProviderAccountCard
+          claudeCliToken={NO_CLI_TOKEN}
+          connection={connection({ provider: "openai", label: "OpenAI" })}
+          label="Codex"
+          logo={null}
+          runsIn={["gen2"]}
+          subscription={subscription({
+            provider: "codex",
+            label: "Codex",
+            status: "connected",
+            provenance: "cli",
+            command: "codev codex-auth",
+          })}
+        />,
+      );
+      const toggle = screen.getByRole("switch", {
+        name: "Allow in shared workspaces",
+      });
+      fireEvent.click(toggle);
+      await waitFor(() => {
+        expect(fetchMock).toHaveBeenCalledWith(
+          "/api/personal/connections",
+          expect.objectContaining({ method: "PATCH" }),
+        );
+      });
+    });
+
+    it("shows and revokes Claude's CLI login beside the command that made it", async () => {
+      const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
+      vi.stubGlobal("fetch", fetchMock);
+
+      render(
+        <ProviderAccountCard
+          claudeCliToken={{
+            status: "connected",
+            lastFour: "wxyz",
+            enabledForRooms: false,
+            enabledForWorkspace: true,
+            allowInSharedWorkspaces: true,
+          }}
+          connection={connection({ provider: "anthropic", label: "Anthropic" })}
+          label="Claude"
+          logo={null}
+          runsIn={["workspace"]}
+          subscription={subscription({
+            provider: "claude",
+            label: "Claude Code",
+            command: "codev claude-auth",
+            status: "not_connected",
+          })}
+        />,
+      );
+
+      expect(screen.getByText(/ending wxyz/)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
       await waitFor(() => {
         expect(fetchMock).toHaveBeenCalledWith(
           "/api/personal/connections?provider=anthropic&kind=claude_cli_token",
           { method: "DELETE" },
         );
       });
-    });
-
-    it("sends the originating section with a pasted key", async () => {
-      const fetchMock = vi
-        .fn()
-        .mockResolvedValue(jsonResponse({ connections: [] }));
-      vi.stubGlobal("fetch", fetchMock);
-
-      render(
-        <ProviderAccountCard
-          capability={capability({})}
-          claudeCliToken={NO_CLI_TOKEN}
-          connection={connection({ provider: "openai", label: "OpenAI" })}
-          label="Codex"
-          logo={null}
-          subscription={subscription({
-            provider: "codex",
-            label: "Codex",
-            connectMode: "device_code",
-            command: "codev codex-auth",
-          })}
-          surface="workspace"
-        />,
-      );
-
-      fireEvent.change(screen.getByPlaceholderText("Paste API key"), {
-        target: { value: "sk-openai-a-long-enough-key" },
-      });
-      fireEvent.click(screen.getByRole("button", { name: "Save key" }));
-
-      await waitFor(() => {
-        expect(fetchMock).toHaveBeenCalled();
-      });
-      expect(
-        JSON.parse(
-          (fetchMock.mock.calls[0]?.[1] as RequestInit).body as string,
-        ),
-      ).toMatchObject({ provider: "openai", surface: "workspace" });
     });
   });
 });

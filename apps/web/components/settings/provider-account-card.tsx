@@ -21,10 +21,8 @@ import type {
   ProviderConnectionProvider,
   ProviderConnectionRecord,
 } from "@/lib/providers/provider-connection-view";
-import type {
-  ProviderSurface,
-  ProviderSurfaceCapability,
-} from "@/lib/providers/provider-surface-capability";
+import { SURFACE_LABEL } from "@/lib/providers/provider-surface-capability";
+import type { ExecutorSurface } from "@/lib/providers/registry";
 import { cn } from "@/lib/platform/utils";
 
 const RETURN_TO = "/settings/personal/providers";
@@ -123,6 +121,58 @@ function StatusDot({ connected }: { connected: boolean }) {
   );
 }
 
+/**
+ * Where this provider runs, named the way the sidebar names it.
+ *
+ * The status is carried by the words, not by the dot: a member who cannot
+ * distinguish the colours still reads "Runs in Rooms and Gen 2". The dot is
+ * a second, redundant cue rather than the only one.
+ *
+ * "Connected, but runs nowhere" is its own state and says so. That case is
+ * real — a Claude setup-token with no browser login runs in Workspaces but
+ * not Rooms — and collapsing it into "Not connected" is what used to send
+ * members off to reconnect something they already had.
+ */
+function RunsIn({
+  surfaces,
+  connected,
+}: {
+  surfaces: ExecutorSurface[];
+  connected: boolean;
+}) {
+  if (surfaces.length === 0) {
+    return (
+      <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <StatusDot connected={false} />
+        {connected
+          ? "Connected, but nothing here can run it yet"
+          : "Not connected"}
+      </p>
+    );
+  }
+  const names = surfaces.map((surface) => SURFACE_LABEL[surface]);
+  const spoken =
+    names.length === 1
+      ? names[0]
+      : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return (
+    <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+      <StatusDot connected />
+      <span className="sr-only">{`Runs in ${spoken}`}</span>
+      <span aria-hidden>Runs in</span>
+      {surfaces.map((surface) => (
+        <span
+          aria-hidden
+          className="rounded-full border border-border/70 px-1.5 py-px text-[10px] font-medium text-foreground/80"
+          key={surface}
+        >
+          {SURFACE_LABEL[surface]}
+        </span>
+      ))}
+    </p>
+  );
+}
+
 function FallbackRow({
   icon: Icon,
   title,
@@ -166,8 +216,7 @@ export function ProviderAccountCard({
   connection,
   hostedClaudeConnect = false,
   hostedOpenAIConnect = false,
-  surface,
-  capability,
+  runsIn,
   claudeCliToken,
 }: {
   logo: ReactNode;
@@ -179,14 +228,13 @@ export function ProviderAccountCard({
   /** Show the in-app "Connect ChatGPT" device-code flow (openai card only). */
   hostedOpenAIConnect?: boolean;
   /**
-   * Which settings section this card sits in. `rooms` offers browser and CLI
-   * sign-ins; `workspace` offers an API key and CLI sign-in only, since a
-   * browser sign-in never reaches the shared host. Omitted renders the
-   * combined card with every method.
+   * Where this provider can run right now, derived from the registry by
+   * `providerRunsIn`. The card states it rather than deducing it: the two
+   * settings sections this replaced each described a surface in prose, and
+   * keeping that prose true by hand is what produced a green "Ready for chat
+   * rooms" for a login rooms cannot run.
    */
-  surface?: ProviderSurface;
-  /** Per-surface readiness, for the header line and the toggles. */
-  capability?: ProviderSurfaceCapability;
+  runsIn: ExecutorSurface[];
   /** Claude's `codev claude-auth` setup-token — its workspace login. */
   claudeCliToken?: ClaudeCliTokenRecord;
 }) {
@@ -211,38 +259,17 @@ export function ProviderAccountCard({
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollStartedAt = useRef(0);
   const isCursor = subscription.provider === "cursor";
-  const roomsSurface = surface === "rooms";
-  const workspaceSurface = surface === "workspace";
-  // A browser sign-in (hosted Claude/Codex connect, Cursor's deeplink) never
-  // powers a coding workspace, so the workspace section does not offer one.
-  const offerBrowserConnect = !workspaceSurface;
-  // The rooms executor cannot run an API key yet, so the rooms section does
-  // not offer one; see ROOMS_ACCEPT_API_KEY in provider-surface-capability.
-  const offerApiKey = !roomsSurface;
   const showClaudeConnect =
-    offerBrowserConnect &&
-    hostedClaudeConnect &&
-    subscription.provider === "claude";
+    hostedClaudeConnect && subscription.provider === "claude";
   const showCodexConnect =
-    offerBrowserConnect &&
-    hostedOpenAIConnect &&
-    subscription.provider === "codex";
+    hostedOpenAIConnect && subscription.provider === "codex";
   const showHostedConnect = showClaudeConnect || showCodexConnect;
   const cliTokenConnected = claudeCliToken?.status === "connected";
-  // In the workspace section "signed in" means a login the shared host can
-  // use: Codex's CLI login, or Claude's CLI setup-token. Cursor has neither.
-  const workspaceLoginConnected = workspaceSurface
-    ? subscription.provider === "claude"
-      ? cliTokenConnected
-      : subscription.provider === "codex"
-        ? connected && subscription.provenance === "cli"
-        : false
-    : connected;
-  const surfaceReady = capability
-    ? workspaceSurface
-      ? capability.workspace.ready
-      : capability.rooms.ready
-    : undefined;
+  // The sharing choice only exists for a login a workspace can actually run.
+  const runsInAWorkspace =
+    runsIn.includes("workspace") || runsIn.includes("gen2");
+  const anythingConnected =
+    connected || cliTokenConnected || apiKeyState.status === "connected";
   useEffect(
     () => () => {
       if (pollTimer.current) clearInterval(pollTimer.current);
@@ -398,12 +425,7 @@ export function ProviderAccountCard({
       const response = await fetch("/api/personal/connections", {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        // A key pasted in a section is enabled for that section only.
-        body: JSON.stringify({
-          provider,
-          apiKey: draft.trim(),
-          ...(surface ? { surface } : {}),
-        }),
+        body: JSON.stringify({ provider, apiKey: draft.trim() }),
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
@@ -459,14 +481,18 @@ export function ProviderAccountCard({
     kind: "api_key" | "subscription" | "claude_cli_token",
     enabled: boolean,
   ) {
-    const target: ProviderSurface = "workspace";
     setBusy("save");
     setMessage("");
     try {
       const response = await fetch("/api/personal/connections", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ provider, kind, surface: target, enabled }),
+        body: JSON.stringify({
+          provider,
+          kind,
+          surface: "workspace",
+          enabled,
+        }),
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
@@ -504,22 +530,6 @@ export function ProviderAccountCard({
     }
   }
 
-  const headerStatus = workspaceSurface
-    ? surfaceReady
-      ? "Ready for coding workspaces"
-      : "Connect with an API key or from your terminal below"
-    : roomsSurface
-      ? surfaceReady
-        ? "Ready for chat rooms"
-        : isCursor || showHostedConnect
-          ? "Sign in with your subscription — no API key needed"
-          : "Connect from your terminal below"
-      : connected
-        ? "Signed in with your subscription"
-        : isCursor || showHostedConnect
-          ? "Sign in with your subscription — no API key needed"
-          : "Connect with an API key or the CoDev CLI below";
-
   return (
     <Card className="px-4 py-3.5">
       <div className="flex items-center gap-2.5">
@@ -528,34 +538,9 @@ export function ProviderAccountCard({
         </span>
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold">{label}</h3>
-          <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <StatusDot connected={surfaceReady ?? workspaceLoginConnected} />
-            {headerStatus}
-          </p>
+          <RunsIn connected={anythingConnected} surfaces={runsIn} />
         </div>
-        {workspaceSurface ? (
-          subscription.provider === "claude" && cliTokenConnected ? (
-            <Button
-              disabled={disabled}
-              onClick={() => void revokeClaudeCliToken()}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              {busy === "revoke" ? "Revoking…" : "Revoke CLI login"}
-            </Button>
-          ) : subscription.provider === "codex" && workspaceLoginConnected ? (
-            <Button
-              disabled={disabled}
-              onClick={() => void disconnect()}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              {busy === "disconnect" ? "Disconnecting…" : "Disconnect"}
-            </Button>
-          ) : null
-        ) : isCursor && offerBrowserConnect ? (
+        {isCursor ? (
           connected ? (
             <div className="flex shrink-0 gap-2">
               <Button
@@ -641,20 +626,12 @@ export function ProviderAccountCard({
       ) : null}
 
       <div className="mt-3">
-        {!offerApiKey ? (
-          <p className="border-t border-border/60 py-2.5 text-[11px] text-muted-foreground">
-            API key support for chat rooms is coming soon. For now, sign in with
-            your subscription above or from your terminal.
-          </p>
-        ) : null}
-        {offerApiKey ? (
+        {true ? (
           <FallbackRow
             connected={apiKeyState.status === "connected"}
-            defaultOpen={
-              workspaceSurface
-                ? !workspaceLoginConnected && apiKeyState.status !== "connected"
-                : !connected && !showHostedConnect
-            }
+            // Open only when there is nothing else to use: the connect
+            // buttons above are the shorter path for most members.
+            defaultOpen={!anythingConnected && !showHostedConnect}
             description={
               isCursor
                 ? "From cursor.com → Dashboard → API Keys. More reliable than the browser sign-in — CoDev exchanges it for a real session."
@@ -729,32 +706,32 @@ export function ProviderAccountCard({
         {subscription.command ? (
           <FallbackRow
             connected={
-              workspaceSurface
-                ? workspaceLoginConnected
-                : connected && subscription.provenance === "cli"
+              cliTokenConnected ||
+              (connected && subscription.provenance === "cli")
             }
-            defaultOpen={
-              workspaceSurface
-                ? !workspaceLoginConnected && apiKeyState.status !== "connected"
-                : !connected && !showHostedConnect
-            }
-            description={
-              workspaceSurface
-                ? "Sign in from your own terminal. This login can also power chat rooms."
-                : "Run the same sign-in from the CoDev CLI. A terminal login can also power coding workspaces."
-            }
+            defaultOpen={!anythingConnected && !showHostedConnect}
+            description="Sign in from your own terminal with the CoDev CLI."
             icon={Terminal}
             title="Connect from a terminal"
           >
-            {workspaceSurface &&
-            subscription.provider === "claude" &&
-            cliTokenConnected ? (
-              <p className="text-xs text-muted-foreground">
-                Connected via codev claude-auth
-                {claudeCliToken?.lastFour
-                  ? ` · ending ${claudeCliToken.lastFour}`
-                  : ""}
-              </p>
+            {subscription.provider === "claude" && cliTokenConnected ? (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">
+                  Connected via codev claude-auth
+                  {claudeCliToken?.lastFour
+                    ? ` · ending ${claudeCliToken.lastFour}`
+                    : ""}
+                </p>
+                <Button
+                  disabled={disabled}
+                  onClick={() => void revokeClaudeCliToken()}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  {busy === "revoke" ? "Revoking…" : "Revoke"}
+                </Button>
+              </div>
             ) : null}
             <CopyableCommand command="npm install -g @trycodev/cli" />
             <CopyableCommand command="codev login" />
@@ -762,21 +739,7 @@ export function ProviderAccountCard({
           </FallbackRow>
         ) : null}
 
-        {roomsSurface && connected && subscription.provenance ? (
-          subscription.provider === "codex" ? (
-            <p className="border-t border-border/60 py-2.5 text-[11px] text-muted-foreground">
-              This Codex sign-in also runs in coding workspaces, in your own
-              private session.
-            </p>
-          ) : (
-            <p className="border-t border-border/60 py-2.5 text-[11px] text-muted-foreground">
-              Browser sign-ins stay in chat rooms. To use {label} in coding
-              workspaces, add an API key or sign in from your terminal there.
-            </p>
-          )
-        ) : null}
-
-        {workspaceSurface && workspaceLoginConnected ? (
+        {runsInAWorkspace ? (
           <SurfaceToggle
             checked={subscription.allowInSharedWorkspaces}
             disabled={disabled}
@@ -786,13 +749,6 @@ export function ProviderAccountCard({
               void setSharedWorkspaceUse("subscription", next)
             }
           />
-        ) : null}
-
-        {workspaceSurface && apiKeyState.status === "connected" ? (
-          <p className="border-t border-border/60 py-2.5 text-[11px] text-muted-foreground">
-            API keys stay in coding workspaces; chat rooms run on a
-            subscription.
-          </p>
         ) : null}
       </div>
 

@@ -8,11 +8,10 @@ import {
   OrcaPageHeader,
   OrcaPageShell,
 } from "@/components/settings/orca-style";
-import { ProviderSurfaceTabs } from "@/components/settings/provider-surface-tabs";
 import { isHostedClaudeConnectEnabled } from "@/lib/providers/claude-connection-runner";
 import { isHostedCodexSubscriptionEnabled } from "@/lib/providers/hosted-codex-subscription-flag";
 import { loadProviderConnectionSnapshot } from "@/lib/providers/provider-connection-server";
-import { providerSurfaceCapability } from "@/lib/providers/provider-surface-capability";
+import { providerRunsIn } from "@/lib/providers/provider-surface-capability";
 import { requireUser } from "@/lib/auth/session";
 
 const CARDS = [
@@ -37,19 +36,22 @@ const CARDS = [
 ] as const;
 
 /**
- * Two separate provider integrations, one per surface, because the surfaces
- * run on different credential rules:
+ * One card per agent account, each stating where it runs.
  *
- *  - Chat rooms run on the member's own account, so a subscription signed in
- *    right in the browser works there.
- *  - Coding workspaces run on a shared host, so a browser sign-in never
- *    reaches them: only an API key or a login made from the member's own
- *    terminal (`codev <provider>-auth`) does.
+ * This page used to be two segmented tabs — "Chat rooms" and "Coding
+ * workspaces" — each with its own copy of every provider and its own prose
+ * about which sign-ins reached it. That split was built on a rule that is no
+ * longer true (a browser sign-in never reaches a shared host: Codex's does),
+ * and it asked the member to know which surface they were configuring before
+ * they could connect anything. Worse, the per-surface prose had to be kept
+ * true by hand against the resolvers, and it lost: a Claude setup-token was
+ * advertised as ready for chat rooms that cannot run it.
  *
- * A connection made in one section applies to that section only; the member
- * opts it into the other with a toggle where the method allows. The two
- * surfaces are segmented tabs, not stacked sections — the workspace section
- * used to sit below the fold every time.
+ * So the member connects an account, and CoDev says where it works —
+ * `providerRunsIn` reads the same registry the server resolves turns from,
+ * so the two cannot disagree. The one thing still worth asking is whether a
+ * personal login may fund a turn inside a workspace other people can see,
+ * which lives on the card as a single switch.
  */
 export default async function PersonalProvidersPage() {
   const user = await requireUser();
@@ -57,71 +59,41 @@ export default async function PersonalProvidersPage() {
   const hostedClaudeConnect = isHostedClaudeConnectEnabled();
   const hostedOpenAIConnect = isHostedCodexSubscriptionEnabled();
 
-  const sections = [
-    {
-      id: "chat-rooms",
-      surface: "rooms",
-      label: "Chat rooms",
-      description:
-        "Sign in with your Claude, ChatGPT, or Cursor subscription right in the browser — no terminal needed — or connect from your own terminal with the CoDev CLI.",
-    },
-    {
-      id: "coding-workspaces",
-      surface: "workspace",
-      label: "Coding workspaces",
-      description:
-        "Workspaces run on a shared host, so a browser sign-in never reaches them. Connect with an API key, or sign in from your own terminal with the CoDev CLI.",
-    },
-  ] as const;
-
   return (
     <OrcaPageShell>
       <OrcaPageHeader
         badge="Optional"
-        description="Connect the accounts your agents run on. Chat rooms and coding workspaces are set up separately; a connection made in one can be enabled for the other where the sign-in method allows. Everything is encrypted on the CoDev server and never shown again after you save it."
+        description="Connect the accounts your agents run on. Each card shows where that account can be used once it is connected. Everything is encrypted on the CoDev server and never shown again after you save it."
         title="AI Provider Accounts"
       />
-      <ProviderSurfaceTabs
-        tabs={sections.map((section) => ({
-          id: section.id,
-          label: section.label,
-          description: section.description,
-          content: (
-            <>
-              {CARDS.map((card) => {
-                const subscription = snapshot.cliSubscriptions.find(
-                  (row) => row.provider === card.subscription,
-                );
-                const connection = snapshot.connections.find(
-                  (row) => row.provider === card.connection,
-                );
-                if (!subscription || !connection) return null;
-                return (
-                  <ProviderAccountCard
-                    capability={providerSurfaceCapability(
-                      snapshot,
-                      card.connection,
-                    )}
-                    claudeCliToken={snapshot.claudeCliToken}
-                    connection={connection}
-                    hostedClaudeConnect={
-                      hostedClaudeConnect && card.connection === "anthropic"
-                    }
-                    hostedOpenAIConnect={
-                      hostedOpenAIConnect && card.connection === "openai"
-                    }
-                    key={`${section.id}-${card.label}`}
-                    label={card.label}
-                    logo={card.logo}
-                    subscription={subscription}
-                    surface={section.surface}
-                  />
-                );
-              })}
-            </>
-          ),
-        }))}
-      />
+      <div className="space-y-3">
+        {CARDS.map((card) => {
+          const subscription = snapshot.cliSubscriptions.find(
+            (row) => row.provider === card.subscription,
+          );
+          const connection = snapshot.connections.find(
+            (row) => row.provider === card.connection,
+          );
+          if (!subscription || !connection) return null;
+          return (
+            <ProviderAccountCard
+              claudeCliToken={snapshot.claudeCliToken}
+              connection={connection}
+              hostedClaudeConnect={
+                hostedClaudeConnect && card.connection === "anthropic"
+              }
+              hostedOpenAIConnect={
+                hostedOpenAIConnect && card.connection === "openai"
+              }
+              key={card.label}
+              label={card.label}
+              logo={card.logo}
+              runsIn={providerRunsIn(snapshot, card.connection)}
+              subscription={subscription}
+            />
+          );
+        })}
+      </div>
     </OrcaPageShell>
   );
 }

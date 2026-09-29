@@ -131,6 +131,44 @@ export function providerSurfaceCapability(
   return { rooms, workspace };
 }
 
+/**
+ * Where a provider currently runs, named the way the sidebar names it.
+ *
+ * The registry's three executors are exactly the three destinations a member
+ * navigates to — Rooms, Workspaces, Gen 2 — so the card can list them
+ * without inventing a vocabulary or blurring two of them together. Claude
+ * running in a Gen 1 workspace but not a Gen 2 one is a real difference, and
+ * saying "coding workspaces" for both is how the settings page used to end
+ * up lying.
+ */
+export const SURFACE_LABEL: Record<ExecutorSurface, string> = {
+  rooms: "Rooms",
+  workspace: "Workspaces",
+  gen2: "Gen 2",
+};
+
+/** The surfaces this provider can run on right now, in sidebar order. */
+export function providerRunsIn(
+  snapshot: ProviderConnectionSnapshot,
+  vendor: ProviderConnectionProvider,
+): ExecutorSurface[] {
+  const provider = PROVIDER_FOR_VENDOR[vendor];
+  const connected = connectedKinds(snapshot, vendor);
+  const surfaces: ExecutorSurface[] = ["workspace", "gen2", "rooms"];
+  return surfaces.filter(
+    (surface) => readinessFor(connected, provider, surface).ready,
+  );
+}
+
+/** Whether the member has connected anything at all for this provider —
+ *  distinct from "runs somewhere", which is what tells them it is useful. */
+export function providerHasAnyConnection(
+  snapshot: ProviderConnectionSnapshot,
+  vendor: ProviderConnectionProvider,
+): boolean {
+  return connectedKinds(snapshot, vendor).size > 0;
+}
+
 /** Providers the coding workspace can actually run, in preference order. */
 export function workspaceReadyProviders(
   snapshot: ProviderConnectionSnapshot,
