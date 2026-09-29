@@ -1,3 +1,9 @@
+import {
+  providerDefinition,
+  type CredentialKind,
+  type ExecutorSurface,
+  type ProviderId,
+} from "./registry";
 import type {
   CredentialProvenance,
   ProviderConnectionProvider,
@@ -5,27 +11,36 @@ import type {
 } from "./provider-connection-view";
 
 /**
- * Per-provider, per-surface readiness — the single source of truth the
- * workspace page, both settings sections, and the workspace-start preflight
- * read. Derived purely from the connection snapshot.
+ * Per-provider, per-surface readiness for the settings and workspace UIs.
  *
- * The rule, uniform across providers:
- *  - A coding workspace runs on a shared host, so it may use a credential only
- *    when the member enabled it there. Codex browser OAuth is workspace-capable
- *    because it yields the same auth cache as `codex login`; other browser
- *    subscription runtimes remain rooms-only.
- *  - A chat room runs on the member's own credential, so it accepts a browser
- *    or local-CLI subscription the member enabled for rooms — but only one the
- *    rooms executor can actually run: Codex's auth cache, or Claude's browser
- *    runtime. Claude's `codev claude-auth` setup-token is workspace-only.
- *
- * `ROOMS_ACCEPT_API_KEY` is off: the rooms executor (shared-chat-reply)
- * currently runs only the two subscription forms. Flip it once the executor
- * can run an API key so the settings copy and this table stay truthful.
+ * This used to be a hand-written table of per-provider exceptions, kept in
+ * step with the resolvers by hand and losing that race — a Claude
+ * setup-token was reported ready for chat rooms that could not run it. It is
+ * now a projection of the provider registry: which kinds the member has
+ * connected, intersected with the kinds each executor can run. The server
+ * resolves turns by walking the same table (`resolve.ts`), so the badge and
+ * the executor cannot disagree.
  */
-const ROOMS_ACCEPT_API_KEY = false;
 
 export type ProviderSurface = "rooms" | "workspace";
+
+/** Which registry credential kind each connected slot in the snapshot is. */
+const SUBSCRIPTION_KIND: Record<ProviderId, CredentialKind> = {
+  codex: "codex_auth_cache",
+  claude: "claude_runtime",
+  cursor: "cursor_tokens",
+};
+
+const PROVIDER_FOR_VENDOR: Record<ProviderConnectionProvider, ProviderId> = {
+  openai: "codex",
+  anthropic: "claude",
+  cursor: "cursor",
+};
+
+const VENDOR_SUBSCRIPTION: Record<
+  ProviderConnectionProvider,
+  "codex" | "claude" | "cursor"
+> = { openai: "codex", anthropic: "claude", cursor: "cursor" };
 
 export type SurfaceReadiness = {
   ready: boolean;
@@ -42,56 +57,61 @@ export type ProviderSurfaceCapability = Record<
   SurfaceReadiness
 >;
 
-const SUBSCRIPTION_FOR: Record<
-  ProviderConnectionProvider,
-  "codex" | "claude" | "cursor"
-> = { openai: "codex", anthropic: "claude", cursor: "cursor" };
+/** How each credential kind is described to a member. */
+const KIND_PROVENANCE: Record<CredentialKind, CredentialProvenance> = {
+  codex_auth_cache: "cli",
+  claude_setup_token: "cli",
+  claude_runtime: "browser",
+  cursor_tokens: "browser",
+  api_key: "api_key",
+};
 
-function readiness(via: CredentialProvenance[]): SurfaceReadiness {
-  return { ready: via.length > 0, via };
+/** The credential kinds this member has connected for a provider, read off
+ *  the snapshot the settings page already loads. */
+function connectedKinds(
+  snapshot: ProviderConnectionSnapshot,
+  vendor: ProviderConnectionProvider,
+): Map<CredentialKind, CredentialProvenance> {
+  const provider = PROVIDER_FOR_VENDOR[vendor];
+  const connected = new Map<CredentialKind, CredentialProvenance>();
+
+  const subscription = snapshot.cliSubscriptions.find(
+    (row) => row.provider === VENDOR_SUBSCRIPTION[vendor],
+  );
+  if (subscription?.status === "connected") {
+    connected.set(
+      SUBSCRIPTION_KIND[provider],
+      subscription.provenance ?? KIND_PROVENANCE[SUBSCRIPTION_KIND[provider]],
+    );
+  }
+  if (provider === "claude" && snapshot.claudeCliToken.status === "connected") {
+    connected.set("claude_setup_token", "cli");
+  }
+  const apiKey = snapshot.connections.find((row) => row.provider === vendor);
+  if (apiKey?.status === "connected") connected.set("api_key", "api_key");
+
+  return connected;
+}
+
+function readinessFor(
+  connected: Map<CredentialKind, CredentialProvenance>,
+  provider: ProviderId,
+  surface: ExecutorSurface,
+): SurfaceReadiness {
+  const via = providerDefinition(provider)
+    .kinds.filter((entry) => entry.runs[surface] && connected.has(entry.kind))
+    .map((entry) => connected.get(entry.kind)!);
+  return { ready: via.length > 0, via: [...new Set(via)] };
 }
 
 export function providerSurfaceCapability(
   snapshot: ProviderConnectionSnapshot,
-  provider: ProviderConnectionProvider,
+  vendor: ProviderConnectionProvider,
 ): ProviderSurfaceCapability {
-  const apiKey = snapshot.connections.find((row) => row.provider === provider);
-  const subscription = snapshot.cliSubscriptions.find(
-    (row) => row.provider === SUBSCRIPTION_FOR[provider],
-  );
-  const keyConnected = apiKey?.status === "connected";
-  const subConnected = subscription?.status === "connected";
-  // Claude's CLI setup-token is a second, *workspace-only* login kept in its
-  // own slot. It is not a rooms credential: the rooms executor resolves Claude
-  // through `getConnectedClaudeRuntime` alone (see
-  // `resolvePersonalChatSubscription`), so counting this token towards rooms
-  // readiness reported a green "Ready for chat rooms" for a member whose every
-  // reply then failed. The browser runtime in `cliSubscriptions` is rooms-only.
-  const claudeCli =
-    provider === "anthropic" && snapshot.claudeCliToken.status === "connected"
-      ? snapshot.claudeCliToken
-      : null;
-
-  const rooms: CredentialProvenance[] = [];
-  if (subConnected && subscription.enabledForRooms && subscription.provenance) {
-    rooms.push(subscription.provenance);
-  }
-  if (ROOMS_ACCEPT_API_KEY && keyConnected && apiKey.enabledForRooms) {
-    rooms.push("api_key");
-  }
-
-  const personalWorkspace: CredentialProvenance[] = [];
-  if (keyConnected && apiKey.enabledForWorkspace) {
-    personalWorkspace.push("api_key");
-  }
-  if (
-    subConnected &&
-    subscription.enabledForWorkspace &&
-    (subscription.provenance === "cli" || provider === "openai")
-  ) {
-    personalWorkspace.push(subscription.provenance ?? "cli");
-  }
-  if (claudeCli?.enabledForWorkspace) personalWorkspace.push("cli");
+  const provider = PROVIDER_FOR_VENDOR[vendor];
+  const connected = connectedKinds(snapshot, vendor);
+  const rooms = readinessFor(connected, provider, "rooms");
+  const personalWorkspace = readinessFor(connected, provider, "workspace");
 
   // No personal login for this workspace's host — fall back to the
   // workspace's own shared (`--org`) login, if one is connected and shared.
@@ -99,20 +119,16 @@ export function providerSurfaceCapability(
   // given and the viewer reached this workspace (so membership already holds).
   // Cursor has no shared-login concept, so it is never a valid key here.
   const sharedWorkspace =
-    (provider === "anthropic" || provider === "openai") &&
-    Boolean(snapshot.sharedWorkspaceLogin?.[provider]);
+    (vendor === "anthropic" || vendor === "openai") &&
+    Boolean(snapshot.sharedWorkspaceLogin?.[vendor]);
 
-  const workspace: SurfaceReadiness =
-    personalWorkspace.length > 0
-      ? { ...readiness([...new Set(personalWorkspace)]), source: "personal" }
-      : sharedWorkspace
-        ? { ready: true, via: ["cli"], source: "shared" }
-        : readiness([]);
+  const workspace: SurfaceReadiness = personalWorkspace.ready
+    ? { ...personalWorkspace, source: "personal" }
+    : sharedWorkspace
+      ? { ready: true, via: ["cli"], source: "shared" }
+      : personalWorkspace;
 
-  return {
-    rooms: readiness([...new Set(rooms)]),
-    workspace,
-  };
+  return { rooms, workspace };
 }
 
 /** Providers the coding workspace can actually run, in preference order. */

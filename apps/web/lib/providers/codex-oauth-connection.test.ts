@@ -93,7 +93,6 @@ describe("persistCodexSubscriptionFromOAuth", () => {
         material: expect.objectContaining({
           authCacheJson: expect.stringContaining('"refresh_token":"r"'),
         }),
-        enabledFor: { rooms: true, workspace: true },
       }),
     );
     expect(persistHostedCodexConnection.mock.calls[0]?.[0]).not.toHaveProperty(

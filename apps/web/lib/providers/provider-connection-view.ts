@@ -1,4 +1,24 @@
+import {
+  providerDefinition,
+  type CredentialKind,
+  type ProviderId,
+} from "./registry";
+
 export type ProviderConnectionProvider = "openai" | "anthropic" | "cursor";
+
+/** The vendor names this view uses, mapped onto registry provider ids. */
+const VENDOR_PROVIDER: Record<ProviderConnectionProvider, ProviderId> = {
+  openai: "codex",
+  anthropic: "claude",
+  cursor: "cursor",
+};
+
+/** The subscription-shaped credential each provider's card represents. */
+const SUBSCRIPTION_KIND: Record<CliSubscriptionProvider, CredentialKind> = {
+  codex: "codex_auth_cache",
+  claude: "claude_runtime",
+  cursor: "cursor_tokens",
+};
 
 export type ProviderConnectionStatus = "connected" | "not_connected";
 
@@ -13,8 +33,13 @@ export type CredentialProvenance = "browser" | "cli" | "api_key";
 
 /** Per-surface applicability a member toggles; the isolation + opt-in model. */
 export type ProviderSurfaceFlags = {
+  /** Where this credential *can* run — the registry's answer, not a stored
+   *  preference. Read-only as far as the member is concerned. */
   enabledForRooms: boolean;
   enabledForWorkspace: boolean;
+  /** The member's one stored choice: whether it may fund a turn inside a
+   *  workspace other people can see. */
+  allowInSharedWorkspaces: boolean;
 };
 
 export type ProviderConnectionRecord = ProviderSurfaceFlags & {
@@ -116,7 +141,7 @@ export function toCliSubscriptionRecords(
       connectMode: connectModes[provider] ?? connectMode,
       command,
       provenance: provenance === "api_key" ? null : provenance,
-      ...surfaceFlags(status),
+      ...surfaceFlags(status, provider, SUBSCRIPTION_KIND[provider]),
     };
   });
 }
@@ -127,7 +152,7 @@ export function toClaudeCliTokenRecord(
   return {
     status: status ? "connected" : "not_connected",
     lastFour: status?.lastFour?.trim() || null,
-    ...surfaceFlags(status),
+    ...surfaceFlags(status, "claude", "claude_setup_token"),
   };
 }
 
@@ -151,8 +176,7 @@ export type ProviderCredentialStatus = {
   credentialType?: string | null | undefined;
   lastFour?: string | null | undefined;
   connectedVia?: CredentialProvenance | null | undefined;
-  enabledForRooms?: boolean | undefined;
-  enabledForWorkspace?: boolean | undefined;
+  allowInSharedWorkspaces?: boolean | undefined;
   sharingEnabled?: boolean | undefined;
   encryptedApiKey?: string | null | undefined;
   encryptedAccessToken?: string | null | undefined;
@@ -209,15 +233,31 @@ function publicProvenance(
   return null;
 }
 
-/** A disconnected credential is enabled nowhere; a connected one defaults to
- *  both surfaces when the row predates the per-surface flags. */
+/**
+ * Where a connected credential can run. These are no longer stored per row:
+ * the provider registry decides, because it is a property of the credential
+ * kind and not of the member's preferences. A disconnected credential runs
+ * nowhere.
+ */
 function surfaceFlags(
   status: ProviderCredentialStatus | null,
+  provider: ProviderId,
+  kind: CredentialKind,
 ): ProviderSurfaceFlags {
-  if (!status) return { enabledForRooms: false, enabledForWorkspace: false };
+  if (!status) {
+    return {
+      enabledForRooms: false,
+      enabledForWorkspace: false,
+      allowInSharedWorkspaces: false,
+    };
+  }
+  const entry = providerDefinition(provider).kinds.find(
+    (candidate) => candidate.kind === kind,
+  );
   return {
-    enabledForRooms: status.enabledForRooms ?? true,
-    enabledForWorkspace: status.enabledForWorkspace ?? true,
+    enabledForRooms: entry?.runs.rooms ?? false,
+    enabledForWorkspace: entry?.runs.workspace ?? false,
+    allowInSharedWorkspaces: status.allowInSharedWorkspaces ?? true,
   };
 }
 
@@ -239,7 +279,11 @@ export function toProviderConnectionRecord(input: {
     suppliedBy: connected ? input.suppliedBy : null,
     scope: "personal",
     provenance: connected ? "api_key" : null,
-    ...surfaceFlags(connected ? input.status : null),
+    ...surfaceFlags(
+      connected ? input.status : null,
+      VENDOR_PROVIDER[input.provider],
+      "api_key",
+    ),
   };
 }
 

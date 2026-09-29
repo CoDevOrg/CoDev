@@ -298,7 +298,7 @@ describe("ensureOrcaSession", () => {
     return {
       credential: {
         connectedVia,
-        enabledForWorkspace: true,
+        allowInSharedWorkspaces: true,
         encryptedMaterial: "enc",
       },
       source: "USER" as const,

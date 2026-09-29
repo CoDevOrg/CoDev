@@ -102,6 +102,5 @@ export async function persistCodexSubscriptionFromOAuth(input: {
     // The workspace runtime materializes it into the member-scoped CODEX_HOME,
     // so one browser sign-in can power both rooms and coding workspaces.
     connectedVia: "browser",
-    enabledFor: { rooms: true, workspace: true },
   });
 }

@@ -17,6 +17,7 @@ const OFF: ClaudeCliTokenRecord = {
   lastFour: null,
   enabledForRooms: false,
   enabledForWorkspace: false,
+  allowInSharedWorkspaces: true,
 };
 
 function key(
@@ -34,6 +35,7 @@ function key(
     provenance: "api_key",
     enabledForRooms: true,
     enabledForWorkspace: true,
+    allowInSharedWorkspaces: true,
     ...overrides,
   };
 }
@@ -51,6 +53,7 @@ function sub(
     provenance: "browser",
     enabledForRooms: true,
     enabledForWorkspace: true,
+    allowInSharedWorkspaces: true,
     ...overrides,
   };
 }
@@ -83,18 +86,24 @@ describe("providerSurfaceCapability", () => {
     });
   });
 
-  it("Claude and Cursor browser subscriptions power rooms only", () => {
+  it("the Claude browser runtime powers rooms only", () => {
     const view = snapshot({
-      cliSubscriptions: [
-        sub("claude", { provenance: "browser", enabledForWorkspace: false }),
-        sub("cursor", { provenance: "browser" }),
-      ],
+      cliSubscriptions: [sub("claude", { provenance: "browser" })],
     });
-    for (const provider of ["anthropic", "cursor"] as const) {
-      const capability = providerSurfaceCapability(view, provider);
-      expect(capability.rooms).toEqual({ ready: true, via: ["browser"] });
-      expect(capability.workspace.ready).toBe(false);
-    }
+    const capability = providerSurfaceCapability(view, "anthropic");
+    expect(capability.rooms).toEqual({ ready: true, via: ["browser"] });
+    expect(capability.workspace.ready).toBe(false);
+  });
+
+  it("a Cursor login powers workspaces only", () => {
+    // Rooms run Claude and Codex; `roomReplyOptions` has never offered
+    // Cursor, though the old capability table reported it as rooms-ready.
+    const view = snapshot({
+      cliSubscriptions: [sub("cursor", { provenance: "browser" })],
+    });
+    const capability = providerSurfaceCapability(view, "cursor");
+    expect(capability.rooms.ready).toBe(false);
+    expect(capability.workspace.ready).toBe(true);
   });
 
   it("a local-CLI Codex login powers both surfaces", () => {
@@ -132,6 +141,7 @@ describe("providerSurfaceCapability", () => {
         lastFour: "wxyz",
         enabledForRooms: false,
         enabledForWorkspace: true,
+        allowInSharedWorkspaces: true,
       },
     });
     const capability = providerSurfaceCapability(view, "anthropic");
@@ -154,6 +164,7 @@ describe("providerSurfaceCapability", () => {
         lastFour: "wxyz",
         enabledForRooms: true,
         enabledForWorkspace: true,
+        allowInSharedWorkspaces: true,
       },
     });
     const capability = providerSurfaceCapability(view, "anthropic");
@@ -161,18 +172,15 @@ describe("providerSurfaceCapability", () => {
     expect(capability.workspace.ready).toBe(true);
   });
 
-  it("honours the member's per-surface toggles", () => {
-    const view = snapshot({
-      connections: [key("openai", { enabledForWorkspace: false })],
-      cliSubscriptions: [
-        sub("codex", { provenance: "cli", enabledForRooms: false }),
-      ],
-    });
+  it("an API key alone cannot answer in chat rooms", () => {
+    // The rooms executor runs only the subscription forms, so a key is a
+    // workspace credential no matter which settings section it was pasted in.
+    const view = snapshot({ connections: [key("openai")] });
     const capability = providerSurfaceCapability(view, "openai");
     expect(capability.rooms.ready).toBe(false);
     expect(capability.workspace).toEqual({
       ready: true,
-      via: ["cli"],
+      via: ["api_key"],
       source: "personal",
     });
   });
@@ -225,6 +233,7 @@ describe("workspaceReadyProviders", () => {
         lastFour: "wxyz",
         enabledForRooms: false,
         enabledForWorkspace: true,
+        allowInSharedWorkspaces: true,
       },
     });
     expect(workspaceReadyProviders(view)).toEqual(["anthropic", "openai"]);

@@ -407,6 +407,20 @@
       "when": 1790577333017,
       "tag": "0057_sloppy_zodiak",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1790648560704,
+      "tag": "0058_milky_ultimates",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1790648571064,
+      "tag": "0059_flippant_zuras",
+      "breakpoints": true
     }
   ]
 }

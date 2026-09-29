@@ -126,8 +126,9 @@ export async function persistHostedCodexConnection(input: {
   /** Browser and CLI logins produce byte-identical auth caches, so the caller
    *  must say which it was: only a `cli` login may power a coding workspace. */
   connectedVia: "browser" | "cli";
-  /** Surfaces to enable on create; existing toggles are kept on reconnect. */
-  enabledFor?: { rooms: boolean; workspace: boolean };
+  /** Whether this login may fund a turn in a shared workspace; the member's
+   *  existing choice is kept on reconnect unless this is given. */
+  allowInSharedWorkspaces?: boolean;
 }) {
   validateAuthCache(input.material.authCacheJson);
   const sharingEnabled =
@@ -151,8 +152,7 @@ export async function persistHostedCodexConnection(input: {
       unavailableUntil: null,
       revokedAt: null,
       connectedVia: input.connectedVia,
-      enabledForRooms: input.enabledFor?.rooms ?? true,
-      enabledForWorkspace: input.enabledFor?.workspace ?? true,
+      allowInSharedWorkspaces: input.allowInSharedWorkspaces ?? true,
     })
     .onConflictDoUpdate({
       target: [
@@ -173,11 +173,8 @@ export async function persistHostedCodexConnection(input: {
         unavailableUntil: null,
         revokedAt: null,
         connectedVia: input.connectedVia,
-        ...(input.enabledFor
-          ? {
-              enabledForRooms: input.enabledFor.rooms,
-              enabledForWorkspace: input.enabledFor.workspace,
-            }
+        ...(input.allowInSharedWorkspaces !== undefined
+          ? { allowInSharedWorkspaces: input.allowInSharedWorkspaces }
           : {}),
         updatedAt: new Date(),
       },

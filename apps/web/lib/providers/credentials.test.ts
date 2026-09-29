@@ -19,6 +19,7 @@ const mockDatabase = vi.hoisted(() => ({
   select: vi.fn(() => ({
     from: vi.fn(() => ({
       where: vi.fn(() => ({
+        limit: vi.fn(async () => mockRows.shift() ?? []),
         orderBy: vi.fn(() => ({
           limit: vi.fn(async () => mockRows.shift() ?? []),
         })),
@@ -104,7 +105,10 @@ describe("resolveAgentCredential", () => {
     expect(mockClaudeRuntime).toHaveBeenCalledWith("sender");
     expect(mockDatabase.select).not.toHaveBeenCalled();
   });
-  it("refuses legacy Claude tokens and requires official runtime reconnect", async () => {
+  it("refuses a browser-era Claude token and asks for a rooms login", async () => {
+    // A legacy `anthropic` OAUTH_TOKEN row is not a setup-token, and a
+    // setup-token is not a rooms credential either. Neither may answer a
+    // reply; the member is told to connect one that can.
     mockRows.push([
       baseCredential({
         provider: "anthropic",
@@ -115,12 +119,11 @@ describe("resolveAgentCredential", () => {
     ]);
     await expect(
       resolvePersonalChatSubscription("sender", "claude"),
-    ).rejects.toThrow(/Reconnect Claude/);
+    ).rejects.toThrow(/Claude/);
     mockRows.length = 0;
     await expect(
       resolvePersonalChatSubscription("sender", "claude"),
-    ).rejects.toThrow("Reconnect Claude");
-    expect(mockRows).toHaveLength(0);
+    ).rejects.toThrow(/Connect Claude in Settings/);
   });
 
   it("room Codex resolution never requests an organization credential", async () => {

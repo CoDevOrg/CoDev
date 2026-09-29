@@ -445,12 +445,21 @@ export function ProviderAccountCard({
     }
   }
 
-  /** Flip a credential's "also use in <other surface>" toggle. */
-  async function setSurface(
+  /**
+   * Flip whether this credential may fund a turn inside a shared workspace.
+   *
+   * It used to be a pair of "also use in <other surface>" switches. Those
+   * wrote two columns that only one resolution path out of three ever read,
+   * so flipping one changed a badge and nothing else; where a credential can
+   * run is now the provider registry's answer. This is the part that was
+   * genuinely the member's to decide: whose subscription gets spent when the
+   * work lands somewhere other people can see.
+   */
+  async function setSharedWorkspaceUse(
     kind: "api_key" | "subscription" | "claude_cli_token",
-    target: ProviderSurface,
     enabled: boolean,
   ) {
+    const target: ProviderSurface = "workspace";
     setBusy("save");
     setMessage("");
     try {
@@ -466,8 +475,8 @@ export function ProviderAccountCard({
       }
       setMessage(
         enabled
-          ? `${label} will also be used in ${target === "rooms" ? "chat rooms" : "coding workspaces"}.`
-          : `${label} is no longer used in ${target === "rooms" ? "chat rooms" : "coding workspaces"}.`,
+          ? `${label} can be used in shared workspaces.`
+          : `${label} will stay out of shared workspaces.`,
       );
       router.refresh();
     } finally {
@@ -755,15 +764,10 @@ export function ProviderAccountCard({
 
         {roomsSurface && connected && subscription.provenance ? (
           subscription.provider === "codex" ? (
-            <SurfaceToggle
-              checked={subscription.enabledForWorkspace ?? true}
-              disabled={disabled}
-              label="Also use in coding workspaces"
-              note="Your Codex sign-in runs in your private workspace session."
-              onChange={(next) =>
-                void setSurface("subscription", "workspace", next)
-              }
-            />
+            <p className="border-t border-border/60 py-2.5 text-[11px] text-muted-foreground">
+              This Codex sign-in also runs in coding workspaces, in your own
+              private session.
+            </p>
           ) : (
             <p className="border-t border-border/60 py-2.5 text-[11px] text-muted-foreground">
               Browser sign-ins stay in chat rooms. To use {label} in coding
@@ -772,15 +776,15 @@ export function ProviderAccountCard({
           )
         ) : null}
 
-        {workspaceSurface &&
-        subscription.provider === "codex" &&
-        workspaceLoginConnected ? (
+        {workspaceSurface && workspaceLoginConnected ? (
           <SurfaceToggle
-            checked={subscription.enabledForRooms ?? true}
+            checked={subscription.allowInSharedWorkspaces}
             disabled={disabled}
-            label="Also use in chat rooms"
-            note="Your terminal login can answer in chat rooms too."
-            onChange={(next) => void setSurface("subscription", "rooms", next)}
+            label="Allow in shared workspaces"
+            note="Turns you start in a workspace other people can see run on this login, and are billed to you."
+            onChange={(next) =>
+              void setSharedWorkspaceUse("subscription", next)
+            }
           />
         ) : null}
 

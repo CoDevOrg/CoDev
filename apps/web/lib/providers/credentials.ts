@@ -94,18 +94,17 @@ function byokRequiredError(provider: AuthProvider) {
 export type CredentialSurface = "rooms" | "workspace";
 
 /**
- * Predicates limiting a lookup to credentials usable on one surface. A coding
- * workspace runs on a shared host, so it never sees a browser subscription —
- * nor an unstamped legacy row, which is treated as browser by the migration.
- * Rooms accept any provenance the member has enabled there.
+ * Predicates limiting a lookup to credentials usable on one surface.
+ *
+ * Only provenance is left here: which *kinds* can run where is the provider
+ * registry's answer (`registry.ts`), and the member's one remaining choice —
+ * whether a credential may fund a turn in a shared workspace — is applied by
+ * `resolveCredential`. This narrow helper survives for the Gen 1 readers that
+ * still query rows directly.
  */
 function surfacePredicates(surface: CredentialSurface | undefined) {
-  if (!surface) return [];
-  if (surface === "rooms") {
-    return [eq(schema.providerCredentials.enabledForRooms, true)];
-  }
+  if (!surface || surface === "rooms") return [];
   return [
-    eq(schema.providerCredentials.enabledForWorkspace, true),
     isNotNull(schema.providerCredentials.connectedVia),
     ne(schema.providerCredentials.connectedVia, "browser"),
   ];
@@ -363,64 +362,47 @@ async function getCredentialValue(
 }
 
 /**
- * Resolve only the sender's subscription for a chat room; never fall back to
- * an API key or shared seat. Rooms are the one surface a browser subscription
- * may power, so any provenance is accepted — but only if the member left the
- * credential enabled for rooms (the Claude browser runtime lives outside
- * provider_credentials and is inherently rooms-only, so it carries no flag).
+ * Resolve the credential a chat-room reply runs on.
+ *
+ * The walk itself now lives in `resolveCredential`; this keeps the
+ * `ResolvedCredential` shape the rooms executor consumes. Rooms pass no
+ * workspace id, so a shared seat can never fund a reply, and the registry —
+ * not a flag on the row — decides that rooms run the two subscription forms
+ * and not an API key.
  */
 export async function resolvePersonalChatSubscription(
   userId: string,
   provider: "claude" | "codex",
 ): Promise<ResolvedCredential> {
-  if (provider === "claude") {
-    const { getConnectedClaudeRuntime } =
-      await import("./claude-connection-session");
-    const connection = await getConnectedClaudeRuntime(userId);
-    if (!connection)
-      throw new Error("Reconnect Claude using official login in Settings.");
+  const { requireCredential } = await import("./resolve");
+  const resolved = await requireCredential({
+    userId,
+    provider,
+    surface: "rooms",
+  });
+  if (resolved.secret.kind === "claude_runtime") {
     return {
       provider: "anthropic",
       source: "USER",
       authType: "CLAUDE_RUNTIME",
-      credentialId: connection.id,
+      credentialId: resolved.secret.connectionId,
       claudeUserId: userId,
     };
   }
-  if (provider === "codex") {
-    const hosted = await resolveHostedCodexSubscription({
-      userId,
-      includeBusy: true,
-    });
-    if (
-      hosted?.credential.encryptedMaterial &&
-      hosted.credential.enabledForRooms !== false
-    ) {
-      const material = await decryptHostedMaterial(
-        hosted.credential.encryptedMaterial,
-      );
-      if (material.authCacheJson)
-        return {
-          provider: "openai",
-          source: "USER",
-          authType: "HOSTED_CODEX_SUBSCRIPTION",
-          credentialId: hosted.credential.id,
-          codexAuthCacheJson: material.authCacheJson,
-        };
-    }
+  if (resolved.secret.kind === "codex_auth_cache") {
+    return {
+      provider: "openai",
+      source: "USER",
+      authType: "HOSTED_CODEX_SUBSCRIPTION",
+      ...(resolved.credentialId ? { credentialId: resolved.credentialId } : {}),
+      codexAuthCacheJson: resolved.secret.authCacheJson,
+    };
   }
-  const credential = await findCredential(
-    "USER",
-    userId,
-    "openai",
-    "OAUTH_TOKEN",
-    "rooms",
+  // The registry lists no other kind as rooms-capable; a new one must decide
+  // how the rooms executor consumes it rather than falling through silently.
+  throw new Error(
+    "This connection cannot answer in chat rooms. Connect a subscription in Settings.",
   );
-  if (!credential || credential.status !== "active")
-    throw new Error(
-      "Connect your subscription in Settings before asking for a reply.",
-    );
-  return getCredentialValue(credential);
 }
 
 export async function resolveAgentCredential(
@@ -609,9 +591,6 @@ export async function resolveClaudeCliTokenForIde(
 /** How a credential was obtained; mirrors `credentialConnectedVia` in the schema. */
 export type CredentialConnectedVia = "browser" | "cli" | "api_key";
 
-/** Which product surfaces a credential is enabled for (isolation + opt-in sharing). */
-export type CredentialSurfaces = { rooms: boolean; workspace: boolean };
-
 export async function saveProviderCredential(input: {
   scopeType: ScopeType;
   scopeId: string;
@@ -629,9 +608,9 @@ export async function saveProviderCredential(input: {
    *  to `browser` (rooms-only), the conservative choice for a flow that did not
    *  declare itself. */
   connectedVia?: CredentialConnectedVia | undefined;
-  /** Surfaces to enable on create. Defaults to both; on reconnect the member's
-   *  existing toggles are preserved unless this is given. */
-  enabledFor?: CredentialSurfaces | undefined;
+  /** Whether this credential may fund a turn in a shared workspace.
+   *  Defaults to true on create; preserved on reconnect unless given. */
+  allowInSharedWorkspaces?: boolean | undefined;
   /** Whether every member of the scope (an ORGANIZATION credential's scope id
    *  is a specific workspace) may use this login, not just whoever connected
    *  it. Defaults to true for ORGANIZATION scope, false for USER — the same
@@ -718,8 +697,7 @@ export async function saveProviderCredential(input: {
       lastFour: input.lastFour ?? null,
       connectedVia,
       sharingEnabled,
-      enabledForRooms: input.enabledFor?.rooms ?? true,
-      enabledForWorkspace: input.enabledFor?.workspace ?? true,
+      allowInSharedWorkspaces: input.allowInSharedWorkspaces ?? true,
     })
     .onConflictDoUpdate({
       target: [
@@ -741,11 +719,8 @@ export async function saveProviderCredential(input: {
         lastFour: input.lastFour ?? null,
         connectedVia,
         ...(input.sharingEnabled !== undefined ? { sharingEnabled } : {}),
-        ...(input.enabledFor
-          ? {
-              enabledForRooms: input.enabledFor.rooms,
-              enabledForWorkspace: input.enabledFor.workspace,
-            }
+        ...(input.allowInSharedWorkspaces !== undefined
+          ? { allowInSharedWorkspaces: input.allowInSharedWorkspaces }
           : {}),
         updatedAt: new Date(),
       },
@@ -755,7 +730,7 @@ export async function saveProviderCredential(input: {
 export async function saveOpenAICredential(
   userId: string,
   apiKey: string,
-  enabledFor?: CredentialSurfaces,
+  allowInSharedWorkspaces?: boolean,
 ) {
   const normalized = apiKey.trim();
   if (!normalized.startsWith("sk-") || normalized.length < 20) {
@@ -768,14 +743,14 @@ export async function saveOpenAICredential(
     credentialType: "API_KEY",
     apiKey: normalized,
     lastFour: normalized.slice(-4),
-    enabledFor,
+    allowInSharedWorkspaces,
   });
 }
 
 export async function saveAnthropicCredential(
   userId: string,
   apiKey: string,
-  enabledFor?: CredentialSurfaces,
+  allowInSharedWorkspaces?: boolean,
 ) {
   const normalized = apiKey.trim();
   if (!normalized.startsWith("sk-ant-") || normalized.length < 20) {
@@ -788,14 +763,14 @@ export async function saveAnthropicCredential(
     credentialType: "API_KEY",
     apiKey: normalized,
     lastFour: normalized.slice(-4),
-    enabledFor,
+    allowInSharedWorkspaces,
   });
 }
 
 export async function saveCursorCredential(
   userId: string,
   apiKey: string,
-  enabledFor?: CredentialSurfaces,
+  allowInSharedWorkspaces?: boolean,
 ) {
   const normalized = apiKey.trim();
   if (normalized.length < 20) {
@@ -808,33 +783,26 @@ export async function saveCursorCredential(
     credentialType: "API_KEY",
     apiKey: normalized,
     lastFour: normalized.slice(-4),
-    enabledFor,
+    allowInSharedWorkspaces,
   });
 }
 
 /**
- * Flip which surfaces a stored credential is enabled for. This records the
- * member's intent only: workspace *eligibility* (never a browser login) is
- * enforced by the resolvers regardless, so enabling a browser subscription for
- * workspaces here would be a no-op — the settings UI disables that toggle and
- * says why.
+ * Flip whether a stored credential may fund a turn inside a shared
+ * workspace. Unlike the two per-surface flags this replaced, it is read on
+ * every resolution path, so it is a real setting rather than a badge.
  */
 export async function updateCredentialSurfaces(
   scopeType: ScopeType,
   scopeId: string,
   provider: AuthProvider,
   credentialType: CredentialType,
-  surfaces: Partial<CredentialSurfaces>,
+  allowInSharedWorkspaces: boolean,
 ) {
   await getDatabase()
     .update(schema.providerCredentials)
     .set({
-      ...(surfaces.rooms !== undefined
-        ? { enabledForRooms: surfaces.rooms }
-        : {}),
-      ...(surfaces.workspace !== undefined
-        ? { enabledForWorkspace: surfaces.workspace }
-        : {}),
+      allowInSharedWorkspaces,
       updatedAt: new Date(),
     })
     .where(
@@ -879,8 +847,7 @@ export async function getProviderCredentialStatus(
     awsRoleArn: credential.awsRoleArn ?? undefined,
     updatedAt: credential.updatedAt,
     connectedVia: credential.connectedVia ?? undefined,
-    enabledForRooms: credential.enabledForRooms,
-    enabledForWorkspace: credential.enabledForWorkspace,
+    allowInSharedWorkspaces: credential.allowInSharedWorkspaces,
     sharingEnabled: credential.sharingEnabled,
   };
 }
