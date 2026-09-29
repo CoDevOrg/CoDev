@@ -18,13 +18,10 @@ describe("provider registry", () => {
       "codex_auth_cache",
       "api_key",
     ]);
+    // One Claude login that runs everywhere, now that the browser sign-in
+    // captures the same setup-token the CLI upload does.
     expect(runnableKinds("claude", "rooms").map((entry) => entry.kind)).toEqual(
-      ["claude_runtime"],
-    );
-    // The setup-token is workspace-only. Reporting it as a rooms credential
-    // is exactly the bug this registry replaced.
-    expect(runnableKinds("claude", "rooms")).not.toContainEqual(
-      expect.objectContaining({ kind: "claude_setup_token" }),
+      ["claude_setup_token"],
     );
     expect(
       runnableKinds("claude", "workspace").map((entry) => entry.kind),
@@ -35,7 +32,9 @@ describe("provider registry", () => {
     expect(providerRunsOn("codex", "gen2")).toBe(true);
     // Gen 2 cannot hand a process an environment variable yet, which is the
     // only reason Claude does not run there; flipping it is a registry edit.
-    expect(providerRunsOn("claude", "gen2")).toBe(false);
+    // Claude reaches Gen 2 now that the guest takes an environment variable
+    // and the login yields a token rather than a profile in a snapshot.
+    expect(providerRunsOn("claude", "gen2")).toBe(true);
     expect(providerRunsOn("cursor", "rooms")).toBe(false);
   });
 
@@ -87,20 +86,8 @@ describe("provider registry", () => {
     ).toEqual({ env: { ANTHROPIC_API_KEY: "sk-ant-test" } });
   });
 
-  it("hands over nothing for the Claude browser runtime", () => {
-    // Its credential is a logged-in profile inside a sandbox CoDev never
-    // holds, which is why it cannot reach any other host.
-    expect(
-      launchProfileFor("claude", {
-        kind: "claude_runtime",
-        connectionId: "connection-1",
-      }),
-    ).toEqual({});
-  });
-
   it("lists every kind a provider owns, in resolution order", () => {
     expect(providerDefinition("claude").kinds.map((k) => k.kind)).toEqual([
-      "claude_runtime",
       "claude_setup_token",
       "api_key",
     ]);

@@ -62,10 +62,6 @@ vi.mock("../providers/ai-model", () => ({
   resolveSelectableAgentModel: mocks.validate,
 }));
 vi.mock("ai", () => ({ generateText: mocks.generate }));
-vi.mock("../providers/claude-subscription-execution", () => ({
-  claimClaudeSubscriptionExecution: mocks.claim,
-  releaseClaudeSubscriptionExecution: mocks.release,
-}));
 vi.mock("../providers/hosted-codex-subscription-credentials", () => ({
   updateHostedCodexAuthCache: mocks.refresh,
 }));

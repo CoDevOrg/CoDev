@@ -49,7 +49,6 @@ export type ConnectMethod = "browser" | "cli" | "paste";
 export type CredentialKind =
   | "codex_auth_cache"
   | "claude_setup_token"
-  | "claude_runtime"
   | "cursor_tokens"
   | "api_key";
 
@@ -74,9 +73,6 @@ export const PROFILE_DIR_TOKEN = "{{profileDir}}";
 export type ResolvedSecret =
   | { kind: "codex_auth_cache"; authCacheJson: string }
   | { kind: "claude_setup_token"; token: string }
-  /** The browser login runtime keeps its credential inside a Firecracker
-   *  profile CoDev never holds; only the connection id identifies it. */
-  | { kind: "claude_runtime"; connectionId: string }
   | { kind: "cursor_tokens"; accessToken: string; refreshToken: string }
   | { kind: "api_key"; apiKey: string };
 
@@ -128,23 +124,14 @@ const CLAUDE: ProviderDefinition = {
   vendor: "anthropic",
   kinds: [
     {
-      kind: "claude_runtime",
-      label: "Claude subscription",
-      connect: ["browser"],
-      // Rooms-only by construction: the credential is a logged-in profile
-      // inside a per-member Firecracker snapshot, so there is nothing to hand
-      // to another host. Retired in a later step, which is what lets the
-      // setup-token below become this provider's single login.
-      runs: { rooms: true, workspace: false, gen2: false },
-    },
-    {
       kind: "claude_setup_token",
-      label: "Claude Code setup-token",
-      connect: ["cli"],
-      // `gen2` is false only because the Gen 2 guest cannot yet be handed an
-      // environment variable — see `LaunchProfile`. Flip it with the guest
-      // change, not by adding a second resolver.
-      runs: { rooms: false, workspace: true, gen2: false },
+      label: "Claude subscription",
+      // Both sign-ins now end at the same credential: the browser login
+      // captures the token the CLI prints instead of leaving a signed-in
+      // profile behind in a per-member Firecracker snapshot, so there is one
+      // Claude login rather than two that ran in different places.
+      connect: ["browser", "cli"],
+      runs: { rooms: true, workspace: true, gen2: true },
     },
     {
       kind: "api_key",
@@ -283,8 +270,5 @@ export function launchProfileFor(
             env: { CODEX_HOME: `${PROFILE_DIR_TOKEN}/.codex` },
           }
         : { env: { [API_KEY_ENV[id]]: secret.apiKey } };
-    case "claude_runtime":
-      // Nothing to hand over: the credential never leaves its own sandbox.
-      return {};
   }
 }

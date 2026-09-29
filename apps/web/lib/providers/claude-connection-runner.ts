@@ -17,7 +17,6 @@ import {
   pollClaudeSetupTokenInSandbox,
   startClaudeSetupTokenInSandbox,
   submitClaudeSetupTokenCodeInSandbox,
-  snapshotWorkspace,
   getSandbox,
   resumeSandbox,
 } from "../runtime/orchestrator";
@@ -95,15 +94,6 @@ export const orchestratorClaudeRunner: ClaudeLoginRunner = {
       reference.profileId,
       reference.sessionId,
     );
-  },
-  async retain({ runnerId }) {
-    const reference = decodeClaudeRuntimeReference(runnerId);
-    if (reference.backend !== "orchestrator")
-      throw new Error("Wrong runtime backend.");
-    const sandbox = await getSandbox(reference.profileId);
-    await snapshotWorkspace(reference.profileId, sandbox.headSha);
-    // Snapshot includes the private guest profile. Release live VM capacity.
-    await destroySandbox(reference.profileId);
   },
   async dispose({ runnerId }) {
     const reference = decodeClaudeRuntimeReference(runnerId);

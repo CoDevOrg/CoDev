@@ -14,10 +14,7 @@ import {
 } from "./credentials";
 import { isHostedClaudeConnectEnabled } from "./claude-connection-runner";
 import { isHostedCodexSubscriptionEnabled } from "./hosted-codex-subscription-flag";
-import {
-  getConnectedClaudeRuntime,
-  disconnectClaudeRuntime,
-} from "./claude-connection-session";
+import { disconnectClaudeRuntime } from "./claude-connection-session";
 import {
   disconnectHostedCodexSubscription,
   getHostedCodexPublicStatus,
@@ -53,7 +50,6 @@ export async function loadProviderConnectionSnapshot(
     cursorKey,
     hostedCodex,
     codexOAuth,
-    claudeRuntime,
     claudeCliToken,
     cursorOAuth,
     sharedCodex,
@@ -69,7 +65,6 @@ export async function loadProviderConnectionSnapshot(
       "HOSTED_CODEX_SUBSCRIPTION",
     ),
     getProviderCredentialStatus("USER", user.id, "openai", "OAUTH_TOKEN"),
-    getConnectedClaudeRuntime(user.id),
     // Only a CLI-stamped setup-token is reported; a browser-era token is not.
     getProviderCredentialStatus("USER", user.id, "anthropic", "OAUTH_TOKEN"),
     getProviderCredentialStatus("USER", user.id, "cursor", "OAUTH_TOKEN"),
@@ -103,15 +98,10 @@ export async function loadProviderConnectionSnapshot(
       // CLI or the in-page device-code flow. Both produce the refreshable auth
       // cache that the member-scoped workspace runtime consumes.
       codex: hostedCodex ?? codexOAuth,
-      // The browser runtime keeps its credential outside provider_credentials
-      // and can never reach a workspace host, so it is inherently rooms-only.
-      claude: claudeRuntime
-        ? {
-            credentialType: "OAUTH_TOKEN",
-            lastFour: "Official runtime",
-            connectedVia: "browser",
-          }
-        : null,
+      // One Claude login, whichever way it was made: the browser sign-in
+      // captures the same setup-token the CLI upload sends, so both land in
+      // the same row and this card and `claudeCliToken` describe one thing.
+      claude: claudeCliToken,
       cursor: cursorOAuth,
     },
     claudeCliToken,

@@ -86,13 +86,25 @@ describe("providerSurfaceCapability", () => {
     });
   });
 
-  it("the Claude browser runtime powers rooms only", () => {
-    const view = snapshot({
-      cliSubscriptions: [sub("claude", { provenance: "browser" })],
-    });
-    const capability = providerSurfaceCapability(view, "anthropic");
-    expect(capability.rooms).toEqual({ ready: true, via: ["browser"] });
-    expect(capability.workspace.ready).toBe(false);
+  it("a Claude login powers both surfaces, however it was made", () => {
+    // It used to matter: a browser sign-in left a profile in a snapshot that
+    // only rooms could reach, and the terminal upload produced a token only
+    // workspaces could use. Both capture the same setup-token now.
+    for (const provenance of ["browser", "cli"] as const) {
+      const view = snapshot({
+        cliSubscriptions: [sub("claude", { provenance })],
+        claudeCliToken: {
+          status: "connected",
+          lastFour: "wxyz",
+          enabledForRooms: true,
+          enabledForWorkspace: true,
+          allowInSharedWorkspaces: true,
+        },
+      });
+      const capability = providerSurfaceCapability(view, "anthropic");
+      expect(capability.rooms.ready).toBe(true);
+      expect(capability.workspace.ready).toBe(true);
+    }
   });
 
   it("a Cursor login powers workspaces only", () => {
@@ -131,32 +143,11 @@ describe("providerSurfaceCapability", () => {
     });
   });
 
-  it("the Claude CLI setup-token is a second, workspace-capable login", () => {
-    const view = snapshot({
-      cliSubscriptions: [
-        sub("claude", { provenance: "browser", enabledForWorkspace: false }),
-      ],
-      claudeCliToken: {
-        status: "connected",
-        lastFour: "wxyz",
-        enabledForRooms: false,
-        enabledForWorkspace: true,
-        allowInSharedWorkspaces: true,
-      },
-    });
-    const capability = providerSurfaceCapability(view, "anthropic");
-    expect(capability.rooms.via).toEqual(["browser"]);
-    expect(capability.workspace).toEqual({
-      ready: true,
-      via: ["cli"],
-      source: "personal",
-    });
-  });
-
-  it("does not report rooms readiness from the Claude setup-token alone", () => {
-    // The rooms executor resolves Claude only through the browser runtime, so
-    // a member whose sole Claude login is `codev claude-auth` must not be told
-    // rooms are ready — every reply would fail with "Reconnect Claude".
+  it("reports rooms readiness from the Claude setup-token", () => {
+    // The inverse of this assertion was the bug that started the cleanup:
+    // the token was advertised for rooms that could not run it. Rooms run it
+    // now — an ephemeral sandbox with the token in its launch profile — so
+    // the claim is true rather than removed.
     const view = snapshot({
       cliSubscriptions: [sub("claude", { status: "not_connected" })],
       claudeCliToken: {
@@ -168,7 +159,7 @@ describe("providerSurfaceCapability", () => {
       },
     });
     const capability = providerSurfaceCapability(view, "anthropic");
-    expect(capability.rooms).toEqual({ ready: false, via: [] });
+    expect(capability.rooms.ready).toBe(true);
     expect(capability.workspace.ready).toBe(true);
   });
 
@@ -239,44 +230,45 @@ describe("workspaceReadyProviders", () => {
     expect(workspaceReadyProviders(view)).toEqual(["anthropic", "openai"]);
   });
 
-  it("lists Codex when the member connected it in the browser", () => {
+  it("lists both agents once each is connected", () => {
     expect(
       workspaceReadyProviders(
-        snapshot({ cliSubscriptions: [sub("codex"), sub("claude")] }),
+        snapshot({
+          cliSubscriptions: [sub("codex"), sub("claude")],
+          claudeCliToken: {
+            status: "connected",
+            lastFour: "wxyz",
+            enabledForRooms: true,
+            enabledForWorkspace: true,
+            allowInSharedWorkspaces: true,
+          },
+        }),
       ),
-    ).toEqual(["openai"]);
+    ).toEqual(["anthropic", "openai"]);
   });
 });
 
 describe("workspaceProviderPreflight", () => {
   /** The original bug: a browser Claude subscription and nothing else. */
-  it("names the agent that cannot run and that it is rooms-only", () => {
-    const preflight = workspaceProviderPreflight(
-      snapshot({
-        cliSubscriptions: [
-          sub("claude", { provenance: "browser", enabledForWorkspace: false }),
-        ],
-      }),
-    );
+  it("names both agents when nothing is connected", () => {
+    // `connectedForRooms` used to distinguish Claude's rooms-only browser
+    // login from its workspace-only token. One login runs in both places
+    // now, so an agent is either usable or not connected at all.
+    const preflight = workspaceProviderPreflight(snapshot({}));
     expect(preflight.starting).toBeNull();
     expect(preflight.notReady).toEqual([
-      { agent: "claude", connectedForRooms: true },
+      { agent: "claude", connectedForRooms: false },
       { agent: "codex", connectedForRooms: false },
     ]);
   });
 
-  it("starts a workspace-ready agent and flags a rooms-only one", () => {
+  it("starts the connected agent and flags the one that is missing", () => {
     const preflight = workspaceProviderPreflight(
-      snapshot({
-        connections: [key("openai")],
-        cliSubscriptions: [
-          sub("claude", { provenance: "browser", enabledForWorkspace: false }),
-        ],
-      }),
+      snapshot({ connections: [key("openai")] }),
     );
     expect(preflight.starting).toBe("codex");
     expect(preflight.notReady).toEqual([
-      { agent: "claude", connectedForRooms: true },
+      { agent: "claude", connectedForRooms: false },
     ]);
   });
 

@@ -91,9 +91,6 @@ describe("provider connection server", () => {
   });
 
   it("loads subscription sign-in status alongside API keys", async () => {
-    mocks.getConnectedClaudeRuntime.mockResolvedValue({
-      runnerId: "private-reference",
-    });
     mocks.getProviderCredentialStatus
       .mockResolvedValueOnce(null) // openai API_KEY
       .mockResolvedValueOnce(null) // anthropic API_KEY
@@ -103,7 +100,11 @@ describe("provider connection server", () => {
         lastFour: "Codex CLI",
       })
       .mockResolvedValueOnce(null) // openai OAUTH_TOKEN
-      .mockResolvedValueOnce(null) // anthropic OAUTH_TOKEN (CLI setup-token)
+      .mockResolvedValueOnce({
+        credentialType: "OAUTH_TOKEN",
+        lastFour: "wxyz",
+        connectedVia: "browser",
+      }) // anthropic OAUTH_TOKEN (the one Claude login)
       .mockResolvedValueOnce({
         credentialType: "OAUTH_TOKEN",
         lastFour: "Cursor",
@@ -112,18 +113,19 @@ describe("provider connection server", () => {
     await expect(loadProviderConnectionSnapshot(user)).resolves.toMatchObject({
       cliSubscriptions: [
         { provider: "codex", status: "connected" },
-        // The browser runtime is inherently rooms-only.
+        // One Claude login, reported the same however it was made.
         {
           provider: "claude",
           status: "connected",
           provenance: "browser",
           enabledForRooms: true,
-          enabledForWorkspace: false,
+          enabledForWorkspace: true,
           allowInSharedWorkspaces: true,
         },
         { provider: "cursor", status: "connected" },
       ],
-      claudeCliToken: { status: "not_connected" },
+      // The same row the Claude card reads; one login, reported once.
+      claudeCliToken: { status: "connected" },
     });
   });
 

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, inArray, lt, ne } from "drizzle-orm";
+import { and, eq, inArray, lt, ne } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 
@@ -10,7 +10,10 @@ import {
   resolveClaudeConnectionScope,
 } from "./claude-connection";
 import { getDatabase } from "../platform/database";
-import { deleteProviderCredential } from "./credentials";
+import {
+  deleteProviderCredential,
+  saveProviderCredential,
+} from "./credentials";
 import { logEvent } from "../platform/observability";
 import { isClaudeRuntimeReference } from "./claude-runtime-reference";
 
@@ -35,13 +38,15 @@ export interface ClaudeLoginRunner {
   poll(input: { runnerId: string }): Promise<ClaudeRunnerPollResult>;
   /** Delete the private profile; failures must remain retryable. */
   dispose(input: { runnerId: string }): Promise<void>;
-  /** Persist runtime-owned login state before acknowledging the connection. */
-  retain?(input: { runnerId: string }): Promise<void>;
 }
 
 export type ClaudeRunnerPollResult =
   | { status: "pending" }
-  | { status: "ready" }
+  /** `token` is the `claude setup-token` the login printed. A guest that
+   *  predates the capture returns none, and the connection then fails with
+   *  a message telling the member to update rather than silently storing
+   *  nothing. */
+  | { status: "ready"; token?: string | undefined }
   | { status: "failed"; reason: string };
 
 /** Placeholder runner used until the hosted implementation lands (Step 3). */
@@ -425,7 +430,12 @@ export async function getClaudeConnectionSession(
   if (!claimed)
     return toView(await loadOwnedSession(input.userId, input.sessionId));
   try {
-    await runner.retain?.({ runnerId: row.runnerId });
+    if (!result.token) {
+      throw new ClaudeConnectionError(
+        "This CoDev runtime cannot capture a Claude login token yet. Try again once the runtime has been updated.",
+        503,
+      );
+    }
     // Reconnection retires any previously stored subscription token, not API keys.
     await deleteProviderCredential(
       "USER",
@@ -433,6 +443,19 @@ export async function getClaudeConnectionSession(
       "anthropic",
       "OAUTH_TOKEN",
     );
+    // The token is the credential now, so the sandbox that produced it has
+    // nothing left worth keeping. It used to be snapshotted and resumed for
+    // every turn; it is destroyed here instead.
+    await saveProviderCredential({
+      scopeType: "USER",
+      scopeId: row.userId,
+      provider: "anthropic",
+      credentialType: "OAUTH_TOKEN",
+      accessToken: result.token,
+      lastFour: result.token.slice(-4),
+      connectedVia: "browser",
+    });
+    await runner.dispose({ runnerId: row.runnerId });
     const saved = await getDatabase()
       .update(schema.claudeConnectionSessions)
       .set({
@@ -451,10 +474,12 @@ export async function getClaudeConnectionSession(
       )
       .returning();
     if (!saved.length) await runner.dispose({ runnerId: row.runnerId });
-  } catch {
+  } catch (error) {
     await markFailed(
       row.id,
-      "The signed-in runtime could not be retained. Try connecting again.",
+      error instanceof ClaudeConnectionError
+        ? error.message
+        : "The Claude login could not be stored. Try connecting again.",
     );
     await runner.dispose({ runnerId: row.runnerId });
   }
@@ -474,22 +499,6 @@ async function sessionRunner(
     );
   const { resolveClaudeRunner } = await import("./claude-connection-runner");
   return resolveClaudeRunner(reference);
-}
-
-/** Server-only reference lookup. Never read or return the runtime's credential files. */
-export async function getConnectedClaudeRuntime(userId: string) {
-  const rows = await getDatabase()
-    .select()
-    .from(schema.claudeConnectionSessions)
-    .where(
-      and(
-        eq(schema.claudeConnectionSessions.userId, userId),
-        eq(schema.claudeConnectionSessions.scopeType, "USER"),
-        eq(schema.claudeConnectionSessions.status, "connected"),
-      ),
-    )
-    .orderBy(desc(schema.claudeConnectionSessions.createdAt));
-  return rows.find((row) => isClaudeRuntimeReference(row.runnerId)) ?? null;
 }
 
 export async function disconnectClaudeRuntime(userId: string) {

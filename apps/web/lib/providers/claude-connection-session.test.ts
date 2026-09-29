@@ -80,7 +80,6 @@ function fakeRunner(
     submitCode: vi.fn(async () => undefined),
     poll: vi.fn(async () => ({ status: "pending" as const })),
     dispose: vi.fn(async () => undefined),
-    retain: vi.fn(async () => undefined),
     ...overrides,
   };
 }
@@ -173,10 +172,11 @@ describe("reapExpiredClaudeConnectionSessions", () => {
 });
 
 describe("getClaudeConnectionSession", () => {
-  it("retains the runtime without persisting credentials on a ready poll", async () => {
+  it("stores the token and discards the sandbox on a ready poll", async () => {
     const runner = fakeRunner({
       poll: vi.fn(async () => ({
         status: "ready" as const,
+        token: "sk-ant-oat01-token",
       })),
     });
     await startClaudeConnectionSession({ userId: "u1" }, runner);
@@ -185,21 +185,25 @@ describe("getClaudeConnectionSession", () => {
       runner,
     );
     expect(view.status).toBe("connected");
-    expect(saveProviderCredential).not.toHaveBeenCalled();
-    expect(runner.retain).toHaveBeenCalledWith({ runnerId: "runner-1" });
-    expect(runner.dispose).not.toHaveBeenCalled();
+    // The token is the credential: it is stored, and the sandbox that
+    // produced it is destroyed rather than snapshotted for later turns.
+    expect(saveProviderCredential).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "anthropic",
+        credentialType: "OAUTH_TOKEN",
+        accessToken: "sk-ant-oat01-token",
+      }),
+    );
+    expect(runner.dispose).toHaveBeenCalledWith({ runnerId: "runner-1" });
     expect(view.authorizeUrl).toBeNull();
     expect(view).not.toHaveProperty("runnerId");
   });
 
-  it("fails safely when the profile cannot be retained", async () => {
+  it("fails rather than connecting when the guest returns no token", async () => {
+    // An un-updated runtime cannot produce one; storing nothing and calling
+    // it connected would leave a member with a login that runs nowhere.
     const runner = fakeRunner({
-      poll: vi.fn(async () => ({
-        status: "ready" as const,
-      })),
-      retain: vi.fn(async () => {
-        throw new Error("private runtime error");
-      }),
+      poll: vi.fn(async () => ({ status: "ready" as const })),
     });
     await startClaudeConnectionSession({ userId: "u1" }, runner);
     const view = await getClaudeConnectionSession(
@@ -207,8 +211,27 @@ describe("getClaudeConnectionSession", () => {
       runner,
     );
     expect(view.status).toBe("failed");
-    expect(view.failureReason).not.toContain("private runtime error");
     expect(saveProviderCredential).not.toHaveBeenCalled();
+    expect(runner.dispose).toHaveBeenCalled();
+  });
+
+  it("fails safely when the token cannot be stored", async () => {
+    const runner = fakeRunner({
+      poll: vi.fn(async () => ({
+        status: "ready" as const,
+        token: "sk-ant-oat01-token",
+      })),
+    });
+    vi.mocked(saveProviderCredential).mockRejectedValueOnce(
+      new Error("private runtime error"),
+    );
+    await startClaudeConnectionSession({ userId: "u1" }, runner);
+    const view = await getClaudeConnectionSession(
+      { userId: "u1", sessionId: "session-1" },
+      runner,
+    );
+    expect(view.status).toBe("failed");
+    expect(view.failureReason).not.toContain("private runtime error");
     expect(runner.dispose).toHaveBeenCalled();
   });
 

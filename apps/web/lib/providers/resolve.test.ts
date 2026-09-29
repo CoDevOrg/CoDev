@@ -54,29 +54,36 @@ describe("resolveCredential", () => {
   });
 
   it("says a credential is connected-but-unrunnable rather than missing", async () => {
-    // The member has Claude's browser runtime, which rooms can run and a
-    // coding workspace cannot. Telling them "not connected" would send them
-    // to connect a thing they already have.
-    mocks.claudeRuntime.mockResolvedValue({ id: "connection-1" });
-
-    const rooms = await resolveCredential({
-      userId,
-      provider: "claude",
-      surface: "rooms",
-      dryRun: true,
-    });
-    expect(rooms).toMatchObject({ ok: true, kind: "claude_runtime" });
-
+    // A Cursor login runs in a workspace and not in a room. Telling the
+    // member "not connected" would send them to connect what they have.
+    const cursorRow = {
+      id: "cursor-1",
+      encryptedAccessToken: "a",
+      encryptedRefreshToken: "b",
+      allowInSharedWorkspaces: true,
+    };
+    mocks.rows.push([cursorRow]);
     const workspace = await resolveCredential({
       userId,
-      provider: "claude",
+      provider: "cursor",
       surface: "workspace",
       dryRun: true,
     });
-    expect(workspace).toMatchObject({
+    expect(workspace).toMatchObject({ ok: true, kind: "cursor_tokens" });
+
+    // Rooms can run none of Cursor's kinds, so the walk goes straight to
+    // reporting what is connected.
+    mocks.rows.push([cursorRow], []);
+    const rooms = await resolveCredential({
+      userId,
+      provider: "cursor",
+      surface: "rooms",
+      dryRun: true,
+    });
+    expect(rooms).toMatchObject({
       ok: false,
       reason: "unsupported_here",
-      connectedKinds: ["claude_runtime"],
+      connectedKinds: ["cursor_tokens"],
     });
   });
 

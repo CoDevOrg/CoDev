@@ -27,7 +27,7 @@ export type ProviderSurface = "rooms" | "workspace";
 /** Which registry credential kind each connected slot in the snapshot is. */
 const SUBSCRIPTION_KIND: Record<ProviderId, CredentialKind> = {
   codex: "codex_auth_cache",
-  claude: "claude_runtime",
+  claude: "claude_setup_token",
   cursor: "cursor_tokens",
 };
 
@@ -61,7 +61,6 @@ export type ProviderSurfaceCapability = Record<
 const KIND_PROVENANCE: Record<CredentialKind, CredentialProvenance> = {
   codex_auth_cache: "cli",
   claude_setup_token: "cli",
-  claude_runtime: "browser",
   cursor_tokens: "browser",
   api_key: "api_key",
 };

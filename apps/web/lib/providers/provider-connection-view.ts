@@ -16,7 +16,7 @@ const VENDOR_PROVIDER: Record<ProviderConnectionProvider, ProviderId> = {
 /** The subscription-shaped credential each provider's card represents. */
 const SUBSCRIPTION_KIND: Record<CliSubscriptionProvider, CredentialKind> = {
   codex: "codex_auth_cache",
-  claude: "claude_runtime",
+  claude: "claude_setup_token",
   cursor: "cursor_tokens",
 };
 

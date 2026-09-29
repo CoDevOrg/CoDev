@@ -99,7 +99,7 @@ describe("official Claude runtime references", () => {
   });
 });
 describe("hosted official login", () => {
-  it("snapshots the private runtime before releasing capacity and retains only a reference", async () => {
+  it("returns the token and keeps nothing behind", async () => {
     const started = await orchestratorClaudeRunner.start({
       sessionId: profileId,
     });
@@ -113,18 +113,16 @@ describe("hosted official login", () => {
     );
     vi.mocked(runtime.pollClaudeSetupTokenInSandbox).mockResolvedValue({
       status: "ready",
+      token: "sk-ant-oat01-token",
     });
     await expect(orchestratorClaudeRunner.poll({ runnerId })).resolves.toEqual({
       status: "ready",
+      token: "sk-ant-oat01-token",
     });
-    await orchestratorClaudeRunner.retain?.({ runnerId });
-    expect(runtime.snapshotWorkspace).toHaveBeenCalledWith(
-      profileId,
-      "a".repeat(40),
-    );
-    expect(runtime.destroySandbox).toHaveBeenCalledWith(profileId);
-    expect(runtime.discardSandboxSnapshot).not.toHaveBeenCalled();
+    // The token is the credential, so there is no profile worth snapshotting
+    // and the sandbox is simply discarded.
     await orchestratorClaudeRunner.dispose({ runnerId });
+    expect(runtime.destroySandbox).toHaveBeenCalledWith(profileId);
     expect(runtime.discardSandboxSnapshot).toHaveBeenCalledWith(profileId);
   });
   it("cleans up and fails closed when the guest lacks the new protocol", async () => {
@@ -136,14 +134,5 @@ describe("hosted official login", () => {
     ).rejects.toThrow(/runtime-login protocol/);
     expect(runtime.destroySandbox).toHaveBeenCalledWith(profileId);
     expect(runtime.discardSandboxSnapshot).toHaveBeenCalledWith(profileId);
-  });
-  it("does not acknowledge a profile snapshot failure", async () => {
-    vi.mocked(runtime.snapshotWorkspace).mockRejectedValueOnce(
-      new Error("disk failure"),
-    );
-    await expect(
-      orchestratorClaudeRunner.retain?.({ runnerId }),
-    ).rejects.toThrow("disk failure");
-    expect(runtime.destroySandbox).not.toHaveBeenCalled();
   });
 });

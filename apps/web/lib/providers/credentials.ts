@@ -37,6 +37,8 @@ export interface ResolvedCredential {
   source: CredentialSource;
   authType: CredentialType | "CLAUDE_RUNTIME";
   claudeUserId?: string;
+  /** The `claude setup-token` a Claude turn authenticates with. */
+  claudeSetupToken?: string | undefined;
   apiKeyOrToken?: string | undefined;
   endpointUrl?: string | undefined;
   awsRoleArn?: string | undefined;
@@ -377,13 +379,14 @@ export async function resolvePersonalChatSubscription(
     provider,
     surface: "rooms",
   });
-  if (resolved.secret.kind === "claude_runtime") {
+  if (resolved.secret.kind === "claude_setup_token") {
     return {
       provider: "anthropic",
       source: "USER",
       authType: "CLAUDE_RUNTIME",
-      credentialId: resolved.secret.connectionId,
+      ...(resolved.credentialId ? { credentialId: resolved.credentialId } : {}),
       claudeUserId: userId,
+      claudeSetupToken: resolved.secret.token,
     };
   }
   if (resolved.secret.kind === "codex_auth_cache") {
@@ -408,19 +411,6 @@ export async function resolveAgentCredential(
   provider: AuthProvider,
 ): Promise<ResolvedCredential> {
   const normalizedProvider = parseProvider(provider);
-  if (normalizedProvider === "anthropic") {
-    const { getConnectedClaudeRuntime } =
-      await import("./claude-connection-session");
-    const connection = await getConnectedClaudeRuntime(userId);
-    if (connection)
-      return {
-        provider: "anthropic",
-        source: "USER",
-        authType: "CLAUDE_RUNTIME",
-        credentialId: connection.id,
-        claudeUserId: userId,
-      };
-  }
   if (normalizedProvider === "openai") {
     const hosted = await resolveHostedCodexSubscription({
       userId,
@@ -616,15 +606,17 @@ export async function saveProviderCredential(input: {
     input.connectedVia ??
     (credentialType === "OAUTH_TOKEN" ? "browser" : "api_key");
 
-  // A consumer Claude OAuth token must never be used as a direct-API bearer, so
-  // the browser-era token flow stays retired. The one exception is the local
-  // CLI's `claude setup-token`: Anthropic's long-lived token whose intended use
-  // is CLAUDE_CODE_OAUTH_TOKEN on a host. Only the workspace-host resolver reads
-  // it (resolveClaudeCliTokenForIde); getCredentialValue still rejects it.
+  // A consumer Claude OAuth token must never be used as a direct-API bearer.
+  // The only anthropic OAUTH_TOKEN CoDev stores is a `claude setup-token`,
+  // whose intended use is CLAUDE_CODE_OAUTH_TOKEN on a host — and both
+  // sign-ins produce one now, the CLI upload and the browser login that
+  // captures what the CLI printed. `connectedVia` therefore records how it
+  // arrived, not whether it may be stored; the browser-era exchange that
+  // this guard was written against no longer has a route at all.
   if (
     provider === "anthropic" &&
     credentialType === "OAUTH_TOKEN" &&
-    connectedVia !== "cli"
+    connectedVia === "api_key"
   ) {
     throw new Error(
       "Token-based Claude connections are retired. Reconnect using official Claude login in Settings.",

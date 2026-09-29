@@ -185,37 +185,20 @@ function loadedFromRow(
 async function loadClaudeSetupToken(
   input: ResolveInput,
 ): Promise<Loaded | null> {
-  // Only a CLI-stamped token is a setup-token; a browser-era Anthropic OAuth
-  // row is a retired credential that must never become an API bearer.
+  // Both sign-ins store a setup-token, so either provenance is valid; only
+  // a key-shaped row would be the retired kind.
   const found = await findPersonalOrShared(
     input,
     "anthropic",
     "OAUTH_TOKEN",
-    (row) => row.connectedVia === "cli" && Boolean(row.encryptedAccessToken),
+    (row) =>
+      row.connectedVia !== "api_key" && Boolean(row.encryptedAccessToken),
   );
   if (!found) return null;
   return loadedFromRow(found, async (row) => {
     const token = await decryptCredential(row.encryptedAccessToken);
     return token ? { kind: "claude_setup_token", token } : null;
   });
-}
-
-async function loadClaudeRuntime(input: ResolveInput): Promise<Loaded | null> {
-  const { getConnectedClaudeRuntime } =
-    await import("./claude-connection-session");
-  const connection = await getConnectedClaudeRuntime(input.userId);
-  if (!connection) return null;
-  return {
-    credentialId: connection.id,
-    source: "personal",
-    // The browser runtime is never shared, and its turns run inside the
-    // member's own sandbox, so there is nothing for this gate to protect.
-    allowInSharedWorkspaces: true,
-    read: async () => ({
-      kind: "claude_runtime",
-      connectionId: connection.id,
-    }),
-  };
 }
 
 async function loadCursorTokens(input: ResolveInput): Promise<Loaded | null> {
@@ -276,7 +259,6 @@ const LOADERS: Record<
 > = {
   codex_auth_cache: loadCodexAuthCache,
   claude_setup_token: loadClaudeSetupToken,
-  claude_runtime: loadClaudeRuntime,
   cursor_tokens: loadCursorTokens,
   api_key: loadApiKey,
 };

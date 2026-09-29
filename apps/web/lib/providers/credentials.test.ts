@@ -87,39 +87,30 @@ afterEach(() => {
 });
 
 describe("resolveAgentCredential", () => {
-  it("uses only the requesting member's Claude profile for rooms and workspaces", async () => {
-    mockClaudeRuntime.mockResolvedValue({ id: "personal-runtime" });
-    for (const resolved of [
-      await resolvePersonalChatSubscription("sender", "claude"),
-      await resolveAgentCredential("sender", "workspace", "anthropic"),
-    ]) {
-      expect(resolved).toMatchObject({
-        authType: "CLAUDE_RUNTIME",
-        source: "USER",
-        claudeUserId: "sender",
-        credentialId: "personal-runtime",
-      });
-      expect(resolved.apiKeyOrToken).toBeUndefined();
-    }
-    expect(mockClaudeRuntime).toHaveBeenCalledTimes(2);
-    expect(mockClaudeRuntime).toHaveBeenCalledWith("sender");
-    expect(mockDatabase.select).not.toHaveBeenCalled();
-  });
-  it("refuses a browser-era Claude token and asks for a rooms login", async () => {
-    // A legacy `anthropic` OAUTH_TOKEN row is not a setup-token, and a
-    // setup-token is not a rooms credential either. Neither may answer a
-    // reply; the member is told to connect one that can.
+  it("uses only the requesting member's Claude setup-token for rooms", async () => {
+    // One login, resolved from the member's own row. It used to come from a
+    // per-member Firecracker profile that no other surface could reach.
     mockRows.push([
       baseCredential({
         provider: "anthropic",
         credentialType: "OAUTH_TOKEN",
         status: "active",
+        connectedVia: "cli",
         encryptedAccessToken: "ciphertext",
       }),
     ]);
-    await expect(
-      resolvePersonalChatSubscription("sender", "claude"),
-    ).rejects.toThrow(/Claude/);
+    const resolved = await resolvePersonalChatSubscription("sender", "claude");
+    expect(resolved).toMatchObject({
+      authType: "CLAUDE_RUNTIME",
+      source: "USER",
+      claudeUserId: "sender",
+    });
+    expect(resolved.apiKeyOrToken).toBeUndefined();
+    // Read from provider_credentials now; the old assertion was that it
+    // touched no table at all, because the credential lived in a VM.
+    expect(mockDatabase.select).toHaveBeenCalled();
+  });
+  it("asks for a Claude login when there is none", async () => {
     mockRows.length = 0;
     await expect(
       resolvePersonalChatSubscription("sender", "claude"),
