@@ -134,9 +134,9 @@ describe("resolveAgentCredential", () => {
     expect(
       await resolvePersonalChatSubscription("sender", "codex"),
     ).toMatchObject({ authType: "HOSTED_CODEX_SUBSCRIPTION", source: "USER" });
+    // No workspace id: a shared seat can never fund a room reply.
     expect(mockHostedSubscription).toHaveBeenLastCalledWith({
       userId: "sender",
-      includeBusy: true,
     });
   });
   it("resolves the encrypted official Codex auth cache", async () => {

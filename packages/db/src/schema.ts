@@ -697,7 +697,6 @@ export const providerCredentials = pgTable(
     }),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
     sharingEnabled: boolean("sharing_enabled").default(false).notNull(),
-    unavailableUntil: timestamp("unavailable_until", { withTimezone: true }),
     // Provenance (see credentialConnectedVia). Nullable for pre-existing rows;
     // the 0042 migration backfills them and code treats NULL conservatively
     // (not workspace-eligible).
@@ -729,6 +728,53 @@ export const providerCredentials = pgTable(
       table.priorityOrder,
     ),
     index("provider_credentials_status_idx").on(table.status),
+  ],
+);
+
+/**
+ * The seat a running turn holds on a provider credential.
+ *
+ * A subscription is one human seat: the provider runs one turn at a time on
+ * it. That used to be a mutable `unavailable_until` stamp on the credential
+ * row, set sixteen minutes ahead — with no reaper, so the stamp *was* the
+ * reaper. A turn that died without releasing blocked every other surface for
+ * a quarter of an hour, and because each executor claimed it differently
+ * (Gen 2 claimed it and then ignored a busy result; chat rooms hard-failed on
+ * one) the same lock meant different things depending on who asked.
+ *
+ * A row here is instead owned by a live run and refreshed as that run is
+ * polled. A run that stops polling stops holding the seat within
+ * `SEAT_STALE_AFTER_MS`, and `ref` names what holds it so a waiting turn can
+ * say so rather than reporting a bare failure.
+ *
+ * `credentialId` carries no foreign key because a seat can be taken on either
+ * credential store — `provider_credentials` or, until the browser login
+ * runtime is retired, `claude_connection_sessions`. An orphaned row is
+ * harmless: nothing resolves to that credential any more, and it ages out.
+ */
+export const providerCredentialRuns = pgTable(
+  "provider_credential_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    credentialId: uuid("credential_id").notNull(),
+    userId: uuid("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    /** Which executor holds it: rooms, workspace or gen2. */
+    surface: text("surface").notNull(),
+    /** The run holding the seat — a reply id, turn session id or run id. */
+    ref: text("ref").notNull(),
+    /** Refreshed on every poll; staleness frees the seat. */
+    heartbeatAt: timestamp("heartbeat_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("provider_credential_runs_credential_idx").on(
+      table.credentialId,
+    ),
+    index("provider_credential_runs_ref_idx").on(table.ref),
   ],
 );
 

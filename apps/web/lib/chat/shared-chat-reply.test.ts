@@ -67,9 +67,13 @@ vi.mock("../providers/claude-subscription-execution", () => ({
   releaseClaudeSubscriptionExecution: mocks.release,
 }));
 vi.mock("../providers/hosted-codex-subscription-credentials", () => ({
-  claimHostedCodexExecution: mocks.claimCodex,
-  releaseHostedCodexExecution: mocks.releaseCodex,
   updateHostedCodexAuthCache: mocks.refresh,
+}));
+vi.mock("../providers/credential-seat", () => ({
+  waitForCredentialSeat: mocks.claimCodex,
+  releaseCredentialSeat: mocks.releaseCodex,
+  heartbeatCredentialSeat: vi.fn(async () => undefined),
+  describeSeatHolder: () => "a workspace turn is still using this connection.",
 }));
 vi.mock("./shared-chat", () => ({
   getSharedChatRoom: mocks.room,
@@ -109,6 +113,7 @@ const history = [
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.nativeStart.mockResolvedValue("claude-exec");
+  mocks.claimCodex.mockResolvedValue({ held: true });
   mocks.rows.length = 0;
   mocks.resolve.mockResolvedValue({
     provider: "anthropic",
@@ -240,13 +245,17 @@ describe("room replies", () => {
     mocks.provision.mockRejectedValue(new Error("provision failed"));
     await expect(prepareRoomReply("reply")).rejects.toThrow();
     expect(mocks.destroy).toHaveBeenCalledWith("reply");
-    expect(mocks.releaseCodex).toHaveBeenCalledWith("seat");
+    expect(mocks.releaseCodex).toHaveBeenCalledWith(
+      expect.objectContaining({ credentialId: "seat" }),
+    );
   });
   it("still destroys the sandbox and releases the seat if process cleanup fails", async () => {
     mocks.close.mockRejectedValue(new Error("close failed"));
     await expect(cleanupRoomReply("reply", "seat", "exec")).rejects.toThrow();
     expect(mocks.destroy).toHaveBeenCalledWith("reply");
-    expect(mocks.releaseCodex).toHaveBeenCalledWith("seat");
+    expect(mocks.releaseCodex).toHaveBeenCalledWith(
+      expect.objectContaining({ credentialId: "seat" }),
+    );
   });
   it("stores refreshed auth without including it in workflow results", async () => {
     mocks.poll.mockResolvedValue({

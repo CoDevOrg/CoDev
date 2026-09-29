@@ -21,11 +21,7 @@ import {
   getAgentModel,
   parseAgentProvider,
 } from "../providers/ai-model";
-import {
-  claimHostedCodexExecution,
-  releaseHostedCodexExecution,
-  updateHostedCodexAuthCache,
-} from "../providers/hosted-codex-subscription-credentials";
+import { updateHostedCodexAuthCache } from "../providers/hosted-codex-subscription-credentials";
 import {
   ProviderConnectionRequiredError,
   assertProviderConnectionForTurn,
@@ -44,6 +40,12 @@ import {
   turnWasInterrupted,
   type AgentContext,
 } from "./agent-turn-context";
+import {
+  describeSeatHolder,
+  heartbeatCredentialSeat,
+  releaseCredentialSeat,
+  waitForCredentialSeat,
+} from "../providers/credential-seat";
 import {
   requireCursorApiKey,
   runCursorCloudAgent,
@@ -302,7 +304,15 @@ export async function prepareAgentTurn(
       );
     }
     const prompt = `You are a coding agent inside an isolated Git worktree. Complete the latest request, verify focused changes, and finish with a concise summary. Do not inspect CODEX_HOME or authentication files.\n\nRepository session transcript:\n${transcript}\n\nComplete the latest request.`;
-    await claimHostedCodexExecution(credential.credentialId);
+    // The turn id is the seat's ref: known before the exec starts, and the
+    // one identifier the poll, cancel and finish paths all share.
+    const seat = await waitForCredentialSeat({
+      credentialId: credential.credentialId,
+      userId: context.authorId,
+      surface: "workspace",
+      ref: turnId,
+    });
+    if (!seat.held) throw new Error(describeSeatHolder(seat.holder));
     const { stepId } = getStepMetadata();
     let codexSessionId: string;
     try {
@@ -332,7 +342,10 @@ export async function prepareAgentTurn(
         idempotencyKey: stepId,
       });
     } catch (error) {
-      await releaseHostedCodexExecution(credential.credentialId);
+      await releaseCredentialSeat({
+        credentialId: credential.credentialId,
+        ref: turnId,
+      });
       throw error;
     }
     return {
@@ -481,9 +494,24 @@ export async function pollCodexTurn(
   workspaceId: string,
   codexSessionId: string,
   after: number,
+  seat?: { credentialId: string; turnId: string },
 ) {
   "use step";
-  return pollCodexExecInSandbox(workspaceId, codexSessionId, after);
+  const result = await pollCodexExecInSandbox(
+    workspaceId,
+    codexSessionId,
+    after,
+  );
+  // Being polled is what holding the seat means. Without this a turn longer
+  // than SEAT_STALE_AFTER_MS would quietly hand its subscription to the next
+  // caller while still running.
+  if (seat && !result.exited) {
+    await heartbeatCredentialSeat({
+      credentialId: seat.credentialId,
+      ref: seat.turnId,
+    });
+  }
+  return result;
 }
 
 /**
@@ -497,10 +525,11 @@ export async function cancelCodexTurn(
   workspaceId: string,
   codexSessionId: string,
   credentialId: string,
+  turnId: string,
 ) {
   "use step";
   await closeCodexExecInSandbox(workspaceId, codexSessionId);
-  await releaseHostedCodexExecution(credentialId);
+  await releaseCredentialSeat({ credentialId, ref: turnId });
 }
 
 export async function finishCodexTurn(
@@ -515,7 +544,7 @@ export async function finishCodexTurn(
       await updateHostedCodexAuthCache(credentialId, poll.codexAuthCacheJson);
     }
   } finally {
-    await releaseHostedCodexExecution(credentialId);
+    await releaseCredentialSeat({ credentialId, ref: turnId });
   }
   if (poll.exitCode !== 0) {
     throw new Error(

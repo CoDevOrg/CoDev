@@ -32,6 +32,13 @@ vi.mock("./workspaces", () => ({
   requireGen2Member: (...args: unknown[]) => mocks.requireMember(...args),
 }));
 
+vi.mock("../providers/credential-seat", () => ({
+  waitForCredentialSeat: (...args: unknown[]) => mocks.claim(...args),
+  releaseCredentialSeat: (...args: unknown[]) => mocks.release(...args),
+  retagCredentialSeat: vi.fn(async () => undefined),
+  heartbeatCredentialSeat: vi.fn(async () => undefined),
+  describeSeatHolder: () => "a workspace turn is still using this connection.",
+}));
 vi.mock("./providers", () => ({
   resolveGen2Codex: (...args: unknown[]) => mocks.resolveCredential(...args),
 }));
@@ -52,24 +59,6 @@ vi.mock("./turns", () => ({
   recordGen2SupersetRunOutput: (...args: unknown[]) =>
     mocks.recordOutput(...args),
 }));
-
-vi.mock("../providers/hosted-codex-subscription-credentials", () => {
-  class HostedCodexSubscriptionError extends Error {
-    constructor(
-      message: string,
-      readonly status = 400,
-      readonly code = "hosted_codex_error",
-    ) {
-      super(message);
-      this.name = "HostedCodexSubscriptionError";
-    }
-  }
-  return {
-    HostedCodexSubscriptionError,
-    claimHostedCodexExecution: (...args: unknown[]) => mocks.claim(...args),
-    releaseHostedCodexExecution: (...args: unknown[]) => mocks.release(...args),
-  };
-});
 
 vi.mock("./superset-runs", () => ({
   registerGen2SupersetRun: (...args: unknown[]) => mocks.register(...args),
@@ -97,7 +86,6 @@ vi.mock("./superset-agent-orchestrator-client", () => ({
     mocks.checkRecovery(...args),
 }));
 
-import { HostedCodexSubscriptionError } from "../providers/hosted-codex-subscription-credentials";
 import { Gen2LifecycleError } from "./errors";
 import {
   cancelGen2SupersetAgentSession,
@@ -128,6 +116,7 @@ describe("gen2 Superset agent runtime adapter", () => {
     vi.resetAllMocks();
     process.env.CODEV_SUPERSET_AGENT_SESSIONS_ENABLED = "true";
     mocks.requireMember.mockResolvedValue({ status: "ready" });
+    mocks.claim.mockResolvedValue({ held: true });
     mocks.resolveCredential.mockResolvedValue({
       credentialId,
       authCacheJson: "{}",
@@ -176,7 +165,9 @@ describe("gen2 Superset agent runtime adapter", () => {
       idempotencyKey: "key-1",
     });
 
-    expect(mocks.claim).toHaveBeenCalledWith(credentialId);
+    expect(mocks.claim).toHaveBeenCalledWith(
+      expect.objectContaining({ credentialId, surface: "gen2" }),
+    );
     expect(mocks.claimLease).toHaveBeenCalledWith(
       expect.objectContaining({ runId }),
     );
@@ -205,31 +196,29 @@ describe("gen2 Superset agent runtime adapter", () => {
     expect(mocks.start).not.toHaveBeenCalled();
   });
 
-  it("proceeds without a lease when the subscription is busy", async () => {
+  it("fails the run rather than sharing a busy subscription", async () => {
+    // This used to swallow the busy result and launch anyway, putting two
+    // turns on one seat while the credential was stamped unavailable.
     mocks.register.mockResolvedValue({
       runId,
       status: "creating",
       created: true,
     });
-    mocks.claim.mockRejectedValue(
-      new HostedCodexSubscriptionError("busy", 409, "hosted_codex_busy"),
-    );
-    mocks.start.mockResolvedValue({
-      hostWorkspaceId: "host-ws-1",
-      hostTerminalId: "term-1",
-      hostAgentSessionId: "agent-1",
-    });
+    mocks.claim.mockResolvedValue({ held: false, holder: null });
 
-    await startGen2SupersetAgentSession({
-      workspaceId,
-      userId,
-      worktreeId: "main",
-      command: ["codex"],
-      idempotencyKey: "key-1",
-    });
+    await expect(
+      startGen2SupersetAgentSession({
+        workspaceId,
+        userId,
+        worktreeId: "main",
+        command: ["codex"],
+        idempotencyKey: "key-1",
+      }),
+    ).rejects.toThrow(/still using this connection/);
 
     expect(mocks.claimLease).not.toHaveBeenCalled();
-    expect(mocks.start).toHaveBeenCalled();
+    expect(mocks.start).not.toHaveBeenCalled();
+    expect(mocks.markFailed).toHaveBeenCalled();
   });
 
   it("rolls back the lease and marks the run failed when the launch fails", async () => {
@@ -250,7 +239,9 @@ describe("gen2 Superset agent runtime adapter", () => {
       }),
     ).rejects.toThrow("launch exploded");
 
-    expect(mocks.release).toHaveBeenCalledWith(credentialId);
+    expect(mocks.release).toHaveBeenCalledWith(
+      expect.objectContaining({ credentialId }),
+    );
     expect(mocks.releaseLease).toHaveBeenCalledWith(
       expect.objectContaining({ runId }),
     );
@@ -279,7 +270,9 @@ describe("gen2 Superset agent runtime adapter", () => {
     expect(mocks.markFinished).toHaveBeenCalledWith(
       expect.objectContaining({ runId, exitReason: "completed" }),
     );
-    expect(mocks.release).toHaveBeenCalledWith(credentialId);
+    expect(mocks.release).toHaveBeenCalledWith(
+      expect.objectContaining({ credentialId }),
+    );
     expect(mocks.releaseLease).toHaveBeenCalled();
   });
 
@@ -324,7 +317,9 @@ describe("gen2 Superset agent runtime adapter", () => {
     ).rejects.toThrow("host unreachable");
 
     expect(mocks.markStopping).toHaveBeenCalled();
-    expect(mocks.release).toHaveBeenCalledWith(credentialId);
+    expect(mocks.release).toHaveBeenCalledWith(
+      expect.objectContaining({ credentialId }),
+    );
     expect(mocks.releaseLease).toHaveBeenCalled();
     expect(mocks.markFinished).toHaveBeenCalledWith(
       expect.objectContaining({ runId, exitReason: "cancelled" }),
@@ -362,6 +357,7 @@ describe("gen2 Superset agent turn (Phase 4 browser-facing delegate)", () => {
     vi.resetAllMocks();
     process.env.CODEV_SUPERSET_AGENT_SESSIONS_ENABLED = "true";
     mocks.requireMember.mockResolvedValue({ status: "ready" });
+    mocks.claim.mockResolvedValue({ held: true });
     mocks.resolveCredential.mockResolvedValue({
       credentialId,
       authCacheJson: "{}",

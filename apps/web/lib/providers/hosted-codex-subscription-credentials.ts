@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, isNull, lt, or } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 import type { HostedCodexScopeType } from "@codev/shared-types";
@@ -78,41 +78,6 @@ export async function updateHostedCodexAuthCache(
     .where(eq(schema.providerCredentials.id, credentialId));
 }
 
-export async function claimHostedCodexExecution(credentialId: string) {
-  const [claimed] = await getDatabase()
-    .update(schema.providerCredentials)
-    .set({
-      unavailableUntil: new Date(Date.now() + 16 * 60 * 1_000),
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(schema.providerCredentials.id, credentialId),
-        eq(schema.providerCredentials.status, "active"),
-        eq(schema.providerCredentials.isConnected, true),
-        or(
-          isNull(schema.providerCredentials.unavailableUntil),
-          lt(schema.providerCredentials.unavailableUntil, new Date()),
-        ),
-      ),
-    )
-    .returning({ id: schema.providerCredentials.id });
-  if (!claimed) {
-    throw new HostedCodexSubscriptionError(
-      "This Codex connection is already running another cloud turn. Try again shortly.",
-      409,
-      "hosted_codex_busy",
-    );
-  }
-}
-
-export async function releaseHostedCodexExecution(credentialId: string) {
-  await getDatabase()
-    .update(schema.providerCredentials)
-    .set({ unavailableUntil: null, updatedAt: new Date() })
-    .where(eq(schema.providerCredentials.id, credentialId));
-}
-
 export async function persistHostedCodexConnection(input: {
   userId: string;
   scopeType: HostedCodexScopeType;
@@ -149,7 +114,6 @@ export async function persistHostedCodexConnection(input: {
       lastRefreshedAt: new Date(),
       createdBy: input.userId,
       sharingEnabled,
-      unavailableUntil: null,
       revokedAt: null,
       connectedVia: input.connectedVia,
       allowInSharedWorkspaces: input.allowInSharedWorkspaces ?? true,
@@ -170,7 +134,6 @@ export async function persistHostedCodexConnection(input: {
         lastRefreshedAt: new Date(),
         createdBy: input.userId,
         sharingEnabled,
-        unavailableUntil: null,
         revokedAt: null,
         connectedVia: input.connectedVia,
         ...(input.allowInSharedWorkspaces !== undefined
@@ -193,7 +156,6 @@ export async function persistHostedCodexConnection(input: {
 async function findActiveHostedCredential(
   scopeType: HostedCodexScopeType,
   scopeId: string,
-  includeBusy = false,
 ) {
   const [credential] = await getDatabase()
     .select()
@@ -212,27 +174,23 @@ async function findActiveHostedCredential(
       ),
     )
     .limit(1);
-  if (
-    !includeBusy &&
-    credential?.unavailableUntil &&
-    credential.unavailableUntil.getTime() > Date.now()
-  ) {
-    return null;
-  }
   return credential ?? null;
 }
 
+/**
+ * Whether the member has a Codex subscription connected — not whether it is
+ * free. Busy is a seat question (`credential-seat.ts`) and is asked by the
+ * caller that is about to run a turn; answering "not connected" for a login
+ * that is merely mid-turn used to send members off to reconnect a perfectly
+ * good credential.
+ */
 export async function resolveHostedCodexSubscription(input: {
   userId: string;
   workspaceId?: string;
-  includeBusy?: boolean;
 }) {
   if (!isHostedCodexSubscriptionEnabled()) return null;
   return resolvePersonalOrSharedCredential(input, {
-    findPersonal: (userId) =>
-      findActiveHostedCredential("USER", userId, input.includeBusy),
-    // A busy (in-use) shared login is unavailable the same as a personal one;
-    // includeBusy is only ever passed for a personal lookup's own caller need.
+    findPersonal: (userId) => findActiveHostedCredential("USER", userId),
     findShared: (workspaceId) =>
       findActiveHostedCredential("ORGANIZATION", workspaceId),
   });

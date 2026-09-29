@@ -2,12 +2,16 @@ import "server-only";
 
 import { logEvent } from "../platform/observability";
 import {
-  claimHostedCodexExecution,
   HostedCodexSubscriptionError,
-  releaseHostedCodexExecution,
   resolveHostedCodexSubscription,
   updateHostedCodexAuthCache,
 } from "../providers/hosted-codex-subscription-credentials";
+import {
+  describeSeatHolder,
+  releaseCredentialSeat,
+  retagCredentialSeat,
+  waitForCredentialSeat,
+} from "../providers/credential-seat";
 import { resolveGen2Codex } from "./providers";
 import { OrchestratorError } from "../runtime/orchestrator-request";
 import { ensureHostReady } from "../runtime/orchestrator-health";
@@ -68,18 +72,22 @@ export async function startGen2AgentTurn(input: {
 
   // Only a subscription holds a seat. An API key has no one-turn-at-a-time
   // limit, so claiming one would invent a restriction the provider does not.
-  let claimed = false;
+  //
+  // This used to claim the seat and then swallow a busy result, running the
+  // turn anyway — while stamping the credential unavailable for sixteen
+  // minutes, which did block the member's chat-room replies. Now it waits for
+  // the seat like every other executor, and says what holds it if it cannot
+  // get one.
+  const seatRef = input.idempotencyKey;
   if (credential.credentialId) {
-    try {
-      await claimHostedCodexExecution(credential.credentialId);
-      claimed = true;
-    } catch (error) {
-      if (
-        !(error instanceof HostedCodexSubscriptionError) ||
-        error.code !== "hosted_codex_busy"
-      ) {
-        throw error;
-      }
+    const claim = await waitForCredentialSeat({
+      credentialId: credential.credentialId,
+      userId: input.userId,
+      surface: "gen2",
+      ref: seatRef,
+    });
+    if (!claim.held) {
+      throw new Gen2LifecycleError(describeSeatHolder(claim.holder), 409);
     }
   }
   const execInput = {
@@ -121,10 +129,22 @@ export async function startGen2AgentTurn(input: {
       chatId: input.chatId,
       userId: input.userId,
     });
+    if (credential.credentialId) {
+      // The poll and cleanup paths know the session id and nothing else, so
+      // the seat moves onto it now that there is one.
+      await retagCredentialSeat({
+        credentialId: credential.credentialId,
+        fromRef: seatRef,
+        toRef: sessionId,
+      });
+    }
     return { sessionId };
   } catch (error) {
-    if (claimed && credential.credentialId) {
-      await releaseHostedCodexExecution(credential.credentialId);
+    if (credential.credentialId) {
+      await releaseCredentialSeat({
+        credentialId: credential.credentialId,
+        ref: seatRef,
+      });
     }
     logEvent("error", "gen2.agent.start_failed", {
       detail: error instanceof Error ? error.message : "unknown",
@@ -205,7 +225,7 @@ export async function pollGen2AgentTurn(input: {
       detail: error instanceof Error ? error.message : "unknown",
     });
     if (error instanceof OrchestratorError && error.status === 404) {
-      await releasePersonalCodex(input.userId);
+      await releasePersonalCodex(input.userId, input.sessionId);
       throw new Gen2LifecycleError(
         "This Codex turn is no longer running. Send the prompt again.",
       );
@@ -222,7 +242,6 @@ export async function pollGen2AgentTurn(input: {
   if (result.exited) {
     const hosted = await resolveHostedCodexSubscription({
       userId: input.userId,
-      includeBusy: true,
     });
     if (hosted?.credential.id) {
       try {
@@ -233,7 +252,10 @@ export async function pollGen2AgentTurn(input: {
           );
         }
       } finally {
-        await releaseHostedCodexExecution(hosted.credential.id);
+        await releaseCredentialSeat({
+          credentialId: hosted.credential.id,
+          ref: input.sessionId,
+        });
       }
     }
   }
@@ -305,16 +327,18 @@ export async function cancelGen2AgentTurn(input: {
       throw new Gen2LifecycleError(describeGen2RuntimeFailure(error), 502);
     }
   } finally {
-    await releasePersonalCodex(input.userId);
+    await releasePersonalCodex(input.userId, input.sessionId);
   }
 }
 
-async function releasePersonalCodex(userId: string) {
+async function releasePersonalCodex(userId: string, sessionId: string) {
   const hosted = await resolveHostedCodexSubscription({
     userId,
-    includeBusy: true,
   });
   if (hosted?.credential.id) {
-    await releaseHostedCodexExecution(hosted.credential.id);
+    await releaseCredentialSeat({
+      credentialId: hosted.credential.id,
+      ref: sessionId,
+    });
   }
 }

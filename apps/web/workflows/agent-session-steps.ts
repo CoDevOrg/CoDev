@@ -20,10 +20,11 @@ export async function pollCodexTurnStep(
   workspaceId: string,
   codexSessionId: string,
   after: number,
+  seat?: { credentialId: string; turnId: string },
 ) {
   "use step";
   const { pollCodexTurn } = await import("@/lib/agents/agent-runtime");
-  return pollCodexTurn(workspaceId, codexSessionId, after);
+  return pollCodexTurn(workspaceId, codexSessionId, after, seat);
 }
 
 export async function finishCodexTurnStep(
@@ -40,10 +41,11 @@ export async function cancelCodexTurnStep(
   workspaceId: string,
   codexSessionId: string,
   credentialId: string,
+  turnId: string,
 ) {
   "use step";
   const { cancelCodexTurn } = await import("@/lib/agents/agent-runtime");
-  return cancelCodexTurn(workspaceId, codexSessionId, credentialId);
+  return cancelCodexTurn(workspaceId, codexSessionId, credentialId, turnId);
 }
 
 export async function failAgentSessionStep(sessionId: string, message: string) {

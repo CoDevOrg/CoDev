@@ -97,10 +97,6 @@ async function loadCodexAuthCache(input: ResolveInput): Promise<Loaded | null> {
   const hosted = await resolveHostedCodexSubscription({
     userId: input.userId,
     ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
-    // Busy is a lease question, not a "do you have one" question. The caller
-    // claims the lease; reporting "not connected" here would send a member to
-    // reconnect a credential that is merely mid-turn.
-    includeBusy: true,
   });
   if (!hosted?.credential.encryptedMaterial) return null;
   const material = hosted.credential.encryptedMaterial;

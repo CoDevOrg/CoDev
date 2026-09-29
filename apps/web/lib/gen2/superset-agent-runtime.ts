@@ -5,10 +5,11 @@ import {
   listSupersetWorktrees,
 } from "../runtime/orchestrator-superset-runtime";
 import {
-  HostedCodexSubscriptionError,
-  claimHostedCodexExecution,
-  releaseHostedCodexExecution,
-} from "../providers/hosted-codex-subscription-credentials";
+  describeSeatHolder,
+  heartbeatCredentialSeat,
+  releaseCredentialSeat,
+  waitForCredentialSeat,
+} from "../providers/credential-seat";
 import {
   appendGen2ChatMessage,
   listGen2ChatMessages,
@@ -98,24 +99,32 @@ export async function startGen2SupersetAgentSession(input: {
 
   // Only a subscription holds a seat -- an API key has no one-turn-at-a-time
   // limit, so claiming one would invent a restriction the provider does not.
-  let claimed = false;
+  //
+  // A busy seat used to be swallowed here and the run started anyway. It now
+  // waits, and fails the run with what holds the seat if the wait runs out,
+  // so the member is told the truth instead of two turns sharing one login.
+  const claimed = Boolean(credential.credentialId);
   if (credential.credentialId) {
-    try {
-      await claimHostedCodexExecution(credential.credentialId);
-      claimed = true;
-      await claimGen2SupersetRunLease({
+    const seat = await waitForCredentialSeat({
+      credentialId: credential.credentialId,
+      userId: input.userId,
+      surface: "gen2",
+      ref: registration.runId,
+    });
+    if (!seat.held) {
+      await markGen2SupersetRunFailed({
         runId: registration.runId,
         workspaceId: input.workspaceId,
+        lastError: "credential_busy",
         actorId: input.userId,
       });
-    } catch (error) {
-      if (
-        !(error instanceof HostedCodexSubscriptionError) ||
-        error.code !== "hosted_codex_busy"
-      ) {
-        throw error;
-      }
+      throw new Gen2LifecycleError(describeSeatHolder(seat.holder), 409);
     }
+    await claimGen2SupersetRunLease({
+      runId: registration.runId,
+      workspaceId: input.workspaceId,
+      actorId: input.userId,
+    });
   }
 
   try {
@@ -137,7 +146,10 @@ export async function startGen2SupersetAgentSession(input: {
     return { ...registration, status: "running" as const };
   } catch (error) {
     if (claimed && credential.credentialId) {
-      await releaseHostedCodexExecution(credential.credentialId);
+      await releaseCredentialSeat({
+        credentialId: credential.credentialId,
+        ref: registration.runId,
+      });
       await releaseGen2SupersetRunLease({
         runId: registration.runId,
         workspaceId: input.workspaceId,
@@ -192,6 +204,15 @@ export async function pollGen2SupersetAgentSession(input: {
     input.after,
   );
 
+  // Being polled is what holding the seat means; a run that stops polling
+  // stops blocking the member's other surfaces.
+  if (run.leaseClaimed && run.connectionId && !result.exited) {
+    await heartbeatCredentialSeat({
+      credentialId: run.connectionId,
+      ref: run.id,
+    });
+  }
+
   if (result.exited) {
     await markGen2SupersetRunFinished({
       runId: run.id,
@@ -201,7 +222,10 @@ export async function pollGen2SupersetAgentSession(input: {
       actorId: input.userId,
     });
     if (run.leaseClaimed && run.connectionId) {
-      await releaseHostedCodexExecution(run.connectionId);
+      await releaseCredentialSeat({
+        credentialId: run.connectionId,
+        ref: run.id,
+      });
     }
     await releaseGen2SupersetRunLease({
       runId: run.id,
@@ -233,7 +257,10 @@ export async function cancelGen2SupersetAgentSession(input: {
     }
   } finally {
     if (run.leaseClaimed && run.connectionId) {
-      await releaseHostedCodexExecution(run.connectionId);
+      await releaseCredentialSeat({
+        credentialId: run.connectionId,
+        ref: run.id,
+      });
     }
     await releaseGen2SupersetRunLease({
       runId: run.id,
