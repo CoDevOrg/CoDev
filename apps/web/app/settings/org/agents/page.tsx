@@ -47,12 +47,12 @@ export default async function OrganizationAgentsPage({
         // is this workspace's id), not WORKSPACE — a separate scope used
         // for the plain fallback keys above.
         getClaudeCliTokenPublicStatus({
-          scopeType: "ORGANIZATION",
+          scopeType: "WORKSPACE",
           scopeId: context.workspace.id,
           canManage: context.canWrite,
         }),
         getHostedCodexPublicStatus({
-          scopeType: "ORGANIZATION",
+          scopeType: "WORKSPACE",
           scopeId: context.workspace.id,
           canManage: context.canWrite,
         }),
@@ -62,16 +62,16 @@ export default async function OrganizationAgentsPage({
   return (
     <OrganizationSettingsPage
       context={context}
-      description="Manage shared provider keys and the fallback credential pool for your workspace."
+      description="Logins this workspace's members can fall back to in a coding workspace."
       title="Coding agents"
     >
       {context ? (
         <>
           <OrganizationSettingsCard
             context={context}
-            description="Team credentials are used only when a member has not configured a personal key."
-            detail="Personal credentials always win. Shared credentials are encrypted before storage and used as the next hierarchy tier."
-            title="Fallback credential pool"
+            description="Used only when a member has not connected their own, and only in a coding workspace."
+            detail="A member's own login always wins. These never fund a chat-room reply or a Gen 2 turn: both run on the credential of the person who asked, so the work is billed to and authorised by them. Everything here is encrypted before storage."
+            title="Workspace credentials"
           />
           <SettingsCard title="OpenAI">
             <WorkspaceCredentialForm

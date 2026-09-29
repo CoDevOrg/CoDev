@@ -18,10 +18,7 @@ import {
   decryptHostedMaterial,
   resolveHostedCodexSubscription,
 } from "./hosted-codex-subscription-credentials";
-import {
-  defaultSharingEnabled,
-  resolvePersonalOrSharedCredential,
-} from "./scoped-credential-sharing";
+import { resolvePersonalOrSharedCredential } from "./scoped-credential-sharing";
 import {
   CLAUDE_CLI_TOKEN_KIND,
   type ClaudeCliTokenPublicStatus,
@@ -33,7 +30,7 @@ const CREDENTIAL_CONTEXT = {
   purpose: "provider-credential",
 };
 
-export type CredentialSource = "USER" | "WORKSPACE" | "ORGANIZATION";
+export type CredentialSource = "USER" | "WORKSPACE";
 
 export interface ResolvedCredential {
   provider: AuthProvider;
@@ -581,7 +578,7 @@ export async function resolveClaudeCliTokenForIde(
     { userId, workspaceId },
     {
       findPersonal: (id) => findCliToken("USER", id),
-      findShared: (id) => findCliToken("ORGANIZATION", id),
+      findShared: (id) => findCliToken("WORKSPACE", id),
     },
   );
   if (!result?.credential.encryptedAccessToken) return null;
@@ -611,11 +608,6 @@ export async function saveProviderCredential(input: {
   /** Whether this credential may fund a turn in a shared workspace.
    *  Defaults to true on create; preserved on reconnect unless given. */
   allowInSharedWorkspaces?: boolean | undefined;
-  /** Whether every member of the scope (an ORGANIZATION credential's scope id
-   *  is a specific workspace) may use this login, not just whoever connected
-   *  it. Defaults to true for ORGANIZATION scope, false for USER — the same
-   *  rule `persistHostedCodexConnection` applies for Codex. */
-  sharingEnabled?: boolean | undefined;
 }) {
   const scopeType = parseScopeType(input.scopeType);
   const provider = parseProvider(input.provider);
@@ -623,8 +615,6 @@ export async function saveProviderCredential(input: {
   const connectedVia: CredentialConnectedVia =
     input.connectedVia ??
     (credentialType === "OAUTH_TOKEN" ? "browser" : "api_key");
-  const sharingEnabled =
-    input.sharingEnabled ?? defaultSharingEnabled(scopeType);
 
   // A consumer Claude OAuth token must never be used as a direct-API bearer, so
   // the browser-era token flow stays retired. The one exception is the local
@@ -696,7 +686,6 @@ export async function saveProviderCredential(input: {
       keyVersion: 2,
       lastFour: input.lastFour ?? null,
       connectedVia,
-      sharingEnabled,
       allowInSharedWorkspaces: input.allowInSharedWorkspaces ?? true,
     })
     .onConflictDoUpdate({
@@ -718,7 +707,6 @@ export async function saveProviderCredential(input: {
         keyVersion: 2,
         lastFour: input.lastFour ?? null,
         connectedVia,
-        ...(input.sharingEnabled !== undefined ? { sharingEnabled } : {}),
         ...(input.allowInSharedWorkspaces !== undefined
           ? { allowInSharedWorkspaces: input.allowInSharedWorkspaces }
           : {}),
@@ -848,7 +836,6 @@ export async function getProviderCredentialStatus(
     updatedAt: credential.updatedAt,
     connectedVia: credential.connectedVia ?? undefined,
     allowInSharedWorkspaces: credential.allowInSharedWorkspaces,
-    sharingEnabled: credential.sharingEnabled,
   };
 }
 
@@ -873,7 +860,7 @@ export async function getOAuthCredentialStatus(
  * means exactly "this scope's workspace host can use this token".
  */
 export async function getClaudeCliTokenPublicStatus(input: {
-  scopeType: "USER" | "ORGANIZATION";
+  scopeType: "USER" | "WORKSPACE";
   scopeId: string;
   canManage: boolean;
 }): Promise<ClaudeCliTokenPublicStatus> {
@@ -889,12 +876,11 @@ export async function getClaudeCliTokenPublicStatus(input: {
     scopeType: input.scopeType,
     status: connected ? "connected" : "not_connected",
     stateText: connected
-      ? input.scopeType === "ORGANIZATION"
+      ? input.scopeType === "WORKSPACE"
         ? "Connected for this workspace"
         : "Connected · codev claude-auth"
       : "Not connected",
     lastFour: connected ? (status?.lastFour ?? null) : null,
-    sharingEnabled: Boolean(status?.sharingEnabled),
     canManage: input.canManage,
   };
 }

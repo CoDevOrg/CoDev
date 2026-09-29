@@ -177,7 +177,6 @@ export type ProviderCredentialStatus = {
   lastFour?: string | null | undefined;
   connectedVia?: CredentialProvenance | null | undefined;
   allowInSharedWorkspaces?: boolean | undefined;
-  sharingEnabled?: boolean | undefined;
   encryptedApiKey?: string | null | undefined;
   encryptedAccessToken?: string | null | undefined;
   encryptedRefreshToken?: string | null | undefined;

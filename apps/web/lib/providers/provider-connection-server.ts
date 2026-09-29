@@ -75,14 +75,14 @@ export async function loadProviderConnectionSnapshot(
     getProviderCredentialStatus("USER", user.id, "cursor", "OAUTH_TOKEN"),
     workspaceId
       ? getHostedCodexPublicStatus({
-          scopeType: "ORGANIZATION",
+          scopeType: "WORKSPACE",
           scopeId: workspaceId,
           canManage: false,
         })
       : null,
     workspaceId
       ? getClaudeCliTokenPublicStatus({
-          scopeType: "ORGANIZATION",
+          scopeType: "WORKSPACE",
           scopeId: workspaceId,
           canManage: false,
         })
@@ -127,13 +127,10 @@ export async function loadProviderConnectionSnapshot(
     ...(workspaceId
       ? {
           sharedWorkspaceLogin: {
-            openai: Boolean(
-              sharedCodex?.status === "connected" && sharedCodex.sharingEnabled,
-            ),
-            anthropic: Boolean(
-              sharedClaude?.status === "connected" &&
-              sharedClaude.sharingEnabled,
-            ),
+            // A workspace-scoped login belongs to that workspace's members;
+            // there is no second sharing flag to consult any more.
+            openai: sharedCodex?.status === "connected",
+            anthropic: sharedClaude?.status === "connected",
           },
         }
       : {}),

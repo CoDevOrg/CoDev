@@ -180,10 +180,15 @@ export const publicationStatus = pgEnum("publication_status", [
   "published",
   "failed",
 ]);
+/**
+ * Who a credential belongs to. There were once two spellings of "shared" —
+ * `WORKSPACE` for the older fallback key pool and `ORGANIZATION`, whose scope
+ * id was also a workspace id, for `--org` logins — so reading a row meant
+ * knowing which mechanism had written it. They are one scope now.
+ */
 export const credentialScopeType = pgEnum("credential_scope_type", [
   "USER",
   "WORKSPACE",
-  "ORGANIZATION",
 ]);
 export const credentialProvider = pgEnum("credential_provider", [
   "anthropic",
@@ -696,7 +701,6 @@ export const providerCredentials = pgTable(
       onDelete: "set null",
     }),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
-    sharingEnabled: boolean("sharing_enabled").default(false).notNull(),
     // Provenance (see credentialConnectedVia). Nullable for pre-existing rows;
     // the 0042 migration backfills them and code treats NULL conservatively
     // (not workspace-eligible).

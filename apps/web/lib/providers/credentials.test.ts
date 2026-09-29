@@ -290,21 +290,19 @@ describe("getClaudeCliTokenPublicStatus", () => {
         provider: "anthropic",
         credentialType: "OAUTH_TOKEN",
         connectedVia: "cli",
-        sharingEnabled: true,
         lastFour: "wxyz",
       }),
     ]);
     await expect(
       getClaudeCliTokenPublicStatus({
-        scopeType: "ORGANIZATION",
+        scopeType: "WORKSPACE",
         scopeId: "workspace-1",
         canManage: true,
       }),
     ).resolves.toMatchObject({
       status: "connected",
-      scopeType: "ORGANIZATION",
+      scopeType: "WORKSPACE",
       lastFour: "wxyz",
-      sharingEnabled: true,
       stateText: "Connected for this workspace",
     });
   });
@@ -325,7 +323,6 @@ describe("getClaudeCliTokenPublicStatus", () => {
       }),
     ).resolves.toMatchObject({
       status: "not_connected",
-      sharingEnabled: false,
     });
   });
 

@@ -13,10 +13,7 @@ import {
   type HostedCodexPublicStatus,
 } from "./hosted-codex-subscription-view";
 import { decryptSecret, encryptSecret } from "../platform/kms";
-import {
-  defaultSharingEnabled,
-  resolvePersonalOrSharedCredential,
-} from "./scoped-credential-sharing";
+import { resolvePersonalOrSharedCredential } from "./scoped-credential-sharing";
 
 const HOSTED_CODEX_CONTEXT = {
   application: "codev",
@@ -82,10 +79,6 @@ export async function persistHostedCodexConnection(input: {
   userId: string;
   scopeType: HostedCodexScopeType;
   scopeId: string;
-  /** Defaults to true for an ORGANIZATION scope, false for USER — see
-   *  `defaultSharingEnabled`. Override to connect a workspace-scoped login
-   *  that only its connector may use, or vice versa. */
-  sharingEnabled?: boolean;
   material: HostedCodexMaterial;
   accountLabel?: string;
   /** Browser and CLI logins produce byte-identical auth caches, so the caller
@@ -96,8 +89,6 @@ export async function persistHostedCodexConnection(input: {
   allowInSharedWorkspaces?: boolean;
 }) {
   validateAuthCache(input.material.authCacheJson);
-  const sharingEnabled =
-    input.sharingEnabled ?? defaultSharingEnabled(input.scopeType);
   const encryptedMaterial = await encryptHostedMaterial(input.material);
   const [credential] = await getDatabase()
     .insert(schema.providerCredentials)
@@ -113,7 +104,6 @@ export async function persistHostedCodexConnection(input: {
       status: "active",
       lastRefreshedAt: new Date(),
       createdBy: input.userId,
-      sharingEnabled,
       revokedAt: null,
       connectedVia: input.connectedVia,
       allowInSharedWorkspaces: input.allowInSharedWorkspaces ?? true,
@@ -133,7 +123,6 @@ export async function persistHostedCodexConnection(input: {
         status: "active",
         lastRefreshedAt: new Date(),
         createdBy: input.userId,
-        sharingEnabled,
         revokedAt: null,
         connectedVia: input.connectedVia,
         ...(input.allowInSharedWorkspaces !== undefined
@@ -192,7 +181,7 @@ export async function resolveHostedCodexSubscription(input: {
   return resolvePersonalOrSharedCredential(input, {
     findPersonal: (userId) => findActiveHostedCredential("USER", userId),
     findShared: (workspaceId) =>
-      findActiveHostedCredential("ORGANIZATION", workspaceId),
+      findActiveHostedCredential("WORKSPACE", workspaceId),
   });
 }
 
@@ -227,12 +216,11 @@ export async function getHostedCodexPublicStatus(input: {
     scopeType: input.scopeType,
     status: connected ? "connected" : enabled ? "not_connected" : "unavailable",
     stateText: connected
-      ? input.scopeType === "ORGANIZATION"
+      ? input.scopeType === "WORKSPACE"
         ? "Connected for this organization"
         : "Connected · Codex CLI"
       : "Not connected",
     accountLabel: connected ? "Codex CLI" : null,
-    sharingEnabled: Boolean(credential?.sharingEnabled),
     canManage: input.canManage,
     enabled,
     configured: enabled,

@@ -49,8 +49,7 @@ export async function saveCodexCliAuthCache(request: Request) {
     organizationId?: unknown;
     authCache?: unknown;
   };
-  const scopeType =
-    input.scopeType === "ORGANIZATION" ? "ORGANIZATION" : "USER";
+  const scopeType = input.scopeType === "WORKSPACE" ? "WORKSPACE" : "USER";
   const scopeId =
     scopeType === "USER"
       ? cli.userId
@@ -58,7 +57,7 @@ export async function saveCodexCliAuthCache(request: Request) {
         ? input.organizationId
         : "";
   if (!scopeId) throw new CliAuthError("Organization id is required.");
-  if (scopeType === "ORGANIZATION") {
+  if (scopeType === "WORKSPACE") {
     try {
       await requireOrganizationSettingsWrite(cli.userId, scopeId);
     } catch {
@@ -73,7 +72,6 @@ export async function saveCodexCliAuthCache(request: Request) {
     userId: cli.userId,
     scopeType,
     scopeId,
-    // sharingEnabled: defaults to true for ORGANIZATION, false for USER.
     material: { authCacheJson },
     accountLabel: "Codex CLI",
     connectedVia: "cli",

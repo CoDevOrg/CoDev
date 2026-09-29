@@ -102,7 +102,7 @@ async function loadCodexAuthCache(input: ResolveInput): Promise<Loaded | null> {
   const material = hosted.credential.encryptedMaterial;
   return {
     credentialId: hosted.credential.id,
-    source: hosted.source === "ORGANIZATION" ? "shared" : "personal",
+    source: hosted.source === "WORKSPACE" ? "shared" : "personal",
     allowInSharedWorkspaces:
       hosted.credential.allowInSharedWorkspaces !== false,
     read: async () => {
@@ -117,7 +117,7 @@ async function loadCodexAuthCache(input: ResolveInput): Promise<Loaded | null> {
 type CredentialRow = typeof schema.providerCredentials.$inferSelect;
 
 async function findRow(
-  scopeType: "USER" | "ORGANIZATION" | "WORKSPACE",
+  scopeType: "USER" | "WORKSPACE" | "WORKSPACE",
   scopeId: string,
   vendor: string,
   credentialType: "API_KEY" | "OAUTH_TOKEN",
@@ -153,7 +153,7 @@ async function findPersonalOrShared(
   }
   if (!input.workspaceId) return null;
   const shared = await findRow(
-    "ORGANIZATION",
+    "WORKSPACE",
     input.workspaceId,
     vendor,
     credentialType,
@@ -161,7 +161,6 @@ async function findPersonalOrShared(
   if (
     shared &&
     accept(shared) &&
-    shared.sharingEnabled &&
     (await belongsToSharedScope(input.userId, input.workspaceId))
   ) {
     return { row: shared, source: "shared" };

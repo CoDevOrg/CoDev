@@ -98,12 +98,12 @@ describe("resolveClaudeConnectionScope", () => {
     expect(requireOrganizationSettingsWriteMock).not.toHaveBeenCalled();
   });
 
-  it("requires org write access for an organization scope", async () => {
+  it("requires org write access for a workspace scope", async () => {
     requireOrganizationSettingsWriteMock.mockRejectedValueOnce(new Error("no"));
     await expect(
       resolveClaudeConnectionScope({
         userId: "u1",
-        scopeType: "ORGANIZATION",
+        scopeType: "WORKSPACE",
         organizationId: "org1",
       }),
     ).rejects.toBeInstanceOf(ClaudeConnectionError);

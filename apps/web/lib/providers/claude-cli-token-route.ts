@@ -7,7 +7,7 @@ import { getApiUser } from "../http/api";
 import { deleteProviderCredential } from "./credentials";
 import { requireOrganizationSettingsWrite } from "../auth/settings-access";
 
-const scopeTypeSchema = z.enum(["USER", "ORGANIZATION"]);
+const scopeTypeSchema = z.enum(["USER", "WORKSPACE"]);
 
 /** Mirrors `disconnectHostedCodexConnection`
  *  (`hosted-codex-subscription-route.ts`) for the Claude CLI setup-token. */
@@ -29,9 +29,9 @@ export async function disconnectClaudeCliTokenConnection(request: Request) {
   }
   const scopeType = parsed.data;
   const scopeId =
-    scopeType === "ORGANIZATION" ? (body.organizationId ?? "") : user.id;
+    scopeType === "WORKSPACE" ? (body.organizationId ?? "") : user.id;
   try {
-    if (scopeType === "ORGANIZATION") {
+    if (scopeType === "WORKSPACE") {
       await requireOrganizationSettingsWrite(user.id, scopeId);
     }
     await deleteProviderCredential(

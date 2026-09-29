@@ -88,14 +88,12 @@ export async function persistCodexSubscriptionFromOAuth(input: {
   tokens: CodexOAuthTokens;
 }) {
   const authCacheJson = buildCodexAuthCacheJson(input.tokens);
-  // Hosted Codex credentials scope to USER or ORGANIZATION; a WORKSPACE-scoped
-  // OAuth session persists as the shared organization connection.
-  const scopeType = input.scopeType === "USER" ? "USER" : "ORGANIZATION";
+  // A Codex login is either the member's own or the workspace's.
+  const scopeType = input.scopeType === "USER" ? "USER" : "WORKSPACE";
   await persistHostedCodexConnection({
     userId: input.userId,
     scopeType,
     scopeId: input.scopeId,
-    // sharingEnabled: defaults to true for ORGANIZATION, false for USER.
     material: { authCacheJson },
     accountLabel: "ChatGPT",
     // Codex OAuth produces the same refreshable auth cache as `codex login`.
