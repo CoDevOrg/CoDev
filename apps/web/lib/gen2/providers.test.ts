@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   decryptMaterial: vi.fn(),
   decryptSecret: vi.fn(),
   limit: vi.fn(),
+  envRows: vi.fn(),
 }));
 
 vi.mock("../providers/hosted-codex-subscription-credentials", () => ({
@@ -22,6 +23,9 @@ vi.mock("../platform/database", () => {
     from: vi.fn(() => query),
     where: vi.fn(() => query),
     limit: (...args: unknown[]) => mocks.limit(...args),
+    // The member's environment variables are read with an ordered query that
+    // is awaited directly rather than through `limit`.
+    orderBy: (...args: unknown[]) => mocks.envRows(...args),
   };
   return { getDatabase: () => ({ select: vi.fn(() => query) }) };
 });
@@ -36,6 +40,43 @@ describe("gen2 provider resolution", () => {
     vi.resetAllMocks();
     mocks.resolveHosted.mockResolvedValue(null);
     mocks.limit.mockResolvedValue([]);
+    mocks.envRows.mockResolvedValue([]);
+  });
+
+  it("carries the member's environment variables into the launch profile", async () => {
+    mocks.resolveHosted.mockResolvedValue({
+      credential: { id: "cred-1", encryptedMaterial: "enc" },
+    });
+    mocks.decryptMaterial.mockResolvedValue({ authCacheJson: '{"a":1}' });
+    mocks.envRows.mockResolvedValue([
+      { name: "GITHUB_TOKEN", encryptedValue: "enc-token" },
+    ]);
+    mocks.decryptSecret.mockResolvedValue("ghp_secret");
+
+    const credential = await resolveGen2Codex(userId);
+
+    expect(credential.launchProfile.env).toMatchObject({
+      GITHUB_TOKEN: "ghp_secret",
+    });
+    // The credential's own variables win: a member variable named after one
+    // the CLI needs must not point it somewhere else.
+    expect(credential.launchProfile.env?.CODEX_HOME).toBe(
+      "{{profileDir}}/.codex",
+    );
+    expect(credential.launchProfile.files?.[0]?.path).toBe(".codex/auth.json");
+  });
+
+  it("still sends the legacy auth cache beside the profile", async () => {
+    mocks.resolveHosted.mockResolvedValue({
+      credential: { id: "cred-1", encryptedMaterial: "enc" },
+    });
+    mocks.decryptMaterial.mockResolvedValue({ authCacheJson: '{"a":1}' });
+
+    const credential = await resolveGen2Codex(userId);
+
+    // A guest image that predates the launch profile reads this field, so a
+    // turn runs whichever image the host happens to have.
+    expect(credential.authCacheJson).toBe('{"a":1}');
   });
 
   it("prefers a ChatGPT subscription and reports its lease id", async () => {
@@ -43,7 +84,7 @@ describe("gen2 provider resolution", () => {
       credential: { id: "cred-1", encryptedMaterial: "enc" },
     });
     mocks.decryptMaterial.mockResolvedValue({ authCacheJson: '{"a":1}' });
-    await expect(resolveGen2Codex(userId)).resolves.toEqual({
+    await expect(resolveGen2Codex(userId)).resolves.toMatchObject({
       credentialId: "cred-1",
       authCacheJson: '{"a":1}',
       via: "subscription",
