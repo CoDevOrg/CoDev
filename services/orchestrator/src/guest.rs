@@ -90,17 +90,14 @@ fn launch_profile_env(profile: &LaunchProfile) -> impl Iterator<Item = (&str, &s
 fn legacy_codex_launch_profile(auth_cache_json: &str) -> LaunchProfile {
     let mut env = BTreeMap::new();
     env.insert("CODEX_HOME".to_string(), PROFILE_DIR_TOKEN.to_string());
-    LaunchProfile {
-        files: if auth_cache_json.is_empty() {
-            Vec::new()
-        } else {
-            vec![LaunchProfileFile {
-                path: "auth.json".to_string(),
-                contents: auth_cache_json.to_string(),
-            }]
-        },
-        env,
+    let mut files = Vec::new();
+    if !auth_cache_json.is_empty() {
+        files.push(LaunchProfileFile {
+            path: "auth.json".to_string(),
+            contents: auth_cache_json.to_string(),
+        });
     }
+    LaunchProfile { files, env }
 }
 
 pub struct GuestResponse {
@@ -734,9 +731,9 @@ impl GuestService {
         // The body is forwarded verbatim, so this is the only place a
         // malformed profile can be rejected before Superset sees it.
         if let Some(profile) = request.launch_profile.as_ref() {
-            let checked =
-                validate_launch_profile(launch_profile_files(profile), launch_profile_env(profile));
-            if let Err(error) = checked {
+            let files = launch_profile_files(profile);
+            let env = launch_profile_env(profile);
+            if let Err(error) = validate_launch_profile(files, env) {
                 return GuestResponse::error(400, &error);
             }
         }
@@ -4805,8 +4802,7 @@ sleep 5
             "{}",
             String::from_utf8_lossy(&start.body)
         );
-        let body: serde_json::Value =
-            serde_json::from_slice(&start.body).expect("json");
+        let body: serde_json::Value = serde_json::from_slice(&start.body).expect("json");
         let session_id = body["sessionId"].as_str().expect("session id").to_string();
         let result = poll_codex_exec_until_exited(
             &service,

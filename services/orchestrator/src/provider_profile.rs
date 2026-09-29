@@ -353,15 +353,12 @@ pub fn materialize_launch_profile<'a>(
         fs::set_permissions(&target, fs::Permissions::from_mode(0o600))?;
     }
     let directory = dir.display().to_string();
-    Ok(env
-        .into_iter()
-        .map(|(name, value)| {
-            (
-                name.to_string(),
-                value.replace(PROFILE_DIR_TOKEN, &directory),
-            )
-        })
-        .collect())
+    let mut resolved = Vec::new();
+    for (name, value) in env {
+        let expanded = value.replace(PROFILE_DIR_TOKEN, &directory);
+        resolved.push((name.to_string(), expanded));
+    }
+    Ok(resolved)
 }
 
 /// Registry of this guestd process's live profiles, keyed by handle.
@@ -581,13 +578,8 @@ mod tests {
         assert_eq!(file_mode & 0o777, 0o600);
         let nested = fs::metadata(profile.dir().join(".codex")).expect("meta");
         assert_eq!(nested.permissions().mode() & 0o777, 0o700);
-        assert_eq!(
-            env,
-            vec![(
-                "CODEX_HOME".to_string(),
-                format!("{}/.codex", profile.dir().display()),
-            )]
-        );
+        let expected = format!("{}/.codex", profile.dir().display());
+        assert_eq!(env, vec![("CODEX_HOME".to_string(), expected)]);
     }
 
     #[test]
@@ -606,8 +598,7 @@ mod tests {
         let names: Vec<String> = (0..=MAX_PROFILE_FILES)
             .map(|index| format!("file-{index}"))
             .collect();
-        let too_many: Vec<(&str, &str)> =
-            names.iter().map(|name| (name.as_str(), "")).collect();
+        let too_many: Vec<(&str, &str)> = names.iter().map(|name| (name.as_str(), "")).collect();
         assert!(validate_launch_profile(too_many, []).is_err());
 
         let oversized = "x".repeat(MAX_PROFILE_FILE_BYTES + 1);
@@ -629,8 +620,7 @@ mod tests {
 
         let oversized = "y".repeat(MAX_PROFILE_ENV_VALUE_BYTES + 1);
         let env = [("TOKEN", oversized.as_str())];
-        let error =
-            validate_launch_profile([], env).expect_err("value should be rejected");
+        let error = validate_launch_profile([], env).expect_err("value should be rejected");
         assert!(!error.contains(&oversized));
         assert!(error.contains("TOKEN"));
     }
