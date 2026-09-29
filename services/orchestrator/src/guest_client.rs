@@ -12,7 +12,9 @@ use crate::model::{
     ClaudeSetupStartRequest, CodexExecPollRequest, CodexExecPollResponse, CodexExecStartRequest,
     ExecRequest, ExecResponse, FileResponse, PublicationExportRequest, PublicationExportResponse,
     Result, RuntimeError, SessionRestoreBeginRequest, SessionRestoreChunkRequest,
-    SessionRestoreFinalizeResponse, SupersetCreateEntryRequest, SupersetDeleteEntryRequest,
+    SessionRestoreFinalizeResponse, SupersetAgentInputRequest, SupersetAgentPollRequest,
+    SupersetAgentPollResponse, SupersetAgentRecoveryResponse, SupersetAgentStartRequest,
+    SupersetAgentStartResponse, SupersetCreateEntryRequest, SupersetDeleteEntryRequest,
     SupersetMoveEntryRequest, TerminalInputRequest, TerminalPollRequest, TerminalPollResponse,
     TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
     WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse,
@@ -260,6 +262,66 @@ impl GuestClient {
         )
         .await
         .map(|_| ())
+    }
+
+    pub async fn start_superset_agent(
+        &self,
+        request: &SupersetAgentStartRequest,
+    ) -> Result<SupersetAgentStartResponse> {
+        self.request("POST", "/v1/superset-agents", Some(request))
+            .await
+    }
+
+    pub async fn input_superset_agent(
+        &self,
+        agent_id: &str,
+        request: &SupersetAgentInputRequest,
+    ) -> Result<()> {
+        self.request::<_, serde_json::Value>(
+            "POST",
+            &format!("/v1/superset-agents/{agent_id}/input"),
+            Some(request),
+        )
+        .await
+        .map(|_| ())
+    }
+
+    pub async fn poll_superset_agent(
+        &self,
+        agent_id: &str,
+        request: &SupersetAgentPollRequest,
+    ) -> Result<SupersetAgentPollResponse> {
+        // Mirrors poll_codex_exec's headroom above the guest's own capped
+        // long-poll wait.
+        self.request_with_timeout(
+            "POST",
+            &format!("/v1/superset-agents/{agent_id}/poll"),
+            Some(request),
+            Duration::from_secs(40),
+        )
+        .await
+    }
+
+    pub async fn close_superset_agent(&self, agent_id: &str) -> Result<()> {
+        self.request::<(), serde_json::Value>(
+            "DELETE",
+            &format!("/v1/superset-agents/{agent_id}"),
+            None,
+        )
+        .await
+        .map(|_| ())
+    }
+
+    pub async fn recover_superset_agent(
+        &self,
+        agent_id: &str,
+    ) -> Result<SupersetAgentRecoveryResponse> {
+        self.request::<(), _>(
+            "GET",
+            &format!("/v1/superset-agents/{agent_id}/recovery"),
+            None,
+        )
+        .await
     }
 
     pub async fn start_claude_setup(

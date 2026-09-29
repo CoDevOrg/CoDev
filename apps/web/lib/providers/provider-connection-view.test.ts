@@ -32,8 +32,11 @@ describe("provider connection view", () => {
       suppliedBy: "CoDev Test Jordan",
       scope: "personal",
       provenance: "api_key",
-      enabledForRooms: true,
+      // An API key is a workspace credential: the rooms executor has no
+      // API-key path, so the registry reports it as workspace-only.
+      enabledForRooms: false,
       enabledForWorkspace: true,
+      allowInSharedWorkspaces: true,
     });
     expect(secretKeysInValue(connection)).toEqual([]);
     expect(JSON.stringify(connection)).not.toMatch(/sk-live|ciphertext/i);

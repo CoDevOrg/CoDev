@@ -15,19 +15,9 @@ vi.mock("../platform/database", () => ({
   }),
 }));
 
-import {
-  defaultSharingEnabled,
-  resolvePersonalOrSharedCredential,
-} from "./scoped-credential-sharing";
+import { resolvePersonalOrSharedCredential } from "./scoped-credential-sharing";
 
-describe("defaultSharingEnabled", () => {
-  it("is true for an ORGANIZATION scope, false for USER", () => {
-    expect(defaultSharingEnabled("ORGANIZATION")).toBe(true);
-    expect(defaultSharingEnabled("USER")).toBe(false);
-  });
-});
-
-type FixtureCredential = { id: string; sharingEnabled: boolean };
+type FixtureCredential = { id: string };
 
 describe("resolvePersonalOrSharedCredential", () => {
   beforeEach(() => mocks.belongs.mockReset());
@@ -36,41 +26,29 @@ describe("resolvePersonalOrSharedCredential", () => {
     const result = await resolvePersonalOrSharedCredential<FixtureCredential>(
       { userId: "u1", workspaceId: "w1" },
       {
-        findPersonal: async () => ({ id: "personal", sharingEnabled: false }),
-        findShared: async () => ({ id: "shared", sharingEnabled: true }),
+        findPersonal: async () => ({ id: "personal" }),
+        findShared: async () => ({ id: "shared" }),
       },
     );
     expect(result).toEqual({
-      credential: { id: "personal", sharingEnabled: false },
+      credential: { id: "personal" },
       source: "USER",
     });
   });
 
-  it("falls back to the shared credential only when it is marked shared and the member belongs to that workspace", async () => {
+  it("falls back to the workspace's credential only for a member of that workspace", async () => {
     mocks.belongs.mockReturnValue(true);
     const result = await resolvePersonalOrSharedCredential<FixtureCredential>(
       { userId: "u1", workspaceId: "w1" },
       {
         findPersonal: async () => null,
-        findShared: async () => ({ id: "shared", sharingEnabled: true }),
+        findShared: async () => ({ id: "shared" }),
       },
     );
     expect(result).toEqual({
-      credential: { id: "shared", sharingEnabled: true },
-      source: "ORGANIZATION",
+      credential: { id: "shared" },
+      source: "WORKSPACE",
     });
-  });
-
-  it("refuses a shared credential that was not marked shared, even for a member", async () => {
-    mocks.belongs.mockReturnValue(true);
-    const result = await resolvePersonalOrSharedCredential<FixtureCredential>(
-      { userId: "u1", workspaceId: "w1" },
-      {
-        findPersonal: async () => null,
-        findShared: async () => ({ id: "shared", sharingEnabled: false }),
-      },
-    );
-    expect(result).toBeNull();
   });
 
   it("refuses a shared credential for someone who does not belong to that workspace", async () => {
@@ -79,7 +57,7 @@ describe("resolvePersonalOrSharedCredential", () => {
       { userId: "outsider", workspaceId: "w1" },
       {
         findPersonal: async () => null,
-        findShared: async () => ({ id: "shared", sharingEnabled: true }),
+        findShared: async () => ({ id: "shared" }),
       },
     );
     expect(result).toBeNull();

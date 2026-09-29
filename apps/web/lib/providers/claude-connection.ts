@@ -79,9 +79,8 @@ export async function resolveClaudeConnectionScope(input: {
   userId: string;
   scopeType?: unknown;
   organizationId?: unknown;
-}): Promise<{ scopeType: "USER" | "ORGANIZATION"; scopeId: string }> {
-  const scopeType =
-    input.scopeType === "ORGANIZATION" ? "ORGANIZATION" : "USER";
+}): Promise<{ scopeType: "USER" | "WORKSPACE"; scopeId: string }> {
+  const scopeType = input.scopeType === "WORKSPACE" ? "WORKSPACE" : "USER";
   const scopeId =
     scopeType === "USER"
       ? input.userId
@@ -91,7 +90,7 @@ export async function resolveClaudeConnectionScope(input: {
   if (!scopeId) {
     throw new ClaudeConnectionError("Organization id is required.");
   }
-  if (scopeType === "ORGANIZATION") {
+  if (scopeType === "WORKSPACE") {
     try {
       await requireOrganizationSettingsWrite(input.userId, scopeId);
     } catch {
@@ -110,7 +109,7 @@ export async function resolveClaudeConnectionScope(input: {
  * land in exactly the same row shape.
  */
 export async function persistClaudeOAuthToken(input: {
-  scopeType: "USER" | "ORGANIZATION";
+  scopeType: "USER" | "WORKSPACE";
   scopeId: string;
   oauthToken: string;
   source: ClaudeConnectionSource;

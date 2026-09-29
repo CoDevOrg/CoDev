@@ -202,7 +202,7 @@ async function resolveCodexAuthCacheForIde(
     // either provenance is valid when the member enabled it for workspaces.
     if (
       !hosted ||
-      !hosted.credential.enabledForWorkspace ||
+      !hosted.credential.allowInSharedWorkspaces ||
       !hosted.credential.encryptedMaterial
     ) {
       return undefined;

@@ -52,12 +52,7 @@ export async function PUT(request: Request) {
   try {
     const input = putSchema.parse(await request.json());
     return Response.json(
-      await savePersonalProviderConnection(
-        user,
-        input.provider,
-        input.apiKey,
-        input.surface,
-      ),
+      await savePersonalProviderConnection(user, input.provider, input.apiKey),
     );
   } catch (error) {
     return apiError(error);

@@ -34,7 +34,9 @@ use crate::{
         CodexExecStartRequest, CreateRequest, ExecRequest, ExecResponse, FileResponse, Instance,
         PublicationExportRequest, PublicationExportResponse, RepositorySnapshot, Result,
         RuntimeError, SessionRestoreBeginRequest, SessionRestoreChunkRequest,
-        SessionRestoreFinalizeResponse, SupersetCreateEntryRequest, SupersetDeleteEntryRequest,
+        SessionRestoreFinalizeResponse, SupersetAgentInputRequest, SupersetAgentPollRequest,
+        SupersetAgentPollResponse, SupersetAgentRecoveryResponse, SupersetAgentStartRequest,
+        SupersetAgentStartResponse, SupersetCreateEntryRequest, SupersetDeleteEntryRequest,
         SupersetMoveEntryRequest, TerminalInputRequest, TerminalPollRequest, TerminalPollResponse,
         TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
         WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest,
@@ -940,6 +942,62 @@ impl FirecrackerBackend {
         machine.guest.close_codex_exec(session_id).await?;
         self.mark_activity(&machine);
         Ok(())
+    }
+
+    pub async fn start_superset_agent(
+        &self,
+        workspace_id: &str,
+        request: SupersetAgentStartRequest,
+    ) -> Result<SupersetAgentStartResponse> {
+        let machine = self.machine(workspace_id).await?;
+        let result = machine.guest.start_superset_agent(&request).await?;
+        self.mark_activity(&machine);
+        Ok(result)
+    }
+
+    pub async fn input_superset_agent(
+        &self,
+        workspace_id: &str,
+        agent_id: &str,
+        request: SupersetAgentInputRequest,
+    ) -> Result<()> {
+        let machine = self.machine(workspace_id).await?;
+        machine
+            .guest
+            .input_superset_agent(agent_id, &request)
+            .await?;
+        self.mark_activity(&machine);
+        Ok(())
+    }
+
+    pub async fn poll_superset_agent(
+        &self,
+        workspace_id: &str,
+        agent_id: &str,
+        request: SupersetAgentPollRequest,
+    ) -> Result<SupersetAgentPollResponse> {
+        // A Superset agent's empty long-poll is transport, not user activity —
+        // matches poll_terminal's reasoning for not marking activity here.
+        let machine = self.machine_without_activity(workspace_id).await?;
+        let _reaper_exempt = ReaperExemptRequest::new(&machine.reaper_exempt_requests);
+        machine.guest.poll_superset_agent(agent_id, &request).await
+    }
+
+    pub async fn close_superset_agent(&self, workspace_id: &str, agent_id: &str) -> Result<()> {
+        let machine = self.machine(workspace_id).await?;
+        machine.guest.close_superset_agent(agent_id).await?;
+        self.mark_activity(&machine);
+        Ok(())
+    }
+
+    pub async fn recover_superset_agent(
+        &self,
+        workspace_id: &str,
+        agent_id: &str,
+    ) -> Result<SupersetAgentRecoveryResponse> {
+        let machine = self.machine_without_activity(workspace_id).await?;
+        let _reaper_exempt = ReaperExemptRequest::new(&machine.reaper_exempt_requests);
+        machine.guest.recover_superset_agent(agent_id).await
     }
 
     pub async fn start_claude_setup(

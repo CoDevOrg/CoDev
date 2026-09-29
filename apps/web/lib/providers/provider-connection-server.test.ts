@@ -119,6 +119,7 @@ describe("provider connection server", () => {
           provenance: "browser",
           enabledForRooms: true,
           enabledForWorkspace: false,
+          allowInSharedWorkspaces: true,
         },
         { provider: "cursor", status: "connected" },
       ],

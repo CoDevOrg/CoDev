@@ -11,7 +11,6 @@ import {
   saveOpenAICredential,
   updateCredentialSurfaces,
   type CredentialSurface,
-  type CredentialSurfaces,
 } from "./credentials";
 import { isHostedClaudeConnectEnabled } from "./claude-connection-runner";
 import { isHostedCodexSubscriptionEnabled } from "./hosted-codex-subscription-flag";
@@ -76,14 +75,14 @@ export async function loadProviderConnectionSnapshot(
     getProviderCredentialStatus("USER", user.id, "cursor", "OAUTH_TOKEN"),
     workspaceId
       ? getHostedCodexPublicStatus({
-          scopeType: "ORGANIZATION",
+          scopeType: "WORKSPACE",
           scopeId: workspaceId,
           canManage: false,
         })
       : null,
     workspaceId
       ? getClaudeCliTokenPublicStatus({
-          scopeType: "ORGANIZATION",
+          scopeType: "WORKSPACE",
           scopeId: workspaceId,
           canManage: false,
         })
@@ -111,8 +110,6 @@ export async function loadProviderConnectionSnapshot(
             credentialType: "OAUTH_TOKEN",
             lastFour: "Official runtime",
             connectedVia: "browser",
-            enabledForRooms: true,
-            enabledForWorkspace: false,
           }
         : null,
       cursor: cursorOAuth,
@@ -120,7 +117,9 @@ export async function loadProviderConnectionSnapshot(
     claudeCliToken,
     connectModes: {
       codex: getOAuthFlowMode("codex"),
-      claude: getOAuthFlowMode("claude"),
+      // Claude has no CoDev-run OAuth flow: the in-app button drives the
+      // official login runtime, and the fallback is `codev claude-auth`.
+      claude: "manual_code",
       cursor: "cursor_deeplink",
     },
     hostedClaudeConnect: isHostedClaudeConnectEnabled(),
@@ -128,13 +127,10 @@ export async function loadProviderConnectionSnapshot(
     ...(workspaceId
       ? {
           sharedWorkspaceLogin: {
-            openai: Boolean(
-              sharedCodex?.status === "connected" && sharedCodex.sharingEnabled,
-            ),
-            anthropic: Boolean(
-              sharedClaude?.status === "connected" &&
-              sharedClaude.sharingEnabled,
-            ),
+            // A workspace-scoped login belongs to that workspace's members;
+            // there is no second sharing flag to consult any more.
+            openai: sharedCodex?.status === "connected",
+            anthropic: sharedClaude?.status === "connected",
           },
         }
       : {}),
@@ -142,26 +138,24 @@ export async function loadProviderConnectionSnapshot(
 }
 
 /**
- * Save a pasted API key. `surface` is the settings section the member pasted
- * it in: a key connected there is enabled for that surface only, and the
- * member opts it into the other with a toggle. Omitted (legacy callers) means
- * both, matching how keys behaved before surfaces existed.
+ * Save a pasted API key.
+ *
+ * The settings section it was pasted in used to decide which surfaces the key
+ * was enabled for. It no longer does: where an API key can run is the
+ * registry's answer, and a key pasted in one section was never usable in the
+ * other anyway. The request may still carry `surface`; it is ignored.
  */
 export async function savePersonalProviderConnection(
   user: ConnectionUser,
   provider: ProviderConnectionProvider,
   apiKey: string,
-  surface?: CredentialSurface,
 ): Promise<ProviderConnectionSnapshot> {
-  const enabledFor: CredentialSurfaces | undefined = surface
-    ? { rooms: surface === "rooms", workspace: surface === "workspace" }
-    : undefined;
   if (provider === "openai") {
-    await saveOpenAICredential(user.id, apiKey, enabledFor);
+    await saveOpenAICredential(user.id, apiKey);
   } else if (provider === "cursor") {
-    await saveCursorCredential(user.id, apiKey, enabledFor);
+    await saveCursorCredential(user.id, apiKey);
   } else {
-    await saveAnthropicCredential(user.id, apiKey, enabledFor);
+    await saveAnthropicCredential(user.id, apiKey);
   }
   return publicProviderConnectionPayload(
     await loadProviderConnectionSnapshot(user),
@@ -198,7 +192,12 @@ export type PersonalCredentialKind =
   | "subscription"
   | "claude_cli_token";
 
-/** Map a settings-page surface toggle onto the concrete row it flips. */
+/**
+ * Flip whether a credential may fund a turn inside a shared workspace — the
+ * member's one remaining per-credential choice. `surface` is accepted for the
+ * existing route shape; only the workspace setting is stored, because rooms
+ * always run on the member's own credential in their own session.
+ */
 export async function setPersonalCredentialSurface(
   user: ConnectionUser,
   input: {
@@ -208,6 +207,12 @@ export async function setPersonalCredentialSurface(
     enabled: boolean;
   },
 ): Promise<ProviderConnectionSnapshot> {
+  if (input.surface === "rooms") {
+    // Nothing to store: a room reply always runs on the sender's own login.
+    return publicProviderConnectionPayload(
+      await loadProviderConnectionSnapshot(user),
+    );
+  }
   let credentialType: CredentialType;
   if (input.kind === "api_key") {
     credentialType = "API_KEY";
@@ -230,9 +235,7 @@ export async function setPersonalCredentialSurface(
     user.id,
     input.provider,
     credentialType,
-    {
-      [input.surface]: input.enabled,
-    },
+    input.enabled,
   );
   return publicProviderConnectionPayload(
     await loadProviderConnectionSnapshot(user),

@@ -89,10 +89,18 @@ async function runCodexTurnToCompletion(prepared: {
   const parts: Uint8Array[] = [];
   for (;;) {
     if (await checkTurnInterruptedStep(turnId)) {
-      await cancelCodexTurnStep(workspaceId, codexSessionId, credentialId);
+      await cancelCodexTurnStep(
+        workspaceId,
+        codexSessionId,
+        credentialId,
+        turnId,
+      );
       return;
     }
-    const poll = await pollCodexTurnStep(workspaceId, codexSessionId, after);
+    const poll = await pollCodexTurnStep(workspaceId, codexSessionId, after, {
+      credentialId,
+      turnId,
+    });
     after = poll.nextSequence;
     for (const chunk of poll.chunks) {
       parts.push(decodeBase64(chunk.dataBase64));

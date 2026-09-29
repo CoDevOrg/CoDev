@@ -15,18 +15,14 @@ export const credentialTypeSchema = z.enum([
   "AZURE_ENDPOINT",
   "HOSTED_CODEX_SUBSCRIPTION",
 ]);
-export const credentialScopeTypeSchema = z.enum([
-  "USER",
-  "WORKSPACE",
-  "ORGANIZATION",
-]);
+export const credentialScopeTypeSchema = z.enum(["USER", "WORKSPACE"]);
 export const providerCredentialStatusSchema = z.enum([
   "active",
   "reauthorization_required",
   "revoked",
   "failed",
 ]);
-export const hostedCodexScopeTypeSchema = z.enum(["USER", "ORGANIZATION"]);
+export const hostedCodexScopeTypeSchema = z.enum(["USER", "WORKSPACE"]);
 
 export type AuthProvider = z.infer<typeof authProviderSchema>;
 export type CredentialType = z.infer<typeof credentialTypeSchema>;

@@ -72,7 +72,7 @@ export type ClaudeConnectionSessionView = {
   status: (typeof schema.claudeConnectionSessionStatus.enumValues)[number];
   authorizeUrl: string | null;
   failureReason: string | null;
-  scopeType: "USER" | "ORGANIZATION";
+  scopeType: "USER" | "WORKSPACE";
   scopeId: string;
 };
 
@@ -93,7 +93,7 @@ function toView(row: SessionRow): ClaudeConnectionSessionView {
     status: row.status,
     authorizeUrl: row.authorizeUrl,
     failureReason: row.failureReason,
-    scopeType: row.scopeType as "USER" | "ORGANIZATION",
+    scopeType: row.scopeType as "USER" | "WORKSPACE",
     scopeId: row.scopeId,
   };
 }
@@ -250,7 +250,7 @@ export async function startClaudeConnectionSession(
   input: { userId: string; scopeType?: unknown; organizationId?: unknown },
   runner: ClaudeLoginRunner = unavailableClaudeRunner,
 ): Promise<ClaudeConnectionSessionView> {
-  if (input.scopeType === "ORGANIZATION") {
+  if (input.scopeType === "WORKSPACE") {
     throw new ClaudeConnectionError(
       "Claude subscriptions must be connected personally, not shared with an organization.",
       400,

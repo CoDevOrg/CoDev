@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{BTreeMap, HashMap, HashSet, VecDeque},
     fs::{self, OpenOptions},
     io::{BufRead, BufReader, Read, Write},
     net::{SocketAddr, TcpStream},
@@ -24,15 +24,20 @@ use wait_timeout::ChildExt;
 use crate::model::{
     ClaudeSetupCodeRequest, ClaudeSetupPollRequest, ClaudeSetupPollResponse,
     ClaudeSetupStartRequest, CodexExecChunk, CodexExecPollRequest, CodexExecPollResponse,
-    CodexExecStartRequest, ExecRequest, ExecResponse, FileResponse, PublicationExportRequest,
-    PublicationExportResponse, PublicationFile, RuntimeError, SESSION_RESTORE_CHUNK_BYTES,
-    SESSION_RESTORE_FILE_BYTES, SESSION_RESTORE_TOTAL_BYTES, SessionRestoreBeginRequest,
-    SessionRestoreChunkRequest, SessionRestoreFileKind, SessionRestoreFinalizeResponse,
-    SessionRestoreStatus, SupersetCreateEntryRequest, SupersetDeleteEntryRequest,
-    SupersetMoveEntryRequest, TerminalChunk, TerminalInputRequest, TerminalPollRequest,
-    TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
+    CodexExecStartRequest, ExecRequest, ExecResponse, FileResponse, LaunchProfile,
+    LaunchProfileFile, PublicationExportRequest, PublicationExportResponse, PublicationFile,
+    RuntimeError, SESSION_RESTORE_CHUNK_BYTES, SESSION_RESTORE_FILE_BYTES,
+    SESSION_RESTORE_TOTAL_BYTES, SessionRestoreBeginRequest, SessionRestoreChunkRequest,
+    SessionRestoreFileKind, SessionRestoreFinalizeResponse, SessionRestoreStatus,
+    SupersetAgentInputRequest, SupersetAgentPollRequest, SupersetAgentStartRequest,
+    SupersetCreateEntryRequest, SupersetDeleteEntryRequest, SupersetMoveEntryRequest,
+    TerminalChunk, TerminalInputRequest, TerminalPollRequest, TerminalPollResponse,
+    TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
     WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse,
     WorktreeRebaseRequest, WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
+};
+use crate::provider_profile::{
+    PROFILE_DIR_TOKEN, materialize_launch_profile, validate_launch_profile,
 };
 
 const MAX_BODY_BYTES: usize = 2 << 20;
@@ -61,6 +66,38 @@ impl Drop for TemporaryCodexHome {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.0);
     }
+}
+
+/// The profile a caller that still sends `codexAuthCacheJson` means: the
+/// auth cache at the root of the profile directory, with `CODEX_HOME`
+/// pointing at it — byte for byte what this route did before profiles
+/// existed, including reading the refreshed cache back from the same path
+/// once the process exits.
+fn launch_profile_files(profile: &LaunchProfile) -> impl Iterator<Item = (&str, &str)> {
+    profile
+        .files
+        .iter()
+        .map(|file| (file.path.as_str(), file.contents.as_str()))
+}
+
+fn launch_profile_env(profile: &LaunchProfile) -> impl Iterator<Item = (&str, &str)> {
+    profile
+        .env
+        .iter()
+        .map(|(name, value)| (name.as_str(), value.as_str()))
+}
+
+fn legacy_codex_launch_profile(auth_cache_json: &str) -> LaunchProfile {
+    let mut env = BTreeMap::new();
+    env.insert("CODEX_HOME".to_string(), PROFILE_DIR_TOKEN.to_string());
+    let mut files = Vec::new();
+    if !auth_cache_json.is_empty() {
+        files.push(LaunchProfileFile {
+            path: "auth.json".to_string(),
+            contents: auth_cache_json.to_string(),
+        });
+    }
+    LaunchProfile { files, env }
 }
 
 pub struct GuestResponse {
@@ -256,6 +293,18 @@ impl GuestService {
                 }
                 if let Some(operation) = path.strip_prefix("/v1/superset/runtime/") {
                     return self.superset_runtime(method, operation, body);
+                }
+                if path == "/v1/superset-agents" && method == "POST" {
+                    return self.start_superset_agent(body);
+                }
+                if let Some((agent_id, action)) = superset_agent_route(path) {
+                    return match (method, action) {
+                        ("POST", "input") => self.input_superset_agent(agent_id, body),
+                        ("POST", "poll") => self.poll_superset_agent(agent_id, body),
+                        ("DELETE", "") => self.close_superset_agent(agent_id),
+                        ("GET", "recovery") => self.recover_superset_agent(agent_id),
+                        _ => GuestResponse::error(400, "invalid Superset agent action"),
+                    };
                 }
                 if let Some(worktree_id) = path.strip_prefix("/v1/worktrees/") {
                     let (worktree_id, action_and_query) =
@@ -648,6 +697,90 @@ impl GuestService {
             }
             _ => GuestResponse::error(400, "invalid Superset runtime operation"),
         }
+    }
+
+    /// Validates and forwards a Superset agent-session launch request over
+    /// the bridge. This guest does not exec the provider process itself for
+    /// these sessions -- Superset's host-service does, on the other side of
+    /// this loopback bridge -- so unlike `start_codex_exec` there is no
+    /// local session table or process handle to keep here.
+    ///
+    /// The launch profile primitive in `provider_profile.rs` intentionally
+    /// is not used on this path: it materializes credentials under this
+    /// guest daemon's *private* `/tmp` (`PrivateTmp=true` in the
+    /// `codev-guestd` systemd unit), which is a separate mount namespace
+    /// Superset's own service cannot see. Forwarding the validated request
+    /// body once, over this bridge-secret-authenticated, guest-internal-only
+    /// channel, is itself the "trusted guest/host launch path" Superset
+    /// Agent Session Plan Phase 2 allows to see a credential -- see that
+    /// plan's Phase 2 for the isolation guarantees this relies on.
+    fn start_superset_agent(&self, body: &[u8]) -> GuestResponse {
+        let request: SupersetAgentStartRequest = match decode(body) {
+            Ok(request) => request,
+            Err(error) => return GuestResponse::error(400, error),
+        };
+        if let Err(error) = validate_worktree_id(&request.worktree_id) {
+            return GuestResponse::error(400, error);
+        }
+        if request.command.is_empty() || request.command.len() > 32 {
+            return GuestResponse::error(400, "command must contain between 1 and 32 arguments");
+        }
+        if request.idempotency_key.is_empty() || request.idempotency_key.len() > 128 {
+            return GuestResponse::error(400, "invalid idempotency key");
+        }
+        // The body is forwarded verbatim, so this is the only place a
+        // malformed profile can be rejected before Superset sees it.
+        if let Some(profile) = request.launch_profile.as_ref() {
+            let files = launch_profile_files(profile);
+            let env = launch_profile_env(profile);
+            if let Err(error) = validate_launch_profile(files, env) {
+                return GuestResponse::error(400, &error);
+            }
+        }
+        self.superset_bridge_request("POST", "/codev/agents", body)
+    }
+
+    fn input_superset_agent(&self, agent_id: &str, body: &[u8]) -> GuestResponse {
+        let request: SupersetAgentInputRequest = match decode(body) {
+            Ok(request) => request,
+            Err(error) => return GuestResponse::error(400, error),
+        };
+        if request.data.len() > MAX_TERMINAL_INPUT_BYTES {
+            return GuestResponse::error(400, "input exceeds 64 KiB");
+        }
+        self.superset_bridge_request(
+            "POST",
+            &format!("/codev/agents/{}/input", percent_encode(agent_id)),
+            body,
+        )
+    }
+
+    fn poll_superset_agent(&self, agent_id: &str, body: &[u8]) -> GuestResponse {
+        let _request: SupersetAgentPollRequest = match decode(body) {
+            Ok(request) => request,
+            Err(error) => return GuestResponse::error(400, error),
+        };
+        self.superset_bridge_request(
+            "POST",
+            &format!("/codev/agents/{}/poll", percent_encode(agent_id)),
+            body,
+        )
+    }
+
+    fn close_superset_agent(&self, agent_id: &str) -> GuestResponse {
+        self.superset_bridge_request(
+            "DELETE",
+            &format!("/codev/agents/{}", percent_encode(agent_id)),
+            &[],
+        )
+    }
+
+    fn recover_superset_agent(&self, agent_id: &str) -> GuestResponse {
+        self.superset_bridge_request(
+            "GET",
+            &format!("/codev/agents/{}/recovery", percent_encode(agent_id)),
+            &[],
+        )
     }
 
     fn superset_bridge_request(&self, method: &str, path: &str, body: &[u8]) -> GuestResponse {
@@ -1968,6 +2101,18 @@ impl GuestService {
                 "Codex auth cache is invalid or too large".into(),
             ));
         }
+        // One code path below: a caller that still sends the Codex-shaped
+        // field gets it converted into the same profile a caller sending
+        // `launchProfile` supplies directly.
+        let launch_profile = match request.launch_profile.clone() {
+            Some(profile) => profile,
+            None => legacy_codex_launch_profile(&request.codex_auth_cache_json),
+        };
+        validate_launch_profile(
+            launch_profile_files(&launch_profile),
+            launch_profile_env(&launch_profile),
+        )
+        .map_err(RuntimeError::BadRequest)?;
         let _mutation = self.mutations.lock().expect("mutation lock");
         // Fast path: reattach to an existing session for this idempotency
         // key, without waiting on codex_busy first — the run this key
@@ -2038,13 +2183,22 @@ impl GuestService {
         fs::create_dir(&codex_home_path).map_err(RuntimeError::internal)?;
         fs::set_permissions(&codex_home_path, fs::Permissions::from_mode(0o700))
             .map_err(RuntimeError::internal)?;
-        let auth_path = codex_home_path.join("auth.json");
-        if !request.codex_auth_cache_json.is_empty() {
-            fs::write(&auth_path, &request.codex_auth_cache_json)
-                .map_err(RuntimeError::internal)?;
-            fs::set_permissions(&auth_path, fs::Permissions::from_mode(0o600))
-                .map_err(RuntimeError::internal)?;
-        }
+        let profile_env = materialize_launch_profile(
+            &codex_home_path,
+            launch_profile_files(&launch_profile),
+            launch_profile_env(&launch_profile),
+        )
+        .map_err(RuntimeError::internal)?;
+        // Where to read a refreshed Codex cache back from once the process
+        // exits. It follows the profile rather than assuming the root, so a
+        // caller that places the cache under a `CODEX_HOME` subdirectory
+        // still has its refresh captured.
+        let refresh_relative_path = launch_profile
+            .files
+            .iter()
+            .map(|file| file.path.clone())
+            .find(|path| path.ends_with("auth.json"))
+            .unwrap_or_else(|| "auth.json".to_string());
         let codex_home = TemporaryCodexHome(codex_home_path);
 
         let pty = native_pty_system()
@@ -2064,7 +2218,11 @@ impl GuestService {
         command.env("TERM", "xterm-256color");
         command.env("HISTFILE", "/dev/null");
         command.env("HISTSIZE", "0");
-        command.env("CODEX_HOME", &codex_home.0);
+        // Last, so a profile that names a variable wins over the defaults
+        // above. Values are never logged: this is the credential.
+        for (name, value) in &profile_env {
+            command.env(name, value);
+        }
         let mut child = match pty.slave.spawn_command(command) {
             Ok(child) => child,
             Err(error) => {
@@ -2162,7 +2320,7 @@ impl GuestService {
                 thread::sleep(Duration::from_millis(25));
             };
             drop(pty.master);
-            let updated_auth_cache = fs::read_to_string(codex_home.0.join("auth.json"))
+            let updated_auth_cache = fs::read_to_string(codex_home.0.join(&refresh_relative_path))
                 .ok()
                 .filter(|value| {
                     value.len() <= (128 << 10)
@@ -3063,6 +3221,12 @@ fn codex_exec_route(path: &str) -> Option<(&str, &str)> {
     (!session_id.is_empty()).then_some((session_id, action))
 }
 
+fn superset_agent_route(path: &str) -> Option<(&str, &str)> {
+    let suffix = path.strip_prefix("/v1/superset-agents/")?;
+    let (agent_id, action) = suffix.split_once('/').unwrap_or((suffix, ""));
+    (!agent_id.is_empty()).then_some((agent_id, action))
+}
+
 fn session_restore_route(path: &str) -> Option<(&str, &str)> {
     let suffix = path.strip_prefix("/v1/session-restores/")?;
     let (operation_id, action) = suffix.split_once('/').unwrap_or((suffix, ""));
@@ -3534,6 +3698,106 @@ mod tests {
         );
         assert!(service.terminals.lock().expect("terminals").is_empty());
         assert!(!Path::new(result.output.trim()).exists());
+    }
+
+    #[test]
+    fn superset_agent_start_rejects_an_invalid_worktree_id() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let request = serde_json::json!({
+            "worktreeId": "../escape",
+            "provider": "openai",
+            "command": ["codex", "exec"],
+            "idempotencyKey": "key-1",
+        });
+        let response = service.handle(
+            "POST",
+            "/v1/superset-agents",
+            serde_json::to_vec(&request).expect("request").as_slice(),
+        );
+        assert_eq!(response.status, 400);
+    }
+
+    #[test]
+    fn superset_agent_start_rejects_an_empty_command() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let request = serde_json::json!({
+            "worktreeId": "main",
+            "provider": "openai",
+            "command": [],
+            "idempotencyKey": "key-1",
+        });
+        let response = service.handle(
+            "POST",
+            "/v1/superset-agents",
+            serde_json::to_vec(&request).expect("request").as_slice(),
+        );
+        assert_eq!(response.status, 400);
+    }
+
+    #[test]
+    fn superset_agent_start_rejects_a_missing_idempotency_key() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let request = serde_json::json!({
+            "worktreeId": "main",
+            "provider": "openai",
+            "command": ["codex", "exec"],
+            "idempotencyKey": "",
+        });
+        let response = service.handle(
+            "POST",
+            "/v1/superset-agents",
+            serde_json::to_vec(&request).expect("request").as_slice(),
+        );
+        assert_eq!(response.status, 400);
+    }
+
+    #[test]
+    fn superset_agent_input_rejects_oversized_input() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let request = serde_json::json!({ "data": "x".repeat(MAX_TERMINAL_INPUT_BYTES + 1) });
+        let response = service.handle(
+            "POST",
+            "/v1/superset-agents/agent-1/input",
+            serde_json::to_vec(&request).expect("request").as_slice(),
+        );
+        assert_eq!(response.status, 400);
+    }
+
+    #[test]
+    fn superset_agent_unknown_action_is_a_bad_request() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let response = service.handle("POST", "/v1/superset-agents/agent-1/bogus", b"{}");
+        assert_eq!(response.status, 400);
+    }
+
+    #[test]
+    fn superset_agent_routes_reach_the_bridge_once_validated() {
+        // No CODEV_SUPERSET_BRIDGE_SECRET is set in this test process, so a
+        // well-formed request should fail closed at the bridge call rather
+        // than at request validation -- proving these routes actually
+        // forward instead of silently succeeding.
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let start = serde_json::json!({
+            "worktreeId": "main",
+            "provider": "openai",
+            "command": ["codex", "exec"],
+            "idempotencyKey": "key-1",
+        });
+        let response = service.handle(
+            "POST",
+            "/v1/superset-agents",
+            serde_json::to_vec(&start).expect("request").as_slice(),
+        );
+        assert_eq!(response.status, 503);
+
+        let recovery = service.handle("GET", "/v1/superset-agents/agent-1/recovery", &[]);
+        assert_eq!(recovery.status, 503);
     }
 
     #[test]
@@ -4501,6 +4765,71 @@ sleep 5
             Some("{\"tokens\":{}}")
         );
         assert!(service.terminals.lock().expect("terminals").is_empty());
+    }
+
+    #[test]
+    fn codex_exec_accepts_a_provider_neutral_launch_profile() {
+        // The point of the profile: the guest is told what files and
+        // environment the process needs, and has to know nothing about
+        // which provider they belong to.
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let request = serde_json::json!({
+            "command": [
+                "/bin/sh",
+                "-c",
+                "test -f \"$CODEX_HOME/auth.json\"; printf '%s' \"$AGENT_MARKER\""
+            ],
+            "launchProfile": {
+                "files": [
+                    { "path": "home/auth.json", "contents": "{\"tokens\":{}}" }
+                ],
+                "env": {
+                    "CODEX_HOME": "{{profileDir}}/home",
+                    "AGENT_MARKER": "profile-ok"
+                }
+            },
+            "idempotencyKey": "profile-key",
+        });
+        let start = service.handle(
+            "POST",
+            "/v1/codex-execs",
+            serde_json::to_vec(&request).expect("request").as_slice(),
+        );
+        assert_eq!(
+            start.status,
+            200,
+            "{}",
+            String::from_utf8_lossy(&start.body)
+        );
+        let body: serde_json::Value = serde_json::from_slice(&start.body).expect("json");
+        let session_id = body["sessionId"].as_str().expect("session id").to_string();
+        let result = poll_codex_exec_until_exited(
+            &service,
+            &session_id,
+            Instant::now() + Duration::from_secs(5),
+        );
+        assert_eq!(result.exit_code, Some(0));
+        assert!(result.output.contains("profile-ok"));
+    }
+
+    #[test]
+    fn codex_exec_rejects_a_launch_profile_that_escapes_its_directory() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let request = serde_json::json!({
+            "command": ["/bin/true"],
+            "launchProfile": {
+                "files": [{ "path": "../escape.json", "contents": "{}" }],
+            },
+            "idempotencyKey": "escape-key",
+        });
+        let start = service.handle(
+            "POST",
+            "/v1/codex-execs",
+            serde_json::to_vec(&request).expect("request").as_slice(),
+        );
+        assert_eq!(start.status, 400);
     }
 
     #[test]

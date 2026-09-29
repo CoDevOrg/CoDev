@@ -12,7 +12,6 @@ export type HostedCodexPublicStatus = {
     | "unavailable";
   stateText: string;
   accountLabel: string | null;
-  sharingEnabled: boolean;
   canManage: boolean;
   enabled: boolean;
   configured: boolean;

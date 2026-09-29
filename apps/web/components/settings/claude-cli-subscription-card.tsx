@@ -23,7 +23,7 @@ export function ClaudeCliSubscriptionCard({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const isOrg = status.scopeType === "ORGANIZATION";
+  const isOrg = status.scopeType === "WORKSPACE";
 
   async function disconnect() {
     setBusy(true);

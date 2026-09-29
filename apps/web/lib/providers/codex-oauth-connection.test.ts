@@ -93,7 +93,6 @@ describe("persistCodexSubscriptionFromOAuth", () => {
         material: expect.objectContaining({
           authCacheJson: expect.stringContaining('"refresh_token":"r"'),
         }),
-        enabledFor: { rooms: true, workspace: true },
       }),
     );
     expect(persistHostedCodexConnection.mock.calls[0]?.[0]).not.toHaveProperty(
@@ -101,7 +100,7 @@ describe("persistCodexSubscriptionFromOAuth", () => {
     );
   });
 
-  it("maps WORKSPACE scope to a shared ORGANIZATION connection", async () => {
+  it("persists a workspace-scoped sign-in as the workspace's login", async () => {
     await persistCodexSubscriptionFromOAuth({
       userId: "user-1",
       scopeType: "WORKSPACE",
@@ -110,7 +109,7 @@ describe("persistCodexSubscriptionFromOAuth", () => {
     });
     expect(persistHostedCodexConnection).toHaveBeenCalledWith(
       expect.objectContaining({
-        scopeType: "ORGANIZATION",
+        scopeType: "WORKSPACE",
         scopeId: "workspace-1",
       }),
     );

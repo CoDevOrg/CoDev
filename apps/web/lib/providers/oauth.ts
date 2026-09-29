@@ -12,12 +12,8 @@ import type { AuthProvider, ScopeType } from "@codev/shared-types";
 
 import { saveProviderCredential } from "./credentials";
 
-export type OAuthProvider = "claude" | "codex" | "cursor";
-export type OAuthFlowMode =
-  | "app_callback"
-  | "manual_code"
-  | "device_code"
-  | "cursor_deeplink";
+export type OAuthProvider = "codex" | "cursor";
+export type OAuthFlowMode = "app_callback" | "device_code" | "cursor_deeplink";
 
 /**
  * Cursor's CLI login, reproduced from `cursor-agent`'s own bundle
@@ -30,9 +26,6 @@ export type OAuthFlowMode =
 export const CURSOR_LOGIN_URL_DEFAULT = "https://cursor.com/loginDeepControl";
 export const CURSOR_API_BASE_URL_DEFAULT = "https://api2.cursor.sh";
 
-/** Public Claude Code PKCE client used by the official CLI. */
-export const DEFAULT_CLAUDE_OAUTH_CLIENT_ID =
-  "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
 /**
  * Public Codex CLI PKCE client used by the official CLI.
  * This is used only by the legacy/test OAuth connection. Hosted cloud Codex
@@ -40,8 +33,6 @@ export const DEFAULT_CLAUDE_OAUTH_CLIENT_ID =
  */
 export const DEFAULT_CODEX_OAUTH_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
 
-export const CLAUDE_MANUAL_REDIRECT_URI =
-  "https://platform.claude.com/oauth/code/callback";
 export const CODEX_DEVICE_REDIRECT_URI =
   "https://auth.openai.com/deviceauth/callback";
 export const CODEX_DEVICE_VERIFICATION_URL =
@@ -183,19 +174,12 @@ function envOptional(name: string) {
 }
 
 function clientIdEnvName(provider: OAuthProvider) {
-  return provider === "claude"
-    ? "CLAUDE_OAUTH_CLIENT_ID"
-    : provider === "codex"
-      ? "CODEX_OAUTH_CLIENT_ID"
-      : "CURSOR_OAUTH_CLIENT_ID";
+  return provider === "codex"
+    ? "CODEX_OAUTH_CLIENT_ID"
+    : "CURSOR_OAUTH_CLIENT_ID";
 }
 
 export function resolveOAuthClientId(provider: OAuthProvider) {
-  if (provider === "claude") {
-    return (
-      envOptional("CLAUDE_OAUTH_CLIENT_ID") ?? DEFAULT_CLAUDE_OAUTH_CLIENT_ID
-    );
-  }
   if (provider === "cursor") {
     // Cursor's CLI login uses no client id; the poll id + PKCE verifier are
     // the only secrets. Report a stable non-empty value so the "configured"
@@ -206,11 +190,6 @@ export function resolveOAuthClientId(provider: OAuthProvider) {
 }
 
 export function getOAuthFlowMode(provider: OAuthProvider): OAuthFlowMode {
-  if (provider === "claude") {
-    return envOptional("CLAUDE_OAUTH_REDIRECT_URI")
-      ? "app_callback"
-      : "manual_code";
-  }
   if (provider === "cursor") {
     return "cursor_deeplink";
   }
@@ -246,33 +225,6 @@ export function getOAuthConfiguration(
   origin: string,
 ): OAuthConfiguration {
   const flowMode = getOAuthFlowMode(provider);
-  if (provider === "claude") {
-    const clientId = resolveOAuthClientId(provider);
-    return {
-      provider: "anthropic",
-      clientId,
-      clientSecret: envOptional("CLAUDE_OAUTH_CLIENT_SECRET"),
-      authorizeUrl: envUrl(
-        "CLAUDE_OAUTH_AUTHORIZE_URL",
-        "https://platform.claude.com/oauth/authorize",
-      ),
-      tokenUrl: envUrl(
-        "CLAUDE_OAUTH_TOKEN_URL",
-        "https://platform.claude.com/v1/oauth/token",
-      ),
-      scope: envUrl(
-        "CLAUDE_OAUTH_SCOPE",
-        "org:create_api_key user:profile user:inference",
-      ),
-      redirectUri: envUrl(
-        "CLAUDE_OAUTH_REDIRECT_URI",
-        flowMode === "manual_code"
-          ? CLAUDE_MANUAL_REDIRECT_URI
-          : `${origin}${oauthCallbackPath(provider)}`,
-      ),
-      flowMode,
-    };
-  }
 
   if (provider === "cursor") {
     return {
@@ -323,29 +275,11 @@ export function buildAuthorizationUrl(
   url.searchParams.set("state", state.state);
   url.searchParams.set("code_challenge", pkceChallenge(state.codeVerifier));
   url.searchParams.set("code_challenge_method", "S256");
-  if (configuration.provider === "anthropic") {
-    url.searchParams.set("code", "true");
-  }
   if (configuration.provider === "openai") {
     url.searchParams.set("codex_cli_simplified_flow", "true");
     url.searchParams.set("id_token_add_organizations", "true");
   }
   return url;
-}
-
-export function parseManualAuthorizationCode(raw: string) {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    throw new Error("Authorization code is required.");
-  }
-  const hashIndex = trimmed.indexOf("#");
-  if (hashIndex >= 0) {
-    return {
-      code: trimmed.slice(0, hashIndex),
-      returnedState: trimmed.slice(hashIndex + 1) || undefined,
-    };
-  }
-  return { code: trimmed, returnedState: undefined };
 }
 
 function expiresAtFrom(value: unknown) {
@@ -375,20 +309,13 @@ export async function exchangeOAuthCode(
     fields.client_secret = configuration.clientSecret;
   }
 
-  // Anthropic's `/v1/oauth/token` only accepts a JSON body and rejects the
-  // form encoding the OAuth spec suggests with a bare 400.
-  const useJson = configuration.provider === "anthropic";
   const response = await fetch(configuration.tokenUrl, {
     method: "POST",
     headers: {
-      "content-type": useJson
-        ? "application/json"
-        : "application/x-www-form-urlencoded",
+      "content-type": "application/x-www-form-urlencoded",
       accept: "application/json",
     },
-    body: useJson
-      ? JSON.stringify(fields)
-      : new URLSearchParams(fields).toString(),
+    body: new URLSearchParams(fields).toString(),
     cache: "no-store",
   });
   if (!response.ok) {
@@ -688,22 +615,6 @@ export async function persistCursorTokens(
     // Cursor's token response carries no expiry and `cursor-agent` refreshes
     // its own tokens from the copy CoDev files on the workspace host, so no
     // control-plane refresh is scheduled.
-  });
-}
-
-export async function persistOAuthTokens(
-  state: OAuthState,
-  configuration: OAuthConfiguration,
-  tokens: Awaited<ReturnType<typeof exchangeOAuthCode>>,
-) {
-  await saveProviderCredential({
-    scopeType: state.scopeType,
-    scopeId: state.scopeId,
-    provider: configuration.provider,
-    credentialType: "OAUTH_TOKEN",
-    accessToken: tokens.accessToken,
-    refreshToken: tokens.refreshToken,
-    expiresAt: tokens.expiresAt,
   });
 }
 

@@ -20,6 +20,13 @@ const mocks = vi.hoisted(() => ({
   resolveCredential: vi.fn(),
 }));
 
+vi.mock("../providers/credential-seat", () => ({
+  waitForCredentialSeat: (...args: unknown[]) => mocks.claim(...args),
+  releaseCredentialSeat: (...args: unknown[]) => mocks.release(...args),
+  retagCredentialSeat: vi.fn(async () => undefined),
+  heartbeatCredentialSeat: vi.fn(async () => undefined),
+  describeSeatHolder: () => "a workspace turn is still using this connection.",
+}));
 vi.mock("./providers", () => ({
   resolveGen2Codex: (...args: unknown[]) => mocks.resolveCredential(...args),
 }));
@@ -57,31 +64,21 @@ vi.mock("../runtime/orchestrator-codex-exec", () => ({
   closeCodexExecInSandbox: (...args: unknown[]) => mocks.close(...args),
 }));
 
-vi.mock("../providers/hosted-codex-subscription-credentials", () => {
-  class HostedCodexSubscriptionError extends Error {
-    constructor(
-      message: string,
-      readonly status = 400,
-      readonly code = "hosted_codex_error",
-    ) {
-      super(message);
-      this.name = "HostedCodexSubscriptionError";
-    }
-  }
-  return {
-    HostedCodexSubscriptionError,
-    claimHostedCodexExecution: (...args: unknown[]) => mocks.claim(...args),
-    releaseHostedCodexExecution: (...args: unknown[]) => mocks.release(...args),
-    resolveHostedCodexSubscription: (...args: unknown[]) =>
-      mocks.resolveHosted(...args),
-    decryptHostedMaterial: (...args: unknown[]) => mocks.decrypt(...args),
-    updateHostedCodexAuthCache: (...args: unknown[]) =>
-      mocks.updateCache(...args),
-  };
-});
+vi.mock("../providers/hosted-codex-subscription-credentials", () => ({
+  // Still exported: the module under test narrows on it when a stored auth
+  // cache turns out to be unusable.
+  HostedCodexSubscriptionError: class extends Error {
+    readonly status = 400;
+    readonly code = "hosted_codex_error";
+  },
+  resolveHostedCodexSubscription: (...args: unknown[]) =>
+    mocks.resolveHosted(...args),
+  decryptHostedMaterial: (...args: unknown[]) => mocks.decrypt(...args),
+  updateHostedCodexAuthCache: (...args: unknown[]) =>
+    mocks.updateCache(...args),
+}));
 
 import { OrchestratorError } from "../runtime/orchestrator-request";
-import { HostedCodexSubscriptionError } from "../providers/hosted-codex-subscription-credentials";
 import {
   buildGen2CodexCommand,
   cancelGen2AgentTurn,
@@ -127,7 +124,7 @@ describe("gen2 Codex agent", () => {
       credential: { id: credentialId, encryptedMaterial: "enc" },
     });
     mocks.decrypt.mockResolvedValue({ authCacheJson: AUTH_CACHE });
-    mocks.claim.mockResolvedValue(undefined);
+    mocks.claim.mockResolvedValue({ held: true });
     mocks.release.mockResolvedValue(undefined);
     mocks.ensureHostReady.mockResolvedValue(undefined);
     mocks.createTurn.mockResolvedValue(undefined);
@@ -174,7 +171,9 @@ describe("gen2 Codex agent", () => {
     await expect(startGen2AgentTurn(turn)).resolves.toEqual({
       sessionId: "session-1",
     });
-    expect(mocks.claim).toHaveBeenCalledWith(credentialId);
+    expect(mocks.claim).toHaveBeenCalledWith(
+      expect.objectContaining({ credentialId, surface: "gen2" }),
+    );
     expect(mocks.start).toHaveBeenCalledWith(
       workspaceId,
       expect.objectContaining({
@@ -240,19 +239,16 @@ describe("gen2 Codex agent", () => {
     expect(mocks.start).toHaveBeenCalled();
   });
 
-  it("reattaches when the hosted Codex seat is already claimed", async () => {
-    mocks.claim.mockRejectedValue(
-      new HostedCodexSubscriptionError("busy", 409, "hosted_codex_busy"),
+  it("refuses a turn whose seat another run holds", async () => {
+    // This used to start the turn anyway — two turns on one subscription —
+    // while still stamping the credential unavailable for sixteen minutes,
+    // which did block the member's chat-room replies.
+    mocks.claim.mockResolvedValue({ held: false, holder: null });
+    await expect(startGen2AgentTurn(turn)).rejects.toThrow(
+      /still using this connection/,
     );
-    await expect(startGen2AgentTurn(turn)).resolves.toEqual({
-      sessionId: "session-1",
-    });
-    expect(mocks.start).toHaveBeenCalled();
-    expect(mocks.appendMessage).toHaveBeenCalledWith({
-      chatId,
-      role: "user",
-      body: "List the files",
-    });
+    expect(mocks.start).not.toHaveBeenCalled();
+    expect(mocks.appendMessage).not.toHaveBeenCalled();
     expect(mocks.release).not.toHaveBeenCalled();
   });
 
@@ -261,14 +257,14 @@ describe("gen2 Codex agent", () => {
     await expect(startGen2AgentTurn(turn)).rejects.toBeInstanceOf(
       Gen2LifecycleError,
     );
-    expect(mocks.release).toHaveBeenCalledWith(credentialId);
+    expect(mocks.release).toHaveBeenCalledWith(
+      expect.objectContaining({ credentialId }),
+    );
     expect(mocks.appendMessage).not.toHaveBeenCalled();
   });
 
-  it("does not release someone else's busy seat when start fails", async () => {
-    mocks.claim.mockRejectedValue(
-      new HostedCodexSubscriptionError("busy", 409, "hosted_codex_busy"),
-    );
+  it("does not release a seat it never took", async () => {
+    mocks.claim.mockResolvedValue({ held: false, holder: null });
     mocks.start.mockRejectedValue(new OrchestratorError("guest down", 500));
     await expect(startGen2AgentTurn(turn)).rejects.toBeInstanceOf(
       Gen2LifecycleError,
@@ -305,7 +301,9 @@ describe("gen2 Codex agent", () => {
     });
     expect(result).not.toHaveProperty("codexAuthCacheJson");
     expect(mocks.updateCache).toHaveBeenCalledWith(credentialId, AUTH_CACHE);
-    expect(mocks.release).toHaveBeenCalledWith(credentialId);
+    expect(mocks.release).toHaveBeenCalledWith(
+      expect.objectContaining({ credentialId }),
+    );
     expect(mocks.appendMessage).not.toHaveBeenCalled();
   });
 
@@ -368,7 +366,9 @@ describe("gen2 Codex agent", () => {
         after: 0,
       }),
     ).rejects.toThrow(/no longer running/);
-    expect(mocks.release).toHaveBeenCalledWith(credentialId);
+    expect(mocks.release).toHaveBeenCalledWith(
+      expect.objectContaining({ credentialId }),
+    );
   });
 
   it("closes the exec and releases the seat on cancel", async () => {
@@ -378,6 +378,8 @@ describe("gen2 Codex agent", () => {
       sessionId: "session-1",
     });
     expect(mocks.close).toHaveBeenCalledWith(workspaceId, "session-1");
-    expect(mocks.release).toHaveBeenCalledWith(credentialId);
+    expect(mocks.release).toHaveBeenCalledWith(
+      expect.objectContaining({ credentialId }),
+    );
   });
 });

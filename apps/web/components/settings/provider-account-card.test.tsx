@@ -30,6 +30,7 @@ function subscription(
     provenance: null,
     enabledForRooms: false,
     enabledForWorkspace: false,
+    allowInSharedWorkspaces: true,
     ...overrides,
   };
 }
@@ -48,6 +49,7 @@ function connection(
     provenance: null,
     enabledForRooms: false,
     enabledForWorkspace: false,
+    allowInSharedWorkspaces: true,
     ...overrides,
   };
 }
@@ -57,6 +59,7 @@ const NO_CLI_TOKEN = {
   lastFour: null,
   enabledForRooms: false,
   enabledForWorkspace: false,
+  allowInSharedWorkspaces: true,
 } as const;
 
 function capability(input: { rooms?: boolean; workspace?: boolean }) {
@@ -617,6 +620,7 @@ describe("ProviderAccountCard", () => {
             provenance: "browser",
             enabledForRooms: true,
             enabledForWorkspace: false,
+            allowInSharedWorkspaces: true,
           })}
           surface="rooms"
         />,
@@ -635,7 +639,9 @@ describe("ProviderAccountCard", () => {
      * (`provenance === "cli" || provider === "openai"`). Offering the toggle
      * here is only correct for as long as that stays true.
      */
-    it("lets a Codex browser sign-in be enabled for workspaces", () => {
+    it("tells a Codex browser sign-in it already reaches workspaces", () => {
+      // Codex is the one browser sign-in that does: it yields the same
+      // auth cache as `codev codex-auth`, so there is nothing to opt into.
       render(
         <ProviderAccountCard
           capability={capability({ rooms: true })}
@@ -651,21 +657,22 @@ describe("ProviderAccountCard", () => {
             command: "codev codex-auth",
             provenance: "browser",
             enabledForRooms: true,
-            enabledForWorkspace: false,
+            enabledForWorkspace: true,
+            allowInSharedWorkspaces: true,
           })}
           surface="rooms"
         />,
       );
 
       expect(
-        screen.getByRole("switch", { name: "Also use in coding workspaces" }),
+        screen.getByText(/also runs in coding workspaces/),
       ).toBeInTheDocument();
       expect(
         screen.queryByText(/Browser sign-ins stay in chat rooms/),
       ).toBeNull();
     });
 
-    it("lets a terminal login be enabled for the other surface", async () => {
+    it("keeps a login out of shared workspaces when the member says so", async () => {
       const fetchMock = vi
         .fn()
         .mockResolvedValue(jsonResponse({ connections: [] }));
@@ -686,16 +693,17 @@ describe("ProviderAccountCard", () => {
             command: "codev codex-auth",
             provenance: "cli",
             enabledForRooms: true,
-            enabledForWorkspace: false,
+            enabledForWorkspace: true,
+            allowInSharedWorkspaces: true,
           })}
-          surface="rooms"
+          surface="workspace"
         />,
       );
 
       const toggle = screen.getByRole("switch", {
-        name: "Also use in coding workspaces",
+        name: "Allow in shared workspaces",
       });
-      expect(toggle).toHaveAttribute("aria-checked", "false");
+      expect(toggle).toHaveAttribute("aria-checked", "true");
       fireEvent.click(toggle);
 
       await waitFor(() => {
@@ -712,7 +720,7 @@ describe("ProviderAccountCard", () => {
         provider: "openai",
         kind: "subscription",
         surface: "workspace",
-        enabled: true,
+        enabled: false,
       });
     });
 
@@ -728,6 +736,7 @@ describe("ProviderAccountCard", () => {
             lastFour: "wxyz",
             enabledForRooms: false,
             enabledForWorkspace: true,
+            allowInSharedWorkspaces: true,
           }}
           connection={connection({ provider: "anthropic", label: "Anthropic" })}
           label="Claude"

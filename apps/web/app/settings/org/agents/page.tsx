@@ -1,4 +1,3 @@
-import { BedrockRoleForm } from "@/components/settings/bedrock-role-form";
 import { ClaudeCliSubscriptionCard } from "@/components/settings/claude-cli-subscription-card";
 import { CursorConnectCard } from "@/components/settings/cursor-connect-card";
 import { HostedCodexSubscriptionCard } from "@/components/settings/hosted-codex-subscription-card";
@@ -27,58 +26,52 @@ export default async function OrganizationAgentsPage({
   const user = await requireUser();
   const context = await getActiveOrganizationSettingsContext(user.id);
   const params = await searchParams;
-  const [openai, anthropic, bedrock, cursor, claudeCliToken, hostedCodex] =
-    context
-      ? await Promise.all([
-          getProviderCredentialStatus(
-            "WORKSPACE",
-            context.workspace.id,
-            "openai",
-          ),
-          getProviderCredentialStatus(
-            "WORKSPACE",
-            context.workspace.id,
-            "anthropic",
-          ),
-          getProviderCredentialStatus(
-            "WORKSPACE",
-            context.workspace.id,
-            "bedrock",
-          ),
-          getProviderCredentialStatus(
-            "WORKSPACE",
-            context.workspace.id,
-            "cursor",
-          ),
-          // A shared Claude login is stored ORGANIZATION-scoped (its scope id
-          // is this workspace's id), not WORKSPACE — a separate scope used
-          // for the plain fallback keys above.
-          getClaudeCliTokenPublicStatus({
-            scopeType: "ORGANIZATION",
-            scopeId: context.workspace.id,
-            canManage: context.canWrite,
-          }),
-          getHostedCodexPublicStatus({
-            scopeType: "ORGANIZATION",
-            scopeId: context.workspace.id,
-            canManage: context.canWrite,
-          }),
-        ])
-      : [null, null, null, null, null, null];
+  const [openai, anthropic, cursor, claudeCliToken, hostedCodex] = context
+    ? await Promise.all([
+        getProviderCredentialStatus(
+          "WORKSPACE",
+          context.workspace.id,
+          "openai",
+        ),
+        getProviderCredentialStatus(
+          "WORKSPACE",
+          context.workspace.id,
+          "anthropic",
+        ),
+        getProviderCredentialStatus(
+          "WORKSPACE",
+          context.workspace.id,
+          "cursor",
+        ),
+        // A shared Claude login is stored ORGANIZATION-scoped (its scope id
+        // is this workspace's id), not WORKSPACE — a separate scope used
+        // for the plain fallback keys above.
+        getClaudeCliTokenPublicStatus({
+          scopeType: "WORKSPACE",
+          scopeId: context.workspace.id,
+          canManage: context.canWrite,
+        }),
+        getHostedCodexPublicStatus({
+          scopeType: "WORKSPACE",
+          scopeId: context.workspace.id,
+          canManage: context.canWrite,
+        }),
+      ])
+    : [null, null, null, null, null, null];
 
   return (
     <OrganizationSettingsPage
       context={context}
-      description="Manage shared provider keys and the fallback credential pool for your workspace."
+      description="Logins this workspace's members can fall back to in a coding workspace."
       title="Coding agents"
     >
       {context ? (
         <>
           <OrganizationSettingsCard
             context={context}
-            description="Team credentials are used only when a member has not configured a personal key."
-            detail="Personal credentials always win. Shared credentials are encrypted before storage and used as the next hierarchy tier."
-            title="Fallback credential pool"
+            description="Used only when a member has not connected their own, and only in a coding workspace."
+            detail="A member's own login always wins. These never fund a chat-room reply or a Gen 2 turn: both run on the credential of the person who asked, so the work is billed to and authorised by them. Everything here is encrypted before storage."
+            title="Workspace credentials"
           />
           <SettingsCard title="OpenAI">
             <WorkspaceCredentialForm
@@ -124,12 +117,6 @@ export default async function OrganizationAgentsPage({
               status={hostedCodex}
             />
           ) : null}
-          <SettingsCard title="Amazon Bedrock">
-            <BedrockRoleForm
-              currentRole={bedrock?.awsRoleArn}
-              workspaceId={context.workspace.id}
-            />
-          </SettingsCard>
         </>
       ) : null}
     </OrganizationSettingsPage>

@@ -180,10 +180,15 @@ export const publicationStatus = pgEnum("publication_status", [
   "published",
   "failed",
 ]);
+/**
+ * Who a credential belongs to. There were once two spellings of "shared" —
+ * `WORKSPACE` for the older fallback key pool and `ORGANIZATION`, whose scope
+ * id was also a workspace id, for `--org` logins — so reading a row meant
+ * knowing which mechanism had written it. They are one scope now.
+ */
 export const credentialScopeType = pgEnum("credential_scope_type", [
   "USER",
   "WORKSPACE",
-  "ORGANIZATION",
 ]);
 export const credentialProvider = pgEnum("credential_provider", [
   "anthropic",
@@ -696,17 +701,19 @@ export const providerCredentials = pgTable(
       onDelete: "set null",
     }),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
-    sharingEnabled: boolean("sharing_enabled").default(false).notNull(),
-    unavailableUntil: timestamp("unavailable_until", { withTimezone: true }),
     // Provenance (see credentialConnectedVia). Nullable for pre-existing rows;
     // the 0042 migration backfills them and code treats NULL conservatively
     // (not workspace-eligible).
     connectedVia: credentialConnectedVia("connected_via"),
-    // Per-surface applicability — the isolation + opt-in-sharing toggles. Default
-    // on so existing credentials keep working on both surfaces after deploy;
-    // provider capability and the explicit toggle determine eligibility.
-    enabledForRooms: boolean("enabled_for_rooms").default(true).notNull(),
-    enabledForWorkspace: boolean("enabled_for_workspace")
+    // Whether this credential may fund a turn inside a workspace other people
+    // can see. It replaced `enabled_for_rooms` / `enabled_for_workspace`,
+    // which claimed to gate surfaces but were read on one path out of three —
+    // the subscription resolvers ignored them entirely, so the settings
+    // toggles changed a badge and nothing else. Where a credential *can* run
+    // is a property of the credential kind and belongs in the provider
+    // registry, not in a column; the only thing left for a member to decide
+    // is this one, which is about whose subscription gets spent.
+    allowInSharedWorkspaces: boolean("allow_in_shared_workspaces")
       .default(true)
       .notNull(),
     ...timestamps,
@@ -725,6 +732,53 @@ export const providerCredentials = pgTable(
       table.priorityOrder,
     ),
     index("provider_credentials_status_idx").on(table.status),
+  ],
+);
+
+/**
+ * The seat a running turn holds on a provider credential.
+ *
+ * A subscription is one human seat: the provider runs one turn at a time on
+ * it. That used to be a mutable `unavailable_until` stamp on the credential
+ * row, set sixteen minutes ahead — with no reaper, so the stamp *was* the
+ * reaper. A turn that died without releasing blocked every other surface for
+ * a quarter of an hour, and because each executor claimed it differently
+ * (Gen 2 claimed it and then ignored a busy result; chat rooms hard-failed on
+ * one) the same lock meant different things depending on who asked.
+ *
+ * A row here is instead owned by a live run and refreshed as that run is
+ * polled. A run that stops polling stops holding the seat within
+ * `SEAT_STALE_AFTER_MS`, and `ref` names what holds it so a waiting turn can
+ * say so rather than reporting a bare failure.
+ *
+ * `credentialId` carries no foreign key because a seat can be taken on either
+ * credential store — `provider_credentials` or, until the browser login
+ * runtime is retired, `claude_connection_sessions`. An orphaned row is
+ * harmless: nothing resolves to that credential any more, and it ages out.
+ */
+export const providerCredentialRuns = pgTable(
+  "provider_credential_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    credentialId: uuid("credential_id").notNull(),
+    userId: uuid("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    /** Which executor holds it: rooms, workspace or gen2. */
+    surface: text("surface").notNull(),
+    /** The run holding the seat — a reply id, turn session id or run id. */
+    ref: text("ref").notNull(),
+    /** Refreshed on every poll; staleness frees the seat. */
+    heartbeatAt: timestamp("heartbeat_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("provider_credential_runs_credential_idx").on(
+      table.credentialId,
+    ),
+    index("provider_credential_runs_ref_idx").on(table.ref),
   ],
 );
 
@@ -2194,5 +2248,97 @@ export const gen2AgentTurns = pgTable(
   },
   (table) => [
     index("gen2_agent_turns_chat_idx").on(table.chatId, table.createdAt),
+  ],
+);
+
+/**
+ * Durable mapping between a Gen 2 workspace and one Superset terminal-agent
+ * session, per docs/SUPERSET_AGENT_SESSION_PLAN.md. CoDev owns this row as
+ * the source of truth for identity, credential lease, and lifecycle state;
+ * Superset's own SQLite database is never queried for that state. No
+ * credential material is stored here -- `connectionId` points at the
+ * existing encrypted `provider_credentials` row and `credentialRevision` is
+ * a fingerprint only.
+ */
+export const gen2SupersetRunStatus = pgEnum("gen2_superset_run_status", [
+  "creating",
+  "running",
+  "stopping",
+  "finished",
+  "failed",
+  "recovery_required",
+]);
+
+export const gen2SupersetRuns = pgTable(
+  "gen2_superset_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .references(() => gen2Workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    chatId: uuid("chat_id").references(() => gen2Chats.id, {
+      onDelete: "set null",
+    }),
+    createdBy: uuid("created_by")
+      .references(() => users.id, { onDelete: "restrict" })
+      .notNull(),
+    /** Superset owns worktree identity host-side; see gen2SupersetWorktreeIdSchema. */
+    worktreeId: text("worktree_id").notNull(),
+    hostWorkspaceId: text("host_workspace_id"),
+    hostTerminalId: text("host_terminal_id"),
+    hostAgentSessionId: text("host_agent_session_id"),
+    provider: credentialProvider("provider").notNull(),
+    connectionId: uuid("connection_id").references(
+      () => providerCredentials.id,
+      { onDelete: "set null" },
+    ),
+    credentialRevision: text("credential_revision"),
+    status: gen2SupersetRunStatus("status").default("creating").notNull(),
+    leaseClaimed: boolean("lease_claimed").default(false).notNull(),
+    exitReason: text("exit_reason"),
+    recoveryCount: integer("recovery_count").default(0).notNull(),
+    /** Caller-supplied key; a retry with the same key returns the same run. */
+    idempotencyKey: text("idempotency_key").notNull(),
+    lastError: text("last_error"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("gen2_superset_runs_workspace_idempotency_idx").on(
+      table.workspaceId,
+      table.idempotencyKey,
+    ),
+    index("gen2_superset_runs_workspace_status_idx").on(
+      table.workspaceId,
+      table.status,
+    ),
+    index("gen2_superset_runs_chat_idx").on(table.chatId, table.createdAt),
+  ],
+);
+
+/** Append-only audit trail for a Superset run's lease and lifecycle events. */
+export const gen2SupersetRunEvents = pgTable(
+  "gen2_superset_run_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    runId: uuid("run_id")
+      .references(() => gen2SupersetRuns.id, { onDelete: "cascade" })
+      .notNull(),
+    workspaceId: uuid("workspace_id")
+      .references(() => gen2Workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    actorId: uuid("actor_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    type: text("type").notNull(),
+    result: text("result").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("gen2_superset_run_events_run_created_idx").on(
+      table.runId,
+      table.createdAt,
+    ),
   ],
 );

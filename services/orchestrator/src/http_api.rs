@@ -25,7 +25,8 @@ use crate::{
         IDE_EXEC_MAX_ARGUMENTS, IDE_EXEC_MAX_TIMEOUT_SECONDS, IdeExecRequest, IdePrepareRequest,
         IdeStartRequest, IdeWriteFileRequest, MAX_IDE_FILE_BYTES, PublicationExportRequest, Result,
         RuntimeError, SESSION_RESTORE_CHUNK_BYTES, SessionRestoreBeginRequest,
-        SessionRestoreChunkRequest, SupersetCreateEntryRequest, SupersetDeleteEntryRequest,
+        SessionRestoreChunkRequest, SupersetAgentInputRequest, SupersetAgentPollRequest,
+        SupersetAgentStartRequest, SupersetCreateEntryRequest, SupersetDeleteEntryRequest,
         SupersetMoveEntryRequest, TerminalInputRequest, TerminalPollRequest, TerminalResizeRequest,
         TerminalStartRequest, WorktreeCheckpointRequest, WorktreeCreateRequest,
         WorktreeMergeRequest, WorktreeRebaseRequest, WriteFileRequest,
@@ -194,6 +195,26 @@ pub fn router(backend: SharedBackend, ide: IdeBackend) -> Router {
         .route(
             "/v1/sandboxes/{workspace_id}/codex-execs/{session_id}",
             delete(close_codex_exec),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/superset-agents",
+            post(start_superset_agent),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/superset-agents/{agent_id}/input",
+            post(input_superset_agent),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/superset-agents/{agent_id}/poll",
+            post(poll_superset_agent),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/superset-agents/{agent_id}",
+            delete(close_superset_agent),
+        )
+        .route(
+            "/v1/sandboxes/{workspace_id}/superset-agents/{agent_id}/recovery",
+            get(recover_superset_agent),
         )
         .route(
             "/v1/sandboxes/{workspace_id}/claude-auth-login",
@@ -943,6 +964,80 @@ async fn close_codex_exec(
     Ok(StatusCode::NO_CONTENT)
 }
 
+async fn start_superset_agent(
+    State(backend): State<SharedBackend>,
+    Path(workspace_id): Path<String>,
+    Json(request): Json<SupersetAgentStartRequest>,
+) -> Result<impl IntoResponse> {
+    validate_workspace_id(&workspace_id)?;
+    validate_worktree_id(&request.worktree_id)?;
+    if request.command.is_empty() || request.command.len() > 32 {
+        return Err(RuntimeError::BadRequest(
+            "command must contain between 1 and 32 arguments".into(),
+        ));
+    }
+    if request.idempotency_key.is_empty() || request.idempotency_key.len() > 128 {
+        return Err(RuntimeError::BadRequest(
+            "invalid Superset agent idempotency key".into(),
+        ));
+    }
+    let response = backend.start_superset_agent(&workspace_id, request).await?;
+    Ok((StatusCode::CREATED, Json(response)))
+}
+
+async fn input_superset_agent(
+    State(backend): State<SharedBackend>,
+    Path((workspace_id, agent_id)): Path<(String, String)>,
+    Json(request): Json<SupersetAgentInputRequest>,
+) -> Result<StatusCode> {
+    validate_workspace_id(&workspace_id)?;
+    validate_superset_agent_id(&agent_id)?;
+    // Guest-side start_superset_agent/input_superset_agent enforce the byte
+    // limit, matching input_terminal's layering: this level only validates
+    // IDs and structure.
+    backend
+        .input_superset_agent(&workspace_id, &agent_id, request)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn poll_superset_agent(
+    State(backend): State<SharedBackend>,
+    Path((workspace_id, agent_id)): Path<(String, String)>,
+    Json(request): Json<SupersetAgentPollRequest>,
+) -> Result<Json<serde_json::Value>> {
+    validate_workspace_id(&workspace_id)?;
+    validate_superset_agent_id(&agent_id)?;
+    let result = backend
+        .poll_superset_agent(&workspace_id, &agent_id, request)
+        .await?;
+    Ok(Json(serde_json::json!({ "result": result })))
+}
+
+async fn close_superset_agent(
+    State(backend): State<SharedBackend>,
+    Path((workspace_id, agent_id)): Path<(String, String)>,
+) -> Result<StatusCode> {
+    validate_workspace_id(&workspace_id)?;
+    validate_superset_agent_id(&agent_id)?;
+    backend
+        .close_superset_agent(&workspace_id, &agent_id)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn recover_superset_agent(
+    State(backend): State<SharedBackend>,
+    Path((workspace_id, agent_id)): Path<(String, String)>,
+) -> Result<Json<serde_json::Value>> {
+    validate_workspace_id(&workspace_id)?;
+    validate_superset_agent_id(&agent_id)?;
+    let result = backend
+        .recover_superset_agent(&workspace_id, &agent_id)
+        .await?;
+    Ok(Json(serde_json::json!({ "result": result })))
+}
+
 async fn start_claude_setup(
     State(backend): State<SharedBackend>,
     Path(workspace_id): Path<String>,
@@ -1308,6 +1403,14 @@ fn validate_codex_exec_id(session_id: &str) -> Result<()> {
     }
 }
 
+fn validate_superset_agent_id(agent_id: &str) -> Result<()> {
+    if superset_agent_id_pattern().is_match(agent_id) {
+        Ok(())
+    } else {
+        Err(RuntimeError::BadRequest("invalid Superset agent ID".into()))
+    }
+}
+
 fn validate_claude_setup_id(session_id: &str) -> Result<()> {
     if claude_setup_id_pattern().is_match(session_id) {
         Ok(())
@@ -1370,6 +1473,14 @@ fn terminal_id_pattern() -> &'static Regex {
 fn codex_exec_id_pattern() -> &'static Regex {
     static PATTERN: OnceLock<Regex> = OnceLock::new();
     PATTERN.get_or_init(|| Regex::new(r"^codex-[0-9]+-[0-9]+$").expect("codex exec regex"))
+}
+
+fn superset_agent_id_pattern() -> &'static Regex {
+    static PATTERN: OnceLock<Regex> = OnceLock::new();
+    // Superset mints this ID, not this orchestrator, so it is not pinned to
+    // the guest's own "prefix-digits-digits" session ID convention (compare
+    // codex_exec_id_pattern) -- just a safe, bounded token shape.
+    PATTERN.get_or_init(|| Regex::new(r"^[A-Za-z0-9_-]{1,128}$").expect("superset agent regex"))
 }
 
 fn claude_setup_id_pattern() -> &'static Regex {
@@ -1707,5 +1818,144 @@ mod tests {
             .await
             .expect("response");
         assert_eq!(invalid_worktree.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn superset_agent_route_validation_and_lifecycle() {
+        let app = router(Arc::new(Backend::fake()), IdeBackend::Disabled);
+        let workspace_id = "e010bd2c-a3c1-438f-acef-166287a3b1cb";
+        let create = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/sandboxes")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::json!({
+                            "workspaceId": workspace_id,
+                            "repositoryUrl": "https://github.com/yousef20920/CoDev.git",
+                            "baseSha": "fc1ba2947ffdaf8c1961e5342387e1079afface6",
+                            "expiresAt": (Utc::now() + Duration::hours(1)).to_rfc3339(),
+                            "lifecycle": {
+                                "timeoutMs": 14400000,
+                                "lifecycle": { "onTimeout": "pause", "autoResume": true }
+                            }
+                        })
+                        .to_string(),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(create.status(), StatusCode::CREATED);
+
+        let invalid_worktree = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!("/v1/sandboxes/{workspace_id}/superset-agents"))
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::json!({
+                            "worktreeId": "../escape",
+                            "provider": "openai",
+                            "command": ["codex", "exec"],
+                            "idempotencyKey": "key-1"
+                        })
+                        .to_string(),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(invalid_worktree.status(), StatusCode::BAD_REQUEST);
+
+        let start = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!("/v1/sandboxes/{workspace_id}/superset-agents"))
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::json!({
+                            "worktreeId": "main",
+                            "provider": "openai",
+                            "command": ["codex", "exec"],
+                            "idempotencyKey": "key-1"
+                        })
+                        .to_string(),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(start.status(), StatusCode::CREATED);
+        let start_body = to_bytes(start.into_body(), 1 << 20).await.expect("body");
+        let start_json: serde_json::Value =
+            serde_json::from_slice(&start_body).expect("start json");
+        assert_eq!(start_json["hostAgentSessionId"], "fake-agent-1");
+
+        let invalid_agent_id = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri(format!(
+                        "/v1/sandboxes/{workspace_id}/superset-agents/not%20a%20safe%20id"
+                    ))
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(invalid_agent_id.status(), StatusCode::BAD_REQUEST);
+
+        let poll = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!(
+                        "/v1/sandboxes/{workspace_id}/superset-agents/fake-agent-1/poll"
+                    ))
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::json!({ "after": 0 }).to_string()))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(poll.status(), StatusCode::OK);
+
+        let recovery = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!(
+                        "/v1/sandboxes/{workspace_id}/superset-agents/fake-agent-1/recovery"
+                    ))
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(recovery.status(), StatusCode::OK);
+
+        let close = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri(format!(
+                        "/v1/sandboxes/{workspace_id}/superset-agents/fake-agent-1"
+                    ))
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(close.status(), StatusCode::NO_CONTENT);
     }
 }

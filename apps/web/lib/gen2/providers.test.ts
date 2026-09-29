@@ -82,10 +82,10 @@ describe("gen2 provider resolution", () => {
     await expect(resolveGen2Codex(userId)).resolves.toMatchObject({
       via: "subscription",
     });
-    expect(mocks.resolveHosted).toHaveBeenCalledWith({
-      userId,
-      includeBusy: true,
-    });
+    // Resolution answers "is one connected", never "is one free": busy is a
+    // seat question, and reporting a mid-turn subscription as missing used to
+    // send members off to reconnect a perfectly good credential.
+    expect(mocks.resolveHosted).toHaveBeenCalledWith({ userId });
   });
 
   it("reports status without ever returning a secret", async () => {

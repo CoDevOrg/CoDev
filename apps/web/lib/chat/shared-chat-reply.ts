@@ -19,11 +19,13 @@ import {
   isClaudeExecution,
   parseClaudeResult,
 } from "../providers/claude-runtime-execution";
+import { updateHostedCodexAuthCache } from "../providers/hosted-codex-subscription-credentials";
 import {
-  claimHostedCodexExecution,
-  releaseHostedCodexExecution,
-  updateHostedCodexAuthCache,
-} from "../providers/hosted-codex-subscription-credentials";
+  describeSeatHolder,
+  heartbeatCredentialSeat,
+  releaseCredentialSeat,
+  waitForCredentialSeat,
+} from "../providers/credential-seat";
 import {
   closeCodexExecInSandbox,
   destroySandbox,
@@ -238,6 +240,17 @@ export async function prepareRoomReply(id: string) {
   const prompt = buildRoomReplyPrompt(context);
   const credentialId = credential.credentialId;
   if (!credentialId) throw new Error("Subscription unavailable.");
+  // A subscription runs one turn at a time. A second turn is a queueing
+  // problem, not a failure: wait for the member's own seat rather than
+  // refusing the reply outright, and name what holds it if the wait runs out.
+  // The reply id is the seat's ref — stable across prepare, poll and cleanup.
+  const seat = await waitForCredentialSeat({
+    credentialId,
+    userId: requestedBy,
+    surface: "rooms",
+    ref: id,
+  });
+  if (!seat.held) throw new Error(describeSeatHolder(seat.holder));
   if (credential.authType === "CLAUDE_RUNTIME") {
     const sessionId = await startClaudeExecution(
       requestedBy,
@@ -252,7 +265,6 @@ export async function prepareRoomReply(id: string) {
     return { sessionId, credentialId, provider: generation.provider };
   }
   if (credential.authType === "HOSTED_CODEX_SUBSCRIPTION") {
-    await claimHostedCodexExecution(credentialId);
     try {
       await ensureHostReady();
       // `codex exec` has no append-instructions flag, so the room's guardrails
@@ -337,6 +349,9 @@ export async function pollRoomReply(
   if (isClaudeExecution(sessionId))
     return pollClaudeExecution(sessionId, after);
   const result = await pollCodexExecInSandbox(id, sessionId, after);
+  // Holding the seat is what being polled means, so refresh it here: a turn
+  // that stops polling stops blocking the member's other surfaces.
+  await heartbeatCredentialSeat({ credentialId, ref: id });
   // Refresh material is persisted here and never enters the workflow's replay log.
   if (result.codexAuthCacheJson)
     await updateHostedCodexAuthCache(credentialId, result.codexAuthCacheJson);
@@ -367,15 +382,15 @@ export async function cleanupRoomReply(
   credentialId: string,
   sessionId?: string,
 ) {
-  if (sessionId && isClaudeExecution(sessionId))
-    return cleanupClaudeExecution(sessionId);
   try {
-    if (sessionId) await closeCodexExecInSandbox(id, sessionId);
-  } finally {
+    if (sessionId && isClaudeExecution(sessionId))
+      return await cleanupClaudeExecution(sessionId);
     try {
-      await destroySandbox(id);
+      if (sessionId) await closeCodexExecInSandbox(id, sessionId);
     } finally {
-      await releaseHostedCodexExecution(credentialId);
+      await destroySandbox(id);
     }
+  } finally {
+    await releaseCredentialSeat({ credentialId, ref: id });
   }
 }

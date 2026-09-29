@@ -394,6 +394,39 @@ pub struct TerminalPollResponse {
     pub exit_code: Option<i32>,
 }
 
+/// One file a launched agent process needs inside its private credential
+/// profile. `path` is relative to the profile directory and may not escape
+/// it; the guest writes the file 0600 inside a 0700 directory it owns.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LaunchProfileFile {
+    pub path: String,
+    pub contents: String,
+}
+
+/// What a launched agent process needs in order to authenticate as the
+/// member, in a form that names no provider.
+///
+/// The exec route used to take `codexAuthCacheJson` by name, so every new
+/// provider meant a new field here, in the guest, and in the host request
+/// that carries it -- the Gen 1 IDE start request already carries six such
+/// fields. A profile is files plus environment instead, which is the whole
+/// of what a CLI needs: Codex reads an `auth.json`, Claude reads
+/// `CLAUDE_CODE_OAUTH_TOKEN`, and the guest has to know neither.
+///
+/// Environment values may contain `{{profileDir}}`, which the guest expands
+/// to the absolute path of the profile directory it created. That single
+/// substitution is what lets the caller say `CODEX_HOME` without knowing
+/// where the guest puts the profile.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LaunchProfile {
+    #[serde(default)]
+    pub files: Vec<LaunchProfileFile>,
+    #[serde(default)]
+    pub env: std::collections::BTreeMap<String, String>,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CodexExecStartRequest {
@@ -406,8 +439,13 @@ pub struct CodexExecStartRequest {
     pub rows: u16,
     #[serde(default)]
     pub columns: u16,
+    /// Superseded by `launch_profile`; kept so a control plane that has not
+    /// been redeployed yet keeps working. The guest converts it into a
+    /// profile at the edge, so there is only one code path below.
     #[serde(default)]
     pub codex_auth_cache_json: String,
+    #[serde(default)]
+    pub launch_profile: Option<LaunchProfile>,
     /// The caller's Vercel Workflow DevKit step id. A retried "start" step
     /// reuses the same id, letting the guest reattach to the still-running
     /// session instead of spawning a second Codex process.
@@ -445,6 +483,71 @@ pub struct CodexExecPollResponse {
     pub exit_code: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub codex_auth_cache_json: Option<String>,
+}
+
+/// A terminal-agent session launched through Superset rather than executed
+/// directly by the guest, per docs/SUPERSET_AGENT_SESSION_PLAN.md Phase 3.
+/// `codev-guestd` validates and forwards this to Superset's host-service
+/// bridge rather than running the provider process itself -- see
+/// `GuestService::start_superset_agent` in guest.rs.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupersetAgentStartRequest {
+    pub worktree_id: String,
+    pub provider: String,
+    /// Superseded by `launch_profile`; see `CodexExecStartRequest`.
+    #[serde(default)]
+    pub codex_auth_cache_json: Option<String>,
+    #[serde(default)]
+    pub launch_profile: Option<LaunchProfile>,
+    pub command: Vec<String>,
+    /// A retried "start" call with the same key reattaches to the run
+    /// Superset already has in flight, matching `CodexExecStartRequest`'s
+    /// idempotency contract.
+    pub idempotency_key: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupersetAgentStartResponse {
+    pub host_workspace_id: String,
+    pub host_terminal_id: String,
+    pub host_agent_session_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupersetAgentInputRequest {
+    pub data: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupersetAgentPollRequest {
+    /// Exclusive cursor: the response includes chunks at this sequence and later.
+    #[serde(default)]
+    pub after: u64,
+    #[serde(default)]
+    pub wait_milliseconds: u64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupersetAgentPollResponse {
+    pub chunks: Vec<CodexExecChunk>,
+    /// Pass as `after` in the next poll; a chunk at this value may arrive later.
+    pub next_sequence: u64,
+    pub exited: bool,
+    pub exit_code: Option<i32>,
+    /// Set once the launched process has exited and a refresh capture is safe.
+    #[serde(default)]
+    pub refresh_ready: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupersetAgentRecoveryResponse {
+    pub adoptable: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
