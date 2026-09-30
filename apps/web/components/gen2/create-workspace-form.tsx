@@ -225,7 +225,7 @@ export function CreateGen2WorkspaceForm({
         </CardHeader>
 
         <CardContent className="space-y-5 px-6 pt-5 pb-5">
-          <fieldset className="m-0 min-w-0 space-y-2 border-0 p-0">
+          <fieldset className="mx-0 min-w-0 space-y-2 border-0 p-0">
             <legend className="mb-2 p-0 text-sm font-medium">Start from</legend>
             <div className="grid gap-2 sm:grid-cols-2" role="radiogroup">
               {(
