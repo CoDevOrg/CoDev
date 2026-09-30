@@ -508,7 +508,7 @@
   position: fixed;
   top: 14px;
   left: 176px;
-  z-index: 5;
+  z-index: 30;
 }
 
 .app-sidebar-toggle {
@@ -539,8 +539,11 @@
   opacity: 1;
 }
 
+/* Collapsed: no column is reserved. The toggle floats over the top-left corner
+   with its own surface so it is visible on any page; pages that put content
+   there (the settings nav) offset themselves via the collapsed class. */
 .app-with-sidebar.is-sidebar-collapsed {
-  grid-template-columns: 44px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .app-with-sidebar.is-sidebar-collapsed .app-sidebar {
@@ -548,13 +551,16 @@
 }
 
 .app-with-sidebar.is-sidebar-collapsed .app-sidebar-rail {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  height: 100dvh;
-  padding: 14px 6px;
-  border-right: 1px solid var(--line);
-  background: rgba(var(--paper-rgb), 0.82);
+  top: 10px;
+  left: 10px;
+}
+
+.app-with-sidebar.is-sidebar-collapsed .app-sidebar-toggle {
+  border: 1px solid var(--line);
+  background: rgba(var(--paper-rgb), 0.92);
+  color: var(--ink);
+  opacity: 1;
+  backdrop-filter: blur(8px);
 }
 
 .dashboard-shell {
