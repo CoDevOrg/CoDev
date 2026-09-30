@@ -34,20 +34,60 @@ function stubFetch() {
   );
 }
 
+async function openRepositories() {
+  fireEvent.click(screen.getByRole("radio", { name: /GitHub repository/ }));
+  return screen.findByText("ada/looms");
+}
+
 describe("CreateGen2WorkspaceForm", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     stubFetch();
   });
 
+  it("creates nothing until Create is pressed", async () => {
+    render(<CreateGen2WorkspaceForm githubConnected />);
+    await openRepositories();
+    fireEvent.click(screen.getByRole("button", { name: /ada\/looms/ }));
+    expect(fetch).not.toHaveBeenCalledWith(
+      "/api/gen2/workspaces",
+      expect.anything(),
+    );
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
   it("creates a blank workspace and opens it", async () => {
     render(<CreateGen2WorkspaceForm githubConnected={false} />);
-    fireEvent.click(screen.getByRole("button", { name: /Blank workspace/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Create workspace" }));
     await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/gen2/ws-1"));
     expect(fetch).toHaveBeenCalledWith(
       "/api/gen2/workspaces",
       expect.objectContaining({ method: "POST", body: "{}" }),
     );
+  });
+
+  it("sends the optional name", async () => {
+    render(<CreateGen2WorkspaceForm githubConnected={false} />);
+    fireEvent.change(screen.getByLabelText("Name (optional)"), {
+      target: { value: "  Studio  " },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create workspace" }));
+    await waitFor(() => expect(mocks.push).toHaveBeenCalled());
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/gen2/workspaces",
+      expect.objectContaining({ body: JSON.stringify({ name: "Studio" }) }),
+    );
+  });
+
+  it("always shows how many workspaces are used", () => {
+    render(
+      <CreateGen2WorkspaceForm
+        githubConnected={false}
+        ownedWorkspaceCount={1}
+      />,
+    );
+    expect(screen.getByText("1 of 2 used")).toBeInTheDocument();
+    expect(screen.queryByRole("status")).toBeNull();
   });
 
   it("blocks workspace creation when the owner limit is reached", () => {
@@ -58,7 +98,7 @@ describe("CreateGen2WorkspaceForm", () => {
       />,
     );
     expect(
-      screen.getByRole("button", { name: /Blank workspace/ }),
+      screen.getByRole("button", { name: "Create workspace" }),
     ).toBeDisabled();
     expect(screen.getByRole("status")).toHaveTextContent(
       "You own 2 of 2 Gen 2 workspaces. Delete one to create another.",
@@ -67,22 +107,25 @@ describe("CreateGen2WorkspaceForm", () => {
 
   it("offers GitHub when it is not connected yet", () => {
     render(<CreateGen2WorkspaceForm githubConnected={false} />);
+    fireEvent.click(screen.getByRole("radio", { name: /GitHub repository/ }));
     expect(
       screen.getByRole("button", { name: /Connect GitHub/ }),
     ).toBeInTheDocument();
     expect(screen.queryByLabelText("Search repositories")).toBeNull();
   });
 
-  it("lists repositories once GitHub is connected", async () => {
+  it("lists repositories with a heading once GitHub is chosen", async () => {
     render(<CreateGen2WorkspaceForm githubConnected />);
-    expect(await screen.findByText("ada/looms")).toBeInTheDocument();
+    expect(await openRepositories()).toBeInTheDocument();
+    expect(screen.getByText("Your repositories")).toBeInTheDocument();
     expect(screen.getByText("Private")).toBeInTheDocument();
     expect(screen.getByText("trunk")).toBeInTheDocument();
+    expect(screen.getByText("2 repositories")).toBeInTheDocument();
   });
 
   it("filters the list as you type", async () => {
     render(<CreateGen2WorkspaceForm githubConnected />);
-    await screen.findByText("ada/looms");
+    await openRepositories();
     fireEvent.change(screen.getByLabelText("Search repositories"), {
       target: { value: "card" },
     });
@@ -90,9 +133,41 @@ describe("CreateGen2WorkspaceForm", () => {
     expect(screen.getByText("ada/cards")).toBeInTheDocument();
   });
 
+  it("says when the list is cut off", async () => {
+    const many = Array.from({ length: 45 }, (_, index) => ({
+      id: index + 1,
+      full_name: `ada/repo-${index}`,
+      private: false,
+      default_branch: "main",
+    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const path = String(url);
+        if (path.endsWith("/repositories")) {
+          return new Response(JSON.stringify({ repositories: many }));
+        }
+        return new Response(
+          JSON.stringify({
+            installations: [
+              { id: 1, account: { login: "ada", avatar_url: "" } },
+            ],
+          }),
+        );
+      }),
+    );
+    render(<CreateGen2WorkspaceForm githubConnected />);
+    fireEvent.click(screen.getByRole("radio", { name: /GitHub repository/ }));
+    expect(await screen.findByText(/Showing 40 of 45/)).toBeInTheDocument();
+  });
+
   it("creates from the repository that was picked", async () => {
     render(<CreateGen2WorkspaceForm githubConnected />);
-    fireEvent.click(await screen.findByRole("button", { name: /ada\/looms/ }));
+    await openRepositories();
+    const create = screen.getByRole("button", { name: "Create workspace" });
+    expect(create).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /ada\/looms/ }));
+    fireEvent.click(create);
     await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/gen2/ws-1"));
     // The browser sends ids only; the control plane resolves the commit and
     // fetches the source, so no repository contents pass through here.
@@ -102,6 +177,37 @@ describe("CreateGen2WorkspaceForm", () => {
         body: JSON.stringify({ installationId: 1, repositoryId: 7 }),
       }),
     );
+  });
+
+  it("shows a retryable error when GitHub cannot be reached", async () => {
+    let failing = true;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const path = String(url);
+        if (path.endsWith("/installations")) {
+          return failing
+            ? new Response("{}", { status: 502 })
+            : new Response(
+                JSON.stringify({
+                  installations: [
+                    { id: 1, account: { login: "ada", avatar_url: "" } },
+                  ],
+                }),
+              );
+        }
+        return new Response(JSON.stringify({ repositories: REPOS }));
+      }),
+    );
+    render(<CreateGen2WorkspaceForm githubConnected />);
+    fireEvent.click(screen.getByRole("radio", { name: /GitHub repository/ }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Couldn't load your repositories",
+    );
+
+    failing = false;
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByText("ada/looms")).toBeInTheDocument();
   });
 
   it("reports a create failure instead of navigating", async () => {
@@ -115,7 +221,7 @@ describe("CreateGen2WorkspaceForm", () => {
       ),
     );
     render(<CreateGen2WorkspaceForm githubConnected={false} />);
-    fireEvent.click(screen.getByRole("button", { name: /Blank workspace/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Create workspace" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Out of capacity.",
     );
