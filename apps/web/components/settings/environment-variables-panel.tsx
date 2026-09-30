@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
+import { ClipboardPaste, KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
 
 import type { EnvironmentVariable } from "@codev/contracts";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,11 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  environmentNameError,
+  parseDotenv,
+} from "@/components/settings/parse-dotenv";
 
 function maskedValue(lastFour: string | null) {
   if (!lastFour) return "••••••••";
@@ -42,6 +47,10 @@ export function EnvironmentVariablesPanel({
   const [deleting, setDeleting] = useState<EnvironmentVariable | null>(null);
   const notify = useSettingsNotify();
   const [showAdd, setShowAdd] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [importText, setImportText] = useState("");
+  const nameError = environmentNameError(name);
+  const parsedImport = parseDotenv(importText);
 
   // A toast where the settings area provides one; the inline line otherwise.
   function report(next: { tone: "success" | "warning"; text: string }) {
@@ -84,6 +93,53 @@ export function EnvironmentVariablesPanel({
     setValue("");
     setShowAdd(false);
     report({ tone: "success", text: `${payload.variable.name} saved.` });
+    setBusy(false);
+  }
+
+  /**
+   * Pasted .env text is saved one variable at a time through the same route as
+   * a single add, so every server-side rule (limit, duplicate names, size)
+   * applies unchanged; the result is one summary rather than a toast per line.
+   */
+  async function importVariables() {
+    if (parsedImport.entries.length === 0) return;
+    setBusy(true);
+    setMessage(null);
+    const saved: EnvironmentVariable[] = [];
+    const failed: string[] = [];
+    for (const entry of parsedImport.entries) {
+      const response = await fetch("/api/settings/environment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(entry),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        variable?: EnvironmentVariable;
+      };
+      if (response.ok && payload.variable) saved.push(payload.variable);
+      else failed.push(entry.name);
+    }
+    if (saved.length > 0) {
+      refreshList(
+        [...variables, ...saved].sort((a, b) => a.name.localeCompare(b.name)),
+      );
+    }
+    if (failed.length === 0) {
+      setImportText("");
+      setShowImport(false);
+    }
+    const parts = [
+      saved.length > 0
+        ? `Imported ${saved.length} variable${saved.length === 1 ? "" : "s"}.`
+        : null,
+      failed.length > 0
+        ? `Not imported (already exist or over the limit): ${failed.join(", ")}.`
+        : null,
+    ].filter(Boolean);
+    report({
+      tone: failed.length > 0 ? "warning" : "success",
+      text: parts.join(" "),
+    });
     setBusy(false);
   }
 
@@ -147,31 +203,43 @@ export function EnvironmentVariablesPanel({
           <CardTitle className="text-base">Personal .env</CardTitle>
           <CardDescription>
             Encrypted at rest and write-only: values are never shown again after
-            you save them. Available to your agents and sandboxes like a
-            personal <code className="font-mono text-xs">.env</code>.
+            you save them. They are passed to every Gen 2 agent session you
+            start, like a personal{" "}
+            <code className="font-mono text-xs">.env</code>. Your provider login
+            always wins over a variable with the same name.
           </CardDescription>
         </div>
-        {variables.length > 0 || showAdd ? (
-          <Button
-            className="shrink-0"
-            disabled={busy}
-            onClick={() => {
-              setShowAdd((current) => !current);
-              setMessage(null);
-            }}
-            size="sm"
-            type="button"
-            variant={showAdd ? "secondary" : "outline"}
-          >
-            {showAdd ? (
-              "Cancel"
-            ) : (
-              <>
-                <Plus aria-hidden="true" className="size-3.5" />
-                Add variable
-              </>
-            )}
-          </Button>
+        {variables.length > 0 || showAdd || showImport ? (
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              disabled={busy}
+              onClick={() => {
+                setShowImport((current) => !current);
+                setShowAdd(false);
+                setMessage(null);
+              }}
+              size="sm"
+              type="button"
+              variant={showImport ? "secondary" : "outline"}
+            >
+              <ClipboardPaste aria-hidden="true" className="size-3.5" />
+              Paste .env
+            </Button>
+            <Button
+              disabled={busy}
+              onClick={() => {
+                setShowAdd((current) => !current);
+                setShowImport(false);
+                setMessage(null);
+              }}
+              size="sm"
+              type="button"
+              variant={showAdd ? "secondary" : "outline"}
+            >
+              <Plus aria-hidden="true" className="size-3.5" />
+              Add variable
+            </Button>
+          </div>
         ) : null}
       </CardHeader>
 
@@ -181,7 +249,8 @@ export function EnvironmentVariablesPanel({
             className="space-y-4 rounded-lg border border-border bg-muted/30 p-4"
             onSubmit={(event) => {
               event.preventDefault();
-              if (!busy && name.trim() && value) void addVariable();
+              if (!busy && name.trim() && value && !nameError)
+                void addVariable();
             }}
           >
             <div className="grid gap-4 sm:grid-cols-2">
@@ -191,6 +260,8 @@ export function EnvironmentVariablesPanel({
                   autoComplete="off"
                   autoFocus
                   className="font-mono"
+                  aria-describedby={nameError ? "env-name-error" : undefined}
+                  aria-invalid={nameError ? true : undefined}
                   id="env-name"
                   onChange={(event) =>
                     setName(event.target.value.toUpperCase())
@@ -199,6 +270,15 @@ export function EnvironmentVariablesPanel({
                   spellCheck={false}
                   value={name}
                 />
+                {nameError ? (
+                  <p
+                    className="text-xs text-destructive"
+                    id="env-name-error"
+                    role="alert"
+                  >
+                    {nameError}
+                  </p>
+                ) : null}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="env-value">Value</Label>
@@ -225,7 +305,7 @@ export function EnvironmentVariablesPanel({
                 Cancel
               </Button>
               <Button
-                disabled={busy || !name.trim() || !value}
+                disabled={busy || !name.trim() || !value || nameError !== null}
                 size="sm"
                 type="submit"
               >
@@ -235,7 +315,53 @@ export function EnvironmentVariablesPanel({
           </form>
         ) : null}
 
-        {variables.length === 0 && !showAdd ? (
+        {showImport ? (
+          <form
+            className="space-y-4 rounded-lg border border-border bg-muted/30 p-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void importVariables();
+            }}
+          >
+            <div className="space-y-2">
+              <Label htmlFor="env-import">Paste your .env</Label>
+              <Textarea
+                autoFocus
+                className="min-h-32 rounded-md border border-input bg-background px-3 py-2 font-mono text-xs focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                id="env-import"
+                onChange={(event) => setImportText(event.target.value)}
+                placeholder={"DATABASE_URL=postgres://...\nAPI_KEY=..."}
+                spellCheck={false}
+                value={importText}
+              />
+              <p aria-live="polite" className="text-xs text-muted-foreground">
+                {importText.trim()
+                  ? `${parsedImport.entries.length} variable${parsedImport.entries.length === 1 ? "" : "s"} ready${parsedImport.skipped.length > 0 ? `; line${parsedImport.skipped.length === 1 ? "" : "s"} ${parsedImport.skipped.join(", ")} can't be used and will be skipped` : ""}. Existing names are not overwritten.`
+                  : "One NAME=value per line. Comments and export prefixes are fine."}
+              </p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                disabled={busy}
+                onClick={() => setShowImport(false)}
+                size="sm"
+                type="button"
+                variant="secondary"
+              >
+                Cancel
+              </Button>
+              <Button
+                disabled={busy || parsedImport.entries.length === 0}
+                size="sm"
+                type="submit"
+              >
+                {busy ? "Importing…" : "Import variables"}
+              </Button>
+            </div>
+          </form>
+        ) : null}
+
+        {variables.length === 0 && !showAdd && !showImport ? (
           <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-6 py-10 text-center">
             <span className="flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
               <KeyRound aria-hidden="true" className="size-5" />
@@ -258,6 +384,16 @@ export function EnvironmentVariablesPanel({
               <Plus aria-hidden="true" className="size-3.5" />
               Add variable
             </Button>
+            <button
+              className="cursor-pointer text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+              onClick={() => {
+                setShowImport(true);
+                setMessage(null);
+              }}
+              type="button"
+            >
+              or paste a .env file
+            </button>
           </div>
         ) : null}
 

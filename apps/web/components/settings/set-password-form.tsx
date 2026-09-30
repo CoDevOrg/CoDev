@@ -3,19 +3,43 @@
 import { useState } from "react";
 import { Check, Circle } from "lucide-react";
 
+import { changeAccountPassword } from "@/app/actions/profile";
 import { setAccountPassword } from "@/app/actions/set-password";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getNewAccountPasswordRequirements } from "@/lib/auth/password-policy";
 import { cn } from "@/lib/platform/utils";
 
-export function SetPasswordForm({ redirectTo }: { redirectTo: string }) {
+export function SetPasswordForm({
+  redirectTo,
+  mode = "set",
+}: {
+  redirectTo: string;
+  /** `change` asks for the current password first and updates the existing one. */
+  mode?: "set" | "change";
+}) {
   const [password, setPassword] = useState("");
   const requirements = getNewAccountPasswordRequirements(password);
-  const action = setAccountPassword.bind(null, redirectTo);
+  const action =
+    mode === "change"
+      ? changeAccountPassword.bind(null, redirectTo)
+      : setAccountPassword.bind(null, redirectTo);
 
   return (
     <form action={action} className="space-y-4">
+      {mode === "change" ? (
+        <label className="block max-w-sm space-y-1.5 text-xs">
+          <span className="font-medium text-muted-foreground">
+            Current password
+          </span>
+          <Input
+            autoComplete="current-password"
+            name="current"
+            required
+            type="password"
+          />
+        </label>
+      ) : null}
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block space-y-1.5 text-xs">
           <span className="font-medium text-muted-foreground">
@@ -64,7 +88,7 @@ export function SetPasswordForm({ redirectTo }: { redirectTo: string }) {
         ))}
       </ul>
       <Button size="sm" type="submit">
-        Set password
+        {mode === "change" ? "Change password" : "Set password"}
       </Button>
     </form>
   );

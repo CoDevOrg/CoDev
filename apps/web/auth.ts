@@ -102,7 +102,7 @@ async function clearGithubLinkCookie() {
   }
 }
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
   trustHost: true,
   session: { strategy: "jwt" },
   cookies: {
@@ -404,7 +404,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       return true;
     },
-    async jwt({ token, account, profile, user }) {
+    async jwt({ token, account, profile, user, trigger, session }) {
+      // Settings refreshes the shown display name after an edit. Only the name
+      // is taken from the update payload; identity fields never are.
+      if (trigger === "update") {
+        const name = (session as { user?: { name?: unknown } } | undefined)
+          ?.user?.name;
+        if (typeof name === "string" && name.trim()) token.name = name.trim();
+        return token;
+      }
       if (account?.provider === "credentials" && user?.id) {
         token.localUserId = user.id;
       } else if (
