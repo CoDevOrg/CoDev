@@ -780,7 +780,7 @@ Type=simple
 # other way round.
 ExecStartPre=-/bin/chgrp -R codev-shell /workspace
 ExecStartPre=-/bin/chmod -R g+w /workspace
-ExecStartPre=-/bin/chmod g+s /workspace
+ExecStartPre=-/usr/bin/find /workspace -type d -exec /bin/chmod g+s {} +
 ExecStart=/usr/local/bin/codev-guestd
 Environment=CODEV_WORKSPACE_ROOT=/workspace
 EnvironmentFile=/etc/codev/superset-bridge.env
@@ -803,16 +803,18 @@ UNIT
 cat >"${work_dir}/rootfs/etc/systemd/system/codev-superset-host.service" <<'UNIT'
 [Unit]
 Description=CoDev Superset host service
-After=workspace.mount
+After=workspace.mount codev-guestd.service
 Requires=workspace.mount
 
 [Service]
 Type=simple
+ExecStartPre=/bin/chmod 0711 /var/lib/codev-agent-profiles
 ExecStart=/usr/local/bin/node /opt/codev/superset-host/host-service.js
 Environment=HOME=/var/lib/codev-superset
 Environment=CODEV_WORKSPACE_ROOT=/workspace
 EnvironmentFile=/etc/codev/superset-bridge.env
 Environment=SUPERSET_HOME_DIR=/var/lib/codev-superset
+Environment=CODEV_AGENT_PROFILE_ROOT=/var/lib/codev-agent-profiles
 Environment=HOST_DB_PATH=/var/lib/codev-superset/host.db
 Environment=HOST_MIGRATIONS_FOLDER=/opt/codev/superset-host/host-migrations
 Environment=SUPERSET_CHAT_V3_MIGRATIONS=/opt/codev/superset-host/chat-migrations
@@ -823,15 +825,16 @@ Environment=AUTH_TOKEN=codev-guest-local
 Environment=SUPERSET_API_URL=http://127.0.0.1:9
 Environment=PORT=4879
 Environment=NODE_ENV=production
-StateDirectory=codev-superset
+StateDirectory=codev-superset codev-agent-profiles
 StateDirectoryMode=0700
+UMask=0002
 Restart=on-failure
 RestartSec=2
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
-ReadWritePaths=/workspace /var/lib/codev-superset
+ReadWritePaths=/workspace /var/lib/codev-superset /var/lib/codev-agent-profiles
 TasksMax=256
 
 [Install]

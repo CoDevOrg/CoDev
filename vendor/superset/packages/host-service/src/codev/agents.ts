@@ -1,6 +1,4 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import { randomUUID, timingSafeEqual } from "node:crypto";
-import { join } from "node:path";
+import { timingSafeEqual } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { Hono } from "hono";
 import { z } from "zod";
@@ -13,6 +11,7 @@ import {
 	snapshotSession,
 	writeFramedInputToSession,
 } from "../terminal/terminal";
+import { prepareAgentLaunch, removeAgentLaunch, type AgentLaunch } from "./agent-isolation";
 import { resolveCoDevWorktreeRoot } from "./files";
 
 const worktreeIdSchema = z
@@ -48,8 +47,8 @@ export type CoDevAgentBridgeOptions = {
 
 type AgentPollState = { sequence: number; text: string };
 const agentPollStates = new Map<string, AgentPollState>();
-/** The private credential profile directory, if one was materialized, keyed by agent ID. */
-const agentProfileDirs = new Map<string, string>();
+/** Private process identity and launch directory, keyed by agent ID. */
+const agentLaunches = new Map<string, AgentLaunch>();
 /** idempotencyKey -> agentId, so a retried start reattaches instead of relaunching. */
 const agentIdempotency = new Map<string, string>();
 let agentSequence = 0;
@@ -110,23 +109,6 @@ function terminalError(error: unknown) {
 }
 
 /**
- * Quotes one argument for a POSIX shell command line: wrap in single quotes,
- * and turn each embedded `'` into `'\''` (close the quote, an escaped
- * literal quote, reopen the quote). Required because `initialCommand` is
- * typed into a live shell -- an agent's command carries a member's prompt
- * text verbatim (see apps/web's buildGen2CodexCommand), so an unescaped
- * `$()`, backtick, or quote in that text would otherwise run as shell code.
- */
-function posixShellQuote(value: string): string {
-	return `'${value.replaceAll("'", `'\\''`)}'`;
-}
-
-async function removeProfileDir(profileDir: string | undefined) {
-	if (!profileDir) return;
-	await rm(profileDir, { recursive: true, force: true }).catch(() => undefined);
-}
-
-/**
  * Fixed, bridge-secret-protected operations that launch and drive a
  * terminal-agent session for CoDev's Superset Agent Session Plan Phase 3.
  * `codev-guestd` forwards a validated request here rather than executing the
@@ -184,30 +166,18 @@ export function registerCoDevAgentBridge({
 			agentIdempotency.delete(idempotencyKey);
 		}
 
-		let profileDir: string | undefined;
+		let launch: AgentLaunch | undefined;
 		try {
 			const workspace = await ensureAgentWorkspace({ db, git, workspaceRoot, worktreeId });
-			let launchCommand = command.map(posixShellQuote).join(" ");
-			if (codexAuthCacheJson) {
-				const homeRoot = process.env.SUPERSET_HOME_DIR;
-				if (!homeRoot) {
-					return context.json(
-						{ error: "Superset host has no private home directory configured." },
-						503,
-					);
-				}
-				profileDir = join(homeRoot, "codev-agent-profiles", randomUUID());
-				await mkdir(profileDir, { recursive: true, mode: 0o700 });
-				await writeFile(join(profileDir, "auth.json"), codexAuthCacheJson, {
-					mode: 0o600,
-				});
-				launchCommand = `CODEX_HOME=${posixShellQuote(profileDir)} ${launchCommand}`;
+			const profileRoot = process.env.CODEV_AGENT_PROFILE_ROOT;
+			if (!profileRoot) {
+				return context.json({ error: "Isolated agent profiles are not configured." }, 503);
 			}
-			// A one-shot exec must not leave an idle shell behind once the
-			// provider process finishes -- exiting lets the terminal
-			// subsystem's own PTY-exit handling mark endedAt, which is what
-			// /codev/agents/:id/poll and /recovery read.
-			launchCommand = `${launchCommand}; exit $?`;
+			launch = await prepareAgentLaunch({
+				root: profileRoot,
+				command,
+				authCacheJson: codexAuthCacheJson,
+			});
 
 			const agentId = `agent-${Date.now()}-${++agentSequence}`;
 			const created = await createTerminalSessionInternal({
@@ -218,25 +188,25 @@ export function registerCoDevAgentBridge({
 				rows: 1_000,
 				cols: 4_096,
 				includeDefaultAccountEnv: false,
-				// Matches /codev/terminal: the image reserves uid/gid 2000 for
-				// codev-shell, and setpriv drops directly to it with no PAM
-				// session.
+				homeDirectory: launch.directory,
+				// Each agent has its own uid; gid 2000 keeps the selected
+				// worktree writable alongside ordinary codev-shell terminals.
 				shell: "/usr/bin/setpriv",
 				shellArgs: [
-					"--reuid=2000",
+					`--reuid=${launch.uid}`,
 					"--regid=2000",
 					"--clear-groups",
 					"--",
 					"/bin/sh",
 					"-l",
 				],
-				initialCommand: launchCommand,
+				initialCommand: launch.command,
 			});
 			if ("error" in created) {
-				await removeProfileDir(profileDir);
+				await removeAgentLaunch(launch);
 				return context.json({ error: terminalError(created) }, 400);
 			}
-			if (profileDir) agentProfileDirs.set(agentId, profileDir);
+			agentLaunches.set(agentId, launch);
 			agentIdempotency.set(idempotencyKey, agentId);
 			agentPollStates.set(agentId, { sequence: 0, text: "" });
 			return context.json(
@@ -248,7 +218,7 @@ export function registerCoDevAgentBridge({
 				201,
 			);
 		} catch (error) {
-			await removeProfileDir(profileDir);
+			await removeAgentLaunch(launch);
 			return context.json(
 				{ error: error instanceof Error ? error.message : "Could not start Superset agent." },
 				400,
@@ -334,8 +304,8 @@ export function registerCoDevAgentBridge({
 		try {
 			await disposeSessionAndWait(agentId, db);
 			agentPollStates.delete(agentId);
-			await removeProfileDir(agentProfileDirs.get(agentId));
-			agentProfileDirs.delete(agentId);
+			await removeAgentLaunch(agentLaunches.get(agentId));
+			agentLaunches.delete(agentId);
 			return context.json({ ok: true });
 		} catch (error) {
 			return context.json(
