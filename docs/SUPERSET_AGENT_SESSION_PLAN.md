@@ -3,7 +3,8 @@
 **Status:** In progress. Phases 0–1 are done. Phase 2's provider-neutral
 credential delivery is implemented on `codex/superset-agent-isolation` and needs
 end-to-end verification. Phase 3's Codex fallback and credential isolation are
-production-verified; its remaining lifecycle and access-control gates are open.
+production-verified; its remaining lifecycle and end-to-end access-control
+verification gates are open.
 Phases 4–5 remain unverified or partial. Phase 6 (browser panel) is not started.
 **Date:** 2026-09-27 (design) · 2026-09-30 (status update)
 
@@ -192,9 +193,10 @@ staging defects, and merge `713eac2bdc` brought it onto `main`. Commits
 selection, command construction, and output parsing provider-aware. Commits
 `73d606ed27` and `1477b6115f` on this branch deliver `launchProfile` to the
 Superset host and clean up profiles after a live host observes terminal exit.
-Refresh capture, durable exit codes across a host restart, and the host-side
-agent/worktree and command gates remain open. Do not mark those items complete
-without new code and end-to-end evidence.
+Refresh capture and durable exit codes across a host restart remain open. Commit
+`72d4894eb1` adds host-memory agent/worktree records and exact Codex and Claude
+command gates; their VM and restart behavior still need evidence. Do not mark
+those items complete without new code and end-to-end evidence.
 
 1. **Codex credential isolation is verified.** Commit `99fe5c5fe1` creates a
    root-owned, searchable profile root and a distinct 0700 directory and UID
@@ -219,20 +221,20 @@ without new code and end-to-end evidence.
 6. **Profile cleanup needs restart coverage.** The host removes the directory
    on failed start, DELETE, and a natural exit it observes. A host restart before
    that callback still needs a cleanup/reconciliation strategy.
-7. **No host-side identity check.** `/input`, `/poll`, `DELETE`, and `/recovery`
-   accept any terminal ID and do not verify it is an agent session or belongs to
-   the requested worktree. Only the web layer scopes IDs, and only by workspace.
-8. **The host accepts arbitrary commands.** guestd checks the `command` array's
-   length and the host quotes its arguments, but neither restricts the executable
-   or arguments to an agent launch. The verification gate saying arbitrary
-   commands are rejected is false for the private bridge's start route.
+7. **Host-side identity checks are implemented but not durable.** `/input`,
+   `/poll`, `DELETE`, and `/recovery` now require an in-memory agent record and
+   verify its terminal's host workspace before acting. A host restart rejects
+   rather than adopts an unknown agent ID, so durable recovery remains open.
+8. **Arbitrary commands are rejected.** The host accepts only the exact Codex
+   and Claude shapes Gen 2 produces; quoting remains a second defense. The
+   command gate needs a real host/guest test.
 9. **Unconfirmed:** a 4096-column terminal may wrap long `codex exec --json`
    lines and corrupt JSON parsing. The idempotency map is host-memory only and
    does not check that a repeated key names the same worktree.
 
 Remaining verification: Codex and Claude launches, two concurrent agents,
 cross-agent access denial, natural-exit cleanup, and the worktree/command gates
-in a real VM.
+in a real VM and after a host restart.
 
 ## Phase 4: replace the Gen 2 agent route behind the flag — IMPLEMENTED, UNVERIFIED
 
@@ -261,7 +263,7 @@ release the seat, and record a failed run, each step safe to repeat.
 Remaining: confirm the flag switches the whole path end to end in a real Gen 2
 VM, and that every failure branch releases the seat exactly once. Blocked on the
 Phase 3 findings, notably VM verification, durable exit codes, restart-safe
-profile cleanup, and host-side access-control gates.
+profile cleanup, and restart-safe agent-record recovery.
 
 ## Phase 5: refresh, cancellation, and recovery — PARTIAL
 
@@ -298,9 +300,9 @@ Status of each gate is unconfirmed unless noted.
   never contains secrets. (Partial unit coverage exists in
   `superset-agent-runtime.test.ts` and `superset-runs.test.ts`.)
 - Host/guest: fixed routes must reject malformed IDs, mismatched worktrees, raw
-  profile contents, arbitrary environment, and arbitrary commands. The current
-  start route accepts arbitrary command arrays; the ID routes only require a
-  nonempty ID and do not check agent/worktree ownership. This gate remains open.
+  profile contents, arbitrary environment, and arbitrary commands. The host now
+  has an in-memory worktree record and exact launcher policy; verify every
+  rejection and the conservative host-restart behavior in a real VM.
 - Integration: two editors launch two agents in separate worktrees; outputs,
   branch status, and file reconciliation appear in the shared page.
 - Isolation: the ordinary-shell check is verified in production. A second
