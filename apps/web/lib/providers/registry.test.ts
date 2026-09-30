@@ -30,11 +30,11 @@ describe("provider registry", () => {
 
   it("knows which providers an executor supports at all", () => {
     expect(providerRunsOn("codex", "gen2")).toBe(true);
-    // Gen 2 cannot hand a process an environment variable yet, which is the
-    // only reason Claude does not run there; flipping it is a registry edit.
-    // Claude reaches Gen 2 now that the guest takes an environment variable
-    // and the login yields a token rather than a profile in a snapshot.
-    expect(providerRunsOn("claude", "gen2")).toBe(true);
+    // Not a credential limit — the launch profile carries Claude's token
+    // fine. Gen 2 builds a `codex exec` command and parses that command's
+    // NDJSON, so Claude needs its own command and reducer first. The
+    // registry has to say what is true today, not what is nearly true.
+    expect(providerRunsOn("claude", "gen2")).toBe(false);
     expect(providerRunsOn("cursor", "rooms")).toBe(false);
   });
 
