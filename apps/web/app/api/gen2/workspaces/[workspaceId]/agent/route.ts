@@ -18,6 +18,7 @@ export const POST = withUser<Params>(
         userId: user.id,
         chatId: input.chatId,
         prompt: input.prompt,
+        provider: input.provider,
         idempotencyKey: input.idempotencyKey,
       }),
     );

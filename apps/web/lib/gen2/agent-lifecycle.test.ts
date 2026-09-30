@@ -28,7 +28,8 @@ vi.mock("../providers/credential-seat", () => ({
   describeSeatHolder: () => "a workspace turn is still using this connection.",
 }));
 vi.mock("./providers", () => ({
-  resolveGen2Codex: (...args: unknown[]) => mocks.resolveCredential(...args),
+  resolveGen2Credential: (...args: unknown[]) =>
+    mocks.resolveCredential(...args),
 }));
 
 vi.mock("./workspaces", () => ({

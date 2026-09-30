@@ -30,11 +30,10 @@ describe("provider registry", () => {
 
   it("knows which providers an executor supports at all", () => {
     expect(providerRunsOn("codex", "gen2")).toBe(true);
-    // Not a credential limit — the launch profile carries Claude's token
-    // fine. Gen 2 builds a `codex exec` command and parses that command's
-    // NDJSON, so Claude needs its own command and reducer first. The
-    // registry has to say what is true today, not what is nearly true.
-    expect(providerRunsOn("claude", "gen2")).toBe(false);
+    // Claude has its own command builder and stream reducer in lib/gen2, so
+    // the registry may say so. Cursor has neither.
+    expect(providerRunsOn("claude", "gen2")).toBe(true);
+    expect(providerRunsOn("cursor", "gen2")).toBe(false);
     expect(providerRunsOn("cursor", "rooms")).toBe(false);
   });
 

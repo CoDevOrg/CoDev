@@ -67,7 +67,7 @@ describe("Gen2ChatPanel", () => {
             },
           });
         }
-        if (path.endsWith("/api/gen2/providers")) {
+        if (path.includes("/api/gen2/providers")) {
           return json(handlers.provider ?? { connected: true, via: "api-key" });
         }
         if (path.endsWith("/chats")) {

@@ -65,8 +65,13 @@ export const gen2JoinRequestSchema = z.object({
   token: z.string().min(1),
 });
 
+export const gen2AgentProviderSchema = z.enum(["codex", "claude"]);
+
 export const gen2AgentStartRequestSchema = z.object({
   chatId: identifierSchema,
+  /** Which agent runs the turn. Omitted means Codex, so a client that
+   *  predates the choice keeps working. */
+  provider: gen2AgentProviderSchema.default("codex"),
   prompt: z.string().trim().min(1).max(20_000),
   idempotencyKey: z.string().trim().min(8).max(128),
 });
@@ -540,6 +545,7 @@ export type Gen2WorkspaceRole = z.infer<typeof gen2WorkspaceRoleSchema>;
 export type Gen2Workspace = z.infer<typeof gen2WorkspaceSchema>;
 export type Gen2WorkspaceDetail = z.infer<typeof gen2WorkspaceDetailSchema>;
 export type Gen2WorkspaceMember = z.infer<typeof gen2WorkspaceMemberSchema>;
+export type Gen2AgentProviderName = z.infer<typeof gen2AgentProviderSchema>;
 export type Gen2AgentStartRequest = z.infer<typeof gen2AgentStartRequestSchema>;
 export type Gen2AgentPollResponse = z.infer<typeof gen2AgentPollResponseSchema>;
 export type Gen2Chat = z.infer<typeof gen2ChatSchema>;

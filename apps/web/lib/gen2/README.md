@@ -19,7 +19,9 @@ danger-full-access` with prior messages in the prompt, so a shareable machine
 never keeps a personal Codex thread or auth home. Firecracker is the isolation
 boundary.
 
-`turn-events.ts` reduces the `codex exec --json` NDJSON into typed activity
+A turn runs on the provider the member picks (`provider` on the start request, Codex by default). `agent-command.ts` chooses `codex exec --json` or `claude -p --output-format stream-json`, and `turn-reducer.ts` reads the provider back from the stream itself, so neither the browser nor the `gen2_agent_turns` row needs to remember it.
+
+`turn-events.ts` reduces the `codex exec --json` NDJSON (`claude-turn-events.ts` does the same for Claude) into typed activity
 items. Codex gives every item a stable `id` across
 `item.started`/`item.updated`/`item.completed`, so re-reducing the accumulated
 stream on each poll is idempotent: cards update in place instead of

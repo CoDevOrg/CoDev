@@ -13,7 +13,7 @@ import {
   encodePendingBytes,
   type CodexExecChunk,
 } from "./codex-output";
-import { reduceCodexTurn } from "./turn-events";
+import { reduceGen2Turn } from "./turn-reducer";
 import type { SupersetAgentPollChunk } from "./superset-agent-orchestrator-client";
 import { reconcileGen2CollaborationPaths } from "./collaboration-events";
 
@@ -90,7 +90,7 @@ export async function recordGen2TurnChunks(input: {
       return null;
     }
 
-    const state = reduceCodexTurn(output);
+    const state = reduceGen2Turn(output);
     const changedPaths = state.items.flatMap((item) =>
       item.kind === "fileChange"
         ? item.changes.map((change) => change.path)
@@ -181,7 +181,7 @@ export async function recordGen2SupersetRunOutput(input: {
       return null;
     }
 
-    const state = reduceCodexTurn(output);
+    const state = reduceGen2Turn(output);
     const changedPaths = state.items.flatMap((item) =>
       item.kind === "fileChange"
         ? item.changes.map((change) => change.path)

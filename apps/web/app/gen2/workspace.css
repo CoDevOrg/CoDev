@@ -475,6 +475,20 @@
   font-size: 0.75rem;
 }
 
+.gen2-composer-agent {
+  background: transparent;
+  border: 1px solid var(--line, currentColor);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  padding: 3px 6px;
+}
+
+.gen2-composer-agent:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+
 .gen2-composer-send,
 .gen2-composer-stop {
   display: grid;

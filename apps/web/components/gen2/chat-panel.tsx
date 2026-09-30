@@ -24,8 +24,12 @@ import {
   mergeCodexExecChunks,
   type CodexExecChunk,
 } from "@/lib/gen2/codex-output";
-import { reduceCodexTurn } from "@/lib/gen2/turn-events";
-import { Gen2ConnectProvider, useGen2ProviderStatus } from "./connect-provider";
+import { reduceGen2Turn } from "@/lib/gen2/turn-reducer";
+import {
+  Gen2ConnectProvider,
+  useGen2ProviderStatus,
+  type Gen2AgentChoice,
+} from "./connect-provider";
 import { Gen2TurnActivity } from "./turn-activity";
 
 type Thread = { messages: Gen2ChatMessage[] };
@@ -103,8 +107,10 @@ export function Gen2ChatPanel({
   const dragDepthRef = useRef(0);
   const attachInputId = useId();
   const [waking, setWaking] = useState(false);
+  const [agent, setAgent] = useState<Gen2AgentChoice>("codex");
+  const agentLabel = agent === "claude" ? "Claude" : "Codex";
   const { status: provider, refresh: refreshProvider } =
-    useGen2ProviderStatus();
+    useGen2ProviderStatus(agent);
   const ready = canRunGen2Agent(workspace.status);
   const needsProvider = provider !== null && !provider.connected;
   const canSend = Boolean(prompt.trim() || attachments.length > 0);
@@ -202,7 +208,7 @@ export function Gen2ChatPanel({
             after,
           });
 
-          const state = reduceCodexTurn(decodeCodexExecOutput(chunks));
+          const state = reduceGen2Turn(decodeCodexExecOutput(chunks));
           setItems(state.items);
           setLiveReply(state.reply);
           if (state.items.some((item) => item.kind === "fileChange")) {
@@ -394,6 +400,7 @@ export function Gen2ChatPanel({
           body: JSON.stringify({
             chatId: target,
             prompt: promptBody,
+            provider: agent,
             idempotencyKey: crypto.randomUUID(),
           }),
         },
@@ -403,7 +410,7 @@ export function Gen2ChatPanel({
         error?: string;
       };
       if (!response.ok || !payload.sessionId) {
-        setError(payload.error ?? "Codex couldn't start.");
+        setError(payload.error ?? `${agentLabel} couldn't start.`);
         // A 409 here is usually a missing or busy credential; re-read it so
         // the connect card appears instead of just an error string.
         if (response.status === 409) void refreshProvider();
@@ -499,7 +506,7 @@ export function Gen2ChatPanel({
         placeholder={
           dragging
             ? "Drop files to attach"
-            : "Ask Codex to build something on this machine"
+            : `Ask ${agentLabel} to build something on this machine`
         }
         rows={empty ? 3 : 2}
         aria-label="Prompt"
@@ -526,11 +533,21 @@ export function Gen2ChatPanel({
         >
           <Paperclip aria-hidden="true" size={15} />
         </button>
+        <select
+          className="gen2-composer-agent"
+          aria-label="Agent"
+          value={agent}
+          disabled={running}
+          onChange={(event) => setAgent(event.target.value as Gen2AgentChoice)}
+        >
+          <option value="codex">Codex</option>
+          <option value="claude">Claude</option>
+        </select>
         <span className="gen2-composer-hint">
           {waking
             ? "Waking the machine…"
             : running
-              ? "Codex is working"
+              ? `${agentLabel} is working`
               : ready
                 ? "Enter to send · text files only"
                 : "Starting the machine"}
@@ -540,7 +557,7 @@ export function Gen2ChatPanel({
             type="button"
             className="gen2-composer-stop"
             onClick={() => void stop()}
-            aria-label="Stop Codex"
+            aria-label={`Stop ${agentLabel}`}
           >
             <Square aria-hidden="true" size={11} />
           </button>
@@ -591,11 +608,14 @@ export function Gen2ChatPanel({
           <div className="gen2-chat-hero-inner">
             <h2>What should we build?</h2>
             <p>
-              Codex works on this workspace&rsquo;s own machine. You can watch
-              the files, terminal, and Git change beside it.
+              {agentLabel} works on this workspace&rsquo;s own machine. You can
+              watch the files, terminal, and Git change beside it.
             </p>
             {needsProvider ? (
-              <Gen2ConnectProvider onConnected={() => void refreshProvider()} />
+              <Gen2ConnectProvider
+                agent={agent}
+                onConnected={() => void refreshProvider()}
+              />
             ) : (
               <>
                 {composer}
@@ -655,7 +675,7 @@ export function Gen2ChatPanel({
                       className="gen2-message gen2-message-waiting"
                       role="status"
                     >
-                      Codex is starting…
+                      {agentLabel} is starting…
                     </p>
                   ) : null}
                 </li>

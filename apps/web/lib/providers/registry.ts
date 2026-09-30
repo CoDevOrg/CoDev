@@ -131,14 +131,11 @@ const CLAUDE: ProviderDefinition = {
       // profile behind in a per-member Firecracker snapshot, so there is one
       // Claude login rather than two that ran in different places.
       connect: ["browser", "cli"],
-      // `gen2` is false because Gen 2 runs Codex, not because the credential
-      // cannot get there — the launch profile carries it fine. The executor
-      // hardcodes the provider, `buildGen2CodexCommand` builds a `codex exec`
-      // invocation, and `turn-events.ts` reduces the NDJSON that command
-      // writes. Claude needs its own command and its own reducer before this
-      // can flip; flipping it first is how the settings page starts lying
-      // again.
-      runs: { rooms: true, workspace: true, gen2: false },
+      // Gen 2 runs it through `claude -p --output-format stream-json`
+      // (`buildGen2ClaudeCommand`), reduced by `reduceClaudeTurn`. The token
+      // reaches the process as `CLAUDE_CODE_OAUTH_TOKEN` in the launch
+      // profile, so it needs a guest image that understands `launchProfile`.
+      runs: { rooms: true, workspace: true, gen2: true },
     },
     {
       kind: "api_key",

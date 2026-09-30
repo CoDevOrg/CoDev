@@ -30,7 +30,7 @@ vi.mock("../platform/database", () => {
   return { getDatabase: () => ({ select: vi.fn(() => query) }) };
 });
 
-const { buildApiKeyAuthCache, getGen2ProviderStatus, resolveGen2Codex } =
+const { buildApiKeyAuthCache, getGen2ProviderStatus, resolveGen2Credential } =
   await import("./providers");
 
 const userId = "22222222-2222-4222-8222-222222222222";
@@ -53,7 +53,7 @@ describe("gen2 provider resolution", () => {
     ]);
     mocks.decryptSecret.mockResolvedValue("ghp_secret");
 
-    const credential = await resolveGen2Codex(userId);
+    const credential = await resolveGen2Credential(userId);
 
     expect(credential.launchProfile.env).toMatchObject({
       GITHUB_TOKEN: "ghp_secret",
@@ -72,7 +72,7 @@ describe("gen2 provider resolution", () => {
     });
     mocks.decryptMaterial.mockResolvedValue({ authCacheJson: '{"a":1}' });
 
-    const credential = await resolveGen2Codex(userId);
+    const credential = await resolveGen2Credential(userId);
 
     // A guest image that predates the launch profile reads this field, so a
     // turn runs whichever image the host happens to have.
@@ -84,7 +84,7 @@ describe("gen2 provider resolution", () => {
       credential: { id: "cred-1", encryptedMaterial: "enc" },
     });
     mocks.decryptMaterial.mockResolvedValue({ authCacheJson: '{"a":1}' });
-    await expect(resolveGen2Codex(userId)).resolves.toMatchObject({
+    await expect(resolveGen2Credential(userId)).resolves.toMatchObject({
       credentialId: "cred-1",
       authCacheJson: '{"a":1}',
       via: "subscription",
@@ -94,19 +94,19 @@ describe("gen2 provider resolution", () => {
   it("falls back to a personal API key, with no lease to claim", async () => {
     mocks.limit.mockResolvedValue([{ encryptedApiKey: "enc" }]);
     mocks.decryptSecret.mockResolvedValue("sk-test-123");
-    const credential = await resolveGen2Codex(userId);
+    const credential = await resolveGen2Credential(userId);
     // No credentialId means no seat: an API key has no one-turn-at-a-time
     // limit, so the caller must not claim one.
     expect(credential.credentialId).toBeNull();
     expect(credential.via).toBe("api-key");
-    expect(JSON.parse(credential.authCacheJson)).toMatchObject({
+    expect(JSON.parse(credential.authCacheJson!)).toMatchObject({
       auth_mode: "apikey",
       OPENAI_API_KEY: "sk-test-123",
     });
   });
 
   it("asks the member to connect when nothing is available", async () => {
-    await expect(resolveGen2Codex(userId)).rejects.toMatchObject({
+    await expect(resolveGen2Credential(userId)).rejects.toMatchObject({
       status: 409,
       message: expect.stringMatching(/Connect ChatGPT/),
     });
@@ -120,7 +120,7 @@ describe("gen2 provider resolution", () => {
     });
     mocks.decryptMaterial.mockResolvedValue({ authCacheJson: "{}" });
     mocks.limit.mockResolvedValue([{ encryptedApiKey: "enc" }]);
-    await expect(resolveGen2Codex(userId)).resolves.toMatchObject({
+    await expect(resolveGen2Credential(userId)).resolves.toMatchObject({
       via: "subscription",
     });
     // Resolution answers "is one connected", never "is one free": busy is a

@@ -27,7 +27,7 @@ import { belongsToSharedScope } from "./scoped-credential-sharing";
  * The one credential resolver.
  *
  * It replaced three that disagreed: `resolveAgentCredential` (Gen 1),
- * `resolvePersonalChatSubscription` (rooms), and `resolveGen2Codex` (Gen 2) —
+ * `resolvePersonalChatSubscription` (rooms), and `resolveGen2Credential` (Gen 2) —
  * none of which consulted the capability table the settings page rendered
  * from. Readiness is now literally this function with `dryRun`, so what a
  * member is told and what the executor does cannot drift.

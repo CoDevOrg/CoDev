@@ -15,10 +15,11 @@ import {
   listGen2ChatMessages,
   requireGen2Chat,
 } from "./chats";
-import { buildGen2CodexCommand } from "./codex-command";
+import { buildGen2AgentCommand } from "./agent-command";
 import { Gen2LifecycleError } from "./errors";
 import { logEvent } from "../platform/observability";
-import { resolveGen2Codex } from "./providers";
+import { resolveGen2Credential, type Gen2AgentProvider } from "./providers";
+import { providerVendor } from "../providers/registry";
 import {
   checkSupersetAgentRecovery,
   pollSupersetAgent,
@@ -77,17 +78,19 @@ export async function startGen2SupersetAgentSession(input: {
   worktreeId: string;
   command: string[];
   idempotencyKey: string;
+  provider?: Gen2AgentProvider;
 }) {
   requireEnabled();
   await requireGen2Member(input.workspaceId, input.userId);
-  const credential = await resolveGen2Codex(input.userId);
+  const provider = input.provider ?? "codex";
+  const credential = await resolveGen2Credential(input.userId, provider);
 
   const registration = await registerGen2SupersetRun({
     workspaceId: input.workspaceId,
     chatId: input.chatId ?? null,
     createdBy: input.userId,
     worktreeId: input.worktreeId,
-    provider: "openai",
+    provider: providerVendor(provider),
     connectionId: credential.credentialId,
     idempotencyKey: input.idempotencyKey,
   });
@@ -130,8 +133,10 @@ export async function startGen2SupersetAgentSession(input: {
   try {
     const started = await startSupersetAgent(input.workspaceId, {
       worktreeId: input.worktreeId,
-      provider: "openai",
-      codexAuthCacheJson: credential.authCacheJson,
+      provider: providerVendor(provider),
+      ...(credential.authCacheJson
+        ? { codexAuthCacheJson: credential.authCacheJson }
+        : {}),
       launchProfile: credential.launchProfile,
       command: input.command,
       idempotencyKey: input.idempotencyKey,
@@ -360,6 +365,7 @@ export async function startGen2SupersetAgentTurn(input: {
   chatId: string;
   prompt: string;
   idempotencyKey: string;
+  provider?: Gen2AgentProvider;
 }) {
   requireEnabled();
   await requireGen2Member(input.workspaceId, input.userId);
@@ -369,7 +375,8 @@ export async function startGen2SupersetAgentTurn(input: {
     input.workspaceId,
     input.chatId,
   );
-  const command = buildGen2CodexCommand(input.prompt, history);
+  const provider = input.provider ?? "codex";
+  const command = buildGen2AgentCommand(provider, input.prompt, history);
 
   const session = await startGen2SupersetAgentSession({
     workspaceId: input.workspaceId,
@@ -377,6 +384,7 @@ export async function startGen2SupersetAgentTurn(input: {
     chatId: input.chatId,
     worktreeId,
     command,
+    provider,
     idempotencyKey: input.idempotencyKey,
   });
 
