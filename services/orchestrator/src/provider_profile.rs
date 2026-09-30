@@ -361,11 +361,16 @@ pub fn materialize_launch_profile<'a>(
     Ok(resolved)
 }
 
+/// Directory names are `codev-profile-<kind>-<pid>-<seed>` under one shared
+/// temp dir, so the seed must be unique across the whole process, not per
+/// registry: two registries (as in parallel tests) would otherwise both start
+/// at 0 and collide on the same directory.
+static NEXT_PROFILE_SEED: AtomicU64 = AtomicU64::new(0);
+
 /// Registry of this guestd process's live profiles, keyed by handle.
 #[derive(Default)]
 pub struct ProviderProfileRegistry {
     profiles: Mutex<HashMap<ProfileHandle, (Instant, Arc<ProviderProfile>)>>,
-    sequence: AtomicU64,
 }
 
 impl ProviderProfileRegistry {
@@ -383,7 +388,7 @@ impl ProviderProfileRegistry {
         relative_path: &str,
         credential: &[u8],
     ) -> io::Result<ProfileHandle> {
-        let seed = self.sequence.fetch_add(1, Ordering::Relaxed);
+        let seed = NEXT_PROFILE_SEED.fetch_add(1, Ordering::Relaxed);
         let profile = ProviderProfile::create(kind, seed)?;
         profile.write_credential(relative_path, credential)?;
         let handle = ProfileHandle::new(kind, seed);
