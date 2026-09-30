@@ -68,6 +68,8 @@ type AgentPollState = { sequence: number; text: string };
 const agentPollStates = new Map<string, AgentPollState>();
 /** Private process identity and launch directory, keyed by agent ID. */
 const agentLaunches = new Map<string, AgentLaunch>();
+/** Exit codes are supplied by the PTY while this host process is alive. */
+const agentExitCodes = new Map<string, number>();
 /** idempotencyKey -> agentId, so a retried start reattaches instead of relaunching. */
 const agentIdempotency = new Map<string, string>();
 let agentSequence = 0;
@@ -134,6 +136,12 @@ function terminalError(error: unknown) {
 	return error && typeof error === "object" && "error" in error
 		? String(error.error)
 		: "Superset agent operation failed.";
+}
+
+async function releaseAgentLaunch(agentId: string) {
+	const launch = agentLaunches.get(agentId);
+	agentLaunches.delete(agentId);
+	await removeAgentLaunch(launch);
 }
 
 /**
@@ -237,6 +245,16 @@ export function registerCoDevAgentBridge({
 				return context.json({ error: terminalError(created) }, 400);
 			}
 			agentLaunches.set(agentId, launch);
+			created.pty.onExit(({ exitCode }) => {
+				agentExitCodes.set(agentId, exitCode);
+				// A natural exit does not pass through DELETE. Remove the private
+				// credential profile as soon as its terminal has ended.
+				void releaseAgentLaunch(agentId).catch(() => {
+					console.error("[codev-agent-bridge] could not remove an isolated launch profile", {
+						agentId,
+					});
+				});
+			});
 			agentIdempotency.set(idempotencyKey, agentId);
 			agentPollStates.set(agentId, { sequence: 0, text: "" });
 			return context.json(
@@ -304,12 +322,8 @@ export function registerCoDevAgentBridge({
 				state.text = snapshot.text;
 				agentPollStates.set(agentId, state);
 			}
-			// The bridge does not expose the underlying process's real exit
-			// code (only this package's own terminal.ts tracks it, in
-			// memory, on the session object) -- 0 is reported on any
-			// detected exit as a reasonable default until that is threaded
-			// through.
-			const exited = Boolean(session.endedAt);
+			const recordedExitCode = agentExitCodes.get(agentId);
+			const exited = Boolean(session.endedAt) || recordedExitCode !== undefined;
 			return context.json({
 				chunks:
 					parsed.data.after < state.sequence
@@ -317,7 +331,7 @@ export function registerCoDevAgentBridge({
 						: [],
 				nextSequence: state.sequence,
 				exited,
-				exitCode: exited ? 0 : null,
+				exitCode: exited ? (recordedExitCode ?? null) : null,
 				refreshReady: exited,
 			});
 		} catch (error) {
@@ -334,8 +348,7 @@ export function registerCoDevAgentBridge({
 		try {
 			await disposeSessionAndWait(agentId, db);
 			agentPollStates.delete(agentId);
-			await removeAgentLaunch(agentLaunches.get(agentId));
-			agentLaunches.delete(agentId);
+			await releaseAgentLaunch(agentId);
 			return context.json({ ok: true });
 		} catch (error) {
 			return context.json(
