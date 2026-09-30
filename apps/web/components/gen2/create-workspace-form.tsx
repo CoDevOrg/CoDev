@@ -202,7 +202,7 @@ export function CreateGen2WorkspaceForm({
       : "Creates an empty workspace.";
 
   return (
-    <Card>
+    <Card id="new-workspace">
       <form
         onSubmit={(event) => {
           event.preventDefault();
