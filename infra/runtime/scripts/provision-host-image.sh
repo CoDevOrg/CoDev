@@ -246,6 +246,19 @@ cp -a "/usr/lib/${guest_lib_dir}/." \
 install -d -m 0755 "${work_dir}/rootfs/workspace"
 install -d -m 0755 "${work_dir}/rootfs/etc/systemd/system/multi-user.target.wants"
 
+# The guest's interactive shell and the isolated agents share this workspace
+# group, but the agents use separate numeric uids for private credentials.
+if ! grep -q '^codev-shell:' "${work_dir}/rootfs/etc/group"; then
+  echo 'codev-shell:x:2000:' >>"${work_dir}/rootfs/etc/group"
+fi
+if ! grep -q '^codev-shell:' "${work_dir}/rootfs/etc/passwd"; then
+  echo 'codev-shell:x:2000:2000:CoDev shell:/workspace:/bin/sh' \
+    >>"${work_dir}/rootfs/etc/passwd"
+fi
+if ! grep -q '^codev-shell:' "${work_dir}/rootfs/etc/shadow"; then
+  echo 'codev-shell:!:20000::::::' >>"${work_dir}/rootfs/etc/shadow"
+fi
+
 # The interactive shell is unprivileged while CoDev assembles the checkout as
 # root. Trust this checkout and its managed worktrees without making every
 # path trusted for a terminal user.
@@ -287,9 +300,13 @@ Requires=workspace.mount
 
 [Service]
 Type=simple
+ExecStartPre=-/bin/chgrp -R codev-shell /workspace
+ExecStartPre=-/bin/chmod -R g+w /workspace
+ExecStartPre=-/usr/bin/find /workspace -type d -exec /bin/chmod g+s {} +
 ExecStart=/usr/local/bin/codev-guestd
 Environment=CODEV_WORKSPACE_ROOT=/workspace
 EnvironmentFile=/etc/codev/superset-bridge.env
+UMask=0002
 Restart=on-failure
 RestartSec=1
 NoNewPrivileges=true
@@ -308,16 +325,18 @@ UNIT
 cat >"${work_dir}/rootfs/etc/systemd/system/codev-superset-host.service" <<'UNIT'
 [Unit]
 Description=CoDev Superset host service
-After=workspace.mount
+After=workspace.mount codev-guestd.service
 Requires=workspace.mount
 
 [Service]
 Type=simple
+ExecStartPre=/bin/chmod 0711 /var/lib/codev-agent-profiles
 ExecStart=/usr/local/bin/node /opt/codev/superset-host/host-service.js
 Environment=HOME=/var/lib/codev-superset
 Environment=CODEV_WORKSPACE_ROOT=/workspace
 EnvironmentFile=/etc/codev/superset-bridge.env
 Environment=SUPERSET_HOME_DIR=/var/lib/codev-superset
+Environment=CODEV_AGENT_PROFILE_ROOT=/var/lib/codev-agent-profiles
 Environment=HOST_DB_PATH=/var/lib/codev-superset/host.db
 Environment=HOST_MIGRATIONS_FOLDER=/opt/codev/superset-host/host-migrations
 Environment=SUPERSET_CHAT_V3_MIGRATIONS=/opt/codev/superset-host/chat-migrations
@@ -328,15 +347,16 @@ Environment=AUTH_TOKEN=codev-guest-local
 Environment=SUPERSET_API_URL=http://127.0.0.1:9
 Environment=PORT=4879
 Environment=NODE_ENV=production
-StateDirectory=codev-superset
+StateDirectory=codev-superset codev-agent-profiles
 StateDirectoryMode=0700
+UMask=0002
 Restart=on-failure
 RestartSec=2
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
-ReadWritePaths=/workspace /var/lib/codev-superset
+ReadWritePaths=/workspace /var/lib/codev-superset /var/lib/codev-agent-profiles
 TasksMax=256
 
 [Install]

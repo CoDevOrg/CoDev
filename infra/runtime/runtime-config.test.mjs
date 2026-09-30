@@ -34,6 +34,46 @@ const azureDeploy = read("../azure/deploy.sh");
 const azureImageBuilder = read("../azure/image-builder.bicep");
 const azureImageBuild = read("../azure/build-host-image.sh");
 
+test("both guest images provision a searchable, host-owned agent profile root", () => {
+  assert.match(imageProvision, /codev-shell:x:2000:2000:CoDev shell/);
+  for (const source of [bootstrap, imageProvision]) {
+    const guestUnit = between(
+      source,
+      'cat >"${work_dir}/rootfs/etc/systemd/system/codev-guestd.service"',
+      "\nUNIT",
+    );
+    assert.match(
+      guestUnit,
+      /ExecStartPre=-\/bin\/chgrp -R codev-shell \/workspace/,
+    );
+    assert.match(guestUnit, /ExecStartPre=-\/bin\/chmod -R g\+w \/workspace/);
+    assert.match(
+      guestUnit,
+      /ExecStartPre=-\/usr\/bin\/find \/workspace -type d -exec \/bin\/chmod g\+s \{\} \+/,
+    );
+    assert.match(guestUnit, /UMask=0002/);
+    const unit = between(
+      source,
+      'cat >"${work_dir}/rootfs/etc/systemd/system/codev-superset-host.service"',
+      "\nUNIT",
+    );
+    assert.match(unit, /StateDirectory=codev-superset codev-agent-profiles/);
+    assert.match(unit, /StateDirectoryMode=0700/);
+    assert.match(unit, /After=workspace\.mount codev-guestd\.service/);
+    assert.match(unit, /UMask=0002/);
+    assert.match(
+      unit,
+      /ExecStartPre=\/bin\/chmod 0711 \/var\/lib\/codev-agent-profiles/,
+    );
+    assert.match(
+      unit,
+      /Environment=CODEV_AGENT_PROFILE_ROOT=\/var\/lib\/codev-agent-profiles/,
+    );
+    assert.match(unit, /ReadWritePaths=.*\/var\/lib\/codev-agent-profiles/);
+    assert.doesNotMatch(unit, /(?:^|\n)User=/);
+  }
+});
+
 // Firecracker needs /dev/kvm, and not every Azure size exposes it: a size
 // without nested virtualization provisions perfectly and then cannot start a
 // single microVM. The Dsv7 Intel series supports nested virtualization and

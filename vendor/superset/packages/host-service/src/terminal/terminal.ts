@@ -2879,6 +2879,8 @@ interface CreateTerminalSessionOptions {
 	/** Trusted host callers may replace the login shell for an unprivileged launcher. */
 	shell?: string;
 	shellArgs?: string[];
+	/** Trusted host callers may set a private home before the shell starts. */
+	homeDirectory?: string;
 	/** Only recover an already-live daemon session; never spawn a new PTY. */
 	adoptOnly?: boolean;
 	/**
@@ -2968,6 +2970,7 @@ async function createTerminalSessionUnlocked({
 	includeDefaultAccountEnv = true,
 	shell: shellOverride,
 	shellArgs: shellArgsOverride,
+	homeDirectory,
 	adoptOnly = false,
 	restoredNotice = false,
 }: CreateTerminalSessionOptions): Promise<
@@ -3080,6 +3083,7 @@ async function createTerminalSessionUnlocked({
 		// this terminal run on the selected login. Baked at spawn as the fast
 		// path; the agent wrappers re-resolve later switches at launch time.
 		...(includeDefaultAccountEnv ? resolveDefaultAccountTerminalEnv(db) : {}),
+		...(homeDirectory ? { HOME: homeDirectory } : {}),
 		SUPERSET_ACCOUNT_ATTRIBUTION_TOKEN: issueAttributionToken(terminalId),
 	};
 
