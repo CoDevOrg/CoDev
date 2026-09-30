@@ -41,7 +41,7 @@ export function Gen2ConnectProvider({
           , then come back and refresh.
         </p>
         <button type="button" onClick={onConnected}>
-          I've connected it
+          I&rsquo;ve connected it
         </button>
       </div>
     );
