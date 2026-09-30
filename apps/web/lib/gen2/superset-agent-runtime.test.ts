@@ -120,7 +120,7 @@ describe("gen2 Superset agent runtime adapter", () => {
     mocks.claim.mockResolvedValue({ held: true });
     mocks.resolveCredential.mockResolvedValue({
       credentialId,
-      authCacheJson: "{}",
+      launchProfile: { files: [], env: {} },
       via: "subscription",
     });
     mocks.requireChat.mockResolvedValue({ id: chatId });
@@ -139,6 +139,7 @@ describe("gen2 Superset agent runtime adapter", () => {
         workspaceId,
         userId,
         worktreeId: "main",
+        provider: "codex",
         command: ["codex"],
         idempotencyKey: "key-1",
       }),
@@ -162,6 +163,7 @@ describe("gen2 Superset agent runtime adapter", () => {
       workspaceId,
       userId,
       worktreeId: "main",
+      provider: "codex",
       command: ["codex", "exec"],
       idempotencyKey: "key-1",
     });
@@ -189,6 +191,7 @@ describe("gen2 Superset agent runtime adapter", () => {
       workspaceId,
       userId,
       worktreeId: "main",
+      provider: "codex",
       command: ["codex"],
       idempotencyKey: "key-1",
     });
@@ -212,6 +215,7 @@ describe("gen2 Superset agent runtime adapter", () => {
         workspaceId,
         userId,
         worktreeId: "main",
+        provider: "codex",
         command: ["codex"],
         idempotencyKey: "key-1",
       }),
@@ -235,6 +239,7 @@ describe("gen2 Superset agent runtime adapter", () => {
         workspaceId,
         userId,
         worktreeId: "main",
+        provider: "codex",
         command: ["codex"],
         idempotencyKey: "key-1",
       }),
@@ -361,7 +366,7 @@ describe("gen2 Superset agent turn (Phase 4 browser-facing delegate)", () => {
     mocks.claim.mockResolvedValue({ held: true });
     mocks.resolveCredential.mockResolvedValue({
       credentialId,
-      authCacheJson: "{}",
+      launchProfile: { files: [], env: {} },
       via: "subscription",
     });
     mocks.requireChat.mockResolvedValue({ id: chatId });
@@ -397,6 +402,7 @@ describe("gen2 Superset agent turn (Phase 4 browser-facing delegate)", () => {
       userId,
       chatId,
       prompt: "hello",
+      provider: "codex",
       idempotencyKey: "key-1",
     });
 
@@ -440,6 +446,7 @@ describe("gen2 Superset agent turn (Phase 4 browser-facing delegate)", () => {
       userId,
       chatId,
       prompt: "hello",
+      provider: "codex",
       idempotencyKey: "key-1",
     });
 

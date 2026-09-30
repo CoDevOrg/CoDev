@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { ArrowUp, Paperclip, Plus, Square, X } from "lucide-react";
-import type {
-  Gen2Chat,
-  Gen2ChatDetail,
-  Gen2ChatMessage,
-  Gen2TurnItem,
-  Gen2WorkspaceDetail,
+import {
+  GEN2_AGENT_PROVIDERS,
+  type Gen2Chat,
+  type Gen2ChatDetail,
+  type Gen2ChatMessage,
+  type Gen2TurnItem,
+  type Gen2WorkspaceDetail,
 } from "@codev/contracts";
 
 import { MarkdownContent } from "@/components/markdown/markdown-content";
@@ -20,10 +21,10 @@ import {
   MAX_GEN2_CHAT_ATTACHMENTS,
 } from "@/lib/gen2/chat-attachments";
 import {
-  decodeCodexExecOutput,
-  mergeCodexExecChunks,
-  type CodexExecChunk,
-} from "@/lib/gen2/codex-output";
+  decodeAgentExecOutput,
+  mergeAgentExecChunks,
+  type AgentExecChunk,
+} from "@/lib/gen2/agent-output";
 import { reduceGen2Turn } from "@/lib/gen2/turn-reducer";
 import {
   Gen2ConnectProvider,
@@ -107,8 +108,11 @@ export function Gen2ChatPanel({
   const dragDepthRef = useRef(0);
   const attachInputId = useId();
   const [waking, setWaking] = useState(false);
-  const [agent, setAgent] = useState<Gen2AgentChoice>("codex");
-  const agentLabel = agent === "claude" ? "Claude" : "Codex";
+  const [agent, setAgent] = useState<Gen2AgentChoice>(
+    GEN2_AGENT_PROVIDERS[0].id,
+  );
+  const agentLabel =
+    GEN2_AGENT_PROVIDERS.find((entry) => entry.id === agent)?.label ?? "Agent";
   const { status: provider, refresh: refreshProvider } =
     useGen2ProviderStatus(agent);
   const ready = canRunGen2Agent(workspace.status);
@@ -168,7 +172,7 @@ export function Gen2ChatPanel({
       abortRef.current = controller;
       sessionRef.current = session;
       setRunning(true);
-      let chunks: CodexExecChunk[] = [];
+      let chunks: AgentExecChunk[] = [];
       let after = startAfter;
       let sawFileChange = false;
 
@@ -190,14 +194,14 @@ export function Gen2ChatPanel({
             throw new Error(payload.error ?? "That turn could not continue.");
           }
           const payload = (await response.json()) as {
-            chunks?: CodexExecChunk[];
+            chunks?: AgentExecChunk[];
             nextSequence?: number;
             exited?: boolean;
           };
           // A proxy hiccup or an error page can return a 200 with a body that
           // is not a poll result. Treat it as "nothing new" rather than
           // letting the whole turn fall over.
-          chunks = mergeCodexExecChunks(
+          chunks = mergeAgentExecChunks(
             chunks,
             Array.isArray(payload.chunks) ? payload.chunks : [],
           );
@@ -208,7 +212,7 @@ export function Gen2ChatPanel({
             after,
           });
 
-          const state = reduceGen2Turn(decodeCodexExecOutput(chunks));
+          const state = reduceGen2Turn(decodeAgentExecOutput(chunks));
           setItems(state.items);
           setLiveReply(state.reply);
           if (state.items.some((item) => item.kind === "fileChange")) {
@@ -540,8 +544,11 @@ export function Gen2ChatPanel({
           disabled={running}
           onChange={(event) => setAgent(event.target.value as Gen2AgentChoice)}
         >
-          <option value="codex">Codex</option>
-          <option value="claude">Claude</option>
+          {GEN2_AGENT_PROVIDERS.map((entry) => (
+            <option key={entry.id} value={entry.id}>
+              {entry.label}
+            </option>
+          ))}
         </select>
         <span className="gen2-composer-hint">
           {waking
@@ -576,7 +583,7 @@ export function Gen2ChatPanel({
   );
 
   return (
-    <section className="gen2-chat" aria-label="Codex">
+    <section className="gen2-chat" aria-label="Agent chat">
       <header className="gen2-chat-bar">
         <button
           type="button"

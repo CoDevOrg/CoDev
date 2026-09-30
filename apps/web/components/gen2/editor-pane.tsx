@@ -119,7 +119,7 @@ export function Gen2EditorPane({
       <div className="gen2-editor-empty">
         <p>Select a file to open it.</p>
         <p className="gen2-wb-hint">
-          You and Codex are editing the same machine.
+          You and the agent are editing the same machine.
         </p>
       </div>
     );
@@ -136,7 +136,7 @@ export function Gen2EditorPane({
         </span>
         {refreshed ? (
           <span className="gen2-editor-flash" role="status">
-            Updated by Codex
+            Updated by the agent
           </span>
         ) : null}
         <button
@@ -146,7 +146,7 @@ export function Gen2EditorPane({
           disabled={saving || agentRunning || (!dirty && !conflict)}
           title={
             agentRunning
-              ? "Codex is working on this machine"
+              ? "The agent is working on this machine"
               : "Save to the workspace machine"
           }
         >
@@ -177,7 +177,7 @@ export function Gen2EditorPane({
 
       {agentRunning ? (
         <p className="gen2-wb-banner" role="status">
-          Codex is working on this machine — saving is paused.
+          The agent is working on this machine — saving is paused.
         </p>
       ) : null}
 

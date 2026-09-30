@@ -57,7 +57,6 @@ export type SupersetAgentStartInput = {
   provider: string;
   /** Superseded by `launchProfile`; both are sent while guest images that
    *  predate the profile may still be running. */
-  codexAuthCacheJson?: string;
   launchProfile?: {
     files?: Array<{ path: string; contents: string }>;
     env?: Record<string, string>;

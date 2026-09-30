@@ -65,13 +65,25 @@ export const gen2JoinRequestSchema = z.object({
   token: z.string().min(1),
 });
 
-export const gen2AgentProviderSchema = z.enum(["codex", "claude"]);
+/** The agents a Gen 2 turn can run, in the order the composer lists them.
+ *  A registry test holds this list to the providers whose credentials the
+ *  `gen2` executor can run, so it cannot drift from what settings shows. */
+export const GEN2_AGENT_PROVIDERS = [
+  { id: "codex", label: "Codex" },
+  { id: "claude", label: "Claude" },
+] as const;
+
+export const gen2AgentProviderSchema = z.enum(
+  GEN2_AGENT_PROVIDERS.map((provider) => provider.id) as [
+    (typeof GEN2_AGENT_PROVIDERS)[number]["id"],
+    ...(typeof GEN2_AGENT_PROVIDERS)[number]["id"][],
+  ],
+);
 
 export const gen2AgentStartRequestSchema = z.object({
   chatId: identifierSchema,
-  /** Which agent runs the turn. Omitted means Codex, so a client that
-   *  predates the choice keeps working. */
-  provider: gen2AgentProviderSchema.default("codex"),
+  /** Which agent runs the turn. */
+  provider: gen2AgentProviderSchema,
   prompt: z.string().trim().min(1).max(20_000),
   idempotencyKey: z.string().trim().min(8).max(128),
 });

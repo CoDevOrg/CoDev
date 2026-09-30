@@ -25,7 +25,7 @@ export function formatGen2TurnPrompt(
   ];
   for (const message of prior) {
     lines.push(
-      `${message.role === "user" ? "User" : "Codex"}: ${message.body}`,
+      `${message.role === "user" ? "User" : "Assistant"}: ${message.body}`,
     );
   }
   let packed = lines.join("\n");

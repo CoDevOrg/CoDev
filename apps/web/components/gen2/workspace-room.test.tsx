@@ -132,7 +132,7 @@ describe("Gen2WorkspaceRoom", () => {
     render(<Gen2WorkspaceRoom workspace={{ ...workspace, status: "ready" }} />);
     expect(screen.getByText("Ada")).toBeInTheDocument();
     expect(
-      await screen.findByRole("region", { name: "Codex" }),
+      await screen.findByRole("region", { name: "Agent chat" }),
     ).toBeInTheDocument();
   });
 });

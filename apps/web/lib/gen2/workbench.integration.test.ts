@@ -37,7 +37,7 @@ const {
   pollCodexExecInSandbox,
   closeCodexExecInSandbox,
 } = await import("../runtime/orchestrator-codex-exec");
-const { decodeCodexExecOutput } = await import("./codex-output");
+const { decodeAgentExecOutput } = await import("./agent-output");
 const { reduceCodexTurn } = await import("./turn-events");
 const { buildGen2CodexCommand } = await import("./agent");
 const {
@@ -242,7 +242,7 @@ describe("gen2 workbench against the guest", () => {
     const poll = await pollCodexExecInSandbox(workspaceId, sessionId, 0);
     expect(poll.exited).toBe(true);
 
-    const state = reduceCodexTurn(decodeCodexExecOutput(poll.chunks));
+    const state = reduceCodexTurn(decodeAgentExecOutput(poll.chunks));
     expect(state.status).toBe("completed");
     expect(state.items.map((item) => item.kind)).toEqual([
       "reasoning",

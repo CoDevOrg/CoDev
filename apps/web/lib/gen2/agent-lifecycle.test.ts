@@ -95,6 +95,7 @@ const credentialId = "33333333-3333-4333-8333-333333333333";
 const AUTH_CACHE = '{"token":"must-not-escape"}';
 
 const turn = {
+  provider: "codex" as const,
   workspaceId,
   userId,
   chatId,
@@ -131,7 +132,7 @@ describe("gen2 Codex agent", () => {
     mocks.createTurn.mockResolvedValue(undefined);
     mocks.resolveCredential.mockResolvedValue({
       credentialId: credentialId,
-      authCacheJson: AUTH_CACHE,
+      launchProfile: { files: [], env: {} },
       via: "subscription",
     });
     mocks.recordChunks.mockResolvedValue(null);
@@ -179,7 +180,7 @@ describe("gen2 Codex agent", () => {
       workspaceId,
       expect.objectContaining({
         idempotencyKey: "turn-1234",
-        codexAuthCacheJson: AUTH_CACHE,
+        launchProfile: expect.any(Object),
       }),
     );
     expect(mocks.appendMessage).toHaveBeenCalledWith({
@@ -230,7 +231,7 @@ describe("gen2 Codex agent", () => {
     // invent a one-turn-at-a-time limit the provider does not impose.
     mocks.resolveCredential.mockResolvedValue({
       credentialId: null,
-      authCacheJson: AUTH_CACHE,
+      launchProfile: { files: [], env: {} },
       via: "api-key",
     });
     await expect(startGen2AgentTurn(turn)).resolves.toEqual({
@@ -314,6 +315,7 @@ describe("gen2 Codex agent", () => {
       userId,
       chatId,
       prompt: "List the files",
+      provider: "codex",
       idempotencyKey: "idem-0001",
     });
     expect(mocks.createTurn).toHaveBeenCalledWith({

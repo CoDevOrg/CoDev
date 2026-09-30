@@ -51,7 +51,6 @@ describe("gen2 Claude credential", () => {
       CLAUDE_CODE_OAUTH_TOKEN: "tok-abc",
     });
     // There is no Codex auth cache to fall back on, and no seat to hold.
-    expect(credential.authCacheJson).toBeNull();
     expect(credential.credentialId).toBeNull();
     expect(credential.via).toBe("subscription");
   });

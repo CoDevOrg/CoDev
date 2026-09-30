@@ -5,8 +5,13 @@ import {
   requireCredential,
   resolveCredential,
 } from "../providers/resolve";
-import { codexApiKeyAuthCache, launchProfileFor } from "../providers/registry";
-import type { LaunchProfile, ProviderId } from "../providers/registry";
+import {
+  codexApiKeyAuthCache,
+  launchProfileFor,
+  providerDefinition,
+} from "../providers/registry";
+import type { Gen2AgentProviderName } from "@codev/contracts";
+import type { LaunchProfile } from "../providers/registry";
 import { listDecryptedUserEnvironmentVariables } from "../providers/user-environment";
 import { Gen2LifecycleError } from "./errors";
 
@@ -26,54 +31,26 @@ import { Gen2LifecycleError } from "./errors";
  * decides what that executor can run.
  */
 export type Gen2Credential = {
-  /** Set only for a Codex subscription, which holds a one-turn-at-a-time
-   *  lease. */
+  /** Set only for a credential that holds a one-turn-at-a-time seat (a Codex
+   *  subscription); Claude and API keys carry none. */
   credentialId: string | null;
-  /** The Codex `auth.json`, for guest images that predate `launchProfile`.
-   *  Null for Claude, whose credential is an environment variable that a
-   *  guest without profile support has no field to receive. */
-  authCacheJson: string | null;
   /** The same credential in the provider-neutral shape, plus the member's
-   *  own environment variables. Sent alongside `authCacheJson` so a Codex
-   *  turn runs whichever guest image the host happens to have. */
+   *  own environment variables. The guest materialises it and knows nothing
+   *  about which provider it belongs to. */
   launchProfile: LaunchProfile;
   via: "subscription" | "api-key";
 };
 
 /** The providers a Gen 2 turn can be asked to run. Which of them a credential
  *  can actually serve is the registry's `gen2` flag, not this list. */
-export type Gen2AgentProvider = Extract<ProviderId, "codex" | "claude">;
-
-export const GEN2_DEFAULT_PROVIDER: Gen2AgentProvider = "codex";
-
-export const GEN2_CONNECT_MESSAGES: Record<Gen2AgentProvider, string> = {
-  codex: "Connect ChatGPT or add an OpenAI API key to run Codex here.",
-  claude: "Connect your Claude subscription to run Claude here.",
-};
-export const GEN2_CONNECT_MESSAGE = GEN2_CONNECT_MESSAGES.codex;
+export type Gen2AgentProvider = Gen2AgentProviderName;
 
 /** The `auth.json` shape the Codex CLI uses for plain API-key auth. */
 export const buildApiKeyAuthCache = codexApiKeyAuthCache;
 
-/**
- * The Codex auth cache inside a launch profile.
- *
- * Both are sent: a guest that understands `launchProfile` uses it, and one
- * that has not been redeployed yet falls back to the named field it has
- * always taken. That is what makes turning the profile on safe without first
- * proving which image every host is running. The legacy field goes once the
- * new guest is everywhere.
- */
-function authCacheFromProfile(profile: LaunchProfile): string | null {
-  return (
-    profile.files?.find((file) => file.path === ".codex/auth.json")?.contents ??
-    null
-  );
-}
-
 export async function resolveGen2Credential(
   userId: string,
-  provider: Gen2AgentProvider = GEN2_DEFAULT_PROVIDER,
+  provider: Gen2AgentProvider,
 ): Promise<Gen2Credential> {
   let resolved;
   try {
@@ -86,7 +63,7 @@ export async function resolveGen2Credential(
     if (error instanceof CredentialUnavailableError) {
       throw new Gen2LifecycleError(
         error.reason === "not_connected"
-          ? GEN2_CONNECT_MESSAGES[provider]
+          ? `Connect ${providerDefinition(provider).label} to run it here.`
           : error.message,
         409,
       );
@@ -95,15 +72,6 @@ export async function resolveGen2Credential(
   }
 
   const credentialProfile = launchProfileFor(provider, resolved.secret);
-  const authCacheJson =
-    provider === "codex" ? authCacheFromProfile(credentialProfile) : null;
-  if (provider === "codex" && !authCacheJson) {
-    throw new Gen2LifecycleError(
-      "Reconnect Codex; the stored connection uses an obsolete format.",
-      409,
-    );
-  }
-
   // The member's own environment variables ride the same channel. They are
   // listed first so a variable named after one the credential needs — say
   // CODEX_HOME or CLAUDE_CODE_OAUTH_TOKEN — cannot displace it and point the
@@ -119,7 +87,6 @@ export async function resolveGen2Credential(
     // limit, so it carries no lease for the caller to claim.
     credentialId:
       resolved.kind === "codex_auth_cache" ? resolved.credentialId : null,
-    authCacheJson,
     launchProfile,
     via: resolved.kind === "api_key" ? "api-key" : "subscription",
   };
@@ -133,7 +100,7 @@ export type Gen2ProviderStatus = {
 /** Drives the connect prompt in the workspace; never returns a secret. */
 export async function getGen2ProviderStatus(
   userId: string,
-  provider: Gen2AgentProvider = GEN2_DEFAULT_PROVIDER,
+  provider: Gen2AgentProvider,
 ): Promise<Gen2ProviderStatus> {
   const result = await resolveCredential({
     userId,

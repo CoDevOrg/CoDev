@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import type { Gen2AgentProviderName } from "@codev/contracts";
 
 import { CodexHostedConnect } from "@/components/settings/codex-hosted-connect";
 
-export type Gen2AgentChoice = "codex" | "claude";
+export type Gen2AgentChoice = Gen2AgentProviderName;
 
 export type Gen2ProviderStatus = {
   connected: boolean;
@@ -20,10 +21,10 @@ export type Gen2ProviderStatus = {
  */
 export function Gen2ConnectProvider({
   onConnected,
-  agent = "codex",
+  agent,
 }: {
   onConnected: () => void;
-  agent?: Gen2AgentChoice;
+  agent: Gen2AgentChoice;
 }) {
   if (agent === "claude") {
     return (
@@ -65,7 +66,7 @@ export function Gen2ConnectProvider({
 }
 
 /** Polls only while disconnected, so a connected workspace costs nothing. */
-export function useGen2ProviderStatus(agent: Gen2AgentChoice = "codex") {
+export function useGen2ProviderStatus(agent: Gen2AgentChoice) {
   const [status, setStatus] = useState<Gen2ProviderStatus | null>(null);
 
   const refresh = useCallback(async () => {

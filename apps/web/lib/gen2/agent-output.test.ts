@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import { canRunGen2Agent } from "./agent-policy";
 import {
-  decodeCodexExecOutput,
-  decodeCodexExecStream,
+  decodeAgentExecOutput,
+  decodeAgentExecStream,
   decodePendingBytes,
   encodePendingBytes,
-  mergeCodexExecChunks,
-  parseCodexExecOutput,
-} from "./codex-output";
+  mergeAgentExecChunks,
+  parseAgentExecOutput,
+} from "./agent-output";
 
 describe("gen2 agent policy", () => {
   it("only runs Codex on a ready instance", () => {
@@ -23,7 +23,7 @@ describe("gen2 agent policy", () => {
 describe("codex exec output", () => {
   it("decodes a UTF-8 character split across unordered chunks", () => {
     expect(
-      decodeCodexExecOutput([
+      decodeAgentExecOutput([
         { sequence: 2, dataBase64: Buffer.from([0xa9]).toString("base64") },
         { sequence: 0, dataBase64: Buffer.from("h").toString("base64") },
         { sequence: 1, dataBase64: Buffer.from([0xc3]).toString("base64") },
@@ -40,7 +40,7 @@ describe("codex exec output", () => {
       }),
       JSON.stringify({ type: "turn.completed" }),
     ].join("\n");
-    expect(parseCodexExecOutput(output)).toEqual({
+    expect(parseAgentExecOutput(output)).toEqual({
       reply: "Listed the files.",
       failed: false,
     });
@@ -48,7 +48,7 @@ describe("codex exec output", () => {
 
   it("surfaces a Codex error event", () => {
     expect(
-      parseCodexExecOutput(
+      parseAgentExecOutput(
         JSON.stringify({
           type: "error",
           error: { message: "auth expired" },
@@ -59,7 +59,7 @@ describe("codex exec output", () => {
 
   it("merges poll chunks by sequence without duplicates", () => {
     expect(
-      mergeCodexExecChunks(
+      mergeAgentExecChunks(
         [{ sequence: 0, dataBase64: "YQ==" }],
         [
           { sequence: 0, dataBase64: "YQ==" },
@@ -73,7 +73,7 @@ describe("codex exec output", () => {
   });
 });
 
-describe("decodeCodexExecStream", () => {
+describe("decodeAgentExecStream", () => {
   const encoder = new TextEncoder();
 
   function chunk(sequence: number, bytes: Uint8Array<ArrayBufferLike>) {
@@ -85,13 +85,13 @@ describe("decodeCodexExecStream", () => {
 
   it("holds back a character split across two polls", () => {
     const bytes = encoder.encode("héllo"); // é is two bytes
-    const first = decodeCodexExecStream(new Uint8Array(0), [
+    const first = decodeAgentExecStream(new Uint8Array(0), [
       chunk(1, bytes.subarray(0, 2)), // "h" + the lead byte of é
     ]);
     expect(first.text).toBe("h");
     expect(first.pending.byteLength).toBe(1);
 
-    const second = decodeCodexExecStream(first.pending, [
+    const second = decodeAgentExecStream(first.pending, [
       chunk(2, bytes.subarray(2)),
     ]);
     expect(second.text).toBe("éllo");
@@ -99,7 +99,7 @@ describe("decodeCodexExecStream", () => {
   });
 
   it("emits everything when the last character is complete", () => {
-    const result = decodeCodexExecStream(new Uint8Array(0), [
+    const result = decodeAgentExecStream(new Uint8Array(0), [
       chunk(1, encoder.encode("done\n")),
     ]);
     expect(result.text).toBe("done\n");
@@ -112,7 +112,7 @@ describe("decodeCodexExecStream", () => {
     let text = "";
     for (const [index, end] of [1, 3, 4].entries()) {
       const start = index === 0 ? 0 : [1, 3][index - 1]!;
-      const result = decodeCodexExecStream(pending, [
+      const result = decodeAgentExecStream(pending, [
         chunk(index + 1, bytes.subarray(start, end)),
       ]);
       text += result.text;

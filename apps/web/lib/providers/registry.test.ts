@@ -92,3 +92,14 @@ describe("provider registry", () => {
     ]);
   });
 });
+
+describe("Gen 2 agent list", () => {
+  it("matches the providers the gen2 executor can run", async () => {
+    const { GEN2_AGENT_PROVIDERS } = await import("@codev/contracts");
+    const listed = GEN2_AGENT_PROVIDERS.map((entry) => entry.id).sort();
+    const runnable = PROVIDER_IDS.filter((id) =>
+      providerRunsOn(id, "gen2"),
+    ).sort();
+    expect(listed).toEqual(runnable);
+  });
+});

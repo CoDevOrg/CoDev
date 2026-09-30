@@ -27,7 +27,7 @@ describe("gen2 chat transcript", () => {
         "",
         "Previous conversation on this chat:",
         "User: List the files",
-        "Codex: README.md",
+        "Assistant: README.md",
         "",
         "Current request:",
         "Add tests",

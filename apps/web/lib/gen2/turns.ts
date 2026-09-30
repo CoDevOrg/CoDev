@@ -8,11 +8,11 @@ import { getDatabase } from "../platform/database";
 import { logEvent } from "../platform/observability";
 import { appendGen2ChatMessage } from "./chats";
 import {
-  decodeCodexExecStream,
+  decodeAgentExecStream,
   decodePendingBytes,
   encodePendingBytes,
-  type CodexExecChunk,
-} from "./codex-output";
+  type AgentExecChunk,
+} from "./agent-output";
 import { reduceGen2Turn } from "./turn-reducer";
 import type { SupersetAgentPollChunk } from "./superset-agent-orchestrator-client";
 import { reconcileGen2CollaborationPaths } from "./collaboration-events";
@@ -60,7 +60,7 @@ export async function createGen2Turn(input: {
  */
 export async function recordGen2TurnChunks(input: {
   sessionId: string;
-  chunks: CodexExecChunk[];
+  chunks: AgentExecChunk[];
   exited: boolean;
 }): Promise<{ reply: string; messageId: string } | null> {
   try {
@@ -72,7 +72,7 @@ export async function recordGen2TurnChunks(input: {
       .limit(1);
     if (!turn || turn.exited) return null;
 
-    const decoded = decodeCodexExecStream(
+    const decoded = decodeAgentExecStream(
       decodePendingBytes(turn.pendingBase64),
       input.chunks,
     );

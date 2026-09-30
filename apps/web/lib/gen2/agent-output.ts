@@ -1,4 +1,4 @@
-export type CodexExecChunk = {
+export type AgentExecChunk = {
   sequence: number;
   dataBase64: string;
 };
@@ -19,7 +19,7 @@ function decodeBase64(value: string): Uint8Array {
  * Guest chunks can split a UTF-8 character. Decode the whole ordered byte
  * stream once instead of each chunk on its own.
  */
-export function decodeCodexExecOutput(chunks: CodexExecChunk[]): string {
+export function decodeAgentExecOutput(chunks: AgentExecChunk[]): string {
   const ordered = [...chunks].sort(
     (left, right) => left.sequence - right.sequence,
   );
@@ -37,7 +37,7 @@ export function decodeCodexExecOutput(chunks: CodexExecChunk[]): string {
   return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
 }
 
-export function parseCodexExecOutput(output: string): {
+export function parseAgentExecOutput(output: string): {
   reply: string;
   failed: boolean;
 } {
@@ -76,11 +76,11 @@ export function parseCodexExecOutput(output: string): {
   return { reply, failed };
 }
 
-export function mergeCodexExecChunks(
-  existing: CodexExecChunk[],
-  incoming: CodexExecChunk[],
-): CodexExecChunk[] {
-  const bySequence = new Map<number, CodexExecChunk>();
+export function mergeAgentExecChunks(
+  existing: AgentExecChunk[],
+  incoming: AgentExecChunk[],
+): AgentExecChunk[] {
+  const bySequence = new Map<number, AgentExecChunk>();
   for (const chunk of existing) bySequence.set(chunk.sequence, chunk);
   for (const chunk of incoming) bySequence.set(chunk.sequence, chunk);
   return [...bySequence.values()].sort(
@@ -92,15 +92,15 @@ export function mergeCodexExecChunks(
  * Decodes one poll's worth of chunks for a stream the server accumulates
  * across many polls.
  *
- * `decodeCodexExecOutput` above decodes a complete byte array in one pass, so
+ * `decodeAgentExecOutput` above decodes a complete byte array in one pass, so
  * a character split across two chunks resolves correctly. That does not hold
  * when each poll is decoded and appended on its own: a character straddling
  * the boundary would become U+FFFD before its remaining bytes ever arrive.
  * So hold back an incomplete trailing sequence and prepend it next time.
  */
-export function decodeCodexExecStream(
+export function decodeAgentExecStream(
   pending: Uint8Array,
-  chunks: CodexExecChunk[],
+  chunks: AgentExecChunk[],
 ): { text: string; pending: Uint8Array } {
   const ordered = [...chunks].sort(
     (left, right) => left.sequence - right.sequence,
@@ -174,16 +174,16 @@ function encodeBase64(text: string): string {
 
 /**
  * Adapts a Superset terminal-agent poll's plain-text, full-snapshot chunks
- * (see `superset-agent-orchestrator-client.ts`) into the `CodexExecChunk[]`
+ * (see `superset-agent-orchestrator-client.ts`) into the `AgentExecChunk[]`
  * shape the browser's `chat-panel.tsx` already merges by `sequence` and
  * decodes for a live in-progress reply. Always emitting `sequence: 0` -- one
- * chunk representing "the current full snapshot" -- makes `mergeCodexExecChunks`
+ * chunk representing "the current full snapshot" -- makes `mergeAgentExecChunks`
  * overwrite that one entry each poll instead of concatenating an
  * ever-growing series of duplicate snapshots.
  */
-export function toCodexExecChunks(
+export function toAgentExecChunks(
   chunks: { sequence: number; data: string }[],
-): CodexExecChunk[] {
+): AgentExecChunk[] {
   if (chunks.length === 0) return [];
   const latest = chunks.reduce((max, chunk) =>
     chunk.sequence > max.sequence ? chunk : max,

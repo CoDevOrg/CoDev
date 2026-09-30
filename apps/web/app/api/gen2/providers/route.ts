@@ -3,14 +3,13 @@ import { getGen2ProviderStatus } from "@/lib/gen2/providers";
 import { gen2AgentProviderSchema } from "@codev/contracts";
 
 /**
- * Whether this member can run the given agent (`?provider=codex|claude`,
- * Codex when omitted) yet. Returns only a boolean and how they connected --
+ * Whether this member can run the given agent (`?provider=`) yet. Returns only a boolean and how they connected --
  * never any part of the credential.
  */
 export const GET = withUser(
   async ({ request, user }) => {
     const requested = new URL(request.url).searchParams.get("provider");
-    const provider = gen2AgentProviderSchema.safeParse(requested ?? "codex");
+    const provider = gen2AgentProviderSchema.safeParse(requested);
     if (!provider.success) {
       return Response.json({ error: "Unknown provider." }, { status: 400 });
     }

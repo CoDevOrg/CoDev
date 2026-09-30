@@ -25,7 +25,7 @@ export default async function Gen2WorkspacesPage() {
         <p className="gen2-lede">
           A workspace is a Firecracker instance you can share. Open one and its
           machine comes up; send the link and anyone you invite works on that
-          same machine, alongside Codex.
+          same machine, alongside an AI agent.
         </p>
         <CreateGen2WorkspaceForm
           githubConnected={github.connected}

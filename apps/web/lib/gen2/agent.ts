@@ -59,7 +59,7 @@ export async function startGen2AgentTurn(input: {
   chatId: string;
   prompt: string;
   idempotencyKey: string;
-  provider?: Gen2AgentProvider;
+  provider: Gen2AgentProvider;
 }) {
   await requireReadyMember(input.workspaceId, input.userId);
   await requireGen2Chat(input.workspaceId, input.chatId);
@@ -69,7 +69,7 @@ export async function startGen2AgentTurn(input: {
   }
 
   const history = await listGen2ChatMessages(input.chatId);
-  const provider = input.provider ?? "codex";
+  const provider = input.provider;
   const credential = await resolveGen2Credential(input.userId, provider);
 
   // Only a subscription holds a seat. An API key has no one-turn-at-a-time
@@ -94,9 +94,6 @@ export async function startGen2AgentTurn(input: {
   }
   const execInput = {
     command: buildGen2AgentCommand(provider, input.prompt, history),
-    ...(credential.authCacheJson
-      ? { codexAuthCacheJson: credential.authCacheJson }
-      : {}),
     launchProfile: credential.launchProfile,
     idempotencyKey: input.idempotencyKey,
   };
@@ -182,7 +179,7 @@ async function startGen2AgentTurnViaSuperset(input: {
   chatId: string;
   prompt: string;
   idempotencyKey: string;
-  provider?: Gen2AgentProvider;
+  provider: Gen2AgentProvider;
 }) {
   try {
     return await startGen2SupersetAgentTurn(input);

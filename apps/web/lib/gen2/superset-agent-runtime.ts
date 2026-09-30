@@ -40,7 +40,7 @@ import {
   releaseGen2SupersetRunLease,
 } from "./superset-runs";
 import { createGen2Turn, recordGen2SupersetRunOutput } from "./turns";
-import { toCodexExecChunks } from "./codex-output";
+import { toAgentExecChunks } from "./agent-output";
 import { requireGen2Member } from "./workspaces";
 
 /**
@@ -78,11 +78,11 @@ export async function startGen2SupersetAgentSession(input: {
   worktreeId: string;
   command: string[];
   idempotencyKey: string;
-  provider?: Gen2AgentProvider;
+  provider: Gen2AgentProvider;
 }) {
   requireEnabled();
   await requireGen2Member(input.workspaceId, input.userId);
-  const provider = input.provider ?? "codex";
+  const provider = input.provider;
   const credential = await resolveGen2Credential(input.userId, provider);
 
   const registration = await registerGen2SupersetRun({
@@ -134,9 +134,6 @@ export async function startGen2SupersetAgentSession(input: {
     const started = await startSupersetAgent(input.workspaceId, {
       worktreeId: input.worktreeId,
       provider: providerVendor(provider),
-      ...(credential.authCacheJson
-        ? { codexAuthCacheJson: credential.authCacheJson }
-        : {}),
       launchProfile: credential.launchProfile,
       command: input.command,
       idempotencyKey: input.idempotencyKey,
@@ -365,7 +362,7 @@ export async function startGen2SupersetAgentTurn(input: {
   chatId: string;
   prompt: string;
   idempotencyKey: string;
-  provider?: Gen2AgentProvider;
+  provider: Gen2AgentProvider;
 }) {
   requireEnabled();
   await requireGen2Member(input.workspaceId, input.userId);
@@ -375,7 +372,7 @@ export async function startGen2SupersetAgentTurn(input: {
     input.workspaceId,
     input.chatId,
   );
-  const provider = input.provider ?? "codex";
+  const provider = input.provider;
   const command = buildGen2AgentCommand(provider, input.prompt, history);
 
   const session = await startGen2SupersetAgentSession({
@@ -437,7 +434,7 @@ export async function pollGen2SupersetAgentTurn(input: {
   });
 
   return {
-    chunks: toCodexExecChunks(result.chunks),
+    chunks: toAgentExecChunks(result.chunks),
     nextSequence: result.nextSequence,
     exited: result.exited,
     exitCode: result.exitCode,

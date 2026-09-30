@@ -53,7 +53,7 @@ describe("gen2 provider resolution", () => {
     ]);
     mocks.decryptSecret.mockResolvedValue("ghp_secret");
 
-    const credential = await resolveGen2Credential(userId);
+    const credential = await resolveGen2Credential(userId, "codex");
 
     expect(credential.launchProfile.env).toMatchObject({
       GITHUB_TOKEN: "ghp_secret",
@@ -66,49 +66,39 @@ describe("gen2 provider resolution", () => {
     expect(credential.launchProfile.files?.[0]?.path).toBe(".codex/auth.json");
   });
 
-  it("still sends the legacy auth cache beside the profile", async () => {
-    mocks.resolveHosted.mockResolvedValue({
-      credential: { id: "cred-1", encryptedMaterial: "enc" },
-    });
-    mocks.decryptMaterial.mockResolvedValue({ authCacheJson: '{"a":1}' });
-
-    const credential = await resolveGen2Credential(userId);
-
-    // A guest image that predates the launch profile reads this field, so a
-    // turn runs whichever image the host happens to have.
-    expect(credential.authCacheJson).toBe('{"a":1}');
-  });
-
   it("prefers a ChatGPT subscription and reports its lease id", async () => {
     mocks.resolveHosted.mockResolvedValue({
       credential: { id: "cred-1", encryptedMaterial: "enc" },
     });
     mocks.decryptMaterial.mockResolvedValue({ authCacheJson: '{"a":1}' });
-    await expect(resolveGen2Credential(userId)).resolves.toMatchObject({
-      credentialId: "cred-1",
-      authCacheJson: '{"a":1}',
-      via: "subscription",
-    });
+    await expect(resolveGen2Credential(userId, "codex")).resolves.toMatchObject(
+      {
+        credentialId: "cred-1",
+        via: "subscription",
+      },
+    );
   });
 
   it("falls back to a personal API key, with no lease to claim", async () => {
     mocks.limit.mockResolvedValue([{ encryptedApiKey: "enc" }]);
     mocks.decryptSecret.mockResolvedValue("sk-test-123");
-    const credential = await resolveGen2Credential(userId);
+    const credential = await resolveGen2Credential(userId, "codex");
     // No credentialId means no seat: an API key has no one-turn-at-a-time
     // limit, so the caller must not claim one.
     expect(credential.credentialId).toBeNull();
     expect(credential.via).toBe("api-key");
-    expect(JSON.parse(credential.authCacheJson!)).toMatchObject({
+    expect(
+      JSON.parse(credential.launchProfile.files![0]!.contents),
+    ).toMatchObject({
       auth_mode: "apikey",
       OPENAI_API_KEY: "sk-test-123",
     });
   });
 
   it("asks the member to connect when nothing is available", async () => {
-    await expect(resolveGen2Credential(userId)).rejects.toMatchObject({
+    await expect(resolveGen2Credential(userId, "codex")).rejects.toMatchObject({
       status: 409,
-      message: expect.stringMatching(/Connect ChatGPT/),
+      message: expect.stringMatching(/Connect Codex/),
     });
   });
 
@@ -120,9 +110,11 @@ describe("gen2 provider resolution", () => {
     });
     mocks.decryptMaterial.mockResolvedValue({ authCacheJson: "{}" });
     mocks.limit.mockResolvedValue([{ encryptedApiKey: "enc" }]);
-    await expect(resolveGen2Credential(userId)).resolves.toMatchObject({
-      via: "subscription",
-    });
+    await expect(resolveGen2Credential(userId, "codex")).resolves.toMatchObject(
+      {
+        via: "subscription",
+      },
+    );
     // Resolution answers "is one connected", never "is one free": busy is a
     // seat question, and reporting a mid-turn subscription as missing used to
     // send members off to reconnect a perfectly good credential.
@@ -132,13 +124,13 @@ describe("gen2 provider resolution", () => {
   it("reports status without ever returning a secret", async () => {
     mocks.limit.mockResolvedValue([{ encryptedApiKey: "enc" }]);
     mocks.decryptSecret.mockResolvedValue("sk-test-123");
-    const status = await getGen2ProviderStatus(userId);
+    const status = await getGen2ProviderStatus(userId, "codex");
     expect(status).toEqual({ connected: true, via: "api-key" });
     expect(JSON.stringify(status)).not.toContain("sk-test");
   });
 
   it("reports not connected when there is nothing", async () => {
-    await expect(getGen2ProviderStatus(userId)).resolves.toEqual({
+    await expect(getGen2ProviderStatus(userId, "codex")).resolves.toEqual({
       connected: false,
       via: null,
     });

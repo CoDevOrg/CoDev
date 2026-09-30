@@ -101,7 +101,7 @@ describe("Gen2EditorPane", () => {
         onSaved={vi.fn()}
       />,
     );
-    expect(screen.getByText("Updated by Codex")).toBeInTheDocument();
+    expect(screen.getByText("Updated by the agent")).toBeInTheDocument();
     expect(screen.queryByText(/changed on the machine/)).toBeNull();
   });
 
