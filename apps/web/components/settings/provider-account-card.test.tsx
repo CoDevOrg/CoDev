@@ -534,6 +534,7 @@ describe("ProviderAccountCard", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+    fireEvent.click(screen.getByRole("button", { name: "Disconnect Cursor" }));
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/personal/subscriptions?provider=cursor",
@@ -749,6 +750,7 @@ describe("ProviderAccountCard", () => {
 
       expect(screen.getByText(/ending wxyz/)).toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
+      fireEvent.click(screen.getByRole("button", { name: "Revoke login" }));
       await waitFor(() => {
         expect(fetchMock).toHaveBeenCalledWith(
           "/api/personal/connections?provider=anthropic&kind=claude_cli_token",
