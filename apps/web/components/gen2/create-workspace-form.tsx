@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { Plus, Search } from "lucide-react";
 
 import { GithubMark } from "@/components/settings/github-mark";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { GEN2_MAX_OWNED_WORKSPACES } from "@/lib/gen2/constants";
 
 type Installation = {
@@ -117,28 +120,27 @@ export function CreateGen2WorkspaceForm({
   }
 
   return (
-    <section className="gen2-create">
-      <div className="gen2-create-row">
-        <button
-          type="button"
-          className="primary-button"
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
           disabled={busy || atWorkspaceLimit}
           onClick={() => void create({})}
+          type="button"
         >
           <Plus aria-hidden="true" size={14} />
           {busy ? "Creating…" : "Blank workspace"}
-        </button>
+        </Button>
 
         {githubConnected ? (
           <>
             {installations.length > 1 ? (
               <select
-                className="gen2-create-select"
                 aria-label="GitHub account"
-                value={installationId ?? ""}
+                className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                 onChange={(event) =>
                   setInstallationId(Number(event.target.value))
                 }
+                value={installationId ?? ""}
               >
                 {installations.map((installation) => (
                   <option key={installation.id} value={installation.id}>
@@ -147,39 +149,44 @@ export function CreateGen2WorkspaceForm({
                 ))}
               </select>
             ) : null}
-            <label className="gen2-create-search">
-              <Search aria-hidden="true" size={14} />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search your repositories"
+            <div className="relative min-w-[16rem] flex-1">
+              <Search
+                aria-hidden="true"
+                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
+                size={14}
+              />
+              <Input
                 aria-label="Search repositories"
                 autoComplete="off"
+                className="pl-9"
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search your repositories"
+                value={query}
               />
-            </label>
+            </div>
           </>
         ) : (
           <form action={connectGitHub}>
-            <button type="submit" className="secondary-button">
-              <GithubMark className="gen2-repo-mark" /> Connect GitHub
-            </button>
+            <Button type="submit" variant="outline">
+              <GithubMark className="size-4" /> Connect GitHub
+            </Button>
           </form>
         )}
       </div>
 
       {atWorkspaceLimit ? (
-        <p className="gen2-create-limit" role="status">
+        <p className="text-sm text-muted-foreground" role="status">
           You own {ownedWorkspaceCount} of {GEN2_MAX_OWNED_WORKSPACES} Gen 2
           workspaces. Delete one to create another.
         </p>
       ) : null}
 
       {githubConnected && visible.length > 0 ? (
-        <ul className="gen2-repo-list">
+        <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border">
           {visible.map((repo) => (
             <li key={repo.id}>
               <button
-                type="button"
+                className="flex w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors outline-none hover:bg-accent focus-visible:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={busy || atWorkspaceLimit}
                 onClick={() =>
                   void create({
@@ -187,13 +194,16 @@ export function CreateGen2WorkspaceForm({
                     repositoryId: repo.id,
                   })
                 }
+                type="button"
               >
-                <GithubMark className="gen2-repo-mark" />
-                <span className="gen2-repo-name">{repo.full_name}</span>
-                {repo.private ? (
-                  <span className="gen2-repo-tag">Private</span>
-                ) : null}
-                <span className="gen2-repo-branch">{repo.default_branch}</span>
+                <GithubMark className="size-4 shrink-0" />
+                <span className="min-w-0 flex-1 truncate font-medium">
+                  {repo.full_name}
+                </span>
+                {repo.private ? <Badge variant="outline">Private</Badge> : null}
+                <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                  {repo.default_branch}
+                </span>
               </button>
             </li>
           ))}
@@ -201,12 +211,13 @@ export function CreateGen2WorkspaceForm({
       ) : null}
 
       {githubConnected && appSlug && repositories.length === 0 ? (
-        <p className="gen2-wb-hint">
+        <p className="text-sm text-muted-foreground">
           No repositories yet.{" "}
           <a
+            className="underline underline-offset-4 hover:text-foreground"
             href={`https://github.com/apps/${appSlug}/installations/new`}
-            target="_blank"
             rel="noreferrer"
+            target="_blank"
           >
             Give CoDev access to some
           </a>
@@ -215,7 +226,7 @@ export function CreateGen2WorkspaceForm({
       ) : null}
 
       {error ? (
-        <p className="form-message error-copy" role="alert">
+        <p className="text-sm text-destructive" role="alert">
           {error}
         </p>
       ) : null}

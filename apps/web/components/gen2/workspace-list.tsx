@@ -6,6 +6,10 @@ import Link from "next/link";
 import { LoaderCircle, Trash2 } from "lucide-react";
 import type { Gen2Workspace } from "@codev/contracts";
 
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { cn } from "@/lib/platform/utils";
+
 const STATUS_LABEL: Record<Gen2Workspace["status"], string> = {
   pending: "Idle",
   provisioning: "Starting",
@@ -13,6 +17,15 @@ const STATUS_LABEL: Record<Gen2Workspace["status"], string> = {
   failed: "Failed",
   stopped: "Idle",
   deleting: "Deleting",
+};
+
+const STATUS_DOT: Record<Gen2Workspace["status"], string> = {
+  pending: "bg-muted-foreground/50",
+  provisioning: "bg-amber-400 animate-pulse motion-reduce:animate-none",
+  ready: "bg-emerald-500",
+  failed: "bg-destructive",
+  stopped: "bg-muted-foreground/50",
+  deleting: "bg-destructive",
 };
 
 export function Gen2WorkspaceList({
@@ -67,11 +80,11 @@ export function Gen2WorkspaceList({
   }
 
   if (workspaces.length === 0) {
-    return <p className="gen2-empty">No workspaces yet.</p>;
+    return <p className="text-sm text-muted-foreground">No workspaces yet.</p>;
   }
 
   return (
-    <ul className="gen2-list">
+    <ul className="grid gap-3">
       {workspaces.map((workspace) => {
         const isDeleting = deletingId === workspace.id;
         const deletionPending = workspace.status === "deleting";
@@ -81,14 +94,22 @@ export function Gen2WorkspaceList({
             : null;
         const cardContent = (
           <>
-            <strong>{workspace.name}</strong>
+            <strong className="min-w-0 flex-1 truncate text-[15px] font-semibold">
+              {workspace.name}
+            </strong>
             {workspace.repository ? (
-              <span className="gen2-card-repo">
+              <span className="hidden max-w-[16rem] truncate rounded-full border border-border px-2.5 py-0.5 font-mono text-xs text-muted-foreground sm:inline">
                 {workspace.repository.fullName}
               </span>
             ) : null}
-            <span className={`gen2-status gen2-status-${workspace.status}`}>
-              <span className="gen2-status-dot" aria-hidden="true" />
+            <span className="inline-flex shrink-0 items-center gap-2 text-sm text-muted-foreground">
+              <span
+                aria-hidden="true"
+                className={cn(
+                  "size-2 rounded-full",
+                  STATUS_DOT[workspace.status],
+                )}
+              />
               {STATUS_LABEL[workspace.status]}
             </span>
           </>
@@ -96,18 +117,23 @@ export function Gen2WorkspaceList({
 
         return (
           <li key={workspace.id}>
-            <div className="gen2-card-row">
+            <div className="flex items-stretch gap-2">
               {deletionPending ? (
-                <div className="gen2-card gen2-card-pending">{cardContent}</div>
-              ) : (
-                <Link className="gen2-card" href={`/gen2/${workspace.id}`}>
+                <Card className="flex min-h-14 flex-1 items-center gap-3 px-4 py-3 opacity-70">
                   {cardContent}
+                </Card>
+              ) : (
+                <Link
+                  className="flex min-w-0 flex-1 rounded-xl outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  href={`/gen2/${workspace.id}`}
+                >
+                  <Card className="flex min-h-14 w-full items-center gap-3 px-4 py-3 transition-colors hover:border-input hover:bg-secondary">
+                    {cardContent}
+                  </Card>
                 </Link>
               )}
               {workspace.role === "owner" ? (
-                <button
-                  type="button"
-                  className="gen2-delete-button"
+                <Button
                   aria-label={
                     isDeleting
                       ? `Deleting ${workspace.name}`
@@ -115,27 +141,30 @@ export function Gen2WorkspaceList({
                         ? `Retry deletion of ${workspace.name}`
                         : `Delete ${workspace.name}`
                   }
+                  className="h-auto min-h-14 w-11 self-stretch hover:text-destructive"
+                  disabled={deletingId !== null}
+                  onClick={() => void deleteWorkspace(workspace)}
                   title={
                     deletionPending ? "Retry deletion" : "Delete workspace"
                   }
-                  disabled={deletingId !== null}
-                  onClick={() => void deleteWorkspace(workspace)}
+                  type="button"
+                  variant="secondary"
                 >
                   {isDeleting ? (
                     <LoaderCircle
-                      className="gen2-delete-spinner"
                       aria-hidden="true"
+                      className="animate-spin motion-reduce:animate-none"
                       size={18}
                     />
                   ) : (
                     <Trash2 aria-hidden="true" size={18} />
                   )}
-                </button>
+                </Button>
               ) : null}
             </div>
             {deletionPending && !error ? (
               <p
-                className="gen2-action-error"
+                className="mt-1.5 text-sm text-destructive"
                 role={workspace.lastError ? "alert" : "status"}
               >
                 {workspace.lastError
@@ -144,7 +173,7 @@ export function Gen2WorkspaceList({
               </p>
             ) : null}
             {error ? (
-              <p className="gen2-action-error" role="alert">
+              <p className="mt-1.5 text-sm text-destructive" role="alert">
                 {error}
               </p>
             ) : null}
