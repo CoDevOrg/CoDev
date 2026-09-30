@@ -63,6 +63,53 @@ export async function startGen2Terminal(
   });
 }
 
+/**
+ * The runtime calls behind an already-authorized terminal, so a socket that
+ * checked membership once does not repeat it for every keystroke.
+ */
+export function gen2TerminalBackend(
+  workspaceId: string,
+  worktreeId = PRIMARY_WORKTREE_ID,
+) {
+  if (isGen2SupersetRuntimeEnabled()) {
+    return {
+      input: (sessionId: string, data: string) =>
+        sendSupersetTerminalInput(workspaceId, { worktreeId, sessionId, data }),
+      resize: (sessionId: string, size: { rows: number; columns: number }) =>
+        resizeSupersetTerminal(workspaceId, { worktreeId, sessionId, ...size }),
+      poll: (sessionId: string, after: number) =>
+        pollSupersetTerminal(workspaceId, { worktreeId, sessionId, after }),
+      close: (sessionId: string) =>
+        closeSupersetTerminal(workspaceId, { sessionId, worktreeId }),
+    };
+  }
+  return {
+    input: (sessionId: string, data: string) =>
+      sendSandboxTerminalInput(workspaceId, sessionId, data),
+    resize: (sessionId: string, size: { rows: number; columns: number }) =>
+      resizeSandboxTerminal(workspaceId, sessionId, size),
+    poll: (sessionId: string, after: number) =>
+      pollSandboxTerminal(workspaceId, sessionId, after),
+    close: (sessionId: string) => closeSandboxTerminal(workspaceId, sessionId),
+  };
+}
+
+/** Membership and readiness, checked once when a stream socket opens. */
+export async function authorizeGen2TerminalStream(
+  workspaceId: string,
+  userId: string,
+) {
+  await requireReadyMember(workspaceId, userId);
+}
+
+/** Cheaper recheck a long-lived socket repeats while it stays open. */
+export async function recheckGen2TerminalMember(
+  workspaceId: string,
+  userId: string,
+) {
+  await requireGen2Member(workspaceId, userId);
+}
+
 export async function sendGen2TerminalInput(
   workspaceId: string,
   userId: string,

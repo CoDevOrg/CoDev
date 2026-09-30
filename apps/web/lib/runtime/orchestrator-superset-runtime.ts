@@ -109,7 +109,7 @@ export async function pollSupersetTerminal(
     workspaceId,
     "POST",
     "terminal/poll",
-    input,
+    { ...input, waitMilliseconds: 20_000 },
   );
   return terminalPollSchema.parse(await response.json());
 }
