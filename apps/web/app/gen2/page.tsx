@@ -31,9 +31,9 @@ export default async function Gen2WorkspacesPage() {
               Cloud workspaces
             </h1>
             <p className="max-w-2xl text-[15px] leading-relaxed text-muted-foreground">
-              A workspace is a Firecracker instance you can share. Open one and
-              its machine comes up; send the link and anyone you invite works on
-              that same machine, alongside an AI agent.
+              A workspace is a cloud computer you and your teammates share, with
+              an AI agent built in. Open one and it starts on its own; send the
+              link and anyone you invite works on that same computer.
             </p>
           </header>
           <CreateGen2WorkspaceForm
