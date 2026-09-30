@@ -29,7 +29,11 @@ import {
   requireGen2Chat,
 } from "./chats";
 import { buildGen2AgentCommand } from "./agent-command";
-import { createGen2Turn, recordGen2TurnChunks } from "./turns";
+import {
+  createGen2Turn,
+  getGen2TurnProvider,
+  recordGen2TurnChunks,
+} from "./turns";
 import { isGen2SupersetAgentSessionsEnabled } from "./superset-agent-sessions-feature";
 import {
   cancelGen2SupersetAgentTurn,
@@ -127,6 +131,7 @@ export async function startGen2AgentTurn(input: {
     // row, so the reply survives the browser going away mid-turn.
     await createGen2Turn({
       sessionId,
+      provider,
       workspaceId: input.workspaceId,
       chatId: input.chatId,
       userId: input.userId,
@@ -230,7 +235,7 @@ export async function pollGen2AgentTurn(input: {
     if (error instanceof OrchestratorError && error.status === 404) {
       await releasePersonalCodex(input.userId, input.sessionId);
       throw new Gen2LifecycleError(
-        "This Codex turn is no longer running. Send the prompt again.",
+        "This turn is no longer running. Send the prompt again.",
       );
     }
     throw new Gen2LifecycleError(describeGen2RuntimeFailure(error), 502);
@@ -240,9 +245,15 @@ export async function pollGen2AgentTurn(input: {
     sessionId: input.sessionId,
     chunks: result.chunks,
     exited: result.exited,
+    exitCode: result.exitCode,
   });
 
-  if (result.exited) {
+  // The hosted ChatGPT seat and its refreshed auth cache belong to Codex
+  // turns only; another provider's turn has neither to hand back.
+  if (
+    result.exited &&
+    (await getGen2TurnProvider(input.sessionId)) === "codex"
+  ) {
     const hosted = await resolveHostedCodexSubscription({
       userId: input.userId,
     });
@@ -297,7 +308,7 @@ async function pollGen2AgentTurnViaSuperset(input: {
     }
     if (error instanceof OrchestratorError && error.status === 404) {
       throw new Gen2LifecycleError(
-        "This Codex turn is no longer running. Send the prompt again.",
+        "This turn is no longer running. Send the prompt again.",
       );
     }
     throw new Gen2LifecycleError(describeGen2RuntimeFailure(error), 502);
@@ -335,6 +346,7 @@ export async function cancelGen2AgentTurn(input: {
 }
 
 async function releasePersonalCodex(userId: string, sessionId: string) {
+  if ((await getGen2TurnProvider(sessionId)) !== "codex") return;
   const hosted = await resolveHostedCodexSubscription({
     userId,
   });

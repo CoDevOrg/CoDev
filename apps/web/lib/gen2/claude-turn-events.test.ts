@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { reduceClaudeTurn } from "./claude-turn-events";
-import { reduceGen2Turn } from "./turn-reducer";
+import { reduceGen2Turn, settleGen2Turn } from "./turn-reducer";
 
 const line = (event: unknown) => JSON.stringify(event);
 
@@ -181,21 +181,52 @@ describe("reduceClaudeTurn", () => {
   });
 });
 
+const NL = String.fromCharCode(10);
+
 describe("reduceGen2Turn", () => {
-  it("picks the reducer from the stream itself", () => {
-    expect(reduceGen2Turn(STREAM.join("\n")).reply).toBe("Done.");
-    const codex = [
-      line({ type: "thread.started", thread_id: "t" }),
-      line({
-        type: "item.completed",
-        item: { id: "i1", type: "agent_message", text: "from codex" },
-      }),
-      line({ type: "turn.completed", usage: {} }),
-    ].join("\n");
-    expect(reduceGen2Turn(codex).reply).toBe("from codex");
+  const codex = [
+    line({ type: "thread.started", thread_id: "t" }),
+    line({
+      type: "item.completed",
+      item: { id: "i1", type: "agent_message", text: "from codex" },
+    }),
+    line({ type: "turn.completed", usage: {} }),
+  ].join(NL);
+
+  it("reads the stream with the parser of the provider that was asked", () => {
+    expect(reduceGen2Turn("claude", STREAM.join(NL)).reply).toBe("Done.");
+    expect(reduceGen2Turn("codex", codex).reply).toBe("from codex");
   });
 
-  it("treats an empty stream as a running turn", () => {
-    expect(reduceGen2Turn("").status).toBe("running");
+  it("does not read one provider's stream with another's parser", () => {
+    expect(reduceGen2Turn("codex", STREAM.join(NL)).items).toEqual([]);
+    expect(reduceGen2Turn("claude", codex).items).toEqual([]);
+  });
+});
+
+describe("settleGen2Turn", () => {
+  it("passes a finished turn through untouched", () => {
+    const settled = settleGen2Turn("claude", STREAM.join(NL), 0);
+    expect(settled.unparsed).toBe(false);
+    expect(settled.state.status).toBe("completed");
+    expect(settled.state.error).toBeNull();
+  });
+
+  it("fails an exited turn the parser never saw a result for", () => {
+    // e.g. the CLI printed plain text instead of its JSON stream.
+    const settled = settleGen2Turn("claude", "claude: command not found", 127);
+    expect(settled.unparsed).toBe(true);
+    expect(settled.state.status).toBe("failed");
+    expect(settled.state.error).toBe(
+      "Claude exited (code 127) without a result.",
+    );
+    // The member-facing message never carries the raw output.
+    expect(settled.state.error).not.toContain("command not found");
+  });
+
+  it("fails a stream in the wrong provider's format the same way", () => {
+    const settled = settleGen2Turn("codex", STREAM.join(NL), 0);
+    expect(settled.state.status).toBe("failed");
+    expect(settled.state.error).toBe("Codex exited (code 0) without a result.");
   });
 });

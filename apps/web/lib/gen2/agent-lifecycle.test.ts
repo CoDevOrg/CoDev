@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   close: vi.fn(),
   getAgentModel: vi.fn(),
   createTurn: vi.fn(),
+  turnProvider: vi.fn(),
   recordChunks: vi.fn(),
   resolveCredential: vi.fn(),
 }));
@@ -45,6 +46,7 @@ vi.mock("./chats", () => ({
 vi.mock("./turns", () => ({
   createGen2Turn: (...args: unknown[]) => mocks.createTurn(...args),
   recordGen2TurnChunks: (...args: unknown[]) => mocks.recordChunks(...args),
+  getGen2TurnProvider: (...args: unknown[]) => mocks.turnProvider(...args),
 }));
 
 vi.mock("../platform/observability", () => ({
@@ -130,6 +132,7 @@ describe("gen2 Codex agent", () => {
     mocks.release.mockResolvedValue(undefined);
     mocks.ensureHostReady.mockResolvedValue(undefined);
     mocks.createTurn.mockResolvedValue(undefined);
+    mocks.turnProvider.mockResolvedValue("codex");
     mocks.resolveCredential.mockResolvedValue({
       credentialId: credentialId,
       launchProfile: { files: [], env: {} },
@@ -320,10 +323,24 @@ describe("gen2 Codex agent", () => {
     });
     expect(mocks.createTurn).toHaveBeenCalledWith({
       sessionId: "session-1",
+      provider: "codex",
       workspaceId,
       chatId,
       userId,
     });
+  });
+
+  it("does not touch the Codex seat when a Claude turn exits", async () => {
+    mocks.turnProvider.mockResolvedValue("claude");
+    await pollGen2AgentTurn({
+      workspaceId,
+      userId,
+      chatId,
+      sessionId: "session-1",
+      after: 0,
+    });
+    expect(mocks.release).not.toHaveBeenCalled();
+    expect(mocks.updateCache).not.toHaveBeenCalled();
   });
 
   it("hands every poll's chunks to the accumulator", async () => {
@@ -338,6 +355,7 @@ describe("gen2 Codex agent", () => {
       sessionId: "session-1",
       chunks: [{ sequence: 0, dataBase64: "e30=" }],
       exited: true,
+      exitCode: 0,
     });
   });
 

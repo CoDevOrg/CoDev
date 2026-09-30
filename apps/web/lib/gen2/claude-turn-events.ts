@@ -41,17 +41,6 @@ function asNumber(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
-/** Event types only Claude's stream uses. Codex's are `thread.*`, `turn.*`,
- *  `item.*` and `error`, so the two never overlap. */
-export const CLAUDE_STREAM_EVENT_TYPES: ReadonlySet<string> = new Set([
-  "system",
-  "assistant",
-  "user",
-  "result",
-  "stream_event",
-  "rate_limit_event",
-]);
-
 function toolItem(block: UnknownRecord, id: string): Gen2TurnItem {
   const name = asString(block.name);
   const input = asRecord(block.input) ?? {};

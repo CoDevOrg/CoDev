@@ -402,6 +402,7 @@ export async function startGen2SupersetAgentTurn(input: {
   // on a retried start because of `onConflictDoNothing`.
   await createGen2Turn({
     sessionId: session.runId,
+    provider,
     workspaceId: input.workspaceId,
     chatId: input.chatId,
     userId: input.userId,
@@ -431,6 +432,7 @@ export async function pollGen2SupersetAgentTurn(input: {
     sessionId: input.sessionId,
     chunks: result.chunks,
     exited: result.exited,
+    exitCode: result.exitCode,
   });
 
   return {

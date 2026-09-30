@@ -1,66 +1,76 @@
-import type { Gen2AgentProviderName, Gen2TurnState } from "@codev/contracts";
-
 import {
-  CLAUDE_STREAM_EVENT_TYPES,
-  reduceClaudeTurn,
-} from "./claude-turn-events";
+  GEN2_AGENT_PROVIDERS,
+  type Gen2AgentProviderName,
+  type Gen2TurnState,
+} from "@codev/contracts";
+
+import { reduceClaudeTurn } from "./claude-turn-events";
 import { reduceCodexTurn } from "./turn-events";
 
 /**
- * How each provider's output is recognised and reduced.
- *
- * `Record` keyed by provider id: adding an agent to `GEN2_AGENT_PROVIDERS`
- * does not compile until it says here how to tell its stream apart and how to
- * turn it into cards. `recognises` takes an event's `type`, so two providers
- * must not share one.
+ * One output parser per provider, chosen by the provider a turn was started
+ * with — never guessed from the bytes. `Record` keyed by provider id: adding
+ * an agent to `GEN2_AGENT_PROVIDERS` does not compile until it names its
+ * parser here (and its command in `agent-command.ts`).
  */
-const READERS: Record<
+const REDUCERS: Record<
   Gen2AgentProviderName,
-  {
-    recognises: (eventType: string) => boolean;
-    reduce: (output: string) => Gen2TurnState;
-  }
+  (output: string) => Gen2TurnState
 > = {
-  codex: {
-    recognises: (type) => /^(thread|turn|item)\.|^error$/.test(type),
-    reduce: reduceCodexTurn,
-  },
-  claude: {
-    recognises: (type) => CLAUDE_STREAM_EVENT_TYPES.has(type),
-    reduce: reduceClaudeTurn,
-  },
+  codex: reduceCodexTurn,
+  claude: reduceClaudeTurn,
 };
 
-const NOTHING_YET: Gen2TurnState = {
-  items: [],
-  reply: "",
-  error: null,
-  usage: null,
-  status: "running",
-};
+export function reduceGen2Turn(
+  provider: Gen2AgentProviderName,
+  output: string,
+): Gen2TurnState {
+  return REDUCERS[provider](output);
+}
+
+function labelFor(provider: Gen2AgentProviderName) {
+  return (
+    GEN2_AGENT_PROVIDERS.find((entry) => entry.id === provider)?.label ??
+    provider
+  );
+}
 
 /**
- * The reduction of whichever agent wrote `output`.
+ * The state of a turn whose process has exited.
  *
- * The stream says which it is, so the browser (which re-reduces the whole
- * accumulated stream on every poll) and the server (which does the same when a
- * turn exits) need no provider threaded to them and no column to remember it.
- * Until an event any reader recognises arrives, the turn is simply running;
- * an unrecognised stream is never guessed to be some provider's.
+ * A parser reports `running` until it sees its provider's closing event. If
+ * the process is gone and that never came, the output was not in the format
+ * the parser reads (the CLI missing, an auth error printed as plain text, a
+ * format change) and no further poll will fix it. That is a failure to say
+ * so, not a turn to wait on. The caller logs the raw output; this message
+ * deliberately carries none of it.
  */
-export function reduceGen2Turn(output: string): Gen2TurnState {
-  for (const line of output.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed.startsWith("{")) continue;
-    try {
-      const type = (JSON.parse(trimmed) as { type?: unknown }).type;
-      if (typeof type !== "string") continue;
-      for (const reader of Object.values(READERS)) {
-        if (reader.recognises(type)) return reader.reduce(output);
-      }
-    } catch {
-      /* PTY noise, or a partial line. */
-    }
-  }
-  return NOTHING_YET;
+export function finalizeGen2Turn(
+  provider: Gen2AgentProviderName,
+  state: Gen2TurnState,
+  exitCode: number | null,
+): Gen2TurnState {
+  if (state.status !== "running") return state;
+  return {
+    ...state,
+    status: "failed",
+    error:
+      state.error ??
+      `${labelFor(provider)} exited${
+        exitCode === null ? "" : ` (code ${exitCode})`
+      } without a result.`,
+  };
+}
+
+/** Everything a caller needs once a turn's process has exited. */
+export function settleGen2Turn(
+  provider: Gen2AgentProviderName,
+  output: string,
+  exitCode: number | null,
+): { state: Gen2TurnState; unparsed: boolean } {
+  const state = reduceGen2Turn(provider, output);
+  return {
+    state: finalizeGen2Turn(provider, state, exitCode),
+    unparsed: state.status === "running",
+  };
 }

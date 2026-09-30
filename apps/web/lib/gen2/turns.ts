@@ -2,6 +2,11 @@ import "server-only";
 
 import { eq } from "drizzle-orm";
 
+import {
+  gen2AgentProviderSchema,
+  type Gen2AgentProviderName,
+  type Gen2TurnState,
+} from "@codev/contracts";
 import { schema } from "@codev/db";
 
 import { getDatabase } from "../platform/database";
@@ -13,7 +18,7 @@ import {
   encodePendingBytes,
   type AgentExecChunk,
 } from "./agent-output";
-import { reduceGen2Turn } from "./turn-reducer";
+import { settleGen2Turn } from "./turn-reducer";
 import type { SupersetAgentPollChunk } from "./superset-agent-orchestrator-client";
 import { reconcileGen2CollaborationPaths } from "./collaboration-events";
 
@@ -39,8 +44,57 @@ export function capTurnOutput(output: string): string {
   return `${output.slice(0, half)}\n…\n${output.slice(-half)}`;
 }
 
+/**
+ * What a turn that has exited amounts to, read with the parser for the
+ * provider it was started with. A turn whose output that parser cannot make a
+ * result of is a failure: logged with the tail of the raw output for whoever
+ * has to diagnose it, and reported to the member without it.
+ */
+function settleTurn(
+  turn: { sessionId: string; provider: string },
+  output: string,
+  exitCode: number | null,
+): Gen2TurnState {
+  const provider = gen2AgentProviderSchema.safeParse(turn.provider);
+  if (!provider.success) {
+    logEvent("error", "gen2.turn.unknown_provider", {
+      sessionId: turn.sessionId,
+      provider: turn.provider,
+    });
+    return {
+      items: [],
+      reply: "",
+      error: "This turn was started with an agent CoDev no longer runs.",
+      usage: null,
+      status: "failed",
+    };
+  }
+  const { state, unparsed } = settleGen2Turn(provider.data, output, exitCode);
+  if (unparsed) {
+    logEvent("error", "gen2.turn.no_result", {
+      sessionId: turn.sessionId,
+      provider: provider.data,
+      exitCode,
+      outputTail: output.slice(-500),
+    });
+  }
+  return state;
+}
+
+/** The provider a turn was started with, or null if there is no such turn. */
+export async function getGen2TurnProvider(sessionId: string) {
+  const [turn] = await getDatabase()
+    .select({ provider: schema.gen2AgentTurns.provider })
+    .from(schema.gen2AgentTurns)
+    .where(eq(schema.gen2AgentTurns.sessionId, sessionId))
+    .limit(1);
+  const parsed = gen2AgentProviderSchema.safeParse(turn?.provider);
+  return parsed.success ? parsed.data : null;
+}
+
 export async function createGen2Turn(input: {
   sessionId: string;
+  provider: Gen2AgentProviderName;
   workspaceId: string;
   chatId: string;
   userId: string;
@@ -62,6 +116,7 @@ export async function recordGen2TurnChunks(input: {
   sessionId: string;
   chunks: AgentExecChunk[];
   exited: boolean;
+  exitCode: number | null;
 }): Promise<{ reply: string; messageId: string } | null> {
   try {
     const database = getDatabase();
@@ -90,7 +145,7 @@ export async function recordGen2TurnChunks(input: {
       return null;
     }
 
-    const state = reduceGen2Turn(output);
+    const state = settleTurn(turn, output, input.exitCode);
     const changedPaths = state.items.flatMap((item) =>
       item.kind === "fileChange"
         ? item.changes.map((change) => change.path)
@@ -155,6 +210,7 @@ export async function recordGen2SupersetRunOutput(input: {
   sessionId: string;
   chunks: SupersetAgentPollChunk[];
   exited: boolean;
+  exitCode: number | null;
 }): Promise<{ reply: string; messageId: string } | null> {
   try {
     const database = getDatabase();
@@ -181,7 +237,7 @@ export async function recordGen2SupersetRunOutput(input: {
       return null;
     }
 
-    const state = reduceGen2Turn(output);
+    const state = settleTurn(turn, output, input.exitCode);
     const changedPaths = state.items.flatMap((item) =>
       item.kind === "fileChange"
         ? item.changes.map((change) => change.path)

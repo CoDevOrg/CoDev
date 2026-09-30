@@ -25,7 +25,7 @@ import {
   mergeAgentExecChunks,
   type AgentExecChunk,
 } from "@/lib/gen2/agent-output";
-import { reduceGen2Turn } from "@/lib/gen2/turn-reducer";
+import { finalizeGen2Turn, reduceGen2Turn } from "@/lib/gen2/turn-reducer";
 import {
   Gen2ConnectProvider,
   useGen2ProviderStatus,
@@ -52,8 +52,13 @@ function storedTurn(workspaceId: string) {
       chatId: string;
       sessionId: string;
       after: number;
+      provider: Gen2AgentChoice;
     };
-    return parsed.chatId && parsed.sessionId ? parsed : null;
+    return parsed.chatId &&
+      parsed.sessionId &&
+      GEN2_AGENT_PROVIDERS.some((entry) => entry.id === parsed.provider)
+      ? parsed
+      : null;
   } catch {
     return null;
   }
@@ -61,7 +66,12 @@ function storedTurn(workspaceId: string) {
 
 function rememberTurn(
   workspaceId: string,
-  turn: { chatId: string; sessionId: string; after: number } | null,
+  turn: {
+    chatId: string;
+    sessionId: string;
+    after: number;
+    provider: Gen2AgentChoice;
+  } | null,
 ) {
   try {
     if (turn) {
@@ -167,7 +177,12 @@ export function Gen2ChatPanel({
 
   /** Drives one turn to completion, re-reducing the stream on every poll. */
   const drive = useCallback(
-    async (session: string, chat: string, startAfter: number) => {
+    async (
+      session: string,
+      chat: string,
+      startAfter: number,
+      turnProvider: Gen2AgentChoice,
+    ) => {
       const controller = new AbortController();
       abortRef.current = controller;
       sessionRef.current = session;
@@ -197,6 +212,7 @@ export function Gen2ChatPanel({
             chunks?: AgentExecChunk[];
             nextSequence?: number;
             exited?: boolean;
+            exitCode?: number | null;
           };
           // A proxy hiccup or an error page can return a 200 with a body that
           // is not a poll result. Treat it as "nothing new" rather than
@@ -210,9 +226,17 @@ export function Gen2ChatPanel({
             chatId: chat,
             sessionId: session,
             after,
+            provider: turnProvider,
           });
 
-          const state = reduceGen2Turn(decodeAgentExecOutput(chunks));
+          const output = decodeAgentExecOutput(chunks);
+          const state = payload.exited
+            ? finalizeGen2Turn(
+                turnProvider,
+                reduceGen2Turn(turnProvider, output),
+                payload.exitCode ?? null,
+              )
+            : reduceGen2Turn(turnProvider, output);
           setItems(state.items);
           setLiveReply(state.reply);
           if (state.items.some((item) => item.kind === "fileChange")) {
@@ -257,7 +281,7 @@ export function Gen2ChatPanel({
     // Rejoining a turn that outlived the page: the server kept streaming it.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setChatId(stored.chatId);
-    void drive(stored.sessionId, stored.chatId, stored.after);
+    void drive(stored.sessionId, stored.chatId, stored.after, stored.provider);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace.id]);
 
@@ -420,7 +444,7 @@ export function Gen2ChatPanel({
         if (response.status === 409) void refreshProvider();
         return;
       }
-      await drive(payload.sessionId, target, 0);
+      await drive(payload.sessionId, target, 0, agent);
     } catch {
       setError("Couldn't reach CoDev. Try again.");
     }

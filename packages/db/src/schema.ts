@@ -2235,6 +2235,8 @@ export const gen2AgentTurns = pgTable(
     userId: uuid("user_id")
       .references(() => users.id, { onDelete: "cascade" })
       .notNull(),
+    /** Which agent wrote `output`; picks the parser that reads it. */
+    provider: text("provider").notNull(),
     /** Decoded NDJSON so far, capped; see GEN2_TURN_OUTPUT_LIMIT. */
     output: text("output").default("").notNull(),
     /** Trailing bytes of a UTF-8 character split across two polls. */
