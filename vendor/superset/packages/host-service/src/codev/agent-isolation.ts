@@ -1,12 +1,22 @@
 import { randomInt } from "node:crypto";
-import { chown, chmod, lstat, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { chown, chmod, lstat, mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 // Reserved for CoDev agent processes. Ordinary terminals always use uid 2000.
 const MIN_AGENT_UID = 100_000;
 const MAX_AGENT_UID = 2_147_483_647;
 const WORKSPACE_GID = 2000;
+const MAX_PROFILE_FILES = 8;
+const MAX_PROFILE_FILE_BYTES = 128 << 10;
+const MAX_PROFILE_ENV_VARS = 16;
+const MAX_PROFILE_ENV_VALUE_BYTES = 32 << 10;
+const PROFILE_DIR_TOKEN = "{{profileDir}}";
 const reservedUids = new Set<number>();
+
+export type AgentLaunchProfile = {
+	files?: Array<{ path: string; contents: string }>;
+	env?: Record<string, string>;
+};
 
 export type AgentLaunch = {
 	directory: string;
@@ -21,12 +31,54 @@ function quote(value: string): string {
 export function agentLaunchScript(
 	directory: string,
 	command: string[],
-	authCacheJson?: string,
+	env: Record<string, string> = {},
 ): string {
 	const lines = ["#!/bin/sh", "umask 0002"];
-	if (authCacheJson) lines.push(`export CODEX_HOME=${quote(directory)}`);
+	for (const [name, value] of Object.entries(env).sort(([left], [right]) => left.localeCompare(right))) {
+		lines.push(`export ${name}=${quote(value.replaceAll(PROFILE_DIR_TOKEN, directory))}`);
+	}
 	lines.push(command.map(quote).join(" "), "exit $?");
 	return `${lines.join("\n")}\n`;
+}
+
+export function validateAgentLaunchProfile(profile: AgentLaunchProfile): void {
+	const files = profile.files ?? [];
+	if (files.length > MAX_PROFILE_FILES) throw new Error("Launch profile has too many files.");
+	const paths = new Set<string>();
+	for (const file of files) {
+		if (
+			!file.path ||
+			file.path.includes("\\") ||
+			file.path.startsWith("/") ||
+			file.path.split("/").some((part) => !part || part === "." || part === "..")
+		) {
+			throw new Error("Launch profile file paths must be relative to the profile.");
+		}
+		if (!paths.add(file.path)) throw new Error("Launch profile contains a duplicate file path.");
+		if (Buffer.byteLength(file.contents) > MAX_PROFILE_FILE_BYTES) {
+			throw new Error(`Launch profile file ${file.path} is too large.`);
+		}
+	}
+	const entries = Object.entries(profile.env ?? {});
+	if (entries.length > MAX_PROFILE_ENV_VARS) throw new Error("Launch profile has too many environment variables.");
+	for (const [name, value] of entries) {
+		if (!/^[A-Z_][A-Z0-9_]*$/.test(name)) {
+			throw new Error("Launch profile environment names must use A-Z, 0-9, and _.");
+		}
+		if (Buffer.byteLength(value) > MAX_PROFILE_ENV_VALUE_BYTES) {
+			throw new Error(`Launch profile value for ${name} is too large.`);
+		}
+	}
+}
+
+async function prepareProfileParents(directory: string, relativePath: string, uid: number) {
+	let parent = directory;
+	for (const part of relativePath.split("/").slice(0, -1)) {
+		parent = join(parent, part);
+		await mkdir(parent, { recursive: true, mode: 0o700 });
+		await chmod(parent, 0o700);
+		await chown(parent, uid, WORKSPACE_GID);
+	}
 }
 
 async function allocateUid(root: string): Promise<number> {
@@ -52,8 +104,10 @@ async function allocateUid(root: string): Promise<number> {
 export async function prepareAgentLaunch(input: {
 	root: string;
 	command: string[];
-	authCacheJson?: string;
+	profile?: AgentLaunchProfile;
 }): Promise<AgentLaunch> {
+	const profile = input.profile ?? {};
+	validateAgentLaunchProfile(profile);
 	const root = await lstat(input.root);
 	if (
 		!root.isDirectory() ||
@@ -68,13 +122,14 @@ export async function prepareAgentLaunch(input: {
 	try {
 		directory = await mkdtemp(join(input.root, "agent-"));
 		await chmod(directory, 0o700);
-		if (input.authCacheJson) {
-			const authPath = join(directory, "auth.json");
-			await writeFile(authPath, input.authCacheJson, { mode: 0o600, flag: "wx" });
-			await chown(authPath, uid, WORKSPACE_GID);
+		for (const file of profile.files ?? []) {
+			const path = join(directory, file.path);
+			await prepareProfileParents(directory, file.path, uid);
+			await writeFile(path, file.contents, { mode: 0o600, flag: "wx" });
+			await chown(path, uid, WORKSPACE_GID);
 		}
 		const scriptPath = join(directory, "launch.sh");
-		await writeFile(scriptPath, agentLaunchScript(directory, input.command, input.authCacheJson), {
+		await writeFile(scriptPath, agentLaunchScript(directory, input.command, profile.env), {
 			mode: 0o600,
 			flag: "wx",
 		});

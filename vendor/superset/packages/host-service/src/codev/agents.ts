@@ -11,7 +11,12 @@ import {
 	snapshotSession,
 	writeFramedInputToSession,
 } from "../terminal/terminal";
-import { prepareAgentLaunch, removeAgentLaunch, type AgentLaunch } from "./agent-isolation";
+import {
+	prepareAgentLaunch,
+	removeAgentLaunch,
+	type AgentLaunch,
+	type AgentLaunchProfile,
+} from "./agent-isolation";
 import { resolveCoDevWorktreeRoot } from "./files";
 
 const worktreeIdSchema = z
@@ -20,9 +25,23 @@ const worktreeIdSchema = z
 	.max(64)
 	.regex(/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/);
 
+const launchProfileSchema = z.object({
+	files: z
+		.array(
+			z.object({
+				path: z.string().min(1).max(512),
+				contents: z.string().max(128 << 10),
+			}),
+		)
+		.max(8)
+		.optional(),
+	env: z.record(z.string(), z.string().max(32 << 10)).optional(),
+});
+
 const agentStartSchema = z.object({
 	worktreeId: worktreeIdSchema,
 	provider: z.string().min(1).max(32),
+	launchProfile: launchProfileSchema.optional(),
 	codexAuthCacheJson: z
 		.string()
 		.max(128 * 1024)
@@ -62,6 +81,15 @@ function secretMatches(actual: string | undefined, expected: string) {
 
 function hostWorkspaceId(worktreeId: string) {
 	return `codev-${worktreeId}`;
+}
+
+/** Compatibility only for hosts reached through an older control-plane rollout. */
+function legacyCodexProfile(authCacheJson: string | undefined): AgentLaunchProfile | undefined {
+	if (!authCacheJson) return undefined;
+	return {
+		files: [{ path: "auth.json", contents: authCacheJson }],
+		env: { CODEX_HOME: "{{profileDir}}" },
+	};
 }
 
 async function branchAt(git: GitFactory, root: string) {
@@ -146,7 +174,7 @@ export function registerCoDevAgentBridge({
 		if (!requireBridge(context.req.raw)) return context.json({ error: "Unauthorized" }, 401);
 		const parsed = agentStartSchema.safeParse(await context.req.json().catch(() => undefined));
 		if (!parsed.success) return context.json({ error: "Invalid Superset agent start request." }, 400);
-		const { worktreeId, codexAuthCacheJson, command, idempotencyKey } = parsed.data;
+		const { worktreeId, codexAuthCacheJson, launchProfile, command, idempotencyKey } = parsed.data;
 
 		const existingAgentId = agentIdempotency.get(idempotencyKey);
 		if (existingAgentId) {
@@ -176,7 +204,9 @@ export function registerCoDevAgentBridge({
 			launch = await prepareAgentLaunch({
 				root: profileRoot,
 				command,
-				authCacheJson: codexAuthCacheJson,
+				// A new control plane sends the provider-neutral profile. Keep the
+				// Codex cache only as a compatibility fallback for a rolling deploy.
+				profile: launchProfile ?? legacyCodexProfile(codexAuthCacheJson),
 			});
 
 			const agentId = `agent-${Date.now()}-${++agentSequence}`;
