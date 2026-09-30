@@ -1,8 +1,11 @@
 # Superset agent-session integration plan
 
-**Status:** In progress. Phases 0–2 are done. Phases 3–5 are implemented and
-committed but not verified end to end. Phase 6 (browser panel) is not started.
-**Date:** 2026-09-27 (design) · 2026-09-29 (status update)
+**Status:** In progress. Phases 0–1 are done. Phase 2's credential foundation is
+done, but its Superset delivery is open. Phase 3's Codex fallback and credential
+isolation are production-verified; its provider-neutral delivery and lifecycle
+gates remain open. Phases 4–5 remain unverified or partial. Phase 6 (browser
+panel) is not started.
+**Date:** 2026-09-27 (design) · 2026-09-30 (status update)
 
 ## Objective
 
@@ -104,8 +107,8 @@ profile boundary, and forwards lifecycle operations to Superset.
 | ------------------------------------------------ | -------------------------------------------------------------------------- |
 | 0. Prerequisite runtime                          | **Done**                                                                   |
 | 1. Durable run identity                          | **Done**                                                                   |
-| 2. Per-launch credential profile                 | **Done** (delivered by the neutral launch profile)                         |
-| 3. Fixed private Superset agent operations       | **Implemented, unverified**                                                |
+| 2. Per-launch credential profile                 | **Foundation done; not yet wired into the Superset path** (see Phase 2)    |
+| 3. Fixed private Superset agent operations       | **Codex fallback and isolation verified; remaining host gates open**       |
 | 4. Replace the Gen 2 agent route behind the flag | **Implemented, unverified**                                                |
 | 5. Refresh, cancellation, recovery               | **Partial**: reconciliation exists; host recovery is a liveness check only |
 | 6. Browser integration                           | **Not started**                                                            |
@@ -127,23 +130,33 @@ and timestamps. It stores no credential material. The CoDev agent-session UUID i
 the idempotency key. Lease state is not duplicated here: seat lifecycle is owned
 by the foundation's run-derived seats.
 
-## Phase 2: per-launch credential profile — DONE
+## Phase 2: per-launch credential profile — FOUNDATION DONE, SUPERSET WIRING OPEN
 
-Delivered by the foundation's neutral launch profile (files + env), produced from
-`resolveCredential` and the registry entry for the credential kind. The profile
-is materialized privately per run, carries only what that agent needs, and is
-removed after final capture, cancel, failed launch, or cleanup. No new provider
-recipe interface is introduced; provider differences live in the registry.
+The foundation's neutral launch profile (files + env) exists and is produced from
+`resolveCredential` and the registry entry for the credential kind. guestd
+validates it (`validate_launch_profile`) and the web adapter sends it.
 
-## Phase 3: fixed private Superset agent operations — IMPLEMENTED, UNVERIFIED
+It does **not** yet reach the process on the Superset path. guestd forwards the
+request body verbatim, and the host's `agentStartSchema`
+(`vendor/superset/packages/host-service/src/codev/agents.ts`) declares only
+`codexAuthCacheJson`, so zod strips `launchProfile`. The legacy Codex cache is
+still delivered through a private per-agent directory as a rollout fallback; it
+was verified in production. Claude and any later provider cannot use that
+fallback. guestd's `provider_profile.rs` primitive is intentionally unused on
+this path because guestd's `PrivateTmp` is invisible to the host service.
+Wiring `launchProfile` into the host is Phase 3 work inside the vendored
+Superset service; it must not alter `resolveCredential`, the registry, or the
+profile shape.
+
+## Phase 3: fixed private Superset agent operations — PARTIALLY VERIFIED
 
 `vendor/superset/packages/host-service/src/codev/agents.ts` (commit
 `841ab3923b`), bridge-secret protected, registered in `app.ts`:
 
 - `POST /codev/agents`: start in a validated worktree.
-- `POST /codev/agents/:id/input`: approved interactive input.
-- `POST /codev/agents/:id/poll`: bounded output, lifecycle state, refresh-ready
-  signal; never returns a profile file or secret.
+- `POST /codev/agents/:id/input`: bounded interactive input.
+- `POST /codev/agents/:id/poll`: terminal snapshot, lifecycle state, and a
+  refresh-ready signal; the snapshot has no redaction.
 - `DELETE /codev/agents/:id`: stop and report terminal state.
 - `GET /codev/agents/:id/recovery`: liveness check.
 
@@ -156,17 +169,68 @@ separate from the terminal/Git flag.
 a tracked terminal; there is no headless launch primitive. The implementation
 therefore reuses the terminal primitives the `/codev/terminal` routes use and
 delivers the agent command as `initialCommand` in a live shell, with each
-argument POSIX-single-quote-escaped. The credential is written to a fresh 0700
-directory under `SUPERSET_HOME_DIR`, never under `/workspace`, and removed on
-close or failure. It does not fake hook-based `TerminalAgentStore` tracking.
+argument POSIX-single-quote-escaped. The credential and a short launch script
+are written to a fresh 0700 directory below `/var/lib/codev-agent-profiles`,
+never under `/workspace`. The agent runs with a distinct numeric UID while
+sharing the workspace-writing group with ordinary terminals. The host attempts
+removal on close or failed start, but does not remove it after a natural exit.
+It does not fake hook-based `TerminalAgentStore` tracking.
 
-Open verification for this phase:
+### Current findings (2026-09-30)
 
-- Confirm no ordinary shell or second agent can read another run's profile
-  directory, given the agent runs as a command in a shell.
-- Adversarial tests for the shell-quoting path (malformed IDs, metacharacters,
-  arbitrary env, arbitrary commands must all be rejected).
-- Confirm every host session is validated against the requested CoDev worktree.
+The five targeted web suites pass (39 tests, including the credential-profile
+tests), `pnpm typecheck` passes, and the full web suite passes (1247 tests; one
+skipped). The root `pnpm test` stops in two infrastructure tests that invoke
+Bash through Windows paths, before running the package suites. No test exists
+for `agents.ts`. The orchestrator's Rust tests were not run on this Windows
+machine, which has neither cargo nor bun.
+
+**Status accounting for future updates:** treat the code on `main` as the
+source of truth. Commit `99fe5c5fe1` fixed the shared-UID and long-command
+staging defects, and merge `713eac2bdc` brought it onto `main`. Commits
+`e2802bdf49`, `efe7ae5f6b`, and `32fc5cf650` made Gen 2's web-side provider
+selection, command construction, and output parsing provider-aware. None of
+those commits delivers `launchProfile` through the Superset host, implements
+refresh capture, automatic natural-exit cleanup, real exit codes, or the
+host-side agent/worktree and command gates. Do not mark those items complete
+without new code and end-to-end evidence.
+
+1. **Codex credential isolation is verified.** Commit `99fe5c5fe1` creates a
+   root-owned, searchable profile root and a distinct 0700 directory and UID
+   per agent. The launch script belongs to that UID and is sourced as a short
+   initial command, avoiding Superset's inaccessible long-command staging. In
+   production, a ChatGPT-connected Codex agent created files successfully while
+   an ordinary workspace terminal received `permission denied` when attempting
+   to inspect `/var/lib/codev-agent-profiles`.
+2. **`launchProfile` is still dropped** (see Phase 2). The host uses the legacy
+   Codex field only. The provider-neutral web and guest contracts are present,
+   but the host ignores `provider`, so Claude cannot authenticate or launch on
+   the Superset path.
+3. **The terminal snapshot is not a redacted progress stream.** The launch
+   script keeps credentials, the prompt, and history out of the echoed command,
+   but the browser still receives the terminal snapshot. The sourced script path
+   and anything an agent prints can appear there, so profile paths and provider
+   output need an explicit redaction policy before broad rollout.
+4. **Exit code is always 0.** `/poll` reports `exitCode: 0` on any exit, so a
+   failed agent is recorded `completed`.
+5. **No refresh capture.** `refreshReady` is set but nothing reads the refreshed
+   cache back, so the provider-refresh write-back is unimplemented.
+6. **Profile cleanup gap.** The directory is removed only on `DELETE` or a failed
+   start. A natural exit never triggers `DELETE` from the web adapter, so
+   `auth.json` outlives the run.
+7. **No host-side identity check.** `/input`, `/poll`, `DELETE`, and `/recovery`
+   accept any terminal ID and do not verify it is an agent session or belongs to
+   the requested worktree. Only the web layer scopes IDs, and only by workspace.
+8. **The host accepts arbitrary commands.** guestd checks the `command` array's
+   length and the host quotes its arguments, but neither restricts the executable
+   or arguments to an agent launch. The verification gate saying arbitrary
+   commands are rejected is false for the private bridge's start route.
+9. **Unconfirmed:** a 4096-column terminal may wrap long `codex exec --json`
+   lines and corrupt JSON parsing. The idempotency map is host-memory only and
+   does not check that a repeated key names the same worktree.
+
+Remaining verification: two concurrent agents, cross-agent access denial,
+profile removal after natural exit, and the worktree/command gates in a real VM.
 
 ## Phase 4: replace the Gen 2 agent route behind the flag — IMPLEMENTED, UNVERIFIED
 
@@ -180,27 +244,28 @@ the flag:
    connection eligibility (via `resolveCredential`), and capacity before any
    runtime request.
 2. Select or create an isolated agent worktree with distinct CoDev path claims.
-3. Claim the seat, create the mapping in `creating`, materialize the profile.
+3. Claim the seat, create the mapping in `creating`, and send the resolved
+   launch profile to guestd.
 4. Start the Superset agent; store host IDs and move to `running`; append the
    user message and create the turn record.
 5. Poll through CoDev and publish only CoDev-safe chunks.
-6. On final exit, collect refreshed credential state through the trusted path,
-   persist it via the existing encrypted connection store, release the seat,
-   remove the profile, mark the run terminal.
+6. On final exit, release the seat and mark the run terminal. Refresh capture
+   and automatic profile removal remain open Phase 5 work.
 
 Startup failure after a claim must stop any host process, remove the profile,
 release the seat, and record a failed run, each step safe to repeat.
 
 Remaining: confirm the flag switches the whole path end to end in a real Gen 2
-VM, and that every failure branch releases the seat exactly once.
+VM, and that every failure branch releases the seat exactly once. Blocked on the
+Phase 3 findings, notably provider-neutral host delivery, real exit codes, and
+profile cleanup after a natural exit.
 
 ## Phase 5: refresh, cancellation, and recovery — PARTIAL
 
 Exists: `reconcileGen2SupersetAgentSession` moves a missing or ambiguous
 nonterminal run to `recovery_required` and increments the bounded recovery
-count. Refresh is captured only after the process ends or at a safe checkpoint,
-through the authenticated internal path, and never streamed to the browser,
-logs, transcript, or audit events.
+count. Refresh state is not yet captured from the Superset host, even though
+the web-side credential store has the existing encrypted write-back path.
 
 Gap: the host `/recovery` endpoint is a liveness check against the terminal
 session, not resume-candidate tracking, so adoption after a host restart can
@@ -229,19 +294,23 @@ Status of each gate is unconfirmed unless noted.
   starts; seat release on every failure and terminal state; profile metadata
   never contains secrets. (Partial unit coverage exists in
   `superset-agent-runtime.test.ts` and `superset-runs.test.ts`.)
-- Host/guest: fixed routes reject malformed IDs, mismatched worktrees, raw
-  profile contents, arbitrary environment, and arbitrary commands.
+- Host/guest: fixed routes must reject malformed IDs, mismatched worktrees, raw
+  profile contents, arbitrary environment, and arbitrary commands. The current
+  start route accepts arbitrary command arrays; the ID routes only require a
+  nonempty ID and do not check agent/worktree ownership. This gate remains open.
 - Integration: two editors launch two agents in separate worktrees; outputs,
   branch status, and file reconciliation appear in the shared page.
-- Isolation: an ordinary shell, a second agent, a viewer, and the browser each
-  fail to read the first agent's profile or refreshed cache.
+- Isolation: the ordinary-shell check is verified in production. A second
+  agent, a viewer, and the browser still need to be shown unable to read the
+  first agent's profile or refreshed cache.
 - Lifecycle: cancellation, provider revocation, host-service restart, and VM
   restoration each leave exactly one durable CoDev state, no held seat, and no
   leftover profile.
 - Provider refresh: a controlled refresh writes back to the requesting member's
   connection only, then the profile is removed.
-- Providers: run the gates for both Codex and Claude; the launch contract is
-  provider-neutral and Claude is already a supported credential kind.
+- Providers: the Superset path is Codex-only today. Run the gates for Codex, then
+  for Claude once the host honors `launchProfile` and the web path resolves a
+  provider other than `openai`.
 
 ## Rollout and removal
 
