@@ -502,6 +502,61 @@
   position: relative;
 }
 
+/* Hide/show control. Expanded, it floats over the sidebar header's right edge;
+   collapsed, the rail becomes a slim column that keeps it reachable. */
+.app-sidebar-rail {
+  position: fixed;
+  top: 14px;
+  left: 176px;
+  z-index: 5;
+}
+
+.app-sidebar-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.7;
+  transition:
+    background-color 150ms ease,
+    opacity 150ms ease;
+}
+
+.app-sidebar-toggle:hover {
+  background: rgba(var(--ink-rgb), 0.08);
+  opacity: 1;
+}
+
+.app-sidebar-toggle:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+  opacity: 1;
+}
+
+.app-with-sidebar.is-sidebar-collapsed {
+  grid-template-columns: 44px minmax(0, 1fr);
+}
+
+.app-with-sidebar.is-sidebar-collapsed .app-sidebar {
+  display: none;
+}
+
+.app-with-sidebar.is-sidebar-collapsed .app-sidebar-rail {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 100dvh;
+  padding: 14px 6px;
+  border-right: 1px solid var(--line);
+  background: rgba(var(--paper-rgb), 0.82);
+}
+
 .dashboard-shell {
   min-height: 100dvh;
   padding: clamp(32px, 5vw, 64px) clamp(20px, 5vw, 64px) 96px;
@@ -792,6 +847,19 @@
   .app-with-sidebar {
     grid-template-columns: 1fr;
     grid-template-rows: auto auto;
+  }
+
+  /* The rail is a desktop affordance; the mobile bar is always shown. */
+  .app-sidebar-rail {
+    display: none;
+  }
+
+  .app-with-sidebar.is-sidebar-collapsed {
+    grid-template-columns: 1fr;
+  }
+
+  .app-with-sidebar.is-sidebar-collapsed .app-sidebar {
+    display: flex;
   }
 
   .app-sidebar {
