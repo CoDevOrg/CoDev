@@ -181,8 +181,4 @@ Passing the prototype gates a separate rollout and migration decision.
 - Which host database and process records must be persisted or reconstructed
   after Firecracker restore?
 
-Related design and current contracts: [Gen 1 to Gen 2 Superset adoption history](./archive/gen1-workspace/SUPERSET_ADOPTION_MANIFEST.md),
-[Gen 2 workspace](./gen2-workspace.md),
-[Gen 1 backend/frontend integration history](./archive/gen1-workspace/BACKEND_FRONTEND_INTEGRATION.md),
-[security boundary](./SECURITY.md), and
-[Gen 1 branch-workspace plan](./archive/gen1-workspace/branch-workspaces-plan.md).
+Related current contract: [Gen 2 workspace](./gen2-workspace.md).

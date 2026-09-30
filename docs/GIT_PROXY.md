@@ -35,9 +35,8 @@ Status: design only. PR creation and stopped-workspace sync already shipped
    (`getGitHubUserToken` / refresh). There is no App installation-token
    minting path today. Pull requests layer on published `codev/*`
    branches.
-6. **No existing proxy.** `docs/SECURITY.md` explicitly forbids tokens in
-   clone URLs or credential helpers. There is no smart HTTP /
-   `git-http-backend` / packfile relay in the repo.
+6. **No existing proxy.** There is no smart HTTP / `git-http-backend` /
+   packfile relay in the repo.
 7. **API Gateway throttles.** Live verification observed intermittent HTTP
    429 from `execute-api`. Any chatty git protocol must batch and back off.
 

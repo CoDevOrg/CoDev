@@ -5,7 +5,6 @@ node_modules
 playwright-report
 test-results
 .claude/worktrees
-.planning
 pnpm-lock.yaml
 packages/db/drizzle
 apps/web/app/.well-known/workflow
@@ -15,8 +14,5 @@ apps/web/.swc
 # Keep root format and format:check from rewriting or checking its sources.
 vendor/superset
 
-# Vendored design skill (upstream ui-ux-pro-max). Kept byte-identical to the
-# published skill apart from the repo-relative script paths in SKILL.md, so
-# re-vendoring stays a clean copy. Prettier would rewrite its markdown tables
-# and JSON datasets.
-.claude/skills/ui-ux-pro-max
+# Keep the installed shadcn skill identical to its upstream source.
+.claude/skills/shadcn

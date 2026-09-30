@@ -149,8 +149,7 @@ not a browser mock. Future Superset work must extend that host service to
 replace the matching Gen 2 terminal, Git/worktree, and agent mechanics; do not
 add duplicate `codev-guestd` implementations. CoDev continues to own member
 authorization, provider credentials, quotas, Yjs documents, conflicts, and
-durable product history. The adoption contract and stop/go gate live in
-[`SUPERSET_ADOPTION_MANIFEST.md`](./SUPERSET_ADOPTION_MANIFEST.md).
+durable product history.
 
 ## Routes
 
