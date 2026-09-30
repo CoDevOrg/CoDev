@@ -7,11 +7,10 @@ import {
   decodePendingBytes,
   encodePendingBytes,
   mergeAgentExecChunks,
-  parseAgentExecOutput,
 } from "./agent-output";
 
 describe("gen2 agent policy", () => {
-  it("only runs Codex on a ready instance", () => {
+  it("only runs an agent on a ready instance", () => {
     expect(canRunGen2Agent("ready")).toBe(true);
     expect(canRunGen2Agent("pending")).toBe(false);
     expect(canRunGen2Agent("provisioning")).toBe(false);
@@ -20,7 +19,7 @@ describe("gen2 agent policy", () => {
   });
 });
 
-describe("codex exec output", () => {
+describe("agent exec output bytes", () => {
   it("decodes a UTF-8 character split across unordered chunks", () => {
     expect(
       decodeAgentExecOutput([
@@ -29,32 +28,6 @@ describe("codex exec output", () => {
         { sequence: 1, dataBase64: Buffer.from([0xc3]).toString("base64") },
       ]),
     ).toBe("hé");
-  });
-
-  it("reads the last agent message and ignores pty noise", () => {
-    const output = [
-      "noise",
-      JSON.stringify({
-        type: "item.completed",
-        item: { type: "agent_message", text: "Listed the files." },
-      }),
-      JSON.stringify({ type: "turn.completed" }),
-    ].join("\n");
-    expect(parseAgentExecOutput(output)).toEqual({
-      reply: "Listed the files.",
-      failed: false,
-    });
-  });
-
-  it("surfaces a Codex error event", () => {
-    expect(
-      parseAgentExecOutput(
-        JSON.stringify({
-          type: "error",
-          error: { message: "auth expired" },
-        }),
-      ),
-    ).toEqual({ reply: "auth expired", failed: true });
   });
 
   it("merges poll chunks by sequence without duplicates", () => {

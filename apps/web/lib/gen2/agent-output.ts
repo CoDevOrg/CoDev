@@ -1,3 +1,10 @@
+/**
+ * Transport only: bytes and chunk sequencing for an agent process's output.
+ * Nothing here knows what the bytes mean. Each provider's output format is
+ * read by its own reducer (`turn-events.ts`, `claude-turn-events.ts`), chosen
+ * in `turn-reducer.ts`.
+ */
+
 export type AgentExecChunk = {
   sequence: number;
   dataBase64: string;
@@ -35,45 +42,6 @@ export function decodeAgentExecOutput(chunks: AgentExecChunk[]): string {
     offset += piece.byteLength;
   }
   return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
-}
-
-export function parseAgentExecOutput(output: string): {
-  reply: string;
-  failed: boolean;
-} {
-  let reply = "";
-  let failed = false;
-  for (const line of output.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed.startsWith("{")) continue;
-    try {
-      const event = JSON.parse(trimmed) as {
-        type?: unknown;
-        item?: { type?: unknown; text?: unknown };
-        error?: { message?: unknown };
-      };
-      if (
-        event.type === "item.completed" &&
-        event.item?.type === "agent_message" &&
-        typeof event.item.text === "string" &&
-        event.item.text.trim()
-      ) {
-        reply = event.item.text.trim();
-      }
-      if (event.type === "error") {
-        failed = true;
-        if (
-          typeof event.error?.message === "string" &&
-          event.error.message.trim()
-        ) {
-          reply = event.error.message.trim();
-        }
-      }
-    } catch {
-      /* PTY noise around JSON lines. */
-    }
-  }
-  return { reply, failed };
 }
 
 export function mergeAgentExecChunks(
