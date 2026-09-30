@@ -17,6 +17,7 @@ import {
 	type AgentLaunch,
 	type AgentLaunchProfile,
 } from "./agent-isolation";
+import { isApprovedAgentCommand, type CoDevAgentProvider } from "./agent-command-policy";
 import { resolveCoDevWorktreeRoot } from "./files";
 
 const worktreeIdSchema = z
@@ -40,13 +41,13 @@ const launchProfileSchema = z.object({
 
 const agentStartSchema = z.object({
 	worktreeId: worktreeIdSchema,
-	provider: z.string().min(1).max(32),
+	provider: z.enum(["openai", "anthropic"]),
 	launchProfile: launchProfileSchema.optional(),
 	codexAuthCacheJson: z
 		.string()
 		.max(128 * 1024)
 		.optional(),
-	command: z.array(z.string().min(1)).min(1).max(32),
+	command: z.array(z.string().max(64 * 1024)).min(1).max(32),
 	idempotencyKey: z.string().min(1).max(128),
 });
 const agentInputSchema = z.object({ data: z.string().max(64 * 1024) });
@@ -65,9 +66,15 @@ export type CoDevAgentBridgeOptions = {
 };
 
 type AgentPollState = { sequence: number; text: string };
+type AgentSession = {
+	workspaceId: string;
+	worktreeId: string;
+	provider: CoDevAgentProvider;
+	launch?: AgentLaunch;
+};
 const agentPollStates = new Map<string, AgentPollState>();
-/** Private process identity and launch directory, keyed by agent ID. */
-const agentLaunches = new Map<string, AgentLaunch>();
+/** The only terminal IDs that this private bridge may operate on. */
+const agentSessions = new Map<string, AgentSession>();
 /** Exit codes are supplied by the PTY while this host process is alive. */
 const agentExitCodes = new Map<string, number>();
 /** idempotencyKey -> agentId, so a retried start reattaches instead of relaunching. */
@@ -139,9 +146,18 @@ function terminalError(error: unknown) {
 }
 
 async function releaseAgentLaunch(agentId: string) {
-	const launch = agentLaunches.get(agentId);
-	agentLaunches.delete(agentId);
+	const session = agentSessions.get(agentId);
+	const launch = session?.launch;
+	if (session) session.launch = undefined;
 	await removeAgentLaunch(launch);
+}
+
+function agentSessionFor(agentId: string) {
+	return agentSessions.get(agentId);
+}
+
+function agentSessionMatchesTerminal(agent: AgentSession, terminal: { originWorkspaceId: string | null }) {
+	return terminal.originWorkspaceId === agent.workspaceId;
 }
 
 /**
@@ -182,14 +198,21 @@ export function registerCoDevAgentBridge({
 		if (!requireBridge(context.req.raw)) return context.json({ error: "Unauthorized" }, 401);
 		const parsed = agentStartSchema.safeParse(await context.req.json().catch(() => undefined));
 		if (!parsed.success) return context.json({ error: "Invalid Superset agent start request." }, 400);
-		const { worktreeId, codexAuthCacheJson, launchProfile, command, idempotencyKey } = parsed.data;
+		const { worktreeId, provider, codexAuthCacheJson, launchProfile, command, idempotencyKey } = parsed.data;
+		if (!isApprovedAgentCommand(provider, command)) {
+			return context.json({ error: "Unsupported Superset agent launch command." }, 400);
+		}
 
 		const existingAgentId = agentIdempotency.get(idempotencyKey);
 		if (existingAgentId) {
+			const launchRecord = agentSessionFor(existingAgentId);
+			if (!launchRecord || launchRecord.worktreeId !== worktreeId || launchRecord.provider !== provider) {
+				return context.json({ error: "Idempotency key belongs to a different agent launch." }, 409);
+			}
 			const existing = db.query.terminalSessions
 				.findFirst({ where: eq(terminalSessions.id, existingAgentId) })
 				.sync();
-			if (existing && !existing.endedAt) {
+			if (existing && !existing.endedAt && agentSessionMatchesTerminal(launchRecord, existing)) {
 				return context.json(
 					{
 						hostWorkspaceId: existing.originWorkspaceId ?? hostWorkspaceId(worktreeId),
@@ -198,6 +221,9 @@ export function registerCoDevAgentBridge({
 					},
 					201,
 				);
+			}
+			if (existing && !existing.endedAt) {
+				return context.json({ error: "Agent launch record does not match its terminal." }, 409);
 			}
 			agentIdempotency.delete(idempotencyKey);
 		}
@@ -244,7 +270,7 @@ export function registerCoDevAgentBridge({
 				await removeAgentLaunch(launch);
 				return context.json({ error: terminalError(created) }, 400);
 			}
-			agentLaunches.set(agentId, launch);
+			agentSessions.set(agentId, { workspaceId: workspace.id, worktreeId, provider, launch });
 			created.pty.onExit(({ exitCode }) => {
 				agentExitCodes.set(agentId, exitCode);
 				// A natural exit does not pass through DELETE. Remove the private
@@ -280,11 +306,15 @@ export function registerCoDevAgentBridge({
 		if (!parsed.success) return context.json({ error: "Invalid Superset agent input request." }, 400);
 		const agentId = context.req.param("agentId");
 		try {
+			const agent = agentSessionFor(agentId);
+			if (!agent) return context.json({ error: "Superset agent session not found." }, 400);
 			const session = db.query.terminalSessions.findFirst({ where: eq(terminalSessions.id, agentId) }).sync();
-			if (!session) return context.json({ error: "Superset agent session not found." }, 400);
+			if (!session || !agentSessionMatchesTerminal(agent, session)) {
+				return context.json({ error: "Superset agent session does not match its launch record." }, 400);
+			}
 			const result = await writeFramedInputToSession({
 				terminalId: agentId,
-				workspaceId: session.originWorkspaceId ?? "",
+				workspaceId: agent.workspaceId,
 				text: parsed.data.data,
 				submit: false,
 				db,
@@ -306,11 +336,15 @@ export function registerCoDevAgentBridge({
 		if (!parsed.success) return context.json({ error: "Invalid Superset agent poll request." }, 400);
 		const agentId = context.req.param("agentId");
 		try {
+			const agent = agentSessionFor(agentId);
+			if (!agent) return context.json({ error: "Superset agent session not found." }, 400);
 			const session = db.query.terminalSessions.findFirst({ where: eq(terminalSessions.id, agentId) }).sync();
-			if (!session) return context.json({ error: "Superset agent session not found." }, 400);
+			if (!session || !agentSessionMatchesTerminal(agent, session)) {
+				return context.json({ error: "Superset agent session does not match its launch record." }, 400);
+			}
 			const snapshot = await snapshotSession({
 				terminalId: agentId,
-				workspaceId: session.originWorkspaceId ?? "",
+				workspaceId: agent.workspaceId,
 				maxLines: 1_000,
 				db,
 				eventBus,
@@ -346,9 +380,20 @@ export function registerCoDevAgentBridge({
 		if (!requireBridge(context.req.raw)) return context.json({ error: "Unauthorized" }, 401);
 		const agentId = context.req.param("agentId");
 		try {
+			const agent = agentSessionFor(agentId);
+			if (!agent) return context.json({ error: "Superset agent session not found." }, 400);
+			const session = db.query.terminalSessions.findFirst({ where: eq(terminalSessions.id, agentId) }).sync();
+			if (!session || !agentSessionMatchesTerminal(agent, session)) {
+				return context.json({ error: "Superset agent session does not match its launch record." }, 400);
+			}
 			await disposeSessionAndWait(agentId, db);
 			agentPollStates.delete(agentId);
 			await releaseAgentLaunch(agentId);
+			agentExitCodes.delete(agentId);
+			agentSessions.delete(agentId);
+			for (const [key, value] of agentIdempotency) {
+				if (value === agentId) agentIdempotency.delete(key);
+			}
 			return context.json({ ok: true });
 		} catch (error) {
 			return context.json(
@@ -362,11 +407,15 @@ export function registerCoDevAgentBridge({
 		if (!requireBridge(context.req.raw)) return context.json({ error: "Unauthorized" }, 401);
 		const agentId = context.req.param("agentId");
 		try {
+			const agent = agentSessionFor(agentId);
+			if (!agent) return context.json({ adoptable: false });
 			const session = db.query.terminalSessions.findFirst({ where: eq(terminalSessions.id, agentId) }).sync();
-			if (!session || session.endedAt) return context.json({ adoptable: false });
+			if (!session || session.endedAt || !agentSessionMatchesTerminal(agent, session)) {
+				return context.json({ adoptable: false });
+			}
 			const snapshot = await snapshotSession({
 				terminalId: agentId,
-				workspaceId: session.originWorkspaceId ?? "",
+				workspaceId: agent.workspaceId,
 				maxLines: 1,
 				db,
 				eventBus,
