@@ -1,8 +1,10 @@
 import { isGitHubAuthConfigured } from "@codev/config";
-import { KeyRound, Mail } from "lucide-react";
+import { Download, KeyRound, Mail } from "lucide-react";
 
 import { connectGitHubAccount } from "@/app/actions/github";
-import { Button } from "@/components/ui/button";
+import { updateDisplayName } from "@/app/actions/profile";
+import { Button, LinkButton } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { GithubMark } from "@/components/settings/github-mark";
 import { GoogleMark } from "@/components/settings/google-mark";
 import {
@@ -20,7 +22,18 @@ const passwordErrorCopy: Record<string, string> = {
   match: "Those passwords did not match. Try again.",
   policy: "Choose a stronger password that meets every requirement below.",
   exists: "This account already has a password set.",
+  current: "That is not your current password.",
+  nopassword: "This account has no password to change yet.",
 };
+
+// `error` is shared by the name and password forms; each shows only its own.
+const PASSWORD_ERRORS = new Set([
+  "match",
+  "policy",
+  "exists",
+  "current",
+  "nopassword",
+]);
 
 function initials(
   name: string | null | undefined,
@@ -81,7 +94,12 @@ function SignInMethodRow({
 export default async function PersonalProfilePage({
   searchParams,
 }: {
-  searchParams: Promise<{ github?: string; password?: string; error?: string }>;
+  searchParams: Promise<{
+    github?: string;
+    password?: string;
+    name?: string;
+    error?: string;
+  }>;
 }) {
   const user = await requireUser();
   const connectedAccounts = await getConnectedAccounts(user.id);
@@ -90,7 +108,14 @@ export default async function PersonalProfilePage({
     params.github === "connected" && connectedAccounts.github.connected;
   const passwordJustSet =
     params.password === "set" && connectedAccounts.hasPassword;
-  const passwordError = params.error ? passwordErrorCopy[params.error] : null;
+  const passwordJustChanged =
+    params.password === "changed" && connectedAccounts.hasPassword;
+  const passwordError =
+    params.error && PASSWORD_ERRORS.has(params.error)
+      ? passwordErrorCopy[params.error]
+      : null;
+  const nameError =
+    params.error === "name" ? "Enter a name up to 80 characters long." : null;
 
   return (
     <OrcaPageShell>
@@ -99,19 +124,51 @@ export default async function PersonalProfilePage({
         title="Profile"
       />
 
-      <Card className="flex items-center gap-4 px-6 py-5">
-        <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-foreground text-lg font-semibold text-background">
-          {initials(user.name, user.email)}
-        </span>
-        <div className="min-w-0 space-y-1">
-          <p className="truncate text-base font-semibold">
-            {user.name || "Unnamed"}
-          </p>
-          <p className="flex items-center gap-1.5 truncate text-sm text-muted-foreground">
-            <Mail aria-hidden className="size-3.5 shrink-0" />
-            {user.email || "No email on file"}
-          </p>
+      <Card className="space-y-4 px-6 py-5">
+        <div className="flex items-center gap-4">
+          <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-foreground text-lg font-semibold text-background">
+            {initials(user.name, user.email)}
+          </span>
+          <div className="min-w-0 space-y-1">
+            <p className="truncate text-base font-semibold">
+              {user.name || "Unnamed"}
+            </p>
+            <p className="flex items-center gap-1.5 truncate text-sm text-muted-foreground">
+              <Mail aria-hidden className="size-3.5 shrink-0" />
+              {user.email || "No email on file"}
+            </p>
+          </div>
         </div>
+        <form
+          action={updateDisplayName}
+          className="flex flex-wrap items-end gap-3 border-t border-border/60 pt-4"
+        >
+          <label className="block min-w-[14rem] flex-1 space-y-1.5 text-xs">
+            <span className="font-medium text-muted-foreground">
+              Display name
+            </span>
+            <Input
+              autoComplete="name"
+              defaultValue={user.name ?? ""}
+              maxLength={80}
+              name="name"
+              required
+            />
+          </label>
+          <Button size="sm" type="submit" variant="outline">
+            Save name
+          </Button>
+          {params.name === "saved" ? (
+            <p className="w-full text-xs text-emerald-400" role="status">
+              Display name updated.
+            </p>
+          ) : null}
+          {nameError ? (
+            <p className="w-full text-xs text-red-400" role="alert">
+              {nameError}
+            </p>
+          ) : null}
+        </form>
       </Card>
 
       <Card className="space-y-4 px-6 py-5">
@@ -135,8 +192,15 @@ export default async function PersonalProfilePage({
           />
           <SignInMethodRow
             action={
-              !connectedAccounts.github.connected &&
-              isGitHubAuthConfigured() ? (
+              connectedAccounts.github.connected ? (
+                <LinkButton
+                  href="/settings/personal/integrations"
+                  size="sm"
+                  variant="outline"
+                >
+                  Repository access
+                </LinkButton>
+              ) : isGitHubAuthConfigured() ? (
                 <form
                   action={connectGitHubAccount.bind(
                     null,
@@ -174,7 +238,28 @@ export default async function PersonalProfilePage({
         ) : null}
       </Card>
 
-      {connectedAccounts.hasPassword ? null : (
+      {connectedAccounts.hasPassword ? (
+        <Card className="space-y-4 px-6 py-5">
+          <OrcaSubsectionHeader
+            description="Enter your current password to choose a new one."
+            title="Change password"
+          />
+          {passwordJustChanged ? (
+            <p className="text-xs text-emerald-400" role="status">
+              Password changed.
+            </p>
+          ) : null}
+          {passwordError ? (
+            <p className="text-xs text-red-400" role="alert">
+              {passwordError}
+            </p>
+          ) : null}
+          <SetPasswordForm
+            mode="change"
+            redirectTo="/settings/personal/profile"
+          />
+        </Card>
+      ) : (
         <Card className="space-y-4 px-6 py-5">
           <OrcaSubsectionHeader
             description="You signed in with Google or GitHub, so this account has no password yet. Set one to also be able to sign in with your email."
@@ -196,6 +281,22 @@ export default async function PersonalProfilePage({
           )}
         </Card>
       )}
+
+      <Card className="flex flex-wrap items-center justify-between gap-4 px-6 py-5">
+        <OrcaSubsectionHeader
+          description="A JSON copy of your profile, sign-in methods, and the names of your environment variables. Secrets are never included."
+          title="Your data"
+        />
+        <LinkButton
+          download
+          href="/api/settings/export"
+          size="sm"
+          variant="outline"
+        >
+          <Download aria-hidden className="size-3.5" />
+          Download account data
+        </LinkButton>
+      </Card>
     </OrcaPageShell>
   );
 }
