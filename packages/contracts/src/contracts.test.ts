@@ -532,18 +532,34 @@ describe("gen2 workspace contracts", () => {
     ).toMatchObject({ status: "ready", role: "owner" });
   });
 
-  it("accepts a Codex turn start and a poll without auth material", () => {
-    expect(
-      gen2AgentStartRequestSchema.parse({
+  it("accepts a turn start for each agent and a poll without auth material", () => {
+    for (const provider of ["codex", "claude"] as const) {
+      expect(
+        gen2AgentStartRequestSchema.parse({
+          chatId: id,
+          prompt: " List the files ",
+          provider,
+          idempotencyKey: "turn-1234",
+        }),
+      ).toEqual({
         chatId: id,
-        prompt: " List the files ",
+        prompt: "List the files",
+        provider,
         idempotencyKey: "turn-1234",
-      }),
-    ).toEqual({
-      chatId: id,
-      prompt: "List the files",
-      idempotencyKey: "turn-1234",
-    });
+      });
+    }
+    // No provider is assumed: a start that names none, or an unknown one, is
+    // refused.
+    for (const provider of [undefined, "cursor"]) {
+      expect(
+        gen2AgentStartRequestSchema.safeParse({
+          chatId: id,
+          prompt: "List the files",
+          provider,
+          idempotencyKey: "turn-1234",
+        }).success,
+      ).toBe(false);
+    }
     const poll = gen2AgentPollResponseSchema.parse({
       chunks: [{ sequence: 0, dataBase64: "aGVsbG8=" }],
       nextSequence: 1,
