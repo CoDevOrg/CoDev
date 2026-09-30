@@ -2,7 +2,7 @@
 
 The CoDev runtime: one Firecracker host VM, its network, key vault, artifact
 storage and monitoring. [`infra/runtime`](../runtime) holds the cloud-neutral
-half — the host bootstrap and the Orca build scripts this stack deploys.
+host bootstrap, guest image provisioning, and Superset build scripts.
 
 ## This used to be one of two stacks
 
@@ -55,10 +55,9 @@ artifact, reading the host's public IP, reading the direct secret, and syncing
 Caddy's certificates — and roughly 600 cloud-agnostic lines around them. The
 shim is gone; those 600 lines are the whole file now.
 
-It lives under `infra/runtime/` rather than `infra/azure/` because it is also
-what the `verify-runtime` CI job and `pnpm orca:web` build against, and because
-the directory it used to sit in was named `infra/aws/` long after it had
-stopped being about AWS.
+It lives under `infra/runtime/` rather than `infra/azure/` because the host
+bootstrap and guest image provisioning are independent of the cloud-specific
+Azure deployment templates.
 
 One leftover: cloud-init still exports `CODEV_CLOUD=azure` into the host's
 environment file. Nothing reads it. It stays because `osProfile.customData` is
@@ -106,8 +105,8 @@ show it running; a line containing `ordering cycle` means it did not.
 ### The bootstrap re-runs, but it does not reinstall
 
 Re-running on every boot is what makes a release roll forward, and it used to
-mean a full reinstall each time: apt, Node, the agent CLIs, the Cursor
-installer, the Orca tarball, Caddy, Firecracker, and a 3 GB guest rootfs
+mean a full reinstall each time: apt, Node, the agent CLIs, Caddy, Firecracker,
+and a 3 GB guest rootfs
 rebuilt from a freshly downloaded Ubuntu squashfs. That is minutes of work,
 and because `codev-orchestrator` only starts once the script finishes, every
 one of those minutes landed on whoever was sitting in front of an opening
@@ -167,7 +166,7 @@ CODEV_HOST_IMAGE_ID=<gallery-image-version-resource-id> \
 ```
 
 Keep the previous version ID for rollback. The gallery image contains stable
-host dependencies, Orca, Firecracker, the guest kernel, and the prepared guest
+host dependencies, Firecracker, the guest kernel, and the prepared guest
 rootfs. It does not contain credentials, certificates, repositories, member
 state, or the deployment's public hostname. The mutable bootstrap still
 installs release-specific services and configures the host after boot.

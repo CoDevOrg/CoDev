@@ -34,8 +34,6 @@ describe("provider connection view", () => {
       provenance: "api_key",
       // An API key is a workspace credential: the rooms executor has no
       // API-key path, so the registry reports it as workspace-only.
-      enabledForRooms: false,
-      enabledForWorkspace: true,
       allowInSharedWorkspaces: true,
     });
     expect(secretKeysInValue(connection)).toEqual([]);
@@ -53,7 +51,6 @@ describe("provider connection view", () => {
     ).toEqual([
       ["openai", "not_connected"],
       ["anthropic", "not_connected"],
-      ["cursor", "not_connected"],
     ]);
     expect(snapshot.connections.every((row) => row.lastFour === null)).toBe(
       true,
@@ -63,7 +60,6 @@ describe("provider connection view", () => {
     ).toEqual([
       ["codex", "not_connected"],
       ["claude", "not_connected"],
-      ["cursor", "not_connected"],
     ]);
     expect(secretKeysInValue(snapshot)).toEqual([]);
   });
@@ -86,7 +82,6 @@ describe("provider connection view", () => {
     ).toEqual([
       ["codex", "connected"],
       ["claude", "not_connected"],
-      ["cursor", "not_connected"],
     ]);
     expect(
       snapshot.cliSubscriptions.find((row) => row.provider === "codex")

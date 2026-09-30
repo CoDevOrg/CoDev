@@ -24,8 +24,8 @@ are in [EMAIL.md](./EMAIL.md).
 1. Run `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`,
    `pnpm build`, `pnpm rust:check`, and `pnpm test:e2e`.
 2. Apply the Drizzle migration with `pnpm db:migrate`.
-3. A push to `main` that touches `packages/ide/`, `services/`, or `infra/runtime/`
-   now runs `infra/runtime/deploy.sh` itself, through the **Deploy runtime**
+3. A push to `main` that touches `services/`, `infra/azure/`, or
+   `infra/runtime/scripts/` runs `infra/runtime/deploy.sh` through the **Deploy runtime**
    workflow — anyone's push ships the runtime, not just a maintainer's laptop.
    Watch that run rather than deploying by hand, and let the host return to
    `stopped` afterwards. `infra/runtime/deploy.sh` stays runnable locally, and the

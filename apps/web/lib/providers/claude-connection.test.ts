@@ -1,35 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
-vi.mock("./credentials", () => ({ saveProviderCredential: vi.fn() }));
-vi.mock("../auth/settings-access", () => ({
-  requireOrganizationSettingsWrite: vi.fn(),
-}));
 vi.mock("../platform/observability", () => ({ logEvent: vi.fn() }));
 
 import {
   ClaudeConnectionError,
   redactClaudeSecrets,
   toClaudeConnectionFailure,
-  resolveClaudeConnectionScope,
-  saveClaudeConnectionForUser,
   validateClaudeOAuthToken,
 } from "./claude-connection";
-import { saveProviderCredential } from "./credentials";
 import { logEvent } from "../platform/observability";
-import { requireOrganizationSettingsWrite } from "../auth/settings-access";
-
-const saveProviderCredentialMock = vi.mocked(saveProviderCredential);
-const requireOrganizationSettingsWriteMock = vi.mocked(
-  requireOrganizationSettingsWrite,
-);
 const logEventMock = vi.mocked(logEvent);
 
 const TOKEN = "sk-ant-oat01-abc123XYZ_-4567890";
 
 beforeEach(() => {
-  saveProviderCredentialMock.mockReset();
-  requireOrganizationSettingsWriteMock.mockReset();
   logEventMock.mockReset();
 });
 
@@ -87,41 +72,5 @@ describe("redactClaudeSecrets", () => {
     expect(out).not.toMatch(/sk-ant-[A-Za-z0-9_-]{12,}/);
     expect(out).toContain("login ok");
     expect(out).toContain("exit 0");
-  });
-});
-
-describe("resolveClaudeConnectionScope", () => {
-  it("defaults to the user's own scope", async () => {
-    await expect(
-      resolveClaudeConnectionScope({ userId: "u1" }),
-    ).resolves.toEqual({ scopeType: "USER", scopeId: "u1" });
-    expect(requireOrganizationSettingsWriteMock).not.toHaveBeenCalled();
-  });
-
-  it("requires org write access for a workspace scope", async () => {
-    requireOrganizationSettingsWriteMock.mockRejectedValueOnce(new Error("no"));
-    await expect(
-      resolveClaudeConnectionScope({
-        userId: "u1",
-        scopeType: "WORKSPACE",
-        organizationId: "org1",
-      }),
-    ).rejects.toBeInstanceOf(ClaudeConnectionError);
-  });
-});
-
-describe("saveClaudeConnectionForUser", () => {
-  it("rejects retired token uploads without saving credentials", async () => {
-    await expect(
-      saveClaudeConnectionForUser("u1", { oauthToken: TOKEN }),
-    ).rejects.toMatchObject({ status: 410 });
-    expect(saveProviderCredentialMock).not.toHaveBeenCalled();
-  });
-
-  it("rejects a malformed token before writing anything", async () => {
-    await expect(
-      saveClaudeConnectionForUser("u1", { oauthToken: "bad" }),
-    ).rejects.toBeInstanceOf(ClaudeConnectionError);
-    expect(saveProviderCredentialMock).not.toHaveBeenCalled();
   });
 });

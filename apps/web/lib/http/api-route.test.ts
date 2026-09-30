@@ -4,7 +4,6 @@ import { z } from "zod";
 const mocks = vi.hoisted(() => ({
   getApiUser: vi.fn(),
   getApiUserAnyAuth: vi.fn(),
-  requireWorkspacePermission: vi.fn(),
 }));
 
 vi.mock("@/lib/http/api", () => ({
@@ -16,20 +15,14 @@ vi.mock("@/lib/http/api", () => ({
   getApiUser: mocks.getApiUser,
   getApiUserAnyAuth: mocks.getApiUserAnyAuth,
 }));
-vi.mock("@/lib/auth/access", () => ({
-  requireWorkspacePermission: mocks.requireWorkspacePermission,
-}));
-
 import {
   ApiError,
   errorStatus,
   readJson,
   withUser,
-  withWorkspace,
 } from "./api-route";
 
 const user = { id: "2f2387ed-4a63-4b05-88cc-266d65f7b82b" };
-const workspaceId = "e010bd2c-a3c1-438f-acef-166287a3b1cb";
 
 function context<P>(params: P) {
   return { params: Promise.resolve(params) };
@@ -151,54 +144,6 @@ describe("withUser", () => {
     )(new Request("http://test"), context({}));
     expect(plain.status).toBe(502);
     expect(await plain.json()).toEqual({ error: "Runtime unreachable." });
-  });
-});
-
-describe("withWorkspace", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.getApiUser.mockResolvedValue(user);
-  });
-
-  it("checks the permission on the route's workspace before the handler", async () => {
-    const access = { role: "owner" };
-    mocks.requireWorkspacePermission.mockResolvedValue(access);
-    const handler = vi.fn(() => Response.json({ ok: true }));
-    const response = await withWorkspace("edit", handler)(
-      new Request("http://test"),
-      context({ workspaceId }),
-    );
-    expect(response.status).toBe(200);
-    expect(mocks.requireWorkspacePermission).toHaveBeenCalledWith(
-      workspaceId,
-      user.id,
-      "edit",
-    );
-    expect(handler).toHaveBeenCalledWith(
-      expect.objectContaining({ workspaceId, access, user }),
-    );
-  });
-
-  it("returns the access error's status instead of a blanket 400", async () => {
-    mocks.requireWorkspacePermission.mockRejectedValue(
-      new StatusError("Workspace not found.", 404),
-    );
-    const handler = vi.fn();
-    const response = await withWorkspace("view", handler)(
-      new Request("http://test"),
-      context({ workspaceId }),
-    );
-    expect(response.status).toBe(404);
-    expect(handler).not.toHaveBeenCalled();
-
-    mocks.requireWorkspacePermission.mockRejectedValue(
-      new StatusError("No.", 403),
-    );
-    const forbidden = await withWorkspace("merge", handler)(
-      new Request("http://test"),
-      context({ workspaceId }),
-    );
-    expect(forbidden.status).toBe(403);
   });
 });
 

@@ -1,16 +1,15 @@
 # Gen 2 workspace
 
 **Status:** Current  
-**Date:** 2026-09-27
+**Date:** 2026-09-30
 
-Gen 2 is a new workspace, isolated from `lib/workspaces`. The product is:
+Gen 2 is CoDev's active workspace implementation. The product is:
 
 > A workspace is a Firecracker cloud instance you can share, and you and Codex
 > work on it together.
 
-The thing Gen 1 could never offer: **one filesystem**. Gen 1's interactive IDE
-session and its agent sandbox are separate filesystems (`AGENTS.md`, "Runtime
-isolation"). In Gen 2 there is only the guest — Codex runs
+Unlike the previous workspace design, Gen 2 has **one filesystem**. There is
+only the guest — Codex runs
 `codex exec --cd .` in `/workspace`, and the editor, terminal, and Git panel
 address that same `/workspace` through the orchestrator. The file you open is
 the file the agent just edited.
@@ -47,9 +46,9 @@ should not have to wait for the owner to press something. The composer is
 never disabled either: type into a cold workspace and the machine is brought
 up as part of sending. The orchestrator hibernates an idle guest after fifteen
 minutes, preserving its workspace disk while releasing its sandbox slot. Once
-no guest or recently used Orca IDE session keeps the host active, it deallocates
-after a one-minute quiet window checked every thirty seconds. Opening the
-workspace resumes it from the saved disk.
+no active guest keeps the host active, it deallocates after a one-minute quiet
+window checked every thirty seconds. Opening the workspace resumes it from the
+saved disk.
 
 ## Interface
 
@@ -130,8 +129,8 @@ stack against it.
 
 ## Out of scope
 
-Gen 1 agent sessions, worktrees, GitHub, OpenFGA, the original
-`workspaces` table, and the embedded Orca IDE.
+The previous Gen 1 workspace runtime and its application code have been
+removed. Historical database migrations and stored records remain intact.
 
 Concurrent agents: the guest serialises Codex (`start_codex_exec` waits on
 `codex_busy`), so one turn runs at a time per machine. Parallelism today means

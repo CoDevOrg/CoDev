@@ -38,7 +38,7 @@ function isSafeReturnTo(value: string) {
 }
 
 export function createGithubLinkState(userId: string, returnTo: string) {
-  const safeReturnTo = isSafeReturnTo(returnTo) ? returnTo : "/dashboard";
+  const safeReturnTo = isSafeReturnTo(returnTo) ? returnTo : "/gen2";
   const state: GitHubLinkState = {
     userId,
     returnTo: safeReturnTo,

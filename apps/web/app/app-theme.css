@@ -3,8 +3,8 @@
  *
  * Every authenticated product page lives inside `.app-page` (AppChrome), so
  * these semantic tokens are the single visual contract for dashboards,
- * settings, and future product surfaces. The embedded Orca IDE keeps its own
- * dark document via `/orca-theme-overrides.css`.
+ * settings, and future product surfaces. The Gen 2 workspace keeps its own
+ * runtime appearance.
  *
  * Palette matches the public landing page: paper cream, deep navy ink, and a
  * vibrant blue accent, with teal / terracotta / violet for agent identities.
@@ -42,8 +42,8 @@
   --codev-orange-400: var(--codev-terracotta);
 
   /* Local names for the shared RGB triplets, kept so the many rgba() call
-     sites elsewhere in this file and in globals.css / mission-control.css /
-     team-chat.css don't need renaming. Values come from theme-tokens.css. */
+     sites elsewhere in this file and in globals.css / mission-control.css
+     don't need renaming. Values come from theme-tokens.css. */
   --paper-rgb: var(--brand-paper-rgb);
   --ink-rgb: var(--brand-ink-rgb);
   --accent-rgb: var(--brand-accent-rgb);

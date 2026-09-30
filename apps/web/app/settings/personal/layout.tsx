@@ -1,4 +1,4 @@
-import "../orca-theme.css";
+import "../settings-theme.css";
 
 import { AppChrome } from "@/components/shell/app-chrome";
 import { SettingsSidebar } from "@/components/settings/SettingsSidebar";
@@ -13,7 +13,7 @@ export default async function PersonalSettingsLayout({
 
   return (
     <AppChrome user={user} sidebar>
-      <div className="orca-settings-scope flex min-h-dvh">
+      <div className="settings-scope flex min-h-dvh">
         <SettingsSidebar />
         <main className="min-w-0 flex-1">{children}</main>
       </div>

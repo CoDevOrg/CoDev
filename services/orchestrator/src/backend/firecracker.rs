@@ -32,16 +32,12 @@ use crate::{
         ClaudeSetupCodeRequest, ClaudeSetupPollRequest, ClaudeSetupPollResponse,
         ClaudeSetupStartRequest, CodexExecPollRequest, CodexExecPollResponse,
         CodexExecStartRequest, CreateRequest, ExecRequest, ExecResponse, FileResponse, Instance,
-        PublicationExportRequest, PublicationExportResponse, RepositorySnapshot, Result,
-        RuntimeError, SessionRestoreBeginRequest, SessionRestoreChunkRequest,
-        SessionRestoreFinalizeResponse, SupersetAgentInputRequest, SupersetAgentPollRequest,
-        SupersetAgentPollResponse, SupersetAgentRecoveryResponse, SupersetAgentStartRequest,
-        SupersetAgentStartResponse, SupersetCreateEntryRequest, SupersetDeleteEntryRequest,
-        SupersetMoveEntryRequest, TerminalInputRequest, TerminalPollRequest, TerminalPollResponse,
-        TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
-        WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest,
-        WorktreeMergeResponse, WorktreeRebaseRequest, WorktreeRebaseResponse,
-        WorktreeReviewResponse, WriteFileRequest,
+        RepositorySnapshot, Result, RuntimeError, SupersetAgentInputRequest,
+        SupersetAgentPollRequest, SupersetAgentPollResponse, SupersetAgentRecoveryResponse,
+        SupersetAgentStartRequest, SupersetAgentStartResponse, SupersetCreateEntryRequest,
+        SupersetDeleteEntryRequest, SupersetMoveEntryRequest, TerminalInputRequest,
+        TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
+        WriteFileRequest,
     },
 };
 
@@ -1046,145 +1042,6 @@ impl FirecrackerBackend {
         machine.guest.close_claude_setup(session_id).await?;
         self.mark_activity(&machine);
         Ok(())
-    }
-
-    pub async fn create_worktree(
-        &self,
-        workspace_id: &str,
-        request: WorktreeCreateRequest,
-    ) -> Result<()> {
-        let machine = self.machine(workspace_id).await?;
-        machine.guest.create_worktree(&request).await?;
-        self.mark_activity(&machine);
-        Ok(())
-    }
-
-    pub async fn begin_session_restore(
-        &self,
-        workspace_id: &str,
-        request: SessionRestoreBeginRequest,
-    ) -> Result<()> {
-        let machine = self.machine(workspace_id).await?;
-        machine.guest.begin_session_restore(&request).await?;
-        self.mark_activity(&machine);
-        Ok(())
-    }
-
-    pub async fn append_session_restore_chunk(
-        &self,
-        workspace_id: &str,
-        operation_id: &str,
-        request: SessionRestoreChunkRequest,
-    ) -> Result<u64> {
-        let machine = self.machine(workspace_id).await?;
-        let offset = machine
-            .guest
-            .append_session_restore_chunk(operation_id, &request)
-            .await?;
-        self.mark_activity(&machine);
-        Ok(offset)
-    }
-
-    pub async fn finalize_session_restore(
-        &self,
-        workspace_id: &str,
-        operation_id: &str,
-    ) -> Result<SessionRestoreFinalizeResponse> {
-        let machine = self.machine(workspace_id).await?;
-        let response = machine.guest.finalize_session_restore(operation_id).await?;
-        self.mark_activity(&machine);
-        Ok(response)
-    }
-
-    pub async fn abort_session_restore(
-        &self,
-        workspace_id: &str,
-        operation_id: &str,
-    ) -> Result<()> {
-        let machine = self.machine(workspace_id).await?;
-        machine.guest.abort_session_restore(operation_id).await?;
-        self.mark_activity(&machine);
-        Ok(())
-    }
-
-    pub async fn delete_worktree(&self, workspace_id: &str, worktree_id: &str) -> Result<()> {
-        let machine = self.machine(workspace_id).await?;
-        machine.guest.delete_worktree(worktree_id).await?;
-        self.mark_activity(&machine);
-        Ok(())
-    }
-
-    pub async fn checkpoint_worktree(
-        &self,
-        workspace_id: &str,
-        worktree_id: &str,
-        request: WorktreeCheckpointRequest,
-    ) -> Result<WorktreeCheckpointResponse> {
-        let machine = self.machine(workspace_id).await?;
-        let result = machine
-            .guest
-            .checkpoint_worktree(worktree_id, &request)
-            .await?;
-        self.mark_activity(&machine);
-        Ok(result)
-    }
-
-    pub async fn review_worktree(
-        &self,
-        workspace_id: &str,
-        worktree_id: &str,
-        base_sha: &str,
-    ) -> Result<WorktreeReviewResponse> {
-        let machine = self.machine(workspace_id).await?;
-        let result = machine.guest.review_worktree(worktree_id, base_sha).await?;
-        self.mark_activity(&machine);
-        Ok(result)
-    }
-
-    pub async fn rebase_worktree(
-        &self,
-        workspace_id: &str,
-        worktree_id: &str,
-        request: WorktreeRebaseRequest,
-    ) -> Result<WorktreeRebaseResponse> {
-        let machine = self.machine(workspace_id).await?;
-        let result = machine.guest.rebase_worktree(worktree_id, &request).await?;
-        self.mark_activity(&machine);
-        Ok(result)
-    }
-
-    pub async fn merge_worktree(
-        &self,
-        workspace_id: &str,
-        worktree_id: &str,
-        request: WorktreeMergeRequest,
-    ) -> Result<WorktreeMergeResponse> {
-        let machine = self.machine(workspace_id).await?;
-        let result = machine.guest.merge_worktree(worktree_id, &request).await?;
-        self.mark_activity(&machine);
-        Ok(result)
-    }
-
-    pub async fn export_publication(
-        &self,
-        workspace_id: &str,
-        request: PublicationExportRequest,
-    ) -> Result<PublicationExportResponse> {
-        let machine = self.machine(workspace_id).await?;
-        let result = machine.guest.export_publication(&request).await?;
-        self.mark_activity(&machine);
-        Ok(result)
-    }
-
-    pub async fn snapshot_workspace(
-        &self,
-        workspace_id: &str,
-        request: PublicationExportRequest,
-    ) -> Result<PublicationExportResponse> {
-        let machine = self.machine(workspace_id).await?;
-        let result = machine.guest.snapshot_workspace(&request).await?;
-        self.snapshot_machine(&machine, &result.head_sha).await?;
-        Ok(result)
     }
 
     pub async fn git_status(

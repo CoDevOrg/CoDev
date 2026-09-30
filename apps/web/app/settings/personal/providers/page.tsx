@@ -1,13 +1,9 @@
 import { ProviderAccountCard } from "@/components/settings/provider-account-card";
+import { ClaudeMark, OpenAIMark } from "@/components/settings/provider-logos";
 import {
-  ClaudeMark,
-  CursorMark,
-  OpenAIMark,
-} from "@/components/settings/provider-logos";
-import {
-  OrcaPageHeader,
-  OrcaPageShell,
-} from "@/components/settings/orca-style";
+  SettingsPageHeader,
+  SettingsPageShell,
+} from "@/components/settings/settings-style";
 import { isHostedClaudeConnectEnabled } from "@/lib/providers/claude-connection-runner";
 import { isHostedCodexSubscriptionEnabled } from "@/lib/providers/hosted-codex-subscription-flag";
 import { loadProviderConnectionSnapshot } from "@/lib/providers/provider-connection-server";
@@ -26,12 +22,6 @@ const CARDS = [
     logo: <OpenAIMark className="size-5" />,
     subscription: "codex",
     connection: "openai",
-  },
-  {
-    label: "Cursor",
-    logo: <CursorMark className="size-5" />,
-    subscription: "cursor",
-    connection: "cursor",
   },
 ] as const;
 
@@ -60,8 +50,8 @@ export default async function PersonalProvidersPage() {
   const hostedOpenAIConnect = isHostedCodexSubscriptionEnabled();
 
   return (
-    <OrcaPageShell>
-      <OrcaPageHeader
+    <SettingsPageShell>
+      <SettingsPageHeader
         badge="Optional"
         description="Connect the accounts your agents run on. Each card shows where that account can be used once it is connected. Everything is encrypted on the CoDev server and never shown again after you save it."
         title="AI Provider Accounts"
@@ -94,6 +84,6 @@ export default async function PersonalProvidersPage() {
           );
         })}
       </div>
-    </OrcaPageShell>
+    </SettingsPageShell>
   );
 }

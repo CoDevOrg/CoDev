@@ -14,10 +14,6 @@
     "test": "pnpm run test:infra && pnpm -r --if-present test",
     "test:infra": "node --test infra/runtime/runtime-config.test.mjs",
     "test:e2e": "pnpm --filter @codev/web test:e2e",
-    "orca:web": "infra/runtime/scripts/build-orca-web.sh",
-    "ide:dev": "bash scripts/ide.sh dev:web",
-    "ide:check": "bash scripts/ide.sh typecheck:web",
-    "ide:test:web": "bash scripts/ide.sh exec vitest run --config config/vitest.config.ts src/renderer/src/web",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:generate": "pnpm --filter @codev/db db:generate",
@@ -41,6 +37,6 @@
     "blockExoticSubdeps": false
   },
   "lint-staged": {
-    "!(packages/ide/**|vendor/superset/**)*.{js,jsx,ts,tsx,json,md,mdx,css,yml,yaml}": "prettier --write"
+    "!vendor/superset/***.{js,jsx,ts,tsx,json,md,mdx,css,yml,yaml}": "prettier --write"
   }
 }

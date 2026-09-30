@@ -15,14 +15,6 @@ export const serverEnvironmentSchema = z.object({
   SUPABASE_URL: optionalUrl,
   NEXT_PUBLIC_SUPABASE_URL: optionalUrl,
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1).optional(),
-  OPENFGA_API_URL: optionalUrl,
-  OPENFGA_STORE_ID: z.string().min(1).optional(),
-  OPENFGA_AUTHORIZATION_MODEL_ID: z.string().min(1).optional(),
-  OPENFGA_CLIENT_TOKEN: z.string().min(1).optional(),
-  OPENFGA_API_TOKEN_ISSUER: optionalUrl,
-  OPENFGA_API_AUDIENCE: optionalUrl,
-  OPENFGA_CLIENT_ID: z.string().min(1).optional(),
-  OPENFGA_CLIENT_SECRET: z.string().min(1).optional(),
   AUTH_SECRET: z.string().min(32).optional(),
   AUTH_GITHUB_ID: z.string().min(1).optional(),
   AUTH_GITHUB_SECRET: z.string().min(1).optional(),
@@ -124,7 +116,6 @@ export const serverEnvironmentSchema = z.object({
    */
   ORCHESTRATOR_DIRECT_URL: optionalUrl,
   ORCHESTRATOR_DIRECT_SECRET: z.string().min(32).optional(),
-  HOCUSPOCUS_TOKEN_SECRET: z.string().min(32).optional(),
   CRON_SECRET: z.string().min(32).optional(),
 });
 

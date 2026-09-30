@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Cloud,
-  LayoutGrid,
   MessagesSquare,
   Settings,
   ShieldCheck,
@@ -15,8 +14,7 @@ import { publicAppHref } from "@/lib/platform/site-hosts";
 const ADMIN_CONSOLE_URL = "https://admins.trycodev.com";
 
 const navItems = [
-  { href: "/dashboard", icon: LayoutGrid, label: "Workspaces" },
-  { href: "/gen2", icon: Cloud, label: "Gen 2" },
+  { href: "/gen2", icon: Cloud, label: "Workspaces" },
   { href: "/rooms", icon: MessagesSquare, label: "Rooms" },
   { href: "/settings", icon: Settings, label: "Settings" },
 ];

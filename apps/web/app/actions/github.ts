@@ -14,10 +14,10 @@ import {
 function safeReturnTo(value: string) {
   return value.startsWith("/") && !value.startsWith("//")
     ? value
-    : "/dashboard";
+    : "/gen2";
 }
 
-export async function connectGitHubAccount(returnTo = "/dashboard") {
+export async function connectGitHubAccount(returnTo = "/gen2") {
   const user = await getApiUser();
   if (!user?.id) throw new Error("Authentication required.");
   if (!isGitHubAuthConfigured()) {

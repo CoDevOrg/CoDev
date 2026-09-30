@@ -181,10 +181,8 @@ resource imageTemplate 'Microsoft.VirtualMachineImages/imageTemplates@2023-07-01
             'test -x /usr/local/bin/codev-guestd'
             'test -x /usr/local/bin/firecracker'
             'test -x /usr/local/bin/jailer'
-            'test -x /opt/orca/squashfs-root/AppRun'
             'test -s /var/lib/codev/base/rootfs.ext4'
             'test -s /var/lib/codev/base/vmlinux'
-            'systemctl cat codev-orca-xvfb.service >/dev/null'
             'systemctl cat codev-firecracker-network-isolation.service >/dev/null'
           ]
         }

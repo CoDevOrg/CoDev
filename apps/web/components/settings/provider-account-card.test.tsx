@@ -22,14 +22,12 @@ function subscription(
   overrides: Partial<CliSubscriptionRecord> = {},
 ): CliSubscriptionRecord {
   return {
-    provider: "cursor",
-    label: "Cursor",
+    provider: "codex",
+    label: "Codex",
     status: "not_connected",
-    connectMode: "cursor_deeplink",
-    command: null,
+    connectMode: "device_code",
+    command: "codev codex-auth",
     provenance: null,
-    enabledForRooms: false,
-    enabledForWorkspace: false,
     allowInSharedWorkspaces: true,
     ...overrides,
   };
@@ -39,16 +37,14 @@ function connection(
   overrides: Partial<ProviderConnectionRecord> = {},
 ): ProviderConnectionRecord {
   return {
-    provider: "cursor",
-    label: "Cursor",
+    provider: "openai",
+    label: "OpenAI",
     status: "not_connected",
     credentialType: null,
     lastFour: null,
     suppliedBy: null,
     scope: "personal",
     provenance: null,
-    enabledForRooms: false,
-    enabledForWorkspace: false,
     allowInSharedWorkspaces: true,
     ...overrides,
   };
@@ -57,8 +53,6 @@ function connection(
 const NO_CLI_TOKEN = {
   status: "not_connected",
   lastFour: null,
-  enabledForRooms: false,
-  enabledForWorkspace: false,
   allowInSharedWorkspaces: true,
 } as const;
 
@@ -75,81 +69,6 @@ describe("ProviderAccountCard", () => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.clearAllMocks();
-  });
-
-  it("signs a member in through Cursor's browser login without an API key", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        jsonResponse({
-          mode: "cursor_deeplink",
-          loginUrl: "https://cursor.com/loginDeepControl?challenge=abc",
-        }),
-      )
-      .mockResolvedValue(jsonResponse({ status: "connected" }));
-    vi.stubGlobal("fetch", fetchMock);
-
-    render(
-      <ProviderAccountCard
-        connection={connection()}
-        label="Cursor"
-        logo={null}
-        runsIn={[]}
-        subscription={subscription()}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Connect Cursor" }));
-
-    await waitFor(() => {
-      expect(screen.getByRole("status")).toHaveTextContent(
-        "Cursor is connected.",
-      );
-    });
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/auth/oauth/cursor/session");
-    expect(window.open).toHaveBeenCalledWith(
-      "https://cursor.com/loginDeepControl?challenge=abc",
-      "_blank",
-      "noopener,noreferrer",
-    );
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/auth/oauth/cursor/poll");
-    expect(
-      screen.getByRole("button", { name: "Disconnect" }),
-    ).toBeInTheDocument();
-  });
-
-  it("exchanges a Cursor API key through the /complete route", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(jsonResponse({ status: "connected" }));
-    vi.stubGlobal("fetch", fetchMock);
-
-    render(
-      <ProviderAccountCard
-        connection={connection()}
-        label="Cursor"
-        logo={null}
-        runsIn={[]}
-        subscription={subscription()}
-      />,
-    );
-
-    fireEvent.change(screen.getByPlaceholderText("key_…"), {
-      target: { value: "key_live_123" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
-
-    await waitFor(() => {
-      expect(screen.getByRole("status")).toHaveTextContent(
-        "Cursor is connected.",
-      );
-    });
-    expect(fetchMock.mock.calls[0]?.[0]).toBe(
-      "/api/auth/oauth/cursor/complete",
-    );
-    expect(
-      JSON.parse((fetchMock.mock.calls[0]?.[1] as RequestInit).body as string),
-    ).toMatchObject({ apiKey: "key_live_123", scopeType: "USER" });
   });
 
   it("offers Claude only an API key and the CLI, no browser OAuth button", () => {
@@ -505,47 +424,6 @@ describe("ProviderAccountCard", () => {
     expect(screen.queryByRole("button", { name: "Reconnect" })).toBeNull();
   });
 
-  it("offers no terminal fallback for a provider without a CoDev CLI command", () => {
-    render(
-      <ProviderAccountCard
-        connection={connection()}
-        label="Cursor"
-        logo={null}
-        runsIn={[]}
-        subscription={subscription()}
-      />,
-    );
-
-    expect(screen.queryByText("Connect from a terminal")).toBeNull();
-  });
-
-  it("signs out through the subscription endpoint, leaving the API key alone", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
-    vi.stubGlobal("fetch", fetchMock);
-
-    render(
-      <ProviderAccountCard
-        connection={connection()}
-        label="Cursor"
-        logo={null}
-        runsIn={[]}
-        subscription={subscription({ status: "connected" })}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/personal/subscriptions?provider=cursor",
-      { method: "DELETE" },
-    );
-    await waitFor(() => {
-      expect(
-        screen.getByRole("button", { name: "Connect Cursor" }),
-      ).toBeInTheDocument();
-    });
-  });
-
   describe("where a connection runs", () => {
     it("names the surfaces the registry reports, not a section it sits in", () => {
       render(
@@ -554,7 +432,7 @@ describe("ProviderAccountCard", () => {
           connection={connection({ provider: "openai", label: "OpenAI" })}
           label="Codex"
           logo={null}
-          runsIn={["workspace", "gen2", "rooms"]}
+          runsIn={["gen2", "rooms"]}
           subscription={subscription({
             provider: "codex",
             label: "Codex",
@@ -567,7 +445,6 @@ describe("ProviderAccountCard", () => {
       // Named the way the sidebar names them, so "where does this work" is
       // answered in the member's own vocabulary.
       expect(screen.getByText("Workspaces")).toBeInTheDocument();
-      expect(screen.getByText("Gen 2")).toBeInTheDocument();
       expect(screen.getByText("Rooms")).toBeInTheDocument();
     });
 
@@ -598,8 +475,6 @@ describe("ProviderAccountCard", () => {
           claudeCliToken={{
             status: "connected",
             lastFour: "wxyz",
-            enabledForRooms: false,
-            enabledForWorkspace: true,
             allowInSharedWorkspaces: true,
           }}
           connection={connection({ provider: "anthropic", label: "Anthropic" })}
@@ -730,14 +605,12 @@ describe("ProviderAccountCard", () => {
           claudeCliToken={{
             status: "connected",
             lastFour: "wxyz",
-            enabledForRooms: false,
-            enabledForWorkspace: true,
             allowInSharedWorkspaces: true,
           }}
           connection={connection({ provider: "anthropic", label: "Anthropic" })}
           label="Claude"
           logo={null}
-          runsIn={["workspace"]}
+          runsIn={["gen2"]}
           subscription={subscription({
             provider: "claude",
             label: "Claude Code",

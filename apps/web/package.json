@@ -39,7 +39,6 @@
     "@codev/contracts": "workspace:*",
     "@codev/db": "workspace:*",
     "@codev/shared-types": "workspace:*",
-    "@cursor/sdk": "^1.0.26",
     "@lezer/highlight": "^1.2.3",
     "@octokit/rest": "22.0.0",
     "@radix-ui/react-avatar": "^1.2.6",

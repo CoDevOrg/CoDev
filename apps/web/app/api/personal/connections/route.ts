@@ -5,32 +5,24 @@ import {
   loadProviderConnectionSnapshot,
   revokePersonalProviderConnection,
   savePersonalProviderConnection,
-  setPersonalCredentialSurface,
+  setPersonalSharedWorkspaceUse,
 } from "@/lib/providers/provider-connection-server";
 import { publicProviderConnectionPayload } from "@/lib/providers/provider-connection-view";
 
-const providerSchema = z.enum(["openai", "anthropic", "cursor"]);
-const surfaceSchema = z.enum(["rooms", "workspace"]);
-
+const providerSchema = z.enum(["openai", "anthropic"]);
 const putSchema = z.object({
   provider: providerSchema,
   apiKey: z.string().trim().min(20).max(512),
-  /** The settings section the key was pasted in; enables it there only. */
-  surface: surfaceSchema.optional(),
 });
 
 const patchSchema = z.object({
   provider: providerSchema,
   kind: z.enum(["api_key", "subscription", "claude_cli_token"]),
-  surface: surfaceSchema,
-  enabled: z.boolean(),
+  allowInSharedWorkspaces: z.boolean(),
 });
 
 /**
  * The signed-in member's own provider connections, outside any workspace.
- * These are the same personal credential rows the workspace-scoped route
- * reads; only the workspace-membership check differs, because personal
- * settings are reachable without opening a workspace.
  */
 export async function GET() {
   const user = await getApiUser();
@@ -59,13 +51,13 @@ export async function PUT(request: Request) {
   }
 }
 
-/** Flip a credential's "also use in <surface>" toggle. */
+/** Update whether this member's credential may fund shared workspace turns. */
 export async function PATCH(request: Request) {
   const user = await getApiUser();
   if (!user) return apiError(new Error("Authentication required."), 401);
   try {
     const input = patchSchema.parse(await request.json());
-    return Response.json(await setPersonalCredentialSurface(user, input));
+    return Response.json(await setPersonalSharedWorkspaceUse(user, input));
   } catch (error) {
     return apiError(error);
   }

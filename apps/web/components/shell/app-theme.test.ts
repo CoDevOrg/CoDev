@@ -22,11 +22,11 @@ const globals = readCss("globals.css");
 const landing = readCss("landing.css");
 const themeTokens = readCss("theme-tokens.css");
 const productTheme = readCss("product-theme.css");
-const orcaTheme = readCss("settings/orca-theme.css");
+const settingsTheme = readCss("settings/settings-theme.css");
 
 describe("CoDev product theme", () => {
   it("keeps every actual color literal in one file: theme-tokens.css", () => {
-    // app-theme.css, product-theme.css and settings/orca-theme.css each used
+    // app-theme.css, product-theme.css and settings/settings-theme.css each used
     // to hold their own copy of this palette under their own token names,
     // which is exactly what let Rooms stay light after everything else went
     // dark. Now only this file has a real hex/rgba value; everything else is
@@ -76,7 +76,7 @@ describe("CoDev product theme", () => {
     expect(productTheme).toContain("--color-primary: var(--brand-accent);");
     // Glass panels over the animated gradient backdrop, unlike Settings'
     // opaque cards -- a real design difference, kept as its own alpha wash
-    // rather than forced to match settings/orca-theme.css.
+    // rather than forced to match settings/settings-theme.css.
     expect(productTheme).toContain(
       "--color-card: rgba(var(--brand-paper-rgb), 0.62);",
     );
@@ -87,14 +87,14 @@ describe("CoDev product theme", () => {
   });
 
   it("gives Settings the same shared theme, with its own opaque surfaces", () => {
-    expect(orcaTheme).toContain(".orca-settings-scope {");
-    expect(orcaTheme).toContain("--color-background: var(--brand-paper);");
-    expect(orcaTheme).toContain("--color-primary: var(--brand-accent);");
+    expect(settingsTheme).toContain(".settings-scope {");
+    expect(settingsTheme).toContain("--color-background: var(--brand-paper);");
+    expect(settingsTheme).toContain("--color-primary: var(--brand-accent);");
     // Solid surfaces, not glass -- Settings has no gradient backdrop behind
     // it for a translucent card to let show through.
-    expect(orcaTheme).toContain("--color-card: var(--brand-paper-bright);");
-    expect(orcaTheme).not.toContain("@media (prefers-color-scheme: dark)");
-    expect(orcaTheme).not.toContain("#070c1a");
+    expect(settingsTheme).toContain("--color-card: var(--brand-paper-bright);");
+    expect(settingsTheme).not.toContain("@media (prefers-color-scheme: dark)");
+    expect(settingsTheme).not.toContain("#070c1a");
   });
 
   it("keeps every profile menu action legible on the light product surface", () => {

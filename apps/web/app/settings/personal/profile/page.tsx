@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button";
 import { GithubMark } from "@/components/settings/github-mark";
 import { GoogleMark } from "@/components/settings/google-mark";
 import {
-  OrcaPageHeader,
-  OrcaPageShell,
-  OrcaSubsectionHeader,
-} from "@/components/settings/orca-style";
+  SettingsPageHeader,
+  SettingsPageShell,
+  SettingsSubsectionHeader,
+} from "@/components/settings/settings-style";
 import { SetPasswordForm } from "@/components/settings/set-password-form";
 import { Card } from "@/components/ui/card";
 import { getConnectedAccounts } from "@/lib/auth/identity";
@@ -93,8 +93,8 @@ export default async function PersonalProfilePage({
   const passwordError = params.error ? passwordErrorCopy[params.error] : null;
 
   return (
-    <OrcaPageShell>
-      <OrcaPageHeader
+    <SettingsPageShell>
+      <SettingsPageHeader
         description="The identity and sign-in methods connected to your CoDev account."
         title="Profile"
       />
@@ -115,7 +115,7 @@ export default async function PersonalProfilePage({
       </Card>
 
       <Card className="space-y-4 px-6 py-5">
-        <OrcaSubsectionHeader
+        <SettingsSubsectionHeader
           description="Sign in with any of these, or link more."
           title="Sign-in methods"
         />
@@ -176,7 +176,7 @@ export default async function PersonalProfilePage({
 
       {connectedAccounts.hasPassword ? null : (
         <Card className="space-y-4 px-6 py-5">
-          <OrcaSubsectionHeader
+          <SettingsSubsectionHeader
             description="You signed in with Google or GitHub, so this account has no password yet. Set one to also be able to sign in with your email."
             title="Set a password"
           />
@@ -196,6 +196,6 @@ export default async function PersonalProfilePage({
           )}
         </Card>
       )}
-    </OrcaPageShell>
+    </SettingsPageShell>
   );
 }

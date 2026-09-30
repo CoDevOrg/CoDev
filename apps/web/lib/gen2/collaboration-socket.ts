@@ -26,7 +26,7 @@ import {
   send,
   sendError,
   type Connection,
-} from "../workspaces/collaboration-connection";
+} from "./collaboration-connection";
 import {
   HEARTBEAT_INTERVAL_MS,
   INSTANCE_ID,
@@ -35,18 +35,18 @@ import {
   redisClient,
   streamKey,
   withDocumentLock,
-} from "../workspaces/collaboration-redis";
+} from "./collaboration-redis";
 import {
   broadcastLocal,
   closeRoomIfEmpty,
   publish,
   replay,
   startRoom,
-} from "../workspaces/collaboration-rooms";
+} from "./collaboration-rooms";
 import {
   refreshPresence,
   removePresence,
-} from "../workspaces/collaboration-presence";
+} from "./collaboration-presence";
 import {
   initializeGen2Document,
   loadGen2Document,

@@ -1,13 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import {
-  useEffect,
-  useRef,
-  useState,
-  type ComponentType,
-  type ReactNode,
-} from "react";
+import { useState, type ComponentType, type ReactNode } from "react";
 import { Check, ChevronDown, Copy, KeyRound, Terminal } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -24,17 +18,6 @@ import type {
 import { SURFACE_LABEL } from "@/lib/providers/provider-surface-capability";
 import type { ExecutorSurface } from "@/lib/providers/registry";
 import { cn } from "@/lib/platform/utils";
-
-const RETURN_TO = "/settings/personal/providers";
-
-/**
- * The in-page sign-in state for a provider with a browser OAuth flow. Only
- * Cursor still has one — Claude and Codex connect via an API key or the
- * CoDev CLI (which itself delegates to each provider's own official CLI
- * login), since Anthropic and OpenAI both restrict consumer-plan OAuth
- * tokens obtained outside their own first-party clients.
- */
-type ActiveFlow = { kind: "polling"; loginUrl: string };
 
 function CopyableCommand({ command }: { command: string }) {
   const [copied, setCopied] = useState(false);
@@ -235,17 +218,16 @@ export function ProviderAccountCard({
    * rooms" for a login rooms cannot run.
    */
   runsIn: ExecutorSurface[];
-  /** Claude's `codev claude-auth` setup-token — its workspace login. */
+  /** Claude's `codev claude-auth` setup-token. */
   claudeCliToken?: ClaudeCliTokenRecord;
 }) {
   const router = useRouter();
   const [apiKeyState, setApiKeyState] = useState(connection);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState<
-    "connect" | "disconnect" | "save" | "revoke" | ""
+    "disconnect" | "save" | "revoke" | ""
   >("");
   const [message, setMessage] = useState("");
-  const [flow, setFlow] = useState<ActiveFlow | null>(null);
   const [connected, setConnected] = useState(
     subscription.status === "connected",
   );
@@ -253,12 +235,6 @@ export function ProviderAccountCard({
   const apiKeyLabel = `${connection.label} API key`;
   const disabled = busy !== "";
 
-  // Cursor is the only provider left with a browser sign-in: the tab does
-  // the signing in and CoDev learns about it only by polling its own
-  // callback. Claude and Codex connect through the rows below instead.
-  const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pollStartedAt = useRef(0);
-  const isCursor = subscription.provider === "cursor";
   const showClaudeConnect =
     hostedClaudeConnect && subscription.provider === "claude";
   const showCodexConnect =
@@ -266,114 +242,14 @@ export function ProviderAccountCard({
   const showHostedConnect = showClaudeConnect || showCodexConnect;
   const cliTokenConnected = claudeCliToken?.status === "connected";
   // The sharing choice only exists for a login a workspace can actually run.
-  const runsInAWorkspace =
-    runsIn.includes("workspace") || runsIn.includes("gen2");
+  const runsInSharedWorkspace = runsIn.includes("gen2");
   const anythingConnected =
     connected || cliTokenConnected || apiKeyState.status === "connected";
-  useEffect(
-    () => () => {
-      if (pollTimer.current) clearInterval(pollTimer.current);
-    },
-    [],
-  );
-
-  function stopPolling() {
-    if (pollTimer.current) {
-      clearInterval(pollTimer.current);
-      pollTimer.current = null;
-    }
-  }
-
   function finishConnected() {
-    stopPolling();
-    setFlow(null);
     setBusy("");
     setConnected(true);
     setMessage(`${label} is connected.`);
     router.refresh();
-  }
-
-  async function poll() {
-    const response = await fetch("/api/auth/oauth/cursor/poll", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    const payload = (await response.json().catch(() => ({}))) as {
-      status?: string;
-      error?: string;
-    };
-    if (!response.ok) {
-      stopPolling();
-      setFlow(null);
-      setBusy("");
-      setMessage(payload.error ?? `${label} sign-in failed. Start again.`);
-      return;
-    }
-    if (payload.status === "connected") {
-      finishConnected();
-      return;
-    }
-    if (payload.status === "denied") {
-      stopPolling();
-      setFlow(null);
-      setBusy("");
-      setMessage(`${label} sign-in was cancelled.`);
-      return;
-    }
-    // Still pending. Cursor's browser sign-in can quietly fail to hand a token
-    // back to a non-CLI poller; nudge toward the API key rather than spinning
-    // forever with no signal.
-    if (
-      isCursor &&
-      pollStartedAt.current > 0 &&
-      Date.now() - pollStartedAt.current > 90_000
-    ) {
-      setMessage(
-        "Still waiting on Cursor. If you already finished signing in, connect with an API key below instead.",
-      );
-    }
-  }
-
-  async function connect() {
-    setBusy("connect");
-    setMessage("");
-    setFlow(null);
-    stopPolling();
-
-    const response = await fetch("/api/auth/oauth/cursor/session", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ scopeType: "USER", returnTo: RETURN_TO }),
-    });
-    const payload = (await response.json().catch(() => ({}))) as {
-      mode?: string;
-      loginUrl?: string;
-      error?: string;
-    };
-    if (!response.ok) {
-      setBusy("");
-      setMessage(payload.error ?? `${label} sign-in could not start.`);
-      return;
-    }
-
-    if (payload.mode === "cursor_deeplink" && payload.loginUrl) {
-      window.open(payload.loginUrl, "_blank", "noopener,noreferrer");
-      setFlow({ kind: "polling", loginUrl: payload.loginUrl });
-      pollStartedAt.current = Date.now();
-      void poll();
-      pollTimer.current = setInterval(() => void poll(), 2000);
-      return;
-    }
-
-    setBusy("");
-    setMessage(`${label} returned an unexpected sign-in response.`);
-  }
-
-  function cancelFlow() {
-    stopPolling();
-    setFlow(null);
-    setBusy("");
   }
 
   async function disconnect() {
@@ -401,27 +277,6 @@ export function ProviderAccountCard({
     setBusy("save");
     setMessage("");
     try {
-      // Cursor: exchange the user API key for the same token pair the browser
-      // login yields, so it lands as one `cursor` connection either way and
-      // `cursor-agent` gets a real refreshable session, not a bare key.
-      if (isCursor) {
-        const response = await fetch("/api/auth/oauth/cursor/complete", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ apiKey: draft.trim(), scopeType: "USER" }),
-        });
-        const payload = (await response.json().catch(() => null)) as {
-          error?: string;
-        } | null;
-        if (!response.ok) {
-          setMessage(payload?.error ?? "The Cursor API key was not accepted.");
-          return;
-        }
-        setDraft("");
-        finishConnected();
-        return;
-      }
-
       const response = await fetch("/api/personal/connections", {
         method: "PUT",
         headers: { "content-type": "application/json" },
@@ -490,8 +345,7 @@ export function ProviderAccountCard({
         body: JSON.stringify({
           provider,
           kind,
-          surface: "workspace",
-          enabled,
+          allowInSharedWorkspaces: enabled,
         }),
       });
       const payload = await response.json().catch(() => null);
@@ -540,40 +394,7 @@ export function ProviderAccountCard({
           <h3 className="text-sm font-semibold">{label}</h3>
           <RunsIn connected={anythingConnected} surfaces={runsIn} />
         </div>
-        {isCursor ? (
-          connected ? (
-            <div className="flex shrink-0 gap-2">
-              <Button
-                disabled={disabled}
-                onClick={() => void connect()}
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                Reconnect
-              </Button>
-              <Button
-                disabled={disabled}
-                onClick={() => void disconnect()}
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                {busy === "disconnect" ? "Disconnecting…" : "Disconnect"}
-              </Button>
-            </div>
-          ) : (
-            <Button
-              className="shrink-0"
-              disabled={disabled}
-              onClick={() => void connect()}
-              size="sm"
-              type="button"
-            >
-              {busy === "connect" && !flow ? "Starting…" : `Connect ${label}`}
-            </Button>
-          )
-        ) : connected ? (
+        {connected ? (
           <Button
             disabled={disabled}
             onClick={() => void disconnect()}
@@ -600,31 +421,6 @@ export function ProviderAccountCard({
         />
       ) : null}
 
-      {flow?.kind === "polling" ? (
-        <div className="mt-3 flex items-center gap-2.5 rounded-md border border-border bg-background/60 p-3">
-          <p className="flex-1 text-xs text-muted-foreground">
-            Finish signing in on the {label} tab (
-            <a
-              className="underline"
-              href={flow.loginUrl}
-              rel="noreferrer"
-              target="_blank"
-            >
-              reopen
-            </a>
-            ). Keep this page open…
-          </p>
-          <Button
-            onClick={cancelFlow}
-            size="sm"
-            type="button"
-            variant="secondary"
-          >
-            Cancel
-          </Button>
-        </div>
-      ) : null}
-
       <div className="mt-3">
         {true ? (
           <FallbackRow
@@ -632,17 +428,9 @@ export function ProviderAccountCard({
             // Open only when there is nothing else to use: the connect
             // buttons above are the shorter path for most members.
             defaultOpen={!anythingConnected && !showHostedConnect}
-            description={
-              isCursor
-                ? "From cursor.com → Dashboard → API Keys. More reliable than the browser sign-in — CoDev exchanges it for a real session."
-                : `Bill usage to your own ${connection.label} account instead of a subscription.`
-            }
+            description={`Bill usage to your own ${connection.label} account instead of a subscription.`}
             icon={KeyRound}
-            title={
-              isCursor
-                ? "Connect with a Cursor API key"
-                : "Use an API key instead"
-            }
+            title="Use an API key instead"
           >
             {apiKeyState.status === "connected" ? (
               <p className="text-xs text-muted-foreground">
@@ -660,7 +448,7 @@ export function ProviderAccountCard({
                 disabled={disabled}
                 id={`api-key-${provider}`}
                 onChange={(event) => setDraft(event.target.value)}
-                placeholder={isCursor ? "key_…" : "Paste API key"}
+                placeholder="Paste API key"
                 spellCheck={false}
                 type="password"
                 value={draft}
@@ -673,16 +461,10 @@ export function ProviderAccountCard({
                 variant="outline"
               >
                 {busy === "save"
-                  ? isCursor
-                    ? "Connecting…"
-                    : "Saving…"
-                  : isCursor
-                    ? connected
-                      ? "Replace"
-                      : "Connect"
-                    : apiKeyState.status === "connected"
-                      ? "Replace key"
-                      : "Save key"}
+                  ? "Saving…"
+                  : apiKeyState.status === "connected"
+                    ? "Replace key"
+                    : "Save key"}
               </Button>
               {apiKeyState.status === "connected" ? (
                 <Button
@@ -739,7 +521,7 @@ export function ProviderAccountCard({
           </FallbackRow>
         ) : null}
 
-        {runsInAWorkspace ? (
+        {runsInSharedWorkspace ? (
           <SurfaceToggle
             checked={subscription.allowInSharedWorkspaces}
             disabled={disabled}

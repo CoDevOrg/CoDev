@@ -3,17 +3,11 @@ import "server-only";
 import { and, eq } from "drizzle-orm";
 
 import { schema } from "@codev/db";
-import type { HostedCodexScopeType } from "@codev/shared-types";
 
 import { getDatabase } from "../platform/database";
 import { recordHostedCodexAuditEvent } from "./hosted-codex-subscription-audit";
 import { isHostedCodexSubscriptionEnabled } from "./hosted-codex-subscription-flag";
-import {
-  HOSTED_CODEX_KIND,
-  type HostedCodexPublicStatus,
-} from "./hosted-codex-subscription-view";
 import { decryptSecret, encryptSecret } from "../platform/kms";
-import { resolvePersonalOrSharedCredential } from "./scoped-credential-sharing";
 
 const HOSTED_CODEX_CONTEXT = {
   application: "codev",
@@ -77,12 +71,9 @@ export async function updateHostedCodexAuthCache(
 
 export async function persistHostedCodexConnection(input: {
   userId: string;
-  scopeType: HostedCodexScopeType;
-  scopeId: string;
   material: HostedCodexMaterial;
   accountLabel?: string;
-  /** Browser and CLI logins produce byte-identical auth caches, so the caller
-   *  must say which it was: only a `cli` login may power a coding workspace. */
+  /** Browser and CLI logins produce the same auth cache for the agent runtime. */
   connectedVia: "browser" | "cli";
   /** Whether this login may fund a turn in a shared workspace; the member's
    *  existing choice is kept on reconnect unless this is given. */
@@ -93,8 +84,8 @@ export async function persistHostedCodexConnection(input: {
   const [credential] = await getDatabase()
     .insert(schema.providerCredentials)
     .values({
-      scopeType: input.scopeType,
-      scopeId: input.scopeId,
+      scopeType: "USER",
+      scopeId: input.userId,
       provider: "openai",
       credentialType: "HOSTED_CODEX_SUBSCRIPTION",
       encryptedMaterial,
@@ -136,24 +127,25 @@ export async function persistHostedCodexConnection(input: {
     credentialId: credential?.id ?? null,
     actorId: input.userId,
     type: "connection_created",
-    scopeType: input.scopeType,
-    scopeId: input.scopeId,
+    scopeType: "USER",
+    scopeId: input.userId,
     result: "success",
   });
 }
 
-async function findActiveHostedCredential(
-  scopeType: HostedCodexScopeType,
-  scopeId: string,
-) {
+async function findActiveHostedCredential(userId: string) {
   const [credential] = await getDatabase()
     .select()
     .from(schema.providerCredentials)
     .where(
       and(
-        eq(schema.providerCredentials.scopeType, scopeType),
-        eq(schema.providerCredentials.scopeId, scopeId),
+        eq(schema.providerCredentials.scopeType, "USER"),
+        eq(schema.providerCredentials.scopeId, userId),
         eq(schema.providerCredentials.provider, "openai"),
+        eq(
+          schema.providerCredentials.credentialType,
+          "HOSTED_CODEX_SUBSCRIPTION",
+        ),
         eq(
           schema.providerCredentials.credentialType,
           "HOSTED_CODEX_SUBSCRIPTION",
@@ -175,69 +167,21 @@ async function findActiveHostedCredential(
  */
 export async function resolveHostedCodexSubscription(input: {
   userId: string;
-  workspaceId?: string;
 }) {
   if (!isHostedCodexSubscriptionEnabled()) return null;
-  return resolvePersonalOrSharedCredential(input, {
-    findPersonal: (userId) => findActiveHostedCredential("USER", userId),
-    findShared: (workspaceId) =>
-      findActiveHostedCredential("WORKSPACE", workspaceId),
-  });
-}
-
-export async function getHostedCodexPublicStatus(input: {
-  scopeType: HostedCodexScopeType;
-  scopeId: string;
-  canManage: boolean;
-}): Promise<HostedCodexPublicStatus> {
-  const enabled = isHostedCodexSubscriptionEnabled();
-  const [credential] = await getDatabase()
-    .select()
-    .from(schema.providerCredentials)
-    .where(
-      and(
-        eq(schema.providerCredentials.scopeType, input.scopeType),
-        eq(schema.providerCredentials.scopeId, input.scopeId),
-        eq(schema.providerCredentials.provider, "openai"),
-        eq(
-          schema.providerCredentials.credentialType,
-          "HOSTED_CODEX_SUBSCRIPTION",
-        ),
-      ),
-    )
-    .limit(1);
-  const connected = Boolean(
-    credential?.isConnected &&
-    credential.status === "active" &&
-    credential.encryptedMaterial,
-  );
-  return {
-    kind: HOSTED_CODEX_KIND,
-    scopeType: input.scopeType,
-    status: connected ? "connected" : enabled ? "not_connected" : "unavailable",
-    stateText: connected
-      ? input.scopeType === "WORKSPACE"
-        ? "Connected for this organization"
-        : "Connected · Codex CLI"
-      : "Not connected",
-    accountLabel: connected ? "Codex CLI" : null,
-    canManage: input.canManage,
-    enabled,
-    configured: enabled,
-  };
+  const credential = await findActiveHostedCredential(input.userId);
+  return credential ? { credential, source: "USER" as const } : null;
 }
 
 export async function disconnectHostedCodexSubscription(input: {
   userId: string;
-  scopeType: HostedCodexScopeType;
-  scopeId: string;
 }) {
   const [credential] = await getDatabase()
     .delete(schema.providerCredentials)
     .where(
       and(
-        eq(schema.providerCredentials.scopeType, input.scopeType),
-        eq(schema.providerCredentials.scopeId, input.scopeId),
+        eq(schema.providerCredentials.scopeType, "USER"),
+        eq(schema.providerCredentials.scopeId, input.userId),
         eq(schema.providerCredentials.provider, "openai"),
         eq(
           schema.providerCredentials.credentialType,
@@ -251,11 +195,9 @@ export async function disconnectHostedCodexSubscription(input: {
       credentialId: credential.id,
       actorId: input.userId,
       type: "disconnect",
-      scopeType: input.scopeType,
-      scopeId: input.scopeId,
+      scopeType: "USER",
+      scopeId: input.userId,
       result: "success",
     });
   }
 }
-
-export type { HostedCodexPublicStatus } from "./hosted-codex-subscription-view";

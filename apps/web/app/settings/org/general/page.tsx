@@ -12,14 +12,14 @@ export default async function OrganizationGeneralPage() {
   return (
     <OrganizationSettingsPage
       context={context}
-      description="Configure the shared identity, domains, and defaults for your workspace."
+      description="Configure shared identity, domains, and defaults for your organization."
       title="Organization settings"
     >
       <OrganizationSettingsCard
         context={context}
-        description="These defaults apply across the active workspace."
+        description="These defaults apply across the active organization."
         detail="Organization name, slug, domain restrictions, and default member roles will be configured here."
-        title="Workspace identity"
+        title="Organization identity"
       />
     </OrganizationSettingsPage>
   );

@@ -17,7 +17,7 @@ export type ProfileMenuUser = {
 export function ProfileMenu({
   user,
   compact = false,
-  returnTo = "/dashboard",
+  returnTo = "/gen2",
   showConnectGitHub = false,
   isAdminHost = false,
 }: {

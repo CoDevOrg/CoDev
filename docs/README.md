@@ -23,18 +23,11 @@ kept for the record only.
 
 | Document                                                                                   | Status  | Covers                                                                   |
 | ------------------------------------------------------------------------------------------ | ------- | ------------------------------------------------------------------------ |
-| [BACKEND_FRONTEND_INTEGRATION.md](./BACKEND_FRONTEND_INTEGRATION.md)                       | Current | Contract between the workspace frontend and the control-plane APIs       |
 | [gen2-workspace.md](./gen2-workspace.md)                                                   | Current | Gen 2 workspace: Firecracker instance, shareable membership, Codex chats |
-| [WORKSPACE_CONSOLIDATION.md](./WORKSPACE_CONSOLIDATION.md)                                 | Current | Sandbox/IDE consolidation; what shipped and what is still gated          |
 | [SUPERSET_WORKSPACE_OWNERSHIP.md](./SUPERSET_WORKSPACE_OWNERSHIP.md)                       | Design  | Phase 1 ownership contract for a first-party Superset-powered workspace  |
-| [SUPERSET_ADOPTION_MANIFEST.md](./SUPERSET_ADOPTION_MANIFEST.md)                           | Design  | Pinned Superset source, build boundary, and Phase 1 runtime/UI map       |
 | [SUPERSET_AGENT_SESSION_PLAN.md](./SUPERSET_AGENT_SESSION_PLAN.md)                         | Design  | Superset agent sessions, CoDev provider ownership, and rollout gates     |
-| [workspace-startup-performance-plan.md](./workspace-startup-performance-plan.md)           | Active  | Faster workspace startup, host pooling, persistence, and headless IDE    |
-| [branch-workspaces-plan.md](./branch-workspaces-plan.md)                                   | Current | Branches-first collaboration plan, phases 1 to 5                         |
-| [branch-workspaces-phase-5-verification.md](./branch-workspaces-phase-5-verification.md)   | Current | Verification record for the branch-workspaces rollout                    |
 | [provider-oauth-openai-codex.md](./provider-oauth-openai-codex.md)                         | Current | How a member connects OpenAI Codex (official CLI auth cache)             |
 | [openai-codex-hosted-subscription-bridge.md](./openai-codex-hosted-subscription-bridge.md) | Current | Running the Codex CLI headless in the cloud with that cache              |
-| [agent-session-portability.md](./agent-session-portability.md)                             | Current | Capsule v0, storage, lifecycle, transport, and restoration boundary      |
 | [GIT_PROXY.md](./GIT_PROXY.md)                                                             | Design  | Git over the control plane without credentials in the guest (unbuilt)    |
 
 ## Product
@@ -44,37 +37,29 @@ kept for the record only.
 | [product/ENTERPRISE_FEATURES.md](./product/ENTERPRISE_FEATURES.md)           | Design | Long-range product vision; not a list of shipped features                      |
 | [session-imports-current-mockup.html](./session-imports-current-mockup.html) | Design | Standalone current-state mockup and redesign brief for imported-session review |
 
-## Original specs (`specs/`)
-
-Written before the Azure-only runtime; each carries a status banner.
-
-| Document                                                                                                     | Status | Covers                                                            |
-| ------------------------------------------------------------------------------------------------------------ | ------ | ----------------------------------------------------------------- |
-| [specs/BYOK_AND_CREDENTIAL_HIERARCHY_SPEC.md](./specs/BYOK_AND_CREDENTIAL_HIERARCHY_SPEC.md)                 | Design | Credential resolution order, BYOK, provider OAuth, key encryption |
-| [specs/DUAL_TIER_SETTINGS_SPEC.md](./specs/DUAL_TIER_SETTINGS_SPEC.md)                                       | Design | Personal vs organization settings, routes, OpenFGA permissions    |
-| [specs/FLOW_AND_HIBERNATION_SPEC.md](./specs/FLOW_AND_HIBERNATION_SPEC.md)                                   | Design | End-to-end sharing flow and workspace auto-hibernation            |
-| [specs/SECURITY_OPERATIONS_AND_RATE_LIMITING_SPEC.md](./specs/SECURITY_OPERATIONS_AND_RATE_LIMITING_SPEC.md) | Design | Rate limiting tiers, cost safety, telemetry, beta access          |
-
-## Collaborative IDE program (`collaborative-ide/`)
-
-A scheduler-driven backlog. `COLLABORATIVE_IDE_TASK_STATE.md` is its ledger (over
-200 KB, and excluded from search by the root `.ignore`); read only the part you need.
-
-| Document                                                                                       | Status  | Covers                                                     |
-| ---------------------------------------------------------------------------------------------- | ------- | ---------------------------------------------------------- |
-| [COLLABORATIVE_IDE_FEATURES.md](./collaborative-ide/COLLABORATIVE_IDE_FEATURES.md)             | Current | Feature backlog and product promise                        |
-| [COLLABORATIVE_IDE_EXECUTION.md](./collaborative-ide/COLLABORATIVE_IDE_EXECUTION.md)           | Current | Execution rules, verification gates, the automation prompt |
-| [COLLABORATIVE_IDE_TASK_STATE.md](./collaborative-ide/COLLABORATIVE_IDE_TASK_STATE.md)         | Current | Scheduler ledger: current task and completed-task log      |
-| [COLLABORATIVE_IDE_FIXTURES.md](./collaborative-ide/COLLABORATIVE_IDE_FIXTURES.md)             | Current | Verification fixture routes                                |
-| [COLLABORATIVE_IDE_EVIDENCE.md](./collaborative-ide/COLLABORATIVE_IDE_EVIDENCE.md)             | Current | Screenshot evidence layout                                 |
-| [COLLABORATIVE_IDE_BASELINE_AUDIT.md](./collaborative-ide/COLLABORATIVE_IDE_BASELINE_AUDIT.md) | History | B0.1 inventory of what existed in August 2026              |
-
 ## Audits and history
 
-| Document                                                       | Status  | Covers                                                           |
-| -------------------------------------------------------------- | ------- | ---------------------------------------------------------------- |
-| [audits/WORKSPACE_UI_AUDIT.md](./audits/WORKSPACE_UI_AUDIT.md) | Current | 27 workspace UI findings from 2026-09-12                         |
-| [archive/PLAN.md](./archive/PLAN.md)                           | History | Original AWS-era delivery plan; does not describe today's system |
-
+| Document | Status | Covers |
+| --- | --- | --- |
+| [archive/PLAN.md](./archive/PLAN.md) | History | Original delivery plan; does not describe today's system |
+| [archive/gen1-workspace/specs/BYOK_AND_CREDENTIAL_HIERARCHY_SPEC.md](./archive/gen1-workspace/specs/BYOK_AND_CREDENTIAL_HIERARCHY_SPEC.md) | History | Gen 1 credential hierarchy and provider integration design |
+| [archive/gen1-workspace/specs/DUAL_TIER_SETTINGS_SPEC.md](./archive/gen1-workspace/specs/DUAL_TIER_SETTINGS_SPEC.md) | History | Gen 1 personal and organization settings with OpenFGA |
+| [archive/gen1-workspace/specs/FLOW_AND_HIBERNATION_SPEC.md](./archive/gen1-workspace/specs/FLOW_AND_HIBERNATION_SPEC.md) | History | Gen 1 sharing, OpenFGA authorization, and hibernation design |
+| [archive/gen1-workspace/specs/SECURITY_OPERATIONS_AND_RATE_LIMITING_SPEC.md](./archive/gen1-workspace/specs/SECURITY_OPERATIONS_AND_RATE_LIMITING_SPEC.md) | History | Gen 1 WebSocket, PTY, and rate-limit design |
+| [archive/gen1-workspace/BACKEND_FRONTEND_INTEGRATION.md](./archive/gen1-workspace/BACKEND_FRONTEND_INTEGRATION.md) | History | Gen 1 workspace API contract and integration design |
+| [archive/gen1-workspace/WORKSPACE_CONSOLIDATION.md](./archive/gen1-workspace/WORKSPACE_CONSOLIDATION.md) | History | Gen 1 and Gen 2 runtime consolidation record |
+| [archive/gen1-workspace/workspace-startup-performance-plan.md](./archive/gen1-workspace/workspace-startup-performance-plan.md) | History | Gen 1 startup performance investigation and plan |
+| [archive/gen1-workspace/branch-workspaces-plan.md](./archive/gen1-workspace/branch-workspaces-plan.md) | History | Gen 1 branches-first collaboration plan |
+| [archive/gen1-workspace/branch-workspaces-phase-5-verification.md](./archive/gen1-workspace/branch-workspaces-phase-5-verification.md) | History | Gen 1 embedded Orca rollout verification |
+| [archive/gen1-workspace/agent-session-portability.md](./archive/gen1-workspace/agent-session-portability.md) | History | Gen 1 agent session portability design and status |
+| [archive/gen1-workspace/SUPERSET_ADOPTION_MANIFEST.md](./archive/gen1-workspace/SUPERSET_ADOPTION_MANIFEST.md) | History | Gen 1 to Gen 2 Superset adoption plan |
+| [archive/gen1-workspace/CODEV_FEATURES.md](./archive/gen1-workspace/CODEV_FEATURES.md) | History | Gen 1 shipped feature inventory |
+| [archive/gen1-workspace/collaborative-ide/COLLABORATIVE_IDE_FEATURES.md](./archive/gen1-workspace/collaborative-ide/COLLABORATIVE_IDE_FEATURES.md) | History | Gen 1 collaborative IDE backlog and product promise |
+| [archive/gen1-workspace/collaborative-ide/COLLABORATIVE_IDE_EXECUTION.md](./archive/gen1-workspace/collaborative-ide/COLLABORATIVE_IDE_EXECUTION.md) | History | Gen 1 collaborative IDE execution rules |
+| [archive/gen1-workspace/collaborative-ide/COLLABORATIVE_IDE_TASK_STATE.md](./archive/gen1-workspace/collaborative-ide/COLLABORATIVE_IDE_TASK_STATE.md) | History | Gen 1 collaborative IDE scheduler ledger |
+| [archive/gen1-workspace/collaborative-ide/COLLABORATIVE_IDE_FIXTURES.md](./archive/gen1-workspace/collaborative-ide/COLLABORATIVE_IDE_FIXTURES.md) | History | Gen 1 verification fixture routes |
+| [archive/gen1-workspace/collaborative-ide/COLLABORATIVE_IDE_EVIDENCE.md](./archive/gen1-workspace/collaborative-ide/COLLABORATIVE_IDE_EVIDENCE.md) | History | Gen 1 screenshot evidence layout |
+| [archive/gen1-workspace/collaborative-ide/COLLABORATIVE_IDE_BASELINE_AUDIT.md](./archive/gen1-workspace/collaborative-ide/COLLABORATIVE_IDE_BASELINE_AUDIT.md) | History | Gen 1 baseline audit from August 2026 |
+| [archive/gen1-workspace/audits/WORKSPACE_UI_AUDIT.md](./archive/gen1-workspace/audits/WORKSPACE_UI_AUDIT.md) | History | Gen 1 workspace UI audit from 2026-09-12 |
 Put new documents in the matching folder and add a row here in the same change.
 Move a document to `archive/` once it no longer describes the system.

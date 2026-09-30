@@ -1,91 +1,84 @@
 import "server-only";
 
-import {
-  checkWorkspaceRelation,
-  requireWorkspacePermission,
-  WorkspaceAccessError,
-  type OpenFgaWorkspaceRelation,
-  type WorkspaceAccessRole,
-} from "./access";
+import { and, eq } from "drizzle-orm";
 
+import { schema } from "@codev/db";
+
+import { getDatabase } from "../platform/database";
+
+export type OrganizationSettingsRole =
+  (typeof schema.organizationMembers.$inferSelect)["role"];
 export type OrganizationSettingsAction = "read" | "write";
 
 export type OrganizationSettingsAccess = {
-  role: WorkspaceAccessRole;
+  role: OrganizationSettingsRole;
   canWrite: boolean;
   action: OrganizationSettingsAction;
 };
 
 export type OrganizationSettingsContext = OrganizationSettingsAccess & {
-  workspace: {
-    id: string;
-    repository: string;
-    repositoryVisibility: "private" | "public";
-    status: string;
-  };
+  organization: { id: string; name: string; slug: string };
 };
 
-export function isOrganizationSettingsAdmin(role: WorkspaceAccessRole) {
-  return role === "owner";
+export class OrganizationSettingsAccessError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "OrganizationSettingsAccessError";
+  }
 }
 
-/**
- * Authorizes reads and writes for shared settings.
- *
- * Maintainers are the only role allowed to change shared organization
- * settings; collaborators and viewers can still read them.
- */
+export function isOrganizationSettingsAdmin(role: OrganizationSettingsRole) {
+  return role === "owner" || role === "admin";
+}
+
 export async function checkOrgSettingsAccess(
   userId: string,
-  workspaceId: string,
+  organizationId: string,
   action: OrganizationSettingsAction,
 ): Promise<OrganizationSettingsAccess> {
-  const membership = await requireWorkspacePermission(
-    workspaceId,
-    userId,
-    "view",
-  );
-  const canWrite = isOrganizationSettingsAdmin(membership.role);
-
-  if (action === "write") {
-    if (!canWrite) {
-      throw new WorkspaceAccessError(
-        "Only workspace Maintainers can modify organization settings.",
-      );
-    }
-
-    const fgaRelations: OpenFgaWorkspaceRelation[] =
-      membership.role === "owner" ? ["owner"] : ["editor"];
-    const allowed = await Promise.all(
-      fgaRelations.map((relation) =>
-        checkWorkspaceRelation(workspaceId, userId, relation),
+  const [membership] = await getDatabase()
+    .select({ role: schema.organizationMembers.role })
+    .from(schema.organizationMembers)
+    .where(
+      and(
+        eq(schema.organizationMembers.organizationId, organizationId),
+        eq(schema.organizationMembers.userId, userId),
       ),
+    )
+    .limit(1);
+
+  if (!membership) {
+    throw new OrganizationSettingsAccessError(
+      "Organization membership is required.",
+      404,
     );
-    if (!allowed.some(Boolean)) {
-      throw new WorkspaceAccessError(
-        "OpenFGA denied organization settings write access.",
-      );
-    }
   }
 
-  return {
-    role: membership.role,
-    canWrite,
-    action,
-  };
+  const canWrite = isOrganizationSettingsAdmin(membership.role);
+  if (action === "write" && !canWrite) {
+    throw new OrganizationSettingsAccessError(
+      "Only organization owners and admins can change shared settings.",
+      403,
+    );
+  }
+
+  return { role: membership.role, canWrite, action };
 }
 
-export async function requireOrganizationSettingsAccess(
+export function requireOrganizationSettingsAccess(
   userId: string,
-  workspaceId: string,
+  organizationId: string,
   action: OrganizationSettingsAction = "read",
 ) {
-  return checkOrgSettingsAccess(userId, workspaceId, action);
+  return checkOrgSettingsAccess(userId, organizationId, action);
 }
 
-export async function requireOrganizationSettingsWrite(
+export function requireOrganizationSettingsWrite(
   userId: string,
-  workspaceId: string,
+  organizationId: string,
 ) {
-  return requireOrganizationSettingsAccess(userId, workspaceId, "write");
+  return requireOrganizationSettingsAccess(userId, organizationId, "write");
 }

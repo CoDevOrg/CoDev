@@ -25,10 +25,7 @@ import { requireGen2Member } from "./workspaces";
 /** Orchestrator create validation requires a 40-character hex SHA. */
 export const GEN2_BLANK_BASE_SHA = "0".repeat(40);
 
-/**
- * The orchestrator rejects any lifecycle other than a four-hour pause with
- * auto-resume. Copied here so gen2 does not import the gen1 hibernation module.
- */
+/** Gen 2 sandboxes pause after four hours and resume when opened again. */
 export const GEN2_SANDBOX_LIFECYCLE = {
   timeoutMs: 4 * 60 * 60 * 1000,
   lifecycle: { onTimeout: "pause" as const, autoResume: true as const },

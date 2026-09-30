@@ -7,18 +7,12 @@ function help() {
 
 Usage:
   codev login [--no-browser]
-  codev codex-auth [--org[=<workspace-id>]] [--browser]
-  codev claude-auth [--org[=<workspace-id>]]
+  codev codex-auth [--browser]
+  codev claude-auth
 
 The codex-auth and claude-auth commands delegate authentication to the
 official Codex and Claude Code CLIs. No provider API key is required.
 `);
-}
-
-function orgArgument(args) {
-  const inline = args.find((value) => value.startsWith("--org="));
-  if (inline) return { organization: true, organizationId: inline.slice(6) };
-  return { organization: args.includes("--org") };
 }
 
 async function main() {
@@ -38,13 +32,12 @@ async function main() {
   }
   if (command === "codex-auth") {
     await codexAuth({
-      ...orgArgument(args),
       browser: args.includes("--browser"),
     });
     return;
   }
   if (command === "claude-auth") {
-    await claudeAuth(orgArgument(args));
+    await claudeAuth();
     return;
   }
   throw new Error(`Unknown command: ${command}`);

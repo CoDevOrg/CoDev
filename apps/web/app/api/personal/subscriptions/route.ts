@@ -3,13 +3,11 @@ import { z } from "zod";
 import { apiError, getApiUser } from "@/lib/http/api";
 import { revokePersonalSubscription } from "@/lib/providers/provider-connection-server";
 
-const providerSchema = z.enum(["claude", "codex", "cursor"]);
+const providerSchema = z.enum(["claude", "codex"]);
 
 /**
- * Sign the member out of an agent subscription (Claude Code, Codex, Cursor).
- * Connecting happens through each provider's own OAuth route; this is the one
- * shared way back out, so the settings card always has a Disconnect that
- * matches the Connect next to it.
+ * Sign the member out of a Claude Code or Codex subscription.
+ * The settings card uses this shared route to disconnect either provider.
  */
 export async function DELETE(request: Request) {
   const user = await getApiUser();

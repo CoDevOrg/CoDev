@@ -197,25 +197,25 @@ export function OrganizationSettingsPage({
           title={title}
         />
         <SettingsCard
-          description="Join or create a workspace before configuring shared settings."
+          description="Join or create an organization before configuring shared settings."
           title="No organization selected"
         >
           <p className="settings-muted-copy">
-            Organization settings become available when you have access to a
-            workspace.
+            Organization settings become available when you belong to an
+            organization.
           </p>
         </SettingsCard>
       </div>
     );
   }
 
-  const roleLabel = context.role === "co_steer" ? "Admin" : context.role;
+  const roleLabel = context.role.replaceAll("_", " ");
 
   return (
     <div className="settings-page">
       <SettingsPageHeader
         description={description}
-        eyebrow={`Organization settings · ${context.workspace.repository}`}
+        eyebrow={`Organization settings · ${context.organization.name}`}
         title={title}
       />
       <div className="settings-scope-meta">
@@ -223,14 +223,14 @@ export function OrganizationSettingsPage({
         <span>
           {context.canWrite
             ? "You can manage shared organization settings."
-            : "Read-only access for this workspace."}
+            : "Read-only access for this organization."}
         </span>
       </div>
       {!context.canWrite ? (
         <div className="settings-readonly-banner" role="status">
           <strong>Read-only view</strong>
           <span>
-            Only workspace Owners and Admins can change organization settings.
+            Only organization owners and admins can change shared settings.
           </span>
         </div>
       ) : null}

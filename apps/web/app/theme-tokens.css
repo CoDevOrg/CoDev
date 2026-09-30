@@ -2,7 +2,7 @@
  * CoDev's single source of truth for color. Every other product theme file
  * -- app-theme.css (plain CSS custom properties for gen2/sign-in/AppChrome),
  * product-theme.css (Tailwind @theme for Rooms + dashboard), and
- * settings/orca-theme.css (Tailwind @theme for Settings) -- derives its
+ * settings/settings-theme.css (Tailwind @theme for Settings) -- derives its
  * tokens from the raw swatches declared here via var(), instead of each
  * holding its own copy of the same hex codes under its own role names. That
  * duplication is exactly what let three separate redesign passes drift out
@@ -55,7 +55,7 @@
   --brand-teal-rgb: 42, 109, 98;
 
   /* A var, not just a bare `color-scheme: light` here, so every consumer
-     (app-theme.css, product-theme.css, orca-theme.css) can write
+     (app-theme.css, product-theme.css, settings-theme.css) can write
      `color-scheme: var(--brand-color-scheme);` on its own scoped element
      and inherit the flip, instead of each needing its own dark override
      just for this one property. */

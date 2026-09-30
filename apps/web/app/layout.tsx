@@ -6,7 +6,6 @@ import { Analytics } from "@vercel/analytics/next";
 import "./theme-tokens.css";
 import "./globals.css";
 import "./app-theme.css";
-import "./team-chat.css";
 
 import { VisitTracker } from "@/components/landing/visit-tracker";
 import { THEME_INIT_SCRIPT } from "@/components/shell/theme-toggle";

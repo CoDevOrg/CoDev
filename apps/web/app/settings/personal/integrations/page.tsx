@@ -10,9 +10,9 @@ import {
   type IntegrationRow,
 } from "@/components/settings/integrations-list";
 import {
-  OrcaPageHeader,
-  OrcaPageShell,
-} from "@/components/settings/orca-style";
+  SettingsPageHeader,
+  SettingsPageShell,
+} from "@/components/settings/settings-style";
 import { getConnectedAccounts } from "@/lib/auth/identity";
 import { requireUser } from "@/lib/auth/session";
 
@@ -64,12 +64,12 @@ export default async function PersonalIntegrationsPage() {
   ];
 
   return (
-    <OrcaPageShell>
-      <OrcaPageHeader
+    <SettingsPageShell>
+      <SettingsPageHeader
         description="Connect the source hosts and task trackers CoDev can use for pull requests, checks, and linked task context."
         title="Integrations"
       />
       <IntegrationsList rows={rows} />
-    </OrcaPageShell>
+    </SettingsPageShell>
   );
 }

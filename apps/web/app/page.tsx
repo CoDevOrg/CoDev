@@ -12,7 +12,6 @@ import { redirect } from "next/navigation";
 import { FlaskConical, GitBranch, MessagesSquare } from "lucide-react";
 
 import { LandingMotion } from "@/components/landing/landing-motion";
-import { LandingWorkspaceDemo } from "@/components/landing/landing-workspace-demo";
 import { RequestAccessButton } from "@/components/landing/request-access-button";
 import { WaitlistInline } from "@/components/landing/waitlist-inline";
 import { LandingBackdrop } from "@/components/landing/webgl/landing-backdrop";
@@ -55,7 +54,7 @@ const LANDING_FONTS = [
 const HEADLINE = ["Ship", "it", "together."];
 
 const DESCRIPTION =
-  "CoDev is one shared cloud workspace where you, your friends, and a crew of AI agents build the same project at the same time, on isolated worktrees that merge without conflicts. Request access to the private beta.";
+  "CoDev is a shared cloud workspace where your team and an AI agent work in the same live environment. Open a repository, steer the work together, and review changes as they happen. Request access to the private beta.";
 
 export const metadata: Metadata = {
   title: "Build together, with agents",
@@ -76,7 +75,7 @@ export const metadata: Metadata = {
 
 export default async function HomePage() {
   if (await getCurrentAppUser()) {
-    redirect("/dashboard");
+    redirect("/gen2");
   }
 
   return (
@@ -137,9 +136,8 @@ export default async function HomePage() {
           <em style={{ "--i": 4 } as CSSProperties}>Agents included.</em>
         </h1>
         <p className="lp-lede">
-          CoDev is one shared cloud workspace where you, your friends, and a
-          crew of AI agents build the same project at the same time, each on an
-          isolated worktree, so nobody lands on top of anyone else.
+          CoDev gives your team and an AI agent one shared cloud environment for
+          building, steering, and reviewing software together.
         </p>
         <div className="lp-hero-actions">
           <RequestAccessButton className="lp-cta lp-cta-primary">
@@ -152,8 +150,8 @@ export default async function HomePage() {
             <span>in one workspace</span>
           </li>
           <li>
-            <strong>0 conflicts</strong>
-            <span>when the worktrees merge</span>
+            <strong>One shared machine</strong>
+            <span>for your team and agent</span>
           </li>
           <li>
             <strong>1 link</strong>
@@ -161,13 +159,9 @@ export default async function HomePage() {
           </li>
           <li>
             <strong>Your own keys</strong>
-            <span>Claude, Codex, or Cursor</span>
+            <span>Claude or Codex</span>
           </li>
         </ul>
-      </section>
-
-      <section className="lp-tour" id="tour" data-reveal>
-        <LandingWorkspaceDemo />
       </section>
 
       <section
@@ -181,8 +175,8 @@ export default async function HomePage() {
             Less waiting. <em>Less rework.</em>
           </h2>
           <p>
-            CoDev removes the waiting and rework between writing code and
-            getting it safely merged.
+            CoDev puts the repository, agent conversation, and live workbench in
+            one shared environment.
           </p>
         </div>
 
@@ -191,30 +185,30 @@ export default async function HomePage() {
             <span className="lp-speed-icon" aria-hidden="true">
               <FlaskConical size={18} strokeWidth={1.8} />
             </span>
-            <h3>Test before merge</h3>
+            <h3>Watch the work happen</h3>
             <p>
-              Run and review a teammate&apos;s in-progress work before a commit,
-              push, or merge.
+              Follow agent activity, inspect changed files, and check Git
+              status while the agent works.
             </p>
           </article>
           <article>
             <span className="lp-speed-icon" aria-hidden="true">
               <MessagesSquare size={18} strokeWidth={1.8} />
             </span>
-            <h3>Coordinate, don&apos;t duplicate</h3>
+            <h3>Keep the context shared</h3>
             <p>
-              Agents see the same live context, divide the work, and stop
-              repeating the same investigation.
+              Teammates can join the same workspace, follow the conversation,
+              and guide the agent together.
             </p>
           </article>
           <article>
             <span className="lp-speed-icon" aria-hidden="true">
               <GitBranch size={18} strokeWidth={1.8} />
             </span>
-            <h3>Prevent conflicts early</h3>
+            <h3>Work in one environment</h3>
             <p>
-              Shared awareness and isolated worktrees reveal overlap before it
-              becomes merge-day rework.
+              The editor, terminal, Git panel, and agent all address the same
+              workspace filesystem.
             </p>
           </article>
         </div>
@@ -231,8 +225,8 @@ export default async function HomePage() {
         <article className="lp-contrast-after">
           <span>In CoDev</span>
           <p>
-            Everyone is inside the same running workspace, watching the same
-            agents, steering the same work, with nothing to reconstruct.
+            Everyone can join the same live workspace, follow the conversation,
+            inspect changes, and steer the agent with the same context.
           </p>
         </article>
       </section>

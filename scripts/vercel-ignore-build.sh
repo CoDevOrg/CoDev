@@ -9,13 +9,8 @@
 # build, and build minutes are the dominant line item on our Vercel bill.
 # This keeps every build that could change the deployed site -- so pushing a
 # branch and testing its preview still works exactly as before -- and skips
-# builds for commits that only touch the Rust orchestrator, infra, the IDE
-# fork source, docs, or CI config.
-#
-# The deployed IDE bundle is the checked-in build output under
-# apps/web/public/orca/**, so a packages/ide source change that does not also
-# regenerate that bundle (via `pnpm orca:web`) genuinely does not change the
-# site and is correctly skipped here.
+# builds for commits that only touch the Rust orchestrator, infra, docs, or CI
+# config.
 
 set -uo pipefail
 

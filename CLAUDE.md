@@ -21,9 +21,8 @@ instead of improvising design decisions.
 See "Verifying a Change" in [`AGENTS.md`](AGENTS.md) for the commands. The point
 worth repeating here, because it is a habit rather than a rule: **run the full
 suites once, when the change is finished.** `apps/web` is cheap now (~20s
-typecheck, ~45s tests) but a `packages/ide` sweep is still minutes, and
-re-running that after each edit is where a ten-minute task becomes an hour.
-Iterate on the single test file that covers what you changed.
+typecheck, ~45s tests), and re-running full suites after every edit wastes
+time. Iterate on the single test file that covers what you changed.
 
 Two searches to avoid: `grep -r` from the repo root (it walks ~4 GB of
 `node_modules` and times out — use the `Grep` tool) and `du`/`find` over the
@@ -40,11 +39,7 @@ Vercel account owner's. A branch push builds a preview; a push to `main`
 builds and promotes production. Build minutes are the dominant cost on our
 Vercel bill and the budget is small.
 
-- **One commit per change.** When a `packages/ide` source change needs the
-  embedded IDE bundle rebuilt, run `pnpm orca:web` and commit the regenerated
-  `apps/web/public/orca/**` output _together with_ the source change. Never
-  land a standalone "regenerate the embedded IDE bundle" follow-up commit — it
-  doubles the build cost of a single change.
+- **One commit per change.** Keep related source and generated output together.
 - **Keep trivial changes off `main`** as their own pushes (comment fixes,
   doc-only tweaks). Each push to `main` is a full production build.
 - **Deploy web** only runs when a push touches `apps/web/**`,
@@ -53,8 +48,7 @@ Vercel bill and the budget is small.
   filter mirrors [`scripts/vercel-ignore-build.sh`](scripts/vercel-ignore-build.sh),
   which is kept as the reference list — update both together if the web app's
   workspace dependencies change. A push touching only `services/`, `infra/`,
-  `docs/`, `.github/`, or `packages/ide/` source (with no regenerated bundle)
-  builds no web deployment.
+  `docs/`, or `.github/` builds no web deployment.
 
 ## Shared working tree
 

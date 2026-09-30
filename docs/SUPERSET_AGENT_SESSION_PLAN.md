@@ -58,8 +58,8 @@ foundation.
 
 Known open items owned by that work, not by this plan:
 
-- `bedrock`/`azure_foundry` enum values survive (removal touches `packages/ide`
-  and `apps/mobile` and forces a bundle rebuild for a Gen 1 concern).
+- `bedrock` and `azure_foundry` remain supported provider values for members'
+  own credentials and model-provider configuration.
 - Gen 2 still sends both `launchProfile` and legacy `codexAuthCacheJson`.
   Dropping the legacy field is a one-line change once rollout is confirmed. It
   is a dependency of this plan's secrecy goal (see Rollout), but the change

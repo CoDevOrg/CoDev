@@ -1,46 +1,16 @@
-import {
-  providerDefinition,
-  type CredentialKind,
-  type ProviderId,
-} from "./registry";
-
-export type ProviderConnectionProvider = "openai" | "anthropic" | "cursor";
-
-/** The vendor names this view uses, mapped onto registry provider ids. */
-const VENDOR_PROVIDER: Record<ProviderConnectionProvider, ProviderId> = {
-  openai: "codex",
-  anthropic: "claude",
-  cursor: "cursor",
-};
-
-/** The subscription-shaped credential each provider's card represents. */
-const SUBSCRIPTION_KIND: Record<CliSubscriptionProvider, CredentialKind> = {
-  codex: "codex_auth_cache",
-  claude: "claude_setup_token",
-  cursor: "cursor_tokens",
-};
+export type ProviderConnectionProvider = "openai" | "anthropic";
 
 export type ProviderConnectionStatus = "connected" | "not_connected";
 
 export type ProviderConnectionCredentialType = "API_KEY" | "OAUTH_TOKEN";
 
 /**
- * How a credential was obtained. Surface support also depends on the provider:
- * Codex browser OAuth produces a workspace-capable auth cache, while the
- * browser runtimes for Claude and Cursor remain rooms-only.
+ * How a credential was obtained.
  */
 export type CredentialProvenance = "browser" | "cli" | "api_key";
 
-/** Per-surface applicability a member toggles; the isolation + opt-in model. */
-export type ProviderSurfaceFlags = {
-  /** Where this credential *can* run — the registry's answer, not a stored
-   *  preference. Read-only as far as the member is concerned. */
-  enabledForRooms: boolean;
-  enabledForWorkspace: boolean;
-  /** The member's one stored choice: whether it may fund a turn inside a
-   *  workspace other people can see. */
-  allowInSharedWorkspaces: boolean;
-};
+/** Whether this member allows their credential to fund shared workspace work. */
+export type ProviderSurfaceFlags = { allowInSharedWorkspaces: boolean };
 
 export type ProviderConnectionRecord = ProviderSurfaceFlags & {
   provider: ProviderConnectionProvider;
@@ -59,20 +29,18 @@ export type ProviderConnectionViewer = {
 };
 
 /**
- * The three agent accounts a member can sign into. Cursor is reachable
- * through its own `cursor-agent` browser deeplink. Claude and Codex connect
- * with an API key or the CoDev CLI (which delegates to each provider's own
+ * The agent accounts a member can sign into. Claude and Codex connect with an
+ * API key or the CoDev CLI (which delegates to each provider's own
  * official CLI login) — Anthropic and OpenAI both restrict consumer-plan
  * OAuth tokens obtained outside their first-party clients, so CoDev no
  * longer offers its own browser OAuth flow for either.
  */
-export type CliSubscriptionProvider = "codex" | "claude" | "cursor";
+export type CliSubscriptionProvider = "codex" | "claude";
 
 export type SubscriptionConnectMode =
   | "app_callback"
   | "manual_code"
-  | "device_code"
-  | "cursor_deeplink";
+  | "device_code";
 
 export type CliSubscriptionRecord = ProviderSurfaceFlags & {
   provider: CliSubscriptionProvider;
@@ -115,12 +83,6 @@ const CLI_SUBSCRIPTIONS: Array<{
     command: "codev claude-auth",
     connectMode: "manual_code",
   },
-  {
-    provider: "cursor",
-    label: "Cursor",
-    command: null,
-    connectMode: "cursor_deeplink",
-  },
 ];
 
 export function toCliSubscriptionRecords(
@@ -141,7 +103,7 @@ export function toCliSubscriptionRecords(
       connectMode: connectModes[provider] ?? connectMode,
       command,
       provenance: provenance === "api_key" ? null : provenance,
-      ...surfaceFlags(status, provider, SUBSCRIPTION_KIND[provider]),
+      ...surfaceFlags(status),
     };
   });
 }
@@ -152,7 +114,7 @@ export function toClaudeCliTokenRecord(
   return {
     status: status ? "connected" : "not_connected",
     lastFour: status?.lastFour?.trim() || null,
-    ...surfaceFlags(status, "claude", "claude_setup_token"),
+    ...surfaceFlags(status),
   };
 }
 
@@ -165,11 +127,6 @@ export type ProviderConnectionSnapshot = {
   hostedClaudeConnect: boolean;
   /** Whether the in-app "Connect ChatGPT" device-code flow can run. */
   hostedOpenAIConnect: boolean;
-  /** Whether the *current workspace* (not the viewer personally) has a
-   *  connected, shared (`--org`) login for this provider — only populated
-   *  when the snapshot was loaded with a workspace id; see
-   *  `loadProviderConnectionSnapshot` and `scoped-credential-sharing.ts`. */
-  sharedWorkspaceLogin?: { anthropic: boolean; openai: boolean };
 };
 
 export type ProviderCredentialStatus = {
@@ -192,7 +149,6 @@ const PROVIDERS: Array<{
 }> = [
   { provider: "openai", label: "OpenAI" },
   { provider: "anthropic", label: "Anthropic" },
-  { provider: "cursor", label: "Cursor" },
 ];
 
 const SECRET_KEYS = new Set([
@@ -213,7 +169,7 @@ const SECRET_KEYS = new Set([
 export function isProviderConnectionProvider(
   value: string,
 ): value is ProviderConnectionProvider {
-  return value === "openai" || value === "anthropic" || value === "cursor";
+  return value === "openai" || value === "anthropic";
 }
 
 function publicCredentialType(
@@ -240,23 +196,9 @@ function publicProvenance(
  */
 function surfaceFlags(
   status: ProviderCredentialStatus | null,
-  provider: ProviderId,
-  kind: CredentialKind,
 ): ProviderSurfaceFlags {
-  if (!status) {
-    return {
-      enabledForRooms: false,
-      enabledForWorkspace: false,
-      allowInSharedWorkspaces: false,
-    };
-  }
-  const entry = providerDefinition(provider).kinds.find(
-    (candidate) => candidate.kind === kind,
-  );
   return {
-    enabledForRooms: entry?.runs.rooms ?? false,
-    enabledForWorkspace: entry?.runs.workspace ?? false,
-    allowInSharedWorkspaces: status.allowInSharedWorkspaces ?? true,
+    allowInSharedWorkspaces: status?.allowInSharedWorkspaces ?? false,
   };
 }
 
@@ -278,11 +220,7 @@ export function toProviderConnectionRecord(input: {
     suppliedBy: connected ? input.suppliedBy : null,
     scope: "personal",
     provenance: connected ? "api_key" : null,
-    ...surfaceFlags(
-      connected ? input.status : null,
-      VENDOR_PROVIDER[input.provider],
-      "api_key",
-    ),
+    ...surfaceFlags(connected ? input.status : null),
   };
 }
 
@@ -300,7 +238,6 @@ export function toProviderConnectionSnapshot(input: {
   claudeCliToken?: ProviderCredentialStatus | null;
   hostedClaudeConnect?: boolean;
   hostedOpenAIConnect?: boolean;
-  sharedWorkspaceLogin?: { anthropic: boolean; openai: boolean };
 }): ProviderConnectionSnapshot {
   const connections = PROVIDERS.map((provider) =>
     toProviderConnectionRecord({
@@ -320,9 +257,6 @@ export function toProviderConnectionSnapshot(input: {
     claudeCliToken: toClaudeCliTokenRecord(input.claudeCliToken ?? null),
     hostedClaudeConnect: input.hostedClaudeConnect ?? false,
     hostedOpenAIConnect: input.hostedOpenAIConnect ?? false,
-    ...(input.sharedWorkspaceLogin
-      ? { sharedWorkspaceLogin: input.sharedWorkspaceLogin }
-      : {}),
   };
 }
 

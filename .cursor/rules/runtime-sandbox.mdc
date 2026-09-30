@@ -1,0 +1,20 @@
+---
+description: Vercel control plane and Azure Firecracker sandbox responsibilities.
+globs:
+  - apps/web/**
+  - services/orchestrator/**
+  - infra/azure/**
+  - infra/runtime/**
+alwaysApply: false
+---
+
+# Runtime boundary
+
+CoDev's web control plane runs on Vercel. The Rust orchestrator and Firecracker guests run on Azure.
+
+- Agent execution, worktrees, and publication exports belong behind sandbox API routes.
+- Gen 2 workspace file, Git, terminal, and collaboration routes check membership before they call the orchestrator.
+- The editor, terminal, Git tools, and agents operate on the same guest filesystem under `/workspace`.
+- Keep credentials and authorization in the control plane; do not move them into the shared runtime host.
+
+Use Apple's `container` tool for local container execution. Do not add Dockerfiles, Compose files, or Docker-dependent commands.

@@ -3,7 +3,7 @@ use std::{
 };
 
 use axum::{
-    Extension, Json, Router,
+    Json, Router,
     body::Body,
     extract::{DefaultBodyLimit, Path, Query, State},
     http::{HeaderValue, Request, StatusCode, header},
@@ -18,18 +18,14 @@ use serde::Deserialize;
 use tracing::info;
 
 use crate::{
-    backend::{IdeBackend, SharedBackend},
+    backend::SharedBackend,
     model::{
         ClaudeSetupCodeRequest, ClaudeSetupPollRequest, ClaudeSetupStartRequest,
-        CodexExecPollRequest, CodexExecStartRequest, CreateRequest, ExecRequest,
-        IDE_EXEC_MAX_ARGUMENTS, IDE_EXEC_MAX_TIMEOUT_SECONDS, IdeExecRequest, IdePrepareRequest,
-        IdeStartRequest, IdeWriteFileRequest, MAX_IDE_FILE_BYTES, PublicationExportRequest, Result,
-        RuntimeError, SESSION_RESTORE_CHUNK_BYTES, SessionRestoreBeginRequest,
-        SessionRestoreChunkRequest, SupersetAgentInputRequest, SupersetAgentPollRequest,
+        CodexExecPollRequest, CodexExecStartRequest, CreateRequest, ExecRequest, Result,
+        RuntimeError, SupersetAgentInputRequest, SupersetAgentPollRequest,
         SupersetAgentStartRequest, SupersetCreateEntryRequest, SupersetDeleteEntryRequest,
         SupersetMoveEntryRequest, TerminalInputRequest, TerminalPollRequest, TerminalResizeRequest,
-        TerminalStartRequest, WorktreeCheckpointRequest, WorktreeCreateRequest,
-        WorktreeMergeRequest, WorktreeRebaseRequest, WriteFileRequest,
+        TerminalStartRequest, WriteFileRequest,
     },
 };
 
@@ -48,13 +44,7 @@ struct WorktreeQuery {
     worktree_id: Option<String>,
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct WorktreeReviewQuery {
-    base_sha: String,
-}
-
-pub fn router(backend: SharedBackend, ide: IdeBackend) -> Router {
+pub fn router(backend: SharedBackend) -> Router {
     Router::new()
         .route("/healthz", get(health))
         .route("/v1/sandboxes", post(create_sandbox))
@@ -65,24 +55,6 @@ pub fn router(backend: SharedBackend, ide: IdeBackend) -> Router {
         .route("/v1/sandboxes/{workspace_id}/resume", post(resume_sandbox))
         .route("/v1/sandboxes/{workspace_id}/activity", post(touch_sandbox))
         .route("/v1/sandboxes/{workspace_id}/park", post(park_sandbox))
-        .route(
-            "/v1/sandboxes/{workspace_id}/ide",
-            post(start_ide).get(get_ide).delete(stop_ide),
-        )
-        .route(
-            "/v1/sandboxes/{workspace_id}/ide/prepare",
-            post(prepare_ide),
-        )
-        .route(
-            "/v1/sandboxes/{workspace_id}/ide/credentials",
-            post(refresh_ide_credentials),
-        )
-        .route("/v1/sandboxes/{workspace_id}/ide/activity", post(touch_ide))
-        .route(
-            "/v1/sandboxes/{workspace_id}/ide/files/write",
-            post(write_ide_file),
-        )
-        .route("/v1/sandboxes/{workspace_id}/ide/exec", post(exec_ide))
         .route("/v1/sandboxes/{workspace_id}/files/read", post(read_file))
         .route(
             "/v1/sandboxes/{workspace_id}/superset/health",
@@ -124,46 +96,6 @@ pub fn router(backend: SharedBackend, ide: IdeBackend) -> Router {
         )
         .route("/v1/sandboxes/{workspace_id}/files/write", post(write_file))
         .route("/v1/sandboxes/{workspace_id}/pty/exec", post(exec_pty))
-        .route(
-            "/v1/sandboxes/{workspace_id}/worktrees",
-            post(create_worktree),
-        )
-        .route(
-            "/v1/sandboxes/{workspace_id}/session-restores",
-            post(begin_session_restore),
-        )
-        .route(
-            "/v1/sandboxes/{workspace_id}/session-restores/{operation_id}/chunks",
-            post(append_session_restore_chunk),
-        )
-        .route(
-            "/v1/sandboxes/{workspace_id}/session-restores/{operation_id}/finalize",
-            post(finalize_session_restore),
-        )
-        .route(
-            "/v1/sandboxes/{workspace_id}/session-restores/{operation_id}",
-            delete(abort_session_restore),
-        )
-        .route(
-            "/v1/sandboxes/{workspace_id}/worktrees/{worktree_id}",
-            delete(delete_worktree),
-        )
-        .route(
-            "/v1/sandboxes/{workspace_id}/worktrees/{worktree_id}/checkpoint",
-            post(checkpoint_worktree),
-        )
-        .route(
-            "/v1/sandboxes/{workspace_id}/worktrees/{worktree_id}/review",
-            get(review_worktree),
-        )
-        .route(
-            "/v1/sandboxes/{workspace_id}/worktrees/{worktree_id}/rebase",
-            post(rebase_worktree),
-        )
-        .route(
-            "/v1/sandboxes/{workspace_id}/worktrees/{worktree_id}/merge",
-            post(merge_worktree),
-        )
         .route(
             "/v1/sandboxes/{workspace_id}/terminals",
             post(start_terminal),
@@ -235,15 +167,10 @@ pub fn router(backend: SharedBackend, ide: IdeBackend) -> Router {
         .route("/v1/sandboxes/{workspace_id}/git/status", get(git_status))
         .route("/v1/sandboxes/{workspace_id}/git/diff", get(git_diff))
         .route(
-            "/v1/sandboxes/{workspace_id}/publication/export",
-            post(export_publication),
-        )
-        .route(
             "/v1/sandboxes/{workspace_id}/snapshot",
-            post(snapshot_workspace).delete(discard_snapshot),
+            delete(discard_snapshot),
         )
         .layer(DefaultBodyLimit::max(MAX_REQUEST_BYTES))
-        .layer(Extension(ide))
         .layer(middleware::from_fn(no_store))
         .layer(middleware::from_fn(observe_request))
         .with_state(backend)
@@ -668,198 +595,6 @@ async fn exec_pty(
     Ok(Json(serde_json::json!({ "result": result })))
 }
 
-async fn create_worktree(
-    State(backend): State<SharedBackend>,
-    Path(workspace_id): Path<String>,
-    Json(request): Json<WorktreeCreateRequest>,
-) -> Result<impl IntoResponse> {
-    validate_workspace_id(&workspace_id)?;
-    validate_worktree_id(&request.worktree_id)?;
-    if !commit_sha_pattern().is_match(&request.head_sha) {
-        return Err(RuntimeError::BadRequest("invalid worktree head SHA".into()));
-    }
-    backend.create_worktree(&workspace_id, request).await?;
-    Ok((
-        StatusCode::CREATED,
-        Json(serde_json::json!({ "created": true })),
-    ))
-}
-
-async fn begin_session_restore(
-    State(backend): State<SharedBackend>,
-    Path(workspace_id): Path<String>,
-    Json(request): Json<SessionRestoreBeginRequest>,
-) -> Result<StatusCode> {
-    validate_workspace_id(&workspace_id)?;
-    validate_worktree_id(&request.operation_id)?;
-    validate_worktree_id(&request.worktree_id)?;
-    validate_sha(&request.base_commit_sha, "restore base commit SHA")?;
-    backend
-        .begin_session_restore(&workspace_id, request)
-        .await?;
-    Ok(StatusCode::ACCEPTED)
-}
-
-async fn append_session_restore_chunk(
-    State(backend): State<SharedBackend>,
-    Path((workspace_id, operation_id)): Path<(String, String)>,
-    Json(request): Json<SessionRestoreChunkRequest>,
-) -> Result<Json<serde_json::Value>> {
-    validate_workspace_id(&workspace_id)?;
-    validate_worktree_id(&operation_id)?;
-    let decoded_bytes = BASE64
-        .decode(request.content_base64.as_bytes())
-        .map_err(|_| RuntimeError::BadRequest("restore chunk is not valid base64".into()))?;
-    if decoded_bytes.is_empty() || decoded_bytes.len() > SESSION_RESTORE_CHUNK_BYTES {
-        return Err(RuntimeError::BadRequest(
-            "restore chunk must contain between one byte and 512 KiB".into(),
-        ));
-    }
-    let next_offset = backend
-        .append_session_restore_chunk(&workspace_id, &operation_id, request)
-        .await?;
-    Ok(Json(serde_json::json!({ "nextOffset": next_offset })))
-}
-
-async fn finalize_session_restore(
-    State(backend): State<SharedBackend>,
-    Path((workspace_id, operation_id)): Path<(String, String)>,
-) -> Result<Json<serde_json::Value>> {
-    validate_workspace_id(&workspace_id)?;
-    validate_worktree_id(&operation_id)?;
-    let response = backend
-        .finalize_session_restore(&workspace_id, &operation_id)
-        .await?;
-    Ok(Json(
-        serde_json::to_value(response).map_err(RuntimeError::internal)?,
-    ))
-}
-
-async fn abort_session_restore(
-    State(backend): State<SharedBackend>,
-    Path((workspace_id, operation_id)): Path<(String, String)>,
-) -> Result<StatusCode> {
-    validate_workspace_id(&workspace_id)?;
-    validate_worktree_id(&operation_id)?;
-    backend
-        .abort_session_restore(&workspace_id, &operation_id)
-        .await?;
-    Ok(StatusCode::NO_CONTENT)
-}
-
-async fn delete_worktree(
-    State(backend): State<SharedBackend>,
-    Path((workspace_id, worktree_id)): Path<(String, String)>,
-) -> Result<StatusCode> {
-    validate_workspace_id(&workspace_id)?;
-    validate_worktree_id(&worktree_id)?;
-    backend.delete_worktree(&workspace_id, &worktree_id).await?;
-    Ok(StatusCode::NO_CONTENT)
-}
-
-async fn checkpoint_worktree(
-    State(backend): State<SharedBackend>,
-    Path((workspace_id, worktree_id)): Path<(String, String)>,
-    Json(request): Json<WorktreeCheckpointRequest>,
-) -> Result<Json<serde_json::Value>> {
-    validate_workspace_id(&workspace_id)?;
-    validate_worktree_id(&worktree_id)?;
-    validate_sha(&request.expected_head_sha, "expected worktree head SHA")?;
-    let response = backend
-        .checkpoint_worktree(&workspace_id, &worktree_id, request)
-        .await?;
-    Ok(Json(
-        serde_json::to_value(response).map_err(RuntimeError::internal)?,
-    ))
-}
-
-async fn review_worktree(
-    State(backend): State<SharedBackend>,
-    Path((workspace_id, worktree_id)): Path<(String, String)>,
-    Query(query): Query<WorktreeReviewQuery>,
-) -> Result<Json<serde_json::Value>> {
-    validate_workspace_id(&workspace_id)?;
-    validate_worktree_id(&worktree_id)?;
-    validate_sha(&query.base_sha, "review base SHA")?;
-    let response = backend
-        .review_worktree(&workspace_id, &worktree_id, &query.base_sha)
-        .await?;
-    Ok(Json(
-        serde_json::to_value(response).map_err(RuntimeError::internal)?,
-    ))
-}
-
-async fn rebase_worktree(
-    State(backend): State<SharedBackend>,
-    Path((workspace_id, worktree_id)): Path<(String, String)>,
-    Json(request): Json<WorktreeRebaseRequest>,
-) -> Result<Json<serde_json::Value>> {
-    validate_workspace_id(&workspace_id)?;
-    validate_worktree_id(&worktree_id)?;
-    validate_sha(&request.expected_head_sha, "expected worktree head SHA")?;
-    validate_sha(&request.onto_sha, "rebase target SHA")?;
-    let response = backend
-        .rebase_worktree(&workspace_id, &worktree_id, request)
-        .await?;
-    Ok(Json(
-        serde_json::to_value(response).map_err(RuntimeError::internal)?,
-    ))
-}
-
-async fn merge_worktree(
-    State(backend): State<SharedBackend>,
-    Path((workspace_id, worktree_id)): Path<(String, String)>,
-    Json(request): Json<WorktreeMergeRequest>,
-) -> Result<Json<serde_json::Value>> {
-    validate_workspace_id(&workspace_id)?;
-    validate_worktree_id(&worktree_id)?;
-    validate_sha(
-        &request.expected_integration_head_sha,
-        "expected integration head SHA",
-    )?;
-    validate_sha(
-        &request.expected_worktree_head_sha,
-        "expected worktree head SHA",
-    )?;
-    if !digest_pattern().is_match(&request.expected_diff_digest) {
-        return Err(RuntimeError::BadRequest(
-            "invalid expected diff digest".into(),
-        ));
-    }
-    let response = backend
-        .merge_worktree(&workspace_id, &worktree_id, request)
-        .await?;
-    Ok(Json(
-        serde_json::to_value(response).map_err(RuntimeError::internal)?,
-    ))
-}
-
-async fn export_publication(
-    State(backend): State<SharedBackend>,
-    Path(workspace_id): Path<String>,
-    Json(request): Json<PublicationExportRequest>,
-) -> Result<Json<serde_json::Value>> {
-    validate_workspace_id(&workspace_id)?;
-    validate_sha(&request.expected_head_sha, "expected integration head SHA")?;
-    let response = backend.export_publication(&workspace_id, request).await?;
-    Ok(Json(
-        serde_json::to_value(response).map_err(RuntimeError::internal)?,
-    ))
-}
-
-async fn snapshot_workspace(
-    State(backend): State<SharedBackend>,
-    Path(workspace_id): Path<String>,
-    Json(request): Json<PublicationExportRequest>,
-) -> Result<Json<serde_json::Value>> {
-    validate_workspace_id(&workspace_id)?;
-    validate_sha(&request.expected_head_sha, "expected integration head SHA")?;
-    let response = backend.snapshot_workspace(&workspace_id, request).await?;
-    Ok(Json(
-        serde_json::to_value(response).map_err(RuntimeError::internal)?,
-    ))
-}
-
 async fn start_terminal(
     State(backend): State<SharedBackend>,
     Path(workspace_id): Path<String>,
@@ -1122,173 +857,6 @@ async fn git_diff(
     Ok(Json(serde_json::json!({ "output": output })))
 }
 
-async fn start_ide(
-    Extension(ide): Extension<IdeBackend>,
-    Path(workspace_id): Path<String>,
-    Json(request): Json<IdeStartRequest>,
-) -> Result<impl IntoResponse> {
-    validate_workspace_id(&workspace_id)?;
-    if request.project_root.is_empty() || request.project_root.len() > 4_096 {
-        return Err(RuntimeError::BadRequest("invalid project root".into()));
-    }
-    validate_ide_clone(request.clone.as_ref())?;
-    validate_ide_credentials(&request)?;
-    let session = ide.start(&workspace_id, request).await?;
-    Ok((
-        StatusCode::CREATED,
-        Json(serde_json::json!({ "ide": session })),
-    ))
-}
-
-async fn prepare_ide(
-    Extension(ide): Extension<IdeBackend>,
-    Path(workspace_id): Path<String>,
-    Json(request): Json<IdePrepareRequest>,
-) -> Result<StatusCode> {
-    validate_workspace_id(&workspace_id)?;
-    if request.project_root.is_empty() || request.project_root.len() > 4_096 {
-        return Err(RuntimeError::BadRequest("invalid project root".into()));
-    }
-    validate_ide_clone(request.clone.as_ref())?;
-    ide.prepare(&workspace_id, request).await?;
-    Ok(StatusCode::NO_CONTENT)
-}
-
-async fn refresh_ide_credentials(
-    Extension(ide): Extension<IdeBackend>,
-    Path(workspace_id): Path<String>,
-    Json(request): Json<IdeStartRequest>,
-) -> Result<StatusCode> {
-    validate_workspace_id(&workspace_id)?;
-    if request.project_root.is_empty() || request.project_root.len() > 4_096 {
-        return Err(RuntimeError::BadRequest("invalid project root".into()));
-    }
-    validate_ide_credentials(&request)?;
-    ide.refresh_credentials(&workspace_id, request).await?;
-    Ok(StatusCode::NO_CONTENT)
-}
-
-fn validate_ide_credentials(request: &IdeStartRequest) -> Result<()> {
-    if let Some(codex_auth_cache_json) = &request.codex_auth_cache_json
-        && (codex_auth_cache_json.len() > (128 << 10)
-            || !serde_json::from_str::<serde_json::Value>(codex_auth_cache_json)
-                .is_ok_and(|value| value.is_object()))
-    {
-        return Err(RuntimeError::BadRequest(
-            "Codex auth cache is invalid or too large".into(),
-        ));
-    }
-    // A Claude OAuth token here is only the long-lived `claude setup-token`
-    // uploaded through the CLI and explicitly enabled for workspace use. The
-    // web control plane never forwards a browser subscription token.
-    if request
-        .anthropic_api_key
-        .as_ref()
-        .is_some_and(|value| value.is_empty() || value.len() > 512)
-        || request
-            .claude_code_oauth_token
-            .as_ref()
-            .is_some_and(|value| value.is_empty() || value.len() > 512)
-    {
-        return Err(RuntimeError::BadRequest(
-            "invalid Anthropic credential".into(),
-        ));
-    }
-    Ok(())
-}
-
-fn validate_ide_clone(clone: Option<&crate::model::IdeCloneRequest>) -> Result<()> {
-    if let Some(clone) = clone {
-        if clone.repository.is_empty() || clone.repository.len() > 256 {
-            return Err(RuntimeError::BadRequest("invalid repository".into()));
-        }
-        if clone.default_branch.is_empty() || clone.default_branch.len() > 256 {
-            return Err(RuntimeError::BadRequest("invalid default branch".into()));
-        }
-        if clone.token.as_ref().is_some_and(|token| token.len() > 512) {
-            return Err(RuntimeError::BadRequest("invalid token".into()));
-        }
-    }
-    Ok(())
-}
-
-async fn get_ide(
-    Extension(ide): Extension<IdeBackend>,
-    Path(workspace_id): Path<String>,
-) -> Result<Json<serde_json::Value>> {
-    validate_workspace_id(&workspace_id)?;
-    let session = ide.status(&workspace_id).await?;
-    Ok(Json(serde_json::json!({ "ide": session })))
-}
-
-/// Browser-driven keepalive. The Orca web client connects directly to the
-/// per-workspace `orca serve` port through Caddy, so this is the only signal
-/// the orchestrator gets that a session is genuinely in use — both the IDE
-/// session reaper and the host idle shutdown depend on it.
-async fn touch_ide(
-    Extension(ide): Extension<IdeBackend>,
-    Path(workspace_id): Path<String>,
-) -> Result<Json<serde_json::Value>> {
-    validate_workspace_id(&workspace_id)?;
-    let session = ide.touch(&workspace_id).await?;
-    Ok(Json(serde_json::json!({ "ide": session })))
-}
-
-async fn stop_ide(
-    Extension(ide): Extension<IdeBackend>,
-    Path(workspace_id): Path<String>,
-) -> Result<StatusCode> {
-    validate_workspace_id(&workspace_id)?;
-    ide.stop(&workspace_id).await?;
-    Ok(StatusCode::NO_CONTENT)
-}
-
-/// Writes a file into the workspace's IDE session — the host filesystem the
-/// member's own terminals and agent CLIs run in.
-///
-/// The sibling of `write_file`, which targets the Firecracker guest. The two
-/// are genuinely different machines, so a caller that needs a later
-/// interactive process to *find* the file has to use this one.
-async fn write_ide_file(
-    Extension(ide): Extension<IdeBackend>,
-    Path(workspace_id): Path<String>,
-    Json(request): Json<IdeWriteFileRequest>,
-) -> Result<StatusCode> {
-    validate_workspace_id(&workspace_id)?;
-    if request.path.is_empty() || request.path.len() > 4_096 {
-        return Err(RuntimeError::BadRequest("invalid path".into()));
-    }
-    if request.contents.len() > MAX_IDE_FILE_BYTES {
-        return Err(RuntimeError::BadRequest(
-            "file exceeds the two MiB limit".into(),
-        ));
-    }
-    ide.write_file(&workspace_id, request).await?;
-    Ok(StatusCode::NO_CONTENT)
-}
-
-/// Runs a command inside the workspace's IDE session, as its unprivileged
-/// Linux user. The sibling of `exec_pty`, which runs as root in the guest.
-async fn exec_ide(
-    Extension(ide): Extension<IdeBackend>,
-    Path(workspace_id): Path<String>,
-    Json(request): Json<IdeExecRequest>,
-) -> Result<Json<serde_json::Value>> {
-    validate_workspace_id(&workspace_id)?;
-    if request.command.is_empty() || request.command.len() > IDE_EXEC_MAX_ARGUMENTS {
-        return Err(RuntimeError::BadRequest(
-            "command must contain between 1 and 32 arguments".into(),
-        ));
-    }
-    if request.timeout_seconds > IDE_EXEC_MAX_TIMEOUT_SECONDS {
-        return Err(RuntimeError::BadRequest(
-            "command timeout exceeds the allowed limit".into(),
-        ));
-    }
-    let result = ide.exec(&workspace_id, request).await?;
-    Ok(Json(serde_json::json!({ "result": result })))
-}
-
 fn validate_create(request: &CreateRequest) -> Result<()> {
     validate_workspace_id(&request.workspace_id)?;
     if !commit_sha_pattern().is_match(&request.base_sha) {
@@ -1495,11 +1063,6 @@ fn worktree_id_pattern() -> &'static Regex {
     })
 }
 
-fn digest_pattern() -> &'static Regex {
-    static PATTERN: OnceLock<Regex> = OnceLock::new();
-    PATTERN.get_or_init(|| Regex::new(r"^[0-9a-f]{64}$").expect("digest regex"))
-}
-
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -1511,7 +1074,7 @@ mod tests {
     use tower::ServiceExt;
 
     use super::*;
-    use crate::backend::{Backend, IdeBackend};
+    use crate::backend::Backend;
     use crate::model::{
         CreateRequest, RepositorySnapshot, RepositorySnapshotFile, SandboxLifecycleHooks,
         SandboxLifecycleOptions,
@@ -1593,27 +1156,7 @@ mod tests {
 
     #[tokio::test]
     async fn health_and_lifecycle() {
-        let app = router(Arc::new(Backend::fake()), IdeBackend::Disabled);
-        let cli_claude_token = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri("/v1/sandboxes/e010bd2c-a3c1-438f-acef-166287a3b1cb/ide")
-                    .header("content-type", "application/json")
-                    .body(Body::from(
-                        serde_json::json!({
-                            "projectRoot": "/srv/codev/workspaces/e010bd2c-a3c1-438f-acef-166287a3b1cb",
-                            "claudeCodeOauthToken": "sk-ant-cli-token"
-                        })
-                        .to_string(),
-                    ))
-                    .expect("request"),
-            )
-            .await
-            .expect("response");
-        assert_eq!(cli_claude_token.status(), StatusCode::SERVICE_UNAVAILABLE);
-
+        let app = router(Arc::new(Backend::fake()));
         let health = app
             .clone()
             .oneshot(
@@ -1690,80 +1233,6 @@ mod tests {
             .expect("response");
         assert_eq!(discard_snapshot.status(), StatusCode::NO_CONTENT);
 
-        let worktree = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri("/v1/sandboxes/e010bd2c-a3c1-438f-acef-166287a3b1cb/worktrees")
-                    .header("content-type", "application/json")
-                    .body(Body::from(
-                        serde_json::json!({
-                            "worktreeId": "agent-one",
-                            "headSha": "fc1ba2947ffdaf8c1961e5342387e1079afface6"
-                        })
-                        .to_string(),
-                    ))
-                    .expect("request"),
-            )
-            .await
-            .expect("response");
-        assert_eq!(worktree.status(), StatusCode::CREATED);
-
-        let checkpoint = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri("/v1/sandboxes/e010bd2c-a3c1-438f-acef-166287a3b1cb/worktrees/agent-one/checkpoint")
-                    .header("content-type", "application/json")
-                    .body(Body::from(
-                        serde_json::json!({
-                            "expectedHeadSha": "fc1ba2947ffdaf8c1961e5342387e1079afface6"
-                        })
-                        .to_string(),
-                    ))
-                    .expect("request"),
-            )
-            .await
-            .expect("response");
-        assert_eq!(checkpoint.status(), StatusCode::OK);
-
-        let review = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .uri("/v1/sandboxes/e010bd2c-a3c1-438f-acef-166287a3b1cb/worktrees/agent-one/review?baseSha=fc1ba2947ffdaf8c1961e5342387e1079afface6")
-                    .body(Body::empty())
-                    .expect("request"),
-            )
-            .await
-            .expect("response");
-        assert_eq!(review.status(), StatusCode::OK);
-        let review_body = to_bytes(review.into_body(), 1 << 20).await.expect("body");
-        assert!(String::from_utf8_lossy(&review_body).contains("diffDigest"));
-
-        let invalid_merge = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri("/v1/sandboxes/e010bd2c-a3c1-438f-acef-166287a3b1cb/worktrees/agent-one/merge")
-                    .header("content-type", "application/json")
-                    .body(Body::from(
-                        serde_json::json!({
-                            "expectedIntegrationHeadSha": "fc1ba2947ffdaf8c1961e5342387e1079afface6",
-                            "expectedWorktreeHeadSha": "fc1ba2947ffdaf8c1961e5342387e1079afface6",
-                            "expectedDiffDigest": "bad"
-                        })
-                        .to_string(),
-                    ))
-                    .expect("request"),
-            )
-            .await
-            .expect("response");
-        assert_eq!(invalid_merge.status(), StatusCode::BAD_REQUEST);
-
         let claude_start = app
             .clone()
             .oneshot(
@@ -1822,7 +1291,7 @@ mod tests {
 
     #[tokio::test]
     async fn superset_agent_route_validation_and_lifecycle() {
-        let app = router(Arc::new(Backend::fake()), IdeBackend::Disabled);
+        let app = router(Arc::new(Backend::fake()));
         let workspace_id = "e010bd2c-a3c1-438f-acef-166287a3b1cb";
         let create = app
             .clone()

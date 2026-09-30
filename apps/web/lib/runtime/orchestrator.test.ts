@@ -4,10 +4,6 @@ const environment = vi.hoisted(() => ({
   ORCHESTRATOR_DIRECT_URL: "https://host.example.test",
   ORCHESTRATOR_DIRECT_SECRET: "0123456789abcdef0123456789abcdef",
 }));
-const runtimeHostPool = vi.hoisted(() => ({
-  resolveRuntimeHostForWorkspace: vi.fn().mockResolvedValue(null),
-}));
-
 vi.mock("@codev/config", () => ({
   readServerEnvironment: () => environment,
 }));
@@ -15,15 +11,10 @@ vi.mock("@codev/config", () => ({
 vi.mock("./host", () => ({
   requestHostWake: vi.fn(),
 }));
-vi.mock("./runtime-host-pool", () => runtimeHostPool);
-
 const fetchMock = vi.fn();
 vi.stubGlobal("fetch", fetchMock);
 
-import {
-  checkOrchestratorConnection,
-  restoreSandboxSession,
-} from "./orchestrator";
+import { checkOrchestratorConnection } from "./orchestrator-health";
 import { orchestratorRequest } from "./orchestrator-request";
 
 const healthy = () =>
@@ -39,7 +30,6 @@ describe("orchestrator transport", () => {
   beforeEach(() => {
     fetchMock.mockReset();
     fetchMock.mockResolvedValue(healthy());
-    runtimeHostPool.resolveRuntimeHostForWorkspace.mockResolvedValue(null);
   });
 
   /**
@@ -72,90 +62,15 @@ describe("orchestrator transport", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("routes workspace requests to their fenced runtime host", async () => {
-    runtimeHostPool.resolveRuntimeHostForWorkspace.mockResolvedValueOnce({
-      runtimeAddress: "https://runtime-2.example.test",
-    });
-
+  it("sends sandbox requests to the configured runtime host", async () => {
     await orchestratorRequest(
       "GET",
-      "/v1/sandboxes/11111111-1111-4111-8111-111111111111/ide",
+      "/v1/sandboxes/11111111-1111-4111-8111-111111111111/superset/health",
     );
 
-    expect(runtimeHostPool.resolveRuntimeHostForWorkspace).toHaveBeenCalledWith(
-      "11111111-1111-4111-8111-111111111111",
-    );
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
-      "https://runtime-2.example.test/v1/sandboxes/11111111-1111-4111-8111-111111111111/ide",
+      "https://host.example.test/v1/sandboxes/11111111-1111-4111-8111-111111111111/superset/health",
     );
   });
 
-  it("routes sandbox creation from its workspace id in the body", async () => {
-    runtimeHostPool.resolveRuntimeHostForWorkspace.mockResolvedValueOnce({
-      runtimeAddress: "https://runtime-3.example.test",
-    });
-    const body = { workspaceId: "22222222-2222-4222-8222-222222222222" };
-
-    await orchestratorRequest("POST", "/v1/sandboxes", body);
-
-    expect(runtimeHostPool.resolveRuntimeHostForWorkspace).toHaveBeenCalledWith(
-      body.workspaceId,
-    );
-    expect(fetchMock.mock.calls[0]?.[0]).toBe(
-      "https://runtime-3.example.test/v1/sandboxes",
-    );
-  });
-
-  it("uploads session repository state in bounded chunks before finalizing", async () => {
-    const contents = new Uint8Array(512 * 1_024 + 7).fill(42);
-    fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
-      if (url.endsWith("/finalize")) {
-        return Response.json({ status: "restored", conflictPaths: [] });
-      }
-      if (url.endsWith("/chunks")) {
-        const body = JSON.parse(String(init.body));
-        return Response.json({
-          nextOffset:
-            body.offset + Buffer.from(body.contentBase64, "base64").byteLength,
-        });
-      }
-      return Response.json({ accepted: true }, { status: 202 });
-    });
-
-    await expect(
-      restoreSandboxSession({
-        workspaceId: "workspace-1",
-        operationId: "import-1",
-        worktreeId: "worktree-1",
-        baseCommitSha: "a".repeat(40),
-        files: [
-          {
-            path: "notes/context.bin",
-            kind: "untracked",
-            contents,
-            sha256: "b".repeat(64),
-            mode: "100644",
-          },
-        ],
-      }),
-    ).resolves.toEqual({ status: "restored", conflictPaths: [] });
-
-    expect(fetchMock).toHaveBeenCalledTimes(4);
-    const begin = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
-    expect(begin.files[0]).toEqual({
-      path: "notes/context.bin",
-      kind: "untracked",
-      bytes: contents.byteLength,
-      sha256: "b".repeat(64),
-      mode: "100644",
-    });
-    const firstChunk = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
-    const secondChunk = JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body));
-    expect(firstChunk.offset).toBe(0);
-    expect(Buffer.from(firstChunk.contentBase64, "base64")).toHaveLength(
-      512 * 1_024,
-    );
-    expect(secondChunk.offset).toBe(512 * 1_024);
-    expect(Buffer.from(secondChunk.contentBase64, "base64")).toHaveLength(7);
-  });
 });

@@ -29,7 +29,6 @@ const personalNav: SettingsNavItem[] = [
       "api key",
       "codex",
       "claude",
-      "cursor",
       "connect",
       "sign in",
     ],
@@ -56,11 +55,11 @@ export function SettingsSidebar() {
   const visibleNav = personalNav.filter((item) => matchesQuery(item, query));
 
   return (
-    <aside className="orca-settings-scope flex w-[280px] shrink-0 flex-col border-r border-worktree-sidebar-border bg-worktree-sidebar">
+    <aside className="settings-scope flex w-[280px] shrink-0 flex-col border-r border-worktree-sidebar-border bg-worktree-sidebar">
       <div className="border-b border-worktree-sidebar-border px-3 py-3">
         <Link
           className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-worktree-sidebar-accent/60 hover:text-worktree-sidebar-foreground"
-          href="/dashboard"
+          href="/gen2"
         >
           <ArrowLeft aria-hidden="true" className="size-4 shrink-0" />
           Back to Dashboard

@@ -21,12 +21,3 @@ jq -e '
 ' <<<"${ready}" >/dev/null
 
 echo "CoDev deployment is live and ready: ${deployment_url}"
-
-if command -v aws >/dev/null && aws sts get-caller-identity >/dev/null 2>&1; then
-  readonly region="${AWS_REGION:-us-east-2}"
-  aws cloudwatch describe-alarms \
-    --region "${region}" \
-    --alarm-name-prefix codev \
-    --query 'MetricAlarms[?StateValue==`ALARM`].[AlarmName,StateReason]' \
-    --output table
-fi

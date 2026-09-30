@@ -1,5 +1,5 @@
 ---
-description: Auth, credentials, GitHub tokens, OpenFGA, and server-only secrets.
+description: Auth, credentials, GitHub tokens, workspace access, and server-only secrets.
 globs:
 alwaysApply: false
 ---
@@ -7,7 +7,7 @@ alwaysApply: false
 # Security
 
 - Auth in `apps/web` is **Auth.js / NextAuth** (`apps/web/auth.ts`); Clerk was removed. Follow the `auth` skill and existing patterns.
-- Authorization infrastructure lives in **OpenFGA** (`infra/openfga`). Do not invent a second ACL.
+- Protect Gen 2 routes with the existing membership/access helpers before calling the orchestrator.
 - Validate untrusted input with Zod at boundaries.
 - **Never** expose credentials via `NEXT_PUBLIC_*`.
 - Private GitHub credentials must not appear in URLs, command arguments, logs, browser pairing data, or persisted remotes.

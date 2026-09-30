@@ -13,7 +13,7 @@ export async function GET() {
   const user = await getApiUser();
   if (!user) return apiError(new Error("Authentication required."), 401);
   return Response.json(
-    await getProviderCredentialStatus("USER", user.id, "anthropic"),
+    await getProviderCredentialStatus(user.id, "anthropic"),
   );
 }
 
@@ -33,7 +33,7 @@ export async function DELETE() {
   const user = await getApiUser();
   if (!user) return apiError(new Error("Authentication required."), 401);
   try {
-    await deleteProviderCredential("USER", user.id, "anthropic");
+    await deleteProviderCredential(user.id, "anthropic");
     return new Response(null, { status: 204 });
   } catch (error) {
     return apiError(error);

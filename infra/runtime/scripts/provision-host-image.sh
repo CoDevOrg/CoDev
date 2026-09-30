@@ -17,20 +17,17 @@ readonly firecracker_version="v1.13.2"
 readonly firecracker_ci_prefix="firecracker-ci/20260723-ae5bf5b68fc4-0"
 readonly runtime_dir="/var/lib/codev"
 readonly base_dir="${runtime_dir}/base"
-readonly orca_dir="/opt/orca"
 readonly work_dir="${CODEV_IMAGE_WORK_DIR:-/var/tmp/codev-image}"
 
 case "${host_arch}" in
   x86_64)
     readonly artifact_arch="x86_64"
     readonly firecracker_arch="x86_64"
-    readonly guest_lib_dir="x86_64-linux-gnu"
-    ;;
+        ;;
   aarch64 | arm64)
     readonly artifact_arch="arm64"
     readonly firecracker_arch="aarch64"
-    readonly guest_lib_dir="aarch64-linux-gnu"
-    ;;
+        ;;
   *)
     echo "Unsupported CoDev host architecture: ${host_arch}" >&2
     exit 1
@@ -95,36 +92,11 @@ readonly host_packages=(
   at-spi2-core
   xdotool
   xclip
-  xvfb
   ripgrep
   squashfs-tools
   sudo
   xz-utils
   xfsprogs
-  libgtk-3-0t64
-  libnss3
-  libnspr4
-  libasound2t64
-  libatk1.0-0t64
-  libatk-bridge2.0-0t64
-  libcups2t64
-  libdrm2
-  libgbm1
-  libxkbcommon0
-  libxcomposite1
-  libxdamage1
-  libxfixes3
-  libxrandr2
-  libxshmfence1
-  libxss1
-  libxtst6
-  libpango-1.0-0
-  libpangocairo-1.0-0
-  libcairo2
-  libglib2.0-0t64
-  libdbus-1-3
-  fonts-liberation
-  xdg-utils
 )
 
 apt-get -o DPkg::Lock::Timeout=300 update
@@ -150,30 +122,7 @@ corepack prepare "pnpm@${pnpm_version}" --activate
 npm install -g "@openai/codex@${codex_version}"
 npm install -g "@anthropic-ai/claude-code@${claude_code_version}"
 
-# Cursor's installer is not version-pinnable. The image version is therefore
-# the audit boundary: rebuild and validate the image when a new Cursor binary
-# is desired, rather than silently changing a running host on boot.
-export HOME=/root
-curl -fsS https://cursor.com/install | bash
-cursor_agent_target="$(readlink -f /root/.local/bin/cursor-agent)"
-install -d -m 0755 /opt/cursor-agent
-cp -a "$(dirname "${cursor_agent_target}")/." /opt/cursor-agent/
-chmod -R go+rX /opt/cursor-agent
-ln -sf "/opt/cursor-agent/$(basename "${cursor_agent_target}")" /usr/local/bin/cursor-agent
-ln -sf "/opt/cursor-agent/$(basename "${cursor_agent_target}")" /usr/local/bin/agent
-
-install -d -m 0755 "${runtime_dir}" "${base_dir}" "${orca_dir}" /srv/codev/workspaces
-install -d -m 0755 /usr/local/libexec
-cat >/usr/local/libexec/codev-git-askpass <<'ASKPASS'
-#!/bin/sh
-case "$1" in
-  *Username*) printf '%s\n' 'x-access-token' ;;
-  *Password*) printf '%s\n' "${CODEV_GITHUB_TOKEN:?missing GitHub credential}" ;;
-  *) exit 1 ;;
-esac
-ASKPASS
-chmod 0755 /usr/local/libexec/codev-git-askpass
-
+install -d -m 0755 "${runtime_dir}" "${base_dir}"
 artifact_download "codev-orchestrator-linux-${artifact_arch}" /usr/local/bin/codev-orchestrator
 artifact_download "codev-guestd-linux-${artifact_arch}" /usr/local/bin/codev-guestd
 chmod 0755 /usr/local/bin/codev-orchestrator /usr/local/bin/codev-guestd
@@ -183,17 +132,6 @@ artifact_download "${superset_guest_archive}" "${work_dir}/${superset_guest_arch
 artifact_download "${superset_guest_archive}.sha256" \
   "${work_dir}/${superset_guest_archive}.sha256"
 (cd "${work_dir}" && sha256sum --check "${superset_guest_archive}.sha256")
-
-artifact_download "orca-serve-linux-${artifact_arch}.tar.gz" \
-  "${work_dir}/orca-serve.tar.gz"
-artifact_download "orca-serve-linux-${artifact_arch}.tar.gz.sha256" \
-  "${work_dir}/orca-serve.tar.gz.sha256"
-(
-  cd "${work_dir}"
-  echo "$(cat orca-serve.tar.gz.sha256)  orca-serve.tar.gz" | sha256sum --check
-)
-tar -xzf "${work_dir}/orca-serve.tar.gz" -C "${orca_dir}"
-chmod -R go+rX "${orca_dir}"
 
 curl -fsSL \
   "https://github.com/firecracker-microvm/firecracker/releases/download/${firecracker_version}/firecracker-${firecracker_version}-${firecracker_arch}.tgz" \
@@ -240,9 +178,6 @@ ln -s "../lib/node_modules/@anthropic-ai/claude-code/${claude_bin_rel}" \
   "${work_dir}/rootfs/usr/local/bin/claude"
 cp -a /usr/lib/git-core "${work_dir}/rootfs/usr/lib/"
 cp -a /usr/share/git-core "${work_dir}/rootfs/usr/share/"
-mkdir -p "${work_dir}/rootfs/usr/lib/${guest_lib_dir}"
-cp -a "/usr/lib/${guest_lib_dir}/." \
-  "${work_dir}/rootfs/usr/lib/${guest_lib_dir}/" 2>/dev/null || true
 install -d -m 0755 "${work_dir}/rootfs/workspace"
 install -d -m 0755 "${work_dir}/rootfs/etc/systemd/system/multi-user.target.wants"
 
@@ -386,9 +321,7 @@ chmod 0600 "${base_dir}/rootfs.ext4"
 packages_key="$(codev_stage_key apt-v1 "${host_packages[@]}")"
 node_key="$(codev_stage_key node-v1 "${node_setup_url}" "${pnpm_version}" \
   "${codex_version}" "${claude_code_version}")"
-cursor_key="$(codev_stage_key cursor-v1 "${release_prefix}")"
 caddy_key="$(codev_stage_key caddy-v1 "https://dl.cloudsmith.io/public/caddy/stable")"
-orca_key="$(codev_stage_key orca-v1 "$(cat "${work_dir}/orca-serve.tar.gz.sha256" 2>/dev/null || true)")"
 firecracker_key="$(codev_stage_key firecracker-v1 "${firecracker_version}" "${firecracker_arch}")"
 kernel_key="$(codev_stage_key kernel-v1 "${firecracker_ci_base}/${guest_kernel}")"
 rootfs_key="$(codev_stage_key rootfs-v2 \
@@ -399,9 +332,7 @@ rootfs_key="$(codev_stage_key rootfs-v2 \
   "${node_key}")"
 codev_stage_record packages "${packages_key}"
 codev_stage_record node "${node_key}"
-codev_stage_record cursor "${cursor_key}"
 codev_stage_record caddy "${caddy_key}"
-codev_stage_record orca "${orca_key}"
 codev_stage_record firecracker "${firecracker_key}"
 codev_stage_record kernel "${kernel_key}"
 codev_stage_record rootfs "${rootfs_key}"
@@ -411,21 +342,6 @@ printf '%s\n' "${release_prefix}" >/etc/codev/image-release
 # Stable service scaffolding is included, but no service is started from the
 # image. bootstrap-host.sh still writes host-specific Caddy/orchestrator
 # configuration and owns the first-boot health transition.
-cat >/etc/systemd/system/codev-orca-xvfb.service <<'UNIT'
-[Unit]
-Description=CoDev virtual display for Orca IDE sessions
-Before=codev-orchestrator.service
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp
-Restart=always
-RestartSec=1
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-
 cat >/usr/local/sbin/codev-firecracker-network-isolation <<'SCRIPT'
 #!/usr/bin/env bash
 set -euo pipefail

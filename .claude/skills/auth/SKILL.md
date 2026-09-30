@@ -1,6 +1,6 @@
 ---
 name: auth
-description: Use when working on authentication, sign-in, sessions, signed-in gates, or account linking in apps/web. Do not use for OpenFGA authorization modeling unless the task also changes who the signed-in user is.
+description: Use when working on authentication, sign-in, sessions, signed-in gates, or account linking in apps/web. Do not use for workspace permission or access-role changes.
 ---
 
 # Authentication (`apps/web`)
@@ -20,7 +20,6 @@ description: Use when working on authentication, sign-in, sessions, signed-in ga
   product is invite-only); invites are carried by `lib/auth/invite-grant.ts`.
 - Workspace permissions are authorization, not authentication:
   `lib/auth/access.ts` (`requireWorkspacePermission`), optionally backed by
-  OpenFGA (`infra/openfga`). Check sibling server code.
 - `users.clerk_user_id` is a legacy column from accounts created while Clerk
   was wired in. Nothing writes it any more; leave it until a migration
   deliberately drops it.
