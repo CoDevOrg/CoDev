@@ -139,7 +139,7 @@ function WorkspaceMenu({
           role="menu"
         >
           <button
-            className="flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-destructive transition-colors outline-none hover:bg-destructive/10 focus-visible:bg-destructive/10"
+            className="flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-3 py-2 text-left text-sm text-destructive transition-colors outline-none hover:bg-destructive/10 focus-visible:bg-destructive/10"
             onClick={() => {
               setOpen(false);
               onDelete();

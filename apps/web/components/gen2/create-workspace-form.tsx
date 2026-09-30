@@ -225,8 +225,8 @@ export function CreateGen2WorkspaceForm({
         </CardHeader>
 
         <CardContent className="space-y-5 px-6 pt-5 pb-5">
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-medium">Start from</legend>
+          <fieldset className="m-0 min-w-0 space-y-2 border-0 p-0">
+            <legend className="mb-2 p-0 text-sm font-medium">Start from</legend>
             <div className="grid gap-2 sm:grid-cols-2" role="radiogroup">
               {(
                 [
@@ -247,10 +247,10 @@ export function CreateGen2WorkspaceForm({
                 <button
                   aria-checked={source === option.id}
                   className={cn(
-                    "flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 text-left text-sm transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                    "flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 text-left text-sm text-foreground transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
                     source === option.id
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:bg-accent",
+                      ? "border-primary bg-primary/10"
+                      : "border-border bg-transparent hover:bg-muted",
                   )}
                   key={option.id}
                   onClick={() => setSource(option.id)}
@@ -355,8 +355,10 @@ export function CreateGen2WorkspaceForm({
                             <button
                               aria-pressed={selected}
                               className={cn(
-                                "flex w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors outline-none focus-visible:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset",
-                                selected ? "bg-primary/5" : "hover:bg-accent",
+                                "flex w-full cursor-pointer items-center gap-3 border-0 px-4 py-2.5 text-left text-sm text-foreground transition-colors outline-none focus-visible:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset",
+                                selected
+                                  ? "bg-primary/10"
+                                  : "bg-transparent hover:bg-muted",
                               )}
                               onClick={() => setSelectedRepoId(repo.id)}
                               type="button"
