@@ -29,6 +29,7 @@ export function Gen2WorkspaceRoom({
   const [agentRunning, setAgentRunning] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
   const [runtimeReady, setRuntimeReady] = useState(false);
+  const [subscriptionRequired, setSubscriptionRequired] = useState(false);
   const workbenchRef = useRef<Gen2WorkbenchHandle | null>(null);
   const startupInFlightRef = useRef<Promise<boolean> | null>(null);
   const ready = current.status === "ready" && runtimeReady;
@@ -54,6 +55,7 @@ export function Gen2WorkspaceRoom({
 
     setRuntimeReady(false);
     setCurrent((value) => ({ ...value, lastError: null }));
+    setSubscriptionRequired(false);
     const attempt = (async () => {
       const result = await ensureGen2WorkspaceReady(current.id);
       if (result.workspace) {
@@ -61,6 +63,10 @@ export function Gen2WorkspaceRoom({
         setRuntimeReady(true);
         refresh();
         return true;
+      }
+      if (result.subscriptionRequired) {
+        setSubscriptionRequired(true);
+        return false;
       }
       setCurrent((value) => ({ ...value, lastError: result.error }));
       return false;
@@ -136,6 +142,24 @@ export function Gen2WorkspaceRoom({
           )}
         </button>
       </header>
+
+      {subscriptionRequired ? (
+        <div className="gen2-wb-banner gen2-wb-banner-error" role="alert">
+          {current.role === "owner" ? (
+            <>
+              Running this workspace needs an active Individual plan.{" "}
+              <Link className="gen2-ws-retry" href="/settings/personal/billing">
+                Subscribe
+              </Link>
+            </>
+          ) : (
+            <>
+              This workspace is paused: its owner needs an active Individual
+              plan to run it. Ask them to subscribe.
+            </>
+          )}
+        </div>
+      ) : null}
 
       {current.lastError ? (
         <p className="gen2-wb-banner gen2-wb-banner-error" role="alert">

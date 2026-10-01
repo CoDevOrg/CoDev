@@ -69,6 +69,12 @@ export function ProfileMenu({
         >
           Settings
         </Link>
+        <Link
+          className="profile-menu-link"
+          href={publicAppHref("/settings/personal/billing", isAdminHost)}
+        >
+          Billing
+        </Link>
         {showConnectGitHub ? (
           <form action={connectGitHubAccount.bind(null, returnTo)}>
             <button className="profile-menu-action" type="submit">

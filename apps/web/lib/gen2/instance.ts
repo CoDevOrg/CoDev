@@ -5,6 +5,7 @@ import { and, eq, inArray, lt, or } from "drizzle-orm";
 import { schema } from "@codev/db";
 import type { Gen2WorkspaceStatus } from "@codev/contracts";
 
+import { requireWorkspaceOwnerPlan } from "../billing/gate";
 import { getDatabase } from "../platform/database";
 import { logEvent } from "../platform/observability";
 import { ensureHostReady } from "../runtime/orchestrator-health";
@@ -250,6 +251,8 @@ export async function ensureGen2Instance(
   runtime?: Gen2SandboxRuntime,
 ) {
   const membership = await requireGen2Member(workspaceId, userId);
+  // Starting or resuming a machine is the cost the plan pays for.
+  await requireWorkspaceOwnerPlan(workspaceId);
   const currentRuntime = runtime ?? createFirecrackerRuntime();
   let hostReady = false;
 

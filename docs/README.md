@@ -14,6 +14,7 @@ kept for the record only.
 | -------------------------------------------------------------------------------------- | ------- | ----------------------------------------------------------------------- |
 | [OPERATIONS.md](./OPERATIONS.md)                                                       | Current | Health signals, crons, Azure runtime deploy credentials, incident steps |
 | [SECURITY.md](./SECURITY.md)                                                           | Current | Control plane vs Firecracker guest boundary, credential handling        |
+| [BILLING.md](./BILLING.md)                                                             | Current | Stripe Individual plan: paywall rules, webhook flow, env, provisioning  |
 | [LAUNCH_CHECKLIST.md](./LAUNCH_CHECKLIST.md)                                           | Current | Per-session checklist for design-partner launches                       |
 | [EMAIL.md](./EMAIL.md)                                                                 | Current | `trycodev.com` email: Resend sending, ImprovMX receiving                |
 | [OAUTH_SETUP.md](./OAUTH_SETUP.md)                                                     | Current | Provider subscription sign-in from inside a workspace terminal          |

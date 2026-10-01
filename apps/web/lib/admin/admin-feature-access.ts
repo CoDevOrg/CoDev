@@ -175,6 +175,28 @@ export async function assignOrganizationPlan(input: {
   if (!organization[0]) throw new Error("Organization not found.");
   if (!plan[0]) throw new Error("Active plan not found.");
 
+  // A live Stripe subscription is the source of truth for its plan. Changing
+  // the row here would be undone by the next webhook (or hand out a free plan
+  // while Stripe keeps billing), so it has to be cancelled in Stripe instead.
+  const [current] = await db
+    .select({
+      provider: schema.organizationSubscriptions.provider,
+      status: schema.organizationSubscriptions.status,
+    })
+    .from(schema.organizationSubscriptions)
+    .where(
+      eq(schema.organizationSubscriptions.organizationId, input.organizationId),
+    )
+    .limit(1);
+  if (
+    current?.provider === "stripe" &&
+    ["active", "trialing", "past_due"].includes(current.status)
+  ) {
+    throw new Error(
+      "This organization has a live Stripe subscription. Cancel it in Stripe to change its plan.",
+    );
+  }
+
   await db
     .insert(schema.organizationSubscriptions)
     .values({

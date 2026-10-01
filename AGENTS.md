@@ -59,20 +59,21 @@ The full suites are expensive. Run them once, at the end — not per edit.
 so searching a file name still finds it; list a folder to see everything in
 that area before adding a new file.
 
-| `lib/<area>`    | What belongs there                                                                 |
-| --------------- | ---------------------------------------------------------------------------------- |
-| `http/`         | `api.ts` and `api-route.ts`: route auth, permission checks, error responses        |
-| `platform/`     | Database, crypto/KMS envelopes, rate limiting, observability, shared utilities     |
-| `auth/`         | Sign-in, sessions, identity, CLI tokens, passwords, workspace access (`access.ts`) |
-| `admin/`        | Admin console, access requests, organization settings, feature access              |
-| `providers/`    | Model providers: Claude/Codex connections, credentials, OAuth, BYOK, preflight     |
-| `agents/`       | Agent sessions, runtime, branching, capacity, review checkpoints                   |
-| `coordination/` | Path claims, coordination MCP, workspace brain, workboard, Mission Control         |
-| `runtime/`      | Azure host, orchestrator, Orca host/pairing, hibernation, lifecycle, quotas        |
-| `workspaces/`   | Workspace records, creation, state, restore, collaboration, presence, audit        |
-| `gen2/`         | Gen 2 workspace: Firecracker instance + shareable membership                       |
-| `chat/`         | Shared chat, shared sessions, team chat, chat coordination, conversation import    |
-| `github/`       | GitHub client, export, publication, pull requests                                  |
+| `lib/<area>`    | What belongs there                                                                         |
+| --------------- | ------------------------------------------------------------------------------------------ |
+| `http/`         | `api.ts` and `api-route.ts`: route auth, permission checks, error responses                |
+| `platform/`     | Database, crypto/KMS envelopes, rate limiting, observability, shared utilities             |
+| `auth/`         | Sign-in, sessions, identity, CLI tokens, passwords, workspace access (`access.ts`)         |
+| `admin/`        | Admin console, access requests, organization settings, feature access                      |
+| `providers/`    | Model providers: Claude/Codex connections, credentials, OAuth, BYOK, preflight             |
+| `agents/`       | Agent sessions, runtime, branching, capacity, review checkpoints                           |
+| `billing/`      | Stripe Individual plan: checkout, portal, webhook sync, paywall guards (`docs/BILLING.md`) |
+| `coordination/` | Path claims, coordination MCP, workspace brain, workboard, Mission Control                 |
+| `runtime/`      | Azure host, orchestrator, Orca host/pairing, hibernation, lifecycle, quotas                |
+| `workspaces/`   | Workspace records, creation, state, restore, collaboration, presence, audit                |
+| `gen2/`         | Gen 2 workspace: Firecracker instance + shareable membership                               |
+| `chat/`         | Shared chat, shared sessions, team chat, chat coordination, conversation import            |
+| `github/`       | GitHub client, export, publication, pull requests                                          |
 
 `components/` follows the same idea: `landing/`, `auth/`, `shell/` (app chrome
 and navigation), `admin/`, `settings/`, `workspace/` (the Orca workspace and

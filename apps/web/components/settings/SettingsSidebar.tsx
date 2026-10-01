@@ -3,7 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
-import { ArrowLeft, Blocks, KeyRound, Plug, User } from "lucide-react";
+import {
+  ArrowLeft,
+  Blocks,
+  CreditCard,
+  KeyRound,
+  Plug,
+  User,
+} from "lucide-react";
 
 import { cn } from "@/lib/platform/utils";
 
@@ -22,6 +29,7 @@ const navGroups: SettingsNavGroup[] = [
     label: "Account",
     items: [
       { name: "Profile", href: "/settings/personal/profile", icon: User },
+      { name: "Billing", href: "/settings/personal/billing", icon: CreditCard },
     ],
   },
   {

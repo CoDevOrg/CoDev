@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   requireMember: vi.fn(),
+  requirePlan: vi.fn(),
   start: vi.fn(),
   input: vi.fn(),
   resize: vi.fn(),
@@ -12,6 +13,10 @@ const mocks = vi.hoisted(() => ({
   supersetResize: vi.fn(),
   supersetPoll: vi.fn(),
   supersetClose: vi.fn(),
+}));
+
+vi.mock("../billing/gate", () => ({
+  requireWorkspaceOwnerPlan: (...args: unknown[]) => mocks.requirePlan(...args),
 }));
 
 vi.mock("./workspaces", () => ({
@@ -92,6 +97,19 @@ describe("gen2 terminals", () => {
     await expect(
       closeGen2Terminal(workspaceId, userId, sessionId),
     ).resolves.toBeUndefined();
+  });
+
+  it("is blocked when the workspace owner has no plan", async () => {
+    mocks.requirePlan.mockRejectedValue(new Error("subscription_required"));
+    await expect(
+      startGen2Terminal(workspaceId, userId, { rows: 24, columns: 80 }),
+    ).rejects.toThrow("subscription_required");
+    await expect(
+      sendGen2TerminalInput(workspaceId, userId, sessionId, "ls\n"),
+    ).rejects.toThrow("subscription_required");
+    expect(mocks.start).not.toHaveBeenCalled();
+    expect(mocks.input).not.toHaveBeenCalled();
+    expect(mocks.requirePlan).toHaveBeenCalledWith(workspaceId);
   });
 
   it("passes the session and cursor straight through", async () => {

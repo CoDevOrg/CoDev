@@ -41,6 +41,7 @@ import {
 } from "./superset-runs";
 import { createGen2Turn, recordGen2SupersetRunOutput } from "./turns";
 import { toAgentExecChunks } from "./agent-output";
+import { requireWorkspaceOwnerPlan } from "../billing/gate";
 import { requireGen2Member } from "./workspaces";
 
 /**
@@ -82,6 +83,7 @@ export async function startGen2SupersetAgentSession(input: {
 }) {
   requireEnabled();
   await requireGen2Member(input.workspaceId, input.userId);
+  await requireWorkspaceOwnerPlan(input.workspaceId);
   const provider = input.provider;
   const credential = await resolveGen2Credential(input.userId, provider);
 
@@ -177,6 +179,7 @@ export async function sendGen2SupersetAgentInput(input: {
 }) {
   requireEnabled();
   await requireGen2Member(input.workspaceId, input.userId);
+  await requireWorkspaceOwnerPlan(input.workspaceId);
   const run = await requireOwnRun(input.workspaceId, input.runId);
   if (!run.hostAgentSessionId) {
     throw new Gen2LifecycleError("This run has not started yet.", 409);
@@ -366,6 +369,7 @@ export async function startGen2SupersetAgentTurn(input: {
 }) {
   requireEnabled();
   await requireGen2Member(input.workspaceId, input.userId);
+  await requireWorkspaceOwnerPlan(input.workspaceId);
   await requireGen2Chat(input.workspaceId, input.chatId);
   const history = await listGen2ChatMessages(input.chatId);
   const worktreeId = await ensureGen2SupersetAgentWorktree(

@@ -107,6 +107,7 @@ export default async function HomePage() {
         </Link>
         <nav aria-label="Primary">
           <a href="#tour">How it works</a>
+          <Link href="/pricing">Pricing</Link>
           <RequestAccessButton className="lp-cta lp-cta-small">
             Get early access
           </RequestAccessButton>
@@ -250,6 +251,7 @@ export default async function HomePage() {
         </Link>
         <p>People and agents, building in the same room.</p>
         <nav aria-label="Footer">
+          <Link href="/pricing">Pricing</Link>
           <Link href="/sign-in">Sign in</Link>
           <Link href="/legal/privacy">Privacy</Link>
           <Link href="/legal/retention">Data retention</Link>

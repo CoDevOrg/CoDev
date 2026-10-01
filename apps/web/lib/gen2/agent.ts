@@ -40,6 +40,7 @@ import {
   pollGen2SupersetAgentTurn,
   startGen2SupersetAgentTurn,
 } from "./superset-agent-runtime";
+import { requireWorkspaceOwnerPlan } from "../billing/gate";
 import { requireGen2Member } from "./workspaces";
 
 export { canRunGen2Agent } from "./agent-policy";
@@ -66,6 +67,7 @@ export async function startGen2AgentTurn(input: {
   provider: Gen2AgentProvider;
 }) {
   await requireReadyMember(input.workspaceId, input.userId);
+  await requireWorkspaceOwnerPlan(input.workspaceId);
   await requireGen2Chat(input.workspaceId, input.chatId);
 
   if (isGen2SupersetAgentSessionsEnabled()) {
