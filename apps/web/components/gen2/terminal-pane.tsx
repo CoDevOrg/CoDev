@@ -1,5 +1,14 @@
 "use client";
 
+/*
+ * This component drives an imperative xterm instance and a WebSocket from
+ * refs, and keeps "latest value" refs (`fooRef.current = foo`) so long-lived
+ * listeners never close over stale props. The React Compiler lint rules below
+ * flag that pattern even though every ref is only read inside event handlers
+ * and effects, so they are disabled for this file rather than restructured.
+ */
+/* eslint-disable react-hooks/refs, react-hooks/immutability, react-hooks/set-state-in-effect */
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ITheme, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
