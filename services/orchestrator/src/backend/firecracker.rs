@@ -860,12 +860,19 @@ impl FirecrackerBackend {
         operation: &str,
         body: Option<&serde_json::Value>,
     ) -> Result<serde_json::Value> {
-        let machine = self.machine(workspace_id).await?;
+        // A terminal poll is transport. Counting it would keep an open shell
+        // awake for as long as the browser is attached.
+        let transport_only = method == "POST" && operation == "terminal/poll";
+        let machine = if transport_only {
+            self.machine_without_activity(workspace_id).await?
+        } else {
+            self.machine(workspace_id).await?
+        };
         let result = machine
             .guest
             .superset_runtime(method, operation, body)
             .await?;
-        if !(method == "POST" && operation == "terminal/poll") {
+        if !transport_only {
             self.mark_activity(&machine);
         }
         Ok(result)

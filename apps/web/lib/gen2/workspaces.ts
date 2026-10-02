@@ -222,6 +222,33 @@ export async function getGen2WorkspaceDetail(
   });
 }
 
+const DELETE_HOST_WAIT_MS = 8_000;
+const DELETE_GUEST_TIMEOUT_MS = 8_000;
+
+async function removeWorkspaceRuntime(workspaceId: string) {
+  let hostReady = false;
+  try {
+    await ensureHostReady(DELETE_HOST_WAIT_MS);
+    hostReady = true;
+  } catch (error) {
+    logEvent("error", "gen2.workspace.delete_host_unreachable", {
+      detail: error instanceof Error ? error.message : "unknown",
+    });
+  }
+
+  try {
+    await destroySandbox(workspaceId, DELETE_GUEST_TIMEOUT_MS);
+    await endComputeSession(workspaceId);
+    await discardSandboxSnapshot(workspaceId, DELETE_GUEST_TIMEOUT_MS);
+  } catch (error) {
+    if (hostReady) throw error;
+    logEvent("error", "gen2.workspace.delete_guest_unreachable", {
+      detail: error instanceof Error ? error.message : "unknown",
+    });
+    await endComputeSession(workspaceId);
+  }
+}
+
 export async function deleteGen2Workspace(workspaceId: string, userId: string) {
   const workspace = await requireGen2Member(workspaceId, userId, {
     allowDeleting: true,
@@ -272,13 +299,7 @@ export async function deleteGen2Workspace(workspaceId: string, userId: string) {
     // host is responsive before teardown so an unreachable-host timeout does
     // not consume most of Vercel's function budget before the wake attempt.
     if (currentStatus !== "pending") {
-      // Leave room in Vercel's 300-second request budget for guest teardown,
-      // snapshot removal, and the final database delete. If the Azure VM is
-      // still booting at this bound, the deleting record remains retryable.
-      await ensureHostReady(120_000);
-      await destroySandbox(workspaceId);
-      await endComputeSession(workspaceId);
-      await discardSandboxSnapshot(workspaceId);
+      await removeWorkspaceRuntime(workspaceId);
     }
     await database
       .delete(schema.gen2Workspaces)

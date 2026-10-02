@@ -40,6 +40,16 @@ export function getAzureCredential(): TokenCredential {
     return credential;
   }
 
+  // DefaultAzureCredential probes IMDS and the Azure CLI. On a Worker those
+  // probes hang until the request is killed, which leaves a delete stuck on
+  // "deleting" with no error saved.
+  if (
+    typeof navigator !== "undefined" &&
+    navigator.userAgent === "Cloudflare-Workers"
+  ) {
+    throw new Error("Azure credentials are not configured for Cloudflare.");
+  }
+
   // Local development and CI, where `az login` or a managed identity already
   // supplies an identity. Production refuses to reach this branch: see
   // `getAzureSubscriptionId`, which throws without the configuration that

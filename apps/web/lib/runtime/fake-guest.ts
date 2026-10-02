@@ -78,7 +78,7 @@ function seed(workspaceId: string): FakeSandbox {
   return sandbox;
 }
 
-function require(workspaceId: string) {
+function getSandboxOrThrow(workspaceId: string) {
   const sandbox = sandboxes.get(workspaceId);
   if (!sandbox) throw new FakeGuestMissing();
   return sandbox;
@@ -280,7 +280,7 @@ export function handleFakeGuestRequest(
 
   try {
     if (method === "GET" && rest === "") {
-      const sandbox = require(workspaceId);
+      const sandbox = getSandboxOrThrow(workspaceId);
       return json({
         sandbox: {
           id: sandbox.id,
@@ -301,7 +301,7 @@ export function handleFakeGuestRequest(
       return new Response(null, { status: 204 });
     }
 
-    const sandbox = require(workspaceId);
+    const sandbox = getSandboxOrThrow(workspaceId);
     const input = payload as Record<string, string & number>;
 
     if (rest === "/files/read") {

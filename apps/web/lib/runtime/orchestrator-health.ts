@@ -67,7 +67,10 @@ export async function ensureHostReady(timeoutMs = HOST_START_TIMEOUT_MS) {
   while (Date.now() < deadline) {
     // This function owns its own poll loop; keep an individual Azure status
     // check from spending the whole loop budget waiting out a stopping VM.
-    const state = await requestHostWake(1).catch(() => "starting" as const);
+    // A credential or API failure is not a host that is still booting. Treating
+    // it as "starting" burns the whole wait and the Worker is killed before
+    // deletion can finish.
+    const state = await requestHostWake(1);
     if (state === "running") {
       try {
         await waitForOrchestrator(Math.min(45_000, deadline - Date.now()));
