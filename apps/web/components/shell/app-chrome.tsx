@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 
 import { isGitHubAuthConfigured } from "@codev/config";
 
+import { AppSidebarFrame } from "@/components/shell/app-sidebar-frame";
 import { AppSidebarNav } from "@/components/shell/app-sidebar-nav";
 import { FeedbackWidget } from "@/components/shell/feedback-widget";
 import { ProfileMenu } from "@/components/shell/profile-menu";
@@ -53,26 +54,27 @@ export async function AppChrome({
 
   if (sidebar) {
     return (
-      <div className="app-page app-with-sidebar">
-        <aside className="app-sidebar">
-          <div className="app-sidebar-header">
-            <Brand isAdminHost={isAdminHost} />
-          </div>
-          <AppSidebarNav showAdmin={showAdmin} isAdminHost={isAdminHost} />
-          <div className="app-sidebar-footer">
-            <ThemeToggle compact />
-            <ProfileMenu
-              user={user}
-              showConnectGitHub={showConnectGitHub}
-              isAdminHost={isAdminHost}
-            />
-          </div>
-        </aside>
-        <div className="app-sidebar-content">
-          {children}
-          <FeedbackWidget />
-        </div>
-      </div>
+      <AppSidebarFrame
+        sidebar={
+          <aside className="app-sidebar" id="app-sidebar">
+            <div className="app-sidebar-header">
+              <Brand isAdminHost={isAdminHost} />
+            </div>
+            <AppSidebarNav showAdmin={showAdmin} isAdminHost={isAdminHost} />
+            <div className="app-sidebar-footer">
+              <ThemeToggle compact />
+              <ProfileMenu
+                user={user}
+                showConnectGitHub={showConnectGitHub}
+                isAdminHost={isAdminHost}
+              />
+            </div>
+          </aside>
+        }
+      >
+        {children}
+        <FeedbackWidget />
+      </AppSidebarFrame>
     );
   }
 
@@ -81,9 +83,7 @@ export async function AppChrome({
       <header className="app-nav">
         <Brand isAdminHost={isAdminHost} />
         <nav aria-label="Application navigation">
-          <Link href={publicAppHref("/gen2", isAdminHost)}>
-            Workspaces
-          </Link>
+          <Link href={publicAppHref("/gen2", isAdminHost)}>Workspaces</Link>
         </nav>
         <div className="user-menu">
           <ThemeToggle />

@@ -116,7 +116,7 @@ export function describeSpawnError(command, error) {
   return error;
 }
 
-function run(command, args, options) {
+export function run(command, args, options) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { ...options, stdio: "inherit" });
     child.on("error", (error) => reject(describeSpawnError(command, error)));
@@ -156,7 +156,7 @@ export function extractClaudeOAuthToken(output) {
   return match ? match[0] : undefined;
 }
 
-async function authenticatedRequest(path, options = {}) {
+export async function authenticatedRequest(path, options = {}) {
   const config = await loadConfig();
   return request(
     path,

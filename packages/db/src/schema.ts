@@ -375,6 +375,9 @@ export const organizationSubscriptions = pgTable(
     providerSubscriptionId: text("provider_subscription_id"),
     currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
     canceledAt: timestamp("canceled_at", { withTimezone: true }),
+    // Stripe keeps a cancelled subscription `active` until the period ends;
+    // this lets the UI say "ends on ..." while access continues.
+    cancelAtPeriodEnd: boolean("cancel_at_period_end").default(false).notNull(),
     ...timestamps,
   },
   (table) => [
@@ -385,6 +388,15 @@ export const organizationSubscriptions = pgTable(
     ),
   ],
 );
+
+/** Processed Stripe webhook event ids, so a redelivered event is a no-op. */
+export const stripeWebhookEvents = pgTable("stripe_webhook_events", {
+  id: text("id").primaryKey(),
+  type: text("type").notNull(),
+  processedAt: timestamp("processed_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
 
 export const organizationFeatureOverrides = pgTable(
   "organization_feature_overrides",

@@ -131,6 +131,23 @@ describe("Gen 2 workspace startup polling", () => {
     ).resolves.toEqual({ error: "Firecracker guest creation failed." });
   });
 
+  it("reports a missing plan as a paywall, not a retryable failure", async () => {
+    const { fetcher, calls } = fetchSequence([
+      response(402, {
+        error: "An active Individual plan is required.",
+        code: "subscription_required",
+      }),
+    ]);
+
+    await expect(
+      ensureGen2WorkspaceReady("workspace-1", { fetcher }),
+    ).resolves.toEqual({
+      error: "An active Individual plan is required.",
+      subscriptionRequired: true,
+    });
+    expect(calls).toHaveLength(1);
+  });
+
   it("stops retrying after the bounded client wait", async () => {
     let clock = 0;
     const { calls, fetcher } = fetchSequence([

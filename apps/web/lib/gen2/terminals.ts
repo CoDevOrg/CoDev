@@ -16,6 +16,7 @@ import {
 } from "../runtime/orchestrator-superset-runtime";
 import { canRunGen2Agent } from "./agent-policy";
 import { Gen2LifecycleError } from "./errors";
+import { requireWorkspaceOwnerPlan } from "../billing/gate";
 import { requireGen2Member } from "./workspaces";
 import { isGen2SupersetRuntimeEnabled } from "./superset-runtime-feature";
 
@@ -88,6 +89,7 @@ export async function startGen2Terminal(
   size: { rows: number; columns: number; worktreeId?: string },
 ) {
   await requireReadyMember(workspaceId, userId);
+  await requireWorkspaceOwnerPlan(workspaceId);
   if (isGen2SupersetRuntimeEnabled()) {
     return startSupersetTerminal(workspaceId, {
       worktreeId: size.worktreeId ?? PRIMARY_WORKTREE_ID,
@@ -109,6 +111,7 @@ export async function sendGen2TerminalInput(
   worktreeId = PRIMARY_WORKTREE_ID,
 ) {
   await getCachedGen2Member(workspaceId, userId);
+  await requireWorkspaceOwnerPlan(workspaceId);
   if (isGen2SupersetRuntimeEnabled()) {
     await sendSupersetTerminalInput(workspaceId, {
       worktreeId,

@@ -45,6 +45,10 @@ async function main() {
     await cursorAuth();
     return;
   }
+  if (command === "cursor-auth") {
+    await cursorAuth(orgArgument(args));
+    return;
+  }
   throw new Error(`Unknown command: ${command}`);
 }
 

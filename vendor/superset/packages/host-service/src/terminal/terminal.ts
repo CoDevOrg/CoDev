@@ -81,6 +81,7 @@ import {
 	type TerminalSnapshot,
 } from "./terminal-mode-tracker.ts";
 import { reconstructTerminalTranscript } from "./terminal-transcript.ts";
+import { completeUtf8Length } from "./utf8-boundary.ts";
 import { toWsCloseReason } from "./ws-close-reason.ts";
 
 /**
@@ -1517,6 +1518,122 @@ function retainOutput(session: TerminalSession, data: Uint8Array) {
 			session.retainedStartSeq += removed.byteLength;
 		}
 	}
+	wakeOutputWaiters(session);
+}
+
+const outputWaiters = new WeakMap<TerminalSession, Set<() => void>>();
+
+function wakeOutputWaiters(session: TerminalSession) {
+	const waiters = outputWaiters.get(session);
+	if (!waiters) return;
+	outputWaiters.delete(session);
+	for (const wake of waiters) wake();
+}
+
+function waitForOutput(session: TerminalSession, waitMs: number): Promise<void> {
+	return new Promise((resolve) => {
+		const waiters = outputWaiters.get(session) ?? new Set<() => void>();
+		outputWaiters.set(session, waiters);
+		const wake = () => {
+			clearTimeout(timer);
+			waiters.delete(wake);
+			resolve();
+		};
+		const timer = setTimeout(wake, waitMs);
+		waiters.add(wake);
+	});
+}
+
+const MAX_POLL_BYTES = 256 * 1024;
+
+export interface TerminalOutputRead {
+	bytes: Uint8Array;
+	nextSeq: number;
+	exited: boolean;
+	exitCode: number;
+}
+
+/**
+ * Raw output after absolute byte position `afterSeq`, parked up to `waitMs`
+ * when nothing new has arrived. The CoDev bridge polls with this instead of a
+ * screen snapshot so the browser's xterm sees the real byte stream: stderr,
+ * colors, cursor movement and scrollback all survive, and the echo of a
+ * keystroke returns on the request that is already waiting for it.
+ */
+export async function readTerminalOutput({
+	terminalId,
+	workspaceId,
+	afterSeq,
+	waitMs,
+	db,
+	eventBus,
+}: {
+	terminalId: string;
+	workspaceId: string;
+	afterSeq: number;
+	waitMs: number;
+	db: HostDb;
+	eventBus?: EventBus;
+}): Promise<({ success: true } & TerminalOutputRead) | TerminalSessionError> {
+	const session = await getOrAdoptSession({
+		terminalId,
+		workspaceId,
+		db,
+		eventBus,
+	});
+	if ("error" in session) return session;
+	if (waitMs > 0 && session.outputSeq <= afterSeq && !session.exited) {
+		await waitForOutput(session, waitMs);
+	}
+	const from = Math.min(
+		Math.max(afterSeq, session.retainedStartSeq),
+		session.outputSeq,
+	);
+	const available =
+		from < session.outputSeq
+			? readRetainedFrom(session, from).subarray(0, MAX_POLL_BYTES)
+			: new Uint8Array(0);
+	const bytes = available.subarray(0, completeUtf8Length(available));
+	const nextSeq = from + bytes.byteLength;
+	return {
+		success: true,
+		bytes,
+		nextSeq,
+		exited: session.exited && nextSeq >= session.outputSeq,
+		exitCode: session.exitCode,
+	};
+}
+
+/**
+ * Keystrokes and pastes from a browser xterm, written untouched. The browser
+ * already brackets its own pastes, so re-wrapping here would turn every typed
+ * key into a paste whenever the shell enables bracketed paste.
+ */
+export async function writeRawInputToSession({
+	terminalId,
+	workspaceId,
+	data,
+	db,
+	eventBus,
+}: {
+	terminalId: string;
+	workspaceId: string;
+	data: string;
+	db: HostDb;
+	eventBus?: EventBus;
+}): Promise<{ success: true } | TerminalSessionError> {
+	const session = await getOrAdoptSession({
+		terminalId,
+		workspaceId,
+		db,
+		eventBus,
+	});
+	if ("error" in session) return session;
+	if (session.exited) {
+		return { kind: "SESSION_EXITED", error: "Terminal session has exited" };
+	}
+	session.pty.write(data);
+	return { success: true };
 }
 
 /** Concatenate the retained stream from absolute seq `from` to the present. */
@@ -3398,6 +3515,7 @@ async function createTerminalSessionUnlocked({
 				cancelShellReady(session);
 				session.exitCode = code ?? 0;
 				session.exitSignal = signal ?? 0;
+				wakeOutputWaiters(session);
 				const occurredAt = Date.now();
 
 				portManager.unregisterSession(terminalId);

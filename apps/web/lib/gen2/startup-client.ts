@@ -17,7 +17,12 @@ type ReadyGen2WorkspaceDetail = Gen2WorkspaceDetail & {
 
 type StartupResult =
   | { workspace: Gen2WorkspaceDetail; error?: never }
-  | { workspace?: never; error: string };
+  | {
+      workspace?: never;
+      error: string;
+      /** The workspace owner has no active plan (HTTP 402); retrying won't help. */
+      subscriptionRequired?: true;
+    };
 
 type StartupDependencies = {
   fetcher?: typeof fetch;
@@ -89,6 +94,14 @@ export async function ensureGen2WorkspaceReady(
           if (payload.workspace.status === "deleting") {
             return { error: "This workspace is being deleted." };
           }
+        }
+        if (response.status === 402) {
+          return {
+            error:
+              payload.error ??
+              "An active Individual plan is required to run this workspace.",
+            subscriptionRequired: true,
+          };
         }
         if (!response.ok && response.status !== 503) {
           return {

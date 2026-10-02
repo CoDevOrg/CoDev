@@ -51,10 +51,10 @@ function connection(
 }
 
 const NO_CLI_TOKEN = {
-  status: "not_connected",
+  status: "not_connected" as const,
   lastFour: null,
   allowInSharedWorkspaces: true,
-} as const;
+};
 
 function jsonResponse(body: unknown, ok = true) {
   return { ok, json: async () => body } as Response;

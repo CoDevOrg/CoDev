@@ -1,23 +1,24 @@
 {
   "name": "@trycodev/cli",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Secure CoDev cloud coding-agent authentication CLI",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yousef20920/CoDev.git",
+    "url": "git+https://github.com/CoDevOrg/CoDev.git",
     "directory": "apps/cli"
   },
   "bin": {
-    "codev": "./bin/codev.mjs"
+    "codev": "bin/codev.mjs"
   },
   "files": [
     "bin",
-    "src/client.mjs"
+    "src/client.mjs",
+    "src/cursor-auth.mjs"
   ],
   "scripts": {
     "test": "node --test",
-    "typecheck": "node --check bin/codev.mjs && node --check src/client.mjs"
+    "typecheck": "node --check bin/codev.mjs && node --check src/client.mjs && node --check src/cursor-auth.mjs"
   },
   "engines": {
     "node": ">=20"

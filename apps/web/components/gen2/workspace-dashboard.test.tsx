@@ -88,9 +88,8 @@ describe("Gen2WorkspaceDashboard", () => {
     expect(newCard).toBeInTheDocument();
     fireEvent.click(newCard);
 
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "New workspace" }),
+      screen.getByRole("dialog", { name: "New workspace" }),
     ).toBeInTheDocument();
   });
 });

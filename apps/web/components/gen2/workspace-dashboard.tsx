@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { SubscribeCallout } from "@/components/billing/subscribe-callout";
 import { CreateGen2WorkspaceForm } from "@/components/gen2/create-workspace-form";
 import { Gen2WorkspaceList } from "@/components/gen2/workspace-list";
 import type { AppUser } from "@/lib/auth/identity";
@@ -21,6 +22,11 @@ type DashboardProps = {
   initialWorkspaces: Gen2Workspace[];
   appSlug?: string | undefined;
   connectGitHub?: (() => void) | undefined;
+  billing?: {
+    hasAccess: boolean;
+    pastDue?: boolean;
+    priceUsdPerMonth: number;
+  };
 };
 
 function getGreeting(): string {
@@ -36,7 +42,9 @@ export function Gen2WorkspaceDashboard({
   initialWorkspaces,
   appSlug,
   connectGitHub,
+  billing,
 }: DashboardProps) {
+  const canCreate = billing?.hasAccess !== false;
   const [workspaces, setWorkspaces] =
     useState<Gen2Workspace[]>(initialWorkspaces);
   const [greeting, setGreeting] = useState("Good evening");
@@ -117,6 +125,13 @@ export function Gen2WorkspaceDashboard({
         </div>
       </header>
 
+      {billing && !billing.hasAccess ? (
+        <SubscribeCallout
+          pastDue={billing.pastDue ?? false}
+          priceUsdPerMonth={billing.priceUsdPerMonth}
+        />
+      ) : null}
+
       <div className="gen2-toolbar">
         <div className="gen2-toolbar-left">
           <label className="gen2-search-box">
@@ -184,8 +199,10 @@ export function Gen2WorkspaceDashboard({
         viewMode={viewMode}
         searchQuery={searchQuery}
         filter={filter}
-        showCreateCard={viewMode === "grid" && filter !== "shared"}
-        onCreateWorkspace={() => setIsCreateOpen(true)}
+        showCreateCard={canCreate && viewMode === "grid" && filter !== "shared"}
+        onCreateWorkspace={() => {
+          if (canCreate) setIsCreateOpen(true);
+        }}
         onWorkspacesChange={setWorkspaces}
       />
 

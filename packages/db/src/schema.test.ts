@@ -21,6 +21,7 @@ import {
   organizations,
   organizationSubscriptionStatus,
   organizationSubscriptions,
+  stripeWebhookEvents,
   pathClaims,
   planEntitlements,
   plans,
@@ -101,6 +102,10 @@ describe("database schema", () => {
     expect(workspaces.organizationId.notNull).toBe(true);
     expect(organizationMembers.role.name).toBe("role");
     expect(organizationSubscriptions.planId.name).toBe("plan_id");
+    expect(organizationSubscriptions.cancelAtPeriodEnd.name).toBe(
+      "cancel_at_period_end",
+    );
+    expect(getTableName(stripeWebhookEvents)).toBe("stripe_webhook_events");
     expect(planEntitlements.feature.name).toBe("feature");
     expect(organizationFeatureOverrides.expiresAt.name).toBe("expires_at");
     expect(userFeatureOverrides.createdBy.name).toBe("created_by");

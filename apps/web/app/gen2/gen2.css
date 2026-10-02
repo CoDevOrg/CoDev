@@ -36,151 +36,6 @@
   gap: 12px;
 }
 
-.gen2-shell .primary-button,
-.gen2-shell .secondary-button,
-.gen2-card {
-  cursor: pointer;
-}
-
-.gen2-field {
-  display: flex;
-  flex: 1 1 16rem;
-  flex-direction: column;
-  gap: 8px;
-  color: var(--muted);
-  font-size: 0.8125rem;
-}
-
-.gen2-field input {
-  min-height: 46px;
-  padding: 0 14px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--surface-2);
-  color: var(--ink);
-  font-size: 0.95rem;
-}
-
-.gen2-field input:focus-visible {
-  outline: 2px solid var(--gold);
-  outline-offset: 2px;
-}
-
-.gen2-list {
-  display: grid;
-  gap: 12px;
-  margin: 40px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.gen2-card-row {
-  display: flex;
-  align-items: stretch;
-  gap: 8px;
-}
-
-.gen2-card-row .gen2-card {
-  flex: 1;
-  min-width: 0;
-}
-
-.gen2-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  min-height: 72px;
-  padding: 20px 22px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--surface-2);
-  color: inherit;
-  text-decoration: none;
-  transition:
-    transform 200ms ease,
-    border-color 200ms ease;
-}
-
-.gen2-card:hover {
-  transform: translateY(-2px);
-  border-color: var(--line-strong);
-}
-
-.gen2-card-pending {
-  cursor: default;
-  opacity: 0.72;
-}
-
-.gen2-card:focus-visible {
-  outline: 2px solid var(--gold);
-  outline-offset: 3px;
-}
-
-.gen2-delete-button {
-  display: inline-flex;
-  flex: 0 0 48px;
-  align-items: center;
-  justify-content: center;
-  min-height: 48px;
-  margin-block: auto;
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--surface-2);
-  color: var(--muted);
-  cursor: pointer;
-  transition:
-    color 160ms ease,
-    border-color 160ms ease,
-    opacity 160ms ease;
-}
-
-.gen2-delete-button:hover:not(:disabled) {
-  border-color: #ef4444;
-  color: #ef4444;
-}
-
-.gen2-delete-button:focus-visible {
-  outline: 2px solid var(--gold);
-  outline-offset: 2px;
-}
-
-.gen2-delete-button:disabled {
-  cursor: wait;
-  opacity: 0.55;
-}
-
-.gen2-delete-spinner {
-  animation: gen2-delete-spin 900ms linear infinite;
-}
-
-.gen2-action-error {
-  margin: 8px 0 0;
-  color: #ffb3a6;
-  font-size: 0.875rem;
-  line-height: 1.5;
-}
-
-@keyframes gen2-delete-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.gen2-empty {
-  margin: 40px 0 0;
-  color: var(--muted);
-}
-
-.gen2-create-limit {
-  flex-basis: 100%;
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.875rem;
-  line-height: 1.5;
-}
-
 .gen2-room-header {
   display: flex;
   flex-wrap: wrap;
@@ -310,10 +165,6 @@
   opacity: 0.62;
 }
 
-.gen2-chat-thread .gen2-empty {
-  margin: 0 0 16px;
-}
-
 .gen2-agent-log {
   min-height: 200px;
   max-height: min(52vh, 440px);
@@ -331,10 +182,6 @@
   margin: 0;
   padding: 0;
   list-style: none;
-}
-
-.gen2-agent-log .gen2-empty {
-  margin: 0;
 }
 
 .gen2-agent-composer-hero {
@@ -375,29 +222,6 @@
   display: grid;
   gap: 12px;
   margin-top: 16px;
-}
-
-.gen2-field textarea {
-  min-height: 92px;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--surface-2);
-  color: var(--ink);
-  font: inherit;
-  font-size: 0.95rem;
-  line-height: 1.5;
-  resize: vertical;
-}
-
-.gen2-field textarea:focus-visible {
-  outline: 2px solid var(--gold);
-  outline-offset: 2px;
-}
-
-.gen2-field textarea:disabled {
-  cursor: not-allowed;
-  opacity: 0.62;
 }
 
 .gen2-agent-composer-actions {
@@ -451,10 +275,6 @@
   .primary-button,
   .secondary-button {
     transition: none;
-  }
-
-  .gen2-delete-spinner {
-    animation: none;
   }
 
   .gen2-card:hover,

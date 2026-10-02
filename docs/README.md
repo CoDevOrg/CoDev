@@ -11,6 +11,7 @@ intent that may have drifted; confirm details against the code.
 | Document                                                                               | Status  | Covers                                                                  |
 | -------------------------------------------------------------------------------------- | ------- | ----------------------------------------------------------------------- |
 | [OPERATIONS.md](./OPERATIONS.md)                                                       | Current | Health signals, crons, Azure runtime deploy credentials, incident steps |
+| [BILLING.md](./BILLING.md)                                                             | Current | Stripe Individual plan: paywall rules, webhook flow, env, provisioning  |
 | [EMAIL.md](./EMAIL.md)                                                                 | Current | `trycodev.com` email: Resend sending, ImprovMX receiving                |
 | [security/openai-hosted-codex-approval.md](./security/openai-hosted-codex-approval.md) | Current | Approval record for the hosted Codex CLI remote-auth pattern            |
 

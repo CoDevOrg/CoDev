@@ -13,6 +13,7 @@ import {
 import { schema } from "@codev/db";
 
 import { createInviteToken, hashInviteToken } from "../platform/crypto";
+import { requireIndividualPlan } from "../billing/access";
 import { getRepository } from "../github/github";
 import { getDatabase } from "../platform/database";
 import { logEvent } from "../platform/observability";
@@ -50,6 +51,8 @@ export async function createGen2Workspace(
   name?: string,
   repository?: { installationId: number; repositoryId: number },
 ) {
+  // Hard paywall: a workspace costs a machine, so creating one needs the plan.
+  await requireIndividualPlan(userId);
   // Resolve the repository before anything is written: a repo the member
   // cannot see should fail the create, not leave a half-built workspace.
   const source = repository

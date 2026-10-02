@@ -1,6 +1,11 @@
 import { getTableName } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const plan = vi.hoisted(() => ({ require: vi.fn() }));
+vi.mock("../billing/access", () => ({
+  requireIndividualPlan: (...args: unknown[]) => plan.require(...args),
+}));
+
 const mocks = vi.hoisted(() => ({
   inserted: [] as Array<{ table: string; values: Record<string, unknown> }>,
   events: [] as string[],
@@ -207,6 +212,15 @@ describe("gen2 workspaces", () => {
         },
       },
     ]);
+  });
+
+  it("needs the Individual plan before anything is written", async () => {
+    plan.require.mockRejectedValueOnce(new Error("subscription_required"));
+    await expect(createGen2Workspace("user-1")).rejects.toThrow(
+      "subscription_required",
+    );
+    expect(plan.require).toHaveBeenCalledWith("user-1");
+    expect(mocks.inserted).toHaveLength(0);
   });
 
   it("rejects a third owned workspace without writing rows", async () => {
