@@ -16,11 +16,11 @@
  * backdrop; both are legitimate, so both stay expressed differently even
  * though they now share the same underlying color values).
  *
- * Deliberately NOT covered here: `.workspace-page` in globals.css (the
- * embedded IDE surface, permanently dark by design, its own palette) and
- * `.lp-page` in landing.css (the marketing page, its own richer multi-hue
- * palette, not meant to follow light/dark at all). Both stay independent on
- * purpose -- this file is the authenticated product's shared palette only.
+ * Deliberately NOT covered here: legacy `--workspace-*` swatches in
+ * globals.css and `.lp-page` in landing.css. The live Gen 2 IDE maps its
+ * scoped `--ws-*` tokens onto these brand swatches in app/gen2/workspace.css,
+ * while the marketing page keeps its richer palette independent of light and
+ * dark mode. This file remains the authenticated product's shared palette.
  *
  * Dark mode ("Midnight Blueprint") applies automatically via
  * prefers-color-scheme; [data-theme="dark"] / [data-theme="light"] are

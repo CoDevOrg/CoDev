@@ -13,12 +13,11 @@
   },
   "files": [
     "bin",
-    "src/client.mjs",
-    "src/cursor-auth.mjs"
+    "src/client.mjs"
   ],
   "scripts": {
     "test": "node --test",
-    "typecheck": "node --check bin/codev.mjs && node --check src/client.mjs && node --check src/cursor-auth.mjs"
+    "typecheck": "node --check bin/codev.mjs && node --check src/client.mjs"
   },
   "engines": {
     "node": ">=20"

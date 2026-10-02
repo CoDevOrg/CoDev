@@ -20,6 +20,7 @@ function readCss(name: string): string {
 const appTheme = readCss("app-theme.css");
 const globals = readCss("globals.css");
 const landing = readCss("landing.css");
+const workspace = readCss("gen2/workspace.css");
 const themeTokens = readCss("theme-tokens.css");
 const productTheme = readCss("product-theme.css");
 const settingsTheme = readCss("settings/settings-theme.css");
@@ -157,10 +158,15 @@ describe("CoDev product theme", () => {
     expect(globals).toContain("--ink: #0e2f7e;");
     expect(globals).toContain("--gold: #1b63b3;");
 
-    // The workspace IDE page keeps a dark document for coding chrome.
-    expect(globals).toContain(".workspace-page {");
-    expect(globals).toContain("--workspace-surface: #121417;");
-    expect(globals).toMatch(/\.workspace-page \{[^}]*color-scheme: dark;/s);
+    // The live Superset shell maps its own tokens onto the shared theme so
+    // its coding surface follows the member's selected light or dark mode.
+    expect(workspace).toContain("--ws-surface-1: var(--brand-paper);");
+    expect(workspace).toContain("--ws-text-primary: var(--brand-ink);");
+    expect(workspace).toContain(
+      "color-scheme: var(--brand-color-scheme, light);",
+    );
+    expect(workspace).toContain(':root[data-theme="light"]');
+    expect(workspace).not.toContain("var(--workspace-surface)");
 
     // The workspace demo stays a dark panel on the light landing page, so it
     // re-declares the ink tokens rather than inheriting the navy ones.
@@ -217,7 +223,7 @@ describe("CoDev product theme", () => {
         "utf8",
       ),
       readFileSync(
-        resolve(process.cwd(), "components/landing/landing-workspace-demo.tsx"),
+        resolve(process.cwd(), "components/landing/waitlist-inline.tsx"),
         "utf8",
       ),
     ].join("\n");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { LayoutGrid, List, Search } from "lucide-react";
 import type { Gen2Workspace } from "@codev/contracts";
 
@@ -36,6 +36,14 @@ function getGreeting(): string {
   return "Good evening";
 }
 
+function subscribeToGreeting() {
+  return () => {};
+}
+
+function getServerGreeting() {
+  return "Good evening";
+}
+
 export function Gen2WorkspaceDashboard({
   user,
   github,
@@ -45,21 +53,23 @@ export function Gen2WorkspaceDashboard({
   billing,
 }: DashboardProps) {
   const canCreate = billing?.hasAccess !== false;
-  const [workspaces, setWorkspaces] =
-    useState<Gen2Workspace[]>(initialWorkspaces);
-  const [greeting, setGreeting] = useState("Good evening");
+  const [workspaceState, setWorkspaceState] = useState({
+    source: initialWorkspaces,
+    value: initialWorkspaces,
+  });
+  const workspaces =
+    workspaceState.source === initialWorkspaces
+      ? workspaceState.value
+      : initialWorkspaces;
+  const greeting = useSyncExternalStore(
+    subscribeToGreeting,
+    getGreeting,
+    getServerGreeting,
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "owned" | "shared">("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-
-  useEffect(() => {
-    setGreeting(getGreeting());
-  }, []);
-
-  useEffect(() => {
-    setWorkspaces(initialWorkspaces);
-  }, [initialWorkspaces]);
 
   const activeCount = useMemo(() => {
     return workspaces.filter(
@@ -81,6 +91,9 @@ export function Gen2WorkspaceDashboard({
   }, [user.name, user.email, github.login]);
 
   const githubHandle = github.login || user.githubLogin || null;
+  const handleWorkspacesChange = (value: Gen2Workspace[]) => {
+    setWorkspaceState({ source: initialWorkspaces, value });
+  };
 
   return (
     <div className="gen2-home-dashboard">
@@ -203,7 +216,7 @@ export function Gen2WorkspaceDashboard({
         onCreateWorkspace={() => {
           if (canCreate) setIsCreateOpen(true);
         }}
-        onWorkspacesChange={setWorkspaces}
+        onWorkspacesChange={handleWorkspacesChange}
       />
 
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>

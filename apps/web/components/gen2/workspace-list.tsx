@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { LoaderCircle, Plus, Trash2 } from "lucide-react";
@@ -32,19 +32,15 @@ export function Gen2WorkspaceList({
   filter?: "all" | "owned" | "shared";
   showCreateCard?: boolean;
   onCreateWorkspace?: () => void;
-  onWorkspacesChange?: (workspaces: Gen2Workspace[]) => void;
+  onWorkspacesChange: (workspaces: Gen2Workspace[]) => void;
 }) {
   const router = useRouter();
-  const [workspaces, setWorkspaces] = useState(initialWorkspaces);
+  const workspaces = initialWorkspaces;
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<{
     workspaceId: string;
     message: string;
   } | null>(null);
-
-  useEffect(() => {
-    setWorkspaces(initialWorkspaces);
-  }, [initialWorkspaces]);
 
   async function deleteWorkspace(workspace: Gen2Workspace) {
     const confirmed = window.confirm(
@@ -71,8 +67,7 @@ export function Gen2WorkspaceList({
       }
 
       const updated = workspaces.filter((item) => item.id !== workspace.id);
-      setWorkspaces(updated);
-      onWorkspacesChange?.(updated);
+      onWorkspacesChange(updated);
       router.refresh();
     } catch {
       setActionError({

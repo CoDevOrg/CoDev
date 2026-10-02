@@ -16,3 +16,6 @@ vendor/superset
 
 # Keep the installed shadcn skill identical to its upstream source.
 .claude/skills/shadcn
+
+# Do not format developer-local Codex settings.
+.claude/settings.local.json

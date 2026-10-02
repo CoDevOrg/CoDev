@@ -97,16 +97,7 @@ export function WorkspaceShareDialog({
   const [transferring, setTransferring] = useState(false);
   const [transferError, setTransferError] = useState("");
   const restoreFocusRef = useRef<HTMLElement | null>(null);
-  const wasOpenRef = useRef(false);
   const membersListRef = useRef<HTMLDivElement | null>(null);
-  const linkRoleRef = useRef(linkRole);
-  linkRoleRef.current = linkRole;
-
-  if (open && !wasOpenRef.current) {
-    const active = document.activeElement;
-    if (active instanceof HTMLElement) restoreFocusRef.current = active;
-  }
-  wasOpenRef.current = open;
 
   const self = members.find((member) => member.userId === currentUserId);
   const effectiveRole = self?.role ?? currentUserRole;
@@ -140,7 +131,7 @@ export function WorkspaceShareDialog({
 
   const refreshShareLink = useCallback(
     async (targetRole?: Gen2WorkspaceRole) => {
-      const role = targetRole ?? linkRoleRef.current;
+      const role = targetRole ?? linkRole;
       setLinkLoading(true);
       setLinkError("");
       try {
@@ -171,18 +162,31 @@ export function WorkspaceShareDialog({
         setLinkLoading(false);
       }
     },
-    [workspaceId],
+    [linkRole, workspaceId],
   );
 
   useEffect(() => {
     if (!open) {
-      setNotice(null);
-      setInviteInput("");
-      setCopied(false);
-      return;
+      let active = true;
+      queueMicrotask(() => {
+        if (!active) return;
+        setNotice(null);
+        setInviteInput("");
+        setCopied(false);
+      });
+      return () => {
+        active = false;
+      };
     }
-    void refreshMembers();
-    if (currentUserRole !== "viewer") void refreshShareLink();
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      void refreshMembers();
+      if (currentUserRole !== "viewer") void refreshShareLink();
+    });
+    return () => {
+      active = false;
+    };
   }, [open, currentUserRole, refreshMembers, refreshShareLink]);
 
   const handleAddMember = async () => {
@@ -369,6 +373,10 @@ export function WorkspaceShareDialog({
         <DialogContent
           showCloseButton={false}
           className="gen2-workspace-surface sm:max-w-[540px]"
+          onOpenAutoFocus={() => {
+            const active = document.activeElement;
+            if (active instanceof HTMLElement) restoreFocusRef.current = active;
+          }}
           onCloseAutoFocus={(event) => {
             const target = restoreFocusRef.current;
             restoreFocusRef.current = null;
