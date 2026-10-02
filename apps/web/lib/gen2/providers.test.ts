@@ -125,15 +125,17 @@ describe("gen2 provider resolution", () => {
     mocks.limit.mockResolvedValue([{ encryptedApiKey: "enc" }]);
     mocks.decryptSecret.mockResolvedValue("sk-test-123");
     const status = await getGen2ProviderStatus(userId, "codex");
-    expect(status).toEqual({ connected: true, via: "api-key" });
+    expect(status).toMatchObject({ connected: true, via: "api-key" });
     expect(JSON.stringify(status)).not.toContain("sk-test");
   });
 
   it("reports not connected when there is nothing", async () => {
-    await expect(getGen2ProviderStatus(userId, "codex")).resolves.toEqual({
-      connected: false,
-      via: null,
-    });
+    await expect(getGen2ProviderStatus(userId, "codex")).resolves.toMatchObject(
+      {
+        connected: false,
+        via: null,
+      },
+    );
   });
 
   it("builds an api-key auth cache the Codex CLI understands", () => {

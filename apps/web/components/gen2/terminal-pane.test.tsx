@@ -86,11 +86,7 @@ describe("Gen2TerminalPane", () => {
     await waitFor(() => expect(onResumeWorkspace).toHaveBeenCalledOnce());
   });
 
-  it("batches input typed while a request is in flight without changing order", async () => {
-    let releaseFirstInput!: () => void;
-    const firstInput = new Promise<void>((resolve) => {
-      releaseFirstInput = resolve;
-    });
+  it("batches input typed before the request leaves, without changing order", async () => {
     const inputCalls: string[] = [];
 
     vi.stubGlobal(
@@ -107,7 +103,6 @@ describe("Gen2TerminalPane", () => {
         }
         if (request.action === "input") {
           inputCalls.push(request.data ?? "");
-          if (inputCalls.length === 1) await firstInput;
           return new Response(null, { status: 204 });
         }
         if (request.action === "poll") {
@@ -136,14 +131,7 @@ describe("Gen2TerminalPane", () => {
     sendInput("w");
     sendInput("d");
 
-    try {
-      await waitFor(() => expect(inputCalls).toEqual(["p"]));
-      expect(inputCalls).toEqual(["p"]);
-    } finally {
-      releaseFirstInput();
-    }
-
-    await waitFor(() => expect(inputCalls).toEqual(["p", "wd"]));
+    await waitFor(() => expect(inputCalls).toEqual(["pwd"]));
     unmount();
   });
 

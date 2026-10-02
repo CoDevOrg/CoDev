@@ -98,7 +98,7 @@ describe("gen2 members route", () => {
       "viewer",
     );
     expect(response.status).toBe(200);
-    const data = await response.json();
+    const data = (await response.json()) as { members: unknown[] };
     expect(data.members).toHaveLength(2);
   });
 });

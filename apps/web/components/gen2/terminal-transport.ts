@@ -51,9 +51,7 @@ export function attachTerminalTransport(
     everOpened: false,
     httpWake: null,
   };
-  void connect(session, 0).catch(() => {
-    if (!session.stopped) startHttp(session);
-  });
+  connect(session, 0);
   return {
     sendInput(data) {
       session.pending += data;

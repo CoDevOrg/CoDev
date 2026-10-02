@@ -30,9 +30,12 @@ export default defineConfig([
   },
   globalIgnores([
     ".next/**",
+    ".cloudflare/**",
+    ".vinext/**",
     ".swc/**",
     "app/.well-known/workflow/**",
     "next-env.d.ts",
+    "worker-configuration.d.ts",
     "playwright-report/**",
     "test-results/**",
   ]),

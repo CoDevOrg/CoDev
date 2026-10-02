@@ -103,7 +103,11 @@ export function SupersetChangesPane({
   }, [workspaceId, worktreeId]);
 
   useEffect(() => {
-    if (visible) void refresh();
+    if (!visible) return;
+    const timeout = setTimeout(() => {
+      void refresh();
+    }, 0);
+    return () => clearTimeout(timeout);
   }, [visible, refresh]);
 
   const files = changedPaths(status);

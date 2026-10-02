@@ -22,7 +22,7 @@ describe("AppSidebarNav", () => {
     const link = screen.getByRole("link", { name: "Rooms" });
     expect(link).toHaveAttribute("href", "/rooms");
     expect(link).toHaveClass("is-active");
-    expect(screen.getByRole("link", { name: "Gen 2" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Workspaces" })).toHaveAttribute(
       "href",
       "/gen2",
     );
@@ -33,7 +33,7 @@ describe("AppSidebarNav", () => {
 
     expect(screen.getByRole("link", { name: "Workspaces" })).toHaveAttribute(
       "href",
-      "https://www.trycodev.com/dashboard",
+      "https://www.trycodev.com/gen2",
     );
     expect(screen.getByRole("link", { name: "Admin" })).toHaveAttribute(
       "href",

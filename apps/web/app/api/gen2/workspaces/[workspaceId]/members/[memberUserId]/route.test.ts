@@ -76,7 +76,7 @@ describe("gen2 member item route", () => {
       targetMemberId,
     );
     expect(response.status).toBe(200);
-    const data = await response.json();
+    const data = (await response.json()) as { members: unknown };
     expect(data.members).toEqual([]);
   });
 });

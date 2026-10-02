@@ -14,10 +14,19 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["ioredis", "node-pty", "pg", "ws"],
   webpack: (config, context) => {
     // vinext probes this hook with a stub compiler and would otherwise alias
-    // away the real `cloudflare:workers` module.
-    if (context.webpack.DefinePlugin?.name !== "WebpackPluginStub") {
-      config.resolve.alias["cloudflare:workers"] = cloudflareWorkersStub;
+    // away the real `cloudflare:workers` module. Webpack also rejects that
+    // scheme before a normal alias can rewrite it, so Next builds replace
+    // the module directly.
+    if (context.webpack.DefinePlugin?.name === "WebpackPluginStub") {
+      return config;
     }
+    config.resolve.alias["cloudflare:workers"] = cloudflareWorkersStub;
+    config.plugins.push(
+      new context.webpack.NormalModuleReplacementPlugin(
+        /^cloudflare:workers$/,
+        cloudflareWorkersStub,
+      ),
+    );
     return config;
   },
 };

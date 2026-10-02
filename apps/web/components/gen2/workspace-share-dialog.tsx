@@ -100,13 +100,15 @@ export function WorkspaceShareDialog({
   const wasOpenRef = useRef(false);
   const membersListRef = useRef<HTMLDivElement | null>(null);
   const linkRoleRef = useRef(linkRole);
-  linkRoleRef.current = linkRole;
-
-  if (open && !wasOpenRef.current) {
-    const active = document.activeElement;
-    if (active instanceof HTMLElement) restoreFocusRef.current = active;
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
+    if (!open) {
+      setNotice(null);
+      setInviteInput("");
+      setCopied(false);
+    }
   }
-  wasOpenRef.current = open;
 
   const self = members.find((member) => member.userId === currentUserId);
   const effectiveRole = self?.role ?? currentUserRole;
@@ -175,14 +177,24 @@ export function WorkspaceShareDialog({
   );
 
   useEffect(() => {
-    if (!open) {
-      setNotice(null);
-      setInviteInput("");
-      setCopied(false);
-      return;
+    linkRoleRef.current = linkRole;
+  }, [linkRole]);
+
+  useEffect(() => {
+    if (open && !wasOpenRef.current) {
+      const active = document.activeElement;
+      if (active instanceof HTMLElement) restoreFocusRef.current = active;
     }
-    void refreshMembers();
-    if (currentUserRole !== "viewer") void refreshShareLink();
+    wasOpenRef.current = open;
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const timeout = setTimeout(() => {
+      void refreshMembers();
+      if (currentUserRole !== "viewer") void refreshShareLink();
+    }, 0);
+    return () => clearTimeout(timeout);
   }, [open, currentUserRole, refreshMembers, refreshShareLink]);
 
   const handleAddMember = async () => {

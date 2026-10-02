@@ -247,11 +247,20 @@ export function SupersetWorkspaceShell({
     try {
       const res = await fetch("/api/gen2/providers?provider=all");
       if (!res.ok) return;
-      const data = await res.json();
+      const data = (await res.json()) as Partial<
+        Record<
+          SupportedAiProvider,
+          { connected?: boolean; via?: string | null }
+        >
+      >;
+      const status = (provider: SupportedAiProvider) => ({
+        connected: data[provider]?.connected === true,
+        via: data[provider]?.via ?? null,
+      });
       setProviderStatuses({
-        codex: data.codex ?? { connected: false, via: null },
-        claude: data.claude ?? { connected: false, via: null },
-        cursor: data.cursor ?? { connected: false, via: null },
+        codex: status("codex"),
+        claude: status("claude"),
+        cursor: status("cursor"),
       });
       if (!data[activeProvider]?.connected) {
         if (data.codex?.connected) setActiveProvider("codex");
@@ -264,7 +273,10 @@ export function SupersetWorkspaceShell({
   }, [activeProvider]);
 
   useEffect(() => {
-    void refreshProviderStatuses();
+    const timeout = setTimeout(() => {
+      void refreshProviderStatuses();
+    }, 0);
+    return () => clearTimeout(timeout);
   }, [refreshProviderStatuses]);
 
   const refreshChats = useCallback(async () => {
@@ -283,7 +295,10 @@ export function SupersetWorkspaceShell({
   }, [workspaceId]);
 
   useEffect(() => {
-    void refreshChats();
+    const timeout = setTimeout(() => {
+      void refreshChats();
+    }, 0);
+    return () => clearTimeout(timeout);
   }, [refreshChats]);
 
   const handleNewChat = useCallback(async () => {
@@ -506,7 +521,10 @@ export function SupersetWorkspaceShell({
   }, [runtimeEnabled, workspaceId]);
 
   useEffect(() => {
-    void refreshRuns();
+    const timeout = setTimeout(() => {
+      void refreshRuns();
+    }, 0);
+    return () => clearTimeout(timeout);
   }, [refreshRuns]);
 
   const boardItems: BoardWorktreeItem[] = worktrees.map((wt) => {
@@ -1680,8 +1698,10 @@ export function SupersetWorkspaceShell({
                       activeChatId={selectedChatId}
                       onSelectChatId={setSelectedChatId}
                       onChatsChange={setChats}
-                      activeProvider={activeProvider as any}
-                      onActiveProviderChange={setActiveProvider as any}
+                      activeProvider={
+                        activeProvider === "cursor" ? "codex" : activeProvider
+                      }
+                      onActiveProviderChange={setActiveProvider}
                       hideChatBar={true}
                       onRunningChange={setAgentRunning}
                       onFilesChanged={() => {

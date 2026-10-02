@@ -217,7 +217,7 @@ describe("CoDev product theme", () => {
         "utf8",
       ),
       readFileSync(
-        resolve(process.cwd(), "components/landing/landing-workspace-demo.tsx"),
+        resolve(process.cwd(), "components/landing/landing-motion.tsx"),
         "utf8",
       ),
     ].join("\n");

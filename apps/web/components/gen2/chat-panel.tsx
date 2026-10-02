@@ -185,6 +185,10 @@ export function Gen2ChatPanel({
   const [agent, setAgent] = useState<Gen2AgentChoice>(
     activeProvider ?? GEN2_AGENT_PROVIDERS[0].id,
   );
+  const [appliedModelKey, setAppliedModelKey] = useState("");
+  if (activeChatId && activeChatId !== chatId) setChatId(activeChatId);
+  if (activeProvider && activeProvider !== agent) setAgent(activeProvider);
+  if (!chatId && thread.messages.length > 0) setThread({ messages: [] });
   const [modelsByProvider, setModelsByProvider] = useState<
     Record<string, Gen2ModelInfo[]>
   >({});
@@ -213,7 +217,11 @@ export function Gen2ChatPanel({
     let mounted = true;
     void fetch("/api/gen2/providers?provider=all")
       .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
+      .then((value) => {
+        const data = value as {
+          claude?: { models?: Gen2ModelInfo[] };
+          codex?: { models?: Gen2ModelInfo[] };
+        } | null;
         if (!mounted || !data) return;
         setModelsByProvider({
           claude: data.claude?.models ?? [],
@@ -226,14 +234,16 @@ export function Gen2ChatPanel({
     };
   }, []);
 
-  useEffect(() => {
-    if (provider?.models?.length) {
-      setModelsByProvider((prev) => ({
-        ...prev,
-        [agent]: provider.models!,
-      }));
-    }
-  }, [agent, provider?.models]);
+  const incomingModels = provider?.models;
+  const incomingModelKey =
+    incomingModels?.map((model) => model.id).join("\0") ?? "";
+  if (incomingModels?.length && incomingModelKey !== appliedModelKey) {
+    setAppliedModelKey(incomingModelKey);
+    setModelsByProvider((prev) => ({
+      ...prev,
+      [agent]: incomingModels,
+    }));
+  }
   const ready = canRunGen2Agent(workspace.status);
   const busy = running || starting || waking;
   const canSend = Boolean(prompt.trim() || attachments.length > 0) && !busy;
@@ -243,18 +253,6 @@ export function Gen2ChatPanel({
     transcriptRef,
     contentKey,
   );
-
-  useEffect(() => {
-    if (activeChatId && activeChatId !== chatId) {
-      setChatId(activeChatId);
-    }
-  }, [activeChatId, chatId]);
-
-  useEffect(() => {
-    if (activeProvider && activeProvider !== agent) {
-      setAgent(activeProvider);
-    }
-  }, [activeProvider, agent]);
 
   useEffect(() => {
     pinToLatest();
@@ -287,7 +285,10 @@ export function Gen2ChatPanel({
   }, [workspace.id, activeChatId, onChatsChange, onSelectChatId]);
 
   useEffect(() => {
-    void loadChats();
+    const timeout = setTimeout(() => {
+      void loadChats();
+    }, 0);
+    return () => clearTimeout(timeout);
   }, [loadChats]);
 
   const loadThread = useCallback(
@@ -303,11 +304,11 @@ export function Gen2ChatPanel({
   );
 
   useEffect(() => {
-    if (!chatId) {
-      setThread({ messages: [] });
-      return;
-    }
-    void loadThread(chatId);
+    if (!chatId) return;
+    const timeout = setTimeout(() => {
+      void loadThread(chatId);
+    }, 0);
+    return () => clearTimeout(timeout);
   }, [chatId, loadThread]);
 
   /** Drives one turn to completion, re-reducing the stream on every poll. */
@@ -407,10 +408,18 @@ export function Gen2ChatPanel({
 
   // Rejoin a turn that was still running when the page reloaded.
   useEffect(() => {
-    const stored = storedTurn(workspace.id);
-    if (!stored) return;
-    setChatId(stored.chatId);
-    void drive(stored.sessionId, stored.chatId, stored.after, stored.provider);
+    const timeout = setTimeout(() => {
+      const stored = storedTurn(workspace.id);
+      if (!stored) return;
+      setChatId(stored.chatId);
+      void drive(
+        stored.sessionId,
+        stored.chatId,
+        stored.after,
+        stored.provider,
+      );
+    }, 0);
+    return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace.id]);
 

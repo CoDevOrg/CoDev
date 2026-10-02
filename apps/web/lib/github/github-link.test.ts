@@ -34,14 +34,14 @@ describe("GitHub account linking state", () => {
     expect(openGithubLinkState(encoded)).toBeNull();
   });
 
-  it("falls back to the dashboard for an unsafe return path", () => {
+  it("falls back to the workspace home for an unsafe return path", () => {
     vi.stubEnv("AUTH_SECRET", "a".repeat(40));
 
     const encoded = createGithubLinkState("user-1", "https://evil.example");
 
     expect(openGithubLinkState(encoded)).toMatchObject({
       userId: "user-1",
-      returnTo: "/dashboard",
+      returnTo: "/gen2",
     });
   });
 });
