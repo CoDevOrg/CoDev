@@ -111,6 +111,40 @@ describe("Gen2WorkspaceRoom", () => {
     expect(await screen.findByText("Ready")).toBeInTheDocument();
   });
 
+  it("sends an owner without a plan to Billing instead of retrying", async () => {
+    stubFetch(
+      () =>
+        new Response(
+          JSON.stringify({
+            error: "An active Individual plan is required.",
+            code: "subscription_required",
+          }),
+          { status: 402 },
+        ),
+    );
+    render(<Gen2WorkspaceRoom workspace={workspace} />);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/needs an active Individual plan/);
+    expect(screen.getByRole("link", { name: "Subscribe" })).toHaveAttribute(
+      "href",
+      "/settings/personal/billing",
+    );
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("tells a collaborator the owner has to subscribe", async () => {
+    stubFetch(
+      () => new Response(JSON.stringify({ error: "x" }), { status: 402 }),
+    );
+    render(<Gen2WorkspaceRoom workspace={{ ...workspace, role: "editor" }} />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /Ask them to subscribe/,
+    );
+    expect(screen.queryByRole("link", { name: "Subscribe" })).toBeNull();
+  });
+
   it("copies the invite link straight to the clipboard", async () => {
     stubFetch(ready);
     render(<Gen2WorkspaceRoom workspace={{ ...workspace, status: "ready" }} />);

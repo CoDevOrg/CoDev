@@ -1886,28 +1886,351 @@
 /* ------------------------------------------------------------ terminal */
 
 .gen2-term {
+  --term-bg: #0c0d10;
+  --term-fg: #e6e6e6;
+  --term-dim: #8b909a;
+  --term-line: rgba(255, 255, 255, 0.08);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
   height: 100%;
+  background: var(--term-bg);
+  color: var(--term-fg);
 }
 
-.gen2-term-start {
+.gen2-term-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 0 6px 0 12px;
+  border-bottom: 1px solid var(--term-line);
+}
+
+.gen2-term-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--term-dim);
+  font-size: 0.75rem;
+}
+
+.gen2-term-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #f5c76a;
+}
+
+.gen2-term-status[data-state="connected"] .gen2-term-dot {
+  background: #7bd88f;
+}
+
+.gen2-term-status[data-state="disconnected"] .gen2-term-dot,
+.gen2-term-status[data-state="offline"] .gen2-term-dot {
+  background: #ff6b6b;
+}
+
+.gen2-term-status[data-state="ended"] .gen2-term-dot,
+.gen2-term-status[data-state="waiting"] .gen2-term-dot {
+  background: #6b7280;
+}
+
+.gen2-term-notice {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--term-dim);
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gen2-term-actions {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.gen2-term-action {
   display: grid;
-  justify-items: start;
-  gap: 6px;
-  padding: 14px;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--term-dim);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
 }
 
-.gen2-term-host {
+.gen2-term-action:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--term-fg);
+}
+
+.gen2-term-action:focus-visible,
+.gen2-term-message-action:focus-visible,
+.gen2-term-menu button:focus-visible {
+  outline: 2px solid var(--gold-bright, #5aa6ec);
+  outline-offset: 1px;
+}
+
+.gen2-term-action:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.gen2-term-stage {
+  position: relative;
   min-height: 0;
-  height: 100%;
-  padding: 6px 8px;
   overflow: hidden;
 }
 
-.gen2-term-host:not([data-live="true"]) {
-  display: none;
+/* Always laid out (so it can be measured and fitted before the shell starts),
+   but invisible until the first screen has arrived: no frame-by-frame paint. */
+.gen2-term-host {
+  position: absolute;
+  inset: 0;
+  padding: 8px 2px 4px 12px;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.gen2-term-host[data-ready="true"] {
+  opacity: 1;
+}
+
+.gen2-term-host .xterm,
+.gen2-term-host .xterm-viewport {
+  height: 100%;
+  background-color: var(--term-bg) !important;
+}
+
+.gen2-term-host .xterm-viewport {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+
+.gen2-term-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: var(--term-bg);
+}
+
+.gen2-term-connecting {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  color: var(--term-dim);
+  font-size: 0.8125rem;
+}
+
+.gen2-term-skeleton {
+  display: grid;
+  gap: 7px;
+  width: 168px;
+}
+
+.gen2-term-skeleton i {
+  display: block;
+  height: 7px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  animation: gen2-term-pulse 1.3s ease-in-out infinite;
+}
+
+.gen2-term-skeleton i:nth-child(1) {
+  width: 62%;
+}
+
+.gen2-term-skeleton i:nth-child(2) {
+  width: 100%;
+  animation-delay: 0.15s;
+}
+
+.gen2-term-skeleton i:nth-child(3) {
+  width: 38%;
+  animation-delay: 0.3s;
+}
+
+@keyframes gen2-term-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.gen2-term-message {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  max-width: 320px;
+  text-align: center;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--term-dim);
+}
+
+.gen2-term-message p {
+  margin: 0;
+}
+
+.gen2-term-message[data-tone="error"] p {
+  color: #ff9d9d;
+}
+
+.gen2-term-message[data-compact="true"] {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 8px 14px;
+  max-width: none;
+}
+
+.gen2-term-message-action {
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--term-fg);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78125rem;
+  transition: background-color 0.15s ease;
+}
+
+.gen2-term-message-action:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.gen2-term-banner {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  left: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--term-line);
+  border-radius: 10px;
+  background: rgba(24, 26, 31, 0.94);
+  backdrop-filter: blur(10px);
+}
+
+.gen2-term-find {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 4px 4px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(28, 30, 36, 0.94);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(12px);
+}
+
+.gen2-term-find input {
+  width: 150px;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--term-fg);
+  font: inherit;
+  font-size: 0.8125rem;
+}
+
+.gen2-term-find input::placeholder {
+  color: var(--term-dim);
+}
+
+.gen2-term-find-count {
+  min-width: 52px;
+  padding: 0 6px;
+  color: var(--term-dim);
+  font-size: 0.6875rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.gen2-term-find button {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--term-dim);
+  cursor: pointer;
+}
+
+.gen2-term-find button:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: var(--term-fg);
+}
+
+.gen2-term-find button:focus-visible {
+  outline: 2px solid var(--gold-bright, #5aa6ec);
+  outline-offset: 1px;
+}
+
+.gen2-term-menu {
+  position: absolute;
+  z-index: 5;
+  display: grid;
+  min-width: 160px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(28, 30, 36, 0.97);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(12px);
+}
+
+.gen2-term-menu button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--term-fg);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8125rem;
+  text-align: left;
+}
+
+.gen2-term-menu button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.gen2-term-menu button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gen2-term-host {
+    transition: none;
+  }
+
+  .gen2-term-skeleton i {
+    animation: none;
+  }
 }
 
 /* ----------------------------------------------------------------- git */

@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("../billing/gate", () => ({
+  requireWorkspaceOwnerPlan: async () => undefined,
+}));
+
 /**
  * The Gen 2 workbench against the in-memory guest.
  *

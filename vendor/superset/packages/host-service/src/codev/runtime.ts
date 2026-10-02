@@ -10,9 +10,9 @@ import type { EventBus } from "../events";
 import {
 	createTerminalSessionInternal,
 	disposeSessionAndWait,
+	readTerminalOutput,
 	resizeTerminalSession,
-	snapshotSession,
-	writeFramedInputToSession,
+	writeRawInputToSession,
 } from "../terminal/terminal";
 import { CODEV_PRIMARY_WORKTREE_ID, resolveCoDevWorktreeRoot } from "./files";
 
@@ -34,7 +34,10 @@ const terminalStartSchema = dimensionsSchema.extend({
 	worktreeId: worktreeIdSchema,
 });
 const terminalInputSchema = z.object({ data: z.string().max(64 * 1024) });
-const terminalPollSchema = z.object({ after: z.number().int().nonnegative() });
+const terminalPollSchema = z.object({
+	after: z.number().int().nonnegative(),
+	waitMilliseconds: z.number().int().min(0).max(25_000).default(0),
+});
 const worktreeCreateSchema = z.object({
 	worktreeId: worktreeIdSchema.refine((id) => id !== CODEV_PRIMARY_WORKTREE_ID),
 	branch: branchSchema,
@@ -53,8 +56,6 @@ export type CoDevRuntimeBridgeOptions = {
 	bridgeSecret: string;
 };
 
-type TerminalPollState = { sequence: number; text: string };
-const terminalPollStates = new Map<string, TerminalPollState>();
 let terminalSequence = 0;
 
 function secretMatches(actual: string | undefined, expected: string) {
@@ -256,7 +257,6 @@ export function registerCoDevRuntimeBridge({
 				],
 			});
 			if ("error" in created) return context.json({ error: terminalError(created) }, 400);
-			terminalPollStates.set(terminalId, { sequence: 0, text: "" });
 			return context.json({ sessionId: terminalId }, 201);
 		} catch (error) {
 			return context.json({ error: error instanceof Error ? error.message : "Could not start terminal." }, 400);
@@ -270,7 +270,7 @@ export function registerCoDevRuntimeBridge({
 		if (!parsed.success || !worktreeId.success) return context.json({ error: "Invalid terminal input request." }, 400);
 		try {
 			const workspace = await ensureTerminalWorkspace({ db, git, workspaceRoot, worktreeId: worktreeId.data });
-			const result = await writeFramedInputToSession({ terminalId: context.req.param("terminalId"), workspaceId: workspace.id, text: parsed.data.data, submit: false, db, eventBus });
+			const result = await writeRawInputToSession({ terminalId: context.req.param("terminalId"), workspaceId: workspace.id, data: parsed.data.data, db, eventBus });
 			if ("error" in result) return context.json({ error: terminalError(result) }, 400);
 			return context.json({ ok: true });
 		} catch (error) {
@@ -300,19 +300,21 @@ export function registerCoDevRuntimeBridge({
 		if (!parsed.success || !worktreeId.success) return context.json({ error: "Invalid terminal poll request." }, 400);
 		try {
 			const workspace = await ensureTerminalWorkspace({ db, git, workspaceRoot, worktreeId: worktreeId.data });
-			const snapshot = await snapshotSession({ terminalId: context.req.param("terminalId"), workspaceId: workspace.id, maxLines: 1_000, db, eventBus });
-			if ("error" in snapshot) return context.json({ error: terminalError(snapshot) }, 400);
-			const state = terminalPollStates.get(context.req.param("terminalId")) ?? { sequence: 0, text: "" };
-			if (snapshot.text !== state.text) {
-				state.sequence += 1;
-				state.text = snapshot.text;
-				terminalPollStates.set(context.req.param("terminalId"), state);
-			}
+			const output = await readTerminalOutput({
+				terminalId: context.req.param("terminalId"),
+				workspaceId: workspace.id,
+				afterSeq: parsed.data.after,
+				waitMs: parsed.data.waitMilliseconds,
+				db,
+				eventBus,
+			});
+			if ("error" in output) return context.json({ error: terminalError(output) }, 400);
+			const data = Buffer.from(output.bytes).toString("utf8");
 			return context.json({
-				chunks: parsed.data.after < state.sequence ? [{ sequence: state.sequence, data: `\u001b[2J\u001b[H${state.text}` }] : [],
-				nextSequence: state.sequence,
-				exited: false,
-				exitCode: null,
+				chunks: data ? [{ sequence: parsed.data.after, data }] : [],
+				nextSequence: output.nextSeq,
+				exited: output.exited,
+				exitCode: output.exited ? output.exitCode : null,
 			});
 		} catch (error) {
 			return context.json({ error: error instanceof Error ? error.message : "Could not poll terminal." }, 400);
@@ -332,7 +334,6 @@ export function registerCoDevRuntimeBridge({
 				return context.json({ error: "Terminal session is not in this worktree." }, 400);
 			}
 			await disposeSessionAndWait(terminalId, db);
-			terminalPollStates.delete(terminalId);
 			return context.json({ ok: true });
 		} catch (error) {
 			return context.json({ error: error instanceof Error ? error.message : "Could not close terminal." }, 400);

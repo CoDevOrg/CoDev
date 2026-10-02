@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("../billing/gate", () => ({
+  requireWorkspaceOwnerPlan: async () => undefined,
+}));
+
 const mocks = vi.hoisted(() => ({
   requireMember: vi.fn(),
   resolveCredential: vi.fn(),

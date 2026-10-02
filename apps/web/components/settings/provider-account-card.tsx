@@ -12,6 +12,8 @@ import { Check, ChevronDown, Copy, KeyRound, Terminal } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/settings/confirm-dialog";
+import { useSettingsNotify } from "@/components/settings/settings-feedback";
 import { Input } from "@/components/ui/input";
 import { ClaudeHostedConnect } from "@/components/settings/claude-hosted-connect";
 import { CodexHostedConnect } from "@/components/settings/codex-hosted-connect";
@@ -40,7 +42,7 @@ function CopyableCommand({ command }: { command: string }) {
   const [copied, setCopied] = useState(false);
 
   return (
-    <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-[11px]">
+    <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-xs">
       <span>
         <span className="text-emerald-400">$</span> {command}
       </span>
@@ -82,9 +84,7 @@ function SurfaceToggle({
     <div className="flex items-start justify-between gap-3 border-t border-border/60 py-2">
       <div className="min-w-0 flex-1">
         <p className="text-xs font-medium">{label}</p>
-        {note ? (
-          <p className="text-[11px] text-muted-foreground">{note}</p>
-        ) : null}
+        {note ? <p className="text-xs text-muted-foreground">{note}</p> : null}
       </div>
       <button
         aria-checked={checked}
@@ -142,7 +142,7 @@ function RunsIn({
 }) {
   if (surfaces.length === 0) {
     return (
-      <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <StatusDot connected={false} />
         {connected
           ? "Connected, but nothing here can run it yet"
@@ -156,14 +156,14 @@ function RunsIn({
       ? names[0]
       : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
   return (
-    <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+    <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
       <StatusDot connected />
       <span className="sr-only">{`Runs in ${spoken}`}</span>
       <span aria-hidden>Runs in</span>
       {surfaces.map((surface) => (
         <span
           aria-hidden
-          className="rounded-full border border-border/70 px-1.5 py-px text-[10px] font-medium text-foreground/80"
+          className="rounded-full border border-border/70 px-1.5 py-px text-[11px] font-medium text-foreground/80"
           key={surface}
         >
           {SURFACE_LABEL[surface]}
@@ -194,10 +194,10 @@ function FallbackRow({
         <Icon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium">{title}</p>
-          <p className="text-[11px] text-muted-foreground">{description}</p>
+          <p className="text-xs text-muted-foreground">{description}</p>
         </div>
         {connected ? (
-          <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
             <StatusDot connected />
             Connected
           </span>
@@ -244,7 +244,14 @@ export function ProviderAccountCard({
   const [busy, setBusy] = useState<
     "connect" | "disconnect" | "save" | "revoke" | ""
   >("");
-  const [message, setMessage] = useState("");
+  const notify = useSettingsNotify();
+  const [inlineMessage, setInlineMessage] = useState<{
+    text: string;
+    tone: "success" | "error";
+  } | null>(null);
+  const [confirming, setConfirming] = useState<
+    "disconnect" | "revoke-key" | "revoke-cli" | null
+  >(null);
   const [flow, setFlow] = useState<ActiveFlow | null>(null);
   const [connected, setConnected] = useState(
     subscription.status === "connected",
@@ -253,11 +260,26 @@ export function ProviderAccountCard({
   const apiKeyLabel = `${connection.label} API key`;
   const disabled = busy !== "";
 
+  // Results go to a toast where the settings area provides one, and fall back
+  // to an inline line otherwise. An empty string clears the inline line.
+  function report(text: string, tone: "success" | "error") {
+    if (notify) notify(text, tone);
+    else setInlineMessage({ text, tone });
+  }
+  function setMessage(text: string) {
+    if (!text) setInlineMessage(null);
+    else report(text, "success");
+  }
+  function fail(text: string) {
+    report(text, "error");
+  }
+
   // Cursor is the only provider left with a browser sign-in: the tab does
   // the signing in and CoDev learns about it only by polling its own
   // callback. Claude and Codex connect through the rows below instead.
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollStartedAt = useRef(0);
+  const stallNoticeShown = useRef(false);
   const isCursor = subscription.provider === "cursor";
   const showClaudeConnect =
     hostedClaudeConnect && subscription.provider === "claude";
@@ -270,6 +292,16 @@ export function ProviderAccountCard({
     runsIn.includes("workspace") || runsIn.includes("gen2");
   const anythingConnected =
     connected || cliTokenConnected || apiKeyState.status === "connected";
+  // Cursor's header button and the hosted Claude/Codex flow are the one
+  // primary way in; without either, the methods below are all there is.
+  const hasPrimaryAction = isCursor || showHostedConnect;
+  const connectedVia = [
+    connected ? "Signed in with a subscription" : null,
+    cliTokenConnected ? "Signed in from the CLI" : null,
+    apiKeyState.status === "connected"
+      ? `API key ending ${apiKeyState.lastFour}`
+      : null,
+  ].filter((item): item is string => item !== null);
   useEffect(
     () => () => {
       if (pollTimer.current) clearInterval(pollTimer.current);
@@ -307,7 +339,7 @@ export function ProviderAccountCard({
       stopPolling();
       setFlow(null);
       setBusy("");
-      setMessage(payload.error ?? `${label} sign-in failed. Start again.`);
+      fail(payload.error ?? `${label} sign-in failed. Start again.`);
       return;
     }
     if (payload.status === "connected") {
@@ -327,8 +359,10 @@ export function ProviderAccountCard({
     if (
       isCursor &&
       pollStartedAt.current > 0 &&
+      !stallNoticeShown.current &&
       Date.now() - pollStartedAt.current > 90_000
     ) {
+      stallNoticeShown.current = true;
       setMessage(
         "Still waiting on Cursor. If you already finished signing in, connect with an API key below instead.",
       );
@@ -353,7 +387,7 @@ export function ProviderAccountCard({
     };
     if (!response.ok) {
       setBusy("");
-      setMessage(payload.error ?? `${label} sign-in could not start.`);
+      fail(payload.error ?? `${label} sign-in could not start.`);
       return;
     }
 
@@ -361,13 +395,14 @@ export function ProviderAccountCard({
       window.open(payload.loginUrl, "_blank", "noopener,noreferrer");
       setFlow({ kind: "polling", loginUrl: payload.loginUrl });
       pollStartedAt.current = Date.now();
+      stallNoticeShown.current = false;
       void poll();
       pollTimer.current = setInterval(() => void poll(), 2000);
       return;
     }
 
     setBusy("");
-    setMessage(`${label} returned an unexpected sign-in response.`);
+    fail(`${label} returned an unexpected sign-in response.`);
   }
 
   function cancelFlow() {
@@ -386,7 +421,7 @@ export function ProviderAccountCard({
       );
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
-        setMessage(payload?.error ?? "The account could not be disconnected.");
+        fail(payload?.error ?? "The account could not be disconnected.");
         return;
       }
       setConnected(false);
@@ -414,7 +449,7 @@ export function ProviderAccountCard({
           error?: string;
         } | null;
         if (!response.ok) {
-          setMessage(payload?.error ?? "The Cursor API key was not accepted.");
+          fail(payload?.error ?? "The Cursor API key was not accepted.");
           return;
         }
         setDraft("");
@@ -429,7 +464,7 @@ export function ProviderAccountCard({
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
-        setMessage(payload?.error ?? "The key could not be saved.");
+        fail(payload?.error ?? "The key could not be saved.");
         return;
       }
       const next = (payload.connections as ProviderConnectionRecord[]).find(
@@ -453,7 +488,7 @@ export function ProviderAccountCard({
       );
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
-        setMessage(payload?.error ?? "The key could not be revoked.");
+        fail(payload?.error ?? "The key could not be revoked.");
         return;
       }
       const next = (payload.connections as ProviderConnectionRecord[]).find(
@@ -496,7 +531,7 @@ export function ProviderAccountCard({
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
-        setMessage(payload?.error ?? "The setting could not be saved.");
+        fail(payload?.error ?? "The setting could not be saved.");
         return;
       }
       setMessage(
@@ -520,7 +555,7 @@ export function ProviderAccountCard({
       );
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
-        setMessage(payload?.error ?? "The CLI login could not be revoked.");
+        fail(payload?.error ?? "The CLI login could not be revoked.");
         return;
       }
       setMessage(`${label} CLI login revoked.`);
@@ -554,7 +589,7 @@ export function ProviderAccountCard({
               </Button>
               <Button
                 disabled={disabled}
-                onClick={() => void disconnect()}
+                onClick={() => setConfirming("disconnect")}
                 size="sm"
                 type="button"
                 variant="outline"
@@ -576,7 +611,7 @@ export function ProviderAccountCard({
         ) : connected ? (
           <Button
             disabled={disabled}
-            onClick={() => void disconnect()}
+            onClick={() => setConfirming("disconnect")}
             size="sm"
             type="button"
             variant="outline"
@@ -625,8 +660,32 @@ export function ProviderAccountCard({
         </div>
       ) : null}
 
-      <div className="mt-3">
-        {true ? (
+      {anythingConnected ? (
+        <p className="mt-2.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Check aria-hidden className="size-3.5 shrink-0 text-emerald-400" />
+          {connectedVia.join(" · ")}
+        </p>
+      ) : null}
+
+      {/* One primary action sits in the header (or the hosted flow above);
+          every other method lives behind a single disclosure so a member sees
+          one way in, not three. */}
+      <details
+        className="group mt-3 rounded-lg border border-border/60 px-3"
+        open={!anythingConnected && !hasPrimaryAction}
+      >
+        <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 text-xs font-medium [&::-webkit-details-marker]:hidden">
+          {anythingConnected
+            ? "Manage connection"
+            : hasPrimaryAction
+              ? "Other ways to connect"
+              : "Choose how to connect"}
+          <ChevronDown
+            aria-hidden
+            className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
+          />
+        </summary>
+        {
           <FallbackRow
             connected={apiKeyState.status === "connected"}
             // Open only when there is nothing else to use: the connect
@@ -687,7 +746,7 @@ export function ProviderAccountCard({
               {apiKeyState.status === "connected" ? (
                 <Button
                   disabled={disabled}
-                  onClick={() => void revoke()}
+                  onClick={() => setConfirming("revoke-key")}
                   size="sm"
                   type="button"
                   variant="secondary"
@@ -701,7 +760,7 @@ export function ProviderAccountCard({
               you save them.
             </p>
           </FallbackRow>
-        ) : null}
+        }
 
         {subscription.command ? (
           <FallbackRow
@@ -724,7 +783,7 @@ export function ProviderAccountCard({
                 </p>
                 <Button
                   disabled={disabled}
-                  onClick={() => void revokeClaudeCliToken()}
+                  onClick={() => setConfirming("revoke-cli")}
                   size="sm"
                   type="button"
                   variant="outline"
@@ -738,8 +797,13 @@ export function ProviderAccountCard({
             <CopyableCommand command={subscription.command} />
           </FallbackRow>
         ) : null}
+      </details>
 
-        {runsInAWorkspace ? (
+      {runsInAWorkspace ? (
+        <div className="mt-3 space-y-1">
+          <h4 className="text-xs font-semibold">
+            Billing in shared workspaces
+          </h4>
           <SurfaceToggle
             checked={subscription.allowInSharedWorkspaces}
             disabled={disabled}
@@ -749,13 +813,66 @@ export function ProviderAccountCard({
               void setSharedWorkspaceUse("subscription", next)
             }
           />
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
-      {message ? (
-        <p className="pt-2.5 text-[11px] text-muted-foreground" role="status">
-          {message}
+      {inlineMessage ? (
+        <p
+          className={cn(
+            "pt-2.5 text-xs",
+            inlineMessage.tone === "error"
+              ? "text-destructive"
+              : "text-muted-foreground",
+          )}
+          role={inlineMessage.tone === "error" ? "alert" : "status"}
+        >
+          {inlineMessage.text}
         </p>
+      ) : null}
+
+      {confirming === "disconnect" ? (
+        <ConfirmDialog
+          busy={busy !== ""}
+          confirmLabel={`Disconnect ${label}`}
+          onCancel={() => setConfirming(null)}
+          onConfirm={() => {
+            setConfirming(null);
+            void disconnect();
+          }}
+          title={`Disconnect ${label}?`}
+        >
+          Agents will stop running on this {label} login until you connect it
+          again. Any API key you saved stays in place.
+        </ConfirmDialog>
+      ) : null}
+      {confirming === "revoke-key" ? (
+        <ConfirmDialog
+          busy={busy !== ""}
+          confirmLabel="Revoke key"
+          onCancel={() => setConfirming(null)}
+          onConfirm={() => {
+            setConfirming(null);
+            void revoke();
+          }}
+          title={`Revoke the ${label} API key?`}
+        >
+          The saved key is deleted from CoDev. You will need to paste it again
+          to use it.
+        </ConfirmDialog>
+      ) : null}
+      {confirming === "revoke-cli" ? (
+        <ConfirmDialog
+          busy={busy !== ""}
+          confirmLabel="Revoke login"
+          onCancel={() => setConfirming(null)}
+          onConfirm={() => {
+            setConfirming(null);
+            void revokeClaudeCliToken();
+          }}
+          title={`Revoke the ${label} CLI login?`}
+        >
+          Run the CLI command again to reconnect.
+        </ConfirmDialog>
       ) : null}
     </Card>
   );
