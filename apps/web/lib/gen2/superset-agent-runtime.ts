@@ -43,6 +43,7 @@ import { createGen2Turn, recordGen2SupersetRunOutput } from "./turns";
 import { toAgentExecChunks } from "./agent-output";
 import { requireWorkspaceOwnerPlan } from "../billing/gate";
 import { requireGen2Member } from "./workspaces";
+import { requireGen2SupersetAgentAccess } from "./superset-agent-access";
 
 /**
  * The server-only CoDev runtime adapter docs/SUPERSET_AGENT_SESSION_PLAN.md
@@ -72,7 +73,16 @@ async function requireOwnRun(workspaceId: string, runId: string) {
   return run;
 }
 
-export async function startGen2SupersetAgentSession(input: {
+async function requireTurnRun(
+  workspaceId: string,
+  userId: string,
+  runId: string,
+) {
+  await requireGen2Member(workspaceId, userId);
+  return requireOwnRun(workspaceId, runId);
+}
+
+type StartSessionInput = {
   workspaceId: string;
   userId: string;
   chatId?: string | null;
@@ -80,9 +90,26 @@ export async function startGen2SupersetAgentSession(input: {
   command: string[];
   idempotencyKey: string;
   provider: Gen2AgentProvider;
-}) {
+};
+
+export async function startGen2SupersetAgentSession(input: StartSessionInput) {
+  return startSession(input, "persistent");
+}
+
+async function startSession(
+  input: StartSessionInput,
+  mode: "persistent" | "turn",
+) {
   requireEnabled();
-  await requireGen2Member(input.workspaceId, input.userId);
+  if (mode === "persistent") {
+    await requireGen2SupersetAgentAccess({
+      action: "start",
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+    });
+  } else {
+    await requireGen2Member(input.workspaceId, input.userId);
+  }
   await requireWorkspaceOwnerPlan(input.workspaceId);
   const provider = input.provider;
   const credential = await resolveGen2Credential(input.userId, provider);
@@ -178,9 +205,13 @@ export async function sendGen2SupersetAgentInput(input: {
   data: string;
 }) {
   requireEnabled();
-  await requireGen2Member(input.workspaceId, input.userId);
+  const run = await requireGen2SupersetAgentAccess({
+    action: "input",
+    workspaceId: input.workspaceId,
+    userId: input.userId,
+    runId: input.runId,
+  });
   await requireWorkspaceOwnerPlan(input.workspaceId);
-  const run = await requireOwnRun(input.workspaceId, input.runId);
   if (!run.hostAgentSessionId) {
     throw new Gen2LifecycleError("This run has not started yet.", 409);
   }
@@ -191,15 +222,31 @@ export async function sendGen2SupersetAgentInput(input: {
   );
 }
 
-export async function pollGen2SupersetAgentSession(input: {
+type PollSessionInput = {
   workspaceId: string;
   userId: string;
   runId: string;
   after: number;
-}) {
+};
+
+export async function pollGen2SupersetAgentSession(input: PollSessionInput) {
+  return pollSession(input, "persistent");
+}
+
+async function pollSession(
+  input: PollSessionInput,
+  mode: "persistent" | "turn",
+) {
   requireEnabled();
-  await requireGen2Member(input.workspaceId, input.userId);
-  const run = await requireOwnRun(input.workspaceId, input.runId);
+  const run =
+    mode === "persistent"
+      ? await requireGen2SupersetAgentAccess({
+          action: "poll",
+          workspaceId: input.workspaceId,
+          userId: input.userId,
+          runId: input.runId,
+        })
+      : await requireTurnRun(input.workspaceId, input.userId, input.runId);
   if (!run.hostAgentSessionId) {
     throw new Gen2LifecycleError("This run has not started yet.", 409);
   }
@@ -243,14 +290,32 @@ export async function pollGen2SupersetAgentSession(input: {
   return result;
 }
 
-export async function cancelGen2SupersetAgentSession(input: {
+type CancelSessionInput = {
   workspaceId: string;
   userId: string;
   runId: string;
-}) {
+};
+
+export async function cancelGen2SupersetAgentSession(
+  input: CancelSessionInput,
+) {
+  return cancelSession(input, "persistent");
+}
+
+async function cancelSession(
+  input: CancelSessionInput,
+  mode: "persistent" | "turn",
+) {
   requireEnabled();
-  await requireGen2Member(input.workspaceId, input.userId);
-  const run = await requireOwnRun(input.workspaceId, input.runId);
+  const run =
+    mode === "persistent"
+      ? await requireGen2SupersetAgentAccess({
+          action: "cancel",
+          workspaceId: input.workspaceId,
+          userId: input.userId,
+          runId: input.runId,
+        })
+      : await requireTurnRun(input.workspaceId, input.userId, input.runId);
 
   await markGen2SupersetRunStopping({
     runId: run.id,
@@ -294,8 +359,12 @@ export async function reconcileGen2SupersetAgentSession(input: {
   runId: string;
 }) {
   requireEnabled();
-  await requireGen2Member(input.workspaceId, input.userId);
-  const run = await requireOwnRun(input.workspaceId, input.runId);
+  const run = await requireGen2SupersetAgentAccess({
+    action: "recover",
+    workspaceId: input.workspaceId,
+    userId: input.userId,
+    runId: input.runId,
+  });
   if (!run.hostAgentSessionId) {
     return { adoptable: false as const };
   }
@@ -396,15 +465,18 @@ export async function startGen2SupersetAgentTurn(input: {
     input.model,
   );
 
-  const session = await startGen2SupersetAgentSession({
-    workspaceId: input.workspaceId,
-    userId: input.userId,
-    chatId: input.chatId,
-    worktreeId,
-    command,
-    provider,
-    idempotencyKey: input.idempotencyKey,
-  });
+  const session = await startSession(
+    {
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      chatId: input.chatId,
+      worktreeId,
+      command,
+      provider,
+      idempotencyKey: input.idempotencyKey,
+    },
+    "turn",
+  );
 
   try {
     await appendGen2ChatMessage({
@@ -442,12 +514,15 @@ export async function pollGen2SupersetAgentTurn(input: {
   after: number;
 }) {
   requireEnabled();
-  const result = await pollGen2SupersetAgentSession({
-    workspaceId: input.workspaceId,
-    userId: input.userId,
-    runId: input.sessionId,
-    after: input.after,
-  });
+  const result = await pollSession(
+    {
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      runId: input.sessionId,
+      after: input.after,
+    },
+    "turn",
+  );
 
   const persisted = await recordGen2SupersetRunOutput({
     sessionId: input.sessionId,
@@ -475,9 +550,12 @@ export async function cancelGen2SupersetAgentTurn(input: {
   sessionId: string;
 }) {
   requireEnabled();
-  await cancelGen2SupersetAgentSession({
-    workspaceId: input.workspaceId,
-    userId: input.userId,
-    runId: input.sessionId,
-  });
+  await cancelSession(
+    {
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      runId: input.sessionId,
+    },
+    "turn",
+  );
 }

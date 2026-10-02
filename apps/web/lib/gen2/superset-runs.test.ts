@@ -83,7 +83,17 @@ describe("gen2 Superset run lifecycle", () => {
   });
 
   it("returns the existing run instead of creating a second one on retry", async () => {
-    const runSelect = selectQuery([{ id: RUN_ID, status: "running" }]);
+    const runSelect = selectQuery([
+      {
+        id: RUN_ID,
+        status: "running",
+        createdBy: USER_ID,
+        chatId: null,
+        worktreeId: "main",
+        provider: "openai",
+        connectionId: null,
+      },
+    ]);
     const transaction = {
       execute: vi.fn().mockResolvedValue(undefined),
       select: vi.fn().mockReturnValueOnce(runSelect),
@@ -102,6 +112,46 @@ describe("gen2 Superset run lifecycle", () => {
         idempotencyKey: "key-1",
       }),
     ).resolves.toEqual({ runId: RUN_ID, status: "running", created: false });
+    expect(transaction.insert).not.toHaveBeenCalled();
+  });
+
+  it("does not reattach a different member or payload to an existing run", async () => {
+    const existing = {
+      id: RUN_ID,
+      status: "running",
+      createdBy: USER_ID,
+      chatId: null,
+      worktreeId: "main",
+      provider: "openai",
+      connectionId: null,
+    };
+    const transaction = {
+      execute: vi.fn().mockResolvedValue(undefined),
+      select: vi.fn().mockReturnValue(selectQuery([existing])),
+      insert: vi.fn(),
+    };
+    databaseMocks.getDatabase.mockReturnValue({
+      transaction: vi.fn(async (callback) => callback(transaction)),
+    });
+    const request = {
+      workspaceId: WORKSPACE_ID,
+      createdBy: USER_ID,
+      worktreeId: "main",
+      provider: "openai",
+      idempotencyKey: "key-1",
+    };
+    await expect(
+      registerGen2SupersetRun({
+        ...request,
+        createdBy: "another-member",
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(
+      registerGen2SupersetRun({
+        ...request,
+        worktreeId: "another-worktree",
+      }),
+    ).rejects.toMatchObject({ status: 409 });
     expect(transaction.insert).not.toHaveBeenCalled();
   });
 

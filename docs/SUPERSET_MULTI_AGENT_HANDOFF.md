@@ -54,6 +54,10 @@ Each slice below should be a separate reviewable change. Do not start the next s
 
 **Pass:** A viewer cannot launch; another editor cannot input or cancel the creator's run; the owner can stop it; a former member cannot observe or control it; foreign run IDs disclose no output. Denials never wake the guest or claim a credential seat.
 
+**Slice A checkpoint (2026-10-02):** The Gen 2 library now rechecks membership and role for persistent run actions before credential selection or host access. Raw session polling remains creator-only; the shared list returns metadata without connection IDs, host IDs, or errors. A reused idempotency key must match its original creator, chat, worktree, provider, and connection. The existing fresh-turn delegate retains its prior policy. Its authorization needs a separate audit before the persistent capability is exposed in the UI.
+
+Validation on this Windows host: repository typecheck passed; lint passed with existing warnings; the full web suite passed (838/838) with four workers; Superset's host command/profile checks passed (3 passed, one Linux-only UID test skipped). The root `pnpm test` stops at the infrastructure shell suite (9 passed, 3 Windows path/shell failures). Rust `cargo` is unavailable and WSL access is denied here. Run the CoDev infrastructure suite, Rust guest suite, and Superset host PTY/UID suite on Linux before treating this checkpoint as a complete baseline or starting VM acceptance.
+
 ### Slice B — durable identity and one worktree per independent agent
 
 **Touch:** `apps/web/lib/gen2/superset-runs.ts`, `superset-agent-runtime.ts`, existing `packages/db/src/schema.ts` only if the current run row lacks required identity, `vendor/superset/packages/host-service/src/codev/agents.ts`, and the host's existing SQLite schema/migrations. Follow forward-only migration rules.

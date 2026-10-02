@@ -6,6 +6,7 @@ import { schema } from "@codev/db";
 import type { Gen2SupersetRunStatus } from "@codev/contracts";
 
 import { getDatabase } from "../platform/database";
+import { Gen2LifecycleError } from "./errors";
 
 /**
  * Durable run identity for a Gen 2 Superset terminal-agent session, per
@@ -104,6 +105,11 @@ export async function registerGen2SupersetRun(
       .select({
         id: schema.gen2SupersetRuns.id,
         status: schema.gen2SupersetRuns.status,
+        createdBy: schema.gen2SupersetRuns.createdBy,
+        chatId: schema.gen2SupersetRuns.chatId,
+        worktreeId: schema.gen2SupersetRuns.worktreeId,
+        provider: schema.gen2SupersetRuns.provider,
+        connectionId: schema.gen2SupersetRuns.connectionId,
       })
       .from(schema.gen2SupersetRuns)
       .where(
@@ -114,6 +120,20 @@ export async function registerGen2SupersetRun(
       )
       .limit(1);
     if (existing) {
+      if (existing.createdBy !== input.createdBy) {
+        throw new Gen2LifecycleError("Superset run not found.", 404);
+      }
+      if (
+        existing.chatId !== (input.chatId ?? null) ||
+        existing.worktreeId !== input.worktreeId ||
+        existing.provider !== input.provider ||
+        existing.connectionId !== (input.connectionId ?? null)
+      ) {
+        throw new Gen2LifecycleError(
+          "This agent request conflicts with an existing run.",
+          409,
+        );
+      }
       return { runId: existing.id, status: existing.status, created: false };
     }
 
