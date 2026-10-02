@@ -6,6 +6,10 @@ import { patchCssModules } from "vite-css-modules";
 import path from "node:path";
 
 export default defineConfig({
+  // A Superset desktop file is imported by the editor. Its nearest tsconfig
+  // extends @superset/typescript, which exists only after that repo's own
+  // install. Use this app's config so a clean Cloudflare checkout can build.
+  tsconfig: "./tsconfig.json",
   plugins: [
     patchCssModules({ exportMode: "default" }),
     vinext(),
