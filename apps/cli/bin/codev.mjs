@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { claudeAuth, codexAuth, login } from "../src/client.mjs";
+import { cursorAuth } from "../src/cursor-auth.mjs";
 
 function help() {
   process.stdout.write(`CoDev CLI
@@ -9,9 +10,10 @@ Usage:
   codev login [--no-browser]
   codev codex-auth [--org[=<workspace-id>]] [--browser]
   codev claude-auth [--org[=<workspace-id>]]
+  codev cursor-auth [--org[=<workspace-id>]]
 
-The codex-auth and claude-auth commands delegate authentication to the
-official Codex and Claude Code CLIs. No provider API key is required.
+The auth commands delegate authentication to the official Codex, Claude
+Code, and Cursor CLIs. No provider API key is required.
 `);
 }
 
@@ -45,6 +47,10 @@ async function main() {
   }
   if (command === "claude-auth") {
     await claudeAuth(orgArgument(args));
+    return;
+  }
+  if (command === "cursor-auth") {
+    await cursorAuth(orgArgument(args));
     return;
   }
   throw new Error(`Unknown command: ${command}`);

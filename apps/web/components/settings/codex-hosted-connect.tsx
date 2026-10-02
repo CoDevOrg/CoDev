@@ -160,7 +160,7 @@ export function CodexHostedConnect({
   if (phase === "idle") {
     return (
       <Button
-        className="mt-4 min-h-11"
+        className="min-h-11 w-fit"
         onClick={() => void start()}
         size="sm"
         type="button"
@@ -171,7 +171,7 @@ export function CodexHostedConnect({
   }
 
   return (
-    <div className="mt-4 space-y-3 rounded-md border border-border bg-background/60 p-4">
+    <div className="flex flex-col gap-3 rounded-md border border-border bg-muted/40 p-4">
       {phase === "starting" ? (
         <p className="text-xs text-muted-foreground" role="status">
           Starting…
@@ -197,7 +197,7 @@ export function CodexHostedConnect({
           </a>
           <div>
             <Button
-              className="min-h-11"
+              className="min-h-11 w-fit"
               onClick={reset}
               size="sm"
               type="button"
@@ -210,12 +210,12 @@ export function CodexHostedConnect({
       ) : null}
 
       {phase === "failed" ? (
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           <p className="text-xs text-destructive" role="alert">
             {error}
           </p>
           <Button
-            className="min-h-11"
+            className="min-h-11 w-fit"
             onClick={reset}
             size="sm"
             type="button"

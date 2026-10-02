@@ -103,6 +103,7 @@ export async function login({ launchBrowser = true } = {}) {
 const INSTALL_HINT = {
   codex: "npm install -g @openai/codex",
   claude: "npm install -g @anthropic-ai/claude-code",
+  agent: "curl https://cursor.com/install -fsS | bash",
 };
 
 export function describeSpawnError(command, error) {
@@ -115,7 +116,7 @@ export function describeSpawnError(command, error) {
   return error;
 }
 
-function run(command, args, options) {
+export function run(command, args, options) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { ...options, stdio: "inherit" });
     child.on("error", (error) => reject(describeSpawnError(command, error)));
@@ -155,7 +156,7 @@ export function extractClaudeOAuthToken(output) {
   return match ? match[0] : undefined;
 }
 
-async function authenticatedRequest(path, options = {}) {
+export async function authenticatedRequest(path, options = {}) {
   const config = await loadConfig();
   return request(
     path,
@@ -170,7 +171,7 @@ async function authenticatedRequest(path, options = {}) {
   );
 }
 
-async function resolveOrganization(organizationId) {
+export async function resolveOrganization(organizationId) {
   if (organizationId) return organizationId;
   const { payload } = await authenticatedRequest("/api/cli/organizations");
   const organizations = payload.organizations || [];
@@ -283,3 +284,4 @@ export async function claudeAuth({
       : "Claude Code is connected to your CoDev account.\n",
   );
 }
+

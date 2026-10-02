@@ -13,6 +13,7 @@ import {
 } from "@codev/shared-types";
 
 import { decryptSecret, encryptSecret } from "../platform/kms";
+import { verifyCursorApiKey } from "./cursor-api-key";
 import { getDatabase } from "../platform/database";
 import {
   decryptHostedMaterial,
@@ -752,10 +753,7 @@ export async function saveCursorCredential(
   apiKey: string,
   allowInSharedWorkspaces?: boolean,
 ) {
-  const normalized = apiKey.trim();
-  if (normalized.length < 20) {
-    throw new Error("Enter a valid Cursor API key.");
-  }
+  const normalized = await verifyCursorApiKey(apiKey);
   await saveProviderCredential({
     scopeType: "USER",
     scopeId: userId,

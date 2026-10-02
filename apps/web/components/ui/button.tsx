@@ -10,6 +10,10 @@ const VARIANT_CLASSES = {
   // High-contrast call to action: the inverse of the page (light on dark).
   solid:
     "bg-foreground text-background shadow-sm hover:bg-foreground/90 hover:shadow-md",
+  ghost:
+    "bg-transparent text-foreground hover:bg-accent/60 hover:text-accent-foreground",
+  destructive:
+    "bg-destructive text-destructive-foreground hover:bg-destructive/90",
 } as const;
 
 // Some pages (the settings area) load Tailwind utilities inside a CSS
@@ -23,13 +27,17 @@ const VARIANT_TEXT_COLOR = {
   outline: "var(--color-foreground)",
   secondary: "var(--color-secondary-foreground)",
   solid: "var(--color-background)",
+  ghost: "var(--color-foreground)",
+  destructive: "var(--color-destructive-foreground, #fff)",
 } as const;
 
 const SIZE_CLASSES = {
   default: "h-9 px-4 py-2",
   sm: "h-8 gap-1.5 px-3 text-sm",
   lg: "h-11 gap-2 rounded-full px-6 text-[15px] font-semibold active:scale-[0.98] motion-reduce:active:scale-100",
+  xs: "h-7 gap-1 px-2 text-xs",
   "icon-sm": "size-8",
+  "icon-xs": "size-7",
 } as const;
 
 export function buttonClassName({
@@ -42,7 +50,7 @@ export function buttonClassName({
   className?: string | undefined;
 } = {}) {
   return cn(
-    "inline-flex shrink-0 items-center justify-center gap-2 rounded-md border-0 cursor-pointer text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50",
+    "inline-flex shrink-0 items-center justify-center gap-2 rounded-md border-0 cursor-pointer text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4",
     VARIANT_CLASSES[variant],
     SIZE_CLASSES[size],
     className,

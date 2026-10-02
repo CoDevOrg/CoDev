@@ -242,7 +242,7 @@ export function ClaudeHostedConnect({
   if (phase === "idle") {
     return (
       <Button
-        className="mt-4 min-h-11"
+        className="min-h-11 w-fit"
         onClick={() => void start()}
         size="sm"
         type="button"
@@ -253,7 +253,7 @@ export function ClaudeHostedConnect({
   }
 
   return (
-    <div className="mt-4 space-y-3 rounded-md border border-border bg-background/60 p-4">
+    <div className="flex flex-col gap-3 rounded-md border border-border bg-muted/40 p-4">
       {phase === "starting" ? (
         <p className="text-xs text-muted-foreground" role="status">
           Starting…
@@ -289,7 +289,7 @@ export function ClaudeHostedConnect({
               value={code}
             />
             <Button
-              className="min-h-11"
+              className="min-h-11 w-fit"
               disabled={!code.trim() || submitting}
               onClick={() => void submit()}
               size="sm"
@@ -300,7 +300,7 @@ export function ClaudeHostedConnect({
             </Button>
             <Button
               aria-busy={canceling}
-              className="min-h-11"
+              className="min-h-11 w-fit"
               disabled={canceling}
               onClick={cancel}
               size="sm"
@@ -336,12 +336,12 @@ export function ClaudeHostedConnect({
       ) : null}
 
       {phase === "failed" ? (
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           <p className="text-xs text-destructive" role="alert">
             {error}
           </p>
           <Button
-            className="min-h-11"
+            className="min-h-11 w-fit"
             onClick={reset}
             size="sm"
             type="button"

@@ -118,7 +118,7 @@ const CLI_SUBSCRIPTIONS: Array<{
   {
     provider: "cursor",
     label: "Cursor",
-    command: null,
+    command: "codev cursor-auth",
     connectMode: "cursor_deeplink",
   },
 ];
