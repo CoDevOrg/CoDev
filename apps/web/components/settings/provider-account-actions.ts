@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { useSettingsNotify } from "@/components/settings/settings-feedback";
+
 import type {
   CliSubscriptionRecord,
   ProviderConnectionProvider,
@@ -19,6 +21,7 @@ type AccountHandlers = {
   subscriptionProvider: CliSubscriptionRecord["provider"];
   setBusy: (busy: Busy) => void;
   setMessage: (message: string) => void;
+  fail: (message: string) => void;
   setConnected: (connected: boolean) => void;
   setApiKeyState: (connection: ProviderConnectionRecord) => void;
   setDraft: (draft: string) => void;
@@ -45,7 +48,25 @@ export function useProviderAccountCard({
   const [apiKeyState, setApiKeyState] = useState(connection);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState<Busy>("");
-  const [message, setMessage] = useState("");
+  const notify = useSettingsNotify();
+  const [inlineMessage, setInlineMessage] = useState<{
+    text: string;
+    tone: "success" | "error";
+  } | null>(null);
+  // A toast where the settings area provides one (it stays in view however
+  // far the page is scrolled); an inline line otherwise. An empty string
+  // clears the inline line.
+  function report(text: string, tone: "success" | "error") {
+    if (notify) notify(text, tone);
+    else setInlineMessage({ text, tone });
+  }
+  function setMessage(text: string) {
+    if (!text) setInlineMessage(null);
+    else report(text, "success");
+  }
+  function fail(text: string) {
+    report(text, "error");
+  }
   const [connected, setConnected] = useState(
     subscription.status === "connected",
   );
@@ -59,6 +80,7 @@ export function useProviderAccountCard({
     subscriptionProvider: subscription.provider,
     setBusy,
     setMessage,
+    fail,
     setConnected,
     setApiKeyState,
     setDraft,
@@ -70,7 +92,7 @@ export function useProviderAccountCard({
     draft,
     setDraft,
     busy,
-    message,
+    inlineMessage,
     connected,
     disabled: busy !== "",
     apiKeyLabel,
@@ -103,9 +125,7 @@ async function disconnectAccount(handlers: AccountHandlers) {
     );
     const payload = await readPayload(response);
     if (!response.ok) {
-      handlers.setMessage(
-        payload?.error ?? "The account could not be disconnected.",
-      );
+      handlers.fail(payload?.error ?? "The account could not be disconnected.");
       return;
     }
     handlers.setConnected(false);
@@ -130,7 +150,7 @@ async function saveApiKey(handlers: AccountHandlers) {
     });
     const payload = await readPayload(response);
     if (!response.ok) {
-      handlers.setMessage(payload?.error ?? "The key could not be saved.");
+      handlers.fail(payload?.error ?? "The key could not be saved.");
       return;
     }
     const next = payload?.connections?.find(
@@ -154,7 +174,7 @@ async function revokeApiKey(handlers: AccountHandlers) {
     );
     const payload = await readPayload(response);
     if (!response.ok) {
-      handlers.setMessage(payload?.error ?? "The key could not be revoked.");
+      handlers.fail(payload?.error ?? "The key could not be revoked.");
       return;
     }
     const next = payload?.connections?.find(
@@ -187,7 +207,7 @@ async function setSharedWorkspaceUse(
     });
     const payload = await readPayload(response);
     if (!response.ok) {
-      handlers.setMessage(payload?.error ?? "The setting could not be saved.");
+      handlers.fail(payload?.error ?? "The setting could not be saved.");
       return;
     }
     handlers.setMessage(
@@ -211,9 +231,7 @@ async function revokeClaudeCliToken(handlers: AccountHandlers) {
     );
     const payload = await readPayload(response);
     if (!response.ok) {
-      handlers.setMessage(
-        payload?.error ?? "The CLI login could not be revoked.",
-      );
+      handlers.fail(payload?.error ?? "The CLI login could not be revoked.");
       return;
     }
     handlers.setMessage(`${handlers.label} CLI login revoked.`);

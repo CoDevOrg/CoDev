@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Check, Circle } from "lucide-react";
 
+import { changeAccountPassword } from "@/app/actions/profile";
 import { setAccountPassword } from "@/app/actions/set-password";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -10,13 +11,35 @@ import { Input } from "@/components/ui/input";
 import { getNewAccountPasswordRequirements } from "@/lib/auth/password-policy";
 import { cn } from "@/lib/platform/utils";
 
-export function SetPasswordForm({ redirectTo }: { redirectTo: string }) {
+export function SetPasswordForm({
+  redirectTo,
+  mode = "set",
+}: {
+  redirectTo: string;
+  /** `change` asks for the current password first and updates the existing one. */
+  mode?: "set" | "change";
+}) {
   const [password, setPassword] = useState("");
   const requirements = getNewAccountPasswordRequirements(password);
-  const action = setAccountPassword.bind(null, redirectTo);
+  const action =
+    mode === "change"
+      ? changeAccountPassword.bind(null, redirectTo)
+      : setAccountPassword.bind(null, redirectTo);
 
   return (
     <form action={action} className="flex flex-col gap-4">
+      {mode === "change" ? (
+        <Field className="max-w-sm">
+          <FieldLabel htmlFor="current-password">Current password</FieldLabel>
+          <Input
+            autoComplete="current-password"
+            id="current-password"
+            name="current"
+            required
+            type="password"
+          />
+        </Field>
+      ) : null}
       <FieldGroup className="sm:flex-row">
         <Field className="flex-1">
           <FieldLabel htmlFor="new-password">New password</FieldLabel>
@@ -63,7 +86,7 @@ export function SetPasswordForm({ redirectTo }: { redirectTo: string }) {
         ))}
       </ul>
       <Button className="w-fit" size="sm" type="submit">
-        Set password
+        {mode === "change" ? "Change password" : "Set password"}
       </Button>
     </form>
   );

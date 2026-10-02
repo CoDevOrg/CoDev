@@ -1,13 +1,23 @@
 "use client";
 
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 
-import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 /**
- * In-app replacement for `window.confirm` on destructive settings actions.
- * Focus starts on Cancel so an accidental Enter is safe; Escape and a click on
- * the scrim both cancel.
+ * Confirmation for destructive settings actions, built on the shared
+ * AlertDialog. It is rendered only while a confirmation is pending, so it is
+ * always open: Radix focuses Cancel first (an accidental Enter is safe), and
+ * Escape or a click outside both cancel.
  */
 export function ConfirmDialog({
   title,
@@ -24,56 +34,37 @@ export function ConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
-  const titleId = useId();
-  const cancelRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    const opener = document.activeElement as HTMLElement | null;
-    cancelRef.current?.focus();
-    return () => opener?.focus?.();
-  }, []);
+  const confirmed = useRef(false);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onCancel();
+    <AlertDialog
+      onOpenChange={(open) => {
+        // The action button closes the dialog too; that is not a cancel.
+        if (!open && !confirmed.current) onCancel();
       }}
-      onKeyDown={(event) => {
-        if (event.key === "Escape") onCancel();
-      }}
+      open
     >
-      <div
-        aria-labelledby={titleId}
-        aria-modal="true"
-        className="w-full max-w-sm space-y-4 rounded-xl border border-border bg-card p-5 shadow-xl"
-        role="alertdialog"
-      >
-        <div className="space-y-1.5">
-          <h2 className="text-base font-semibold" id={titleId}>
-            {title}
-          </h2>
-          <div className="text-sm text-muted-foreground">{children}</div>
-        </div>
-        <div className="flex justify-end gap-2">
-          <Button
-            onClick={onCancel}
-            ref={cancelRef}
-            type="button"
-            variant="secondary"
-          >
-            Cancel
-          </Button>
-          <button
-            className="inline-flex h-9 cursor-pointer items-center justify-center rounded-md bg-destructive px-4 text-sm font-medium text-white transition-colors outline-none hover:bg-destructive/90 focus-visible:ring-[3px] focus-visible:ring-destructive/40 disabled:pointer-events-none disabled:opacity-50"
+      <AlertDialogContent className="max-w-sm">
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="text-sm">{children}</div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive text-white hover:bg-destructive/90"
             disabled={busy}
-            onClick={onConfirm}
-            type="button"
+            onClick={() => {
+              confirmed.current = true;
+              onConfirm();
+            }}
           >
             {confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
