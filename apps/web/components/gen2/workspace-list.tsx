@@ -43,8 +43,6 @@ export function Gen2WorkspaceList({
   } | null>(null);
 
   useEffect(() => {
-    // Pick up a refreshed list from the server.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setWorkspaces(initialWorkspaces);
   }, [initialWorkspaces]);
 

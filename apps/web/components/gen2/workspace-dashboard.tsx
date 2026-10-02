@@ -54,15 +54,10 @@ export function Gen2WorkspaceDashboard({
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   useEffect(() => {
-    // The greeting depends on the visitor's clock, so it is set after mount to
-    // keep the server and first client render identical.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setGreeting(getGreeting());
   }, []);
 
   useEffect(() => {
-    // Pick up a refreshed list from the server.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setWorkspaces(initialWorkspaces);
   }, [initialWorkspaces]);
 

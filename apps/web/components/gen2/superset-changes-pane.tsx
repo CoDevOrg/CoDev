@@ -103,8 +103,6 @@ export function SupersetChangesPane({
   }, [workspaceId, worktreeId]);
 
   useEffect(() => {
-    // Load the changes whenever the pane becomes visible.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (visible) void refresh();
   }, [visible, refresh]);
 

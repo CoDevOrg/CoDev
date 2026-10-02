@@ -157,7 +157,7 @@ export function Gen2ChatPanel({
   activeChatId?: string | null;
   onSelectChatId?: (chatId: string) => void;
   onChatsChange?: (chats: Gen2Chat[]) => void;
-  activeProvider?: Gen2AgentChoice | undefined;
+  activeProvider?: Gen2AgentChoice;
   onActiveProviderChange?: (provider: Gen2AgentChoice) => void;
   hideChatBar?: boolean;
 }) {
@@ -228,8 +228,6 @@ export function Gen2ChatPanel({
 
   useEffect(() => {
     if (provider?.models?.length) {
-      // Mirror the discovered models into the per-agent cache.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setModelsByProvider((prev) => ({
         ...prev,
         [agent]: provider.models!,
@@ -248,16 +246,12 @@ export function Gen2ChatPanel({
 
   useEffect(() => {
     if (activeChatId && activeChatId !== chatId) {
-      // Follow the chat the parent selected.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setChatId(activeChatId);
     }
   }, [activeChatId, chatId]);
 
   useEffect(() => {
     if (activeProvider && activeProvider !== agent) {
-      // Follow the provider the parent selected.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAgent(activeProvider);
     }
   }, [activeProvider, agent]);
@@ -293,8 +287,6 @@ export function Gen2ChatPanel({
   }, [workspace.id, activeChatId, onChatsChange, onSelectChatId]);
 
   useEffect(() => {
-    // Fetch on mount: the chat list lives on the server.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadChats();
   }, [loadChats]);
 
@@ -312,8 +304,6 @@ export function Gen2ChatPanel({
 
   useEffect(() => {
     if (!chatId) {
-      // No chat selected: clear the transcript.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setThread({ messages: [] });
       return;
     }
@@ -419,8 +409,6 @@ export function Gen2ChatPanel({
   useEffect(() => {
     const stored = storedTurn(workspace.id);
     if (!stored) return;
-    // Reattach to the chat whose turn survived the reload.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setChatId(stored.chatId);
     void drive(stored.sessionId, stored.chatId, stored.after, stored.provider);
     // eslint-disable-next-line react-hooks/exhaustive-deps
