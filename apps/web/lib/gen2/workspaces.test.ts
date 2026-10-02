@@ -242,6 +242,7 @@ describe("gen2 workspaces", () => {
       "update:gen2_workspaces",
       "wake-host",
       "destroy",
+      "update:gen2_compute_sessions",
       "discard-snapshot",
       "delete-row",
     ]);
@@ -268,6 +269,7 @@ describe("gen2 workspaces", () => {
       "update:gen2_workspaces",
       "wake-host",
       "destroy",
+      "update:gen2_compute_sessions",
       "discard-snapshot",
       "delete-row",
     ]);

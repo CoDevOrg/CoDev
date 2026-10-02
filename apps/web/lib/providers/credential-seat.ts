@@ -188,14 +188,13 @@ export async function releaseStaleCredentialSeats(): Promise<number> {
 
 const SURFACE_LABEL: Record<ExecutorSurface, string> = {
   rooms: "a chat room reply",
-  workspace: "a workspace turn",
   gen2: "a workspace turn",
 };
 
 /** What to tell a member whose turn is waiting for their own seat. */
 export function describeSeatHolder(holder: SeatHolder | null): string {
   if (!holder) return "Another turn is using this connection.";
-  return `${SURFACE_LABEL[holder.surface]} is still using this connection.`;
+  return `${SURFACE_LABEL[holder.surface] ?? "a workspace turn"} is still using this connection.`;
 }
 
 /**

@@ -1,15 +1,17 @@
 # Gen 2 workspace
 
-A new CoDev workspace, built separately from `lib/workspaces`.
+CoDev's active workspace implementation.
 
 A gen 2 workspace is a **shareable Firecracker cloud instance** that you and
 Codex work on together — one filesystem, addressed by the chat and by the
 workbench alike.
 
-## What this is not
+## Runtime boundary
 
-No IDE iframe, Gen 1 agent sessions, worktrees, GitHub pin, hibernation, or
-OpenFGA. Those stay in gen 1 until they are rebuilt here on purpose.
+The web workbench, terminal, Git operations, and agents all target the
+workspace's Firecracker guest. Gen 2 workspace membership is checked before
+the control plane calls the orchestrator. Historical Gen 1 data and database
+migrations are preserved; its application code has been removed.
 
 ## Codex chats
 
@@ -59,4 +61,11 @@ ready-gate on each function follows that split, and
 | `packages/contracts` `gen2.ts` | Request/response shapes                                                  |
 
 The Azure orchestrator is reused (`provisionSandbox` / `destroySandbox`). Gen 2
-does not read or write the original `workspaces` table.
+uses its own `gen2_*` tables and does not access the original `workspaces` table.
+
+`compute-quota.ts` bills each running Gen 2 VM interval to its current workspace
+owner. The 6,000-minute allowance is shared across that owner's workspaces and
+resets at the UTC month boundary. `compute-reconcile.ts` checks runtime state
+without waking guests, closes hibernated intervals, and stops active guests at
+the limit. The authenticated per-minute scheduler route invokes it; startup
+checks the same live interval total before provisioning.

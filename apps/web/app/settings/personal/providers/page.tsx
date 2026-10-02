@@ -1,13 +1,10 @@
+import { CursorLogo } from "@/components/gen2/provider-logos";
 import { ProviderAccountCard } from "@/components/settings/provider-account-card";
+import { ClaudeMark, OpenAIMark } from "@/components/settings/provider-logos";
 import {
-  ClaudeMark,
-  CursorMark,
-  OpenAIMark,
-} from "@/components/settings/provider-logos";
-import {
-  OrcaPageHeader,
-  OrcaPageShell,
-} from "@/components/settings/orca-style";
+  SettingsPageHeader,
+  SettingsPageShell,
+} from "@/components/settings/settings-style";
 import { isHostedClaudeConnectEnabled } from "@/lib/providers/claude-connection-runner";
 import { isHostedCodexSubscriptionEnabled } from "@/lib/providers/hosted-codex-subscription-flag";
 import { loadProviderConnectionSnapshot } from "@/lib/providers/provider-connection-server";
@@ -29,7 +26,7 @@ const CARDS = [
   },
   {
     label: "Cursor",
-    logo: <CursorMark className="size-5" />,
+    logo: <CursorLogo className="size-5" size={20} />,
     subscription: "cursor",
     connection: "cursor",
   },
@@ -60,13 +57,13 @@ export default async function PersonalProvidersPage() {
   const hostedOpenAIConnect = isHostedCodexSubscriptionEnabled();
 
   return (
-    <OrcaPageShell>
-      <OrcaPageHeader
+    <SettingsPageShell>
+      <SettingsPageHeader
         badge="Optional"
         description="Connect the accounts your agents run on. Each card shows where that account can be used once it is connected. Everything is encrypted on the CoDev server and never shown again after you save it."
         title="AI Provider Accounts"
       />
-      <div className="space-y-3">
+      <div className="flex flex-col gap-3">
         {CARDS.map((card) => {
           const subscription = snapshot.cliSubscriptions.find(
             (row) => row.provider === card.subscription,
@@ -94,6 +91,6 @@ export default async function PersonalProvidersPage() {
           );
         })}
       </div>
-    </OrcaPageShell>
+    </SettingsPageShell>
   );
 }

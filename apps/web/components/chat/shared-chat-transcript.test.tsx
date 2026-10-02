@@ -1,10 +1,9 @@
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CHANNEL_MESSAGE_POLL_MS } from "@/lib/chat/team-chat-view";
-
 import {
   mergeRoomMessages,
+  ROOM_TRANSCRIPT_POLL_MS,
   SharedChatTranscript,
 } from "./shared-chat-transcript";
 
@@ -64,7 +63,7 @@ describe("SharedChatTranscript", () => {
     );
     expect(screen.getByText("Claude is replying…")).toBeInTheDocument();
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(CHANNEL_MESSAGE_POLL_MS);
+      await vi.advanceTimersByTimeAsync(ROOM_TRANSCRIPT_POLL_MS);
     });
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/rooms/room-123/messages?after=0",
@@ -100,7 +99,7 @@ describe("SharedChatTranscript", () => {
 
     expect(screen.queryByText(liveMessage.text)).not.toBeInTheDocument();
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(CHANNEL_MESSAGE_POLL_MS);
+      await vi.advanceTimersByTimeAsync(ROOM_TRANSCRIPT_POLL_MS);
     });
 
     expect(fetchMock).toHaveBeenCalledWith(

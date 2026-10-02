@@ -12,14 +12,14 @@ export default async function OrganizationMembersPage() {
   return (
     <OrganizationSettingsPage
       context={context}
-      description="Review workspace members and manage their organization access."
+      description="Review organization members and manage their access."
       title="Members"
     >
       <OrganizationSettingsCard
         context={context}
         description="Member invites and role changes are protected by the organization write guard."
         detail="Owners and Admins will be able to invite members and assign access roles here."
-        title="Workspace access"
+        title="Organization access"
       />
     </OrganizationSettingsPage>
   );

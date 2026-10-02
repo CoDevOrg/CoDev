@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { apiError, getApiUser } from "@/lib/http/api";
 import {
-  deleteOpenAICredential,
+  deleteProviderCredential,
   saveOpenAICredential,
 } from "@/lib/providers/credentials";
 
@@ -28,7 +28,7 @@ export async function DELETE() {
   if (!user) return apiError(new Error("Authentication required."), 401);
 
   try {
-    await deleteOpenAICredential(user.id);
+    await deleteProviderCredential(user.id, "openai", "API_KEY");
     return new Response(null, { status: 204 });
   } catch (error) {
     return apiError(error);

@@ -1,12 +1,14 @@
 import "server-only";
 
-import { and, count, eq } from "drizzle-orm";
+import { and, asc, count, eq, or, sql } from "drizzle-orm";
 
 import {
   gen2WorkspaceDetailSchema,
   gen2WorkspaceSchema,
   type Gen2Workspace,
   type Gen2WorkspaceDetail,
+  type Gen2WorkspaceMember,
+  type Gen2WorkspaceRole,
 } from "@codev/contracts";
 import { schema } from "@codev/db";
 
@@ -21,6 +23,11 @@ import {
   discardSandboxSnapshot,
 } from "../runtime/orchestrator-sandbox";
 import { GEN2_MAX_OWNED_WORKSPACES } from "./constants";
+import {
+  assertComputeAvailable,
+  endComputeSession,
+  transferActiveComputeSession,
+} from "./compute-quota";
 import { Gen2AccessError, Gen2LifecycleError } from "./errors";
 
 const DEFAULT_WORKSPACE_NAME = "Workspace";
@@ -194,17 +201,24 @@ export async function getGen2WorkspaceDetail(
       userId: schema.gen2WorkspaceMembers.userId,
       login: schema.users.login,
       name: schema.users.name,
+      email: schema.users.email,
+      avatarUrl: schema.users.avatarUrl,
       role: schema.gen2WorkspaceMembers.role,
+      joinedAt: schema.gen2WorkspaceMembers.joinedAt,
     })
     .from(schema.gen2WorkspaceMembers)
     .innerJoin(
       schema.users,
       eq(schema.users.id, schema.gen2WorkspaceMembers.userId),
     )
-    .where(eq(schema.gen2WorkspaceMembers.workspaceId, workspaceId));
+    .where(eq(schema.gen2WorkspaceMembers.workspaceId, workspaceId))
+    .orderBy(asc(schema.gen2WorkspaceMembers.joinedAt));
   return gen2WorkspaceDetailSchema.parse({
     ...workspace,
-    members,
+    members: members.map((m) => ({
+      ...m,
+      joinedAt: m.joinedAt ? m.joinedAt.toISOString() : undefined,
+    })),
   });
 }
 
@@ -263,6 +277,7 @@ export async function deleteGen2Workspace(workspaceId: string, userId: string) {
       // still booting at this bound, the deleting record remains retryable.
       await ensureHostReady(120_000);
       await destroySandbox(workspaceId);
+      await endComputeSession(workspaceId);
       await discardSandboxSnapshot(workspaceId);
     }
     await database
@@ -308,10 +323,17 @@ export async function createGen2ShareLink(
   workspaceId: string,
   userId: string,
   origin: string,
+  role: Gen2WorkspaceRole = "editor",
 ) {
   const membership = await requireGen2Member(workspaceId, userId);
-  if (membership.role !== "owner") {
-    throw new Gen2AccessError("Only the owner can share this workspace.", 403);
+  if (membership.role === "viewer") {
+    throw new Gen2AccessError("Viewers cannot share this workspace.", 403);
+  }
+  if (role === "owner" && membership.role !== "owner") {
+    throw new Gen2AccessError(
+      "Only the owner can create an owner share link.",
+      403,
+    );
   }
   const token = createInviteToken();
   const createdAt = new Date();
@@ -320,13 +342,41 @@ export async function createGen2ShareLink(
     .set({
       activeInviteTokenHash: hashInviteToken(token),
       activeInviteCreatedByUserId: userId,
-      activeInviteRole: "editor",
+      activeInviteRole: role,
       activeInviteCreatedAt: createdAt,
       activeInviteExpiresAt: new Date(createdAt.getTime() + INVITE_TTL_MS),
       updatedAt: new Date(),
     })
     .where(eq(schema.gen2Workspaces.id, workspaceId));
-  return { inviteUrl: `${origin}/gen2/join/${token}` };
+  return {
+    inviteUrl: `${origin}/gen2/join/${token}`,
+    role,
+  };
+}
+
+export async function getGen2ActiveShare(
+  workspaceId: string,
+  userId: string,
+  origin: string,
+) {
+  await requireGen2Member(workspaceId, userId);
+  const [workspace] = await getDatabase()
+    .select({
+      activeInviteTokenHash: schema.gen2Workspaces.activeInviteTokenHash,
+      activeInviteRole: schema.gen2Workspaces.activeInviteRole,
+      activeInviteExpiresAt: schema.gen2Workspaces.activeInviteExpiresAt,
+    })
+    .from(schema.gen2Workspaces)
+    .where(eq(schema.gen2Workspaces.id, workspaceId))
+    .limit(1);
+
+  if (!workspace || !workspaceInviteIsActive(workspace.activeInviteExpiresAt)) {
+    return null;
+  }
+  return {
+    role: workspace.activeInviteRole ?? "editor",
+    expiresAt: workspace.activeInviteExpiresAt?.toISOString(),
+  };
 }
 
 export async function joinGen2Workspace(token: string, userId: string) {
@@ -336,6 +386,7 @@ export async function joinGen2Workspace(token: string, userId: string) {
       id: schema.gen2Workspaces.id,
       status: schema.gen2Workspaces.status,
       activeInviteExpiresAt: schema.gen2Workspaces.activeInviteExpiresAt,
+      activeInviteRole: schema.gen2Workspaces.activeInviteRole,
     })
     .from(schema.gen2Workspaces)
     .where(eq(schema.gen2Workspaces.activeInviteTokenHash, tokenHash))
@@ -348,16 +399,375 @@ export async function joinGen2Workspace(token: string, userId: string) {
     throw new Gen2AccessError("This invite link is no longer valid.", 404);
   }
 
-  await getDatabase()
-    .insert(schema.gen2WorkspaceMembers)
-    .values({
-      workspaceId: workspace.id,
-      userId,
-      role: "editor",
-    })
-    .onConflictDoNothing();
+  const role = workspace.activeInviteRole ?? "editor";
+
+  if (role === "owner") {
+    await assertComputeAvailable(userId);
+    await getDatabase().transaction(async (tx) => {
+      await tx
+        .update(schema.gen2WorkspaceMembers)
+        .set({ role: "editor" })
+        .where(
+          and(
+            eq(schema.gen2WorkspaceMembers.workspaceId, workspace.id),
+            eq(schema.gen2WorkspaceMembers.role, "owner"),
+          ),
+        );
+      await tx
+        .update(schema.gen2Workspaces)
+        .set({ ownerId: userId, updatedAt: new Date() })
+        .where(eq(schema.gen2Workspaces.id, workspace.id));
+      await transferActiveComputeSession(tx, workspace.id, userId);
+      const [existing] = await tx
+        .select({ userId: schema.gen2WorkspaceMembers.userId })
+        .from(schema.gen2WorkspaceMembers)
+        .where(
+          and(
+            eq(schema.gen2WorkspaceMembers.workspaceId, workspace.id),
+            eq(schema.gen2WorkspaceMembers.userId, userId),
+          ),
+        )
+        .limit(1);
+      if (existing) {
+        await tx
+          .update(schema.gen2WorkspaceMembers)
+          .set({ role: "owner" })
+          .where(
+            and(
+              eq(schema.gen2WorkspaceMembers.workspaceId, workspace.id),
+              eq(schema.gen2WorkspaceMembers.userId, userId),
+            ),
+          );
+      } else {
+        await tx.insert(schema.gen2WorkspaceMembers).values({
+          workspaceId: workspace.id,
+          userId,
+          role: "owner",
+        });
+      }
+    });
+  } else {
+    await getDatabase()
+      .insert(schema.gen2WorkspaceMembers)
+      .values({
+        workspaceId: workspace.id,
+        userId,
+        role,
+      })
+      .onConflictDoNothing();
+  }
 
   return requireGen2Member(workspace.id, userId);
+}
+
+export async function getGen2WorkspaceMembers(
+  workspaceId: string,
+  userId: string,
+): Promise<{ members: Gen2WorkspaceMember[]; ownerId: string }> {
+  await requireGen2Member(workspaceId, userId);
+  const [workspace] = await getDatabase()
+    .select({ ownerId: schema.gen2Workspaces.ownerId })
+    .from(schema.gen2Workspaces)
+    .where(eq(schema.gen2Workspaces.id, workspaceId))
+    .limit(1);
+  if (!workspace) throw new Gen2AccessError();
+
+  const members = await getDatabase()
+    .select({
+      userId: schema.gen2WorkspaceMembers.userId,
+      login: schema.users.login,
+      name: schema.users.name,
+      email: schema.users.email,
+      avatarUrl: schema.users.avatarUrl,
+      role: schema.gen2WorkspaceMembers.role,
+      joinedAt: schema.gen2WorkspaceMembers.joinedAt,
+    })
+    .from(schema.gen2WorkspaceMembers)
+    .innerJoin(
+      schema.users,
+      eq(schema.users.id, schema.gen2WorkspaceMembers.userId),
+    )
+    .where(eq(schema.gen2WorkspaceMembers.workspaceId, workspaceId))
+    .orderBy(asc(schema.gen2WorkspaceMembers.joinedAt));
+
+  return {
+    ownerId: workspace.ownerId,
+    members: members.map((m) => ({
+      userId: m.userId,
+      login: m.login,
+      name: m.name,
+      email: m.email,
+      avatarUrl: m.avatarUrl,
+      role: m.role,
+      joinedAt: m.joinedAt ? m.joinedAt.toISOString() : undefined,
+    })),
+  };
+}
+
+export async function addGen2WorkspaceMember(
+  workspaceId: string,
+  currentUserId: string,
+  emailOrLogin: string,
+  role: Gen2WorkspaceRole,
+): Promise<Gen2WorkspaceMember[]> {
+  const caller = await requireGen2Member(workspaceId, currentUserId);
+  if (caller.role === "viewer") {
+    throw new Gen2AccessError("Viewers cannot add members.", 403);
+  }
+  if (role === "owner" && caller.role !== "owner") {
+    throw new Gen2AccessError("Only the owner can transfer ownership.", 403);
+  }
+
+  const normalized = emailOrLogin.trim().toLowerCase();
+  const [targetUser] = await getDatabase()
+    .select({
+      id: schema.users.id,
+      login: schema.users.login,
+      name: schema.users.name,
+      email: schema.users.email,
+      avatarUrl: schema.users.avatarUrl,
+    })
+    .from(schema.users)
+    .where(
+      or(
+        eq(sql`lower(${schema.users.email})`, normalized),
+        eq(sql`lower(${schema.users.login})`, normalized),
+      ),
+    )
+    .limit(1);
+
+  if (!targetUser) {
+    throw new Gen2AccessError(
+      `No user found with email or username "${emailOrLogin}".`,
+      404,
+    );
+  }
+
+  const database = getDatabase();
+  if (role === "owner") {
+    await assertComputeAvailable(targetUser.id);
+    await database.transaction(async (tx) => {
+      await tx
+        .update(schema.gen2WorkspaceMembers)
+        .set({ role: "editor" })
+        .where(
+          and(
+            eq(schema.gen2WorkspaceMembers.workspaceId, workspaceId),
+            eq(schema.gen2WorkspaceMembers.role, "owner"),
+          ),
+        );
+      await tx
+        .update(schema.gen2Workspaces)
+        .set({ ownerId: targetUser.id, updatedAt: new Date() })
+        .where(eq(schema.gen2Workspaces.id, workspaceId));
+      await transferActiveComputeSession(tx, workspaceId, targetUser.id);
+      const [existing] = await tx
+        .select({ userId: schema.gen2WorkspaceMembers.userId })
+        .from(schema.gen2WorkspaceMembers)
+        .where(
+          and(
+            eq(schema.gen2WorkspaceMembers.workspaceId, workspaceId),
+            eq(schema.gen2WorkspaceMembers.userId, targetUser.id),
+          ),
+        )
+        .limit(1);
+      if (existing) {
+        await tx
+          .update(schema.gen2WorkspaceMembers)
+          .set({ role: "owner" })
+          .where(
+            and(
+              eq(schema.gen2WorkspaceMembers.workspaceId, workspaceId),
+              eq(schema.gen2WorkspaceMembers.userId, targetUser.id),
+            ),
+          );
+      } else {
+        await tx.insert(schema.gen2WorkspaceMembers).values({
+          workspaceId,
+          userId: targetUser.id,
+          role: "owner",
+        });
+      }
+    });
+  } else {
+    const [existing] = await database
+      .select({
+        userId: schema.gen2WorkspaceMembers.userId,
+        role: schema.gen2WorkspaceMembers.role,
+      })
+      .from(schema.gen2WorkspaceMembers)
+      .where(
+        and(
+          eq(schema.gen2WorkspaceMembers.workspaceId, workspaceId),
+          eq(schema.gen2WorkspaceMembers.userId, targetUser.id),
+        ),
+      )
+      .limit(1);
+
+    if (existing) {
+      if (existing.role === "owner") {
+        throw new Gen2AccessError(
+          "Cannot change role of the owner. Transfer ownership first.",
+          400,
+        );
+      }
+      await database
+        .update(schema.gen2WorkspaceMembers)
+        .set({ role })
+        .where(
+          and(
+            eq(schema.gen2WorkspaceMembers.workspaceId, workspaceId),
+            eq(schema.gen2WorkspaceMembers.userId, targetUser.id),
+          ),
+        );
+    } else {
+      await database.insert(schema.gen2WorkspaceMembers).values({
+        workspaceId,
+        userId: targetUser.id,
+        role,
+      });
+    }
+  }
+
+  const { members } = await getGen2WorkspaceMembers(workspaceId, currentUserId);
+  return members;
+}
+
+export async function updateGen2WorkspaceMemberRole(
+  workspaceId: string,
+  currentUserId: string,
+  targetUserId: string,
+  role: Gen2WorkspaceRole,
+): Promise<Gen2WorkspaceMember[]> {
+  const caller = await requireGen2Member(workspaceId, currentUserId);
+  if (caller.role !== "owner") {
+    throw new Gen2AccessError(
+      "Only the workspace owner can change member roles.",
+      403,
+    );
+  }
+
+  const database = getDatabase();
+  const [targetMember] = await database
+    .select({
+      userId: schema.gen2WorkspaceMembers.userId,
+      role: schema.gen2WorkspaceMembers.role,
+    })
+    .from(schema.gen2WorkspaceMembers)
+    .where(
+      and(
+        eq(schema.gen2WorkspaceMembers.workspaceId, workspaceId),
+        eq(schema.gen2WorkspaceMembers.userId, targetUserId),
+      ),
+    )
+    .limit(1);
+
+  if (!targetMember) {
+    throw new Gen2AccessError("Member not found in this workspace.", 404);
+  }
+
+  if (targetMember.role === "owner" && role !== "owner") {
+    throw new Gen2AccessError(
+      "Cannot demote the owner directly. Transfer ownership to another member.",
+      400,
+    );
+  }
+
+  if (role === "owner") {
+    await assertComputeAvailable(targetUserId);
+    await database.transaction(async (tx) => {
+      await tx
+        .update(schema.gen2WorkspaceMembers)
+        .set({ role: "editor" })
+        .where(
+          and(
+            eq(schema.gen2WorkspaceMembers.workspaceId, workspaceId),
+            eq(schema.gen2WorkspaceMembers.role, "owner"),
+          ),
+        );
+      await tx
+        .update(schema.gen2Workspaces)
+        .set({ ownerId: targetUserId, updatedAt: new Date() })
+        .where(eq(schema.gen2Workspaces.id, workspaceId));
+      await transferActiveComputeSession(tx, workspaceId, targetUserId);
+      await tx
+        .update(schema.gen2WorkspaceMembers)
+        .set({ role: "owner" })
+        .where(
+          and(
+            eq(schema.gen2WorkspaceMembers.workspaceId, workspaceId),
+            eq(schema.gen2WorkspaceMembers.userId, targetUserId),
+          ),
+        );
+    });
+  } else {
+    await database
+      .update(schema.gen2WorkspaceMembers)
+      .set({ role })
+      .where(
+        and(
+          eq(schema.gen2WorkspaceMembers.workspaceId, workspaceId),
+          eq(schema.gen2WorkspaceMembers.userId, targetUserId),
+        ),
+      );
+  }
+
+  const { members } = await getGen2WorkspaceMembers(workspaceId, currentUserId);
+  return members;
+}
+
+export async function removeGen2WorkspaceMember(
+  workspaceId: string,
+  currentUserId: string,
+  targetUserId: string,
+): Promise<Gen2WorkspaceMember[]> {
+  const caller = await requireGen2Member(workspaceId, currentUserId);
+  if (caller.role !== "owner" && currentUserId !== targetUserId) {
+    throw new Gen2AccessError(
+      "Only the workspace owner can remove other members.",
+      403,
+    );
+  }
+
+  const database = getDatabase();
+  const [targetMember] = await database
+    .select({
+      role: schema.gen2WorkspaceMembers.role,
+    })
+    .from(schema.gen2WorkspaceMembers)
+    .where(
+      and(
+        eq(schema.gen2WorkspaceMembers.workspaceId, workspaceId),
+        eq(schema.gen2WorkspaceMembers.userId, targetUserId),
+      ),
+    )
+    .limit(1);
+
+  if (!targetMember) {
+    throw new Gen2AccessError("Member not found in this workspace.", 404);
+  }
+
+  if (targetMember.role === "owner") {
+    throw new Gen2AccessError(
+      "Cannot remove the workspace owner. Transfer ownership first.",
+      400,
+    );
+  }
+
+  await database
+    .delete(schema.gen2WorkspaceMembers)
+    .where(
+      and(
+        eq(schema.gen2WorkspaceMembers.workspaceId, workspaceId),
+        eq(schema.gen2WorkspaceMembers.userId, targetUserId),
+      ),
+    );
+
+  const { members } = await getGen2WorkspaceMembers(
+    workspaceId,
+    currentUserId === targetUserId ? targetUserId : currentUserId,
+  ).catch(() => ({ members: [] }));
+  return members;
 }
 
 function toWorkspace(

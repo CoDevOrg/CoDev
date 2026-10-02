@@ -24,8 +24,8 @@ are in [EMAIL.md](./EMAIL.md).
 1. Run `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`,
    `pnpm build`, `pnpm rust:check`, and `pnpm test:e2e`.
 2. Apply the Drizzle migration with `pnpm db:migrate`.
-3. A push to `main` that touches `packages/ide/`, `services/`, or `infra/runtime/`
-   now runs `infra/runtime/deploy.sh` itself, through the **Deploy runtime**
+3. A push to `main` that touches `services/`, `infra/azure/`, or
+   `infra/runtime/scripts/` runs `infra/runtime/deploy.sh` through the **Deploy runtime**
    workflow — anyone's push ships the runtime, not just a maintainer's laptop.
    Watch that run rather than deploying by hand, and let the host return to
    `stopped` afterwards. `infra/runtime/deploy.sh` stays runnable locally, and the
@@ -101,24 +101,24 @@ deploying a Rust or Firecracker change:
 sudo /opt/codev-verify-lifecycle.sh
 ```
 
-It creates a dirty integration file, an agent-worktree file, and a PTY session;
-snapshots and destroys the VM; restores it from the Firecracker snapshot; checks
-all three state types; measures restore latency against the 500 ms target; and
-verifies that the orchestrator reports zero active sandboxes. Host power-off is
-intentionally asynchronous, and on Azure it is a _deallocate_ rather than a
-power-off — a VM stopped from inside the guest stays allocated and keeps
-billing.
+It creates a Superset worktree and an untracked file, stops the durable guest
+without explicitly snapshotting, reopens it, and verifies both the worktree
+list and exact file contents. It requires zero other active guests and cleans
+up its own workspace and snapshots.
 
-Run the authenticated launch preflight from Settings before every
-design-partner session. With zero active workspaces, any host state other than
-`stopped` or `stopping` requires lifecycle reconciliation and an explicit
-deallocate.
+On an isolated test host, set `CODEV_VERIFY_SERVICE_RESTART=1` to also restart
+`codev-orchestrator.service` after writing newer data following the first
+restore. This verifies that a service restart preserves the latest work rather
+than reverting to an older checkpoint. Supply `CODEV_DIRECT_SECRET` when the
+local endpoint requires authentication. This test needs Linux/KVM and the
+Superset host artifact; filesystem recovery unit tests do not boot a microVM.
 
-If PostgreSQL says a runtime is ready while the host is deallocated, the
-reconciler
-interrupts active work, expires claims, marks physical worktrees discarded,
-and records a `lifecycle.cleaned` event. If unpublished integration work was
-lost, the workspace is marked failed rather than silently claiming recovery.
+Runtime rollout must wait for active guests on the old release to hibernate
+before restarting it: the old binary does not checkpoint on SIGTERM. The new
+service uses `KillMode=mixed` and a 180-second stop timeout so the orchestrator
+can flush and save guests before systemd kills child processes. New startup
+never bulk-deletes live guest directories. Legacy interrupted disks without
+recovery metadata produce an explicit recovery error and remain untouched.
 
 ## Incident checklist
 
@@ -138,3 +138,41 @@ lost, the workspace is marked failed rather than silently claiming recovery.
    the host if needed.
 
 Never delete evidence or force-push a publication branch during an incident.
+
+## Superset chat storage readiness
+
+Run `pnpm db:check` against the same database used by the web app. `pnpm dev`
+checks this before starting; the web deployment workflow checks the pulled Vercel
+environment before publishing. If it fails, run `pnpm db:migrate` with the target
+database configured, then repeat the check. Do not assume the latest migration
+ledger timestamp proves all older objects exist: a merged history can skip an
+older migration. Migration `0064_repair_superset_run_storage` safely repairs the
+Superset run tables even when later migrations were already recorded.
+
+Database query failures return HTTP 503 with a safe message and `Retry-After`.
+Server logs record only the database error code, never the SQL or parameters.
+
+The compute allowance requires migration `0065_burly_star_brand` before the
+web release. Production schedules `/api/gen2/compute/reconcile` every minute
+with `CRON_SECRET`; confirm the Vercel project supports one-minute cron jobs
+and monitor its runs. The route measures running Gen 2 guest intervals and
+hibernates an owner's active workspaces once their combined UTC-month usage
+reaches 6,000 minutes. A missed scheduled run delays enforcement, so alert on
+repeated failures.
+A failed chat start restores the draft and attachments and removes the optimistic
+message so the user can retry. Transient outages are not automatically retried
+because a start request may already have reached the server.
+
+Superset guest rollout compatibility: the web client sends both the neutral
+`launchProfile` and its legacy `codexAuthCacheJson` field for Codex until older
+host-service images have been replaced. Do not remove the legacy field before
+verifying a real agent start on retained guests. A runtime validation mismatch
+returns an actionable 503 instead of blaming the user's prompt. Older guests
+also need the root-owned `/var/lib/codev-agent-profiles` parent set to 0711;
+individual agent directories stay 0700 and credential files stay 0600. Both guest
+image builders set this parent mode inside the host-service's final `ExecStart`
+wrapper. `ExecStartPre` alone is insufficient: systemd reapplies
+`StateDirectoryMode=0700` for the next command. Keep the host state directory
+private and change only the agent-profile parent. The poll bridge includes both
+plain `data` and `dataBase64` for rolling compatibility; web clients unwrap the
+orchestrator's `result` envelope before validating poll and recovery responses.

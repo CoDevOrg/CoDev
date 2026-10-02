@@ -4,10 +4,6 @@ import { and, countDistinct, desc, eq, gte, sql } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 
-import {
-  getComputeMinutesByUserThisMonth,
-  memberComputeCreditStatus,
-} from "../runtime/compute-credits";
 import { getDatabase } from "../platform/database";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -119,12 +115,6 @@ export type AdminUserRow = {
   createdAt: string;
   lastSeenAt: string | null;
   visits: number;
-  computeUsedMinutes: number;
-  computeUsedUsd: number;
-  computeAllottedMinutes: number | null;
-  computeAllottedUsd: number | null;
-  computeRemainingMinutes: number | null;
-  computeRemainingUsd: number | null;
 };
 
 export async function getUserDirectory(): Promise<AdminUserRow[]> {
@@ -155,15 +145,7 @@ export async function getUserDirectory(): Promise<AdminUserRow[]> {
       desc(users.createdAt),
     );
 
-  const minutesByUser = await getComputeMinutesByUserThisMonth(
-    rows.map((row) => row.id),
-  );
-
   return rows.map((row) => {
-    const credit = memberComputeCreditStatus(
-      minutesByUser.get(row.id) ?? 0,
-      row.isAdmin,
-    );
     return {
       id: row.id,
       name: row.name,
@@ -179,12 +161,6 @@ export async function getUserDirectory(): Promise<AdminUserRow[]> {
         ? new Date(row.lastSeenAt).toISOString()
         : null,
       visits: row.visits ?? 0,
-      computeUsedMinutes: credit.usedMinutes,
-      computeUsedUsd: credit.usedUsd,
-      computeAllottedMinutes: credit.allottedMinutes,
-      computeAllottedUsd: credit.allottedUsd,
-      computeRemainingMinutes: credit.remainingMinutes,
-      computeRemainingUsd: credit.remainingUsd,
     };
   });
 }

@@ -1,17 +1,31 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { ArrowUp, Paperclip, Plus, Square, X } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  Check,
+  ChevronDown,
+  Copy,
+  FileText,
+  Paperclip,
+  Plus,
+  Square,
+  X,
+} from "lucide-react";
 import {
   GEN2_AGENT_PROVIDERS,
+  GEN2_PROVIDER_MODELS,
   type Gen2Chat,
   type Gen2ChatDetail,
   type Gen2ChatMessage,
+  type Gen2ModelInfo,
   type Gen2TurnItem,
   type Gen2WorkspaceDetail,
 } from "@codev/contracts";
 
 import { MarkdownContent } from "@/components/markdown/markdown-content";
+import { cn } from "@/lib/platform/utils";
 import { canRunGen2Agent } from "@/lib/gen2/agent-policy";
 import {
   formatGen2AttachmentPrompt,
@@ -27,11 +41,31 @@ import {
 } from "@/lib/gen2/agent-output";
 import { finalizeGen2Turn, reduceGen2Turn } from "@/lib/gen2/turn-reducer";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Gen2ConnectProvider,
   useGen2ProviderStatus,
   type Gen2AgentChoice,
 } from "./connect-provider";
 import { Gen2TurnActivity } from "./turn-activity";
+import { useGen2ChatScroll } from "./use-gen2-chat-scroll";
+import { WorkspaceButton } from "./workspace-button";
 
 type Thread = { messages: Gen2ChatMessage[] };
 type PendingFile = { id: string; file: File };
@@ -39,9 +73,21 @@ type PendingFile = { id: string; file: File };
 const STORAGE_PREFIX = "codev-gen2-turn:";
 
 const SUGGESTIONS = [
-  "Scaffold a small Next.js app",
-  "Set up a Python project with tests",
-  "Show me what's on this machine",
+  {
+    title: "Scaffold Next.js App",
+    desc: "Create a modern Next.js project with Tailwind and App Router",
+    prompt: "Scaffold a small Next.js app",
+  },
+  {
+    title: "Python with Tests",
+    desc: "Set up a clean Python module with pytest and type hints",
+    prompt: "Set up a Python project with tests",
+  },
+  {
+    title: "Inspect Environment",
+    desc: "Explore this workspace’s files, tools, and Git status",
+    prompt: "Show me what's on this machine",
+  },
 ];
 
 function storedTurn(workspaceId: string) {
@@ -93,6 +139,13 @@ export function Gen2ChatPanel({
   onFilesChanged,
   onOpenFile,
   onNeedsMachine,
+  worktreeId,
+  activeChatId,
+  onSelectChatId,
+  onChatsChange,
+  activeProvider,
+  onActiveProviderChange,
+  hideChatBar = false,
 }: {
   workspace: Gen2WorkspaceDetail;
   onRunningChange: (running: boolean) => void;
@@ -100,9 +153,16 @@ export function Gen2ChatPanel({
   onOpenFile: (path: string) => void;
   /** Brings the machine up; resolves false if it could not. */
   onNeedsMachine: () => Promise<boolean>;
+  worktreeId?: string;
+  activeChatId?: string | null;
+  onSelectChatId?: (chatId: string) => void;
+  onChatsChange?: (chats: Gen2Chat[]) => void;
+  activeProvider?: Gen2AgentChoice;
+  onActiveProviderChange?: (provider: Gen2AgentChoice) => void;
+  hideChatBar?: boolean;
 }) {
   const [chats, setChats] = useState<Gen2Chat[]>([]);
-  const [chatId, setChatId] = useState<string | null>(null);
+  const [chatId, setChatId] = useState<string | null>(activeChatId ?? null);
   const [thread, setThread] = useState<Thread>({ messages: [] });
   const [prompt, setPrompt] = useState("");
   const [attachments, setAttachments] = useState<PendingFile[]>([]);
@@ -110,40 +170,123 @@ export function Gen2ChatPanel({
   const [liveReply, setLiveReply] = useState("");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
+  const [starting, setStarting] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const sendingRef = useRef(false);
+  const drivingRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const sessionRef = useRef<string | null>(null);
-  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const transcriptRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const dragDepthRef = useRef(0);
   const attachInputId = useId();
   const [waking, setWaking] = useState(false);
   const [agent, setAgent] = useState<Gen2AgentChoice>(
-    GEN2_AGENT_PROVIDERS[0].id,
+    activeProvider ?? GEN2_AGENT_PROVIDERS[0].id,
   );
+  const [modelsByProvider, setModelsByProvider] = useState<
+    Record<string, Gen2ModelInfo[]>
+  >({});
+  const [selectedModel, setSelectedModel] = useState<string>(() => {
+    if (typeof window === "undefined") return "sonnet";
+    try {
+      const saved = sessionStorage.getItem(`codev-gen2-model:${workspace.id}`);
+      if (saved) return saved;
+    } catch {}
+    return (activeProvider ?? GEN2_AGENT_PROVIDERS[0].id) === "claude"
+      ? "sonnet"
+      : "gpt-5.6-luna";
+  });
   const agentLabel =
     GEN2_AGENT_PROVIDERS.find((entry) => entry.id === agent)?.label ?? "Agent";
+  const providerModels: Gen2ModelInfo[] = modelsByProvider[agent]?.length
+    ? modelsByProvider[agent]!
+    : (GEN2_PROVIDER_MODELS[agent as keyof typeof GEN2_PROVIDER_MODELS] ?? []);
+  const currentModelItem =
+    providerModels.find((m) => m.id === selectedModel) ?? providerModels[0];
+  const currentModelLabel = currentModelItem?.label ?? selectedModel;
   const { status: provider, refresh: refreshProvider } =
     useGen2ProviderStatus(agent);
-  const ready = canRunGen2Agent(workspace.status);
-  const needsProvider = provider !== null && !provider.connected;
-  const canSend = Boolean(prompt.trim() || attachments.length > 0);
 
-  useEffect(() => onRunningChange(running), [running, onRunningChange]);
+  useEffect(() => {
+    let mounted = true;
+    void fetch("/api/gen2/providers?provider=all")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!mounted || !data) return;
+        setModelsByProvider({
+          claude: data.claude?.models ?? [],
+          codex: data.codex?.models ?? [],
+        });
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (provider?.models?.length) {
+      setModelsByProvider((prev) => ({
+        ...prev,
+        [agent]: provider.models!,
+      }));
+    }
+  }, [agent, provider?.models]);
+  const ready = canRunGen2Agent(workspace.status);
+  const busy = running || starting || waking;
+  const canSend = Boolean(prompt.trim() || attachments.length > 0) && !busy;
+  const empty = thread.messages.length === 0 && !running;
+  const contentKey = `${chatId ?? ""}:${thread.messages.length}:${items.length}:${liveReply.length}`;
+  const { onScroll, showJump, jumpToLatest, pinToLatest } = useGen2ChatScroll(
+    transcriptRef,
+    contentKey,
+  );
+
+  useEffect(() => {
+    if (activeChatId && activeChatId !== chatId) {
+      setChatId(activeChatId);
+    }
+  }, [activeChatId, chatId]);
+
+  useEffect(() => {
+    if (activeProvider && activeProvider !== agent) {
+      setAgent(activeProvider);
+    }
+  }, [activeProvider, agent]);
+
+  useEffect(() => {
+    pinToLatest();
+  }, [chatId, pinToLatest]);
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      abortRef.current = null;
+    };
+  }, []);
+
+  useEffect(
+    () => onRunningChange(running || starting),
+    [running, starting, onRunningChange],
+  );
 
   const loadChats = useCallback(async () => {
     const response = await fetch(`/api/gen2/workspaces/${workspace.id}/chats`);
     if (!response.ok) return;
     const payload = (await response.json()) as { chats?: Gen2Chat[] };
-    setChats(payload.chats ?? []);
-    setChatId((current) => current ?? payload.chats?.[0]?.id ?? null);
-  }, [workspace.id]);
+    const fetchedChats = payload.chats ?? [];
+    setChats(fetchedChats);
+    onChatsChange?.(fetchedChats);
+    const targetId = activeChatId ?? fetchedChats[0]?.id ?? null;
+    setChatId((current) => current ?? targetId);
+    if (targetId && !activeChatId) {
+      onSelectChatId?.(targetId);
+    }
+  }, [workspace.id, activeChatId, onChatsChange, onSelectChatId]);
 
   useEffect(() => {
-    // Fetch-on-mount. apps/web has no data-fetching library, so an effect
-    // is where a client component loads from its own API; these updates
-    // land in an async continuation, which the rule cannot see.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadChats();
   }, [loadChats]);
 
@@ -161,19 +304,11 @@ export function Gen2ChatPanel({
 
   useEffect(() => {
     if (!chatId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setThread({ messages: [] });
       return;
     }
-    // Fetch-on-mount. apps/web has no data-fetching library, so an effect
-    // is where a client component loads from its own API; these updates
-    // land in an async continuation, which the rule cannot see.
     void loadThread(chatId);
   }, [chatId, loadThread]);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: "end" });
-  }, [thread.messages.length, items.length, liveReply]);
 
   /** Drives one turn to completion, re-reducing the stream on every poll. */
   const drive = useCallback(
@@ -183,6 +318,8 @@ export function Gen2ChatPanel({
       startAfter: number,
       turnProvider: Gen2AgentChoice,
     ) => {
+      if (drivingRef.current) return;
+      drivingRef.current = true;
       const controller = new AbortController();
       abortRef.current = controller;
       sessionRef.current = session;
@@ -214,9 +351,6 @@ export function Gen2ChatPanel({
             exited?: boolean;
             exitCode?: number | null;
           };
-          // A proxy hiccup or an error page can return a 200 with a body that
-          // is not a poll result. Treat it as "nothing new" rather than
-          // letting the whole turn fall over.
           chunks = mergeAgentExecChunks(
             chunks,
             Array.isArray(payload.chunks) ? payload.chunks : [],
@@ -256,18 +390,15 @@ export function Gen2ChatPanel({
           void refreshProvider();
         }
       } finally {
+        drivingRef.current = false;
         abortRef.current = null;
         sessionRef.current = null;
         rememberTurn(workspace.id, null);
         setRunning(false);
         setItems([]);
         setLiveReply("");
-        // The server persisted the reply as the turn exited, so re-reading
-        // the thread is what puts it on screen — no client-side save.
         await loadThread(chat);
         await loadChats();
-        // The agent and this browser share one filesystem; anything it wrote
-        // should be visible in the workbench straight away.
         if (sawFileChange) onFilesChanged();
       }
     },
@@ -278,8 +409,6 @@ export function Gen2ChatPanel({
   useEffect(() => {
     const stored = storedTurn(workspace.id);
     if (!stored) return;
-    // Rejoining a turn that outlived the page: the server kept streaming it.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setChatId(stored.chatId);
     void drive(stored.sessionId, stored.chatId, stored.after, stored.provider);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -346,80 +475,87 @@ export function Gen2ChatPanel({
     return { paths };
   }
 
-  async function send() {
-    const text = prompt.trim();
+  async function send(overridePrompt?: string) {
+    const text = (overridePrompt ?? prompt).trim();
     const pending = attachments;
-    if ((!text && pending.length === 0) || running) return;
+    if (
+      (!text && pending.length === 0) ||
+      running ||
+      starting ||
+      sendingRef.current
+    )
+      return;
+    sendingRef.current = true;
+    pinToLatest();
+    setStarting(true);
     setError("");
     setPrompt("");
     setAttachments([]);
 
-    // The composer is never disabled. If the machine is not up yet, say so
-    // and bring it up rather than making the member find a button.
-    if (!ready) {
-      setWaking(true);
-      const started = await onNeedsMachine();
-      setWaking(false);
-      if (!started) {
-        setError("The machine could not start. Try again in a moment.");
-        setPrompt(text);
-        setAttachments(pending);
-        return;
-      }
-    }
-
-    let target = chatId;
-    if (!target) {
-      const created = await fetch(
-        `/api/gen2/workspaces/${workspace.id}/chats`,
-        { method: "POST" },
-      );
-      if (!created.ok) {
-        setError("Couldn't start a chat.");
-        setPrompt(text);
-        setAttachments(pending);
-        return;
-      }
-      target = ((await created.json()) as { chat: Gen2Chat }).chat.id;
-      setChatId(target);
-    }
-
-    let promptBody = text;
-    if (pending.length > 0) {
-      try {
-        const uploaded = await uploadAttachments(pending);
-        if (uploaded.error) {
-          setError(uploaded.error);
+    const pendingMessageId = `pending-${crypto.randomUUID()}`;
+    let accepted = false;
+    try {
+      if (!ready) {
+        setWaking(true);
+        const started = await onNeedsMachine();
+        setWaking(false);
+        if (!started) {
+          setError("Couldn’t reconnect to the workspace. Please try again.");
           setPrompt(text);
           setAttachments(pending);
           return;
         }
-        promptBody = formatGen2AttachmentPrompt(uploaded.paths, text);
-        // Files are now on the shared guest FS — refresh the tree.
-        onFilesChanged();
-      } catch {
-        setError("Couldn't upload those files. Try again.");
-        setPrompt(text);
-        setAttachments(pending);
-        return;
       }
-    }
 
-    // Show the prompt immediately; the server writes it as the turn starts.
-    setThread((current) => ({
-      messages: [
-        ...current.messages,
-        {
-          id: `pending-${Date.now()}`,
-          role: "user",
-          body: promptBody,
-          items: null,
-          createdAt: new Date().toISOString(),
-        },
-      ],
-    }));
+      let target = chatId;
+      if (!target) {
+        const created = await fetch(
+          `/api/gen2/workspaces/${workspace.id}/chats`,
+          { method: "POST" },
+        );
+        if (!created.ok) {
+          setError("Couldn't start a chat.");
+          setPrompt(text);
+          setAttachments(pending);
+          return;
+        }
+        target = ((await created.json()) as { chat: Gen2Chat }).chat.id;
+        setChatId(target);
+      }
 
-    try {
+      let promptBody = text;
+      if (pending.length > 0) {
+        try {
+          const uploaded = await uploadAttachments(pending);
+          if (uploaded.error) {
+            setError(uploaded.error);
+            setPrompt(text);
+            setAttachments(pending);
+            return;
+          }
+          promptBody = formatGen2AttachmentPrompt(uploaded.paths, text);
+          onFilesChanged();
+        } catch {
+          setError("Couldn't upload those files. Try again.");
+          setPrompt(text);
+          setAttachments(pending);
+          return;
+        }
+      }
+
+      setThread((current) => ({
+        messages: [
+          ...current.messages,
+          {
+            id: pendingMessageId,
+            role: "user",
+            body: promptBody,
+            items: null,
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      }));
+
       const response = await fetch(
         `/api/gen2/workspaces/${workspace.id}/agent`,
         {
@@ -430,6 +566,8 @@ export function Gen2ChatPanel({
             prompt: promptBody,
             provider: agent,
             idempotencyKey: crypto.randomUUID(),
+            ...(worktreeId ? { worktreeId } : {}),
+            ...(selectedModel ? { model: selectedModel } : {}),
           }),
         },
       );
@@ -439,14 +577,25 @@ export function Gen2ChatPanel({
       };
       if (!response.ok || !payload.sessionId) {
         setError(payload.error ?? `${agentLabel} couldn't start.`);
-        // A 409 here is usually a missing or busy credential; re-read it so
-        // the connect card appears instead of just an error string.
         if (response.status === 409) void refreshProvider();
         return;
       }
+      accepted = true;
       await drive(payload.sessionId, target, 0, agent);
     } catch {
       setError("Couldn't reach CoDev. Try again.");
+    } finally {
+      if (!accepted) {
+        setPrompt((current) => current || text);
+        setAttachments((current) => (current.length ? current : pending));
+        setThread((current) => ({
+          messages: current.messages.filter(
+            (message) => message.id !== pendingMessageId,
+          ),
+        }));
+      }
+      sendingRef.current = false;
+      setStarting(false);
     }
   }
 
@@ -467,15 +616,38 @@ export function Gen2ChatPanel({
     });
     if (!response.ok) return;
     const { chat } = (await response.json()) as { chat: Gen2Chat };
-    setChats((current) => [chat, ...current]);
+    const next = [chat, ...chats];
+    setChats(next);
     setChatId(chat.id);
+    onChatsChange?.(next);
+    onSelectChatId?.(chat.id);
+    pinToLatest();
   }
 
-  const empty = thread.messages.length === 0 && !running;
+  const handleProviderSelect = (
+    newAgent: Gen2AgentChoice,
+    newModel?: string,
+  ) => {
+    setAgent(newAgent);
+    onActiveProviderChange?.(newAgent);
+    const models: Gen2ModelInfo[] = modelsByProvider[newAgent]?.length
+      ? modelsByProvider[newAgent]!
+      : (GEN2_PROVIDER_MODELS[newAgent as keyof typeof GEN2_PROVIDER_MODELS] ??
+        []);
+    const modelToSet =
+      newModel ??
+      (models.find((m) => m.id === selectedModel)?.id ||
+        models[0]?.id ||
+        "sonnet");
+    setSelectedModel(modelToSet);
+    try {
+      sessionStorage.setItem(`codev-gen2-model:${workspace.id}`, modelToSet);
+    } catch {}
+  };
 
   const composer = (
     <form
-      className="gen2-composer"
+      className="gen2-chat-composer"
       data-dragging={dragging || undefined}
       onSubmit={(event) => {
         event.preventDefault();
@@ -503,11 +675,13 @@ export function Gen2ChatPanel({
       }}
     >
       {attachments.length > 0 ? (
-        <ul className="gen2-composer-files" aria-label="Attached files">
+        <ul className="gen2-chat-attachments" aria-label="Attached files">
           {attachments.map(({ id, file }) => (
-            <li key={id}>
-              <span title={file.name}>{file.name}</span>
-              <button
+            <li key={id} className="gen2-chat-attachment">
+              <FileText aria-hidden="true" />
+              <span>{file.name}</span>
+              <WorkspaceButton
+                size="icon"
                 type="button"
                 aria-label={`Remove ${file.name}`}
                 onClick={() =>
@@ -516,30 +690,37 @@ export function Gen2ChatPanel({
                   )
                 }
               >
-                <X aria-hidden="true" size={12} />
-              </button>
+                <X aria-hidden="true" />
+              </WorkspaceButton>
             </li>
           ))}
         </ul>
       ) : null}
+
       <textarea
+        ref={textareaRef}
         value={prompt}
+        disabled={busy}
         onChange={(event) => setPrompt(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === "Enter" && !event.shiftKey) {
             event.preventDefault();
-            void send();
+            if (!busy) void send();
           }
         }}
         placeholder={
           dragging
-            ? "Drop files to attach"
-            : `Ask ${agentLabel} to build something on this machine`
+            ? "Drop files to attach to this turn…"
+            : busy
+              ? `${agentLabel} is working…`
+              : "Ask a question or describe changes…"
         }
         rows={empty ? 3 : 2}
+        className="gen2-chat-composer-input"
         aria-label="Prompt"
       />
-      <div className="gen2-composer-row">
+
+      <div className="gen2-chat-composer-toolbar">
         <input
           ref={fileInputRef}
           id={attachInputId}
@@ -552,178 +733,359 @@ export function Gen2ChatPanel({
             event.target.value = "";
           }}
         />
-        <button
-          type="button"
-          className="gen2-composer-attach"
-          aria-label="Attach files"
-          disabled={running}
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <Paperclip aria-hidden="true" size={15} />
-        </button>
-        <select
-          className="gen2-composer-agent"
-          aria-label="Agent"
-          value={agent}
-          disabled={running}
-          onChange={(event) => setAgent(event.target.value as Gen2AgentChoice)}
-        >
-          {GEN2_AGENT_PROVIDERS.map((entry) => (
-            <option key={entry.id} value={entry.id}>
-              {entry.label}
-            </option>
-          ))}
-        </select>
-        <span className="gen2-composer-hint">
-          {waking
-            ? "Waking the machine…"
-            : running
-              ? `${agentLabel} is working`
-              : ready
-                ? "Enter to send · text files only"
-                : "Starting the machine"}
-        </span>
-        {running ? (
-          <button
-            type="button"
-            className="gen2-composer-stop"
-            onClick={() => void stop()}
-            aria-label={`Stop ${agentLabel}`}
-          >
-            <Square aria-hidden="true" size={11} />
-          </button>
-        ) : (
-          <button
-            type="submit"
-            className="gen2-composer-send"
-            disabled={!canSend}
-            aria-label="Send"
-          >
-            <ArrowUp aria-hidden="true" size={15} />
-          </button>
-        )}
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <WorkspaceButton
+              size="icon"
+              type="button"
+              aria-label="Attach files"
+              disabled={busy}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Paperclip aria-hidden="true" />
+            </WorkspaceButton>
+          </TooltipTrigger>
+          <TooltipContent className="gen2-workspace-surface">
+            Attach files (max 5, 1MB each)
+          </TooltipContent>
+        </Tooltip>
+
+        <div className="gen2-chat-composer-actions">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <WorkspaceButton
+                type="button"
+                size="toolbar"
+                disabled={busy}
+                aria-label="Agent"
+              >
+                <span>
+                  {agentLabel} · {currentModelLabel}
+                </span>
+                <ChevronDown aria-hidden="true" size={13} />
+              </WorkspaceButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="gen2-workspace-surface min-w-[200px]"
+            >
+              <DropdownMenuLabel className="text-xs text-muted-foreground font-semibold px-2 py-1.5">
+                Provider & Model
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {GEN2_AGENT_PROVIDERS.map((entry) => {
+                const isSelectedProvider = agent === entry.id;
+                const models: Gen2ModelInfo[] = modelsByProvider[entry.id]
+                  ?.length
+                  ? modelsByProvider[entry.id]!
+                  : (GEN2_PROVIDER_MODELS[
+                      entry.id as keyof typeof GEN2_PROVIDER_MODELS
+                    ] ?? []);
+                return (
+                  <DropdownMenuSub key={entry.id}>
+                    <DropdownMenuSubTrigger
+                      className="cursor-pointer py-1.5 px-2 text-xs flex items-center justify-between"
+                      onClick={() =>
+                        handleProviderSelect(entry.id, models[0]?.id)
+                      }
+                    >
+                      <span
+                        className={cn(
+                          isSelectedProvider && "font-semibold text-primary",
+                        )}
+                      >
+                        {entry.label}
+                      </span>
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="gen2-workspace-surface min-w-[220px] max-h-[360px] overflow-y-auto">
+                      <DropdownMenuRadioGroup
+                        value={isSelectedProvider ? selectedModel : ""}
+                        onValueChange={(val) => {
+                          handleProviderSelect(entry.id, val);
+                        }}
+                      >
+                        {models.map((m) => (
+                          <DropdownMenuRadioItem
+                            key={m.id}
+                            value={m.id}
+                            className="cursor-pointer text-xs py-1.5 flex flex-col items-start gap-0.5"
+                          >
+                            <span className="font-medium">{m.label}</span>
+                            <span className="text-[10px] text-muted-foreground font-mono">
+                              {m.id}
+                            </span>
+                            {m.description ? (
+                              <span className="text-[10px] text-muted-foreground/80 line-clamp-2">
+                                {m.description}
+                              </span>
+                            ) : null}
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {running ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <WorkspaceButton
+                  type="button"
+                  size="icon"
+                  tone="primary"
+                  onClick={() => void stop()}
+                  aria-label={`Stop ${agentLabel}`}
+                >
+                  <Square aria-hidden="true" />
+                </WorkspaceButton>
+              </TooltipTrigger>
+              <TooltipContent className="gen2-workspace-surface">
+                Stop
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <WorkspaceButton
+                  type="submit"
+                  size="icon"
+                  tone="primary"
+                  disabled={!canSend}
+                  aria-label="Send"
+                >
+                  <ArrowUp aria-hidden="true" />
+                </WorkspaceButton>
+              </TooltipTrigger>
+              <TooltipContent className="gen2-workspace-surface">
+                Send
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
       </div>
     </form>
   );
 
+  const errorBanner = error ? (
+    <div className="gen2-chat-alert" role="alert">
+      <span>{error}</span>
+      <WorkspaceButton
+        size="icon"
+        type="button"
+        aria-label="Dismiss error"
+        onClick={() => setError("")}
+      >
+        <X aria-hidden="true" />
+      </WorkspaceButton>
+    </div>
+  ) : null;
+
   return (
-    <section className="gen2-chat" aria-label="Agent chat">
-      <header className="gen2-chat-bar">
-        <button
-          type="button"
-          className="gen2-chat-new"
-          onClick={() => void newChat()}
-        >
-          <Plus aria-hidden="true" size={13} /> New chat
-        </button>
-        {chats.length > 0 ? (
-          <nav className="gen2-chat-tabs" aria-label="Chats">
-            {chats.slice(0, 6).map((chat) => (
-              <button
-                key={chat.id}
-                type="button"
-                className="gen2-chat-tab"
-                aria-current={chat.id === chatId}
-                onClick={() => setChatId(chat.id)}
-                title={chat.title}
-              >
-                {chat.title}
-              </button>
-            ))}
-          </nav>
+    <TooltipProvider delayDuration={300}>
+      <section className="gen2-chat-panel" aria-label="Agent chat">
+        {!hideChatBar ? (
+          <header className="gen2-chat-panel-bar">
+            <WorkspaceButton
+              type="button"
+              tone="secondary"
+              size="toolbar"
+              onClick={() => void newChat()}
+            >
+              <Plus aria-hidden="true" /> New chat
+            </WorkspaceButton>
+            {chats.length > 0 ? (
+              <nav className="gen2-chat-panel-tabs" aria-label="Chats">
+                {chats.slice(0, 5).map((chat) => (
+                  <button
+                    key={chat.id}
+                    type="button"
+                    className={cn(
+                      "gen2-chat-panel-tab",
+                      chat.id === chatId && "is-current",
+                    )}
+                    aria-current={chat.id === chatId}
+                    onClick={() => {
+                      setChatId(chat.id);
+                      onSelectChatId?.(chat.id);
+                      pinToLatest();
+                    }}
+                    title={chat.title}
+                  >
+                    {chat.title}
+                  </button>
+                ))}
+              </nav>
+            ) : null}
+          </header>
         ) : null}
-      </header>
 
-      {empty ? (
-        <div className="gen2-chat-hero">
-          <div className="gen2-chat-hero-inner">
-            <h2>What should we build?</h2>
-            <p>
-              {agentLabel} works on this workspace&rsquo;s own machine. You can
-              watch the files, terminal, and Git change beside it.
-            </p>
-            {needsProvider ? (
-              <Gen2ConnectProvider
-                agent={agent}
-                onConnected={() => void refreshProvider()}
-              />
-            ) : (
-              <>
-                {composer}
-                {error ? (
-                  <p className="gen2-chat-error" role="alert">
-                    {error}
-                  </p>
-                ) : null}
-                <ul className="gen2-chat-suggestions">
-                  {SUGGESTIONS.map((suggestion) => (
-                    <li key={suggestion}>
+        {empty ? (
+          <div className="gen2-chat-empty">
+            <div className="gen2-chat-empty-inner">
+              <div className="gen2-chat-empty-intro">
+                <h2>What should we build?</h2>
+                <p className="gen2-chat-empty-copy">
+                  {agentLabel} can help you explore files, run commands, and
+                  build in this workspace.
+                </p>
+              </div>
+
+              {provider !== null && !provider.connected ? (
+                <Gen2ConnectProvider
+                  agent={agent}
+                  onConnected={() => void refreshProvider()}
+                />
+              ) : (
+                <>
+                  {composer}
+                  {errorBanner}
+                  <div className="gen2-chat-suggestions">
+                    {SUGGESTIONS.map((sug) => (
                       <button
+                        key={sug.title}
                         type="button"
-                        onClick={() => setPrompt(suggestion)}
+                        className="gen2-chat-suggestion"
+                        onClick={() => {
+                          setPrompt(sug.prompt);
+                          textareaRef.current?.focus();
+                        }}
                       >
-                        {suggestion}
+                        <span className="gen2-chat-suggestion-title">
+                          {sug.title}
+                        </span>
+                        <span className="gen2-chat-suggestion-desc">
+                          {sug.desc}
+                        </span>
                       </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="gen2-chat-filled">
+            <div className="gen2-chat-transcript-wrap">
+              <div
+                ref={transcriptRef}
+                className="gen2-chat-transcript"
+                onScroll={onScroll}
+              >
+                <ol className="gen2-chat-thread">
+                  {thread.messages.map((message) => {
+                    const isUser = message.role === "user";
+                    return (
+                      <li
+                        key={message.id}
+                        data-role={message.role}
+                        className={cn(
+                          "gen2-chat-turn",
+                          isUser && "gen2-chat-turn-user",
+                        )}
+                      >
+                        {isUser ? (
+                          <div className="gen2-chat-user">
+                            <p>{message.body}</p>
+                          </div>
+                        ) : (
+                          <div className="gen2-chat-assistant">
+                            {message.items?.length ? (
+                              <Gen2TurnActivity
+                                items={message.items}
+                                onOpenFile={onOpenFile}
+                              />
+                            ) : null}
+                            <MarkdownContent
+                              className="gen2-chat-markdown"
+                              text={message.body}
+                            />
+                            <MessageActionButtons text={message.body} />
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+
+                  {running || starting ? (
+                    <li data-role="assistant" className="gen2-chat-turn">
+                      <div className="gen2-chat-assistant">
+                        <Gen2TurnActivity
+                          items={items}
+                          onOpenFile={onOpenFile}
+                          live
+                        />
+                        {liveReply ? (
+                          <MarkdownContent
+                            className="gen2-chat-markdown"
+                            text={liveReply}
+                          />
+                        ) : items.length === 0 ? (
+                          <div className="gen2-chat-thinking" role="status">
+                            Thinking…
+                          </div>
+                        ) : null}
+                      </div>
                     </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </div>
-        </div>
-      ) : (
-        <>
-          <div className="gen2-chat-scroll">
-            <ol className="gen2-thread">
-              {thread.messages.map((message) => (
-                <li key={message.id} data-role={message.role}>
-                  {message.items?.length ? (
-                    <Gen2TurnActivity
-                      items={message.items}
-                      onOpenFile={onOpenFile}
-                    />
                   ) : null}
-                  <MarkdownContent
-                    text={message.body}
-                    className="gen2-message"
-                  />
-                </li>
-              ))}
-              {running ? (
-                <li data-role="assistant">
-                  <Gen2TurnActivity
-                    items={items}
-                    onOpenFile={onOpenFile}
-                    live
-                  />
-                  {liveReply ? (
-                    <MarkdownContent
-                      text={liveReply}
-                      className="gen2-message"
-                    />
-                  ) : items.length === 0 ? (
-                    <p
-                      className="gen2-message gen2-message-waiting"
-                      role="status"
-                    >
-                      {agentLabel} is starting…
-                    </p>
-                  ) : null}
-                </li>
+                </ol>
+              </div>
+              {showJump ? (
+                <div className="gen2-chat-jump">
+                  <WorkspaceButton
+                    type="button"
+                    tone="secondary"
+                    size="toolbar"
+                    onClick={jumpToLatest}
+                  >
+                    <ArrowDown aria-hidden="true" />
+                    Jump to latest
+                  </WorkspaceButton>
+                </div>
               ) : null}
-            </ol>
-            <div ref={bottomRef} />
+            </div>
+
+            <div className="gen2-chat-dock">
+              {errorBanner}
+              {composer}
+            </div>
           </div>
+        )}
+      </section>
+    </TooltipProvider>
+  );
+}
 
-          {error ? (
-            <p className="gen2-wb-banner gen2-wb-banner-error" role="alert">
-              {error}
-            </p>
-          ) : null}
-
-          {composer}
-        </>
-      )}
-    </section>
+function MessageActionButtons({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="gen2-chat-message-actions">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <WorkspaceButton
+            size="icon"
+            type="button"
+            aria-label="Copy message"
+            onClick={() => {
+              void navigator.clipboard.writeText(text);
+              setCopied(true);
+              window.setTimeout(() => setCopied(false), 2000);
+            }}
+          >
+            {copied ? (
+              <Check aria-hidden="true" />
+            ) : (
+              <Copy aria-hidden="true" />
+            )}
+          </WorkspaceButton>
+        </TooltipTrigger>
+        <TooltipContent className="gen2-workspace-surface">
+          {copied ? "Copied" : "Copy"}
+        </TooltipContent>
+      </Tooltip>
+    </div>
   );
 }

@@ -2,89 +2,105 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeft,
   Blocks,
   CreditCard,
-  KeyRound,
   Plug,
+  Search,
   User,
 } from "lucide-react";
 
+import { Input } from "@/components/ui/input";
+import { LinkButton } from "@/components/ui/button";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { cn } from "@/lib/platform/utils";
 
 type SettingsNavItem = {
   name: string;
   href: string;
   icon: LucideIcon;
+  keywords?: string[];
 };
 
-type SettingsNavGroup = { label: string; items: SettingsNavItem[] };
-
-// Grouped by what the member is trying to do, not by page count: who they are,
-// what runs their agents, and what those agents can reach.
-const navGroups: SettingsNavGroup[] = [
+const personalNav: SettingsNavItem[] = [
+  { name: "Profile", href: "/settings/personal/profile", icon: User },
   {
-    label: "Account",
-    items: [
-      { name: "Profile", href: "/settings/personal/profile", icon: User },
-      { name: "Billing", href: "/settings/personal/billing", icon: CreditCard },
+    name: "Billing",
+    href: "/settings/personal/billing",
+    icon: CreditCard,
+    keywords: ["stripe", "plan", "subscription", "payment"],
+  },
+  {
+    name: "AI Provider Accounts",
+    href: "/settings/personal/providers",
+    icon: Plug,
+    keywords: [
+      "openai",
+      "anthropic",
+      "api key",
+      "codex",
+      "claude",
+      "cursor",
+      "connect",
+      "sign in",
     ],
   },
   {
-    label: "Agents",
-    items: [
-      {
-        name: "AI Provider Accounts",
-        href: "/settings/personal/providers",
-        icon: Plug,
-      },
-      {
-        name: "Environment Variables",
-        href: "/settings/personal/environment",
-        icon: KeyRound,
-      },
-    ],
-  },
-  {
-    label: "Connections",
-    items: [
-      {
-        name: "Integrations",
-        href: "/settings/personal/integrations",
-        icon: Blocks,
-      },
-    ],
+    name: "Integrations",
+    href: "/settings/personal/integrations",
+    icon: Blocks,
+    keywords: ["github", "gitlab", "linear", "jira"],
   },
 ];
 
+function matchesQuery(item: SettingsNavItem, query: string): boolean {
+  if (!query) return true;
+  const haystack = [item.name, ...(item.keywords ?? [])]
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(query.toLowerCase());
+}
+
 export function SettingsSidebar() {
   const pathname = usePathname();
+  const [query, setQuery] = useState("");
+  const visibleNav = personalNav.filter((item) => matchesQuery(item, query));
 
   return (
-    <aside className="orca-settings-scope sticky top-0 flex h-dvh w-[280px] shrink-0 flex-col self-start border-r border-worktree-sidebar-border bg-worktree-sidebar">
-      {/* Leaves room for the app sidebar's floating show button. */}
-      <div className="border-b border-worktree-sidebar-border px-3 py-3 [.is-sidebar-collapsed_&]:pl-12">
-        <Link
-          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-worktree-sidebar-accent/60 hover:text-worktree-sidebar-foreground"
-          href="/dashboard"
-        >
-          <ArrowLeft aria-hidden="true" className="size-4 shrink-0" />
-          Back to Dashboard
-        </Link>
+    <aside className="flex w-full shrink-0 flex-col gap-3 border-b border-border px-3 py-3 md:w-56 md:border-r md:border-b-0">
+      <LinkButton className="w-fit" href="/gen2" size="sm" variant="ghost">
+        <ArrowLeft aria-hidden="true" data-icon="inline-start" />
+        Back to Dashboard
+      </LinkButton>
+      <div className="relative">
+        <Search
+          aria-hidden="true"
+          className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+        />
+        <Input
+          aria-label="Search settings"
+          className="h-8 pl-8"
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search settings"
+          type="search"
+          value={query}
+        />
       </div>
-
-      <nav
-        aria-label="Settings"
-        className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3 py-4"
-      >
-        {navGroups.map((group) => (
-          <div className="space-y-1" key={group.label}>
-            <p className="px-3 pb-1 text-[11px] font-medium tracking-[0.18em] text-muted-foreground uppercase">
-              {group.label}
-            </p>
-            {group.items.map((item) => {
+      <div className="flex flex-col gap-2">
+        <p className="px-2 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
+          Personal
+        </p>
+        {visibleNav.length > 0 ? (
+          <nav aria-label="Personal settings" className="flex flex-col gap-0.5">
+            {visibleNav.map((item) => {
               const isActive = pathname === item.href;
               const Icon = item.icon;
 
@@ -92,25 +108,31 @@ export function SettingsSidebar() {
                 <Link
                   aria-current={isActive ? "page" : undefined}
                   className={cn(
-                    "flex min-h-9 w-full items-center gap-2 rounded-lg border-l-2 border-transparent py-1.5 pr-3 pl-[10px] text-left text-[13px] transition-colors duration-150 outline-none focus-visible:ring-[3px] focus-visible:ring-primary/50",
-                    // A neutral wash plus a thin accent rule on the left,
-                    // not a color wash -- carries "selected" through a
-                    // precise mark instead of a blue block.
+                    "flex min-h-9 items-center gap-2 rounded-md px-2 text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50",
                     isActive
-                      ? "border-primary bg-foreground/5 font-medium text-foreground"
-                      : "text-worktree-sidebar-foreground/60 hover:bg-primary/5 hover:text-worktree-sidebar-foreground",
+                      ? "bg-secondary font-medium text-secondary-foreground"
+                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
                   )}
                   href={item.href}
                   key={item.href}
                 >
                   <Icon aria-hidden="true" className="size-4 shrink-0" />
-                  <span className="truncate">{item.name}</span>
+                  <span className="min-w-0 truncate">{item.name}</span>
                 </Link>
               );
             })}
-          </div>
-        ))}
-      </nav>
+          </nav>
+        ) : (
+          <Empty className="px-2 py-3">
+            <EmptyHeader>
+              <EmptyTitle>No matching settings.</EmptyTitle>
+              <EmptyDescription>
+                Try a provider, integration, or account name.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        )}
+      </div>
     </aside>
   );
 }

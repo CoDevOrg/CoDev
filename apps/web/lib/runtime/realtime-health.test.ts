@@ -4,7 +4,7 @@ const { checkRealtimeConnection } = vi.hoisted(() => ({
   checkRealtimeConnection: vi.fn(),
 }));
 
-vi.mock("@/lib/workspaces/collaboration-server", () => ({
+vi.mock("@/lib/gen2/collaboration-redis", () => ({
   checkRealtimeConnection,
 }));
 

@@ -27,7 +27,12 @@ function getRemoteUrlCached(
 	const inFlight = remoteUrlInFlight.get(repoPath);
 	if (inFlight) return inFlight;
 
-	const resolving = getRemoteUrl(createUserSimpleGit(repoPath).env(env))
+	const resolving = getRemoteUrl(
+		createUserSimpleGit(repoPath).env({
+			...(process.env.PATH ? { PATH: process.env.PATH } : {}),
+			...env,
+		}),
+	)
 		.then((url) => {
 			remoteUrlCache.set(repoPath, { url, resolvedAt: Date.now() });
 			return url;
@@ -57,6 +62,9 @@ export function createGitEnvResolver(provider: GitCredentialProvider) {
 			...initialCredentials.env,
 			...credentials.env,
 			GIT_OPTIONAL_LOCKS: "0",
+			GIT_CONFIG_COUNT: "1",
+			GIT_CONFIG_KEY_0: "safe.directory",
+			GIT_CONFIG_VALUE_0: "*",
 			// Git translates its diagnostics, and the classifier that keeps
 			// environmental failures off the 500 path recognises git's own
 			// English wording (trpc/router/git/utils/classify-git-error.ts). Pin

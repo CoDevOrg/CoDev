@@ -1,4 +1,7 @@
 import { realpath } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { parseCoDevWorktrees } from "./worktree-paths";
 import { relative, resolve, sep } from "node:path";
 import { timingSafeEqual } from "node:crypto";
 import type { Hono } from "hono";
@@ -109,14 +112,15 @@ export async function resolveCoDevWorktreeRoot(
 ) {
 	const checkedId = worktreeIdSchema.parse(worktreeId);
 	const root = await realpath(workspaceRoot);
-	const requested =
-		checkedId === CODEV_PRIMARY_WORKTREE_ID
-			? root
-			: resolve(root, ".git", "codev-agent-worktrees", checkedId);
-	const resolved = await realpath(requested);
-	if (!isWithin(root, resolved)) {
-		throw new Error("Worktree path escapes the CoDev workspace.");
-	}
+	if (checkedId === CODEV_PRIMARY_WORKTREE_ID) return root;
+	const { stdout } = await promisify(execFile)("git", ["-C", root, "worktree", "list", "--porcelain"], {
+		timeout: 10_000,
+		maxBuffer: 1024 * 1024,
+	});
+	const entry = parseCoDevWorktrees(stdout, root).find((worktree) => worktree.worktreeId === checkedId);
+	if (!entry) throw new Error("Worktree is not registered with this repository.");
+	const resolved = await realpath(entry.path);
+	if (!isWithin(root, resolved)) throw new Error("Worktree path escapes the CoDev workspace.");
 	return resolved;
 }
 
@@ -130,12 +134,12 @@ function requestSecretMatches(actual: string | undefined, expected: string) {
 	);
 }
 
-function queryInput(request: Request, schema: typeof listSchema | typeof readSchema) {
+function queryInput<T extends typeof listSchema | typeof readSchema>(request: Request, schema: T) {
 	const query = new URL(request.url).searchParams;
 	return schema.safeParse({
 		worktreeId: query.get("worktreeId"),
 		path: query.get("path"),
-	});
+	}) as z.ZodSafeParseResult<z.infer<T>>;
 }
 
 function asRelativePath(root: string, absolutePath: string) {
@@ -155,6 +159,7 @@ async function listFiles(service: FileService, root: string) {
 		if (!directory) break;
 		const { entries } = await service.listDirectory({ absolutePath: directory });
 		for (const entry of entries) {
+			if (entry.name === ".git") continue;
 			if (entry.kind === "directory") {
 				if (!HIDDEN_DIRECTORIES.has(entry.name)) {
 					files.push({

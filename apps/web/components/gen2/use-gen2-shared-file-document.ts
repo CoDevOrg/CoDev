@@ -85,6 +85,7 @@ export function useGen2SharedFileDocument(input: {
 
     let disposed = false;
     let reconnectTimer: number | null = null;
+    let retryCount = 0;
     const doc = new Y.Doc();
     const nextText = doc.getText("content");
     const nextAwareness = new Awareness(doc);
@@ -134,6 +135,9 @@ export function useGen2SharedFileDocument(input: {
       setState(syncedRef.current ? "syncing" : "connecting");
       const socket = new WebSocket(socketUrl(input.workspaceId));
       socketRef.current = socket;
+      socket.onerror = () => {
+        // Error handling will flow through onclose
+      };
       socket.onopen = () => send({ type: "join", worktreeId });
       socket.onmessage = (event) => {
         if (typeof event.data !== "string") return;
@@ -152,6 +156,7 @@ export function useGen2SharedFileDocument(input: {
         } else if (message.type === "sync" && message.path === path) {
           Y.applyUpdate(doc, decodeBase64(message.update), REMOTE_ORIGIN);
           syncedRef.current = true;
+          retryCount = 0;
           setState("connected");
           setNotice(null);
         } else if (
@@ -205,8 +210,23 @@ export function useGen2SharedFileDocument(input: {
         if (socketRef.current === socket) socketRef.current = null;
         if (disposed) return;
         setState("disconnected");
-        setNotice("Collaboration disconnected. Reconnecting…");
-        reconnectTimer = window.setTimeout(connect, 1_000);
+        retryCount += 1;
+        if (syncedRef.current) {
+          if (retryCount <= 3) {
+            setNotice("Collaboration disconnected. Reconnecting…");
+          } else {
+            setNotice("Working offline · Changes save to workspace");
+          }
+        } else {
+          // Never established a collaborative session (single-user or offline);
+          // don't present an alarming disconnected notice when local editing works.
+          setNotice(null);
+        }
+        const delay = Math.min(
+          1000 * Math.pow(2, Math.min(retryCount - 1, 4)),
+          15_000,
+        );
+        reconnectTimer = window.setTimeout(connect, delay);
       };
     };
     connect();

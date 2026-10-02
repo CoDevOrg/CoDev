@@ -10,10 +10,7 @@ import {
 } from "@/lib/github/github-link";
 
 /**
- * Starts the GitHub account-linking OAuth flow from the embedded personal
- * settings surface. The Orca iframe can't invoke a Next.js Server Action
- * directly, so this is a plain route the "Connect GitHub account" link
- * navigates the top-level window to (target="_top").
+ * Starts the GitHub account-linking OAuth flow from personal settings.
  */
 export async function GET() {
   const user = await getApiUser();

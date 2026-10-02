@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "dotenv -e ../../.env.local -- drizzle-kit migrate"
+    "db:migrate": "dotenv -e ../../.env.local -- drizzle-kit migrate",
+    "db:check": "node scripts/check-schema.mjs"
   },
   "dependencies": {
     "@upstash/redis": "^1.38.0",

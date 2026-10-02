@@ -83,9 +83,7 @@ export async function AppChrome({
       <header className="app-nav">
         <Brand isAdminHost={isAdminHost} />
         <nav aria-label="Application navigation">
-          <Link href={publicAppHref("/dashboard", isAdminHost)}>
-            Workspaces
-          </Link>
+          <Link href={publicAppHref("/gen2", isAdminHost)}>Workspaces</Link>
         </nav>
         <div className="user-menu">
           <ThemeToggle />

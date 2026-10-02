@@ -6,7 +6,6 @@ import { Analytics } from "@vercel/analytics/next";
 import "./theme-tokens.css";
 import "./globals.css";
 import "./app-theme.css";
-import "./team-chat.css";
 
 import { VisitTracker } from "@/components/landing/visit-tracker";
 import { THEME_INIT_SCRIPT } from "@/components/shell/theme-toggle";
@@ -63,7 +62,10 @@ export default function RootLayout({
             query already handles that case without JS. */}
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
-      <body className={`${sans.variable} ${mono.variable}`}>
+      <body
+        className={`${sans.variable} ${mono.variable}`}
+        suppressHydrationWarning
+      >
         {children}
         <Analytics />
         <Suspense fallback={null}>

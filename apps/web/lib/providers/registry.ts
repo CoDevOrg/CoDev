@@ -17,25 +17,13 @@ import type { AuthProvider } from "@codev/shared-types";
  */
 
 /** A coding agent a member connects. Not the same as the credential's
- *  `provider` column, which is the vendor (`openai`, `anthropic`, `cursor`). */
-export type ProviderId = "codex" | "claude" | "cursor";
+ *  `provider` column, which is the vendor (`openai` or `anthropic`). */
+export type ProviderId = "codex" | "claude";
 
-/**
- * The executors that can run a credential. `workspace` is the Gen 1 Orca IDE
- * host and `gen2` the Firecracker instance: they are separate because they
- * accept credentials differently. The Gen 1 host takes named per-provider
- * fields (`StartIdeInput.claudeCodeOauthToken` and five siblings); the Gen 2
- * guest exec route takes only `codexAuthCacheJson` and has no channel for an
- * environment variable at all. Collapsing the two would re-create the lie
- * this registry exists to prevent.
- */
-export type ExecutorSurface = "rooms" | "workspace" | "gen2";
+/** The runtime surfaces that can execute a member's provider credential. */
+export type ExecutorSurface = "rooms" | "gen2";
 
-export const EXECUTOR_SURFACES: readonly ExecutorSurface[] = [
-  "rooms",
-  "workspace",
-  "gen2",
-];
+export const EXECUTOR_SURFACES: readonly ExecutorSurface[] = ["rooms", "gen2"];
 
 /** How a member obtains a credential. */
 export type ConnectMethod = "browser" | "cli" | "paste";
@@ -49,7 +37,6 @@ export type ConnectMethod = "browser" | "cli" | "paste";
 export type CredentialKind =
   | "codex_auth_cache"
   | "claude_setup_token"
-  | "cursor_tokens"
   | "api_key";
 
 /** What a launched process needs in order to authenticate as the member.
@@ -73,7 +60,6 @@ export const PROFILE_DIR_TOKEN = "{{profileDir}}";
 export type ResolvedSecret =
   | { kind: "codex_auth_cache"; authCacheJson: string }
   | { kind: "claude_setup_token"; token: string }
-  | { kind: "cursor_tokens"; accessToken: string; refreshToken: string }
   | { kind: "api_key"; apiKey: string };
 
 export type ProviderCredentialKind = {
@@ -105,7 +91,7 @@ const CODEX: ProviderDefinition = {
       // byte-identical `auth.json` (see `codex-oauth-connection.ts`), so
       // unlike every other browser sign-in this one does reach a shared host.
       connect: ["browser", "cli"],
-      runs: { rooms: true, workspace: true, gen2: true },
+      runs: { rooms: true, gen2: true },
     },
     {
       kind: "api_key",
@@ -113,7 +99,7 @@ const CODEX: ProviderDefinition = {
       connect: ["paste"],
       // Rooms run only the two subscription forms today; the rooms executor
       // has no API-key path (`resolvePersonalChatSubscription`).
-      runs: { rooms: false, workspace: true, gen2: true },
+      runs: { rooms: false, gen2: true },
     },
   ],
 };
@@ -135,33 +121,13 @@ const CLAUDE: ProviderDefinition = {
       // (`buildGen2ClaudeCommand`), reduced by `reduceClaudeTurn`. The token
       // reaches the process as `CLAUDE_CODE_OAUTH_TOKEN` in the launch
       // profile, so it needs a guest image that understands `launchProfile`.
-      runs: { rooms: true, workspace: true, gen2: true },
+      runs: { rooms: true, gen2: true },
     },
     {
       kind: "api_key",
       label: "Anthropic API key",
       connect: ["paste"],
-      runs: { rooms: false, workspace: true, gen2: false },
-    },
-  ],
-};
-
-const CURSOR: ProviderDefinition = {
-  id: "cursor",
-  label: "Cursor",
-  vendor: "cursor",
-  kinds: [
-    {
-      kind: "cursor_tokens",
-      label: "Cursor login",
-      connect: ["browser", "paste"],
-      runs: { rooms: false, workspace: true, gen2: false },
-    },
-    {
-      kind: "api_key",
-      label: "Cursor API key",
-      connect: ["paste"],
-      runs: { rooms: false, workspace: true, gen2: false },
+      runs: { rooms: false, gen2: true },
     },
   ],
 };
@@ -169,14 +135,9 @@ const CURSOR: ProviderDefinition = {
 export const PROVIDERS: Readonly<Record<ProviderId, ProviderDefinition>> = {
   codex: CODEX,
   claude: CLAUDE,
-  cursor: CURSOR,
 };
 
-export const PROVIDER_IDS: readonly ProviderId[] = [
-  "codex",
-  "claude",
-  "cursor",
-];
+export const PROVIDER_IDS: readonly ProviderId[] = ["codex", "claude"];
 
 export function providerDefinition(id: ProviderId): ProviderDefinition {
   return PROVIDERS[id];
@@ -227,7 +188,6 @@ export function codexApiKeyAuthCache(apiKey: string): string {
 const API_KEY_ENV: Readonly<Record<ProviderId, string>> = {
   codex: "OPENAI_API_KEY",
   claude: "ANTHROPIC_API_KEY",
-  cursor: "CURSOR_API_KEY",
 };
 
 /**
@@ -236,7 +196,7 @@ const API_KEY_ENV: Readonly<Record<ProviderId, string>> = {
  * One exhaustive switch, so a new credential kind cannot be added without
  * deciding how a machine consumes it. The provider is a parameter because the
  * same kind lands differently per vendor: Codex wants an `auth.json` even for
- * a bare key, while Claude and Cursor want an environment variable.
+ * a bare key, while Claude wants an environment variable.
  */
 export function launchProfileFor(
   id: ProviderId,
@@ -250,18 +210,6 @@ export function launchProfileFor(
       };
     case "claude_setup_token":
       return { env: { CLAUDE_CODE_OAUTH_TOKEN: secret.token } };
-    case "cursor_tokens":
-      return {
-        files: [
-          {
-            path: ".cursor/auth.json",
-            contents: JSON.stringify({
-              accessToken: secret.accessToken,
-              refreshToken: secret.refreshToken,
-            }),
-          },
-        ],
-      };
     case "api_key":
       return id === "codex"
         ? {

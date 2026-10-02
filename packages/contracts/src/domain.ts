@@ -35,8 +35,8 @@ export const memberCapabilitiesSchema = z.object({
 });
 
 /**
- * The product-facing workspace roles. Database/OpenFGA access-role names may
- * remain more specific for compatibility, but every member is presented with
+ * The product-facing workspace roles. Database access-role names may remain
+ * more specific for compatibility, but every member is presented with
  * one of these three capability sets.
  */
 export const workspaceRoleSchema = z.enum([

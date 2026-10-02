@@ -4,7 +4,6 @@ import { readServerEnvironment } from "@codev/config";
 import { z } from "zod";
 
 import { fakeGuestEnabled, handleFakeGuestRequest } from "./fake-guest";
-import { resolveRuntimeHostForWorkspace } from "./runtime-host-pool";
 
 const errorSchema = z.object({
   error: z.string(),
@@ -23,7 +22,7 @@ export class OrchestratorError extends Error {
     this.name = "OrchestratorError";
   }
 
-  /** Used by `withUser`/`withWorkspace` in place of the plain error body. */
+  /** Used by `withUser` in place of the plain error body. */
   toResponse() {
     return Response.json(
       {
@@ -69,31 +68,6 @@ export async function orchestratorRequestAt(
   return orchestratorDirectRequest(method, path, body, timeoutMs, endpoint);
 }
 
-function workspaceIdFromOrchestratorRequest(path: string, body: unknown) {
-  const match = /^\/v1\/sandboxes\/([^/]+)/.exec(path);
-  if (match?.[1]) {
-    try {
-      return decodeURIComponent(match[1]);
-    } catch {
-      return undefined;
-    }
-  }
-
-  // Sandbox creation carries its workspace id in the JSON body rather than
-  // the path. Keep this narrow so arbitrary orchestrator payloads never affect
-  // host routing accidentally.
-  if (
-    path === "/v1/sandboxes" &&
-    typeof body === "object" &&
-    body !== null &&
-    "workspaceId" in body &&
-    typeof body.workspaceId === "string"
-  ) {
-    return body.workspaceId;
-  }
-  return undefined;
-}
-
 /** The orchestrator's bearer-authenticated HTTPS endpoint, via Caddy on the
  * host (see ORCHESTRATOR_DIRECT_URL). */
 async function orchestratorDirectRequest(
@@ -120,14 +94,7 @@ async function orchestratorDirectRequest(
       "ORCHESTRATOR_DIRECT_URL/ORCHESTRATOR_DIRECT_SECRET are not configured.",
     );
   }
-  const workspaceId = workspaceIdFromOrchestratorRequest(path, body);
-  const assignedHost = endpointOverride
-    ? null
-    : workspaceId
-      ? await resolveRuntimeHostForWorkspace(workspaceId)
-      : null;
-  const targetEndpoint =
-    endpointOverride ?? assignedHost?.runtimeAddress ?? endpoint;
+  const targetEndpoint = endpointOverride ?? endpoint;
   // `new URL(path, base)` treats a leading-slash path as origin-relative,
   // which would silently drop the direct endpoint's own path prefix — join
   // as plain strings instead.

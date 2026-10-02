@@ -2,8 +2,8 @@
 # Roll out the CoDev runtime on Azure.
 #
 # The Azure counterpart of infra/runtime/deploy.sh, and deliberately the same
-# shape: build the orchestrator and guestd, build orca serve, upload both to
-# the artifact store, then apply the stack. The differences are the ones the
+# shape: build the orchestrator and guestd, prepare the Superset guest host,
+# upload runtime artifacts, then apply the stack. The differences are the ones the
 # platform forces -- Bicep instead of CloudFormation, a blob container instead
 # of a bucket, Key Vault instead of SSM -- and the one it does not: there is
 # no API Gateway or Lambda proxy to deploy, because apps/web reaches the
@@ -30,7 +30,6 @@ readonly jailer_volume_size_gib="${CODEV_JAILER_VOLUME_SIZE_GIB:-128}"
 readonly release_version="${CODEV_RELEASE_VERSION:-$(git -C "${repo_root}" rev-parse --short=12 HEAD)}"
 readonly budget_alert_email="${CODEV_BUDGET_ALERT_EMAIL:-}"
 readonly enable_budget="${CODEV_ENABLE_BUDGET:-false}"
-readonly skip_orca_build="${CODEV_SKIP_ORCA_BUILD:-}"
 readonly ssh_public_key="${CODEV_HOST_SSH_PUBLIC_KEY:-$(cat "${HOME}/.ssh/id_rsa.pub" 2>/dev/null || true)}"
 
 if [[ -z "${ssh_public_key}" ]]; then
@@ -105,14 +104,6 @@ if [[ "${superset_output_dir}" != "${build_dir}" ]]; then
   install -m 0644 "${superset_output_dir}/${superset_archive}" "${build_dir}/${superset_archive}"
   install -m 0644 "${superset_output_dir}/${superset_archive}.sha256" \
     "${build_dir}/${superset_archive}.sha256"
-fi
-
-# Building orca serve from source takes ~15-30 minutes; skip it for
-# orchestrator-only iteration once a matching archive already exists at the
-# target release version.
-if [[ -z "${skip_orca_build}" ]]; then
-  echo "==> Building orca serve"
-  "${repo_root}/infra/runtime/scripts/build-orca-serve.sh" "${build_dir}" "${host_arch}"
 fi
 
 # ---------------------------------------------------------------------------

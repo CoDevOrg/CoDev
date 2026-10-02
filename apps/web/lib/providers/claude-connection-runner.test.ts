@@ -10,7 +10,6 @@ vi.mock("../runtime/orchestrator", () => ({
   ensureHostReady: vi.fn(),
   provisionSandbox: vi.fn(),
   getSandbox: vi.fn(),
-  snapshotWorkspace: vi.fn(),
   resumeSandbox: vi.fn(),
   pollClaudeSetupTokenInSandbox: vi.fn(),
   startClaudeSetupTokenInSandbox: vi.fn(),

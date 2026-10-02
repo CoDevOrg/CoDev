@@ -11,8 +11,6 @@ import {
   resolveHostedCodexSubscription,
 } from "./hosted-codex-subscription-credentials";
 import {
-  EXECUTOR_SURFACES,
-  PROVIDER_IDS,
   providerDefinition,
   providerVendor,
   runnableKinds,
@@ -21,16 +19,12 @@ import {
   type ProviderId,
   type ResolvedSecret,
 } from "./registry";
-import { belongsToSharedScope } from "./scoped-credential-sharing";
 
 /**
  * The one credential resolver.
  *
- * It replaced three that disagreed: `resolveAgentCredential` (Gen 1),
- * `resolvePersonalChatSubscription` (rooms), and `resolveGen2Credential` (Gen 2) —
- * none of which consulted the capability table the settings page rendered
- * from. Readiness is now literally this function with `dryRun`, so what a
- * member is told and what the executor does cannot drift.
+ * It resolves personal credentials for Rooms and Gen 2 from the same
+ * capability table the settings page uses.
  *
  * Resolution order is the provider's own kind order from the registry,
  * filtered to the kinds the target executor can run.
@@ -40,14 +34,11 @@ export type ResolveInput = {
   userId: string;
   provider: ProviderId;
   surface: ExecutorSurface;
-  /** Enables the workspace's shared login as a fallback, and is required for
-   *  any shared lookup. Membership is verified before a shared row is used. */
-  workspaceId?: string | undefined;
   /** Skip decryption — for readiness, which needs only "would this work". */
   dryRun?: boolean | undefined;
 };
 
-export type CredentialSource = "personal" | "shared";
+export type CredentialSource = "personal";
 
 export type ResolvedCredentialRecord = {
   ok: true;
@@ -94,15 +85,12 @@ type Loaded = {
  * ---------------------------------------------------------------------- */
 
 async function loadCodexAuthCache(input: ResolveInput): Promise<Loaded | null> {
-  const hosted = await resolveHostedCodexSubscription({
-    userId: input.userId,
-    ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
-  });
+  const hosted = await resolveHostedCodexSubscription({ userId: input.userId });
   if (!hosted?.credential.encryptedMaterial) return null;
   const material = hosted.credential.encryptedMaterial;
   return {
     credentialId: hosted.credential.id,
-    source: hosted.source === "WORKSPACE" ? "shared" : "personal",
+    source: "personal",
     allowInSharedWorkspaces:
       hosted.credential.allowInSharedWorkspaces !== false,
     read: async () => {
@@ -117,8 +105,7 @@ async function loadCodexAuthCache(input: ResolveInput): Promise<Loaded | null> {
 type CredentialRow = typeof schema.providerCredentials.$inferSelect;
 
 async function findRow(
-  scopeType: "USER" | "WORKSPACE" | "WORKSPACE",
-  scopeId: string,
+  userId: string,
   vendor: string,
   credentialType: "API_KEY" | "OAUTH_TOKEN",
 ): Promise<CredentialRow | null> {
@@ -127,8 +114,8 @@ async function findRow(
     .from(schema.providerCredentials)
     .where(
       and(
-        eq(schema.providerCredentials.scopeType, scopeType),
-        eq(schema.providerCredentials.scopeId, scopeId),
+        eq(schema.providerCredentials.scopeType, "USER"),
+        eq(schema.providerCredentials.scopeId, userId),
         eq(schema.providerCredentials.provider, vendor as never),
         eq(schema.providerCredentials.credentialType, credentialType),
         eq(schema.providerCredentials.isConnected, true),
@@ -139,96 +126,41 @@ async function findRow(
   return row ?? null;
 }
 
-/** Personal row wins; a shared one needs both its sharing flag and real
- *  membership. Mirrors `resolvePersonalOrSharedCredential`. */
-async function findPersonalOrShared(
-  input: ResolveInput,
-  vendor: string,
-  credentialType: "API_KEY" | "OAUTH_TOKEN",
-  accept: (row: CredentialRow) => boolean = () => true,
-): Promise<{ row: CredentialRow; source: CredentialSource } | null> {
-  const personal = await findRow("USER", input.userId, vendor, credentialType);
-  if (personal && accept(personal)) {
-    return { row: personal, source: "personal" };
-  }
-  if (!input.workspaceId) return null;
-  const shared = await findRow(
-    "WORKSPACE",
-    input.workspaceId,
-    vendor,
-    credentialType,
-  );
-  if (
-    shared &&
-    accept(shared) &&
-    (await belongsToSharedScope(input.userId, input.workspaceId))
-  ) {
-    return { row: shared, source: "shared" };
-  }
-  return null;
-}
-
 function loadedFromRow(
-  found: { row: CredentialRow; source: CredentialSource },
+  row: CredentialRow,
   read: (row: CredentialRow) => Promise<ResolvedSecret | null>,
 ): Loaded {
   return {
-    credentialId: found.row.id,
-    source: found.source,
+    credentialId: row.id,
+    source: "personal",
     // NOT NULL default true in the schema; `!== false` keeps a row read
     // through a partial projection from reading as "denied".
-    allowInSharedWorkspaces: found.row.allowInSharedWorkspaces !== false,
-    read: () => read(found.row),
+    allowInSharedWorkspaces: row.allowInSharedWorkspaces !== false,
+    read: () => read(row),
   };
 }
 
 async function loadClaudeSetupToken(
   input: ResolveInput,
 ): Promise<Loaded | null> {
-  // Both sign-ins store a setup-token, so either provenance is valid; only
-  // a key-shaped row would be the retired kind.
-  const found = await findPersonalOrShared(
-    input,
-    "anthropic",
-    "OAUTH_TOKEN",
-    (row) =>
-      row.connectedVia !== "api_key" && Boolean(row.encryptedAccessToken),
-  );
-  if (!found) return null;
-  return loadedFromRow(found, async (row) => {
+  const row = await findRow(input.userId, "anthropic", "OAUTH_TOKEN");
+  if (!row || row.connectedVia === "api_key" || !row.encryptedAccessToken) {
+    return null;
+  }
+  return loadedFromRow(row, async (row) => {
     const token = await decryptCredential(row.encryptedAccessToken);
     return token ? { kind: "claude_setup_token", token } : null;
   });
 }
 
-async function loadCursorTokens(input: ResolveInput): Promise<Loaded | null> {
-  const found = await findPersonalOrShared(
-    input,
-    "cursor",
-    "OAUTH_TOKEN",
-    (row) => Boolean(row.encryptedAccessToken && row.encryptedRefreshToken),
-  );
-  if (!found) return null;
-  return loadedFromRow(found, async (row) => {
-    const [accessToken, refreshToken] = await Promise.all([
-      decryptCredential(row.encryptedAccessToken),
-      decryptCredential(row.encryptedRefreshToken),
-    ]);
-    return accessToken && refreshToken
-      ? { kind: "cursor_tokens", accessToken, refreshToken }
-      : null;
-  });
-}
-
 async function loadApiKey(input: ResolveInput): Promise<Loaded | null> {
-  const found = await findPersonalOrShared(
-    input,
+  const row = await findRow(
+    input.userId,
     providerVendor(input.provider),
     "API_KEY",
-    (row) => Boolean(row.encryptedApiKey),
   );
-  if (!found) return null;
-  return loadedFromRow(found, async (row) => {
+  if (!row?.encryptedApiKey) return null;
+  return loadedFromRow(row, async (row) => {
     const apiKey = await decryptCredential(row.encryptedApiKey);
     return apiKey ? { kind: "api_key", apiKey } : null;
   });
@@ -259,7 +191,6 @@ const LOADERS: Record<
 > = {
   codex_auth_cache: loadCodexAuthCache,
   claude_setup_token: loadClaudeSetupToken,
-  cursor_tokens: loadCursorTokens,
   api_key: loadApiKey,
 };
 
@@ -368,7 +299,6 @@ export class CredentialUnavailableError extends Error {
 const PROVIDER_LABEL: Record<ProviderId, string> = {
   codex: "Codex",
   claude: "Claude",
-  cursor: "Cursor",
 };
 
 export function describeUnavailable(
@@ -385,71 +315,4 @@ export function describeUnavailable(
     case "not_allowed_in_shared_workspaces":
       return `${label} is set to stay out of shared workspaces. Allow it in Settings to run it here.`;
   }
-}
-
-/* ---------------------------------------------------------------------- */
-
-export type ProviderReadiness = {
-  ready: boolean;
-  kind: CredentialKind | null;
-  source: CredentialSource | null;
-  reason: CredentialUnavailableReason | null;
-  connectedKinds: CredentialKind[];
-};
-
-export type ReadinessReport = Record<
-  ProviderId,
-  Record<ExecutorSurface, ProviderReadiness>
->;
-
-function toReadiness(result: ResolveResult): ProviderReadiness {
-  return result.ok
-    ? {
-        ready: true,
-        kind: result.kind,
-        source: result.source,
-        reason: null,
-        connectedKinds: [result.kind],
-      }
-    : {
-        ready: false,
-        kind: null,
-        source: null,
-        reason: result.reason,
-        connectedKinds: result.connectedKinds,
-      };
-}
-
-/**
- * What every readiness surface renders from: the same walk a turn performs,
- * without decrypting anything. There is no second table to keep in step.
- */
-export async function providerReadiness(
-  userId: string,
-  workspaceId?: string,
-): Promise<ReadinessReport> {
-  const entries = await Promise.all(
-    PROVIDER_IDS.map(async (provider) => {
-      const surfaces = await Promise.all(
-        EXECUTOR_SURFACES.map(async (surface) => {
-          const result = await resolveCredential({
-            userId,
-            provider,
-            surface,
-            ...(workspaceId ? { workspaceId } : {}),
-            dryRun: true,
-          });
-          return [surface, toReadiness(result)] as const;
-        }),
-      );
-      return [
-        provider,
-        Object.fromEntries(surfaces) as Record<
-          ExecutorSurface,
-          ProviderReadiness
-        >,
-      ] as const;
-    }),
-  );
-  return Object.fromEntries(entries) as ReadinessReport;
 }

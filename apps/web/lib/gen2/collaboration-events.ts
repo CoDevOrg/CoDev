@@ -1,6 +1,6 @@
 import "server-only";
 
-import { publish } from "../workspaces/collaboration-rooms";
+import { publish } from "./collaboration-rooms";
 import {
   loadGen2Document,
   reconcileGen2Document,

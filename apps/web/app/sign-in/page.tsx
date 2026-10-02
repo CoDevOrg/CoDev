@@ -92,7 +92,7 @@ export default async function SignInPage({
   const safeCallback =
     callbackUrl?.startsWith("/") && !callbackUrl.startsWith("//")
       ? callbackUrl
-      : "/dashboard";
+      : "/gen2";
   let session: Session | null = null;
   let sessionCheckUnavailable = false;
   try {

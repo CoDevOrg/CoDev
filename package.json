@@ -7,23 +7,20 @@
     "node": ">=24"
   },
   "scripts": {
-    "dev": "dotenv -e .env.local -- pnpm --filter @codev/web dev",
+    "dev": "pnpm db:check && dotenv -e .env.local -- pnpm --filter @codev/web dev",
     "build": "pnpm -r --if-present build",
     "lint": "pnpm -r --if-present lint",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm run test:infra && pnpm -r --if-present test",
     "test:infra": "node --test infra/runtime/runtime-config.test.mjs",
     "test:e2e": "pnpm --filter @codev/web test:e2e",
-    "orca:web": "infra/runtime/scripts/build-orca-web.sh",
-    "ide:dev": "bash scripts/ide.sh dev:web",
-    "ide:check": "bash scripts/ide.sh typecheck:web",
-    "ide:test:web": "bash scripts/ide.sh exec vitest run --config config/vitest.config.ts src/renderer/src/web",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:generate": "pnpm --filter @codev/db db:generate",
     "db:migrate": "pnpm --filter @codev/db db:migrate",
     "rust:check": "cd services/orchestrator && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test",
-    "prepare": "husky"
+    "prepare": "husky",
+    "db:check": "dotenv -e .env.local -- pnpm --filter @codev/db db:check"
   },
   "devDependencies": {
     "@eslint/js": "9.39.2",
@@ -41,6 +38,6 @@
     "blockExoticSubdeps": false
   },
   "lint-staged": {
-    "!(packages/ide/**|vendor/superset/**)*.{js,jsx,ts,tsx,json,md,mdx,css,yml,yaml}": "prettier --write"
+    "!vendor/superset/***.{js,jsx,ts,tsx,json,md,mdx,css,yml,yaml}": "prettier --write --ignore-unknown"
   }
 }

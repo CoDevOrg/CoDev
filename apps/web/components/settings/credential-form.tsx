@@ -3,41 +3,30 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-type ApiKeyProvider = "openai" | "anthropic" | "cursor";
+type ApiKeyProvider = "openai" | "anthropic";
 
 const PROVIDER_LABELS: Record<ApiKeyProvider, string> = {
   openai: "OpenAI",
   anthropic: "Anthropic",
-  cursor: "Cursor",
 };
 
 const PROVIDER_PLACEHOLDERS: Record<ApiKeyProvider, string> = {
   openai: "sk-…",
   anthropic: "sk-ant-…",
-  cursor: "key_…",
 };
 
 function saveEndpoint(provider: ApiKeyProvider) {
   if (provider === "openai") return "/api/settings/openai-key";
-  if (provider === "anthropic") return "/api/settings/anthropic-key";
-  return "/api/settings/provider-credential";
+  return "/api/settings/anthropic-key";
 }
 
-function saveBody(provider: ApiKeyProvider, apiKey: string) {
-  if (provider === "cursor") {
-    return JSON.stringify({
-      provider: "cursor",
-      credentialType: "API_KEY",
-      apiKey,
-    });
-  }
+function saveBody(apiKey: string) {
   return JSON.stringify({ apiKey });
 }
 
 function deleteEndpoint(provider: ApiKeyProvider) {
   if (provider === "openai") return "/api/settings/openai-key";
-  if (provider === "anthropic") return "/api/settings/anthropic-key";
-  return "/api/settings/provider-credential?provider=cursor";
+  return "/api/settings/anthropic-key";
 }
 
 export function CredentialForm({
@@ -59,7 +48,7 @@ export function CredentialForm({
     const response = await fetch(saveEndpoint(provider), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: saveBody(provider, apiKey),
+      body: saveBody(apiKey),
     });
     const payload = (await response.json()) as { error?: string };
     if (!response.ok) {

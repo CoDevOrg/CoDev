@@ -103,6 +103,7 @@ export async function login({ launchBrowser = true } = {}) {
 const INSTALL_HINT = {
   codex: "npm install -g @openai/codex",
   claude: "npm install -g @anthropic-ai/claude-code",
+  agent: "curl https://cursor.com/install -fsS | bash",
 };
 
 export function describeSpawnError(command, error) {
@@ -115,7 +116,7 @@ export function describeSpawnError(command, error) {
   return error;
 }
 
-function run(command, args, options) {
+export function run(command, args, options) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { ...options, stdio: "inherit" });
     child.on("error", (error) => reject(describeSpawnError(command, error)));
@@ -155,7 +156,7 @@ export function extractClaudeOAuthToken(output) {
   return match ? match[0] : undefined;
 }
 
-async function authenticatedRequest(path, options = {}) {
+export async function authenticatedRequest(path, options = {}) {
   const config = await loadConfig();
   return request(
     path,
@@ -170,44 +171,8 @@ async function authenticatedRequest(path, options = {}) {
   );
 }
 
-async function resolveOrganization(organizationId) {
-  if (organizationId) return organizationId;
-  const { payload } = await authenticatedRequest("/api/cli/organizations");
-  const organizations = payload.organizations || [];
-  if (organizations.length === 1) return organizations[0].id;
-  if (organizations.length === 0) {
-    throw new Error(
-      "Your account does not maintain an organization workspace.",
-    );
-  }
-  const choices = organizations
-    .map((organization) => `  ${organization.id}  ${organization.repository}`)
-    .join("\n");
-  throw new Error(
-    `More than one organization is available. Re-run with --org=<id>:\n${choices}`,
-  );
-}
-
-/**
- * Printed before an `--org` login starts, and folded into the success line —
- * a shared login is not a private connection, and this is the one moment a
- * member is actively choosing that before it takes effect.
- */
-export function organizationSharingWarning(provider) {
-  return `⚠ This connects ${provider} for every member of this CoDev workspace, not just you. Anyone in it can run agents on this login.\n`;
-}
-
-function warnOrganizationSharing(provider) {
-  process.stdout.write(organizationSharingWarning(provider));
-}
-
-export async function codexAuth({
-  organization = false,
-  organizationId,
-  browser = false,
-} = {}) {
+export async function codexAuth({ browser = false } = {}) {
   await loadConfig();
-  if (organization) warnOrganizationSharing("Codex");
   const { mkdtemp } = await import("node:fs/promises");
   const codexHome = await mkdtemp(join(tmpdir(), "codev-codex-auth-"));
   await chmod(codexHome, 0o700);
@@ -225,36 +190,19 @@ export async function codexAuth({
     const authCache = JSON.parse(
       await readFile(join(codexHome, "auth.json"), "utf8"),
     );
-    const resolvedOrganizationId = organization
-      ? await resolveOrganization(organizationId)
-      : undefined;
     await authenticatedRequest("/api/cli/codex-auth", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        scopeType: organization ? "ORGANIZATION" : "USER",
-        ...(resolvedOrganizationId
-          ? { organizationId: resolvedOrganizationId }
-          : {}),
-        authCache,
-      }),
+      body: JSON.stringify({ authCache }),
     });
-    process.stdout.write(
-      organization
-        ? "Codex is connected to the CoDev organization — shared with every member of that workspace.\n"
-        : "Codex is connected to your CoDev account.\n",
-    );
+    process.stdout.write("Codex is connected to your CoDev account.\n");
   } finally {
     await rm(codexHome, { recursive: true, force: true });
   }
 }
 
-export async function claudeAuth({
-  organization = false,
-  organizationId,
-} = {}) {
+export async function claudeAuth() {
   await loadConfig();
-  if (organization) warnOrganizationSharing("Claude");
   process.stdout.write("Starting the official Claude Code login flow…\n");
   const output = await runCapture("claude", ["setup-token"]);
   const oauthToken = extractClaudeOAuthToken(output);
@@ -263,23 +211,59 @@ export async function claudeAuth({
       "Could not read the token from `claude setup-token`. Run it manually and try again.",
     );
   }
-  const resolvedOrganizationId = organization
-    ? await resolveOrganization(organizationId)
-    : undefined;
   await authenticatedRequest("/api/cli/claude-auth", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      scopeType: organization ? "ORGANIZATION" : "USER",
-      ...(resolvedOrganizationId
-        ? { organizationId: resolvedOrganizationId }
-        : {}),
-      oauthToken,
-    }),
+    body: JSON.stringify({ oauthToken }),
   });
-  process.stdout.write(
-    organization
-      ? "Claude Code is connected to the CoDev organization — shared with every member of that workspace.\n"
-      : "Claude Code is connected to your CoDev account.\n",
+  process.stdout.write("Claude Code is connected to your CoDev account.\n");
+}
+
+/** Paths `agent login` may write when the credential store is a file. */
+export function cursorAuthFileCandidates(home) {
+  return [
+    join(home, ".cursor", "auth.json"),
+    join(home, ".config", "cursor", "auth.json"),
+  ];
+}
+
+async function readCursorAuthFile(home) {
+  for (const path of cursorAuthFileCandidates(home)) {
+    try {
+      return JSON.parse(await readFile(path, "utf8"));
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+  }
+  throw new Error(
+    "Could not read Cursor's auth.json after `agent login`. Run it again with the file credential store.",
   );
+}
+
+export async function cursorAuth() {
+  await loadConfig();
+  const { mkdtemp } = await import("node:fs/promises");
+  const home = await mkdtemp(join(tmpdir(), "codev-cursor-auth-"));
+  await chmod(home, 0o700);
+  try {
+    process.stdout.write("Starting the official Cursor CLI login…\n");
+    const env = {
+      ...process.env,
+      HOME: home,
+      USERPROFILE: home,
+      XDG_CONFIG_HOME: join(home, ".config"),
+      AGENT_CLI_CREDENTIAL_STORE: "file",
+    };
+    delete env.CURSOR_API_KEY;
+    await run("agent", ["login"], { env });
+    const auth = await readCursorAuthFile(home);
+    await authenticatedRequest("/api/cli/cursor-auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ auth }),
+    });
+    process.stdout.write("Cursor is connected to your CoDev account.\n");
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
 }

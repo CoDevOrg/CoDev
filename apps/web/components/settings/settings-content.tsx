@@ -1,6 +1,19 @@
 import { isGitHubAuthConfigured } from "@codev/config";
 
 import { connectGitHubAccount } from "@/app/actions/github";
+import {
+  SettingsPageHeader as SettingsSectionHeader,
+  SettingsPageShell,
+} from "@/components/settings/settings-style";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import type { AppUser, ConnectedAccounts } from "@/lib/auth/identity";
 import type { OrganizationSettingsContext } from "@/lib/auth/settings-access";
 export function SettingsPageHeader({
@@ -190,52 +203,50 @@ export function OrganizationSettingsPage({
 }) {
   if (!context) {
     return (
-      <div className="settings-page">
-        <SettingsPageHeader
-          description={description}
-          eyebrow="Organization settings"
-          title={title}
-        />
-        <SettingsCard
-          description="Join or create a workspace before configuring shared settings."
-          title="No organization selected"
-        >
-          <p className="settings-muted-copy">
-            Organization settings become available when you have access to a
-            workspace.
-          </p>
-        </SettingsCard>
-      </div>
+      <SettingsPageShell>
+        <SettingsSectionHeader description={description} title={title} />
+        <Card className="flex flex-col gap-3 p-4">
+          <CardHeader>
+            <CardTitle>No organization selected</CardTitle>
+            <CardDescription>
+              Join or create an organization before configuring shared settings.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Organization settings become available when you belong to an
+              organization.
+            </p>
+          </CardContent>
+        </Card>
+      </SettingsPageShell>
     );
   }
 
-  const roleLabel = context.role === "co_steer" ? "Admin" : context.role;
+  const roleLabel = context.role.replaceAll("_", " ");
 
   return (
-    <div className="settings-page">
-      <SettingsPageHeader
-        description={description}
-        eyebrow={`Organization settings · ${context.workspace.repository}`}
+    <SettingsPageShell>
+      <SettingsSectionHeader
+        badge={roleLabel}
+        description={`${context.organization.name}. ${description}`}
         title={title}
       />
-      <div className="settings-scope-meta">
-        <span className="settings-scope-badge">{roleLabel}</span>
-        <span>
-          {context.canWrite
-            ? "You can manage shared organization settings."
-            : "Read-only access for this workspace."}
-        </span>
-      </div>
+      <p className="text-sm text-muted-foreground">
+        {context.canWrite
+          ? "You can manage shared organization settings."
+          : "Read-only access for this organization."}
+      </p>
       {!context.canWrite ? (
-        <div className="settings-readonly-banner" role="status">
-          <strong>Read-only view</strong>
-          <span>
-            Only workspace Owners and Admins can change organization settings.
-          </span>
-        </div>
+        <Alert role="status">
+          <AlertTitle>Read-only view</AlertTitle>
+          <AlertDescription>
+            Only organization owners and admins can change shared settings.
+          </AlertDescription>
+        </Alert>
       ) : null}
       {children}
-    </div>
+    </SettingsPageShell>
   );
 }
 
@@ -251,18 +262,22 @@ export function OrganizationSettingsCard({
   detail: string;
 }) {
   return (
-    <SettingsCard description={description} title={title}>
-      <div className="settings-org-resource">
-        <div>
-          <strong>
+    <Card className="flex flex-col gap-4 p-4">
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-1">
+          <p className="text-sm font-medium">
             {context?.canWrite ? "Managed resource" : "Resource summary"}
-          </strong>
-          <p>{detail}</p>
+          </p>
+          <p className="text-sm text-muted-foreground">{detail}</p>
         </div>
-        <span className="settings-resource-status">
+        <Badge variant="outline">
           {context?.canWrite ? "Admin access" : "Read only"}
-        </span>
-      </div>
-    </SettingsCard>
+        </Badge>
+      </CardContent>
+    </Card>
   );
 }

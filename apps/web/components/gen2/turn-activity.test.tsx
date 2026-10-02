@@ -96,6 +96,39 @@ describe("Gen2TurnActivity", () => {
     expect(onOpenFile).toHaveBeenCalledWith("src/a.ts");
   });
 
+  it("keeps file paths as buttons and uses a real failed status label", () => {
+    render(
+      <Gen2TurnActivity
+        items={[
+          {
+            id: "c1",
+            kind: "command",
+            status: "failed",
+            command: "pnpm test",
+            output: "boom",
+            exitCode: 1,
+          },
+          {
+            id: "f1",
+            kind: "fileChange",
+            status: "completed",
+            changes: [{ path: "src/a.ts", change: "add" }],
+          },
+        ]}
+        onOpenFile={noop}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Worked/ }));
+    expect(screen.getByRole("button", { name: /src\/a\.ts/ })).toHaveAttribute(
+      "data-change",
+      "add",
+    );
+    expect(screen.getByRole("button", { name: /Ran pnpm/ })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+  });
+
   it("shows the plan and which steps are done", () => {
     render(
       <Gen2TurnActivity

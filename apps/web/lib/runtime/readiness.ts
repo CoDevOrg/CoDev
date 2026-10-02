@@ -1,9 +1,9 @@
 import "server-only";
 
-import { checkRealtimeConnection } from "../workspaces/collaboration-server";
+import { checkRealtimeConnection } from "../gen2/collaboration-redis";
 import { checkDatabaseConnection } from "../platform/database";
 import { getHostState } from "./host";
-import { checkOrchestratorConnection } from "./orchestrator";
+import { checkOrchestratorConnection } from "./orchestrator-health";
 
 async function measured(check: () => Promise<unknown>) {
   const startedAt = Date.now();

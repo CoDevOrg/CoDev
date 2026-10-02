@@ -106,6 +106,26 @@ describe("SupersetFilePane", () => {
     vi.clearAllMocks();
   });
 
+  it("hides Git's linked-worktree pointer from the file tree", async () => {
+    mocks.list.mockResolvedValue([
+      { path: ".git", kind: "file", size: 57 },
+      secondFile,
+    ]);
+    render(
+      <SupersetFilePane
+        workspaceId={workspaceId}
+        worktreeId="test-2"
+        canEdit
+      />,
+    );
+    expect(
+      await screen.findByRole("treeitem", { name: /README\.md/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("treeitem", { name: /^\.git$/ }),
+    ).not.toBeInTheDocument();
+  });
+
   it("loads workspace files, opens a file, and saves with its revision", async () => {
     render(<SupersetFilePane workspaceId={workspaceId} canEdit />);
 
@@ -273,5 +293,49 @@ describe("SupersetFilePane", () => {
       await screen.findByText("Folder notes created."),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Code")).toHaveValue("keep this draft");
+  });
+
+  it("opens a requested path from Changes or chat", async () => {
+    const onConsumed = vi.fn();
+    const { rerender } = render(
+      <SupersetFilePane workspaceId={workspaceId} canEdit />,
+    );
+    await screen.findByLabelText("Code");
+    rerender(
+      <SupersetFilePane
+        workspaceId={workspaceId}
+        canEdit
+        requestedPath={secondFile.path}
+        onRequestedPathConsumed={onConsumed}
+      />,
+    );
+    await waitFor(() =>
+      expect(mocks.read).toHaveBeenLastCalledWith(
+        workspaceId,
+        "main",
+        secondFile.path,
+        undefined,
+      ),
+    );
+    expect(onConsumed).toHaveBeenCalled();
+    expect(
+      screen.getByRole("treeitem", { name: /README\.md/ }),
+    ).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("keeps file-row actions in the tab order for keyboard users", async () => {
+    render(<SupersetFilePane workspaceId={workspaceId} canEdit />);
+    await screen.findByLabelText("Code");
+    const trigger = screen.getByRole("button", {
+      name: "Actions for src/greeting.ts",
+    });
+    expect(trigger).not.toBeDisabled();
+    trigger.focus();
+    expect(trigger).toHaveFocus();
+    fireEvent.pointerDown(trigger, { button: 0 });
+    fireEvent.pointerUp(trigger, { button: 0 });
+    expect(
+      await screen.findByRole("menuitem", { name: /Rename/ }),
+    ).toBeInTheDocument();
   });
 });

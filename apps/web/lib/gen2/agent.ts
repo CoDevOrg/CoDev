@@ -65,6 +65,8 @@ export async function startGen2AgentTurn(input: {
   prompt: string;
   idempotencyKey: string;
   provider: Gen2AgentProvider;
+  worktreeId?: string | undefined;
+  model?: string | undefined;
 }) {
   await requireReadyMember(input.workspaceId, input.userId);
   await requireWorkspaceOwnerPlan(input.workspaceId);
@@ -99,9 +101,17 @@ export async function startGen2AgentTurn(input: {
     }
   }
   const execInput = {
-    command: buildGen2AgentCommand(provider, input.prompt, history),
+    command: buildGen2AgentCommand(
+      provider,
+      input.prompt,
+      history,
+      input.model,
+    ),
     launchProfile: credential.launchProfile,
     idempotencyKey: input.idempotencyKey,
+    ...(input.worktreeId && input.worktreeId !== "main"
+      ? { worktreeId: input.worktreeId }
+      : {}),
   };
   try {
     let sessionId: string;
@@ -187,6 +197,8 @@ async function startGen2AgentTurnViaSuperset(input: {
   prompt: string;
   idempotencyKey: string;
   provider: Gen2AgentProvider;
+  worktreeId?: string | undefined;
+  model?: string | undefined;
 }) {
   try {
     return await startGen2SupersetAgentTurn(input);

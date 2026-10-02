@@ -4,9 +4,9 @@ import assert from "node:assert/strict";
 import {
   apiUrl,
   configPath,
+  cursorAuthFileCandidates,
   describeSpawnError,
   extractClaudeOAuthToken,
-  organizationSharingWarning,
 } from "./client.mjs";
 
 test("uses an explicit CoDev API URL without a trailing slash", () => {
@@ -39,12 +39,16 @@ test("explains a missing codex/claude binary with an install hint", () => {
   assert.match(error.message, /npm config set prefix/);
 });
 
-test("warns that an --org login is shared with the whole workspace, for either provider", () => {
-  for (const provider of ["Codex", "Claude"]) {
-    const message = organizationSharingWarning(provider);
-    assert.match(message, new RegExp(`connects ${provider}`));
-    assert.match(message, /every member of this CoDev workspace/);
-  }
+test("explains a missing Cursor CLI with the official install command", () => {
+  const error = describeSpawnError("agent", { code: "ENOENT" });
+  assert.match(error.message, /curl https:\/\/cursor.com\/install/);
+});
+
+test("looks for Cursor CLI auth in an isolated home", () => {
+  assert.deepEqual(cursorAuthFileCandidates("/tmp/codev-cursor"), [
+    "/tmp/codev-cursor/.cursor/auth.json",
+    "/tmp/codev-cursor/.config/cursor/auth.json",
+  ]);
 });
 
 test("passes through non-ENOENT spawn errors unchanged", () => {

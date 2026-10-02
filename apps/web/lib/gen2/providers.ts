@@ -10,8 +10,9 @@ import {
   launchProfileFor,
   providerDefinition,
 } from "../providers/registry";
-import type { Gen2AgentProviderName } from "@codev/contracts";
+import type { Gen2AgentProviderName, Gen2ModelInfo } from "@codev/contracts";
 import type { LaunchProfile } from "../providers/registry";
+import { getDynamicModelsForProvider } from "../providers/dynamic-models";
 import { listDecryptedUserEnvironmentVariables } from "../providers/user-environment";
 import { Gen2LifecycleError } from "./errors";
 
@@ -95,6 +96,7 @@ export async function resolveGen2Credential(
 export type Gen2ProviderStatus = {
   connected: boolean;
   via: "subscription" | "api-key" | null;
+  models?: Gen2ModelInfo[];
 };
 
 /** Drives the connect prompt in the workspace; never returns a secret. */
@@ -102,15 +104,19 @@ export async function getGen2ProviderStatus(
   userId: string,
   provider: Gen2AgentProvider,
 ): Promise<Gen2ProviderStatus> {
-  const result = await resolveCredential({
-    userId,
-    provider,
-    surface: "gen2",
-    dryRun: true,
-  });
-  if (!result.ok) return { connected: false, via: null };
+  const [result, models] = await Promise.all([
+    resolveCredential({
+      userId,
+      provider,
+      surface: "gen2",
+      dryRun: true,
+    }),
+    getDynamicModelsForProvider(provider),
+  ]);
+  if (!result.ok) return { connected: false, via: null, models };
   return {
     connected: true,
     via: result.kind === "api_key" ? "api-key" : "subscription",
+    models,
   };
 }

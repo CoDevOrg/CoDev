@@ -23,22 +23,20 @@ describe("provider registry", () => {
     expect(runnableKinds("claude", "rooms").map((entry) => entry.kind)).toEqual(
       ["claude_setup_token"],
     );
-    expect(
-      runnableKinds("claude", "workspace").map((entry) => entry.kind),
-    ).toEqual(["claude_setup_token", "api_key"]);
+    expect(runnableKinds("claude", "gen2").map((entry) => entry.kind)).toEqual([
+      "claude_setup_token",
+      "api_key",
+    ]);
   });
 
   it("knows which providers an executor supports at all", () => {
     expect(providerRunsOn("codex", "gen2")).toBe(true);
-    // Claude has its own command builder and stream reducer in lib/gen2, so
-    // the registry may say so. Cursor has neither.
+    // Claude has its own command builder and stream reducer in lib/gen2.
     expect(providerRunsOn("claude", "gen2")).toBe(true);
-    expect(providerRunsOn("cursor", "gen2")).toBe(false);
-    expect(providerRunsOn("cursor", "rooms")).toBe(false);
   });
 
   it("gives every provider at least one place to run", () => {
-    const surfaces: ExecutorSurface[] = ["rooms", "workspace", "gen2"];
+    const surfaces: ExecutorSurface[] = ["rooms", "gen2"];
     for (const provider of PROVIDER_IDS) {
       expect(
         surfaces.some((surface) => providerRunsOn(provider, surface)),

@@ -1,26 +1,15 @@
 import "server-only";
 
-import {
-  requireWorkspacePermission,
-  type WorkspacePermission,
-} from "@/lib/auth/access";
 import { apiError, getApiUser, getApiUserAnyAuth } from "@/lib/http/api";
 import type { AppUser } from "@/lib/auth/identity";
+import { databaseErrorResponse } from "./database-error";
 
 /**
- * The one way an `app/api` route authenticates, authorizes, reads its body,
- * and turns a thrown error into a response. Before this, 129 routes repeated
- * the same sign-in check and each picked its own error status, and 75 of them
- * returned 400 for everything, including permission (403) and not-found (404)
- * failures thrown by `requireWorkspacePermission`.
+ * The one way an `app/api` route authenticates, reads its body, and turns a
+ * thrown error into a response.
  *
- *   export const POST = withWorkspace("edit", async ({ request, user, workspaceId }) => {
- *     const body = await readJson(request, schema);
- *     return Response.json(await doThing(workspaceId, user.id, body));
- *   });
- *
- * Throw `ApiError` (or any error with a numeric `status`, like
- * `WorkspaceAccessError`) to choose the response status, or an error with a
+ * Throw `ApiError` (or any error with a numeric `status`) to choose the
+ * response status, or an error with a
  * `toResponse()` method to choose the whole response. Anything else becomes
  * the route's `errorStatus` (400 unless the route says otherwise) and its
  * message is returned, which matches what the routes did before.
@@ -52,6 +41,8 @@ function hasOwnResponse(error: unknown): error is ResponseError {
  * `Retry-After`) provide `toResponse()`; everything else is `{ error }`.
  */
 export function errorResponse(error: unknown, fallbackStatus = 400) {
+  const databaseResponse = databaseErrorResponse(error);
+  if (databaseResponse) return databaseResponse;
   if (hasOwnResponse(error)) return error.toResponse();
   return apiError(error, errorStatus(error, fallbackStatus));
 }
@@ -111,43 +102,15 @@ export function withUser<P extends RouteParams = Record<string, never>>(
   options: RouteOptions = {},
 ) {
   return async (request: Request, context: RouteContext<P>) => {
-    const user = options.anyAuth
-      ? await getApiUserAnyAuth(request)
-      : await getApiUser();
-    if (!user) return apiError(new Error("Authentication required."), 401);
     try {
+      const user = options.anyAuth
+        ? await getApiUserAnyAuth(request)
+        : await getApiUser();
+      if (!user) return apiError(new Error("Authentication required."), 401);
       const params = ((await context?.params) ?? {}) as P;
       return await handler({ request, user, params });
     } catch (error) {
       return errorResponse(error, options.errorStatus);
     }
   };
-}
-
-export type WorkspaceRouteInput<P> = UserRouteInput<P> & {
-  workspaceId: string;
-  access: Awaited<ReturnType<typeof requireWorkspacePermission>>;
-};
-
-/**
- * `withUser`, plus `requireWorkspacePermission` on the route's `workspaceId`
- * before the handler runs: 404 when the workspace is not visible to the
- * caller, 403 when the permission is missing.
- */
-export function withWorkspace<
-  P extends RouteParams & { workspaceId: string } = { workspaceId: string },
->(
-  permission: WorkspacePermission,
-  handler: (input: WorkspaceRouteInput<P>) => Response | Promise<Response>,
-  options: RouteOptions = {},
-) {
-  return withUser<P>(async (input) => {
-    const workspaceId = input.params.workspaceId;
-    const access = await requireWorkspacePermission(
-      workspaceId,
-      input.user.id,
-      permission,
-    );
-    return handler({ ...input, workspaceId, access });
-  }, options);
 }

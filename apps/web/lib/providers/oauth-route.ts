@@ -6,40 +6,30 @@ import { z } from "zod";
 
 import { getApiUser } from "../http/api";
 import { persistCodexSubscriptionFromOAuth } from "./codex-oauth-connection";
-import { requireOrganizationSettingsWrite } from "../auth/settings-access";
 import {
   buildAuthorizationUrl,
   COOKIE_MAX_AGE_SECONDS,
   createOAuthState,
-  CURSOR_COOKIE_MAX_AGE_SECONDS,
-  exchangeCursorApiKey,
   exchangeOAuthCode,
   getOAuthConfiguration,
   oauthCallbackPath,
   oauthCookieName,
   OAuthConfigurationError,
   openOAuthState,
-  persistCursorTokens,
   pollCodexDeviceCode,
-  pollCursorLogin,
   requestCodexDeviceCode,
   sealOAuthState,
-  startCursorLogin,
   type OAuthProvider,
   type OAuthState,
 } from "./oauth";
 
-const scopeTypeSchema = z.enum(["USER", "WORKSPACE"]);
 const DEFAULT_OAUTH_RETURN_TO = "/settings/personal/providers";
 
 const sessionBodySchema = z.object({
-  scopeType: z.enum(["USER", "WORKSPACE"]).optional(),
-  workspaceId: z.string().uuid().optional(),
   returnTo: z.string().optional(),
   code: z.string().optional(),
   deviceAuthId: z.string().optional(),
   userCode: z.string().optional(),
-  apiKey: z.string().optional(),
 });
 
 function safeReturnTo(
@@ -74,10 +64,7 @@ function setOAuthCookie(
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    maxAge:
-      provider === "cursor"
-        ? CURSOR_COOKIE_MAX_AGE_SECONDS
-        : COOKIE_MAX_AGE_SECONDS,
+    maxAge: COOKIE_MAX_AGE_SECONDS,
     path: `/api/auth/oauth/${provider}`,
   });
   return response;
@@ -96,32 +83,19 @@ function clearOAuthCookie(response: NextResponse, provider: OAuthProvider) {
   return response;
 }
 
-async function authorizeScope(input: {
+async function authorizeUser(input: {
   request: Request;
   provider: OAuthProvider;
-  scopeType: "USER" | "WORKSPACE";
-  scopeId: string;
   returnTo: string;
   asJson: boolean;
 }) {
-  const { request, provider, scopeType, scopeId, returnTo, asJson } = input;
+  const { request, provider, returnTo, asJson } = input;
   const user = await getApiUser();
   if (!user) {
     return NextResponse.json(
       { error: "Authentication required." },
       { status: 401 },
     );
-  }
-
-  if (scopeType === "WORKSPACE") {
-    try {
-      await requireOrganizationSettingsWrite(user.id, scopeId);
-    } catch {
-      return NextResponse.json(
-        { error: "Workspace credential access denied." },
-        { status: 403 },
-      );
-    }
   }
 
   try {
@@ -131,24 +105,8 @@ async function authorizeScope(input: {
     );
     const state = createOAuthState({
       userId: user.id,
-      scopeType,
-      scopeId,
       returnTo,
     });
-
-    if (configuration.flowMode === "cursor_deeplink") {
-      const login = startCursorLogin(new URL(request.url).origin);
-      return setOAuthCookie(
-        NextResponse.json({
-          mode: configuration.flowMode,
-          provider,
-          loginUrl: login.loginUrl,
-          intervalSeconds: 2,
-        }),
-        provider,
-        { ...state, cursorUuid: login.uuid, cursorVerifier: login.verifier },
-      );
-    }
 
     if (configuration.flowMode === "device_code") {
       const device = await requestCodexDeviceCode(configuration.clientId);
@@ -197,16 +155,12 @@ async function authorizeScope(input: {
 
 async function parseSessionInput(request: Request) {
   const url = new URL(request.url);
-  let scopeTypeRaw = url.searchParams.get("scopeType");
-  let workspaceId = url.searchParams.get("workspaceId");
   let returnTo = url.searchParams.get("returnTo");
 
   if (request.method !== "GET") {
     try {
       const parsed = sessionBodySchema.safeParse(await request.json());
       if (parsed.success) {
-        if (parsed.data.scopeType) scopeTypeRaw = parsed.data.scopeType;
-        if (parsed.data.workspaceId) workspaceId = parsed.data.workspaceId;
         if (parsed.data.returnTo) returnTo = parsed.data.returnTo;
       }
     } catch {
@@ -214,48 +168,18 @@ async function parseSessionInput(request: Request) {
     }
   }
 
-  const scopeTypeResult = scopeTypeSchema.safeParse(
-    (scopeTypeRaw ?? "USER").toUpperCase(),
-  );
-  if (!scopeTypeResult.success) {
-    return {
-      error: NextResponse.json(
-        { error: "scopeType must be USER or WORKSPACE." },
-        { status: 400 },
-      ),
-    } as const;
-  }
-
-  const scopeType = scopeTypeResult.data;
-  if (scopeType === "WORKSPACE" && !z.uuid().safeParse(workspaceId).success) {
-    return {
-      error: NextResponse.json(
-        { error: "workspaceId is required for workspace OAuth." },
-        { status: 400 },
-      ),
-    } as const;
-  }
-
-  const user = await getApiUser();
-  return {
-    scopeType,
-    scopeId: scopeType === "WORKSPACE" ? workspaceId! : (user?.id ?? ""),
-    returnTo: safeReturnTo(returnTo),
-  } as const;
+  return { returnTo: safeReturnTo(returnTo) } as const;
 }
 
 export async function startOAuthSession(
   request: Request,
   provider: OAuthProvider,
-) {
+): Promise<NextResponse> {
   const resolved = await parseSessionInput(request);
-  if ("error" in resolved) return resolved.error;
 
-  return authorizeScope({
+  return authorizeUser({
     request,
     provider,
-    scopeType: resolved.scopeType,
-    scopeId: resolved.scopeId,
     returnTo: resolved.returnTo,
     asJson: true,
   });
@@ -274,76 +198,10 @@ async function readOAuthState(
   }
 }
 
-/**
- * Cursor's `/complete`: takes a Cursor **user API key**, exchanges it for the
- * same `{ accessToken, refreshToken }` pair as the browser login, and stores it
- * as a `cursor` OAUTH_TOKEN connection. Needs no in-flight OAuth session — the
- * key is the credential — so it works even after the deeplink poll has expired.
- */
-export async function completeCursorApiKey(request: Request) {
-  const user = await getApiUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: "Authentication required." },
-      { status: 401 },
-    );
-  }
-
-  const parsed = sessionBodySchema.safeParse(
-    await request.json().catch(() => ({})),
-  );
-  const apiKey = parsed.success ? (parsed.data.apiKey ?? "").trim() : "";
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "A Cursor API key is required." },
-      { status: 400 },
-    );
-  }
-
-  const scopeType =
-    parsed.success && parsed.data.scopeType === "WORKSPACE"
-      ? "WORKSPACE"
-      : "USER";
-  const workspaceId = parsed.success ? parsed.data.workspaceId : undefined;
-  if (scopeType === "WORKSPACE" && !workspaceId) {
-    return NextResponse.json(
-      { error: "workspaceId is required for a workspace credential." },
-      { status: 400 },
-    );
-  }
-  const scopeId = scopeType === "WORKSPACE" ? workspaceId! : user.id;
-
-  try {
-    if (scopeType === "WORKSPACE") {
-      await requireOrganizationSettingsWrite(user.id, scopeId);
-    }
-    const tokens = await exchangeCursorApiKey(apiKey);
-    await persistCursorTokens({ scopeType, scopeId }, tokens, "api_key");
-    return NextResponse.json({ status: "connected", provider: "cursor" });
-  } catch (error) {
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Cursor API key connection failed.",
-      },
-      { status: 400 },
-    );
-  }
-}
-
 export async function pollDeviceOAuth(
   request: Request,
   provider: OAuthProvider,
 ) {
-  if (provider !== "codex" && provider !== "cursor") {
-    return NextResponse.json(
-      { error: "Polled completion is only supported for Codex and Cursor." },
-      { status: 400 },
-    );
-  }
-
   const state = await readOAuthState(provider);
   if (!state) {
     return NextResponse.json(
@@ -357,38 +215,6 @@ export async function pollDeviceOAuth(
     if (!user || user.id !== state.userId) {
       throw new Error("OAuth user mismatch.");
     }
-    if (state.scopeType === "WORKSPACE") {
-      await requireOrganizationSettingsWrite(user.id, state.scopeId);
-    }
-
-    if (provider === "cursor") {
-      if (!state.cursorUuid || !state.cursorVerifier) {
-        throw new Error("Cursor login session is incomplete.");
-      }
-      const poll = await pollCursorLogin({
-        uuid: state.cursorUuid,
-        verifier: state.cursorVerifier,
-      });
-      if (poll.status === "pending") {
-        return NextResponse.json({ status: "pending" });
-      }
-      if (poll.status === "denied") {
-        return clearOAuthCookie(
-          NextResponse.json({ status: "denied", provider }),
-          provider,
-        );
-      }
-      await persistCursorTokens(
-        { scopeType: state.scopeType, scopeId: state.scopeId },
-        { accessToken: poll.accessToken, refreshToken: poll.refreshToken },
-        "browser",
-      );
-      return clearOAuthCookie(
-        NextResponse.json({ status: "connected", provider }),
-        provider,
-      );
-    }
-
     const parsed = sessionBodySchema.safeParse(
       await request.json().catch(() => ({})),
     );
@@ -420,8 +246,6 @@ export async function pollDeviceOAuth(
     // runtime already consumes rather than an `openai`/OAUTH_TOKEN row.
     await persistCodexSubscriptionFromOAuth({
       userId: user.id,
-      scopeType: state.scopeType,
-      scopeId: state.scopeId,
       tokens,
     });
     return clearOAuthCookie(

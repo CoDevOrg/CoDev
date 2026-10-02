@@ -12,6 +12,7 @@ import { formatGen2TurnPrompt } from "./chats-format";
 export function buildGen2CodexCommand(
   prompt: string,
   history: Array<{ role: "user" | "assistant"; body: string }> = [],
+  model?: string,
 ) {
   return [
     "codex",
@@ -25,7 +26,7 @@ export function buildGen2CodexCommand(
     "-c",
     'approval_policy="never"',
     "--model",
-    getAgentModel("openai"),
+    model?.trim() || getAgentModel("openai"),
     "--cd",
     ".",
     [

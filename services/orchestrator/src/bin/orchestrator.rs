@@ -1,7 +1,7 @@
 use std::{env, sync::Arc, time::Duration};
 
 use codev_runtime::{
-    backend::{Backend, IdeBackend, SharedBackend},
+    backend::{Backend, SharedBackend},
     http_api,
     model::{Result, RuntimeError},
 };
@@ -24,16 +24,10 @@ async fn main() -> Result<()> {
     let backend = Arc::new(backend);
     let host_idle_timeout = environment_duration("CODEV_HOST_IDLE_TIMEOUT", Duration::ZERO)?;
 
-    let ide = configure_ide_backend();
-
     tokio::spawn(reap_expired_sandboxes(backend.clone()));
 
     if !host_idle_timeout.is_zero() {
-        tokio::spawn(stop_idle_host(
-            backend.clone(),
-            ide.clone(),
-            host_idle_timeout,
-        ));
+        tokio::spawn(stop_idle_host(backend.clone(), host_idle_timeout));
     }
 
     let port = env::var("PORT").unwrap_or_else(|_| "8080".into());
@@ -41,10 +35,11 @@ async fn main() -> Result<()> {
         .await
         .map_err(RuntimeError::internal)?;
     info!(port, "orchestrator listening");
-    axum::serve(listener, http_api::router(backend, ide))
+    axum::serve(listener, http_api::router(backend.clone()))
         .with_graceful_shutdown(shutdown_signal())
         .await
-        .map_err(RuntimeError::internal)
+        .map_err(RuntimeError::internal)?;
+    backend.shutdown().await
 }
 
 async fn reap_expired_sandboxes(backend: SharedBackend) {
@@ -56,31 +51,6 @@ async fn reap_expired_sandboxes(backend: SharedBackend) {
         if reaped > 0 {
             info!(reaped, "stopped or hibernated idle Firecracker sandboxes");
         }
-    }
-}
-
-/// The Orca IDE backend is optional: a host that has not been provisioned
-/// with `CODEV_ORCA_PUBLIC_HOST` yet (or a non-Linux dev build) simply serves
-/// every other route and reports the IDE routes as unavailable, rather than
-/// failing to start.
-fn configure_ide_backend() -> IdeBackend {
-    #[cfg(target_os = "linux")]
-    {
-        use codev_runtime::backend::{OrcaBackend, OrcaConfig};
-        match OrcaConfig::from_environment() {
-            Ok(config) => IdeBackend::Orca(OrcaBackend::new(config)),
-            Err(error) => {
-                tracing::warn!(
-                    %error,
-                    "Orca IDE backend not configured; /ide routes will be unavailable"
-                );
-                IdeBackend::Disabled
-            }
-        }
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        IdeBackend::Disabled
     }
 }
 
@@ -114,16 +84,9 @@ async fn configure_backend() -> Result<Backend> {
 /// Power the runtime host off once nothing has been used on it for
 /// `idle_timeout`.
 ///
-/// Two things have to be true for this to behave the way somebody using CoDev
-/// expects. A live sandbox blocks shutdown outright — it holds VM state, and
-/// its own reaper is what eventually hibernates it. IDE sessions, by
-/// contrast, are measured by *when they were last used*, not by whether they
-/// still exist: a workspace opened straight into its Orca IDE never
-/// provisions a sandbox, so ignoring IDE sessions would power the host off
-/// mid-session, while merely counting them would restart this clock from zero
-/// the moment the IDE reaper removed an abandoned one — billing a second full
-/// idle window for a host nobody had touched in twice that long.
-async fn stop_idle_host(backend: SharedBackend, ide: IdeBackend, idle_timeout: Duration) {
+/// Live sandboxes block shutdown. Their reaper hibernates expired guests
+/// before this timer can deallocate the runtime host.
+async fn stop_idle_host(backend: SharedBackend, idle_timeout: Duration) {
     let mut interval = time::interval(Duration::from_secs(30));
     interval.tick().await;
     let mut quiet_since: Option<chrono::DateTime<chrono::Utc>> = None;
@@ -143,21 +106,7 @@ async fn stop_idle_host(backend: SharedBackend, ide: IdeBackend, idle_timeout: D
             continue;
         }
         let since = *quiet_since.get_or_insert_with(chrono::Utc::now);
-        // The host window can be shorter than the IDE session timeout to
-        // save compute after Firecracker guests hibernate. Keep an Orca-only
-        // workspace online until its own idle reaper considers it inactive,
-        // while preserving the quiet clock so stale IDE sessions add no
-        // second full idle window.
-        if ide.has_recent_activity().await {
-            continue;
-        }
-        // Whichever is later: when this loop first saw the host quiet, or
-        // when an IDE session was last actually used.
-        let idle_from = ide
-            .last_activity_at()
-            .await
-            .map_or(since, |last| last.max(since));
-        if (chrono::Utc::now() - idle_from)
+        if (chrono::Utc::now() - since)
             .to_std()
             .is_ok_and(|idle| idle < idle_timeout)
         {

@@ -26,8 +26,6 @@ const between = (source, startMarker, endMarker) => {
 };
 
 const bootstrap = read("./scripts/bootstrap-host.sh");
-const buildOrca = read("./scripts/build-orca-serve.sh");
-const buildOrcaWeb = read("./scripts/build-orca-web.sh");
 const imageProvision = read("./scripts/provision-host-image.sh");
 const azureTemplate = read("../azure/main.bicep");
 const azureDeploy = read("../azure/deploy.sh");
@@ -59,6 +57,10 @@ test("both guest images provision a searchable, host-owned agent profile root", 
     );
     assert.match(unit, /StateDirectory=codev-superset codev-agent-profiles/);
     assert.match(unit, /StateDirectoryMode=0700/);
+    assert.match(
+      unit,
+      /ExecStart=\/bin\/sh -c '\/bin\/chmod 0711 \/var\/lib\/codev-agent-profiles && exec \/usr\/local\/bin\/node/,
+    );
     assert.match(unit, /After=workspace\.mount codev-guestd\.service/);
     assert.match(unit, /UMask=0002/);
     assert.match(
@@ -90,12 +92,9 @@ test("defaults the Firecracker host to a six-sandbox nested-KVM size", () => {
 test("hibernates idle sandboxes after fifteen minutes and quickly deallocates the host", () => {
   assert.match(bootstrap, /CODEV_IDLE_TIMEOUT=15m/);
   assert.match(bootstrap, /CODEV_HOST_IDLE_TIMEOUT=1m/);
-  assert.match(bootstrap, /CODEV_IDE_IDLE_TIMEOUT=10m/);
   const orchestrator = read(
     "../../services/orchestrator/src/bin/orchestrator.rs",
   );
-  const orca = read("../../services/orchestrator/src/backend/orca.rs");
-  assert.match(orca, /has_recent_activity/);
   // Bootstrap deliberately keeps /healthz unavailable while a freshly woken
   // host installs its release. It must also block idle deallocation; otherwise
   // a workspace request can wake the VM forever without reaching provisioning.
@@ -103,14 +102,6 @@ test("hibernates idle sandboxes after fifteen minutes and quickly deallocates th
     orchestrator,
     /http_api::host_bootstrap_still_running\(\)\.await/,
   );
-  assert.match(orchestrator, /ide\s*\.has_recent_activity\(\)\.await/);
-  // An Orca-only workspace never provisions a sandbox, so the host's idle
-  // check has to consult the IDE backend or it powers off mid-session - and
-  // it has to measure last *use*, not session existence, or an abandoned
-  // session buys the host a second full idle window when the reaper clears
-  // it.
-  assert.match(orchestrator, /ide\s*\n?\s*\.last_activity_at\(\)/);
-  assert.match(orchestrator, /\.map_or\(since, \|last\| last\.max\(since\)\)/);
 });
 
 test("builds and bootstraps architecture-specific runtime artifacts", () => {
@@ -122,9 +113,6 @@ test("builds and bootstraps architecture-specific runtime artifacts", () => {
     bootstrap,
     /firecracker-\$\{firecracker_version\}-\$\{firecracker_arch\}/,
   );
-  assert.match(buildOrca, /TARGET_ARCH=\$\{electron_arch\}/);
-  assert.match(buildOrcaWeb, /corepack pnpm@10\.24\.0/);
-  assert.match(buildOrcaWeb, /rsync -a --delete/);
 });
 
 test("the golden host image is versioned, validated, and optional to promote", () => {
@@ -168,29 +156,6 @@ test("the golden host image is versioned, validated, and optional to promote", (
   assert.doesNotMatch(imageProvision, /orchestrator-direct-secret/);
   assert.doesNotMatch(imageProvision, /git clone/);
   assert.doesNotMatch(imageProvision, /caddy-data/);
-});
-
-// The IDE is first-party (packages/ide), not a vendored upstream checkout, so
-// both artifacts must build from the tree. A reintroduced clone would mean the
-// shipped IDE no longer matches the source under review — and would silently
-// drop every CoDev change, since there is no patch to re-apply any more.
-test("IDE artifacts build from packages/ide, never from an upstream clone", () => {
-  // Comments legitimately mention the retired clone (explaining what replaced
-  // it), so assert against executable lines only.
-  const code = (source) =>
-    source
-      .split("\n")
-      .filter((line) => !line.trimStart().startsWith("#"))
-      .join("\n");
-
-  const containerfile = read("./orca-build/Containerfile");
-  for (const source of [buildOrca, buildOrcaWeb, containerfile]) {
-    assert.doesNotMatch(code(source), /git clone/);
-    assert.doesNotMatch(code(source), /stablyai\/orca/);
-  }
-  assert.match(buildOrcaWeb, /source_dir="\$\{repo_root\}\/packages\/ide"/);
-  assert.match(buildOrca, /build_context="\$\{repo_root\}\/packages\/ide"/);
-  assert.match(containerfile, /^COPY \. \/build$/m);
 });
 
 // The Azure bootstrap is a systemd unit because cloud-init's runcmd fires on
@@ -238,15 +203,9 @@ test("Azure release roll starts a deallocated host instead of failing", () => {
   assert.doesNotMatch(azureTemplate, /__RELEASE_VERSION__/);
 });
 
-// apps/web's health check calls /healthz. The bearer route on the host is the
-// only way in, so it has to match /healthz as well as /v1/*. The Caddyfile
-// block is written twice, in
-// the bootstrap and in the orchestrator that later replaces it over the admin
-// API, and the two must not drift.
-test("the direct bearer route serves /healthz and both copies agree", () => {
-  const orca = read("../../services/orchestrator/src/backend/orca.rs");
+// The host health check and sandbox API share the authenticated Caddy route.
+test("the direct bearer route serves health and sandbox API requests", () => {
   assert.match(bootstrap, /path \/v1\/\* \/healthz/);
-  assert.match(orca, /path \/v1\/\* \/healthz/);
   assert.equal(
     (bootstrap.match(/path \/v1\/\*/g) ?? []).length,
     1,
@@ -256,9 +215,8 @@ test("the direct bearer route serves /healthz and both copies agree", () => {
 
 // The bootstrap runs on every boot, not once, and the host boots far more
 // often than it is deployed to -- it deallocates itself after one quiet
-// minutes without a sandbox or recently used IDE session. Reinstalling apt
-// packages, Node, the agent CLIs, Orca, Caddy,
-// Firecracker and a 3 GB guest rootfs on each of those boots put minutes in
+// minutes without a sandbox. Reinstalling apt packages, Node, the agent CLIs,
+// Caddy, Firecracker and a 3 GB guest rootfs on each of those boots put minutes in
 // front of whoever was opening a workspace, because the orchestrator only
 // starts once all of it finishes. Each of those stages is now keyed on its own
 // inputs and skipped when the key is unchanged.
@@ -266,8 +224,6 @@ test("every expensive bootstrap stage is skipped when already current", () => {
   for (const stage of [
     "packages",
     "node",
-    "cursor",
-    "orca",
     "caddy",
     "firecracker",
     "kernel",
@@ -287,20 +243,6 @@ test("every expensive bootstrap stage is skipped when already current", () => {
       `${stage} should record its key once it succeeds`,
     );
   }
-
-  // The two downloads worth singling out, both hundreds of megabytes: Orca
-  // keys on the checksum the build published, fetched on its own so the
-  // archive itself is never pulled when the host already has that build.
-  assert.match(
-    bootstrap,
-    /orca_key="\$\(codev_stage_key orca-v1 "\$\(cat "\$\{work_dir\}\/\$\{orca_archive\}\.sha256"\)"\)"/,
-  );
-  const orcaStage = between(bootstrap, 'orca_key="', "codev_stage_record orca");
-  assert.doesNotMatch(
-    orcaStage.slice(0, orcaStage.indexOf("else")),
-    /codev_fetch "\$\{orca_archive\}"/,
-    "the Orca archive must be fetched inside the stage, not before its guard",
-  );
 
   // And the guest rootfs names every input it bakes in: the Ubuntu image, this
   // release's guest daemon, the Superset archive checksum, and the two keys
@@ -326,7 +268,7 @@ test("a bootstrap stage stamp tracks its key and honours the force switch", () =
   const helpers = between(
     bootstrap,
     "codev_stage_key() {",
-    "codev_public_ipv4() {",
+    "codev_read_direct_secret() {",
   );
   const harness = `
 set -euo pipefail
@@ -351,19 +293,10 @@ echo ok
 test("deployment shell scripts parse", () => {
   for (const script of [
     "scripts/bootstrap-host.sh",
-    "scripts/build-orca-serve.sh",
-    "scripts/build-orca-web.sh",
     "scripts/provision-host-image.sh",
     "../azure/deploy.sh",
     "../azure/build-host-image.sh",
   ]) {
     execFileSync("bash", ["-n", new URL(script, import.meta.url).pathname]);
   }
-});
-
-test("GitHub clone credentials stay out of git argv and persisted remotes", () => {
-  const orcaBackend = read("../../services/orchestrator/src/backend/orca.rs");
-  assert.match(orcaBackend, /\.env\("GIT_ASKPASS", GIT_ASKPASS_BIN\)/);
-  assert.match(orcaBackend, /\.env\("CODEV_GITHUB_TOKEN", token\)/);
-  assert.doesNotMatch(orcaBackend, /x-access-token:\{token\}@github\.com/);
 });

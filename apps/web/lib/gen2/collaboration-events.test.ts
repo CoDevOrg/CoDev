@@ -11,7 +11,7 @@ vi.mock("./collaboration-documents", () => ({
   reconcileGen2Document: mocks.reconcile,
 }));
 
-vi.mock("../workspaces/collaboration-rooms", () => ({
+vi.mock("./collaboration-rooms", () => ({
   publish: mocks.publish,
 }));
 

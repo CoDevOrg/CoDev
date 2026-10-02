@@ -5,31 +5,14 @@ node_modules
 playwright-report
 test-results
 .claude/worktrees
-.planning
 pnpm-lock.yaml
-apps/mobile/.expo
-apps/mobile/expo-env.d.ts
 packages/db/drizzle
 apps/web/app/.well-known/workflow
 apps/web/.swc
-apps/web/public/orca
 
 # Superset is vendored as an upstream snapshot and uses its own toolchain.
 # Keep root format and format:check from rewriting or checking its sources.
 vendor/superset
 
-# CoDev's IDE (packages/ide) carries its own formatter (oxfmt, see its
-# .oxfmtrc.json) and lints itself with oxlint. Running the root Prettier over
-# its ~11k sources would rewrite the entire IDE to a different style and turn
-# `format:check` red, so it formats itself and is checked by its own tooling.
-packages/ide
-
-# Vendored verbatim from stablyai/orca — kept byte-identical to upstream so
-# re-vendoring is a clean copy (see third_party/orca-mobile/UPSTREAM.md).
-apps/mobile/src/vendor/orca
-
-# Vendored design skill (upstream ui-ux-pro-max). Kept byte-identical to the
-# published skill apart from the repo-relative script paths in SKILL.md, so
-# re-vendoring stays a clean copy. Prettier would rewrite its markdown tables
-# and JSON datasets.
-.claude/skills/ui-ux-pro-max
+# Keep the installed shadcn skill identical to its upstream source.
+.claude/skills/shadcn

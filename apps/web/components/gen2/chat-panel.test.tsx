@@ -34,9 +34,11 @@ describe("Gen2ChatPanel", () => {
   });
 
   function stubFetch(handlers: {
+    start?: () => Response | Promise<Response>;
     poll?: () => unknown | Promise<unknown>;
     messages?: unknown[];
     provider?: { connected: boolean; via: string | null };
+    allProviders?: unknown;
   }) {
     let turnFinished = false;
     vi.stubGlobal(
@@ -56,7 +58,8 @@ describe("Gen2ChatPanel", () => {
           if (result.exited) turnFinished = true;
           return json(result);
         }
-        if (path.endsWith("/agent")) return json({ sessionId: "session-1" });
+        if (path.endsWith("/agent"))
+          return handlers.start?.() ?? json({ sessionId: "session-1" });
         if (path.includes("/chats/")) {
           // The assistant message exists only once the server has written
           // it, which it does as the turn exits.
@@ -68,6 +71,9 @@ describe("Gen2ChatPanel", () => {
           });
         }
         if (path.includes("/api/gen2/providers")) {
+          if (path.includes("provider=all") && handlers.allProviders) {
+            return json(handlers.allProviders);
+          }
           return json(handlers.provider ?? { connected: true, via: "api-key" });
         }
         if (path.endsWith("/chats")) {
@@ -82,6 +88,68 @@ describe("Gen2ChatPanel", () => {
       }),
     );
   }
+
+  it("restores the draft and removes the optimistic message when storage rejects a start", async () => {
+    stubFetch({
+      start: () =>
+        Response.json(
+          { error: "Chat storage is being updated. Please try again shortly." },
+          { status: 503 },
+        ),
+    });
+    render(
+      <Gen2ChatPanel
+        workspace={workspace}
+        onRunningChange={vi.fn()}
+        onFilesChanged={vi.fn()}
+        onOpenFile={vi.fn()}
+        onNeedsMachine={async () => true}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Prompt"), {
+      target: { value: "Please review my files" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(
+      await screen.findByText(
+        "Chat storage is being updated. Please try again shortly.",
+      ),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByLabelText("Prompt")).toHaveValue(
+        "Please review my files",
+      ),
+    );
+    expect(screen.getAllByText("Please review my files")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Send" })).toBeEnabled();
+  });
+
+  it("restores the draft after a network failure while starting", async () => {
+    stubFetch({
+      start: () => {
+        throw new TypeError("network failed");
+      },
+    });
+    render(
+      <Gen2ChatPanel
+        workspace={workspace}
+        onRunningChange={vi.fn()}
+        onFilesChanged={vi.fn()}
+        onOpenFile={vi.fn()}
+        onNeedsMachine={async () => true}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Prompt"), {
+      target: { value: "Keep this draft" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(
+      await screen.findByText("Couldn't reach CoDev. Try again."),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByLabelText("Prompt")).toHaveValue("Keep this draft"),
+    );
+  });
 
   it("renders what Codex did while the turn is still running", async () => {
     // Hold the first poll open: without it the turn resolves inside one
@@ -263,7 +331,7 @@ describe("Gen2ChatPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      /could not start/,
+      /reconnect to the workspace/,
     );
     // Their words are not thrown away.
     expect(screen.getByLabelText("Prompt")).toHaveValue("do the thing");
@@ -354,5 +422,106 @@ describe("Gen2ChatPanel", () => {
       );
     });
     expect(onFilesChanged).toHaveBeenCalled();
+  });
+
+  it("fills the prompt from an empty-state suggestion without sending", async () => {
+    stubFetch({});
+    render(
+      <Gen2ChatPanel
+        workspace={workspace}
+        onRunningChange={vi.fn()}
+        onFilesChanged={vi.fn()}
+        onOpenFile={vi.fn()}
+        onNeedsMachine={async () => true}
+      />,
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "What should we build?" }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: /Scaffold Next.js App/ }),
+    );
+    expect(screen.getByLabelText("Prompt")).toHaveValue(
+      "Scaffold a small Next.js app",
+    );
+    expect(
+      vi
+        .mocked(fetch)
+        .mock.calls.some(
+          ([url, init]) =>
+            String(url).endsWith("/agent") && init?.method === "POST",
+        ),
+    ).toBe(false);
+  });
+
+  it("includes the selected model in the turn request body", async () => {
+    stubFetch({});
+    render(
+      <Gen2ChatPanel
+        workspace={workspace}
+        onRunningChange={vi.fn()}
+        onFilesChanged={vi.fn()}
+        onOpenFile={vi.fn()}
+        onNeedsMachine={async () => true}
+        activeProvider="claude"
+      />,
+    );
+
+    await screen.findByRole("heading", { name: "What should we build?" });
+    fireEvent.change(screen.getByLabelText("Prompt"), {
+      target: { value: "hello agent" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => {
+      const agentCall = vi
+        .mocked(fetch)
+        .mock.calls.find(
+          ([url, init]) =>
+            String(url).endsWith("/agent") && init?.method === "POST",
+        );
+      expect(agentCall).toBeDefined();
+      const body = JSON.parse(String(agentCall?.[1]?.body));
+      expect(body.provider).toBe("claude");
+      expect(body.model).toBe("sonnet");
+    });
+  });
+
+  it("populates and uses dynamically fetched models from providers endpoint", async () => {
+    stubFetch({
+      allProviders: {
+        claude: {
+          connected: true,
+          via: "api-key",
+          models: [
+            { id: "claude-sonnet-5.5", label: "Claude Sonnet 5.5" },
+            { id: "claude-opus-5.5", label: "Claude Opus 5.5" },
+          ],
+        },
+        codex: {
+          connected: true,
+          via: "api-key",
+          models: [{ id: "gpt-6.1-sol", label: "GPT-6.1 Sol" }],
+        },
+      },
+    });
+
+    render(
+      <Gen2ChatPanel
+        workspace={workspace}
+        onRunningChange={vi.fn()}
+        onFilesChanged={vi.fn()}
+        onOpenFile={vi.fn()}
+        onNeedsMachine={async () => true}
+        activeProvider="claude"
+      />,
+    );
+
+    // The dropdown trigger should display the dynamic model once loaded
+    expect(
+      await screen.findByRole("button", { name: "Agent" }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText(/Claude Sonnet 5.5/)).toBeInTheDocument();
   });
 });

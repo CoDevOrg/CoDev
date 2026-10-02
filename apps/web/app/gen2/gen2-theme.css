@@ -1,0 +1,46 @@
+/*
+ * Tailwind theme and utilities for Gen 2 / Superset workspaces.
+ * Declares reset, theme, utilities layers so Tailwind utilities
+ * are available to shadcn/ui components throughout Gen 2.
+ */
+@layer reset, theme, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@theme {
+  --font-sans:
+    var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  --font-mono:
+    var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, monospace;
+  --radius: 0.625rem;
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+
+  --color-background: var(--surface, var(--brand-paper));
+  --color-foreground: var(--ink, var(--brand-ink));
+  --color-card: var(--surface-2, var(--brand-paper-bright));
+  --color-card-foreground: var(--ink, var(--brand-ink));
+  --color-popover: var(--surface-2, var(--brand-paper-bright));
+  --color-popover-foreground: var(--ink, var(--brand-ink));
+  --color-primary: var(--gold, var(--brand-accent));
+  --color-primary-foreground: var(--brand-on-accent);
+  --color-secondary: var(--surface-3, var(--brand-paper-tan));
+  --color-secondary-foreground: var(--ink, var(--brand-ink));
+  --color-muted: var(--surface-3, var(--brand-paper-tan));
+  --color-muted-foreground: var(--muted, var(--brand-ink-muted));
+  --color-accent: var(--surface-3, var(--brand-paper-tan));
+  --color-accent-foreground: var(--ink, var(--brand-ink));
+  --color-destructive: var(--brand-destructive);
+  --color-border: var(--line, rgba(var(--brand-ink-rgb), 0.16));
+  --color-input: var(--line-strong, rgba(var(--brand-ink-rgb), 0.28));
+  --color-ring: var(--gold, var(--brand-accent));
+
+  --color-teal: var(--brand-teal);
+  --color-orange: var(--brand-orange);
+  --color-violet: var(--brand-violet);
+}

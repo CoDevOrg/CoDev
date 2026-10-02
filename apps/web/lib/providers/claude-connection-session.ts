@@ -7,7 +7,6 @@ import { schema } from "@codev/db";
 import {
   ClaudeConnectionError,
   redactClaudeSecrets,
-  resolveClaudeConnectionScope,
 } from "./claude-connection";
 import { getDatabase } from "../platform/database";
 import {
@@ -252,17 +251,9 @@ export async function reapExpiredClaudeConnectionSessions(
  * start.
  */
 export async function startClaudeConnectionSession(
-  input: { userId: string; scopeType?: unknown; organizationId?: unknown },
+  input: { userId: string },
   runner: ClaudeLoginRunner = unavailableClaudeRunner,
 ): Promise<ClaudeConnectionSessionView> {
-  if (input.scopeType === "WORKSPACE") {
-    throw new ClaudeConnectionError(
-      "Claude subscriptions must be connected personally, not shared with an organization.",
-      400,
-    );
-  }
-  const { scopeType, scopeId } = await resolveClaudeConnectionScope(input);
-
   // Sweep this member's stale runners before allocating another scarce
   // sandbox. Best-effort: cleanup failure must not block a fresh attempt.
   try {
@@ -282,8 +273,8 @@ export async function startClaudeConnectionSession(
       .insert(schema.claudeConnectionSessions)
       .values({
         userId: input.userId,
-        scopeType,
-        scopeId,
+        scopeType: "USER",
+        scopeId: input.userId,
         status: "starting",
         expiresAt: new Date(Date.now() + CLAUDE_CONNECTION_SESSION_TTL_MS),
       })
@@ -437,18 +428,12 @@ export async function getClaudeConnectionSession(
       );
     }
     // Reconnection retires any previously stored subscription token, not API keys.
-    await deleteProviderCredential(
-      "USER",
-      row.userId,
-      "anthropic",
-      "OAUTH_TOKEN",
-    );
+    await deleteProviderCredential(row.userId, "anthropic", "OAUTH_TOKEN");
     // The token is the credential now, so the sandbox that produced it has
     // nothing left worth keeping. It used to be snapshotted and resumed for
     // every turn; it is destroyed here instead.
     await saveProviderCredential({
-      scopeType: "USER",
-      scopeId: row.userId,
+      userId: row.userId,
       provider: "anthropic",
       credentialType: "OAUTH_TOKEN",
       accessToken: result.token,

@@ -15,37 +15,12 @@ import {
   getTopPaths,
   getUserDirectory,
 } from "@/lib/admin/admin-stats";
-import { listAllWorkspacesForAdmin } from "@/lib/admin/admin-workspaces";
 import { getAdminFeatureAccessData } from "@/lib/admin/admin-feature-access";
 
 export const metadata: Metadata = { title: "Admin" };
 export const dynamic = "force-dynamic";
 
 const numberFmt = new Intl.NumberFormat("en-US");
-function formatCost(value: number | null, currency: string): string {
-  if (value === null) return "—";
-  const safeCurrency = /^[A-Z]{3}$/.test(currency) ? currency : "USD";
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: safeCurrency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 4,
-  }).format(value);
-}
-
-function formatMinutes(minutes: number): string {
-  if (minutes < 60) return `${numberFmt.format(minutes)}m`;
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  return `${numberFmt.format(hours)}h ${rest}m`;
-}
-
-const ACCESS_ROLE_LABEL: Record<string, string> = {
-  owner: "owner",
-  co_steer: "co-steer",
-  reviewer: "reviewer",
-  viewer: "viewer",
-};
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", {
@@ -78,7 +53,6 @@ export default async function AdminPage() {
     topPaths,
     daily,
     waitlist,
-    workspacesReport,
     featureAccess,
   ] = await Promise.all([
     getAdminSummary(),
@@ -87,7 +61,6 @@ export default async function AdminPage() {
     getTopPaths(30, 15),
     getDailyTraffic(30),
     listAccessRequests(),
-    listAllWorkspacesForAdmin(),
     getAdminFeatureAccessData(),
   ]);
 
@@ -96,21 +69,6 @@ export default async function AdminPage() {
   ).length;
 
   const maxDaily = Math.max(1, ...daily.map((point) => point.views));
-  const memberCreditRows = directory.filter((row) => !row.isAdmin);
-  const adminCreditRows = directory.filter((row) => row.isAdmin);
-  const totalMemberAllocationUsd = memberCreditRows.reduce(
-    (total, row) => total + (row.computeAllottedUsd ?? 0),
-    0,
-  );
-  const totalMemberUsedUsd = memberCreditRows.reduce(
-    (total, row) => total + row.computeUsedUsd,
-    0,
-  );
-  const totalAdminUsedUsd = adminCreditRows.reduce(
-    (total, row) => total + row.computeUsedUsd,
-    0,
-  );
-
   const stats: { label: string; value: string; hint?: string }[] = [
     {
       label: "Total accounts",
@@ -175,117 +133,6 @@ export default async function AdminPage() {
             organization exceptions and plans.
           </p>
           <AdminFeatureControls data={featureAccess} />
-        </section>
-
-        <section className="admin-section">
-          <h2>Compute credits · this month</h2>
-          <p className="admin-console-sub admin-section-intro">
-            Each non-admin member contributes a $5 monthly allowance that is
-            pooled within their workspaces. Admin sessions bypass that limit,
-            but their runtime is still recorded here. Dollar values are
-            estimated from the current host rate and are separate from the real
-            Azure spend report below.
-          </p>
-          <div className="admin-stat-grid" style={{ marginBottom: "1rem" }}>
-            <div className="admin-stat">
-              <div className="admin-stat-label">Member allowance</div>
-              <div className="admin-stat-value">
-                {formatCost(totalMemberAllocationUsd, "USD")}
-              </div>
-              <div className="admin-stat-hint">
-                pooled across {numberFmt.format(memberCreditRows.length)}{" "}
-                non-admin members
-              </div>
-            </div>
-            <div className="admin-stat">
-              <div className="admin-stat-label">Member credits used</div>
-              <div className="admin-stat-value">
-                {formatCost(totalMemberUsedUsd, "USD")}
-              </div>
-              <div className="admin-stat-hint">
-                estimated credit-equivalent runtime
-              </div>
-            </div>
-            <div className="admin-stat">
-              <div className="admin-stat-label">Admin runtime tracked</div>
-              <div className="admin-stat-value">
-                {formatCost(totalAdminUsedUsd, "USD")}
-              </div>
-              <div className="admin-stat-hint">
-                unlimited sessions, still metered
-              </div>
-            </div>
-          </div>
-          <div className="admin-table-wrap">
-            <div className="admin-table-scroll">
-              <table className="admin-table">
-                <caption className="sr-only">
-                  Per-user compute credit usage for the current calendar month
-                </caption>
-                <thead>
-                  <tr>
-                    <th>User</th>
-                    <th>Role</th>
-                    <th className="num">Used</th>
-                    <th className="num">Allowance</th>
-                    <th className="num">Remaining</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {directory.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="admin-muted">
-                        No users yet.
-                      </td>
-                    </tr>
-                  ) : (
-                    directory.map((row) => (
-                      <tr key={`credit-${row.id}`}>
-                        <td>
-                          <span className="admin-user-name">
-                            {row.name ?? row.login}
-                          </span>
-                          <br />
-                          <span className="admin-user-login">@{row.login}</span>
-                        </td>
-                        <td>
-                          {row.isAdmin ? (
-                            <span className="admin-badge is-admin">admin</span>
-                          ) : (
-                            <span className="admin-muted">member</span>
-                          )}
-                        </td>
-                        <td className="num">
-                          <div>{formatMinutes(row.computeUsedMinutes)}</div>
-                          <span className="admin-time">
-                            {formatCost(row.computeUsedUsd, "USD")} est.
-                          </span>
-                        </td>
-                        <td className="num">
-                          {row.isAdmin ? (
-                            <span className="admin-badge is-admin">
-                              unlimited
-                            </span>
-                          ) : (
-                            <>
-                              {formatCost(row.computeAllottedUsd, "USD")}
-                              <br />
-                              <span className="admin-time">pooled</span>
-                            </>
-                          )}
-                        </td>
-                        <td className="num">
-                          {row.isAdmin
-                            ? "—"
-                            : formatCost(row.computeRemainingUsd, "USD")}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
         </section>
 
         <section className="admin-section">
@@ -414,161 +261,6 @@ export default async function AdminPage() {
                       <td className="num">{numberFmt.format(row.visits)}</td>
                     </tr>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        <section className="admin-section">
-          <h2>Workspaces ({workspacesReport.workspaces.length})</h2>
-          <p className="admin-console-sub" style={{ marginBottom: "1rem" }}>
-            Every workspace ever created, including closed ones — closing a
-            workspace marks it deleted but keeps its record here permanently.
-            Cost is real Azure spend (Cost Management, scoped to the CoDev
-            resource group), not an estimate — but it has only been tracked
-            since {formatDate(workspacesReport.costTracking.trackedSinceIso)},
-            since that&rsquo;s when the Azure cost tracker was activated; Azure
-            cannot retroactively reconstruct a comparable allocation before that
-            date. Per-workspace amounts are each workspace&rsquo;s share of the
-            real Azure VM compute bill, split by its recorded runtime minutes —
-            the only slice that can be honestly attributed to one workspace,
-            since every workspace shares one host. The remaining{" "}
-            {formatCost(
-              workspacesReport.costTracking.platformOverheadCost,
-              workspacesReport.costTracking.currency,
-            )}{" "}
-            of real spend (networking, storage, Key Vault, and other shared
-            services) has no honest per-workspace split, so it isn&rsquo;t
-            divided below.
-          </p>
-          <div className="admin-stat-grid" style={{ marginBottom: "1rem" }}>
-            <div className="admin-stat">
-              <div className="admin-stat-label">Real Azure spend tracked</div>
-              <div className="admin-stat-value">
-                {formatCost(
-                  workspacesReport.costTracking.totalRealCost,
-                  workspacesReport.costTracking.currency,
-                )}
-              </div>
-              <div className="admin-stat-hint">
-                since{" "}
-                {formatDate(workspacesReport.costTracking.trackedSinceIso)}
-              </div>
-            </div>
-            <div className="admin-stat">
-              <div className="admin-stat-label">
-                Attributable to workspaces (VM compute)
-              </div>
-              <div className="admin-stat-value">
-                {formatCost(
-                  workspacesReport.costTracking.attributableComputeCost,
-                  workspacesReport.costTracking.currency,
-                )}
-              </div>
-              <div className="admin-stat-hint">
-                split by real recorded runtime minutes
-              </div>
-            </div>
-            <div className="admin-stat">
-              <div className="admin-stat-label">Platform overhead</div>
-              <div className="admin-stat-value">
-                {formatCost(
-                  workspacesReport.costTracking.platformOverheadCost,
-                  workspacesReport.costTracking.currency,
-                )}
-              </div>
-              <div className="admin-stat-hint">
-                networking, storage, Key Vault, and other shared services — not
-                per-workspace
-              </div>
-            </div>
-          </div>
-          <div className="admin-table-wrap">
-            <div className="admin-table-scroll">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Workspace</th>
-                    <th>Owner</th>
-                    <th>Members</th>
-                    <th className="num">Tracked runtime</th>
-                    <th className="num">Allocated cost</th>
-                    <th>Created</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {workspacesReport.workspaces.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="admin-muted">
-                        No workspaces yet.
-                      </td>
-                    </tr>
-                  ) : (
-                    workspacesReport.workspaces.map((workspace) => (
-                      <tr key={workspace.id}>
-                        <td>
-                          <span className="admin-user-name">
-                            {workspace.repository}
-                          </span>
-                          <br />
-                          <span className="admin-user-login">
-                            {workspace.defaultBranch}
-                          </span>
-                        </td>
-                        <td>
-                          {workspace.ownerName ?? workspace.ownerLogin}
-                          <br />
-                          <span className="admin-user-login">
-                            @{workspace.ownerLogin}
-                          </span>
-                        </td>
-                        <td>
-                          {workspace.members.length === 0 ? (
-                            <span className="admin-muted">—</span>
-                          ) : (
-                            <span className="admin-providers">
-                              {workspace.members.map((member) => (
-                                <span
-                                  className="admin-chip"
-                                  key={member.userId}
-                                  title={member.name ?? member.login}
-                                >
-                                  @{member.login} ·{" "}
-                                  {ACCESS_ROLE_LABEL[member.accessRole] ??
-                                    member.accessRole}
-                                </span>
-                              ))}
-                            </span>
-                          )}
-                        </td>
-                        <td className="num">
-                          {formatMinutes(workspace.trackedMinutes)}
-                        </td>
-                        <td className="num">
-                          {formatCost(
-                            workspace.allocatedCost,
-                            workspacesReport.costTracking.currency,
-                          )}
-                        </td>
-                        <td className="admin-time">
-                          {formatDate(workspace.createdAt)}
-                        </td>
-                        <td>
-                          {workspace.isDeleted ? (
-                            <span className="admin-badge status-declined">
-                              deleted {formatDate(workspace.deletedAt!)}
-                            </span>
-                          ) : (
-                            <span className="admin-badge status-accepted">
-                              {workspace.status}
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  )}
                 </tbody>
               </table>
             </div>

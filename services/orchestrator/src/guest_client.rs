@@ -10,15 +10,12 @@ use tokio::{
 use crate::model::{
     ClaudeSetupCodeRequest, ClaudeSetupPollRequest, ClaudeSetupPollResponse,
     ClaudeSetupStartRequest, CodexExecPollRequest, CodexExecPollResponse, CodexExecStartRequest,
-    ExecRequest, ExecResponse, FileResponse, PublicationExportRequest, PublicationExportResponse,
-    Result, RuntimeError, SessionRestoreBeginRequest, SessionRestoreChunkRequest,
-    SessionRestoreFinalizeResponse, SupersetAgentInputRequest, SupersetAgentPollRequest,
-    SupersetAgentPollResponse, SupersetAgentRecoveryResponse, SupersetAgentStartRequest,
-    SupersetAgentStartResponse, SupersetCreateEntryRequest, SupersetDeleteEntryRequest,
-    SupersetMoveEntryRequest, TerminalInputRequest, TerminalPollRequest, TerminalPollResponse,
-    TerminalResizeRequest, TerminalStartRequest, WorktreeCheckpointRequest,
-    WorktreeCheckpointResponse, WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse,
-    WorktreeRebaseRequest, WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
+    ExecRequest, ExecResponse, FileResponse, Result, RuntimeError, SupersetAgentInputRequest,
+    SupersetAgentPollRequest, SupersetAgentPollResponse, SupersetAgentRecoveryResponse,
+    SupersetAgentStartRequest, SupersetAgentStartResponse, SupersetCreateEntryRequest,
+    SupersetDeleteEntryRequest, SupersetMoveEntryRequest, TerminalInputRequest,
+    TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
+    WriteFileRequest,
 };
 
 const MAX_RESPONSE_BYTES: usize = 10 << 20;
@@ -368,136 +365,6 @@ impl GuestClient {
         )
         .await
         .map(|_| ())
-    }
-
-    pub async fn create_worktree(&self, request: &WorktreeCreateRequest) -> Result<()> {
-        self.request::<_, serde_json::Value>("POST", "/v1/worktrees", Some(request))
-            .await
-            .map(|_| ())
-    }
-
-    pub async fn begin_session_restore(&self, request: &SessionRestoreBeginRequest) -> Result<()> {
-        self.request::<_, serde_json::Value>("POST", "/v1/session-restores", Some(request))
-            .await
-            .map(|_| ())
-    }
-
-    pub async fn append_session_restore_chunk(
-        &self,
-        operation_id: &str,
-        request: &SessionRestoreChunkRequest,
-    ) -> Result<u64> {
-        let response: serde_json::Value = self
-            .request(
-                "POST",
-                &format!("/v1/session-restores/{operation_id}/chunks"),
-                Some(request),
-            )
-            .await?;
-        response
-            .get("nextOffset")
-            .and_then(serde_json::Value::as_u64)
-            .ok_or_else(|| RuntimeError::GuestUnavailable("missing restore chunk offset".into()))
-    }
-
-    pub async fn finalize_session_restore(
-        &self,
-        operation_id: &str,
-    ) -> Result<SessionRestoreFinalizeResponse> {
-        self.request::<(), _>(
-            "POST",
-            &format!("/v1/session-restores/{operation_id}/finalize"),
-            None,
-        )
-        .await
-    }
-
-    pub async fn abort_session_restore(&self, operation_id: &str) -> Result<()> {
-        self.request::<(), serde_json::Value>(
-            "DELETE",
-            &format!("/v1/session-restores/{operation_id}"),
-            None,
-        )
-        .await
-        .map(|_| ())
-    }
-
-    pub async fn delete_worktree(&self, worktree_id: &str) -> Result<()> {
-        self.request::<(), serde_json::Value>(
-            "DELETE",
-            &format!("/v1/worktrees/{worktree_id}"),
-            None,
-        )
-        .await
-        .map(|_| ())
-    }
-
-    pub async fn checkpoint_worktree(
-        &self,
-        worktree_id: &str,
-        request: &WorktreeCheckpointRequest,
-    ) -> Result<WorktreeCheckpointResponse> {
-        self.request(
-            "POST",
-            &format!("/v1/worktrees/{worktree_id}/checkpoint"),
-            Some(request),
-        )
-        .await
-    }
-
-    pub async fn review_worktree(
-        &self,
-        worktree_id: &str,
-        base_sha: &str,
-    ) -> Result<WorktreeReviewResponse> {
-        self.request::<(), _>(
-            "GET",
-            &format!("/v1/worktrees/{worktree_id}/review?baseSha={base_sha}"),
-            None,
-        )
-        .await
-    }
-
-    pub async fn rebase_worktree(
-        &self,
-        worktree_id: &str,
-        request: &WorktreeRebaseRequest,
-    ) -> Result<WorktreeRebaseResponse> {
-        self.request(
-            "POST",
-            &format!("/v1/worktrees/{worktree_id}/rebase"),
-            Some(request),
-        )
-        .await
-    }
-
-    pub async fn merge_worktree(
-        &self,
-        worktree_id: &str,
-        request: &WorktreeMergeRequest,
-    ) -> Result<WorktreeMergeResponse> {
-        self.request(
-            "POST",
-            &format!("/v1/worktrees/{worktree_id}/merge"),
-            Some(request),
-        )
-        .await
-    }
-
-    pub async fn export_publication(
-        &self,
-        request: &PublicationExportRequest,
-    ) -> Result<PublicationExportResponse> {
-        self.request("POST", "/v1/publication/export", Some(request))
-            .await
-    }
-
-    pub async fn snapshot_workspace(
-        &self,
-        request: &PublicationExportRequest,
-    ) -> Result<PublicationExportResponse> {
-        self.request("POST", "/v1/workspace/snapshot", Some(request))
-            .await
     }
 
     pub async fn git_status(&self, worktree_id: Option<&str>) -> Result<String> {

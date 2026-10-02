@@ -6,10 +6,8 @@ import { revokePersonalSubscription } from "@/lib/providers/provider-connection-
 const providerSchema = z.enum(["claude", "codex", "cursor"]);
 
 /**
- * Sign the member out of an agent subscription (Claude Code, Codex, Cursor).
- * Connecting happens through each provider's own OAuth route; this is the one
- * shared way back out, so the settings card always has a Disconnect that
- * matches the Connect next to it.
+ * Sign the member out of a Claude Code, Codex, or Cursor CLI login.
+ * The settings card uses this shared route to disconnect either provider.
  */
 export async function DELETE(request: Request) {
   const user = await getApiUser();

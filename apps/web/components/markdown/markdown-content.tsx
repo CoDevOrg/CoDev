@@ -1,4 +1,7 @@
-import { FileText } from "lucide-react";
+"use client";
+
+import { useRef, useState } from "react";
+import { Check, Copy, FileText } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -38,6 +41,41 @@ export function MarkdownContent({
   );
 }
 
+function CodePre({ children }: { children: React.ReactNode }) {
+  const [copied, setCopied] = useState(false);
+  const preRef = useRef<HTMLPreElement | null>(null);
+
+  const handleCopy = () => {
+    if (!preRef.current) return;
+    const text = preRef.current.innerText || "";
+    void navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className={styles.preContainer}>
+      <pre ref={preRef}>{children}</pre>
+      <button
+        type="button"
+        onClick={handleCopy}
+        className={styles.codeCopyButton}
+        title="Copy code"
+        aria-label="Copy code"
+      >
+        {copied ? (
+          <Check
+            className={cn("size-3.5", styles.codeCopied)}
+            aria-hidden="true"
+          />
+        ) : (
+          <Copy className="size-3.5" aria-hidden="true" />
+        )}
+      </button>
+    </div>
+  );
+}
+
 function MarkdownBody({ text }: { text: string }) {
   return (
     <ReactMarkdown
@@ -68,6 +106,9 @@ function MarkdownBody({ text }: { text: string }) {
               <table>{children}</table>
             </div>
           );
+        },
+        pre({ children }) {
+          return <CodePre>{children}</CodePre>;
         },
       }}
     >
