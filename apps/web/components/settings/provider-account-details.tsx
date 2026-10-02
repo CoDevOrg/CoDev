@@ -36,12 +36,15 @@ export function CopyableCommand({ command }: { command: string }) {
 }
 
 export function SurfaceToggle({
+  heading,
   label,
   note,
   checked,
   disabled,
   onChange,
 }: {
+  /** A section title above the switch, for a choice with a cost attached. */
+  heading?: string;
   label: string;
   note?: string;
   checked: boolean;
@@ -51,6 +54,7 @@ export function SurfaceToggle({
   return (
     <div className="flex flex-col gap-3">
       <Separator />
+      {heading ? <h4 className="text-sm font-semibold">{heading}</h4> : null}
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <p className="text-sm font-medium">{label}</p>

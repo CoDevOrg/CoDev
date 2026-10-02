@@ -424,6 +424,64 @@ describe("ProviderAccountCard", () => {
     expect(screen.queryByRole("button", { name: "Reconnect" })).toBeNull();
   });
 
+  it("confirms before disconnecting and says what stops working", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <ProviderAccountCard
+        connection={connection({ provider: "openai", label: "OpenAI" })}
+        label="Codex"
+        logo={null}
+        runsIn={[]}
+        subscription={subscription({
+          provider: "codex",
+          label: "Codex",
+          status: "connected",
+          command: "codev codex-auth",
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+    expect(screen.getByRole("alertdialog")).toHaveTextContent(
+      "Agents stop running on this Codex login",
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+    fireEvent.click(screen.getByRole("button", { name: "Disconnect Codex" }));
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/personal/subscriptions?provider=codex",
+        { method: "DELETE" },
+      ),
+    );
+  });
+
+  it("summarises how a connected account signs in", () => {
+    render(
+      <ProviderAccountCard
+        connection={connection({ provider: "openai", label: "OpenAI" })}
+        label="Codex"
+        logo={null}
+        runsIn={[]}
+        subscription={subscription({
+          provider: "codex",
+          label: "Codex",
+          status: "connected",
+          command: "codev codex-auth",
+        })}
+      />,
+    );
+    expect(
+      screen.getByText("Signed in with a subscription"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Manage connection")).toBeInTheDocument();
+  });
+
   describe("where a connection runs", () => {
     it("names the surfaces the registry reports, not a section it sits in", () => {
       render(
@@ -622,6 +680,7 @@ describe("ProviderAccountCard", () => {
 
       expect(screen.getByText(/ending wxyz/)).toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
+      fireEvent.click(screen.getByRole("button", { name: "Revoke login" }));
       await waitFor(() => {
         expect(fetchMock).toHaveBeenCalledWith(
           "/api/personal/connections?provider=anthropic&kind=claude_cli_token",
