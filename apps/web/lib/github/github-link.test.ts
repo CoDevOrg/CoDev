@@ -41,7 +41,7 @@ describe("GitHub account linking state", () => {
 
     expect(openGithubLinkState(encoded)).toMatchObject({
       userId: "user-1",
-      returnTo: "/dashboard",
+      returnTo: "/gen2",
     });
   });
 });

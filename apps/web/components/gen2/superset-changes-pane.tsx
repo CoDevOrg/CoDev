@@ -103,7 +103,7 @@ export function SupersetChangesPane({
   }, [workspaceId, worktreeId]);
 
   useEffect(() => {
-    if (visible) void refresh();
+    if (visible) queueMicrotask(() => void refresh());
   }, [visible, refresh]);
 
   const files = changedPaths(status);

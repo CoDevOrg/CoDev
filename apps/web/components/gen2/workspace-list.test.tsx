@@ -37,7 +37,13 @@ describe("Gen2WorkspaceList", () => {
   });
 
   it("confirms permanent deletion and refreshes the owner count", async () => {
-    render(<Gen2WorkspaceList workspaces={[ownerWorkspace]} />);
+    const onWorkspacesChange = vi.fn();
+    render(
+      <Gen2WorkspaceList
+        workspaces={[ownerWorkspace]}
+        onWorkspacesChange={onWorkspacesChange}
+      />,
+    );
     fireEvent.click(screen.getByRole("button", { name: "Delete Studio" }));
 
     await waitFor(() =>
@@ -50,7 +56,7 @@ describe("Gen2WorkspaceList", () => {
       expect.stringContaining("permanently deletes the workspace"),
     );
     expect(mocks.refresh).toHaveBeenCalledOnce();
-    expect(screen.getByText("No workspaces yet.")).toBeInTheDocument();
+    expect(onWorkspacesChange).toHaveBeenCalledWith([]);
   });
 
   it("shows interrupted deletion as retryable and not openable", () => {
@@ -59,7 +65,12 @@ describe("Gen2WorkspaceList", () => {
       status: "deleting" as const,
       lastError: "Deletion did not finish.",
     };
-    render(<Gen2WorkspaceList workspaces={[deletingWorkspace]} />);
+    render(
+      <Gen2WorkspaceList
+        workspaces={[deletingWorkspace]}
+        onWorkspacesChange={vi.fn()}
+      />,
+    );
 
     expect(screen.getByText("Deleting")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Studio/ })).toBeNull();

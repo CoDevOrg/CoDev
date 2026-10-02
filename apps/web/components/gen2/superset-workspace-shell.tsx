@@ -35,6 +35,7 @@ import { cn } from "@/lib/platform/utils";
 import { WorkspaceShareDialog } from "./workspace-share-dialog";
 import { ThemeToggle } from "@/components/shell/theme-toggle";
 import { Gen2ChatPanel } from "./chat-panel";
+import type { Gen2AgentChoice } from "./connect-provider";
 import { Gen2TerminalPane } from "./terminal-pane";
 import {
   createSupersetWorktree,
@@ -89,6 +90,12 @@ import {
 type Tab = "files" | "changes" | "review";
 
 type Worktree = { worktreeId: string; branch: string };
+
+function chatProvider(
+  provider: SupportedAiProvider,
+): Gen2AgentChoice | undefined {
+  return provider === "codex" || provider === "claude" ? provider : undefined;
+}
 
 /** Auto-collapse the left rail below this viewport. User toggles pin the choice. */
 export const GEN2_SIDEBAR_COLLAPSE_QUERY = "(max-width: 1279px)";
@@ -264,7 +271,7 @@ export function SupersetWorkspaceShell({
   }, [activeProvider]);
 
   useEffect(() => {
-    void refreshProviderStatuses();
+    queueMicrotask(() => void refreshProviderStatuses());
   }, [refreshProviderStatuses]);
 
   const refreshChats = useCallback(async () => {
@@ -283,7 +290,7 @@ export function SupersetWorkspaceShell({
   }, [workspaceId]);
 
   useEffect(() => {
-    void refreshChats();
+    queueMicrotask(() => void refreshChats());
   }, [refreshChats]);
 
   const handleNewChat = useCallback(async () => {
@@ -506,7 +513,7 @@ export function SupersetWorkspaceShell({
   }, [runtimeEnabled, workspaceId]);
 
   useEffect(() => {
-    void refreshRuns();
+    queueMicrotask(() => void refreshRuns());
   }, [refreshRuns]);
 
   const boardItems: BoardWorktreeItem[] = worktrees.map((wt) => {
@@ -538,6 +545,7 @@ export function SupersetWorkspaceShell({
       lastActivity: run?.updatedAt,
     };
   });
+  const chatActiveProvider = chatProvider(activeProvider);
 
   const refreshCounts = useCallback(
     async (next: Worktree[]) => {
@@ -1680,8 +1688,12 @@ export function SupersetWorkspaceShell({
                       activeChatId={selectedChatId}
                       onSelectChatId={setSelectedChatId}
                       onChatsChange={setChats}
-                      activeProvider={activeProvider as any}
-                      onActiveProviderChange={setActiveProvider as any}
+                      {...(chatActiveProvider
+                        ? { activeProvider: chatActiveProvider }
+                        : {})}
+                      onActiveProviderChange={(provider) =>
+                        setActiveProvider(provider)
+                      }
                       hideChatBar={true}
                       onRunningChange={setAgentRunning}
                       onFilesChanged={() => {

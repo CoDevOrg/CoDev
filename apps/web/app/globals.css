@@ -29,8 +29,8 @@
    after this file) re-declares the same tokens on `.app-page`/`.auth-page`
    with a matching dark override and always wins there, so this block only
    matters for the rare consumer of these tokens outside those two classes.
-   Kept in lockstep with app-theme.css's dark values; --workspace-* stays
-   untouched since the embedded IDE surface is intentionally dark already. */
+   The legacy --workspace-* tokens below are not used by the live Gen 2 IDE;
+   its theme-aware --ws-* palette is defined in app/gen2/workspace.css. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --ink: #f2e9d6;

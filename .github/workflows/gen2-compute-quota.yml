@@ -1,0 +1,28 @@
+name: Gen 2 compute quota reconciliation
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gen2-compute-quota
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Reconcile running workspace usage
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          test -n "$CRON_SECRET"
+          curl --fail-with-body --silent --show-error --retry 2 \
+            --retry-delay 10 --max-time 300 \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            https://codev-xi.vercel.app/api/gen2/compute/reconcile

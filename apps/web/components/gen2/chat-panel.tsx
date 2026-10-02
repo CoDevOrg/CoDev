@@ -162,7 +162,10 @@ export function Gen2ChatPanel({
   hideChatBar?: boolean;
 }) {
   const [chats, setChats] = useState<Gen2Chat[]>([]);
-  const [chatId, setChatId] = useState<string | null>(activeChatId ?? null);
+  const [localChatId, setLocalChatId] = useState<string | null>(
+    () => activeChatId ?? storedTurn(workspace.id)?.chatId ?? null,
+  );
+  const chatId = activeChatId ?? localChatId;
   const [thread, setThread] = useState<Thread>({ messages: [] });
   const [prompt, setPrompt] = useState("");
   const [attachments, setAttachments] = useState<PendingFile[]>([]);
@@ -182,9 +185,10 @@ export function Gen2ChatPanel({
   const dragDepthRef = useRef(0);
   const attachInputId = useId();
   const [waking, setWaking] = useState(false);
-  const [agent, setAgent] = useState<Gen2AgentChoice>(
+  const [localAgent, setLocalAgent] = useState<Gen2AgentChoice>(
     activeProvider ?? GEN2_AGENT_PROVIDERS[0].id,
   );
+  const agent = activeProvider ?? localAgent;
   const [modelsByProvider, setModelsByProvider] = useState<
     Record<string, Gen2ModelInfo[]>
   >({});
@@ -200,14 +204,17 @@ export function Gen2ChatPanel({
   });
   const agentLabel =
     GEN2_AGENT_PROVIDERS.find((entry) => entry.id === agent)?.label ?? "Agent";
+  const { status: provider, refresh: refreshProvider } =
+    useGen2ProviderStatus(agent);
   const providerModels: Gen2ModelInfo[] = modelsByProvider[agent]?.length
     ? modelsByProvider[agent]!
-    : (GEN2_PROVIDER_MODELS[agent as keyof typeof GEN2_PROVIDER_MODELS] ?? []);
+    : provider?.models?.length
+      ? provider.models
+      : (GEN2_PROVIDER_MODELS[agent as keyof typeof GEN2_PROVIDER_MODELS] ??
+        []);
   const currentModelItem =
     providerModels.find((m) => m.id === selectedModel) ?? providerModels[0];
   const currentModelLabel = currentModelItem?.label ?? selectedModel;
-  const { status: provider, refresh: refreshProvider } =
-    useGen2ProviderStatus(agent);
 
   useEffect(() => {
     let mounted = true;
@@ -226,14 +233,6 @@ export function Gen2ChatPanel({
     };
   }, []);
 
-  useEffect(() => {
-    if (provider?.models?.length) {
-      setModelsByProvider((prev) => ({
-        ...prev,
-        [agent]: provider.models!,
-      }));
-    }
-  }, [agent, provider?.models]);
   const ready = canRunGen2Agent(workspace.status);
   const busy = running || starting || waking;
   const canSend = Boolean(prompt.trim() || attachments.length > 0) && !busy;
@@ -243,18 +242,6 @@ export function Gen2ChatPanel({
     transcriptRef,
     contentKey,
   );
-
-  useEffect(() => {
-    if (activeChatId && activeChatId !== chatId) {
-      setChatId(activeChatId);
-    }
-  }, [activeChatId, chatId]);
-
-  useEffect(() => {
-    if (activeProvider && activeProvider !== agent) {
-      setAgent(activeProvider);
-    }
-  }, [activeProvider, agent]);
 
   useEffect(() => {
     pinToLatest();
@@ -280,14 +267,14 @@ export function Gen2ChatPanel({
     setChats(fetchedChats);
     onChatsChange?.(fetchedChats);
     const targetId = activeChatId ?? fetchedChats[0]?.id ?? null;
-    setChatId((current) => current ?? targetId);
+    setLocalChatId((current) => current ?? targetId);
     if (targetId && !activeChatId) {
       onSelectChatId?.(targetId);
     }
   }, [workspace.id, activeChatId, onChatsChange, onSelectChatId]);
 
   useEffect(() => {
-    void loadChats();
+    queueMicrotask(() => void loadChats());
   }, [loadChats]);
 
   const loadThread = useCallback(
@@ -303,11 +290,18 @@ export function Gen2ChatPanel({
   );
 
   useEffect(() => {
-    if (!chatId) {
-      setThread({ messages: [] });
-      return;
-    }
-    void loadThread(chatId);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      if (!chatId) {
+        setThread({ messages: [] });
+        return;
+      }
+      void loadThread(chatId);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [chatId, loadThread]);
 
   /** Drives one turn to completion, re-reducing the stream on every poll. */
@@ -409,8 +403,15 @@ export function Gen2ChatPanel({
   useEffect(() => {
     const stored = storedTurn(workspace.id);
     if (!stored) return;
-    setChatId(stored.chatId);
-    void drive(stored.sessionId, stored.chatId, stored.after, stored.provider);
+    queueMicrotask(
+      () =>
+        void drive(
+          stored.sessionId,
+          stored.chatId,
+          stored.after,
+          stored.provider,
+        ),
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace.id]);
 
@@ -520,7 +521,7 @@ export function Gen2ChatPanel({
           return;
         }
         target = ((await created.json()) as { chat: Gen2Chat }).chat.id;
-        setChatId(target);
+        setLocalChatId(target);
       }
 
       let promptBody = text;
@@ -618,7 +619,7 @@ export function Gen2ChatPanel({
     const { chat } = (await response.json()) as { chat: Gen2Chat };
     const next = [chat, ...chats];
     setChats(next);
-    setChatId(chat.id);
+    setLocalChatId(chat.id);
     onChatsChange?.(next);
     onSelectChatId?.(chat.id);
     pinToLatest();
@@ -628,7 +629,7 @@ export function Gen2ChatPanel({
     newAgent: Gen2AgentChoice,
     newModel?: string,
   ) => {
-    setAgent(newAgent);
+    setLocalAgent(newAgent);
     onActiveProviderChange?.(newAgent);
     const models: Gen2ModelInfo[] = modelsByProvider[newAgent]?.length
       ? modelsByProvider[newAgent]!
@@ -909,7 +910,7 @@ export function Gen2ChatPanel({
                     )}
                     aria-current={chat.id === chatId}
                     onClick={() => {
-                      setChatId(chat.id);
+                      setLocalChatId(chat.id);
                       onSelectChatId?.(chat.id);
                       pinToLatest();
                     }}
