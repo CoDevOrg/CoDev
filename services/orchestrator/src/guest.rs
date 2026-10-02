@@ -1927,6 +1927,8 @@ impl GuestService {
         arguments: &[&str],
     ) -> crate::model::Result<std::process::Output> {
         let mut child = Command::new("git")
+            .arg("-c")
+            .arg("safe.directory=*")
             .arg("-C")
             .arg(root)
             .args(arguments)

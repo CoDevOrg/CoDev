@@ -1,39 +1,10 @@
-import { notFound } from "next/navigation";
-import type { Metadata } from "next";
-import type { Gen2WorkspaceDetail } from "@codev/contracts";
+import { redirect } from "next/navigation";
 
-import { SupersetWorkspaceShell } from "@/components/gen2/superset-workspace-shell";
-import { requireUser } from "@/lib/auth/session";
-import { Gen2AccessError } from "@/lib/gen2/errors";
-import { isGen2SupersetFilePaneEnabled } from "@/lib/gen2/superset-file-feature";
-import { isGen2SupersetRuntimeEnabled } from "@/lib/gen2/superset-runtime-feature";
-import { getGen2WorkspaceDetail } from "@/lib/gen2/workspaces";
-
-export const metadata: Metadata = { title: "Workspace" };
-
-export default async function Gen2SupersetFilesPage({
+export default async function Gen2SupersetPage({
   params,
 }: {
   params: Promise<{ workspaceId: string }>;
 }) {
-  if (!isGen2SupersetFilePaneEnabled()) notFound();
-
   const { workspaceId } = await params;
-  const user = await requireUser(`/gen2/${workspaceId}/superset`);
-  let workspace: Gen2WorkspaceDetail;
-  try {
-    workspace = await getGen2WorkspaceDetail(workspaceId, user.id);
-  } catch (error) {
-    if (error instanceof Gen2AccessError) notFound();
-    throw error;
-  }
-
-  return (
-    <SupersetWorkspaceShell
-      workspace={workspace}
-      workspaceId={workspaceId}
-      canEdit={workspace.role !== "viewer"}
-      runtimeEnabled={isGen2SupersetRuntimeEnabled()}
-    />
-  );
+  redirect(`/gen2/${workspaceId}`);
 }

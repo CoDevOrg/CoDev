@@ -375,6 +375,7 @@ export async function startGen2SupersetAgentTurn(input: {
   idempotencyKey: string;
   provider: Gen2AgentProvider;
   worktreeId?: string | undefined;
+  model?: string | undefined;
 }) {
   requireEnabled();
   await requireGen2Member(input.workspaceId, input.userId);
@@ -384,7 +385,12 @@ export async function startGen2SupersetAgentTurn(input: {
     input.worktreeId ??
     (await ensureGen2SupersetAgentWorktree(input.workspaceId, input.chatId));
   const provider = input.provider;
-  const command = buildGen2AgentCommand(provider, input.prompt, history);
+  const command = buildGen2AgentCommand(
+    provider,
+    input.prompt,
+    history,
+    input.model,
+  );
 
   const session = await startGen2SupersetAgentSession({
     workspaceId: input.workspaceId,

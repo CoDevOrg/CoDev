@@ -6,6 +6,6 @@ This module owns the registry, configuration, and integration of external servic
 
 **Key files:**
 
-- `ai-model.ts`, `provider-capabilities.ts`: Core definitions for model features.
+- `ai-model.ts`, `provider-capabilities.ts`, `dynamic-models.ts`: Core definitions and dynamic model discovery.
 - `registry.ts`, `resolve.ts`: Provider registration and resolution logic.
 - `credentials.ts`, `credential-seat.ts`: Managing access credentials for external APIs.

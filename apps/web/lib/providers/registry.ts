@@ -23,10 +23,7 @@ export type ProviderId = "codex" | "claude";
 /** The runtime surfaces that can execute a member's provider credential. */
 export type ExecutorSurface = "rooms" | "gen2";
 
-export const EXECUTOR_SURFACES: readonly ExecutorSurface[] = [
-  "rooms",
-  "gen2",
-];
+export const EXECUTOR_SURFACES: readonly ExecutorSurface[] = ["rooms", "gen2"];
 
 /** How a member obtains a credential. */
 export type ConnectMethod = "browser" | "cli" | "paste";
@@ -130,7 +127,7 @@ const CLAUDE: ProviderDefinition = {
       kind: "api_key",
       label: "Anthropic API key",
       connect: ["paste"],
-      runs: { rooms: false, gen2: false },
+      runs: { rooms: false, gen2: true },
     },
   ],
 };
@@ -140,10 +137,7 @@ export const PROVIDERS: Readonly<Record<ProviderId, ProviderDefinition>> = {
   claude: CLAUDE,
 };
 
-export const PROVIDER_IDS: readonly ProviderId[] = [
-  "codex",
-  "claude",
-];
+export const PROVIDER_IDS: readonly ProviderId[] = ["codex", "claude"];
 
 export function providerDefinition(id: ProviderId): ProviderDefinition {
   return PROVIDERS[id];

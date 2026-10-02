@@ -38,6 +38,7 @@ describe("Gen2ChatPanel", () => {
     poll?: () => unknown | Promise<unknown>;
     messages?: unknown[];
     provider?: { connected: boolean; via: string | null };
+    allProviders?: unknown;
   }) {
     let turnFinished = false;
     vi.stubGlobal(
@@ -70,6 +71,9 @@ describe("Gen2ChatPanel", () => {
           });
         }
         if (path.includes("/api/gen2/providers")) {
+          if (path.includes("provider=all") && handlers.allProviders) {
+            return json(handlers.allProviders);
+          }
           return json(handlers.provider ?? { connected: true, via: "api-key" });
         }
         if (path.endsWith("/chats")) {
@@ -449,5 +453,75 @@ describe("Gen2ChatPanel", () => {
             String(url).endsWith("/agent") && init?.method === "POST",
         ),
     ).toBe(false);
+  });
+
+  it("includes the selected model in the turn request body", async () => {
+    stubFetch({});
+    render(
+      <Gen2ChatPanel
+        workspace={workspace}
+        onRunningChange={vi.fn()}
+        onFilesChanged={vi.fn()}
+        onOpenFile={vi.fn()}
+        onNeedsMachine={async () => true}
+        activeProvider="claude"
+      />,
+    );
+
+    await screen.findByRole("heading", { name: "What should we build?" });
+    fireEvent.change(screen.getByLabelText("Prompt"), {
+      target: { value: "hello agent" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => {
+      const agentCall = vi
+        .mocked(fetch)
+        .mock.calls.find(
+          ([url, init]) =>
+            String(url).endsWith("/agent") && init?.method === "POST",
+        );
+      expect(agentCall).toBeDefined();
+      const body = JSON.parse(String(agentCall?.[1]?.body));
+      expect(body.provider).toBe("claude");
+      expect(body.model).toBe("sonnet");
+    });
+  });
+
+  it("populates and uses dynamically fetched models from providers endpoint", async () => {
+    stubFetch({
+      allProviders: {
+        claude: {
+          connected: true,
+          via: "api-key",
+          models: [
+            { id: "claude-sonnet-5.5", label: "Claude Sonnet 5.5" },
+            { id: "claude-opus-5.5", label: "Claude Opus 5.5" },
+          ],
+        },
+        codex: {
+          connected: true,
+          via: "api-key",
+          models: [{ id: "gpt-6.1-sol", label: "GPT-6.1 Sol" }],
+        },
+      },
+    });
+
+    render(
+      <Gen2ChatPanel
+        workspace={workspace}
+        onRunningChange={vi.fn()}
+        onFilesChanged={vi.fn()}
+        onOpenFile={vi.fn()}
+        onNeedsMachine={async () => true}
+        activeProvider="claude"
+      />,
+    );
+
+    // The dropdown trigger should display the dynamic model once loaded
+    expect(
+      await screen.findByRole("button", { name: "Agent" }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText(/Claude Sonnet 5.5/)).toBeInTheDocument();
   });
 });

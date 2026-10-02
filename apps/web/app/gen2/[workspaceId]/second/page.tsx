@@ -1,21 +1,21 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 
-import { SupersetWorkspaceShell } from "@/components/gen2/superset-workspace-shell";
+import { Gen2WorkspaceRoom } from "@/components/gen2/workspace-room";
+import { AppChrome } from "@/components/shell/app-chrome";
 import { requireUser } from "@/lib/auth/session";
 import { Gen2AccessError, Gen2LifecycleError } from "@/lib/gen2/errors";
-import { isGen2SupersetRuntimeEnabled } from "@/lib/gen2/superset-runtime-feature";
 import { getGen2WorkspaceDetail } from "@/lib/gen2/workspaces";
 
-export const metadata: Metadata = { title: "Workspace" };
+export const metadata: Metadata = { title: "Workspace (Classic)" };
 
-export default async function Gen2WorkspacePage({
+export default async function Gen2WorkspaceSecondPage({
   params,
 }: {
   params: Promise<{ workspaceId: string }>;
 }) {
   const { workspaceId } = await params;
-  const user = await requireUser(`/gen2/${workspaceId}`);
+  const user = await requireUser(`/gen2/${workspaceId}/second`);
   let workspace;
   try {
     workspace = await getGen2WorkspaceDetail(workspaceId, user.id);
@@ -28,11 +28,8 @@ export default async function Gen2WorkspacePage({
   }
 
   return (
-    <SupersetWorkspaceShell
-      workspace={workspace}
-      workspaceId={workspaceId}
-      canEdit={workspace.role !== "viewer"}
-      runtimeEnabled={isGen2SupersetRuntimeEnabled()}
-    />
+    <AppChrome user={user} sidebar>
+      <Gen2WorkspaceRoom workspace={workspace} />
+    </AppChrome>
   );
 }

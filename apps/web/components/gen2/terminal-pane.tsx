@@ -94,7 +94,7 @@ export function Gen2TerminalPane({
   const markWorkspacePaused = useCallback(() => {
     sessionRef.current = null;
     setWorkspacePaused(true);
-    setError("The terminal disconnected when the workspace stopped.");
+    setError("The workspace was inactive for more than 15 minutes.");
     setStatus("ended");
   }, []);
 

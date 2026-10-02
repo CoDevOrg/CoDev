@@ -97,6 +97,32 @@ export const gen2AgentProviderSchema = z.enum(
   ],
 );
 
+export const gen2ModelInfoSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  description: z.string().optional(),
+});
+
+export type Gen2ModelInfo = z.infer<typeof gen2ModelInfoSchema>;
+
+export const GEN2_PROVIDER_MODELS: Record<
+  Gen2AgentProviderName,
+  Gen2ModelInfo[]
+> = {
+  claude: [
+    { id: "sonnet", label: "Claude 3.7 Sonnet" },
+    { id: "opus", label: "Claude 3 Opus" },
+    { id: "haiku", label: "Claude 3.5 Haiku" },
+  ],
+  codex: [
+    { id: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
+    { id: "gpt-4o", label: "GPT-4o" },
+    { id: "o3-mini", label: "o3-mini" },
+  ],
+};
+
+export type Gen2ProviderModelId = string;
+
 export const gen2AgentStartRequestSchema = z.object({
   chatId: identifierSchema,
   /** Which agent runs the turn. */
@@ -105,6 +131,8 @@ export const gen2AgentStartRequestSchema = z.object({
   idempotencyKey: z.string().trim().min(8).max(128),
   /** Optional target worktree to execute in. */
   worktreeId: z.string().trim().min(1).max(128).optional(),
+  /** Optional model override for the agent turn. */
+  model: z.string().trim().min(1).max(128).optional(),
 });
 
 export const gen2AgentStartResponseSchema = z.object({

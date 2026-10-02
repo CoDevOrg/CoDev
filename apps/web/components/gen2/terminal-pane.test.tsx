@@ -79,7 +79,7 @@ describe("Gen2TerminalPane", () => {
       name: "Reconnect workspace",
     });
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "The terminal disconnected when the workspace stopped.",
+      "The workspace was inactive for more than 15 minutes.",
     );
 
     fireEvent.click(resume);

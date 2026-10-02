@@ -17,6 +17,7 @@ export const GEN2_CLAUDE_MODEL = "sonnet";
 export function buildGen2ClaudeCommand(
   prompt: string,
   history: Array<{ role: "user" | "assistant"; body: string }> = [],
+  model?: string,
 ) {
   return [
     "claude",
@@ -33,7 +34,7 @@ export function buildGen2ClaudeCommand(
     "--permission-mode",
     "bypassPermissions",
     "--model",
-    GEN2_CLAUDE_MODEL,
+    model?.trim() || GEN2_CLAUDE_MODEL,
     [
       "You are Claude on this workspace's Firecracker machine.",
       "The working directory is /workspace. Use the shell to inspect and change files there.",

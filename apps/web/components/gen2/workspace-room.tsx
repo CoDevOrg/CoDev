@@ -120,6 +120,9 @@ export function Gen2WorkspaceRoom({
           ))}
         </ul>
 
+        <Link className="gen2-wb-button" href={`/gen2/${current.id}`}>
+          Open Superset
+        </Link>
         <button
           type="button"
           className="gen2-wb-button"

@@ -21,6 +21,7 @@ export const POST = withUser<Params>(
         provider: input.provider,
         idempotencyKey: input.idempotencyKey,
         worktreeId: input.worktreeId,
+        model: input.model,
       }),
     );
   },

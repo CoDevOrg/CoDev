@@ -199,8 +199,7 @@ fi
 # path trusted for a terminal user.
 cat >>"${work_dir}/rootfs/etc/gitconfig" <<'GITCONFIG'
 [safe]
-	directory = /workspace
-	directory = /workspace/*
+	directory = *
 GITCONFIG
 
 cat >"${work_dir}/rootfs/etc/systemd/system/workspace.mount" <<'UNIT'
@@ -238,8 +237,12 @@ Type=simple
 ExecStartPre=-/bin/chgrp -R codev-shell /workspace
 ExecStartPre=-/bin/chmod -R g+w /workspace
 ExecStartPre=-/usr/bin/find /workspace -type d -exec /bin/chmod g+s {} +
+ExecStartPre=-/usr/bin/git config --system --replace-all safe.directory '*'
 ExecStart=/usr/local/bin/codev-guestd
 Environment=CODEV_WORKSPACE_ROOT=/workspace
+Environment=GIT_CONFIG_COUNT=1
+Environment=GIT_CONFIG_KEY_0=safe.directory
+Environment=GIT_CONFIG_VALUE_0=*
 EnvironmentFile=/etc/codev/superset-bridge.env
 UMask=0002
 Restart=on-failure
@@ -271,6 +274,9 @@ ExecStartPre=/bin/chmod 0711 /var/lib/codev-agent-profiles
 ExecStart=/bin/sh -c '/bin/chmod 0711 /var/lib/codev-agent-profiles && exec /usr/local/bin/node /opt/codev/superset-host/host-service.js'
 Environment=HOME=/var/lib/codev-superset
 Environment=CODEV_WORKSPACE_ROOT=/workspace
+Environment=GIT_CONFIG_COUNT=1
+Environment=GIT_CONFIG_KEY_0=safe.directory
+Environment=GIT_CONFIG_VALUE_0=*
 EnvironmentFile=/etc/codev/superset-bridge.env
 Environment=SUPERSET_HOME_DIR=/var/lib/codev-superset
 Environment=CODEV_AGENT_PROFILE_ROOT=/var/lib/codev-agent-profiles

@@ -15,9 +15,11 @@ import {
 } from "lucide-react";
 import {
   GEN2_AGENT_PROVIDERS,
+  GEN2_PROVIDER_MODELS,
   type Gen2Chat,
   type Gen2ChatDetail,
   type Gen2ChatMessage,
+  type Gen2ModelInfo,
   type Gen2TurnItem,
   type Gen2WorkspaceDetail,
 } from "@codev/contracts";
@@ -41,8 +43,13 @@ import { finalizeGen2Turn, reduceGen2Turn } from "@/lib/gen2/turn-reducer";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -178,10 +185,55 @@ export function Gen2ChatPanel({
   const [agent, setAgent] = useState<Gen2AgentChoice>(
     activeProvider ?? GEN2_AGENT_PROVIDERS[0].id,
   );
+  const [modelsByProvider, setModelsByProvider] = useState<
+    Record<string, Gen2ModelInfo[]>
+  >({});
+  const [selectedModel, setSelectedModel] = useState<string>(() => {
+    if (typeof window === "undefined") return "sonnet";
+    try {
+      const saved = sessionStorage.getItem(`codev-gen2-model:${workspace.id}`);
+      if (saved) return saved;
+    } catch {}
+    return (activeProvider ?? GEN2_AGENT_PROVIDERS[0].id) === "claude"
+      ? "sonnet"
+      : "gpt-5.6-luna";
+  });
   const agentLabel =
     GEN2_AGENT_PROVIDERS.find((entry) => entry.id === agent)?.label ?? "Agent";
+  const providerModels: Gen2ModelInfo[] = modelsByProvider[agent]?.length
+    ? modelsByProvider[agent]!
+    : (GEN2_PROVIDER_MODELS[agent as keyof typeof GEN2_PROVIDER_MODELS] ?? []);
+  const currentModelItem =
+    providerModels.find((m) => m.id === selectedModel) ?? providerModels[0];
+  const currentModelLabel = currentModelItem?.label ?? selectedModel;
   const { status: provider, refresh: refreshProvider } =
     useGen2ProviderStatus(agent);
+
+  useEffect(() => {
+    let mounted = true;
+    void fetch("/api/gen2/providers?provider=all")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!mounted || !data) return;
+        setModelsByProvider({
+          claude: data.claude?.models ?? [],
+          codex: data.codex?.models ?? [],
+        });
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (provider?.models?.length) {
+      setModelsByProvider((prev) => ({
+        ...prev,
+        [agent]: provider.models!,
+      }));
+    }
+  }, [agent, provider?.models]);
   const ready = canRunGen2Agent(workspace.status);
   const busy = running || starting || waking;
   const canSend = Boolean(prompt.trim() || attachments.length > 0) && !busy;
@@ -515,6 +567,7 @@ export function Gen2ChatPanel({
             provider: agent,
             idempotencyKey: crypto.randomUUID(),
             ...(worktreeId ? { worktreeId } : {}),
+            ...(selectedModel ? { model: selectedModel } : {}),
           }),
         },
       );
@@ -571,9 +624,25 @@ export function Gen2ChatPanel({
     pinToLatest();
   }
 
-  const handleProviderSelect = (newAgent: Gen2AgentChoice) => {
+  const handleProviderSelect = (
+    newAgent: Gen2AgentChoice,
+    newModel?: string,
+  ) => {
     setAgent(newAgent);
     onActiveProviderChange?.(newAgent);
+    const models: Gen2ModelInfo[] = modelsByProvider[newAgent]?.length
+      ? modelsByProvider[newAgent]!
+      : (GEN2_PROVIDER_MODELS[newAgent as keyof typeof GEN2_PROVIDER_MODELS] ??
+        []);
+    const modelToSet =
+      newModel ??
+      (models.find((m) => m.id === selectedModel)?.id ||
+        models[0]?.id ||
+        "sonnet");
+    setSelectedModel(modelToSet);
+    try {
+      sessionStorage.setItem(`codev-gen2-model:${workspace.id}`, modelToSet);
+    } catch {}
   };
 
   const composer = (
@@ -691,23 +760,73 @@ export function Gen2ChatPanel({
                 disabled={busy}
                 aria-label="Agent"
               >
-                {agentLabel}
-                <ChevronDown aria-hidden="true" />
+                <span>
+                  {agentLabel} · {currentModelLabel}
+                </span>
+                <ChevronDown aria-hidden="true" size={13} />
               </WorkspaceButton>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="gen2-workspace-surface">
-              <DropdownMenuRadioGroup
-                value={agent}
-                onValueChange={(value) =>
-                  handleProviderSelect(value as Gen2AgentChoice)
-                }
-              >
-                {GEN2_AGENT_PROVIDERS.map((entry) => (
-                  <DropdownMenuRadioItem key={entry.id} value={entry.id}>
-                    {entry.label}
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
+            <DropdownMenuContent
+              align="end"
+              className="gen2-workspace-surface min-w-[200px]"
+            >
+              <DropdownMenuLabel className="text-xs text-muted-foreground font-semibold px-2 py-1.5">
+                Provider & Model
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {GEN2_AGENT_PROVIDERS.map((entry) => {
+                const isSelectedProvider = agent === entry.id;
+                const models: Gen2ModelInfo[] = modelsByProvider[entry.id]
+                  ?.length
+                  ? modelsByProvider[entry.id]!
+                  : (GEN2_PROVIDER_MODELS[
+                      entry.id as keyof typeof GEN2_PROVIDER_MODELS
+                    ] ?? []);
+                return (
+                  <DropdownMenuSub key={entry.id}>
+                    <DropdownMenuSubTrigger
+                      className="cursor-pointer py-1.5 px-2 text-xs flex items-center justify-between"
+                      onClick={() =>
+                        handleProviderSelect(entry.id, models[0]?.id)
+                      }
+                    >
+                      <span
+                        className={cn(
+                          isSelectedProvider && "font-semibold text-primary",
+                        )}
+                      >
+                        {entry.label}
+                      </span>
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="gen2-workspace-surface min-w-[220px] max-h-[360px] overflow-y-auto">
+                      <DropdownMenuRadioGroup
+                        value={isSelectedProvider ? selectedModel : ""}
+                        onValueChange={(val) => {
+                          handleProviderSelect(entry.id, val);
+                        }}
+                      >
+                        {models.map((m) => (
+                          <DropdownMenuRadioItem
+                            key={m.id}
+                            value={m.id}
+                            className="cursor-pointer text-xs py-1.5 flex flex-col items-start gap-0.5"
+                          >
+                            <span className="font-medium">{m.label}</span>
+                            <span className="text-[10px] text-muted-foreground font-mono">
+                              {m.id}
+                            </span>
+                            {m.description ? (
+                              <span className="text-[10px] text-muted-foreground/80 line-clamp-2">
+                                {m.description}
+                              </span>
+                            ) : null}
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                );
+              })}
             </DropdownMenuContent>
           </DropdownMenu>
 
