@@ -17,8 +17,8 @@ import { getVercelOidcToken } from "@vercel/oidc";
  *
  * On Vercel there is no long-lived secret. `ClientAssertionCredential` takes a
  * callback that returns Vercel's request-scoped OIDC token. The Worker cannot
- * obtain that token, so it uses a separate app registration whose only
- * permission is unwrapping Key Vault keys.
+ * obtain that token, so it uses a separate app registration that can unwrap
+ * Key Vault keys and start or stop the Firecracker host VM.
  */
 let credential: TokenCredential | undefined;
 
@@ -31,8 +31,8 @@ function onCloudflareWorker() {
 
 /**
  * The Worker cannot call `getVercelOidcToken`. It exchanges a client secret
- * for a short-lived Key Vault token instead. The secret belongs to an app
- * registration that can unwrap keys and cannot manage the rest of Azure.
+ * for a short-lived Azure token instead. The secret belongs to an app
+ * registration that can unwrap keys and operate the Firecracker host VM.
  */
 export function createClientSecretCredential(
   tenantId: string,

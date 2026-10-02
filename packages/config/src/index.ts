@@ -83,8 +83,8 @@ export const serverEnvironmentSchema = z.object({
   AZURE_CLIENT_ID: z.string().uuid().optional(),
   /**
    * Client secret for the Cloudflare Worker only. That isolate cannot present
-   * Vercel's OIDC token, so Key Vault unwrap uses a dedicated app registration
-   * with key-unwrap permission and nothing else. Leave this unset on Vercel.
+   * Vercel's OIDC token, so a dedicated app registration unwraps Key Vault
+   * keys and starts the Firecracker host. Leave this unset on Vercel.
    */
   AZURE_CLIENT_SECRET: z.string().min(1).optional(),
   AZURE_SUBSCRIPTION_ID: z.string().uuid().optional(),
