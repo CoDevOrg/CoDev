@@ -33,8 +33,8 @@ the file the agent just edited.
 - Delete an owned workspace to remove its guest and saved disk snapshots and
   free an ownership slot
 - Run up to six active sandboxes per host; idle guests hibernate after 15
-  minutes and a quiet host deallocates after one minute
-- Use up to 6,000 VM minutes per UTC month across all workspaces you own;
+  minutes and the host stays running
+- Use up to 1,000 VM minutes per UTC month across all workspaces you own;
   shared workspace time is charged to its owner while the VM runs, including
   agent work after the browser closes
 - Upload a local file onto the machine

@@ -59,7 +59,7 @@ vi.mock("../runtime/orchestrator-sandbox", () => ({
 }));
 vi.mock("./instance", () => ({ stopGen2Instance: mocks.stop }));
 vi.mock("./compute-quota", () => ({
-  MONTHLY_COMPUTE_LIMIT_MS: 360_000_000,
+  MONTHLY_COMPUTE_LIMIT_MS: 60_000_000,
   endComputeSession: mocks.end,
   startComputeSession: vi.fn(),
   usedComputeMs: mocks.usedComputeMs,
@@ -92,7 +92,7 @@ beforeEach(() => {
   });
   mocks.update.set.mockReturnValue(mocks.update);
   mocks.update.where.mockResolvedValue(undefined);
-  mocks.usedComputeMs.mockResolvedValue(360_000_000);
+  mocks.usedComputeMs.mockResolvedValue(60_000_000);
   mocks.stop.mockResolvedValue(undefined);
 });
 

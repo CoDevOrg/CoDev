@@ -10,7 +10,7 @@ import { OrchestratorError } from "../runtime/orchestrator-request";
 import { getSandbox } from "../runtime/orchestrator-sandbox";
 import { Gen2LifecycleError } from "./errors";
 
-export const MONTHLY_COMPUTE_LIMIT_MS = 6_000 * 60_000;
+export const MONTHLY_COMPUTE_LIMIT_MS = 1_000 * 60_000;
 
 export function computeMonth(now: Date) {
   const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
@@ -61,7 +61,7 @@ export async function assertComputeAvailable(
 ) {
   if ((await usedComputeMs(ownerId, now)) < MONTHLY_COMPUTE_LIMIT_MS) return;
   throw new Gen2LifecycleError(
-    "You've used your 6,000 workspace minutes for this month. Your work is saved; you can reconnect next month.",
+    "You've used your 1,000 workspace minutes for this month. Your work is saved; you can reconnect next month.",
     429,
   );
 }
