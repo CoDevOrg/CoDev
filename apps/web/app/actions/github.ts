@@ -12,9 +12,7 @@ import {
 } from "@/lib/github/github-link";
 
 function safeReturnTo(value: string) {
-  return value.startsWith("/") && !value.startsWith("//")
-    ? value
-    : "/gen2";
+  return value.startsWith("/") && !value.startsWith("//") ? value : "/gen2";
 }
 
 export async function connectGitHubAccount(returnTo = "/gen2") {

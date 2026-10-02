@@ -428,11 +428,7 @@ export async function getClaudeConnectionSession(
       );
     }
     // Reconnection retires any previously stored subscription token, not API keys.
-    await deleteProviderCredential(
-      row.userId,
-      "anthropic",
-      "OAUTH_TOKEN",
-    );
+    await deleteProviderCredential(row.userId, "anthropic", "OAUTH_TOKEN");
     // The token is the credential now, so the sandbox that produced it has
     // nothing left worth keeping. It used to be snapshotted and resumed for
     // every turn; it is destroyed here instead.

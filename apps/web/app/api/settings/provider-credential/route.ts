@@ -9,12 +9,7 @@ import {
 
 const requestSchema = z
   .object({
-    provider: z.enum([
-      "anthropic",
-      "openai",
-      "bedrock",
-      "azure_foundry",
-    ]),
+    provider: z.enum(["anthropic", "openai", "bedrock", "azure_foundry"]),
     credentialType: z.enum(["API_KEY", "AWS_BEDROCK_ROLE", "AZURE_ENDPOINT"]),
     apiKey: z.string().trim().min(20).max(512).optional(),
     awsRoleArn: z
@@ -93,9 +88,7 @@ export async function GET(request: Request) {
     const provider = z
       .enum(["anthropic", "openai", "bedrock", "azure_foundry"])
       .parse(new URL(request.url).searchParams.get("provider"));
-    return Response.json(
-      await getProviderCredentialStatus(user.id, provider),
-    );
+    return Response.json(await getProviderCredentialStatus(user.id, provider));
   } catch (error) {
     return apiError(error);
   }

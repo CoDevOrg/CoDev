@@ -7,7 +7,7 @@ import { useGen2SharedFileDocument } from "./use-gen2-shared-file-document";
 class MockWebSocket {
   static instances: MockWebSocket[] = [];
   url: string;
-  readyState = WebSocket.CONNECTING;
+  readyState: number = WebSocket.CONNECTING;
   onopen: (() => void) | null = null;
   onclose: (() => void) | null = null;
   onerror: (() => void) | null = null;
@@ -46,7 +46,7 @@ describe("useGen2SharedFileDocument", () => {
       }),
     );
 
-    const socket = MockWebSocket.instances[0];
+    const socket = MockWebSocket.instances[0]!;
     expect(socket).toBeDefined();
 
     // Socket fails to establish on initial attempt
@@ -70,7 +70,7 @@ describe("useGen2SharedFileDocument", () => {
       }),
     );
 
-    const socket = MockWebSocket.instances[0];
+    const socket = MockWebSocket.instances[0]!;
     expect(socket).toBeDefined();
 
     const validUpdate = Buffer.from(

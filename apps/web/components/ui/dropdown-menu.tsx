@@ -116,7 +116,7 @@ export const DropdownMenuCheckboxItem = React.forwardRef<
         "relative flex cursor-default select-none items-center py-1.5 pr-2 pl-8 text-xs outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         className,
       )}
-      checked={checked}
+      {...(checked === undefined ? {} : { checked })}
       {...props}
     >
       <span className="absolute left-2 flex size-3.5 items-center justify-center">

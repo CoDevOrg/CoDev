@@ -93,5 +93,4 @@ describe("persistCodexSubscriptionFromOAuth", () => {
       "sharingEnabled",
     );
   });
-
 });

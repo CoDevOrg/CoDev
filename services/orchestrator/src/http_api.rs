@@ -1012,14 +1012,6 @@ fn is_safe_superset_relative_path(path: &str) -> bool {
             .all(|part| !part.is_empty() && !matches!(part, "." | ".."))
 }
 
-fn validate_sha(value: &str, label: &str) -> Result<()> {
-    if commit_sha_pattern().is_match(value) {
-        Ok(())
-    } else {
-        Err(RuntimeError::BadRequest(format!("invalid {label}")))
-    }
-}
-
 fn workspace_id_pattern() -> &'static Regex {
     static PATTERN: OnceLock<Regex> = OnceLock::new();
     PATTERN.get_or_init(|| {

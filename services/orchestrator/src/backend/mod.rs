@@ -177,25 +177,8 @@ impl Backend {
 
     pub async fn superset_list_files(
         &self,
-        workspace_id: &str,
-        worktree_id: &str,
-    ) -> Result<serde_json::Value> {
-        match self {
-            Self::Fake(_) => Err(RuntimeError::Unavailable(
-                "Superset host service is unavailable in the fake backend".into(),
-            )),
-            #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => {
-                backend.superset_list_files(workspace_id, worktree_id).await
-            }
-        }
-    }
-
-    pub async fn superset_read_file(
-        &self,
-        workspace_id: &str,
-        path: String,
-        worktree_id: &str,
+        _workspace_id: &str,
+        _worktree_id: &str,
     ) -> Result<serde_json::Value> {
         match self {
             Self::Fake(_) => Err(RuntimeError::Unavailable(
@@ -204,7 +187,26 @@ impl Backend {
             #[cfg(target_os = "linux")]
             Self::Firecracker(backend) => {
                 backend
-                    .superset_read_file(workspace_id, path, worktree_id)
+                    .superset_list_files(_workspace_id, _worktree_id)
+                    .await
+            }
+        }
+    }
+
+    pub async fn superset_read_file(
+        &self,
+        _workspace_id: &str,
+        _path: String,
+        _worktree_id: &str,
+    ) -> Result<serde_json::Value> {
+        match self {
+            Self::Fake(_) => Err(RuntimeError::Unavailable(
+                "Superset host service is unavailable in the fake backend".into(),
+            )),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => {
+                backend
+                    .superset_read_file(_workspace_id, _path, _worktree_id)
                     .await
             }
         }
@@ -212,22 +214,8 @@ impl Backend {
 
     pub async fn superset_write_file(
         &self,
-        workspace_id: &str,
-        request: &WriteFileRequest,
-    ) -> Result<serde_json::Value> {
-        match self {
-            Self::Fake(_) => Err(RuntimeError::Unavailable(
-                "Superset host service is unavailable in the fake backend".into(),
-            )),
-            #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => backend.superset_write_file(workspace_id, request).await,
-        }
-    }
-
-    pub async fn superset_create_entry(
-        &self,
-        workspace_id: &str,
-        request: &SupersetCreateEntryRequest,
+        _workspace_id: &str,
+        _request: &WriteFileRequest,
     ) -> Result<serde_json::Value> {
         match self {
             Self::Fake(_) => Err(RuntimeError::Unavailable(
@@ -235,29 +223,31 @@ impl Backend {
             )),
             #[cfg(target_os = "linux")]
             Self::Firecracker(backend) => {
-                backend.superset_create_entry(workspace_id, request).await
+                backend.superset_write_file(_workspace_id, _request).await
+            }
+        }
+    }
+
+    pub async fn superset_create_entry(
+        &self,
+        _workspace_id: &str,
+        _request: &SupersetCreateEntryRequest,
+    ) -> Result<serde_json::Value> {
+        match self {
+            Self::Fake(_) => Err(RuntimeError::Unavailable(
+                "Superset host service is unavailable in the fake backend".into(),
+            )),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => {
+                backend.superset_create_entry(_workspace_id, _request).await
             }
         }
     }
 
     pub async fn superset_move_entry(
         &self,
-        workspace_id: &str,
-        request: &SupersetMoveEntryRequest,
-    ) -> Result<serde_json::Value> {
-        match self {
-            Self::Fake(_) => Err(RuntimeError::Unavailable(
-                "Superset host service is unavailable in the fake backend".into(),
-            )),
-            #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => backend.superset_move_entry(workspace_id, request).await,
-        }
-    }
-
-    pub async fn superset_delete_entry(
-        &self,
-        workspace_id: &str,
-        request: &SupersetDeleteEntryRequest,
+        _workspace_id: &str,
+        _request: &SupersetMoveEntryRequest,
     ) -> Result<serde_json::Value> {
         match self {
             Self::Fake(_) => Err(RuntimeError::Unavailable(
@@ -265,15 +255,31 @@ impl Backend {
             )),
             #[cfg(target_os = "linux")]
             Self::Firecracker(backend) => {
-                backend.superset_delete_entry(workspace_id, request).await
+                backend.superset_move_entry(_workspace_id, _request).await
+            }
+        }
+    }
+
+    pub async fn superset_delete_entry(
+        &self,
+        _workspace_id: &str,
+        _request: &SupersetDeleteEntryRequest,
+    ) -> Result<serde_json::Value> {
+        match self {
+            Self::Fake(_) => Err(RuntimeError::Unavailable(
+                "Superset host service is unavailable in the fake backend".into(),
+            )),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => {
+                backend.superset_delete_entry(_workspace_id, _request).await
             }
         }
     }
 
     pub async fn superset_file_changes(
         &self,
-        workspace_id: &str,
-        worktree_id: &str,
+        _workspace_id: &str,
+        _worktree_id: &str,
     ) -> Result<serde_json::Value> {
         match self {
             Self::Fake(_) => Err(RuntimeError::Unavailable(
@@ -282,7 +288,7 @@ impl Backend {
             #[cfg(target_os = "linux")]
             Self::Firecracker(backend) => {
                 backend
-                    .superset_file_changes(workspace_id, worktree_id)
+                    .superset_file_changes(_workspace_id, _worktree_id)
                     .await
             }
         }
@@ -290,10 +296,10 @@ impl Backend {
 
     pub async fn superset_runtime(
         &self,
-        workspace_id: &str,
-        method: &str,
-        operation: &str,
-        body: Option<&serde_json::Value>,
+        _workspace_id: &str,
+        _method: &str,
+        _operation: &str,
+        _body: Option<&serde_json::Value>,
     ) -> Result<serde_json::Value> {
         match self {
             Self::Fake(_) => Err(RuntimeError::Unavailable(
@@ -302,7 +308,7 @@ impl Backend {
             #[cfg(target_os = "linux")]
             Self::Firecracker(backend) => {
                 backend
-                    .superset_runtime(workspace_id, method, operation, body)
+                    .superset_runtime(_workspace_id, _method, _operation, _body)
                     .await
             }
         }

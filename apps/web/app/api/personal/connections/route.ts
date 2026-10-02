@@ -57,7 +57,13 @@ export async function PATCH(request: Request) {
   if (!user) return apiError(new Error("Authentication required."), 401);
   try {
     const input = patchSchema.parse(await request.json());
-    return Response.json(await setPersonalSharedWorkspaceUse(user, input));
+    return Response.json(
+      await setPersonalSharedWorkspaceUse(user, {
+        provider: input.provider,
+        kind: input.kind,
+        enabled: input.allowInSharedWorkspaces,
+      }),
+    );
   } catch (error) {
     return apiError(error);
   }

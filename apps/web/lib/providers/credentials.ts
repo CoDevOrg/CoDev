@@ -343,11 +343,7 @@ export async function getProviderCredentialStatus(
   provider: AuthProvider,
   credentialType?: CredentialType,
 ) {
-  const credential = await findCredential(
-    userId,
-    provider,
-    credentialType,
-  );
+  const credential = await findCredential(userId, provider, credentialType);
   if (!credential) return null;
   // A browser-era Claude token is retired; only a CLI setup-token (stamped
   // `cli` by persistClaudeOAuthToken) counts as a live connection.

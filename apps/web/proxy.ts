@@ -67,8 +67,7 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   }
 
   const edgeLimited =
-    pathname === "/api/gen2/workspaces" ||
-    pathname.startsWith("/api/auth/");
+    pathname === "/api/gen2/workspaces" || pathname.startsWith("/api/auth/");
   if (edgeLimited && !apiEdgeLimiter && process.env.NODE_ENV === "production") {
     return NextResponse.json(
       { error: "Rate limiting is temporarily unavailable." },

@@ -23,9 +23,10 @@ describe("provider registry", () => {
     expect(runnableKinds("claude", "rooms").map((entry) => entry.kind)).toEqual(
       ["claude_setup_token"],
     );
-    expect(runnableKinds("claude", "gen2").map((entry) => entry.kind)).toEqual(
-      ["claude_setup_token", "api_key"],
-    );
+    expect(runnableKinds("claude", "gen2").map((entry) => entry.kind)).toEqual([
+      "claude_setup_token",
+      "api_key",
+    ]);
   });
 
   it("knows which providers an executor supports at all", () => {

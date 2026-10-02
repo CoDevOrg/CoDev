@@ -144,11 +144,7 @@ async function loadClaudeSetupToken(
   input: ResolveInput,
 ): Promise<Loaded | null> {
   const row = await findRow(input.userId, "anthropic", "OAUTH_TOKEN");
-  if (
-    !row ||
-    row.connectedVia === "api_key" ||
-    !row.encryptedAccessToken
-  ) {
+  if (!row || row.connectedVia === "api_key" || !row.encryptedAccessToken) {
     return null;
   }
   return loadedFromRow(row, async (row) => {

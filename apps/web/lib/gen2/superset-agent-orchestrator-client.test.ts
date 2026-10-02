@@ -81,7 +81,7 @@ describe("Superset agent orchestrator client", () => {
       command: ["codex", "exec"],
       idempotencyKey: "legacy",
     });
-    expect(mocks.codexExecRequest.mock.calls[0][2]).toMatchObject({
+    expect(mocks.codexExecRequest.mock.calls[0]![2]).toMatchObject({
       launchProfile,
       codexAuthCacheJson: "test-only-auth",
     });
@@ -104,7 +104,7 @@ describe("Superset agent orchestrator client", () => {
       command: ["claude"],
       idempotencyKey: "claude",
     });
-    expect(mocks.codexExecRequest.mock.calls[0][2]).not.toHaveProperty(
+    expect(mocks.codexExecRequest.mock.calls[0]![2]).not.toHaveProperty(
       "codexAuthCacheJson",
     );
   });
@@ -181,7 +181,7 @@ describe("Superset agent orchestrator client", () => {
       }),
     );
     expect(
-      (await pollSupersetAgent(workspaceId, agentId, 0)).chunks[0].data,
+      (await pollSupersetAgent(workspaceId, agentId, 0)).chunks[0]!.data,
     ).toBe("Hi");
     mocks.codexExecRequest.mockResolvedValue(
       jsonResponse({ result: { adoptable: true } }),

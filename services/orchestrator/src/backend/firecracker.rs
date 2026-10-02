@@ -331,19 +331,6 @@ impl FirecrackerApiClient {
             .await
     }
 
-    async fn create_full_snapshot(&self) -> Result<()> {
-        self.request(
-            "PUT",
-            "/snapshot/create",
-            json!({
-                "snapshot_type": "Full",
-                "snapshot_path": "/snapshot_file",
-                "mem_file_path": "/mem_file"
-            }),
-        )
-        .await
-    }
-
     async fn load_snapshot(&self) -> Result<()> {
         self.request(
             "PUT",
@@ -1289,91 +1276,6 @@ impl FirecrackerBackend {
             return Err(RuntimeError::internal(error));
         }
         info!(%workspace_id, "recovered interrupted workspace disks");
-        Ok(())
-    }
-
-    async fn snapshot_machine(&self, machine: &RunningMachine, head_sha: &str) -> Result<()> {
-        let started_at = Instant::now();
-        let api = FirecrackerApiClient::new(machine.api_socket.clone());
-        api.pause().await?;
-        if let Err(error) = api.create_full_snapshot().await {
-            let _ = api
-                .request("PATCH", "/vm", json!({ "state": "Resumed" }))
-                .await;
-            return Err(error);
-        }
-
-        let snapshots_root = self.config.jailer_dir.join("snapshots");
-        let staging = snapshots_root.join(format!(".{}.next", machine.workspace_id()));
-        let files = [
-            ("snapshot_file", machine.jail_dir.join("root/snapshot_file")),
-            ("mem_file", machine.jail_dir.join("root/mem_file")),
-            ("rootfs.ext4", machine.jail_dir.join("root/rootfs.ext4")),
-            (
-                "workspace.ext4",
-                machine.jail_dir.join("root/workspace.ext4"),
-            ),
-        ];
-        let persist_result = async {
-            fs::create_dir_all(&snapshots_root)
-                .await
-                .map_err(RuntimeError::internal)?;
-            remove_directory_if_present(&staging).await?;
-            fs::create_dir_all(&staging)
-                .await
-                .map_err(RuntimeError::internal)?;
-            for (name, source) in files {
-                // This VM remains live after the checkpoint. A hard link
-                // would let later writes corrupt the durable snapshot.
-                clone_or_copy(&source, &staging.join(name)).await?;
-            }
-            let metadata = serde_json::to_vec(&MicroVmSnapshotMetadata {
-                head_sha: head_sha.to_owned(),
-                slot: machine.slot,
-                kind: SnapshotKind::FullMachine,
-            })
-            .map_err(RuntimeError::internal)?;
-            fs::write(staging.join("metadata.json"), metadata)
-                .await
-                .map_err(RuntimeError::internal)?;
-            let destination = self.snapshot_dir(&machine.workspace_id());
-            let previous = self.previous_snapshot_dir(&machine.workspace_id());
-            let had_previous = match fs::metadata(&destination).await {
-                Ok(_) => {
-                    remove_directory_if_present(&previous).await?;
-                    fs::rename(&destination, &previous)
-                        .await
-                        .map_err(RuntimeError::internal)?;
-                    true
-                }
-                Err(error) if error.kind() == ErrorKind::NotFound => false,
-                Err(error) => return Err(RuntimeError::internal(error)),
-            };
-            if let Err(error) = fs::rename(&staging, &destination).await {
-                if had_previous {
-                    let _ = fs::rename(&previous, &destination).await;
-                }
-                return Err(RuntimeError::internal(error));
-            }
-            if let Err(error) = remove_directory_if_present(&previous).await {
-                warn!(workspace_id = %machine.workspace_id(), %error, "could not remove prior VM checkpoint");
-            }
-            Ok::<(), RuntimeError>(())
-        }
-        .await;
-        if let Err(error) = persist_result {
-            let _ = api
-                .request("PATCH", "/vm", json!({ "state": "Resumed" }))
-                .await;
-            let _ = remove_directory_if_present(&staging).await;
-            return Err(error);
-        }
-        info!(
-            workspace_id = %machine.workspace_id(),
-            snapshot_ms = started_at.elapsed().as_millis() as u64,
-            "firecracker snapshot persisted"
-        );
-        api.resume().await?;
         Ok(())
     }
 

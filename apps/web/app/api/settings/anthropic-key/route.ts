@@ -12,9 +12,7 @@ const requestSchema = z.object({ apiKey: z.string().min(20).max(512) });
 export async function GET() {
   const user = await getApiUser();
   if (!user) return apiError(new Error("Authentication required."), 401);
-  return Response.json(
-    await getProviderCredentialStatus(user.id, "anthropic"),
-  );
+  return Response.json(await getProviderCredentialStatus(user.id, "anthropic"));
 }
 
 export async function PUT(request: Request) {

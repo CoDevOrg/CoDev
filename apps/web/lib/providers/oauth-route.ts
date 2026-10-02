@@ -174,9 +174,8 @@ async function parseSessionInput(request: Request) {
 export async function startOAuthSession(
   request: Request,
   provider: OAuthProvider,
-) {
+): Promise<NextResponse> {
   const resolved = await parseSessionInput(request);
-  if ("error" in resolved) return resolved.error;
 
   return authorizeUser({
     request,

@@ -3,7 +3,7 @@ use std::{
     fs::{self, OpenOptions},
     io::{BufRead, BufReader, Read, Write},
     net::{SocketAddr, TcpStream},
-    os::unix::fs::{OpenOptionsExt, PermissionsExt},
+    os::unix::fs::PermissionsExt,
     path::{Component, Path, PathBuf},
     process::{Command, Stdio},
     sync::{
@@ -2517,7 +2517,7 @@ mod tests {
         assert!(TerminalUser::parse(passwd, "codev-shell").is_none());
     }
 
-    use std::{process::Command, sync::atomic::AtomicBool};
+    use std::sync::atomic::AtomicBool;
 
     use tempfile::tempdir;
 
@@ -3408,38 +3408,6 @@ sleep 5
             &next_session_id,
             Instant::now() + Duration::from_secs(5),
         );
-    }
-
-    fn git(root: &Path, arguments: &[&str]) {
-        let output = Command::new("git")
-            .arg("-C")
-            .arg(root)
-            .args(arguments)
-            .output()
-            .expect("git");
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    fn git_stdout(root: &Path, arguments: &[&str]) -> String {
-        let output = Command::new("git")
-            .arg("-C")
-            .arg(root)
-            .args(arguments)
-            .output()
-            .expect("git");
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        String::from_utf8(output.stdout)
-            .expect("git output")
-            .trim()
-            .into()
     }
 
     #[test]

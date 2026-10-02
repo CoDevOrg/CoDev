@@ -15,7 +15,10 @@ export async function POST() {
   if (!user) return apiError(new Error("Authentication required."), 401);
   try {
     return Response.json(
-      await startClaudeConnectionSession({ userId: user.id }, resolveClaudeRunner()),
+      await startClaudeConnectionSession(
+        { userId: user.id },
+        resolveClaudeRunner(),
+      ),
     );
   } catch (error) {
     const failure = toClaudeConnectionFailure(

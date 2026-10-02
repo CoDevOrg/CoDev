@@ -22,11 +22,7 @@ import {
   encodedDocument,
 } from "../collaboration/yjs-document";
 import { logEvent } from "../platform/observability";
-import {
-  send,
-  sendError,
-  type Connection,
-} from "./collaboration-connection";
+import { send, sendError, type Connection } from "./collaboration-connection";
 import {
   HEARTBEAT_INTERVAL_MS,
   INSTANCE_ID,
@@ -43,10 +39,7 @@ import {
   replay,
   startRoom,
 } from "./collaboration-rooms";
-import {
-  refreshPresence,
-  removePresence,
-} from "./collaboration-presence";
+import { refreshPresence, removePresence } from "./collaboration-presence";
 import {
   initializeGen2Document,
   loadGen2Document,

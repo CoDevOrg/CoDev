@@ -2,12 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Cloud,
-  MessagesSquare,
-  Settings,
-  ShieldCheck,
-} from "lucide-react";
+import { Cloud, MessagesSquare, Settings, ShieldCheck } from "lucide-react";
 
 import { publicAppHref } from "@/lib/platform/site-hosts";
 
