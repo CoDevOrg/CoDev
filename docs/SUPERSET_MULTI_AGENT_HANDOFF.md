@@ -1,7 +1,7 @@
 # Superset multi-agent integration handoff
 
-**Status:** Implementation plan, 2026-10-02. No new integration phase is verified by this document.
-**Branch:** `codex/superset-agent-isolation`; merge `7ae9d39e15` includes `origin/main` at `0a2c880d50`.
+**Status:** Implementation plan, revised 2026-10-02. No new integration phase is verified by this document.
+**Branch:** `codex/superset-agent-isolation`; merge `670f3053b5` includes `origin/main` at `31ec6e66ff`.
 
 ## Goal and product boundary
 
@@ -20,63 +20,87 @@ The first milestone is two independent agents in two worktrees. A CLI agent's ow
 - `vendor/superset/packages/host-service/src/trpc/router/agents/agents.ts` contains Superset's native launch and continuation behavior. It also reads host-default account configuration, which is inappropriate for CoDev's member-specific launches.
 - `vendor/superset/packages/host-service/src/terminal-agents/` contains the binding store, SQLite persistence, subagent roster and transcript harnesses, and resume-candidate logic. The CoDev bridge currently bypasses this path because it has no real hook events for its launched processes.
 - `vendor/superset/packages/host-service/src/trpc/router/notifications/notifications.ts` accepts public lifecycle hooks. Its attribution token protects account capture, not every binding-changing event. A CoDev multi-member host needs a per-launch trust boundary before relying on hooks for status or recovery.
-- Current `main` uses terminal snapshot polling. Keep that transport; do not restore the removed raw-stream or WebSocket terminal path.
+- Current `main` has a browser-to-CoDev terminal WebSocket with HTTP polling fallback; the upstream guest/Superset side still polls snapshots. Keep that current transport and do not revive the branch's older raw-stream host path. Agent progress needs its own safe projection; terminal transport is not an authorization or redaction boundary.
 
-## Build sequence
+## Where to work and what to build first
 
-### 0. Establish a reproducible baseline
+Work in the existing `codex/superset-agent-isolation` worktree, not a new branch from `main`. It contains credential profile delivery, private agent UIDs, cleanup, command gates, and CoDev run records, and now includes current `origin/main`. The primary checkout is on another branch with unrelated files. Do not copy its working tree into this branch. Before each implementation slice, fetch `origin/main`, compare it with this branch, and merge relevant updates here; preserve CoDev's current behavior if paths conflict.
 
-Record the exact local branch, `origin/main` SHA, tool versions, and a focused test manifest. Separate Windows-only test limitations and unrelated baseline failures from changes introduced by this work. The 2026-10-02 merge passed 22 focused CoDev tests and 3 host policy/isolation tests; one host isolation case skipped on Windows. Repository-wide typecheck, lint, and test are not green on this checkout (missing CLI file, web lint errors, and Windows shell-path failures), and the vendored host typecheck reports dependency errors. Do not treat those failures as integration regressions without reproducing them on `origin/main` or Linux.
+**The first build target is one secure, observable persistent agent.** Its CoDev run ID must resolve to exactly one Superset worktree, terminal, provider, and member connection. A real hook must create a Superset binding; terminal exit must clean the private profile and release the CoDev seat. Build the second concurrent agent only after that path is proven. Do not build the agent roster or swap the existing chat turn route first.
 
-**Exit:** A Linux test environment can run the focused host PTY suite with the required `tsx` loader; baseline failures are recorded with owners before code changes.
+The existing `agentWorktreeIdForChat` in `apps/web/lib/gen2/superset-agent-runtime.ts` deliberately reuses one worktree per chat. That is safe for sequential turns but does not isolate two independent agents in the same chat. For this feature, assign a worktree per independent agent session/task. Continuing that agent retains its worktree; a second independent writer gets a different one. A chat may reference multiple agent sessions.
 
-### 1. Freeze the CoDev authorization and run contract
+## Proposed permission contract for persistent agents
 
-Define separate permissions for viewing agent metadata and output, launching, sending input, cancelling, and resuming. Decide explicitly whether an editor may control another editor's run and what viewers may see. Enforce the policy in `apps/web/lib/gen2/`, including every route that accepts a run, terminal, chat, or worktree ID. The current adapter verifies membership but does not consistently distinguish those actions by role or run owner.
+Apply this to the new persistent-agent capability first; audit the existing fresh-turn chat policy separately so the rollout does not silently change current behavior.
 
-Use one durable CoDev run ID with immutable workspace ID, creator, provider, credential connection ID, worktree ID, host workspace ID, host terminal ID, and lifecycle state. Keep lease and billing state in CoDev. Idempotency must compare the full launch identity, not just a key. Do not store profile contents or raw provider tokens in any run row.
+- All current workspace members may list agent metadata and read a filtered progress view. Raw PTY output and private profiles are never a general member API.
+- Owners and editors may launch, subject to the requesting member's credential eligibility, workspace billing gate, and concurrency policy. Viewers cannot launch.
+- The creator may send input and cancel. A workspace owner may cancel any run for safety. Other editors and viewers cannot send input or cancel someone else's run.
+- Only the creator may resume a provider session, using a freshly resolved credential. An owner may stop or mark a run for recovery, but cannot inherit another member's provider connection.
+- A removed member loses access immediately. The run is reconciled according to policy; removal never transfers credential ownership to another member.
 
-**Exit:** Denial tests prove a viewer, former member, another workspace member without the required capability, and a caller substituting another run or worktree ID cannot launch, input, cancel, resume, or read unauthorized output.
+Enforce this policy in `apps/web/lib/gen2/`, not only in UI controls or thin API routes. Return a non-disclosing error for a foreign run ID. The host independently verifies its persisted run-to-terminal-to-worktree mapping on every operation, because possession of the private bridge secret alone must not turn an arbitrary terminal ID into an agent session.
 
-### 2. Reuse a shared Superset launch core
+## Reviewable implementation slices
 
-Extract the smallest concrete shared operation from Superset's native agent launcher that both the native router and the CoDev bridge can call. Keep provider command/model validation, prompt framing, terminal creation, continuation checks, and worktree binding in that Superset-owned path. The CoDev entry point supplies an approved provider and per-launch private profile; it must not resolve `resolveDefaultAccountEnv`, host-global agent settings, or a desktop login. Retain the existing exact command gate until the shared path has an equally narrow policy.
+Each slice below should be a separate reviewable change. Do not start the next slice merely because the code compiles; use its pass condition. The phase descriptions below explain the full lifecycle; these slices are the build order.
 
-Preserve Superset's registered-worktree resolution, including direct-child worktrees under `/workspace`, and reject mismatched workspace, worktree, and terminal IDs at the host boundary. Keep the agent and ordinary terminal on the same guest filesystem while their credential access differs.
+### Slice A — baseline and policy tests
 
-**Exit:** One CoDev launch uses the Superset core; native Superset launch behavior still passes its existing tests; arbitrary commands, paths, environment keys, and worktree substitutions fail.
+**Touch:** `apps/web/lib/gen2/agent.ts`, `superset-agent-runtime.ts`, `superset-runs.ts`, their tests, and shared request/response schemas in `packages/contracts/src/gen2.ts` only if a shape changes. Keep API route handlers thin.
 
-### 3. Make lifecycle hooks trustworthy on a headless guest
+**Do:** Record Linux baseline results for CoDev, Rust guest, and Superset host. Add a single policy function used by list/start/input/poll/cancel/recover. Test the proposed role and run-owner matrix, current-membership recheck, credential selection, billing gate, and idempotent denial before any orchestrator call. Preserve the fresh-turn route's existing behavior while the new capability is gated.
 
-Provision the relevant Superset hook script and per-agent CLI configuration in the guest image or final launch profile, not in a host-wide member credential home. Ensure hooks work when the host starts under systemd without Electron. Authenticate or bind every CoDev lifecycle and subagent event to a launch and terminal before it can mutate `TerminalAgentStore`; a terminal ID alone is not proof. Keep hook delivery local to the guest, bounded, and free of credential material.
+**Pass:** A viewer cannot launch; another editor cannot input or cancel the creator's run; the owner can stop it; a former member cannot observe or control it; foreign run IDs disclose no output. Denials never wake the guest or claim a credential seat.
 
-Connect the CoDev launch to Superset's existing binding persistence and terminal-exit path using genuine CLI events. Do not fabricate `Attached` or `Start` events to fill the UI. A missing hook should produce an explicit `unknown` status, with the PTY still tracked separately.
+### Slice B — durable identity and one worktree per independent agent
 
-**Exit:** Real Codex and Claude launches populate the binding store; working, waiting, ended, and subagent events are attributable to the correct terminal; forged and cross-agent hooks are rejected. Verify this in a Firecracker guest, since upstream has documented headless hook-provisioning failures.
+**Touch:** `apps/web/lib/gen2/superset-runs.ts`, `superset-agent-runtime.ts`, existing `packages/db/src/schema.ts` only if the current run row lacks required identity, `vendor/superset/packages/host-service/src/codev/agents.ts`, and the host's existing SQLite schema/migrations. Follow forward-only migration rules.
 
-### 4. Make process and credential lifecycle restart-safe
+**Do:** Replace per-chat worktree assignment for persistent agents with a per-session/task assignment. Persist immutable CoDev run, member, provider, connection, worktree, and host terminal linkage without secrets. Persist a minimal host-side CoDev agent registration so operations remain scoped after a host restart. Validate idempotency keys against that complete identity; never relaunch a second PTY on retry. Use Superset's registered Git worktree lookup, including direct children of `/workspace`.
 
-Reconcile CoDev's durable run with Superset's terminal row and binding on host restart, guest restart, and VM restoration. Persist enough non-secret launch identity to prove that a recovered terminal belongs to the same CoDev workspace, worktree, provider, and run. Record actual exit codes where available; an unknown code must remain unknown. Expire stale idempotency mappings and release seats exactly once.
+**Pass:** Two independent starts in one chat choose different worktrees; retrying either start returns the same run and terminal; forged or mismatched worktree/terminal IDs fail before input, poll, stop, or recovery. Both worktrees survive guest restart.
 
-Remove private profile directories on natural exit, cancellation, failed start, daemon loss, and restart cleanup. Capture provider-refreshed credentials only into the launching member's CoDev connection, then remove the profile. Never silently restart an agent using an old profile. A resume candidate needs an explicit CoDev decision and freshly resolved credential. If identity or liveness cannot be proved, mark the run `recovery_required`.
+### Slice C — shared Superset launch path and private profile
 
-**Exit:** Every failure path has one durable terminal state, no leaked profile, no duplicate process, and no held seat; tests cover interruption between each start/stop transition.
+**Touch:** `vendor/superset/packages/host-service/src/trpc/router/agents/agents.ts`, `src/codev/agents.ts`, `src/codev/agent-isolation.ts`, and their existing tests. Add a shared helper only for operations used by both the native and CoDev launchers.
 
-### 5. Expose safe concurrent agent sessions through CoDev
+**Do:** Reuse native Superset command construction, terminal creation, safe prompt framing, and continuation checks where they fit. Keep CoDev's exact provider command policy and private UID/profile. The CoDev adapter provides a per-launch profile and must bypass native host-default account selection; it must not install member credentials into a global agent configuration. Leave `codev-guestd` as a validating private proxy.
 
-Provide CoDev APIs for list, start, input, poll, cancel, and recovery, backed by the same policy and run mapping. Use current snapshot polling initially. Define bounded output retention, sequence/cursor behavior, and a redaction policy before returning terminal text to browsers; a raw PTY snapshot is not a safe progress stream. Keep CoDev's chat messages and audit history durable without copying credential files or host administration state.
+**Pass:** One CoDev agent launches through the shared path in the intended worktree; native launcher tests still pass; ordinary shells and a second agent cannot read its profile; arbitrary command, environment, path, and provider substitutions fail.
 
-Create one worktree per independent writer and make the claim explicit. Allow shared-worktree concurrent writers only after a coordination policy exists. Keep files, editor, terminal, and Git scoped to the selected worktree; agent changes must appear through the existing file and Git reconciliation path.
+### Slice D — genuine headless hooks and Superset bindings
 
-**Exit:** Two members can launch independent agents in separate worktrees, observe both, switch worktrees, inspect changes, and cancel only runs their policy permits. Existing Gen 2 chat, file, terminal, Git, and sharing flows still work.
+**Touch:** Superset's guest/host startup integration, `terminal-agents/`, `trpc/router/notifications/notifications.ts`, and the CoDev bridge. Use the existing hook harnesses for Codex and Claude.
 
-### 6. Add the Gen 2 agent UI, then evaluate chat migration
+**Do:** Provision hook scripts and per-launch CLI hook configuration on a systemd-started guest. Give each launch an unguessable local attribution token and bind lifecycle and child-agent hook events to the registered terminal before changing `TerminalAgentStore`. The public desktop notification path must not be accepted as proof of a CoDev member or run. Track PTY liveness separately; missing hooks mean `unknown`, not `idle` or `completed`. Do not invent synthetic lifecycle events.
 
-Show an agent roster in the current Gen 2 workspace with provider, worktree/branch, owner, trustworthy state, output, input, cancel, and `recovery_required`. Keep agent controls within the existing workspace design contract and shadcn/WorkspaceButton conventions. Show child subagents beneath their parent only after Phase 3 attribution is verified; their roster does not grant independent file or credential permissions.
+**Pass:** A real Claude launch, then a real Codex launch, creates the expected persisted binding and status transitions in a headless VM. Forged, replayed, and cross-terminal events cannot alter another run. Child subagents attach to the correct parent without gaining separate credential access.
 
-After persistent sessions meet the same user needs as fresh turns, decide whether to replace the chat turn route, offer both modes, or keep chat fresh-turn while the agent roster provides persistent work. Do not switch the existing flag merely because a host agent can start.
+### Slice E — lifecycle, credential refresh, and safe recovery
 
-**Exit:** Internal VM acceptance passes before broad rollout; no regression in current chat or workspace controls.
+**Touch:** `src/codev/agents.ts`, profile cleanup, `apps/web/lib/gen2/superset-agent-runtime.ts`, `superset-runs.ts`, and the existing credential write-back path. Do not change `resolveCredential` or the provider registry.
+
+**Do:** Record real exit outcomes; preserve `unknown` when an exit code is unavailable. Capture refreshed provider state into only the creator's encrypted connection before deleting the profile. Clean on natural exit, cancel, failed start, daemon loss, and restart. Heartbeat the credential seat from verified running agent work, not browser polling. Reconcile CoDev and host records after restart; ambiguous identity becomes `recovery_required`. Resume only through an explicit creator action and a fresh profile.
+
+**Pass:** Fault-injection tests around each state transition produce exactly one durable outcome, no duplicate process, no leaked profile, and no held seat. A host restart cannot convert an unknown exit into success or silently relaunch with stale credentials.
+
+### Slice F — CoDev facade and safe output
+
+**Touch:** `apps/web/lib/gen2/superset-agent-runtime.ts`, the existing orchestrator client, matching Gen 2 API routes, `packages/contracts/src/gen2.ts`, and output tests. Use current main's terminal transport where appropriate; do not copy its raw terminal payload into an agent progress API.
+
+**Do:** Expose list/start/input/poll/cancel/recovery through CoDev authorization. Define bounded snapshot cursors and persist a filtered run transcript. Treat PTY text, sourced script paths, and provider output as untrusted and potentially secret-bearing. Keep any raw terminal view more restricted than the shared progress view. Ensure file and Git changes from each agent appear in that worktree's existing panels.
+
+**Pass:** Two members can observe two simultaneous runs and their branch changes without reading profiles or host secrets. Refresh and reconnect do not duplicate output or lose a final status. Existing chat, terminal, file, Git, and sharing tests still pass.
+
+### Slice G — agent roster and controlled rollout
+
+**Touch:** `apps/web/components/gen2/` and the existing workspace shell. Follow `docs/design/superset-workspace-ui.md`, `docs/design/workspace-controls.md`, shadcn/ui, and `WorkspaceButton` conventions.
+
+**Do:** Show parent agents, owner, provider, branch/worktree, trustworthy status, filtered output, and permitted controls. Show child subagents only after Slice D. Keep the existing chat turn UI and its fresh-turn route. Exercise the full Linux host suite and Gen 2 VM acceptance matrix below before enabling the capability outside an internal workspace.
+
+**Pass:** A member can run and inspect two independent agents from one workspace page; role-specific controls match server policy; changing branches shows the correct files and diffs; disabling the flag leaves current Gen 2 behavior intact.
 
 ## Verification and rollout gates
 
@@ -84,10 +108,6 @@ After persistent sessions meet the same user needs as fresh turns, decide whethe
 2. **Linux host suite:** PTY start/input/snapshot/exit, `tsx`-dependent tests with the loader configured, process and daemon loss, profile permissions, two isolated UIDs, and hook attribution.
 3. **Gen 2 VM acceptance:** Codex and Claude; two agents in separate worktrees; viewer and cross-member denial; revoked connection; natural exit, cancellation, host restart, guest restart, hibernation/restoration; correct billing attribution and seat release.
 4. **Release gate:** Resolve or explicitly baseline repository typecheck/lint/test failures. Enable the new capability only for an internal workspace, observe metadata-only starts, exits, recovery, profile cleanup, and seat durations, then widen the flag. Keep the current chat path as rollback until parity is proven.
-
-## First implementation slice
-
-Start with Steps 0 and 1, then implement a host-only vertical slice of Steps 2 and 3: one CoDev-authorized launch that uses the shared Superset launch core and produces a genuine persisted binding in a headless guest. The first review should include the denial tests and host tests, not a browser UI. This slice determines whether Superset's agent manager can be reused safely before adding more surface area.
 
 ## Handoff notes
 
