@@ -1,5 +1,7 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
+
 import {
   createSupersetWorktree,
   listSupersetWorktrees,
@@ -161,6 +163,8 @@ async function startSession(
 
   try {
     const started = await startSupersetAgent(input.workspaceId, {
+      codevRunId: registration.runId,
+      codevWorkspaceId: input.workspaceId,
       worktreeId: input.worktreeId,
       provider: providerVendor(provider),
       launchProfile: credential.launchProfile,
@@ -396,20 +400,18 @@ export async function reconcileGen2SupersetAgentSession(input: {
 }
 
 /**
- * One worktree per chat, so two members' agents in two different chats never
- * collide on the same checkout, matching Plan Phase 4 step 2 ("concurrent
- * independent agents receive distinct worktrees"). Idempotent: a chat's
- * worktree is created once and reused by every later turn in that chat.
+ * One worktree per start idempotency key. A retry gets the same checkout;
+ * independent agents in the same chat get different checkouts.
  */
-function agentWorktreeIdForChat(chatId: string) {
-  return `agent-${chatId.replace(/-/g, "")}`.slice(0, 64);
+function agentWorktreeIdForStart(idempotencyKey: string) {
+  return `agent-${createHash("sha256").update(idempotencyKey).digest("hex").slice(0, 40)}`;
 }
 
 async function ensureGen2SupersetAgentWorktree(
   workspaceId: string,
-  chatId: string,
+  idempotencyKey: string,
 ) {
-  const worktreeId = agentWorktreeIdForChat(chatId);
+  const worktreeId = agentWorktreeIdForStart(idempotencyKey);
   const existing = await listSupersetWorktrees(workspaceId);
   if (existing.some((worktree) => worktree.worktreeId === worktreeId)) {
     return worktreeId;
@@ -421,7 +423,7 @@ async function ensureGen2SupersetAgentWorktree(
       baseRef: "HEAD",
     });
   } catch (error) {
-    // Two turns racing to create the same chat's first worktree: the loser's
+    // Two retries racing to create the same agent worktree: the loser's
     // `git worktree add` fails, but the worktree it wanted now exists anyway.
     const retried = await listSupersetWorktrees(workspaceId);
     if (!retried.some((worktree) => worktree.worktreeId === worktreeId)) {
@@ -456,7 +458,10 @@ export async function startGen2SupersetAgentTurn(input: {
   const history = await listGen2ChatMessages(input.chatId);
   const worktreeId =
     input.worktreeId ??
-    (await ensureGen2SupersetAgentWorktree(input.workspaceId, input.chatId));
+    (await ensureGen2SupersetAgentWorktree(
+      input.workspaceId,
+      input.idempotencyKey,
+    ));
   const provider = input.provider;
   const command = buildGen2AgentCommand(
     provider,

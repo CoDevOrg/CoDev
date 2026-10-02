@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createHash } from "node:crypto";
 
 const mocks = vi.hoisted(() => ({
   bill: vi.fn(),
@@ -304,6 +305,13 @@ describe("gen2 Superset agent runtime adapter", () => {
     expect(mocks.markStarted).toHaveBeenCalledWith(
       expect.objectContaining({ runId, hostAgentSessionId: "agent-1" }),
     );
+    expect(mocks.start).toHaveBeenCalledWith(
+      workspaceId,
+      expect.objectContaining({
+        codevRunId: runId,
+        codevWorkspaceId: workspaceId,
+      }),
+    );
     expect(result).toEqual({ runId, status: "running", created: true });
   });
 
@@ -514,7 +522,7 @@ describe("gen2 Superset agent turn (Phase 4 browser-facing delegate)", () => {
     });
   });
 
-  it("provisions a per-chat worktree, starts the run, and persists the prompt", async () => {
+  it("provisions a per-agent worktree, starts the run, and persists the prompt", async () => {
     mocks.register.mockResolvedValue({
       runId,
       status: "creating",
@@ -555,9 +563,12 @@ describe("gen2 Superset agent turn (Phase 4 browser-facing delegate)", () => {
     );
   });
 
-  it("reuses an existing chat worktree instead of creating a second one", async () => {
+  it("reuses the idempotent start worktree instead of creating a second one", async () => {
     mocks.listWorktrees.mockResolvedValue([
-      { worktreeId: `agent-${chatId.replace(/-/g, "")}`, branch: "x" },
+      {
+        worktreeId: `agent-${createHash("sha256").update("key-1").digest("hex").slice(0, 40)}`,
+        branch: "x",
+      },
     ]);
     mocks.register.mockResolvedValue({
       runId,
@@ -580,6 +591,42 @@ describe("gen2 Superset agent turn (Phase 4 browser-facing delegate)", () => {
     });
 
     expect(mocks.createWorktree).not.toHaveBeenCalled();
+  });
+
+  it("uses distinct worktrees for independent starts in the same chat", async () => {
+    mocks.register
+      .mockResolvedValueOnce({ runId, status: "creating", created: true })
+      .mockResolvedValueOnce({
+        runId: "66666666-6666-4666-8666-666666666666",
+        status: "creating",
+        created: true,
+      });
+    mocks.start.mockResolvedValue({
+      hostWorkspaceId: "host-ws-1",
+      hostTerminalId: "term-1",
+      hostAgentSessionId: "agent-1",
+    });
+    await startGen2SupersetAgentTurn({
+      workspaceId,
+      userId,
+      chatId,
+      prompt: "first",
+      provider: "codex",
+      idempotencyKey: "key-1",
+    });
+    await startGen2SupersetAgentTurn({
+      workspaceId,
+      userId,
+      chatId,
+      prompt: "second",
+      provider: "codex",
+      idempotencyKey: "key-2",
+    });
+    const worktrees = mocks.createWorktree.mock.calls.map(
+      ([, value]) => (value as { worktreeId: string }).worktreeId,
+    );
+    expect(worktrees).toHaveLength(2);
+    expect(worktrees[0]).not.toBe(worktrees[1]);
   });
 
   it("polls the run, records output, and reports the persisted reply", async () => {

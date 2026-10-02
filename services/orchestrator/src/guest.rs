@@ -2677,6 +2677,8 @@ mod tests {
         let directory = tempdir().expect("tempdir");
         let service = GuestService::new(directory.path()).expect("service");
         let request = serde_json::json!({
+            "codevRunId": "11111111-1111-4111-8111-111111111111",
+            "codevWorkspaceId": "22222222-2222-4222-8222-222222222222",
             "worktreeId": "../escape",
             "provider": "openai",
             "command": ["codex", "exec"],
@@ -2695,6 +2697,8 @@ mod tests {
         let directory = tempdir().expect("tempdir");
         let service = GuestService::new(directory.path()).expect("service");
         let request = serde_json::json!({
+            "codevRunId": "11111111-1111-4111-8111-111111111111",
+            "codevWorkspaceId": "22222222-2222-4222-8222-222222222222",
             "worktreeId": "main",
             "provider": "openai",
             "command": [],
@@ -2713,6 +2717,8 @@ mod tests {
         let directory = tempdir().expect("tempdir");
         let service = GuestService::new(directory.path()).expect("service");
         let request = serde_json::json!({
+            "codevRunId": "11111111-1111-4111-8111-111111111111",
+            "codevWorkspaceId": "22222222-2222-4222-8222-222222222222",
             "worktreeId": "main",
             "provider": "openai",
             "command": ["codex", "exec"],
@@ -2756,6 +2762,8 @@ mod tests {
         let directory = tempdir().expect("tempdir");
         let service = GuestService::new(directory.path()).expect("service");
         let start = serde_json::json!({
+            "codevRunId": "11111111-1111-4111-8111-111111111111",
+            "codevWorkspaceId": "22222222-2222-4222-8222-222222222222",
             "worktreeId": "main",
             "provider": "openai",
             "command": ["codex", "exec"],

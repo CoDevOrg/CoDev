@@ -72,6 +72,8 @@ export type SupersetAgentPollChunk = z.infer<
 >["chunks"][number];
 
 export type SupersetAgentStartInput = {
+  codevRunId: string;
+  codevWorkspaceId: string;
   worktreeId: string;
   provider: string;
   /** The client also derives the legacy Codex field from this profile while

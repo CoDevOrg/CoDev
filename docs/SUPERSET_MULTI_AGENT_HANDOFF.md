@@ -66,6 +66,10 @@ Validation on this Windows host: repository typecheck passed; lint passed with e
 
 **Pass:** Two independent starts in one chat choose different worktrees; retrying either start returns the same run and terminal; forged or mismatched worktree/terminal IDs fail before input, poll, stop, or recovery. Both worktrees survive guest restart.
 
+**Slice B checkpoint (2026-10-02):** A chat-delegated start without an explicit worktree now derives a stable worktree ID from its idempotency key. Retries reuse it; independent starts in one chat receive different worktrees. The CoDev run ID and workspace ID now travel with the launch request. Superset persists a private, secret-free `codev_agent_runs` registration that binds the CoDev run, provider, idempotency key, worktree, host workspace, and terminal. Every bridge operation reloads that registration and verifies its terminal-to-worktree mapping before touching the terminal. A retry after host restart reattaches to the persisted terminal; it never launches another PTY.
+
+Validation on this Windows host: focused CoDev tests passed (41/41); focused Superset registration, migration, command-policy, and profile-isolation checks passed (10 passed, 1 Linux-only UID test skipped). Superset-wide typecheck remains blocked by pre-existing vendored auth and generated-locale type errors; it contains no remaining Slice B diagnostics. Rust checks remain unavailable because `cargo` is not installed. Linux host/guest and VM acceptance remain required before the next acceptance gate.
+
 ### Slice C — shared Superset launch path and private profile
 
 **Touch:** `vendor/superset/packages/host-service/src/trpc/router/agents/agents.ts`, `src/codev/agents.ts`, `src/codev/agent-isolation.ts`, and their existing tests. Add a shared helper only for operations used by both the native and CoDev launchers.

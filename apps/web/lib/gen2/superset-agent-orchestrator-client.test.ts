@@ -22,6 +22,8 @@ function jsonResponse(body: unknown) {
 
 const workspaceId = "workspace-1";
 const agentId = "agent-1";
+const runId = "11111111-1111-4111-8111-111111111111";
+const codevWorkspaceId = "22222222-2222-4222-8222-222222222222";
 
 describe("Superset agent orchestrator client", () => {
   beforeEach(() => {
@@ -37,6 +39,8 @@ describe("Superset agent orchestrator client", () => {
       }),
     );
     const result = await startSupersetAgent(workspaceId, {
+      codevRunId: runId,
+      codevWorkspaceId,
       worktreeId: "main",
       provider: "openai",
       command: ["codex", "exec"],
@@ -45,7 +49,11 @@ describe("Superset agent orchestrator client", () => {
     expect(mocks.codexExecRequest).toHaveBeenCalledWith(
       "POST",
       `/v1/sandboxes/${workspaceId}/superset-agents`,
-      expect.objectContaining({ worktreeId: "main" }),
+      expect.objectContaining({
+        codevRunId: runId,
+        codevWorkspaceId,
+        worktreeId: "main",
+      }),
       expect.any(Number),
     );
     expect(result.hostAgentSessionId).toBe("agent-1");
@@ -75,6 +83,8 @@ describe("Superset agent orchestrator client", () => {
       env: { CODEX_HOME: "{{profileDir}}/.codex" },
     };
     await startSupersetAgent(workspaceId, {
+      codevRunId: runId,
+      codevWorkspaceId,
       worktreeId: "main",
       provider: "openai",
       launchProfile,
@@ -96,6 +106,8 @@ describe("Superset agent orchestrator client", () => {
       }),
     );
     await startSupersetAgent(workspaceId, {
+      codevRunId: runId,
+      codevWorkspaceId,
       worktreeId: "main",
       provider: "anthropic",
       launchProfile: {
@@ -115,6 +127,8 @@ describe("Superset agent orchestrator client", () => {
     );
     await expect(
       startSupersetAgent(workspaceId, {
+        codevRunId: runId,
+        codevWorkspaceId,
         worktreeId: "main",
         provider: "anthropic",
         command: ["claude"],

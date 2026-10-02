@@ -79,6 +79,38 @@ export const terminalAgentBindings = sqliteTable(
 	],
 );
 
+/**
+ * CoDev's durable identity for a bridge-launched terminal agent. CoDev owns
+ * membership and credentials; this row only binds its run to one host
+ * terminal and registered Git worktree after a host restart.
+ */
+export const codevAgentRuns = sqliteTable(
+	"codev_agent_runs",
+	{
+		codevRunId: text("codev_run_id").primaryKey(),
+		codevWorkspaceId: text("codev_workspace_id").notNull(),
+		terminalId: text("terminal_id")
+			.notNull()
+			.references(() => terminalSessions.id, { onDelete: "restrict" }),
+		hostWorkspaceId: text("host_workspace_id")
+			.notNull()
+			.references(() => workspaces.id, { onDelete: "restrict" }),
+		worktreeId: text("worktree_id").notNull(),
+		provider: text("provider").notNull(),
+		idempotencyKey: text("idempotency_key").notNull(),
+		createdAt: integer("created_at")
+			.notNull()
+			.$defaultFn(() => Date.now()),
+	},
+	(table) => [
+		uniqueIndex("codev_agent_runs_terminal_id_idx").on(table.terminalId),
+		uniqueIndex("codev_agent_runs_idempotency_key_idx").on(
+			table.idempotencyKey,
+		),
+		index("codev_agent_runs_host_workspace_id_idx").on(table.hostWorkspaceId),
+	],
+);
+
 export const projects = sqliteTable(
 	"projects",
 	{
