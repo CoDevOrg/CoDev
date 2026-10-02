@@ -164,6 +164,9 @@ describe("Gen2TerminalPane", () => {
       />,
     );
 
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Opening the terminal",
+    );
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
         `/api/gen2/workspaces/${workspaceId}/terminal`,
@@ -173,5 +176,26 @@ describe("Gen2TerminalPane", () => {
         }),
       );
     });
+  });
+
+  it("waits for the workspace before opening a shell", () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <Gen2TerminalPane
+        workspaceId={workspaceId}
+        visible
+        canStart
+        autoStart
+        workspaceConnection="waking"
+        onExit={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Waiting for the workspace",
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

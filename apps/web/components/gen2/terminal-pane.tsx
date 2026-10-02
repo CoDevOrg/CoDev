@@ -5,6 +5,7 @@ import {
   type TerminalTransport,
 } from "./terminal-transport";
 import { WorkspaceButton } from "./workspace-button";
+import { WorkspaceLoading } from "./workspace-loading";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Terminal } from "@xterm/xterm";
@@ -71,6 +72,7 @@ export function Gen2TerminalPane({
   visible,
   canStart,
   autoStart = false,
+  workspaceConnection = "ready",
   onExit,
   onResumeWorkspace,
 }: {
@@ -79,6 +81,7 @@ export function Gen2TerminalPane({
   visible: boolean;
   canStart: boolean;
   autoStart?: boolean | undefined;
+  workspaceConnection?: "ready" | "waking" | "asleep" | undefined;
   onExit: () => void;
   onResumeWorkspace?: (() => Promise<boolean>) | undefined;
 }) {
@@ -305,6 +308,7 @@ export function Gen2TerminalPane({
   useEffect(() => {
     if (
       autoStart &&
+      workspaceConnection === "ready" &&
       visible &&
       canStart &&
       status === "idle" &&
@@ -313,7 +317,7 @@ export function Gen2TerminalPane({
       autoStartedRef.current = true;
       void start();
     }
-  }, [autoStart, visible, canStart, status, start]);
+  }, [autoStart, workspaceConnection, visible, canStart, status, start]);
 
   const handleResume = useCallback(async () => {
     if (!onResumeWorkspace) return;
@@ -329,7 +333,33 @@ export function Gen2TerminalPane({
 
   return (
     <div className="gen2-term">
-      {workspacePaused ? (
+      {workspaceConnection === "waking" && !workspacePaused ? (
+        <div className="gen2-term-start is-loading">
+          <WorkspaceLoading
+            title="Waiting for the workspace"
+            description="The shell opens once this workspace is awake."
+          />
+        </div>
+      ) : workspaceConnection === "asleep" && !workspacePaused ? (
+        <div className="gen2-term-start is-loading">
+          <WorkspaceLoading
+            busy={false}
+            title="This workspace is asleep"
+            description="Reconnect to open the shell. Your files are still saved."
+            action={
+              onResumeWorkspace ? (
+                <WorkspaceButton
+                  tone="secondary"
+                  type="button"
+                  onClick={() => void handleResume()}
+                >
+                  Reconnect workspace
+                </WorkspaceButton>
+              ) : null
+            }
+          />
+        </div>
+      ) : workspacePaused ? (
         <div className="gen2-term-start">
           <p className="gen2-term-error" role="alert">
             {error} Reconnect to continue.
@@ -346,9 +376,12 @@ export function Gen2TerminalPane({
         </div>
       ) : status === "starting" ||
         (autoStart && status === "idle" && !error) ? (
-        <p className="gen2-term-status" role="status">
-          Starting shell…
-        </p>
+        <div className="gen2-term-start is-loading">
+          <WorkspaceLoading
+            title="Opening the terminal"
+            description="Connecting to the shell on this workspace."
+          />
+        </div>
       ) : status === "idle" || status === "ended" ? (
         <div className="gen2-term-start">
           <WorkspaceButton
