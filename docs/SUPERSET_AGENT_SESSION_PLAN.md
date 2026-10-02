@@ -8,6 +8,11 @@ verification gates are open.
 Phases 4–5 remain unverified or partial. Phase 6 (browser panel) is not started.
 **Date:** 2026-09-27 (design) · 2026-09-30 (status update)
 
+**Implementation sequencing update (2026-10-02):** See
+[`SUPERSET_MULTI_AGENT_HANDOFF.md`](./SUPERSET_MULTI_AGENT_HANDOFF.md). Prove
+independent persistent agents in separate worktrees before replacing Gen 2's
+fresh-turn chat contract. Keep the existing chat path available during rollout.
+
 ## Objective
 
 Replace the Gen 2 fresh-turn runtime (`codex exec` through `codev-guestd`) with
@@ -229,8 +234,9 @@ those items complete without new code and end-to-end evidence.
    and Claude shapes Gen 2 produces; quoting remains a second defense. The
    command gate needs a real host/guest test.
 9. **Unconfirmed:** a 4096-column terminal may wrap long `codex exec --json`
-   lines and corrupt JSON parsing. The idempotency map is host-memory only and
-   does not check that a repeated key names the same worktree.
+   lines and corrupt JSON parsing. The idempotency map is host-memory only;
+   repeated keys are checked against worktree and provider while the host lives,
+   but that check is not restart-safe.
 
 Remaining verification: Codex and Claude launches, two concurrent agents,
 cross-agent access denial, natural-exit cleanup, and the worktree/command gates
