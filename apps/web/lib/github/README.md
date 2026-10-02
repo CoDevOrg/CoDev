@@ -7,4 +7,5 @@ This module owns the integration with GitHub, including repo linking and API int
 **Key files:**
 
 - `github.ts`: Core GitHub API utilities.
+- `repository-tree.ts`: Committed file and folder names for one revision, without downloading contents.
 - `github-link.ts`: Logic for linking repositories or issues.

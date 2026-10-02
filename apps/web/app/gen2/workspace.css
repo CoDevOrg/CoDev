@@ -2687,6 +2687,49 @@
   height: 100%;
 }
 
+.gen2-ide-chat-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.gen2-ide-loading {
+  position: absolute;
+  inset: 0;
+  gap: 24px;
+  background: var(--ws-surface-1);
+}
+
+.gen2-ide-loading [data-slot="empty-header"],
+.gen2-term-start.is-loading [data-slot="empty-header"] {
+  gap: 8px;
+}
+
+.gen2-ide-loading [data-slot="empty-title"],
+.gen2-term-start.is-loading [data-slot="empty-title"] {
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 500;
+  color: var(--ws-text-primary);
+}
+
+.gen2-ide-loading [data-slot="empty-description"],
+.gen2-term-start.is-loading [data-slot="empty-description"] {
+  max-width: 40rem;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--ws-text-muted);
+}
+
+.gen2-ide-loading [data-slot="empty-media"] svg,
+.gen2-term-start.is-loading [data-slot="empty-media"] svg {
+  width: 28px;
+  height: 28px;
+  color: var(--ws-text-secondary);
+}
+
 /* --------------------------------------------------- Chat transcript (design contract) */
 
 .gen2-chat-panel {
@@ -4600,6 +4643,23 @@
   grid-row: 1;
 }
 
+.gen2-term-start.is-loading {
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: var(--ws-surface-1);
+}
+
+.gen2-loading-mark {
+  animation: gen2-loading-spin 1s linear infinite;
+}
+
+@keyframes gen2-loading-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
 .gen2-term-status,
 .gen2-term-hint {
   color: var(--ws-text-secondary);
@@ -4833,6 +4893,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .gen2-loading-mark {
+    animation: none;
+  }
+
   .gen2-superset-save,
   .gen2-superset-icon-button,
   .gen2-superset-code-editor .cm-foldChevron {

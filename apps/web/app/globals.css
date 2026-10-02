@@ -25,6 +25,12 @@
   color-scheme: light;
 }
 
+.workspace-page {
+  color-scheme: dark;
+  background: var(--workspace-surface);
+  color: var(--workspace-ink);
+}
+
 /* Dark-mode fallback for the semantic tokens above -- app-theme.css (loaded
    after this file) re-declares the same tokens on `.app-page`/`.auth-page`
    with a matching dark override and always wins there, so this block only

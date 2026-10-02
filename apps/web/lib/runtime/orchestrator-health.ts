@@ -49,8 +49,8 @@ async function parseHealth(response: Response) {
 /**
  * Wait until the Firecracker host is running *and* its orchestrator answers.
  *
- * The Azure Firecracker host deallocates after one quiet minute, so the first
- * call after a quiet period can land on a stopped instance. Starting it takes
+ * The host stays running. A workspace that has been asleep still has to be
+ * resumed, and a host that was stopped for a deploy has to boot first. Starting it takes
  * roughly ten seconds before the orchestrator is even up, and longer before
  * it serves -- far longer than a single provision attempt is willing to wait.
  * Callers that skip this see "Firecracker host unavailable" on the first
@@ -67,7 +67,10 @@ export async function ensureHostReady(timeoutMs = HOST_START_TIMEOUT_MS) {
   while (Date.now() < deadline) {
     // This function owns its own poll loop; keep an individual Azure status
     // check from spending the whole loop budget waiting out a stopping VM.
-    const state = await requestHostWake(1).catch(() => "starting" as const);
+    // A credential or API failure is not a host that is still booting. Treating
+    // it as "starting" burns the whole wait and the Worker is killed before
+    // deletion can finish.
+    const state = await requestHostWake(1);
     if (state === "running") {
       try {
         await waitForOrchestrator(Math.min(45_000, deadline - Date.now()));

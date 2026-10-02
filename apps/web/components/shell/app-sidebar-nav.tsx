@@ -34,14 +34,20 @@ export function AppSidebarNav({
         const active = href.startsWith("http")
           ? false
           : pathname === href || pathname.startsWith(href + "/");
+        const resolved = href.startsWith("http")
+          ? href
+          : publicAppHref(href, isAdminHost);
+        const className = `app-sidebar-link${active ? " is-active" : ""}`;
+        if (resolved.startsWith("http")) {
+          return (
+            <a key={href} href={resolved} className={className}>
+              <Icon className="app-sidebar-link-icon" aria-hidden="true" />
+              {label}
+            </a>
+          );
+        }
         return (
-          <Link
-            key={href}
-            href={
-              href.startsWith("http") ? href : publicAppHref(href, isAdminHost)
-            }
-            className={`app-sidebar-link${active ? " is-active" : ""}`}
-          >
+          <Link key={href} href={resolved} className={className}>
             <Icon className="app-sidebar-link-icon" aria-hidden="true" />
             {label}
           </Link>

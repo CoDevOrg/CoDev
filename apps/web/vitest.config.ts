@@ -16,6 +16,9 @@ const alias = {
   "@azure/arm-compute": fileURLToPath(
     new URL("./test-support/azure-arm-compute.ts", import.meta.url),
   ),
+  "cloudflare:workers": fileURLToPath(
+    new URL("./lib/platform/cloudflare-workers-stub.ts", import.meta.url),
+  ),
 };
 
 /**

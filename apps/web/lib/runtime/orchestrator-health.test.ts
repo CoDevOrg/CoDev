@@ -46,4 +46,13 @@ describe("ensureHostReady", () => {
     expect(mocks.requestHostWake).toHaveBeenCalledOnce();
     expect(mocks.requestHostWake).toHaveBeenCalledWith(1);
   });
+
+  it("stops when the host cannot be described", async () => {
+    mocks.requestHostWake.mockRejectedValue(new Error("no azure credentials"));
+
+    await expect(ensureHostReady(5_000)).rejects.toThrow(
+      "no azure credentials",
+    );
+    expect(mocks.requestHostWake).toHaveBeenCalledOnce();
+  });
 });

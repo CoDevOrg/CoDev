@@ -250,8 +250,7 @@ az storage container create \
 # ---------------------------------------------------------------------------
 
 if [[ "${host_existed}" == "true" ]]; then
-  # A quiet host deallocates itself after its one-minute window, unless a
-  # recently used IDE session extends that window. `az vm restart` refuses a
+  # The host stays running while workspaces sleep. `az vm restart` refuses a
   # deallocated VM; `az vm start` boots it, and a boot re-runs the bootstrap
   # just like a restart does, so both land on the new tag.
   host_power="$(az vm get-instance-view \

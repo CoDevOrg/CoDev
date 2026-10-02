@@ -58,9 +58,14 @@ export async function getSandbox(
   return payload.sandbox;
 }
 
-export async function destroySandbox(workspaceId: string) {
+export async function destroySandbox(workspaceId: string, timeoutMs = 70_000) {
   try {
-    await orchestratorRequest("DELETE", `/v1/sandboxes/${workspaceId}`);
+    await orchestratorRequest(
+      "DELETE",
+      `/v1/sandboxes/${workspaceId}`,
+      undefined,
+      timeoutMs,
+    );
   } catch (error) {
     if (error instanceof OrchestratorError && error.status === 404) {
       return;
@@ -78,11 +83,16 @@ export async function resumeSandbox(workspaceId: string) {
   }
 }
 
-export async function discardSandboxSnapshot(workspaceId: string) {
+export async function discardSandboxSnapshot(
+  workspaceId: string,
+  timeoutMs = 70_000,
+) {
   try {
     await orchestratorRequest(
       "DELETE",
       `/v1/sandboxes/${workspaceId}/snapshot`,
+      undefined,
+      timeoutMs,
     );
   } catch (error) {
     if (error instanceof OrchestratorError && error.status === 404) return;

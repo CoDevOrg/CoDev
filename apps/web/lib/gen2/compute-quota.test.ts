@@ -42,7 +42,7 @@ describe("monthly VM minute allowance", () => {
     expect(await usedComputeMs("owner", now)).toBe(120 * 60_000);
   });
 
-  it("rejects new runtime use at 6,000 minutes", async () => {
+  it("rejects new runtime use at 1,000 minutes", async () => {
     const now = new Date("2026-10-10T00:00:00Z");
     mocks.intervals.push({
       startedAt: new Date(now.getTime() - MONTHLY_COMPUTE_LIMIT_MS),

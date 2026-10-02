@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { LoaderCircle, Plus, Trash2 } from "lucide-react";
@@ -36,15 +36,16 @@ export function Gen2WorkspaceList({
 }) {
   const router = useRouter();
   const [workspaces, setWorkspaces] = useState(initialWorkspaces);
+  const [workspaceSource, setWorkspaceSource] = useState(initialWorkspaces);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<{
     workspaceId: string;
     message: string;
   } | null>(null);
-
-  useEffect(() => {
+  if (workspaceSource !== initialWorkspaces) {
+    setWorkspaceSource(initialWorkspaces);
     setWorkspaces(initialWorkspaces);
-  }, [initialWorkspaces]);
+  }
 
   async function deleteWorkspace(workspace: Gen2Workspace) {
     const confirmed = window.confirm(

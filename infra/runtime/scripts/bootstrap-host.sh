@@ -74,10 +74,10 @@ codev_restart_if_changed() {
 # ---------------------------------------------------------------------------
 # Stages
 #
-# This script re-runs on every boot, and the host boots far more often than it
-# is deployed to: the orchestrator deallocates it after one quiet minute
-# without a sandbox or recently used IDE session, so
-# every member returning from a break pays for whatever this script does. Most
+# This script re-runs on every boot. The host stays running; workspaces sleep
+# after 15 idle minutes, so a returning member does not pay for a cold boot.
+# A deploy or a manual restart still runs this script, so
+# every one of those boots pays for whatever this script does. Most
 # of it is installation -- apt, npm, Firecracker, and a 3 GB guest rootfs
 # rebuilt from a downloaded Ubuntu
 # squashfs -- and on a two-core host that is minutes of work reproducing, byte
@@ -784,7 +784,7 @@ Environment=CODEV_VM_VCPU=2
 Environment=CODEV_VM_MEMORY_MIB=2048
 Environment=CODEV_VM_DISK_GIB=10
 Environment=CODEV_IDLE_TIMEOUT=15m
-Environment=CODEV_HOST_IDLE_TIMEOUT=1m
+Environment=CODEV_HOST_IDLE_TIMEOUT=0
 Environment=CODEV_DIRECT_SECRET=${direct_secret}
 # /healthz reports unhealthy while this unit is still running, so no session
 # opens on a host that is about to restart the orchestrator under it.

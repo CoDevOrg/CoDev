@@ -152,6 +152,7 @@ describe("workspace connection", () => {
       await result.current.reconnect();
     });
     expect(result.current.state).toBe("disconnected");
+    expect(result.current.subscriptionRequired).toBe(false);
     expect(result.current.error).toContain("try again");
     Object.defineProperty(document, "visibilityState", {
       configurable: true,
@@ -162,5 +163,21 @@ describe("workspace connection", () => {
       await vi.advanceTimersByTimeAsync(3 * CONNECTION_CHECK_MS);
     });
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("remembers when a plan is required", async () => {
+    mocks.connect.mockResolvedValue({
+      error: "An active Individual plan is required.",
+      subscriptionRequired: true,
+    });
+    const { result } = renderHook(() =>
+      useWorkspaceConnection("w", true, vi.fn()),
+    );
+    await flush();
+    await act(async () => {
+      await result.current.reconnect();
+    });
+    expect(result.current.subscriptionRequired).toBe(true);
+    expect(result.current.state).toBe("disconnected");
   });
 });

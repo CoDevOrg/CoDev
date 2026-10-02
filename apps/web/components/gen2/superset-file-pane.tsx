@@ -1136,7 +1136,9 @@ export function SupersetFilePane({
               <p className="gen2-superset-list-state">
                 {query
                   ? "No files match your search."
-                  : "No files found. Refresh to try again."}
+                  : notice?.kind === "error"
+                    ? notice.text
+                    : "No files found. Refresh to try again."}
               </p>
             ) : (
               <ul role="tree" aria-label="Workspace files">

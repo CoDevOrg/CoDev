@@ -38,7 +38,7 @@ closed tab and why the other members of a shared workspace can see the turn.
 
 ## Files, Git, and terminals
 
-`workbench.ts` and `terminals.ts` wrap the orchestrator clients. Both check
+`workbench.ts` and `terminals.ts` wrap the orchestrator clients. A checkout with more than 5,000 files is listed from the cloned GitHub commit so the guest walk does not hide the tree. Both check
 membership **before** touching `lib/runtime/orchestrator-*`, which performs no
 authorization of its own — a route reaching those clients directly would be an
 IDOR across every gen 2 workspace. Keeping the guard in this layer means a new
@@ -64,7 +64,7 @@ The Azure orchestrator is reused (`provisionSandbox` / `destroySandbox`). Gen 2
 uses its own `gen2_*` tables and does not access the original `workspaces` table.
 
 `compute-quota.ts` bills each running Gen 2 VM interval to its current workspace
-owner. The 6,000-minute allowance is shared across that owner's workspaces and
+owner. The 1,000-minute allowance is shared across that owner's workspaces and
 resets at the UTC month boundary. `compute-reconcile.ts` checks runtime state
 without waking guests, closes hibernated intervals, and stops active guests at
 the limit. The authenticated per-minute scheduler route invokes it; startup

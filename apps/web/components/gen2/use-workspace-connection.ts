@@ -19,6 +19,7 @@ export function useWorkspaceConnection(
     "checking" | "connected" | "connecting" | "disconnected"
   >("checking");
   const [error, setError] = useState("");
+  const [subscriptionRequired, setSubscriptionRequired] = useState(false);
   const connectRef = useRef<Promise<boolean> | null>(null);
   const onConnectedRef = useRef(onConnected);
   const stateRef = useRef(state);
@@ -35,6 +36,7 @@ export function useWorkspaceConnection(
     const attemptRevision = ++revision.current;
     setState("connecting");
     setError("");
+    setSubscriptionRequired(false);
     const promise = (async () => {
       try {
         const result = await ensureGen2WorkspaceReady(workspaceId);
@@ -46,6 +48,7 @@ export function useWorkspaceConnection(
           setState("connected");
           return true;
         }
+        setSubscriptionRequired(result.subscriptionRequired === true);
         setError(result.error ?? "Couldn't reconnect. Please try again.");
       } catch {
         if (mounted.current)
@@ -137,5 +140,5 @@ export function useWorkspaceConnection(
     };
   }, [enabled, workspaceId]);
 
-  return { state, error, reconnect };
+  return { state, error, subscriptionRequired, reconnect };
 }

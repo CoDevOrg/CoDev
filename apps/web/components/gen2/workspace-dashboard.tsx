@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { LayoutGrid, List, Search } from "lucide-react";
 import type { Gen2Workspace } from "@codev/contracts";
 
@@ -47,19 +47,21 @@ export function Gen2WorkspaceDashboard({
   const canCreate = billing?.hasAccess !== false;
   const [workspaces, setWorkspaces] =
     useState<Gen2Workspace[]>(initialWorkspaces);
-  const [greeting, setGreeting] = useState("Good evening");
+  const [workspaceSource, setWorkspaceSource] =
+    useState<Gen2Workspace[]>(initialWorkspaces);
+  const greeting = useSyncExternalStore(
+    () => () => {},
+    getGreeting,
+    () => "Good evening",
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "owned" | "shared">("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-
-  useEffect(() => {
-    setGreeting(getGreeting());
-  }, []);
-
-  useEffect(() => {
+  if (workspaceSource !== initialWorkspaces) {
+    setWorkspaceSource(initialWorkspaces);
     setWorkspaces(initialWorkspaces);
-  }, [initialWorkspaces]);
+  }
 
   const activeCount = useMemo(() => {
     return workspaces.filter(

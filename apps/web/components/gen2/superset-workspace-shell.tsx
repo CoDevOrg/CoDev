@@ -36,6 +36,7 @@ import { WorkspaceShareDialog } from "./workspace-share-dialog";
 import { ThemeToggle } from "@/components/shell/theme-toggle";
 import { Gen2ChatPanel } from "./chat-panel";
 import { Gen2TerminalPane } from "./terminal-pane";
+import { WorkspaceLoading } from "./workspace-loading";
 import {
   createSupersetWorktree,
   DEFAULT_SUPERSET_WORKTREE_ID,
@@ -247,11 +248,20 @@ export function SupersetWorkspaceShell({
     try {
       const res = await fetch("/api/gen2/providers?provider=all");
       if (!res.ok) return;
-      const data = await res.json();
+      const data = (await res.json()) as Partial<
+        Record<
+          SupportedAiProvider,
+          { connected?: boolean; via?: string | null }
+        >
+      >;
+      const status = (provider: SupportedAiProvider) => ({
+        connected: data[provider]?.connected === true,
+        via: data[provider]?.via ?? null,
+      });
       setProviderStatuses({
-        codex: data.codex ?? { connected: false, via: null },
-        claude: data.claude ?? { connected: false, via: null },
-        cursor: data.cursor ?? { connected: false, via: null },
+        codex: status("codex"),
+        claude: status("claude"),
+        cursor: status("cursor"),
       });
       if (!data[activeProvider]?.connected) {
         if (data.codex?.connected) setActiveProvider("codex");
@@ -264,7 +274,10 @@ export function SupersetWorkspaceShell({
   }, [activeProvider]);
 
   useEffect(() => {
-    void refreshProviderStatuses();
+    const timeout = setTimeout(() => {
+      void refreshProviderStatuses();
+    }, 0);
+    return () => clearTimeout(timeout);
   }, [refreshProviderStatuses]);
 
   const refreshChats = useCallback(async () => {
@@ -283,7 +296,10 @@ export function SupersetWorkspaceShell({
   }, [workspaceId]);
 
   useEffect(() => {
-    void refreshChats();
+    const timeout = setTimeout(() => {
+      void refreshChats();
+    }, 0);
+    return () => clearTimeout(timeout);
   }, [refreshChats]);
 
   const handleNewChat = useCallback(async () => {
@@ -506,7 +522,10 @@ export function SupersetWorkspaceShell({
   }, [runtimeEnabled, workspaceId]);
 
   useEffect(() => {
-    void refreshRuns();
+    const timeout = setTimeout(() => {
+      void refreshRuns();
+    }, 0);
+    return () => clearTimeout(timeout);
   }, [refreshRuns]);
 
   const boardItems: BoardWorktreeItem[] = worktrees.map((wt) => {
@@ -917,39 +936,38 @@ export function SupersetWorkspaceShell({
               </span>
             </WorkspaceButton>
 
-            {connection.state !== "connected" ? (
+            {connection.state === "connecting" ||
+            connection.state === "checking" ? (
               <WorkspaceButton
                 tone="secondary"
                 size="toolbar"
-                disabled={
-                  connection.state === "connecting" ||
-                  connection.state === "checking"
-                }
-                onClick={() => void ensureRunning()}
+                disabled
                 aria-label={
                   connection.state === "connecting"
                     ? "Reconnecting workspace"
-                    : connection.state === "checking"
-                      ? "Checking workspace connection"
-                      : "Reconnect workspace"
+                    : "Checking workspace connection"
                 }
               >
-                {connection.state === "disconnected" ? (
-                  <Cloud data-icon="inline-start" aria-hidden="true" />
-                ) : (
-                  <LoaderCircle
-                    data-icon="inline-start"
-                    className="animate-spin"
-                    aria-hidden="true"
-                  />
-                )}
+                <LoaderCircle
+                  data-icon="inline-start"
+                  className="animate-spin"
+                  aria-hidden="true"
+                />
                 <span className="gen2-topbar-action-label">
                   {connection.state === "connecting"
                     ? "Reconnecting…"
-                    : connection.state === "checking"
-                      ? "Connecting…"
-                      : "Reconnect"}
+                    : "Connecting…"}
                 </span>
+              </WorkspaceButton>
+            ) : connection.state === "disconnected" && viewMode === "board" ? (
+              <WorkspaceButton
+                tone="secondary"
+                size="toolbar"
+                onClick={() => void ensureRunning()}
+                aria-label="Reconnect workspace"
+              >
+                <Cloud data-icon="inline-start" aria-hidden="true" />
+                <span className="gen2-topbar-action-label">Reconnect</span>
               </WorkspaceButton>
             ) : null}
 
@@ -1240,7 +1258,7 @@ export function SupersetWorkspaceShell({
                             onClick={() => setActiveProvider(provider.id)}
                             aria-label={`${provider.name} provider`}
                           >
-                            <ProviderLogo provider={provider.id} size={16} />
+                            <ProviderLogo provider={provider.id} size={20} />
                           </WorkspaceButton>
                         </TooltipTrigger>
                         <TooltipContent side="right">
@@ -1530,7 +1548,7 @@ export function SupersetWorkspaceShell({
                                     <div className="gen2-sidebar-provider-label">
                                       <ProviderLogo
                                         provider={provider.id}
-                                        size={14}
+                                        size={18}
                                         className="gen2-sidebar-provider-logo"
                                       />
                                       <span className="gen2-sidebar-provider-name">
@@ -1666,33 +1684,97 @@ export function SupersetWorkspaceShell({
                   className="gen2-ide-session"
                   aria-label="Workspace session"
                 >
-                  {notice || connection.error ? (
+                  {notice ? (
                     <p className="gen2-superset-runtime-notice" role="status">
-                      {connection.error || notice}
+                      {notice}
                     </p>
                   ) : null}
 
                   {/* Middle part is ALWAYS the agent chat */}
-                  <div className="gen2-ide-chat-stage">
-                    <Gen2ChatPanel
-                      workspace={currentWorkspace}
-                      worktreeId={worktreeId}
-                      activeChatId={selectedChatId}
-                      onSelectChatId={setSelectedChatId}
-                      onChatsChange={setChats}
-                      activeProvider={activeProvider as any}
-                      onActiveProviderChange={setActiveProvider as any}
-                      hideChatBar={true}
-                      onRunningChange={setAgentRunning}
-                      onFilesChanged={() => {
-                        void refreshWorktrees();
-                      }}
-                      onOpenFile={(path) => {
-                        setRequestedFilePath(path);
-                        setTab("files");
-                      }}
-                      onNeedsMachine={ensureRunning}
-                    />
+                  <div
+                    className="gen2-ide-chat-stage"
+                    aria-busy={connection.state !== "connected"}
+                  >
+                    <div
+                      className="gen2-ide-chat-body"
+                      inert={
+                        connection.state === "connected" ? undefined : true
+                      }
+                    >
+                      <Gen2ChatPanel
+                        workspace={currentWorkspace}
+                        worktreeId={worktreeId}
+                        activeChatId={selectedChatId}
+                        onSelectChatId={setSelectedChatId}
+                        onChatsChange={setChats}
+                        activeProvider={
+                          activeProvider === "cursor" ? "codex" : activeProvider
+                        }
+                        onActiveProviderChange={setActiveProvider}
+                        hideChatBar={true}
+                        onRunningChange={setAgentRunning}
+                        onFilesChanged={() => {
+                          void refreshWorktrees();
+                        }}
+                        onOpenFile={(path) => {
+                          setRequestedFilePath(path);
+                          setTab("files");
+                        }}
+                        onNeedsMachine={ensureRunning}
+                      />
+                    </div>
+                    {connection.state === "connected" ? null : (
+                      <WorkspaceLoading
+                        className="gen2-ide-loading"
+                        busy={
+                          !connection.subscriptionRequired &&
+                          connection.state !== "disconnected"
+                        }
+                        title={
+                          connection.subscriptionRequired
+                            ? "An Individual plan is required"
+                            : connection.state === "disconnected"
+                              ? workspace?.status === "pending"
+                                ? "This workspace hasn't started"
+                                : "This workspace is asleep"
+                              : "Waking your workspace"
+                        }
+                        description={
+                          connection.subscriptionRequired
+                            ? connection.error ||
+                              "Workspace owners can subscribe in Settings, then open this workspace again."
+                            : connection.state === "disconnected"
+                              ? connection.error ||
+                                "Your files are still saved."
+                              : "This usually takes a moment. Your files stay where you left them."
+                        }
+                        action={
+                          connection.subscriptionRequired ? (
+                            <WorkspaceButton
+                              tone="secondary"
+                              type="button"
+                              onClick={() => {
+                                window.location.assign(
+                                  "/settings/personal/billing",
+                                );
+                              }}
+                            >
+                              Open billing
+                            </WorkspaceButton>
+                          ) : connection.state === "disconnected" ? (
+                            <WorkspaceButton
+                              tone="secondary"
+                              type="button"
+                              onClick={() => void ensureRunning()}
+                            >
+                              {workspace?.status === "pending"
+                                ? "Start workspace"
+                                : "Reconnect workspace"}
+                            </WorkspaceButton>
+                          ) : null
+                        }
+                      />
+                    )}
                   </div>
 
                   {/* Bottom terminal dock: click to expand / collapse */}
@@ -1753,6 +1835,15 @@ export function SupersetWorkspaceShell({
                         visible={terminalExpanded}
                         canStart
                         autoStart
+                        workspaceConnection={
+                          connection.state === "connected"
+                            ? "ready"
+                            : connection.subscriptionRequired
+                              ? "blocked"
+                              : connection.state === "disconnected"
+                                ? "asleep"
+                                : "waking"
+                        }
                         onResumeWorkspace={ensureRunning}
                         onExit={() => undefined}
                       />

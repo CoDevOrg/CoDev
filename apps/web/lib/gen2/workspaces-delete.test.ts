@@ -102,7 +102,7 @@ describe("Gen 2 workspace deletion", () => {
     ).resolves.toBeUndefined();
 
     expect(mocks.ensureHostReady).toHaveBeenCalledOnce();
-    expect(mocks.ensureHostReady).toHaveBeenCalledWith(120_000);
+    expect(mocks.ensureHostReady).toHaveBeenCalledWith(8_000);
     expect(mocks.destroySandbox).toHaveBeenCalledOnce();
     expect(mocks.discardSandboxSnapshot).toHaveBeenCalledOnce();
     expect(mocks.database.delete).toHaveBeenCalledOnce();
@@ -127,19 +127,18 @@ describe("Gen 2 workspace deletion", () => {
     expect(mocks.database.update).toHaveBeenCalledOnce();
   });
 
-  it("keeps deletion retryable when the host does not wake in time", async () => {
+  it("removes the record when the host cannot be woken", async () => {
     mocks.ensureHostReady.mockRejectedValue(
-      new Error("The Firecracker host is still starting."),
+      new Error("Azure credentials are not configured for Cloudflare."),
     );
+    mocks.destroySandbox.mockRejectedValue(new Error("fetch failed"));
 
     await expect(
       deleteGen2Workspace("11111111-1111-4111-8111-111111111111", "user-1"),
-    ).rejects.toMatchObject({ status: 502 });
+    ).resolves.toBeUndefined();
 
-    expect(mocks.ensureHostReady).toHaveBeenCalledWith(120_000);
-    expect(mocks.destroySandbox).not.toHaveBeenCalled();
-    expect(mocks.discardSandboxSnapshot).not.toHaveBeenCalled();
-    expect(mocks.database.delete).not.toHaveBeenCalled();
-    expect(mocks.database.update).toHaveBeenCalledOnce();
+    expect(mocks.ensureHostReady).toHaveBeenCalledWith(8_000);
+    expect(mocks.destroySandbox).toHaveBeenCalledOnce();
+    expect(mocks.database.delete).toHaveBeenCalledOnce();
   });
 });

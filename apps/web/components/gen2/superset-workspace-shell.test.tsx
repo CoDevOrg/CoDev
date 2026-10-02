@@ -594,6 +594,9 @@ describe("SupersetWorkspaceShell", () => {
         runtimeEnabled
       />,
     );
+    expect(
+      await screen.findByText("This workspace is asleep"),
+    ).toBeInTheDocument();
     const reconnect = await screen.findByRole("button", {
       name: "Reconnect workspace",
     });

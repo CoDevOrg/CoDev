@@ -145,9 +145,9 @@ export async function pollSupersetAgent(
     { after, waitMilliseconds: 25_000 },
     35_000,
   );
-  const payload = await response.json();
+  const payload = (await response.json()) as { result?: unknown } | null;
   const parsed = supersetAgentPollResponseSchema.safeParse(
-    payload.result ?? payload,
+    payload?.result ?? payload,
   );
   if (!parsed.success)
     throw new OrchestratorError(
@@ -176,7 +176,7 @@ export async function checkSupersetAgentRecovery(
     undefined,
     20_000,
   );
-  const payload = await response.json();
+  const payload = (await response.json()) as { result?: unknown } | null;
   const parsed = supersetAgentRecoveryResponseSchema.safeParse(
     payload?.result ?? payload,
   );

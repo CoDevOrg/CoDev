@@ -1,6 +1,11 @@
 "use client";
 
+import {
+  attachTerminalTransport,
+  type TerminalTransport,
+} from "./terminal-transport";
 import { WorkspaceButton } from "./workspace-button";
+import { WorkspaceLoading } from "./workspace-loading";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Terminal } from "@xterm/xterm";
@@ -56,9 +61,10 @@ function resolveTerminalTheme() {
 /**
  * A shell on the workspace's own machine.
  *
- * The orchestrator has no WebSocket. Legacy guests long-poll; the Superset
- * bridge returns snapshots. Polling stops when hidden, and empty polls do
- * not count as workspace activity.
+ * Keys, output, and resize use Marwan's terminal stream (320c5f27): this app
+ * holds one upstream poll and pushes output as the guest prints it. The
+ * socket closes when the pane is hidden and does not count as activity.
+ * HTTP polling remains the fallback when the socket never opens.
  */
 export function Gen2TerminalPane({
   workspaceId,
@@ -66,6 +72,7 @@ export function Gen2TerminalPane({
   visible,
   canStart,
   autoStart = false,
+  workspaceConnection = "ready",
   onExit,
   onResumeWorkspace,
 }: {
@@ -74,6 +81,7 @@ export function Gen2TerminalPane({
   visible: boolean;
   canStart: boolean;
   autoStart?: boolean | undefined;
+  workspaceConnection?: "ready" | "waking" | "asleep" | "blocked" | undefined;
   onExit: () => void;
   onResumeWorkspace?: (() => Promise<boolean>) | undefined;
 }) {
@@ -83,8 +91,8 @@ export function Gen2TerminalPane({
   const sessionRef = useRef<string | null>(null);
   const afterRef = useRef(0);
   const dimensionsRef = useRef("");
-  const wakePumpRef = useRef<(() => void) | null>(null);
-  const lastTypedAtRef = useRef(0);
+  const transportRef = useRef<TerminalTransport | null>(null);
+  const pendingInputRef = useRef("");
   const [status, setStatus] = useState<"idle" | "starting" | "live" | "ended">(
     "idle",
   );
@@ -166,43 +174,14 @@ export function Gen2TerminalPane({
         setStatus("idle");
         return;
       }
-      const sessionId = payload.sessionId;
-      sessionRef.current = sessionId;
+      sessionRef.current = payload.sessionId;
       afterRef.current = 0;
+      pendingInputRef.current = "";
       setStatus("live");
-      let pendingInput = "";
-      let sending = false;
-      const flushInput = async () => {
-        if (sending) return;
-        sending = true;
-        try {
-          while (pendingInput && sessionRef.current === sessionId) {
-            let end = Math.min(pendingInput.length, 8_192);
-            if (
-              end < pendingInput.length &&
-              /[\uD800-\uDBFF]/.test(pendingInput[end - 1] ?? "")
-            )
-              end--;
-            const data = pendingInput.slice(0, end);
-            pendingInput = pendingInput.slice(end);
-            const response = await post({ action: "input", sessionId, data });
-            if ([404, 502, 503].includes(response.status)) {
-              markWorkspacePaused();
-              return;
-            }
-            wakePumpRef.current?.();
-          }
-        } catch {
-          markWorkspacePaused();
-        } finally {
-          sending = false;
-        }
-      };
       term.onData((data) => {
-        lastTypedAtRef.current = Date.now();
-        wakePumpRef.current?.();
-        pendingInput += data;
-        void flushInput();
+        const transport = transportRef.current;
+        if (transport) transport.sendInput(data);
+        else pendingInputRef.current += data;
       });
     } catch {
       setError("Couldn't reach CoDev. Try again.");
@@ -210,87 +189,47 @@ export function Gen2TerminalPane({
     }
   }, [markWorkspacePaused, post]);
 
-  // Long-poll loop. Restarted whenever the pane becomes visible again.
+  // The socket closes while the pane is hidden, and resumes from the last
+  // output sequence when it is shown again.
   useEffect(() => {
     if (status !== "live" || !visible) return;
-    let cancelled = false;
-    let backoff = 1_000;
-    let networkFailures = 0;
-
-    async function pump() {
-      while (!cancelled) {
-        const sessionId = sessionRef.current;
-        if (!sessionId) return;
-        try {
-          const response = await post({
-            action: "poll",
-            sessionId,
-            after: afterRef.current,
-          });
-          if (cancelled) return;
-          if (!response.ok) {
-            if ([404, 502, 503].includes(response.status)) {
-              markWorkspacePaused();
-              return;
-            }
-            await new Promise((resolve) => setTimeout(resolve, backoff));
-            backoff = Math.min(backoff * 2, 15_000);
-            continue;
-          }
-          networkFailures = 0;
-          backoff = 1_000;
-          const result = (await response.json()) as {
-            chunks: { sequence: number; data: string }[];
-            nextSequence: number;
-            exited: boolean;
-          };
-          for (const chunk of result.chunks) termRef.current?.write(chunk.data);
-          afterRef.current = result.nextSequence;
-          if (result.exited) {
-            setStatus("ended");
-            sessionRef.current = null;
-            onExit();
-            return;
-          }
-          // The legacy guest endpoint parks this request, while the Superset
-          // bridge returns an immediate snapshot. Yield between idle snapshots
-          // so an open shell cannot turn into a tight browser request loop.
-          // When recently typing, poll with tight burst latency (15ms) and wake
-          // immediately on keystroke input so echoes appear instantly.
-          if (result.chunks.length === 0) {
-            const isTypingBurst = Date.now() - lastTypedAtRef.current < 1_500;
-            const sleepMs = isTypingBurst ? 15 : 150;
-            await new Promise<void>((resolve) => {
-              let timer: ReturnType<typeof setTimeout> | null = null;
-              const wake = () => {
-                if (timer) clearTimeout(timer);
-                wakePumpRef.current = null;
-                resolve();
-              };
-              wakePumpRef.current = wake;
-              timer = setTimeout(wake, sleepMs);
-            });
-          }
-        } catch {
-          if (cancelled) return;
-          networkFailures += 1;
-          if (networkFailures >= 3) {
-            markWorkspacePaused();
-            return;
-          }
-          await new Promise((resolve) => setTimeout(resolve, backoff));
-          backoff = Math.min(backoff * 2, 15_000);
-        }
-      }
+    const sessionId = sessionRef.current;
+    if (!sessionId) return;
+    const transport = attachTerminalTransport({
+      workspaceId,
+      worktreeId,
+      sessionId,
+      after: afterRef.current,
+      post,
+      onChunk: (data) => termRef.current?.write(data),
+      onCursor: (after) => {
+        afterRef.current = after;
+      },
+      onExit: () => {
+        setStatus("ended");
+        sessionRef.current = null;
+        onExit();
+      },
+      onPaused: markWorkspacePaused,
+    });
+    transportRef.current = transport;
+    if (pendingInputRef.current) {
+      transport.sendInput(pendingInputRef.current);
+      pendingInputRef.current = "";
     }
-
-    void pump();
     return () => {
-      cancelled = true;
-      wakePumpRef.current?.();
-      wakePumpRef.current = null;
+      transport.stop();
+      if (transportRef.current === transport) transportRef.current = null;
     };
-  }, [status, visible, post, onExit, markWorkspacePaused]);
+  }, [
+    status,
+    visible,
+    post,
+    onExit,
+    markWorkspacePaused,
+    workspaceId,
+    worktreeId,
+  ]);
 
   // Keep the PTY's idea of the viewport in step with the pane.
   useEffect(() => {
@@ -309,12 +248,16 @@ export function Gen2TerminalPane({
         const dimensions = `${term.rows}:${term.cols}`;
         if (dimensions === dimensionsRef.current) return;
         dimensionsRef.current = dimensions;
-        void post({
-          action: "resize",
-          sessionId,
-          rows: term.rows,
-          columns: term.cols,
-        });
+        const transport = transportRef.current;
+        if (transport) transport.sendResize(term.rows, term.cols);
+        else {
+          void post({
+            action: "resize",
+            sessionId,
+            rows: term.rows,
+            columns: term.cols,
+          });
+        }
       }, 120);
     });
     observer.observe(host);
@@ -365,6 +308,7 @@ export function Gen2TerminalPane({
   useEffect(() => {
     if (
       autoStart &&
+      workspaceConnection === "ready" &&
       visible &&
       canStart &&
       status === "idle" &&
@@ -373,7 +317,7 @@ export function Gen2TerminalPane({
       autoStartedRef.current = true;
       void start();
     }
-  }, [autoStart, visible, canStart, status, start]);
+  }, [autoStart, workspaceConnection, visible, canStart, status, start]);
 
   const handleResume = useCallback(async () => {
     if (!onResumeWorkspace) return;
@@ -389,7 +333,52 @@ export function Gen2TerminalPane({
 
   return (
     <div className="gen2-term">
-      {workspacePaused ? (
+      {workspaceConnection === "blocked" && !workspacePaused ? (
+        <div className="gen2-term-start is-loading">
+          <WorkspaceLoading
+            busy={false}
+            title="An Individual plan is required"
+            description="The shell opens after the workspace owner subscribes."
+            action={
+              <WorkspaceButton
+                tone="secondary"
+                type="button"
+                onClick={() => {
+                  window.location.assign("/settings/personal/billing");
+                }}
+              >
+                Open billing
+              </WorkspaceButton>
+            }
+          />
+        </div>
+      ) : workspaceConnection === "waking" && !workspacePaused ? (
+        <div className="gen2-term-start is-loading">
+          <WorkspaceLoading
+            title="Waiting for the workspace"
+            description="The shell opens once this workspace is awake."
+          />
+        </div>
+      ) : workspaceConnection === "asleep" && !workspacePaused ? (
+        <div className="gen2-term-start is-loading">
+          <WorkspaceLoading
+            busy={false}
+            title="This workspace is asleep"
+            description="Reconnect to open the shell. Your files are still saved."
+            action={
+              onResumeWorkspace ? (
+                <WorkspaceButton
+                  tone="secondary"
+                  type="button"
+                  onClick={() => void handleResume()}
+                >
+                  Reconnect workspace
+                </WorkspaceButton>
+              ) : null
+            }
+          />
+        </div>
+      ) : workspacePaused ? (
         <div className="gen2-term-start">
           <p className="gen2-term-error" role="alert">
             {error} Reconnect to continue.
@@ -406,9 +395,12 @@ export function Gen2TerminalPane({
         </div>
       ) : status === "starting" ||
         (autoStart && status === "idle" && !error) ? (
-        <p className="gen2-term-status" role="status">
-          Starting shell…
-        </p>
+        <div className="gen2-term-start is-loading">
+          <WorkspaceLoading
+            title="Opening the terminal"
+            description="Connecting to the shell on this workspace."
+          />
+        </div>
       ) : status === "idle" || status === "ended" ? (
         <div className="gen2-term-start">
           <WorkspaceButton

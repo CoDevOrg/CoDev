@@ -1,5 +1,4 @@
 import Image from "next/image";
-import Link from "next/link";
 import { headers } from "next/headers";
 
 import { isGitHubAuthConfigured } from "@codev/config";
@@ -14,7 +13,7 @@ import { isAdminHostname, publicAppHref } from "@/lib/platform/site-hosts";
 
 export function Brand({ isAdminHost = false }: { isAdminHost?: boolean }) {
   return (
-    <Link
+    <a
       className="wordmark"
       href={publicAppHref("/", isAdminHost)}
       aria-label="CoDev home"
@@ -27,7 +26,7 @@ export function Brand({ isAdminHost = false }: { isAdminHost?: boolean }) {
         height={28}
       />
       <span>CoDev</span>
-    </Link>
+    </a>
   );
 }
 
@@ -83,7 +82,7 @@ export async function AppChrome({
       <header className="app-nav">
         <Brand isAdminHost={isAdminHost} />
         <nav aria-label="Application navigation">
-          <Link href={publicAppHref("/gen2", isAdminHost)}>Workspaces</Link>
+          <a href={publicAppHref("/gen2", isAdminHost)}>Workspaces</a>
         </nav>
         <div className="user-menu">
           <ThemeToggle />

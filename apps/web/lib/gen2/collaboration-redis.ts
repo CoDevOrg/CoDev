@@ -28,6 +28,9 @@ export function redisClient() {
       maxRetriesPerRequest: 2,
       enableReadyCheck: true,
     });
+    // ioredis emits connection failures as events. Without a listener those
+    // become uncaught exceptions and take down the Worker.
+    redis.on("error", () => undefined);
   }
   return redis;
 }

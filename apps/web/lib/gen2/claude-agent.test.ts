@@ -72,7 +72,9 @@ describe("gen2 Claude credential", () => {
       ok: true,
       kind: "claude_setup_token",
     });
-    await expect(getGen2ProviderStatus("user-1", "claude")).resolves.toEqual({
+    await expect(
+      getGen2ProviderStatus("user-1", "claude"),
+    ).resolves.toMatchObject({
       connected: true,
       via: "subscription",
     });

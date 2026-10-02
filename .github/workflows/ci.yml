@@ -32,6 +32,7 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      - run: pnpm --filter @codev/web exec vite build
       - run: pnpm --filter @codev/web exec playwright install --with-deps chromium
       - run: pnpm test:e2e
 

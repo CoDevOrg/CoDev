@@ -27,7 +27,10 @@ export default async function PersonalEnvironmentPage() {
         <CardHeader>
           <CardTitle>Personal .env</CardTitle>
           <CardDescription>
-            Encrypted at rest. Values are write-only after you save them.
+            Encrypted at rest and write-only: values are never shown again after
+            you save them. They are passed to every Gen 2 agent session you
+            start, like a personal .env. Your provider login always wins over a
+            variable with the same name.
           </CardDescription>
         </CardHeader>
         <CardContent>

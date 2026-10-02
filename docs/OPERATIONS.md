@@ -157,7 +157,7 @@ web release. Production schedules `/api/gen2/compute/reconcile` every minute
 with `CRON_SECRET`; confirm the Vercel project supports one-minute cron jobs
 and monitor its runs. The route measures running Gen 2 guest intervals and
 hibernates an owner's active workspaces once their combined UTC-month usage
-reaches 6,000 minutes. A missed scheduled run delays enforcement, so alert on
+reaches 1,000 minutes. A missed scheduled run delays enforcement, so alert on
 repeated failures.
 A failed chat start restores the draft and attachments and removes the optimistic
 message so the user can retry. Transient outages are not automatically retried

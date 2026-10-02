@@ -15,8 +15,13 @@ import {
   type Gen2SupersetEntry,
   type Gen2SupersetWorktree,
 } from "@codev/contracts";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 
+import { schema } from "@codev/db";
+
+import { listRepositoryTree } from "../github/repository-tree";
+import { getDatabase } from "../platform/database";
 import {
   OrchestratorError,
   orchestratorRequest,
@@ -26,6 +31,11 @@ import {
   listSupersetWorktrees,
 } from "../runtime/orchestrator-superset-runtime";
 import { canRunGen2Agent } from "./agent-policy";
+import {
+  GUEST_FILE_LIST_TOO_LARGE,
+  repositoryTreeExceedsGuestList,
+  repositoryTreeToEntries,
+} from "./repository-file-list";
 import {
   Gen2AccessError,
   Gen2FileConflictError,
@@ -51,8 +61,8 @@ export async function getGen2SupersetHealth(
   const workspace = await requireGen2Member(workspaceId, userId);
   if (!canRunGen2Agent(workspace.status)) {
     throw new Gen2LifecycleError(
-      workspace.status === "provisioning"
-        ? "The instance is still starting."
+      workspace.status === "pending" || workspace.status === "provisioning"
+        ? "The workspace is still starting."
         : "Start the instance first.",
     );
   }
@@ -69,12 +79,43 @@ async function requireReadySupersetMember(workspaceId: string, userId: string) {
   const membership = await requireGen2Member(workspaceId, userId);
   if (!canRunGen2Agent(membership.status)) {
     throw new Gen2LifecycleError(
-      membership.status === "provisioning"
-        ? "The instance is still starting."
+      membership.status === "pending" || membership.status === "provisioning"
+        ? "The workspace is still starting."
         : "Start the instance first.",
     );
   }
   return membership;
+}
+
+async function readWorkspaceBaseSha(workspaceId: string) {
+  const [row] = await getDatabase()
+    .select({ baseSha: schema.gen2Workspaces.baseSha })
+    .from(schema.gen2Workspaces)
+    .where(eq(schema.gen2Workspaces.id, workspaceId))
+    .limit(1);
+  return row?.baseSha ?? null;
+}
+
+/**
+ * The guest walks the whole checkout and hides every file once it passes
+ * 5,000 entries. A connected repository can be listed from the commit that
+ * was cloned, which keeps the machine from doing that walk.
+ */
+async function listConnectedRepositoryFiles(
+  workspaceId: string,
+  userId: string,
+  fullName: string | undefined,
+) {
+  if (!fullName) return null;
+  const baseSha = await readWorkspaceBaseSha(workspaceId);
+  if (!baseSha) return null;
+  try {
+    return repositoryTreeToEntries(
+      await listRepositoryTree(userId, fullName, baseSha),
+    );
+  } catch {
+    return null;
+  }
 }
 
 export async function listGen2SupersetFiles(
@@ -82,14 +123,40 @@ export async function listGen2SupersetFiles(
   userId: string,
   worktreeId: string,
 ): Promise<Gen2SupersetEntry[]> {
-  await requireReadySupersetMember(workspaceId, userId);
-  const response = await orchestratorRequest(
-    "POST",
-    `/v1/sandboxes/${workspaceId}/superset/files`,
-    { worktreeId },
-    35_000,
-  );
-  return gen2SupersetListFilesResponseSchema.parse(await response.json()).files;
+  const membership = await requireReadySupersetMember(workspaceId, userId);
+  const repositoryFiles =
+    worktreeId === "main"
+      ? await listConnectedRepositoryFiles(
+          workspaceId,
+          userId,
+          membership.repository?.fullName,
+        )
+      : null;
+  if (
+    repositoryFiles &&
+    repositoryTreeExceedsGuestList(repositoryFiles.length)
+  ) {
+    return repositoryFiles;
+  }
+  try {
+    const response = await orchestratorRequest(
+      "POST",
+      `/v1/sandboxes/${workspaceId}/superset/files`,
+      { worktreeId },
+      35_000,
+    );
+    return gen2SupersetListFilesResponseSchema.parse(await response.json())
+      .files;
+  } catch (error) {
+    if (
+      repositoryFiles &&
+      error instanceof OrchestratorError &&
+      error.message === GUEST_FILE_LIST_TOO_LARGE
+    ) {
+      return repositoryFiles;
+    }
+    throw error;
+  }
 }
 
 export async function createGen2SupersetEntry(
