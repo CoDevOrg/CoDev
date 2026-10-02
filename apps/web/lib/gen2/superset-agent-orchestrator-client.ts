@@ -2,7 +2,10 @@ import "server-only";
 
 import { z } from "zod";
 
-import { codexExecRequest } from "../runtime/orchestrator-request";
+import {
+  codexExecRequest,
+  OrchestratorError,
+} from "../runtime/orchestrator-request";
 
 /**
  * Thin HTTP client for the Superset agent-launch routes
@@ -26,16 +29,27 @@ const supersetAgentStartResponseSchema = z.object({
 
 const supersetAgentPollResponseSchema = z.object({
   chunks: z.array(
-    z.object({
-      sequence: z.number().int().nonnegative(),
-      // Plain text, not base64: matches the terminal-snapshot convention
-      // `orchestrator-superset-runtime.ts`'s `terminalPollSchema` already
-      // uses for this same host-service poll shape, and what
-      // `vendor/superset/.../codev/agents.ts` actually returns. Each chunk is
-      // a full buffer snapshot (prefixed with a clear-screen escape), not an
-      // incremental append -- see `recordGen2SupersetRunOutput` in turns.ts.
-      data: z.string(),
-    }),
+    z
+      .object({
+        sequence: z.number().int().nonnegative(),
+        // Plain text, not base64: matches the terminal-snapshot convention
+        // `orchestrator-superset-runtime.ts`'s `terminalPollSchema` already
+        // uses for this same host-service poll shape, and what
+        // `vendor/superset/.../codev/agents.ts` actually returns. Each chunk is
+        // a full buffer snapshot (prefixed with a clear-screen escape), not an
+        // incremental append -- see `recordGen2SupersetRunOutput` in turns.ts.
+        data: z.string().optional(),
+        dataBase64: z.string().optional(),
+      })
+      .refine(
+        (chunk) => chunk.data !== undefined || chunk.dataBase64 !== undefined,
+      )
+      .transform((chunk) => ({
+        sequence: chunk.sequence,
+        data:
+          chunk.data ??
+          Buffer.from(chunk.dataBase64!, "base64").toString("utf8"),
+      })),
   ),
   nextSequence: z.number().int().nonnegative(),
   exited: z.boolean(),
@@ -46,6 +60,11 @@ const supersetAgentPollResponseSchema = z.object({
 
 const supersetAgentRecoveryResponseSchema = z.object({
   adoptable: z.boolean(),
+  status: z.enum(["running", "exited", "not_found", "failed"]).optional(),
+  exitCode: z.number().int().nullable().optional(),
+  sequence: z.number().int().nonnegative().optional(),
+  bufferLength: z.number().int().nonnegative().optional(),
+  worktreeId: z.string().optional(),
 });
 
 export type SupersetAgentPollChunk = z.infer<
@@ -55,8 +74,8 @@ export type SupersetAgentPollChunk = z.infer<
 export type SupersetAgentStartInput = {
   worktreeId: string;
   provider: string;
-  /** Superseded by `launchProfile`; both are sent while guest images that
-   *  predate the profile may still be running. */
+  /** The client also derives the legacy Codex field from this profile while
+   * older guest images still require it. */
   launchProfile?: {
     files?: Array<{ path: string; contents: string }>;
     env?: Record<string, string>;
@@ -69,12 +88,36 @@ export async function startSupersetAgent(
   workspaceId: string,
   input: SupersetAgentStartInput,
 ) {
-  const response = await codexExecRequest(
-    "POST",
-    `/v1/sandboxes/${workspaceId}/superset-agents`,
-    input,
-    20_000,
-  );
+  // Older host-service images require codexAuthCacheJson and cannot read
+  // launchProfile. Derive it only from the initiating member's Codex file;
+  // retain the neutral profile for current images and other providers.
+  const legacyAuth =
+    input.provider === "openai"
+      ? input.launchProfile?.files?.find(
+          (file) => file.path === ".codex/auth.json",
+        )?.contents
+      : undefined;
+  let response: Response;
+  try {
+    response = await codexExecRequest(
+      "POST",
+      `/v1/sandboxes/${workspaceId}/superset-agents`,
+      { ...input, ...(legacyAuth ? { codexAuthCacheJson: legacyAuth } : {}) },
+      20_000,
+    );
+  } catch (error) {
+    if (
+      error instanceof OrchestratorError &&
+      error.status === 400 &&
+      error.message === "Invalid Superset agent start request."
+    ) {
+      throw new OrchestratorError(
+        "This workspace's agent runtime needs an update before it can start this agent. Your message was kept; please contact support.",
+        503,
+      );
+    }
+    throw error;
+  }
   return supersetAgentStartResponseSchema.parse(await response.json());
 }
 
@@ -102,7 +145,16 @@ export async function pollSupersetAgent(
     { after, waitMilliseconds: 25_000 },
     35_000,
   );
-  return supersetAgentPollResponseSchema.parse(await response.json());
+  const payload = await response.json();
+  const parsed = supersetAgentPollResponseSchema.safeParse(
+    payload.result ?? payload,
+  );
+  if (!parsed.success)
+    throw new OrchestratorError(
+      "The workspace runtime returned an unsupported agent response. Your chat is saved; please contact support.",
+      503,
+    );
+  return parsed.data;
 }
 
 export async function stopSupersetAgent(workspaceId: string, agentId: string) {
@@ -124,5 +176,14 @@ export async function checkSupersetAgentRecovery(
     undefined,
     20_000,
   );
-  return supersetAgentRecoveryResponseSchema.parse(await response.json());
+  const payload = await response.json();
+  const parsed = supersetAgentRecoveryResponseSchema.safeParse(
+    payload?.result ?? payload,
+  );
+  if (!parsed.success)
+    throw new OrchestratorError(
+      "The workspace runtime returned an unsupported recovery response. Please contact support.",
+      503,
+    );
+  return parsed.data;
 }

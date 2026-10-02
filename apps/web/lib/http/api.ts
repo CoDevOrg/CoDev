@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { databaseErrorResponse } from "./database-error";
 
 import { schema } from "@codev/db";
 
@@ -49,6 +50,8 @@ export async function getApiUserAnyAuth(
 }
 
 export function apiError(error: unknown, status = 400) {
+  const databaseResponse = databaseErrorResponse(error);
+  if (databaseResponse) return databaseResponse;
   const message =
     error instanceof Error
       ? error.message

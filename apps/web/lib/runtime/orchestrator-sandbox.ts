@@ -14,6 +14,8 @@ export interface ProvisionSandboxInput {
   baseSha: string;
   expiresAt: string;
   resumeFromSnapshot: boolean;
+  /** Refuse a fresh checkout when reopening a previously provisioned workspace. */
+  requireSavedState?: boolean;
   /** Azure managed-disk LUN carrying the workspace.ext4 image, when enabled. */
   persistentDiskLun?: number;
   /** Preserve the guest disks and hibernate the VM after host idle timeout. */
@@ -42,10 +44,13 @@ export async function provisionSandbox(
 
 export async function getSandbox(
   workspaceId: string,
+  timeoutMs = 70_000,
 ): Promise<SandboxInstance> {
   const response = await orchestratorRequest(
     "GET",
     `/v1/sandboxes/${workspaceId}`,
+    undefined,
+    timeoutMs,
   );
   const payload = z
     .object({ sandbox: sandboxInstanceSchema })
@@ -85,10 +90,12 @@ export async function discardSandboxSnapshot(workspaceId: string) {
   }
 }
 
-export async function touchSandbox(workspaceId: string) {
+export async function touchSandbox(workspaceId: string, timeoutMs = 70_000) {
   const response = await orchestratorRequest(
     "POST",
     `/v1/sandboxes/${workspaceId}/activity`,
+    undefined,
+    timeoutMs,
   );
   return z
     .object({ sandbox: sandboxInstanceSchema })

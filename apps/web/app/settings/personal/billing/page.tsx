@@ -1,8 +1,8 @@
 import { BillingPanel } from "@/components/billing/billing-panel";
 import {
-  OrcaPageHeader,
-  OrcaPageShell,
-} from "@/components/settings/orca-style";
+  SettingsPageHeader,
+  SettingsPageShell,
+} from "@/components/settings/settings-style";
 import { requireUser } from "@/lib/auth/session";
 import { getBillingStatus } from "@/lib/billing/access";
 import { syncCheckoutSession } from "@/lib/billing/checkout";
@@ -34,8 +34,8 @@ export default async function PersonalBillingPage({
   const status = await getBillingStatus(user.id);
 
   return (
-    <OrcaPageShell>
-      <OrcaPageHeader
+    <SettingsPageShell>
+      <SettingsPageHeader
         description="Your CoDev plan. Payments and invoices are handled securely by Stripe."
         title="Billing"
       />
@@ -77,6 +77,6 @@ export default async function PersonalBillingPage({
       ) : null}
 
       <BillingPanel status={status} />
-    </OrcaPageShell>
+    </SettingsPageShell>
   );
 }

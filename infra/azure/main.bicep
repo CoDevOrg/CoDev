@@ -77,11 +77,9 @@ var subnetCidr = '10.42.0.0/24'
 // Network
 // ---------------------------------------------------------------------------
 
-// Browsers connect straight to Caddy on the host for Orca IDE's WebSocket
-// protocol, so 80 and 443 are genuinely public. 80 is not decorative: Caddy
-// needs it for the Let's Encrypt HTTP-01 challenge. The orchestrator's own
-// port 8080 is never exposed — Caddy terminates TLS and proxies to it on
-// loopback, so there is no rule for it here and no way to reach it directly.
+// The Vercel control plane connects to Caddy over TLS. Port 80 is required for
+// Caddy's Let's Encrypt HTTP-01 challenge. The orchestrator's port 8080 stays
+// private; Caddy proxies the authenticated routes to loopback.
 resource nsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
   name: '${namePrefix}-host-nsg'
   location: location
@@ -113,7 +111,7 @@ resource nsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
           sourcePortRange: '*'
           destinationAddressPrefix: '*'
           destinationPortRange: '443'
-          description: 'Orca IDE WebSocket and the orchestrator control API.'
+          description: 'Authenticated Vercel control-plane access to the orchestrator.'
         }
       }
       {
@@ -166,12 +164,8 @@ resource vnet 'Microsoft.Network/virtualNetworks@2024-05-01' = {
   }
 }
 
-// Static, not dynamic. The AWS stack uses an Elastic IP for exactly one
-// reason and it applies here unchanged: the host stops when idle and starts
-// again on wake, but the nip.io hostname Orca advertises to browsers and
-// Caddy's TLS certificate are both derived once on first boot. An address
-// that changed across a stop would silently strand every IDE session behind
-// a hostname that no longer resolves to the host.
+// Static, not dynamic. The Vercel control plane uses the host's DNS name to
+// reach Caddy after the Azure VM is deallocated and started again.
 resource publicIp 'Microsoft.Network/publicIPAddresses@2024-05-01' = {
   name: '${namePrefix}-host-ip'
   location: location
@@ -181,13 +175,8 @@ resource publicIp 'Microsoft.Network/publicIPAddresses@2024-05-01' = {
     publicIPAllocationMethod: 'Static'
     publicIPAddressVersion: 'IPv4'
     // A real hostname, which removes a whole problem rather than solving it.
-    // The AWS host derives a nip.io name from its own address because EC2
-    // has nothing better to offer, but Azure IMDS reports an empty
-    // publicIpAddress for Standard-SKU addresses -- and Standard is exactly
-    // what a static allocation requires -- so the host cannot learn its own
-    // address that way at all. Azure hands out <label>.<region>
-    // .cloudapp.azure.com for free, which Caddy can obtain a certificate for
-    // and which the host never has to discover: it is fixed by the template.
+    // Azure hands out <label>.<region>.cloudapp.azure.com, which Caddy can
+    // obtain a certificate for and which the host receives from cloud-init.
     dnsSettings: {
       domainNameLabel: dnsLabel
     }

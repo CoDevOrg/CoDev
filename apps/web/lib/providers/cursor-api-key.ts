@@ -1,5 +1,7 @@
 import "server-only";
 
+import { saveProviderCredential } from "./credentials";
+
 const IDENTITY_ENDPOINTS = [
   {
     url: "https://api.cursor.com/v1/me",
@@ -58,4 +60,21 @@ async function cursorIdentity(
   } catch {
     return "unavailable";
   }
+}
+
+export async function saveCursorCredential(
+  userId: string,
+  apiKey: string,
+  allowInSharedWorkspaces?: boolean,
+) {
+  const normalized = await verifyCursorApiKey(apiKey);
+  await saveProviderCredential({
+    userId,
+    provider: "cursor",
+    credentialType: "API_KEY",
+    apiKey: normalized,
+    lastFour: normalized.slice(-4),
+    connectedVia: "api_key",
+    allowInSharedWorkspaces,
+  });
 }

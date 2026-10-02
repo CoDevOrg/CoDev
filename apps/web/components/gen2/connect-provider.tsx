@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import type { Gen2AgentProviderName } from "@codev/contracts";
+import type { Gen2AgentProviderName, Gen2ModelInfo } from "@codev/contracts";
 
 import { CodexHostedConnect } from "@/components/settings/codex-hosted-connect";
 
@@ -11,6 +11,7 @@ export type Gen2AgentChoice = Gen2AgentProviderName;
 export type Gen2ProviderStatus = {
   connected: boolean;
   via: "subscription" | "api-key" | null;
+  models?: Gen2ModelInfo[];
 };
 
 /**

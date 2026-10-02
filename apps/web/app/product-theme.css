@@ -12,7 +12,7 @@
  * card/secondary/accent/muted values are this file's own design choice --
  * Rooms and the dashboard have an animated gradient backdrop that glass
  * panels should let show through, unlike Settings' opaque cards in
- * settings/orca-theme.css -- so they stay expressed as alpha washes over the
+ * settings/settings-theme.css -- so they stay expressed as alpha washes over the
  * shared paper/ink swatches rather than forced to match Settings exactly.
  */
 @layer reset, theme, utilities;

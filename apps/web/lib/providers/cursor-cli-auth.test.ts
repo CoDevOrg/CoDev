@@ -6,10 +6,12 @@ describe("validateCursorAuthCache", () => {
   it("keeps an access token login and only returns its last four characters", () => {
     const auth = validateCursorAuthCache({
       accessToken: "cursor-access-token-value-0001",
-      refreshToken: "cursor-refresh-token-value-9999",
+      refreshToken: "cursor-refresh-token-value-0001",
     });
     expect(auth.lastFour).toBe("0001");
-    expect(auth.refreshToken).toBe("cursor-refresh-token-value-9999");
+    expect(JSON.parse(auth.serialized)).toMatchObject({
+      accessToken: "cursor-access-token-value-0001",
+    });
   });
 
   it("accepts the snake_case field some CLI builds write", () => {

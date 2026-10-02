@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getHostState } from "@/lib/runtime/host";
-import { checkOrchestratorConnection } from "@/lib/runtime/orchestrator";
+import { checkOrchestratorConnection } from "@/lib/runtime/orchestrator-health";
 
 export async function GET() {
   try {

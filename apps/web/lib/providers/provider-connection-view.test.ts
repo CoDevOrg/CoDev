@@ -34,8 +34,6 @@ describe("provider connection view", () => {
       provenance: "api_key",
       // An API key is a workspace credential: the rooms executor has no
       // API-key path, so the registry reports it as workspace-only.
-      enabledForRooms: false,
-      enabledForWorkspace: true,
       allowInSharedWorkspaces: true,
     });
     expect(secretKeysInValue(connection)).toEqual([]);

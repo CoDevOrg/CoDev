@@ -5,16 +5,13 @@ import {
   CODEX_DEVICE_REDIRECT_URI,
   createOAuthState,
   DEFAULT_CODEX_OAUTH_CLIENT_ID,
-  exchangeCursorApiKey,
   exchangeOAuthCode,
   getOAuthConfiguration,
   getOAuthConfigurationStatus,
   getOAuthFlowMode,
   openOAuthState,
   pkceChallenge,
-  pollCursorLogin,
   sealOAuthState,
-  startCursorLogin,
 } from "./oauth";
 
 afterEach(() => {
@@ -54,8 +51,6 @@ describe("provider OAuth", () => {
     vi.stubEnv("AUTH_SECRET", "a".repeat(40));
     const state = createOAuthState({
       userId: "user-1",
-      scopeType: "USER",
-      scopeId: "user-1",
       returnTo: "/settings",
     });
 
@@ -73,8 +68,6 @@ describe("provider OAuth", () => {
     );
     const state = createOAuthState({
       userId: "user-1",
-      scopeType: "USER",
-      scopeId: "user-1",
       returnTo: "/settings",
     });
 
@@ -178,100 +171,5 @@ describe("provider OAuth", () => {
         "state-value",
       ),
     ).rejects.toThrow(/status 400\. code has expired/);
-  });
-});
-
-describe("Cursor browser login", () => {
-  it("is a deeplink flow with an env-overridable login URL", () => {
-    vi.stubEnv("CURSOR_LOGIN_URL", "");
-    expect(getOAuthFlowMode("cursor")).toBe("cursor_deeplink");
-    expect(getOAuthConfigurationStatus("cursor")).toMatchObject({
-      configured: true,
-      flowMode: "cursor_deeplink",
-    });
-    expect(
-      getOAuthConfiguration("cursor", "https://app.example.com").tokenUrl,
-    ).toBe("https://api2.cursor.sh/auth/poll");
-
-    vi.stubEnv("CURSOR_LOGIN_URL", "https://staging.example/deep");
-    const start = startCursorLogin();
-    expect(start.loginUrl.startsWith("https://staging.example/deep?")).toBe(
-      true,
-    );
-    const url = new URL(start.loginUrl);
-    expect(url.searchParams.get("uuid")).toBe(start.uuid);
-    expect(url.searchParams.get("mode")).toBe("login");
-    expect(url.searchParams.get("redirectTarget")).toBe("cli");
-    // challenge = base64url(sha256(verifier))
-    expect(url.searchParams.get("challenge")).toBe(
-      pkceChallenge(start.verifier),
-    );
-  });
-
-  it("maps the poll responses: 404 pending, 403 denied, 200 tokens", async () => {
-    const responses = [
-      new Response(null, { status: 404 }),
-      new Response(null, { status: 403 }),
-      new Response(
-        JSON.stringify({ accessToken: "cur_at", refreshToken: "cur_rt" }),
-        { status: 200, headers: { "content-type": "application/json" } },
-      ),
-    ];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () => responses.shift() ?? new Response(null, { status: 500 }),
-      ),
-    );
-
-    const input = { uuid: "u", verifier: "v" };
-    expect(await pollCursorLogin(input)).toEqual({ status: "pending" });
-    expect(await pollCursorLogin(input)).toEqual({ status: "denied" });
-    expect(await pollCursorLogin(input)).toEqual({
-      status: "ready",
-      accessToken: "cur_at",
-      refreshToken: "cur_rt",
-    });
-  });
-
-  it("exchanges a user API key for the token pair", async () => {
-    const seen: { url: string; headers: Headers; body: unknown }[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url: string, init: RequestInit) => {
-        seen.push({
-          url,
-          headers: new Headers(init.headers),
-          body: init.body,
-        });
-        return new Response(
-          JSON.stringify({ accessToken: "x_at", refreshToken: "x_rt" }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
-      }),
-    );
-
-    await expect(exchangeCursorApiKey("  key_abc  ")).resolves.toEqual({
-      accessToken: "x_at",
-      refreshToken: "x_rt",
-    });
-    expect(seen[0]!.url).toBe(
-      "https://api2.cursor.sh/auth/exchange_user_api_key",
-    );
-    expect(seen[0]!.headers.get("authorization")).toBe("Bearer key_abc");
-  });
-
-  it("rejects an unaccepted API key without leaking the status body", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response("{}", { status: 401 })),
-    );
-    await expect(exchangeCursorApiKey("key_bad")).rejects.toThrow(
-      "not accepted",
-    );
-  });
-
-  it("requires a non-empty key", async () => {
-    await expect(exchangeCursorApiKey("   ")).rejects.toThrow("required");
   });
 });

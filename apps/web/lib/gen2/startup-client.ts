@@ -1,6 +1,7 @@
+import { boundedJsonRequest } from "./bounded-request";
 import type { Gen2WorkspaceDetail } from "@codev/contracts";
 
-const STARTUP_MAX_WAIT_MS = 12 * 60_000;
+const STARTUP_MAX_WAIT_MS = 90_000;
 const STARTUP_RECHECK_MS = 60_000;
 const MAX_BACKOFF_MS = 15_000;
 
@@ -40,10 +41,6 @@ function retryDelay(attempt: number, random: () => number) {
   return Math.round(base * (0.8 + random() * 0.4));
 }
 
-async function readResponse(response: Response): Promise<WorkspaceResponse> {
-  return (await response.json().catch(() => ({}))) as WorkspaceResponse;
-}
-
 function readyWorkspace(
   workspace: Gen2WorkspaceDetail | undefined,
 ): workspace is ReadyGen2WorkspaceDetail {
@@ -76,8 +73,13 @@ export async function ensureGen2WorkspaceReady(
       lastPostAt = now();
       postNext = false;
       try {
-        const response = await fetcher(`${url}/instance`, { method: "POST" });
-        const payload = await readResponse(response);
+        const { response, payload } =
+          await boundedJsonRequest<WorkspaceResponse>(
+            `${url}/instance`,
+            { method: "POST" },
+            Math.min(65_000, deadline - now()),
+            fetcher,
+          );
         if (readyWorkspace(payload.workspace)) {
           return { workspace: payload.workspace! };
         }
@@ -117,12 +119,19 @@ export async function ensureGen2WorkspaceReady(
       }
       if (postNext) {
         if (now() < deadline) {
-          await wait(retryDelay(attempt, random));
+          await wait(
+            Math.min(
+              retryDelay(attempt, random),
+              Math.max(0, deadline - now()),
+            ),
+          );
         }
         continue;
       }
     } else {
-      await wait(retryDelay(attempt, random));
+      await wait(
+        Math.min(retryDelay(attempt, random), Math.max(0, deadline - now())),
+      );
       if (now() >= deadline) break;
       if (now() - lastPostAt >= recheckMs) {
         postNext = true;
@@ -130,8 +139,13 @@ export async function ensureGen2WorkspaceReady(
       }
 
       try {
-        const response = await fetcher(url, { method: "GET" });
-        const payload = await readResponse(response);
+        const { response, payload } =
+          await boundedJsonRequest<WorkspaceResponse>(
+            url,
+            { method: "GET" },
+            Math.min(10_000, deadline - now()),
+            fetcher,
+          );
         if (!response.ok) {
           if (response.status === 404 || response.status === 409) {
             return {
@@ -168,6 +182,7 @@ export async function ensureGen2WorkspaceReady(
   }
 
   return {
-    error: "The Firecracker host is still starting. Try again in a moment.",
+    error:
+      "The workspace is taking longer to reconnect. Please try again in a moment.",
   };
 }

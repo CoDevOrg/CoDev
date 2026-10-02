@@ -1,6 +1,5 @@
 import "server-only";
 
-import { requireOrganizationSettingsWrite } from "../auth/settings-access";
 import { authenticateCliRequest, CliAuthError } from "../auth/cli-auth";
 import { saveProviderCredential } from "./credentials";
 
@@ -12,14 +11,9 @@ function isObject(value: unknown): value is JsonObject {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function tokenField(value: JsonObject, ...keys: string[]) {
-  for (const key of keys) {
-    const token = value[key];
-    if (typeof token === "string" && token.trim().length >= 20) {
-      return token.trim();
-    }
-  }
-  return "";
+function accessToken(value: JsonObject) {
+  const token = value.accessToken ?? value.access_token;
+  return typeof token === "string" ? token.trim() : "";
 }
 
 /** The file `agent login` writes when credentials are stored on disk. */
@@ -31,36 +25,13 @@ export function validateCursorAuthCache(value: unknown) {
   if (Buffer.byteLength(serialized, "utf8") > MAX_AUTH_BYTES) {
     throw new CliAuthError("Cursor auth.json exceeds the 128 KiB limit.", 413);
   }
-  const accessToken = tokenField(value, "accessToken", "access_token");
-  if (!accessToken) {
+  const token = accessToken(value);
+  if (token.length < 20) {
     throw new CliAuthError(
       "Cursor auth.json does not contain an access token. Run `agent login` and try again.",
     );
   }
-  const refreshToken =
-    tokenField(value, "refreshToken", "refresh_token") || accessToken;
-  return { accessToken, refreshToken, lastFour: accessToken.slice(-4) };
-}
-
-async function cursorScope(
-  userId: string,
-  scopeType: unknown,
-  organizationId: unknown,
-) {
-  const shared = scopeType === "ORGANIZATION" || scopeType === "WORKSPACE";
-  if (!shared) return { scopeType: "USER" as const, scopeId: userId };
-  if (typeof organizationId !== "string" || !organizationId) {
-    throw new CliAuthError("Organization id is required.");
-  }
-  try {
-    await requireOrganizationSettingsWrite(userId, organizationId);
-  } catch {
-    throw new CliAuthError(
-      "Only an organization maintainer can connect shared Cursor authentication.",
-      403,
-    );
-  }
-  return { scopeType: "WORKSPACE" as const, scopeId: organizationId };
+  return { serialized, lastFour: token.slice(-4) };
 }
 
 export async function saveCursorCliAuth(request: Request) {
@@ -69,26 +40,15 @@ export async function saveCursorCliAuth(request: Request) {
   if (contentLength > MAX_AUTH_BYTES * 2) {
     throw new CliAuthError("Request body is too large.", 413);
   }
-  const input = (await request.json().catch(() => ({}))) as {
-    auth?: unknown;
-    scopeType?: unknown;
-    organizationId?: unknown;
-  };
+  const input = (await request.json().catch(() => ({}))) as { auth?: unknown };
   const auth = validateCursorAuthCache(input.auth);
-  const scope = await cursorScope(
-    cli.userId,
-    input.scopeType,
-    input.organizationId,
-  );
   await saveProviderCredential({
-    scopeType: scope.scopeType,
-    scopeId: scope.scopeId,
+    userId: cli.userId,
     provider: "cursor",
     credentialType: "OAUTH_TOKEN",
-    accessToken: auth.accessToken,
-    refreshToken: auth.refreshToken,
+    accessToken: auth.serialized,
     lastFour: auth.lastFour,
     connectedVia: "cli",
   });
-  return { scopeType: scope.scopeType, scopeId: scope.scopeId };
+  return { scopeType: "USER" as const, scopeId: cli.userId };
 }

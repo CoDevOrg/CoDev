@@ -1,6 +1,6 @@
 import "server-only";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import {
   gen2AgentProviderSchema,
@@ -145,6 +145,24 @@ export async function recordGen2TurnChunks(input: {
       return null;
     }
 
+    // Atomically claim the exit finalization so only the first concurrent poll persists the reply.
+    const [claimed] = await database
+      .update(schema.gen2AgentTurns)
+      .set({
+        output,
+        pendingBase64: "",
+        exited: true,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(schema.gen2AgentTurns.sessionId, input.sessionId),
+          eq(schema.gen2AgentTurns.exited, false),
+        ),
+      )
+      .returning();
+    if (!claimed) return null;
+
     const state = settleTurn(turn, output, input.exitCode);
     const changedPaths = state.items.flatMap((item) =>
       item.kind === "fileChange"
@@ -171,16 +189,12 @@ export async function recordGen2TurnChunks(input: {
           items: state.items,
         })
       : null;
-    await database
-      .update(schema.gen2AgentTurns)
-      .set({
-        output,
-        pendingBase64: "",
-        exited: true,
-        replyMessageId: message?.id ?? null,
-        updatedAt: new Date(),
-      })
-      .where(eq(schema.gen2AgentTurns.sessionId, input.sessionId));
+    if (message) {
+      await database
+        .update(schema.gen2AgentTurns)
+        .set({ replyMessageId: message.id })
+        .where(eq(schema.gen2AgentTurns.sessionId, input.sessionId));
+    }
     return message ? { reply: message.body, messageId: message.id } : null;
   } catch (error) {
     logEvent("error", "gen2.turn.record_failed", {
@@ -237,6 +251,23 @@ export async function recordGen2SupersetRunOutput(input: {
       return null;
     }
 
+    // Atomically claim the exit finalization so only the first concurrent poll persists the reply.
+    const [claimed] = await database
+      .update(schema.gen2AgentTurns)
+      .set({
+        output,
+        exited: true,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(schema.gen2AgentTurns.sessionId, input.sessionId),
+          eq(schema.gen2AgentTurns.exited, false),
+        ),
+      )
+      .returning();
+    if (!claimed) return null;
+
     const state = settleTurn(turn, output, input.exitCode);
     const changedPaths = state.items.flatMap((item) =>
       item.kind === "fileChange"
@@ -263,15 +294,12 @@ export async function recordGen2SupersetRunOutput(input: {
           items: state.items,
         })
       : null;
-    await database
-      .update(schema.gen2AgentTurns)
-      .set({
-        output,
-        exited: true,
-        replyMessageId: message?.id ?? null,
-        updatedAt: new Date(),
-      })
-      .where(eq(schema.gen2AgentTurns.sessionId, input.sessionId));
+    if (message) {
+      await database
+        .update(schema.gen2AgentTurns)
+        .set({ replyMessageId: message.id })
+        .where(eq(schema.gen2AgentTurns.sessionId, input.sessionId));
+    }
     return message ? { reply: message.body, messageId: message.id } : null;
   } catch (error) {
     logEvent("error", "gen2.turn.record_failed", {

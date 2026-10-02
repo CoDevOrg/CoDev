@@ -1,4 +1,4 @@
-import { checkRealtimeConnection } from "@/lib/workspaces/collaboration-server";
+import { checkRealtimeConnection } from "@/lib/gen2/collaboration-redis";
 
 export const dynamic = "force-dynamic";
 

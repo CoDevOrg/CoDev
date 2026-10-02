@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, inArray } from "drizzle-orm";
 
 import {
   gen2ChatDetailSchema,
@@ -33,12 +33,14 @@ function toChat(row: {
   title: string;
   createdAt: Date;
   updatedAt: Date;
+  messageCount?: number | null;
 }): Gen2Chat {
   return gen2ChatSchema.parse({
     id: row.id,
     title: row.title,
     createdAt: toIso(row.createdAt),
     updatedAt: toIso(row.updatedAt),
+    messageCount: row.messageCount ?? undefined,
   });
 }
 
@@ -74,7 +76,30 @@ export async function listGen2Chats(workspaceId: string, userId: string) {
     .from(schema.gen2Chats)
     .where(eq(schema.gen2Chats.workspaceId, workspaceId))
     .orderBy(desc(schema.gen2Chats.updatedAt));
-  return rows.map(toChat);
+
+  if (!rows.length) return [];
+
+  try {
+    const chatIds = rows.map((r) => r.id);
+    const counts = await getDatabase()
+      .select({
+        chatId: schema.gen2ChatMessages.chatId,
+        msgCount: count(),
+      })
+      .from(schema.gen2ChatMessages)
+      .where(inArray(schema.gen2ChatMessages.chatId, chatIds))
+      .groupBy(schema.gen2ChatMessages.chatId);
+
+    const countMap = new Map(counts.map((c) => [c.chatId, Number(c.msgCount)]));
+    return rows.map((row) =>
+      toChat({
+        ...row,
+        messageCount: countMap.get(row.id) ?? 0,
+      }),
+    );
+  } catch {
+    return rows.map(toChat);
+  }
 }
 
 export async function createGen2Chat(workspaceId: string, userId: string) {
@@ -91,6 +116,30 @@ export async function createGen2Chat(workspaceId: string, userId: string) {
     throw new Gen2AccessError("Couldn't create a chat.", 500);
   }
   return toChat(created);
+}
+
+export async function renameGen2Chat(
+  workspaceId: string,
+  chatId: string,
+  userId: string,
+  title: string,
+) {
+  await requireGen2Member(workspaceId, userId);
+  await requireGen2Chat(workspaceId, chatId);
+  const [updated] = await getDatabase()
+    .update(schema.gen2Chats)
+    .set({ title })
+    .where(
+      and(
+        eq(schema.gen2Chats.id, chatId),
+        eq(schema.gen2Chats.workspaceId, workspaceId),
+      ),
+    )
+    .returning();
+  if (!updated) {
+    throw new Gen2AccessError("Chat not found.");
+  }
+  return toChat(updated);
 }
 
 export async function requireGen2Chat(workspaceId: string, chatId: string) {
@@ -127,7 +176,16 @@ export async function listGen2ChatMessages(chatId: string) {
     .from(schema.gen2ChatMessages)
     .where(eq(schema.gen2ChatMessages.chatId, chatId))
     .orderBy(schema.gen2ChatMessages.createdAt);
-  return rows.map(toMessage);
+
+  const deduplicated: typeof rows = [];
+  for (const row of rows) {
+    const prev = deduplicated.at(-1);
+    if (prev && prev.role === row.role && prev.body === row.body) {
+      continue;
+    }
+    deduplicated.push(row);
+  }
+  return deduplicated.map(toMessage);
 }
 
 export async function getGen2ChatDetail(
@@ -178,6 +236,24 @@ export async function appendGen2ChatMessage(input: {
     return null;
   }
   return getDatabase().transaction(async (transaction) => {
+    if (input.role === "assistant") {
+      const existing = await transaction
+        .select({
+          id: schema.gen2ChatMessages.id,
+          role: schema.gen2ChatMessages.role,
+          body: schema.gen2ChatMessages.body,
+          items: schema.gen2ChatMessages.items,
+          createdAt: schema.gen2ChatMessages.createdAt,
+        })
+        .from(schema.gen2ChatMessages)
+        .where(eq(schema.gen2ChatMessages.chatId, input.chatId))
+        .orderBy(desc(schema.gen2ChatMessages.createdAt))
+        .limit(1);
+      const last = existing[0];
+      if (last && last.role === "assistant" && last.body === body) {
+        return toMessage(last);
+      }
+    }
     const [created] = await transaction
       .insert(schema.gen2ChatMessages)
       .values({

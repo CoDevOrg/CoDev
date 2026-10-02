@@ -7,7 +7,7 @@ set -euo pipefail
 # when the runtime ran on EC2 and the cutover had to stay reversible. That
 # migration is finished and the AWS account holds nothing to go back to, so
 # the shim and its four aws branches are gone; what is left is the Firecracker,
-# jailer, networking and Orca logic that was always the bulk of this file.
+# jailer, networking and Superset guest-service setup.
 
 : "${CODEV_RELEASE_VERSION:?CODEV_RELEASE_VERSION is required}"
 : "${CODEV_ARTIFACT_ACCOUNT:?CODEV_ARTIFACT_ACCOUNT is required}"
@@ -18,12 +18,10 @@ case "${host_arch}" in
   x86_64)
     readonly artifact_arch="x86_64"
     readonly firecracker_arch="x86_64"
-    readonly guest_lib_dir="x86_64-linux-gnu"
     ;;
   aarch64 | arm64)
     readonly artifact_arch="arm64"
     readonly firecracker_arch="aarch64"
-    readonly guest_lib_dir="aarch64-linux-gnu"
     ;;
   *)
     echo "Unsupported CoDev host architecture: ${host_arch}" >&2
@@ -35,8 +33,6 @@ readonly firecracker_ci_base="https://s3.amazonaws.com/spec.ccfc.min/${firecrack
 readonly runtime_dir="/var/lib/codev"
 readonly base_dir="${runtime_dir}/base"
 readonly jailer_dir="/srv/jailer"
-readonly orca_dir="/opt/orca"
-readonly orca_workspaces_root="/srv/codev/workspaces"
 
 # Fetch one release artifact from Blob Storage to a local path.
 #
@@ -82,8 +78,8 @@ codev_restart_if_changed() {
 # is deployed to: the orchestrator deallocates it after one quiet minute
 # without a sandbox or recently used IDE session, so
 # every member returning from a break pays for whatever this script does. Most
-# of it is installation -- apt, npm, the Cursor installer, the Orca tarball,
-# Firecracker, and a 3 GB guest rootfs rebuilt from a downloaded Ubuntu
+# of it is installation -- apt, npm, Firecracker, and a 3 GB guest rootfs
+# rebuilt from a downloaded Ubuntu
 # squashfs -- and on a two-core host that is minutes of work reproducing, byte
 # for byte, what the root disk already holds from the last boot. The
 # orchestrator only starts at the end, so all of it lands on somebody watching
@@ -100,7 +96,7 @@ codev_restart_if_changed() {
 #   - The key must cover every input. A stage keyed on less than it installs
 #     is a stage that silently keeps a stale copy after a deploy, which is far
 #     worse than a slow boot. When in doubt, hash the artifact itself (see the
-#     Orca stage, which fetches the published .sha256 and keys on its contents)
+#     artifact stage, which fetches the published .sha256 and keys on its contents)
 #     or fall back to ${CODEV_RELEASE_VERSION}.
 #   - The stamp is recorded only after the stage succeeds. `set -e` aborts the
 #     script on a failure, so a half-finished stage leaves the old stamp (or
@@ -133,17 +129,6 @@ codev_stage_record() {
 
 codev_stage_skipped() {
   echo "bootstrap: $1 is already current, skipping"
-}
-
-# The nip.io fallback for Orca's advertised hostname, from when the EC2 host
-# derived one from its own public IPv4. The Azure stack always supplies
-# CODEV_PUBLIC_HOST, so this only ever fires on a misconfigured deploy. It
-# fails loudly rather than returning an empty string, because Azure IMDS
-# reports an empty publicIpAddress for Standard-SKU addresses and returning
-# that produced a Caddyfile asking for a certificate for ".nip.io".
-codev_public_ipv4() {
-  echo "Set CODEV_PUBLIC_HOST: the host cannot derive its own name." >&2
-  return 1
 }
 
 # Read the orchestrator's direct-route bearer token from Key Vault, which the
@@ -206,16 +191,6 @@ if ! chronyc waitsync 60 1.0 0.0 2; then
   exit 1
 fi
 install -d -m 0755 /usr/local/libexec
-cat >/usr/local/libexec/codev-git-askpass <<'ASKPASS'
-#!/bin/sh
-case "$1" in
-  *Username*) printf '%s\n' 'x-access-token' ;;
-  *Password*) printf '%s\n' "${CODEV_GITHUB_TOKEN:?missing GitHub credential}" ;;
-  *) exit 1 ;;
-esac
-ASKPASS
-chmod 0755 /usr/local/libexec/codev-git-askpass
-
 export DEBIAN_FRONTEND=noninteractive
 # Kept as an array rather than a backslash-continued argument list so the
 # stage key can cover it: adding or removing a package changes the key, and
@@ -234,41 +209,11 @@ readonly host_packages=(
   iptables
   jq
   python3
-  python3-gi
-  gir1.2-atspi-2.0
-  at-spi2-core
-  xdotool
-  xclip
-  xvfb
   ripgrep
   squashfs-tools
   sudo
   xz-utils
   xfsprogs
-  libgtk-3-0t64
-  libnss3
-  libnspr4
-  libasound2t64
-  libatk1.0-0t64
-  libatk-bridge2.0-0t64
-  libcups2t64
-  libdrm2
-  libgbm1
-  libxkbcommon0
-  libxcomposite1
-  libxdamage1
-  libxfixes3
-  libxrandr2
-  libxshmfence1
-  libxss1
-  libxtst6
-  libpango-1.0-0
-  libpangocairo-1.0-0
-  libcairo2
-  libglib2.0-0t64
-  libdbus-1-3
-  fonts-liberation
-  xdg-utils
 )
 packages_key="$(codev_stage_key apt-v1 "${host_packages[@]}")"
 if codev_stage_done packages "${packages_key}"; then
@@ -303,44 +248,6 @@ else
   codev_stage_record node "${node_key}"
 fi
 
-# Orca's own agent launcher (the IDE's "Launch agent" quick-open menu) probes
-# PATH for each agent's detectCmd at runtime and only lists the ones it
-# finds — it already recognizes claude/cursor as full agent types, it just
-# needs their CLIs present on the host every orca-ws-<workspaceId> user
-# shares. Codex/Claude land on PATH via npm above; Cursor's official
-# installer only supports installing into the invoking user's own $HOME
-# (no env var to redirect it), so relocate the result into a world-readable
-# location every workspace user can execute from, mirroring how ${orca_dir}
-# below is made world-readable for the same reason.
-#
-# UserData scripts run without a login shell, so $HOME is unset here — the
-# installer's own symlink step resolves the invoking user's home some other
-# way (correctly landing at /root/.local/bin), but its download/extract step
-# concatenates "$HOME/.local/share/...", which with $HOME empty put the real
-# payload at /.local/share/... (filesystem root) instead, leaving the /root
-# symlinks dangling. Export HOME explicitly so both steps agree.
-export HOME=/root
-# Cursor's installer always fetches the current release and offers no way to
-# pin one, so there is no version to key on. The release version stands in for
-# it: rolling a runtime release picks up whatever Cursor ships that day, and a
-# reboot in between keeps what the host already has. That is the same bargain
-# as before -- the installer's answer was never reproducible -- except that it
-# is now paid once per deploy instead of once per boot.
-cursor_key="$(codev_stage_key cursor-v1 "${CODEV_RELEASE_VERSION}")"
-if codev_stage_done cursor "${cursor_key}"; then
-  codev_stage_skipped "the Cursor agent CLI"
-else
-  curl -fsS https://cursor.com/install | bash
-  cursor_agent_target="$(readlink -f /root/.local/bin/cursor-agent)"
-  install -d -m 0755 /opt/cursor-agent
-  cp -a "$(dirname "${cursor_agent_target}")/." /opt/cursor-agent/
-  chmod -R go+rX /opt/cursor-agent
-  ln -sf "/opt/cursor-agent/$(basename "${cursor_agent_target}")" /usr/local/bin/cursor-agent
-  ln -sf "/opt/cursor-agent/$(basename "${cursor_agent_target}")" /usr/local/bin/agent
-  codev_stage_record cursor "${cursor_key}"
-fi
-
-install -d -m 0700 "${runtime_dir}/workspaces"
 install -d -m 0755 "${base_dir}" "${jailer_dir}"
 
 # Snapshot restore depends on metadata-only reflink clones for the writable
@@ -397,70 +304,8 @@ chmod 0755 /opt/codev-verify-lifecycle.sh
 work_dir="$(mktemp -d)"
 trap 'rm -rf "${work_dir}"' EXIT
 
-# orca serve: the per-workspace Orca IDE backend, built by CoDev from source
-# (infra/runtime/scripts/build-orca-serve.sh) rather than downloaded as a
-# prebuilt third-party AppImage release asset. codev-orchestrator spawns one
-# instance of this per workspace (services/orchestrator/src/backend/orca.rs).
-readonly orca_archive="orca-serve-linux-${artifact_arch}.tar.gz"
-# The checksum the build published, fetched on its own first. It is a few
-# bytes against the archive's hundreds of megabytes, and it is the exact
-# identity of what the archive would extract to -- so it makes both the
-# integrity check below and this stage's key, and a boot that already has this
-# build of Orca on disk never downloads the archive at all.
-codev_fetch "${orca_archive}.sha256" "${work_dir}/${orca_archive}.sha256"
-orca_key="$(codev_stage_key orca-v1 "$(cat "${work_dir}/${orca_archive}.sha256")")"
-if codev_stage_done orca "${orca_key}"; then
-  codev_stage_skipped "the Orca IDE backend"
-else
-  codev_fetch "${orca_archive}" "${work_dir}/${orca_archive}"
-  (
-    cd "${work_dir}"
-    echo "$(cat "${orca_archive}.sha256")  ${orca_archive}" | sha256sum --check
-  )
-  rm -rf "${orca_dir}"
-  install -d -m 0755 "${orca_dir}"
-  tar -xzf "${work_dir}/${orca_archive}" -C "${orca_dir}"
-  # `--appimage-extract` (in the build container) creates squashfs-root as
-  # 0700, since it's normally only ever run by the user who extracted it. Here
-  # it's `AppRun`-ed by each workspace's own dedicated, unprivileged Linux user
-  # (see services/orchestrator/src/backend/orca.rs), so every file and
-  # directory underneath needs to be at least world-readable/traversable.
-  chmod -R go+rX "${orca_dir}"
-  codev_stage_record orca "${orca_key}"
-fi
-
-# orca serve is a full Electron app: even run headless via `--serve`, it
-# still needs a real X display to attach to, or it exits immediately before
-# ever printing its `orca_server_ready` line. `xvfb` (installed above) only
-# provides the binary; this unit is what actually runs a virtual display at
-# :99, which services/orchestrator/src/backend/orca.rs assumes is already up
-# (CODEV_ORCA_DISPLAY, default ":99") before spawning any session.
-xvfb_unit_before="$(codev_fingerprint /etc/systemd/system/codev-orca-xvfb.service)"
-cat >/etc/systemd/system/codev-orca-xvfb.service <<'UNIT'
-[Unit]
-Description=CoDev virtual display for Orca IDE sessions
-Before=codev-orchestrator.service
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp
-Restart=always
-RestartSec=1
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-systemctl daemon-reload
-systemctl enable codev-orca-xvfb.service
-# The orchestrator Requires= this unit, so restarting it also stops the
-# orchestrator and every open workspace session with it.
-codev_restart_if_changed codev-orca-xvfb.service "${xvfb_unit_before}" \
-  "$(codev_fingerprint /etc/systemd/system/codev-orca-xvfb.service)"
-
-# Caddy fronts the public 443 endpoint that browsers connect to directly for
-# Orca's WebSocket protocol; the orchestrator manages its routing table at
-# runtime over the local admin API (127.0.0.1:2019), one `handle_path
-# /w/<workspaceId>/*` route per active IDE session.
+# Caddy fronts the public 443 endpoint that the Vercel control plane uses to
+# reach the Firecracker orchestrator over an authenticated TLS connection.
 caddy_key="$(codev_stage_key caddy-v1 "https://dl.cloudsmith.io/public/caddy/stable")"
 if codev_stage_done caddy "${caddy_key}"; then
   codev_stage_skipped "Caddy"
@@ -485,23 +330,7 @@ else
   codev_stage_record caddy "${caddy_key}"
 fi
 
-# Orca's browser client connects to a `nip.io` hostname that resolves to
-# this instance's own current public IP, so a real domain/DNS record is not
-# required. Caddy obtains its own TLS certificate for that hostname.
-# Azure hands the host a real DNS name through cloud-init (see
-# infra/azure/main.bicep), so there is nothing to derive and no address to
-# discover. AWS has no equivalent, so it keeps synthesising a nip.io name
-# from its own public address.
-if [[ -n "${CODEV_PUBLIC_HOST:-}" ]]; then
-  orca_public_host="${CODEV_PUBLIC_HOST}"
-else
-  public_ipv4="$(codev_public_ipv4)"
-  if [[ -z "${public_ipv4}" ]]; then
-    echo "could not determine this host's public address" >&2
-    exit 1
-  fi
-  orca_public_host="${public_ipv4//./-}.nip.io"
-fi
+runtime_public_host="${CODEV_PUBLIC_HOST:?CODEV_PUBLIC_HOST is required}"
 
 # Bearer token for the /v1/* bypass around API Gateway's hard 29-second
 # timeout. Absent or unreadable is not fatal: the route is simply not served,
@@ -519,11 +348,8 @@ fi
 # health checks, so a health route that the bearer matcher does not cover
 # answers 404 and the app reports the runtime degraded while it is fine.
 #
-# This block must stay byte-identical to direct_route() in
-# services/orchestrator/src/backend/orca.rs. Caddy's config is wholly replaced
-# by the orchestrator over the admin API on the first workspace change, so this
-# copy only covers the window before that happens -- but during that window it
-# is the only thing serving the route.
+# Caddy is the only public route to the orchestrator, so these authenticated
+# paths are fixed here at host bootstrap.
 direct_route=""
 if [[ -n "${direct_secret}" ]]; then
   direct_route="  @codev_direct {
@@ -550,7 +376,7 @@ cat >/etc/caddy/Caddyfile <<CADDYFILE
   admin 127.0.0.1:2019
 }
 
-${orca_public_host} {
+${runtime_public_host} {
 ${direct_route}  respond 404
 }
 CADDYFILE
@@ -561,8 +387,8 @@ chmod 0640 /etc/caddy/Caddyfile
 # destroys with the instance on every host-affecting deploy. Without this the
 # replacement asks Let's Encrypt for a brand new certificate each time, and
 # five issuances for the same name inside 168h exhausts the rate limit -- the
-# host then serves no TLS at all, which breaks Orca's browser IDE (it connects
-# straight to https://<host>/w/<workspaceId>) as well as the /v1 bypass. The
+# host then serves no TLS at all, which breaks control-plane requests to the
+# orchestrator as well as the /v1 route. The
 # Elastic IP keeps the hostname stable, so a restored certificate is still
 # valid for the replacement.
 readonly caddy_data_dir="/var/lib/caddy/.local/share/caddy"
@@ -706,8 +532,6 @@ ln -s "../lib/node_modules/@anthropic-ai/claude-code/${claude_bin_rel}" \
   "${work_dir}/rootfs/usr/local/bin/claude"
 cp -a /usr/lib/git-core "${work_dir}/rootfs/usr/lib/"
 cp -a /usr/share/git-core "${work_dir}/rootfs/usr/share/"
-mkdir -p "${work_dir}/rootfs/usr/lib/${guest_lib_dir}"
-cp -a "/usr/lib/${guest_lib_dir}/." "${work_dir}/rootfs/usr/lib/${guest_lib_dir}/" 2>/dev/null || true
 install -d -m 0755 "${work_dir}/rootfs/workspace"
 
 # An unprivileged account for interactive shells. Codex writes its provider
@@ -738,8 +562,7 @@ fi
 # ownership protection with a global wildcard before `git status` can work.
 cat >>"${work_dir}/rootfs/etc/gitconfig" <<'GITCONFIG'
 [safe]
-	directory = /workspace
-	directory = /workspace/*
+	directory = *
 GITCONFIG
 
 cat >"${work_dir}/rootfs/etc/systemd/system/workspace.mount" <<'UNIT'
@@ -781,8 +604,12 @@ Type=simple
 ExecStartPre=-/bin/chgrp -R codev-shell /workspace
 ExecStartPre=-/bin/chmod -R g+w /workspace
 ExecStartPre=-/usr/bin/find /workspace -type d -exec /bin/chmod g+s {} +
+ExecStartPre=-/usr/bin/git config --system --replace-all safe.directory '*'
 ExecStart=/usr/local/bin/codev-guestd
 Environment=CODEV_WORKSPACE_ROOT=/workspace
+Environment=GIT_CONFIG_COUNT=1
+Environment=GIT_CONFIG_KEY_0=safe.directory
+Environment=GIT_CONFIG_VALUE_0=*
 EnvironmentFile=/etc/codev/superset-bridge.env
 UMask=0002
 Restart=on-failure
@@ -809,9 +636,14 @@ Requires=workspace.mount
 [Service]
 Type=simple
 ExecStartPre=/bin/chmod 0711 /var/lib/codev-agent-profiles
-ExecStart=/usr/local/bin/node /opt/codev/superset-host/host-service.js
+# systemd reapplies StateDirectoryMode for each ExecStart command, after
+# ExecStartPre. Set the searchable profile-parent mode inside the final exec.
+ExecStart=/bin/sh -c '/bin/chmod 0711 /var/lib/codev-agent-profiles && exec /usr/local/bin/node /opt/codev/superset-host/host-service.js'
 Environment=HOME=/var/lib/codev-superset
 Environment=CODEV_WORKSPACE_ROOT=/workspace
+Environment=GIT_CONFIG_COUNT=1
+Environment=GIT_CONFIG_KEY_0=safe.directory
+Environment=GIT_CONFIG_VALUE_0=*
 EnvironmentFile=/etc/codev/superset-bridge.env
 Environment=SUPERSET_HOME_DIR=/var/lib/codev-superset
 Environment=CODEV_AGENT_PROFILE_ROOT=/var/lib/codev-agent-profiles
@@ -941,8 +773,6 @@ After=network-online.target
 Wants=network-online.target
 Requires=codev-firecracker-network-isolation.service
 After=codev-firecracker-network-isolation.service
-Requires=codev-orca-xvfb.service
-After=codev-orca-xvfb.service
 
 [Service]
 Type=simple
@@ -955,19 +785,15 @@ Environment=CODEV_VM_MEMORY_MIB=2048
 Environment=CODEV_VM_DISK_GIB=10
 Environment=CODEV_IDLE_TIMEOUT=15m
 Environment=CODEV_HOST_IDLE_TIMEOUT=1m
-Environment=CODEV_ORCA_APPRUN_BIN=${orca_dir}/squashfs-root/AppRun
-Environment=CODEV_ORCA_WORKSPACES_ROOT=${orca_workspaces_root}
-Environment=CODEV_ORCA_PUBLIC_HOST=${orca_public_host}
-Environment=CODEV_ORCA_CADDY_ADMIN_ADDR=127.0.0.1:2019
 Environment=CODEV_DIRECT_SECRET=${direct_secret}
-Environment=CODEV_MAX_IDE_SESSIONS=4
-Environment=CODEV_IDE_IDLE_TIMEOUT=10m
 # /healthz reports unhealthy while this unit is still running, so no session
 # opens on a host that is about to restart the orchestrator under it.
 Environment=CODEV_BOOTSTRAP_UNIT=codev-bootstrap.service
 Restart=always
 RestartSec=2
-KillMode=control-group
+KillMode=mixed
+# Give the orchestrator time to flush/checkpoint guests before killing children.
+TimeoutStopSec=180
 LimitNOFILE=65536
 TasksMax=4096
 StandardOutput=append:/var/log/codev-orchestrator.log

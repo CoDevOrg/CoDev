@@ -1,13 +1,7 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
-
-import { schema } from "@codev/db";
-
 import { authenticateCliRequest, CliAuthError } from "../auth/cli-auth";
-import { getDatabase } from "../platform/database";
 import { persistHostedCodexConnection } from "./hosted-codex-subscription-credentials";
-import { requireOrganizationSettingsWrite } from "../auth/settings-access";
 
 const MAX_AUTH_CACHE_BYTES = 128 * 1024;
 
@@ -45,56 +39,14 @@ export async function saveCodexCliAuthCache(request: Request) {
     throw new CliAuthError("Request body is too large.", 413);
   }
   const input = (await request.json()) as {
-    scopeType?: unknown;
-    organizationId?: unknown;
     authCache?: unknown;
   };
-  const scopeType = input.scopeType === "WORKSPACE" ? "WORKSPACE" : "USER";
-  const scopeId =
-    scopeType === "USER"
-      ? cli.userId
-      : typeof input.organizationId === "string"
-        ? input.organizationId
-        : "";
-  if (!scopeId) throw new CliAuthError("Organization id is required.");
-  if (scopeType === "WORKSPACE") {
-    try {
-      await requireOrganizationSettingsWrite(cli.userId, scopeId);
-    } catch {
-      throw new CliAuthError(
-        "Only an organization maintainer can connect shared Codex authentication.",
-        403,
-      );
-    }
-  }
   const authCacheJson = validateCodexAuthCache(input.authCache);
   await persistHostedCodexConnection({
     userId: cli.userId,
-    scopeType,
-    scopeId,
     material: { authCacheJson },
     accountLabel: "Codex CLI",
     connectedVia: "cli",
   });
-  return { scopeType, scopeId };
-}
-
-export async function listCliOrganizations(request: Request) {
-  const cli = await authenticateCliRequest(request);
-  return getDatabase()
-    .select({
-      id: schema.workspaces.id,
-      repository: schema.workspaces.repository,
-    })
-    .from(schema.workspaceMembers)
-    .innerJoin(
-      schema.workspaces,
-      eq(schema.workspaceMembers.workspaceId, schema.workspaces.id),
-    )
-    .where(
-      and(
-        eq(schema.workspaceMembers.userId, cli.userId),
-        eq(schema.workspaceMembers.accessRole, "owner"),
-      ),
-    );
+  return { scopeType: "USER", scopeId: cli.userId };
 }

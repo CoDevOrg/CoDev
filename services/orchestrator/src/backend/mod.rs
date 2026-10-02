@@ -3,23 +3,17 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use chrono::{Duration, Utc};
 
 use crate::model::{
     ClaudeSetupCodeRequest, ClaudeSetupPollRequest, ClaudeSetupPollResponse,
     ClaudeSetupStartRequest, CodexExecPollRequest, CodexExecPollResponse, CodexExecStartRequest,
-    CreateRequest, ExecRequest, ExecResponse, FileResponse, IdeExecRequest, IdePrepareRequest,
-    IdeSession, IdeStartRequest, IdeWriteFileRequest, Instance, PublicationExportRequest,
-    PublicationExportResponse, Result, RuntimeError, SessionRestoreBeginRequest,
-    SessionRestoreChunkRequest, SessionRestoreFinalizeResponse, SessionRestoreStatus,
+    CreateRequest, ExecRequest, ExecResponse, FileResponse, Instance, Result, RuntimeError,
     SupersetAgentInputRequest, SupersetAgentPollRequest, SupersetAgentPollResponse,
     SupersetAgentRecoveryResponse, SupersetAgentStartRequest, SupersetAgentStartResponse,
     SupersetCreateEntryRequest, SupersetDeleteEntryRequest, SupersetMoveEntryRequest,
     TerminalInputRequest, TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest,
-    TerminalStartRequest, WorktreeCheckpointRequest, WorktreeCheckpointResponse,
-    WorktreeCreateRequest, WorktreeMergeRequest, WorktreeMergeResponse, WorktreeRebaseRequest,
-    WorktreeRebaseResponse, WorktreeReviewResponse, WriteFileRequest,
+    TerminalStartRequest, WriteFileRequest,
 };
 
 const MAX_ACTIVE_SESSIONS: usize = 3;
@@ -28,144 +22,6 @@ const MAX_ACTIVE_SESSIONS: usize = 3;
 mod firecracker;
 #[cfg(target_os = "linux")]
 pub use firecracker::{FirecrackerBackend, FirecrackerConfig};
-
-#[cfg(target_os = "linux")]
-mod orca;
-#[cfg(target_os = "linux")]
-pub use orca::{OrcaBackend, OrcaConfig};
-
-/// Separate from `Backend`: an IDE session is not a sandbox lifecycle
-/// concern, and this stays constructible (as `Disabled`) on every platform
-/// and in configurations where the Orca IDE backend has not been set up yet.
-#[derive(Clone)]
-pub enum IdeBackend {
-    #[cfg(target_os = "linux")]
-    Orca(Arc<OrcaBackend>),
-    Disabled,
-}
-
-impl IdeBackend {
-    pub async fn prepare(&self, workspace_id: &str, request: IdePrepareRequest) -> Result<()> {
-        #[cfg(not(target_os = "linux"))]
-        let _ = (&workspace_id, &request);
-        match self {
-            #[cfg(target_os = "linux")]
-            Self::Orca(backend) => backend.prepare(workspace_id, request).await,
-            Self::Disabled => Err(RuntimeError::Unavailable(
-                "the Orca IDE backend is not configured on this host".into(),
-            )),
-        }
-    }
-
-    pub async fn start(&self, workspace_id: &str, request: IdeStartRequest) -> Result<IdeSession> {
-        #[cfg(not(target_os = "linux"))]
-        let _ = (&workspace_id, &request);
-        match self {
-            #[cfg(target_os = "linux")]
-            Self::Orca(backend) => backend.start(workspace_id, request).await,
-            Self::Disabled => Err(RuntimeError::Unavailable(
-                "the Orca IDE backend is not configured on this host".into(),
-            )),
-        }
-    }
-
-    /// Refresh the per-member agent credentials after the IDE is already
-    /// reachable. Provider lookup and credential filing are intentionally not
-    /// part of the workspace readiness path.
-    pub async fn refresh_credentials(
-        &self,
-        workspace_id: &str,
-        request: IdeStartRequest,
-    ) -> Result<()> {
-        #[cfg(not(target_os = "linux"))]
-        let _ = (&workspace_id, &request);
-        match self {
-            #[cfg(target_os = "linux")]
-            Self::Orca(backend) => backend.refresh_credentials(workspace_id, request).await,
-            Self::Disabled => Err(RuntimeError::Unavailable(
-                "the Orca IDE backend is not configured on this host".into(),
-            )),
-        }
-    }
-
-    /// When any IDE session was last used. `Disabled` reports `None` so a host
-    /// without the Orca backend configured still idles down normally.
-    pub async fn last_activity_at(&self) -> Option<chrono::DateTime<chrono::Utc>> {
-        match self {
-            #[cfg(target_os = "linux")]
-            Self::Orca(backend) => backend.last_activity_at().await,
-            Self::Disabled => None,
-        }
-    }
-
-    /// Whether an IDE session is still within its configured idle window.
-    pub async fn has_recent_activity(&self) -> bool {
-        match self {
-            #[cfg(target_os = "linux")]
-            Self::Orca(backend) => backend.has_recent_activity().await,
-            Self::Disabled => false,
-        }
-    }
-
-    pub async fn touch(&self, workspace_id: &str) -> Result<IdeSession> {
-        #[cfg(not(target_os = "linux"))]
-        let _ = &workspace_id;
-        match self {
-            #[cfg(target_os = "linux")]
-            Self::Orca(backend) => backend.touch(workspace_id).await,
-            Self::Disabled => Err(RuntimeError::SandboxNotFound),
-        }
-    }
-
-    pub async fn status(&self, workspace_id: &str) -> Result<IdeSession> {
-        #[cfg(not(target_os = "linux"))]
-        let _ = &workspace_id;
-        match self {
-            #[cfg(target_os = "linux")]
-            Self::Orca(backend) => backend.status(workspace_id).await,
-            Self::Disabled => Err(RuntimeError::SandboxNotFound),
-        }
-    }
-
-    pub async fn stop(&self, workspace_id: &str) -> Result<()> {
-        #[cfg(not(target_os = "linux"))]
-        let _ = &workspace_id;
-        match self {
-            #[cfg(target_os = "linux")]
-            Self::Orca(backend) => backend.stop(workspace_id).await,
-            Self::Disabled => Err(RuntimeError::SandboxNotFound),
-        }
-    }
-
-    /// Deliver a file into the session's own host filesystem — where the
-    /// member's terminals and agent CLIs actually run, as opposed to
-    /// `Backend::write_file`, which reaches the Firecracker guest.
-    pub async fn write_file(&self, workspace_id: &str, request: IdeWriteFileRequest) -> Result<()> {
-        #[cfg(not(target_os = "linux"))]
-        let _ = (&workspace_id, &request);
-        match self {
-            #[cfg(target_os = "linux")]
-            Self::Orca(backend) => backend.write_file(workspace_id, request).await,
-            Self::Disabled => Err(RuntimeError::Unavailable(
-                "the Orca IDE backend is not configured on this host".into(),
-            )),
-        }
-    }
-
-    /// Run a command in the session's own host environment, as the
-    /// workspace's unprivileged Linux user.
-    pub async fn exec(&self, workspace_id: &str, request: IdeExecRequest) -> Result<ExecResponse> {
-        #[cfg(not(target_os = "linux"))]
-        let _ = (&workspace_id, &request);
-        match self {
-            #[cfg(target_os = "linux")]
-            Self::Orca(backend) => backend.exec(workspace_id, request).await,
-            Self::Disabled => Err(RuntimeError::Unavailable(
-                "the Orca IDE backend is not configured on this host".into(),
-            )),
-        }
-    }
-}
 
 #[allow(clippy::large_enum_variant)]
 pub enum Backend {
@@ -177,6 +33,15 @@ pub enum Backend {
 impl Backend {
     pub fn fake() -> Self {
         Self::Fake(FakeBackend::new())
+    }
+
+    /// Preserve durable workspaces after draining requests during a service restart.
+    pub async fn shutdown(&self) -> Result<()> {
+        match self {
+            Self::Fake(_) => Ok(()),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => backend.shutdown().await,
+        }
     }
 
     pub async fn health(&self) -> Result<()> {
@@ -312,25 +177,8 @@ impl Backend {
 
     pub async fn superset_list_files(
         &self,
-        workspace_id: &str,
-        worktree_id: &str,
-    ) -> Result<serde_json::Value> {
-        match self {
-            Self::Fake(_) => Err(RuntimeError::Unavailable(
-                "Superset host service is unavailable in the fake backend".into(),
-            )),
-            #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => {
-                backend.superset_list_files(workspace_id, worktree_id).await
-            }
-        }
-    }
-
-    pub async fn superset_read_file(
-        &self,
-        workspace_id: &str,
-        path: String,
-        worktree_id: &str,
+        _workspace_id: &str,
+        _worktree_id: &str,
     ) -> Result<serde_json::Value> {
         match self {
             Self::Fake(_) => Err(RuntimeError::Unavailable(
@@ -339,7 +187,26 @@ impl Backend {
             #[cfg(target_os = "linux")]
             Self::Firecracker(backend) => {
                 backend
-                    .superset_read_file(workspace_id, path, worktree_id)
+                    .superset_list_files(_workspace_id, _worktree_id)
+                    .await
+            }
+        }
+    }
+
+    pub async fn superset_read_file(
+        &self,
+        _workspace_id: &str,
+        _path: String,
+        _worktree_id: &str,
+    ) -> Result<serde_json::Value> {
+        match self {
+            Self::Fake(_) => Err(RuntimeError::Unavailable(
+                "Superset host service is unavailable in the fake backend".into(),
+            )),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => {
+                backend
+                    .superset_read_file(_workspace_id, _path, _worktree_id)
                     .await
             }
         }
@@ -347,22 +214,8 @@ impl Backend {
 
     pub async fn superset_write_file(
         &self,
-        workspace_id: &str,
-        request: &WriteFileRequest,
-    ) -> Result<serde_json::Value> {
-        match self {
-            Self::Fake(_) => Err(RuntimeError::Unavailable(
-                "Superset host service is unavailable in the fake backend".into(),
-            )),
-            #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => backend.superset_write_file(workspace_id, request).await,
-        }
-    }
-
-    pub async fn superset_create_entry(
-        &self,
-        workspace_id: &str,
-        request: &SupersetCreateEntryRequest,
+        _workspace_id: &str,
+        _request: &WriteFileRequest,
     ) -> Result<serde_json::Value> {
         match self {
             Self::Fake(_) => Err(RuntimeError::Unavailable(
@@ -370,29 +223,31 @@ impl Backend {
             )),
             #[cfg(target_os = "linux")]
             Self::Firecracker(backend) => {
-                backend.superset_create_entry(workspace_id, request).await
+                backend.superset_write_file(_workspace_id, _request).await
+            }
+        }
+    }
+
+    pub async fn superset_create_entry(
+        &self,
+        _workspace_id: &str,
+        _request: &SupersetCreateEntryRequest,
+    ) -> Result<serde_json::Value> {
+        match self {
+            Self::Fake(_) => Err(RuntimeError::Unavailable(
+                "Superset host service is unavailable in the fake backend".into(),
+            )),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => {
+                backend.superset_create_entry(_workspace_id, _request).await
             }
         }
     }
 
     pub async fn superset_move_entry(
         &self,
-        workspace_id: &str,
-        request: &SupersetMoveEntryRequest,
-    ) -> Result<serde_json::Value> {
-        match self {
-            Self::Fake(_) => Err(RuntimeError::Unavailable(
-                "Superset host service is unavailable in the fake backend".into(),
-            )),
-            #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => backend.superset_move_entry(workspace_id, request).await,
-        }
-    }
-
-    pub async fn superset_delete_entry(
-        &self,
-        workspace_id: &str,
-        request: &SupersetDeleteEntryRequest,
+        _workspace_id: &str,
+        _request: &SupersetMoveEntryRequest,
     ) -> Result<serde_json::Value> {
         match self {
             Self::Fake(_) => Err(RuntimeError::Unavailable(
@@ -400,15 +255,31 @@ impl Backend {
             )),
             #[cfg(target_os = "linux")]
             Self::Firecracker(backend) => {
-                backend.superset_delete_entry(workspace_id, request).await
+                backend.superset_move_entry(_workspace_id, _request).await
+            }
+        }
+    }
+
+    pub async fn superset_delete_entry(
+        &self,
+        _workspace_id: &str,
+        _request: &SupersetDeleteEntryRequest,
+    ) -> Result<serde_json::Value> {
+        match self {
+            Self::Fake(_) => Err(RuntimeError::Unavailable(
+                "Superset host service is unavailable in the fake backend".into(),
+            )),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => {
+                backend.superset_delete_entry(_workspace_id, _request).await
             }
         }
     }
 
     pub async fn superset_file_changes(
         &self,
-        workspace_id: &str,
-        worktree_id: &str,
+        _workspace_id: &str,
+        _worktree_id: &str,
     ) -> Result<serde_json::Value> {
         match self {
             Self::Fake(_) => Err(RuntimeError::Unavailable(
@@ -417,7 +288,7 @@ impl Backend {
             #[cfg(target_os = "linux")]
             Self::Firecracker(backend) => {
                 backend
-                    .superset_file_changes(workspace_id, worktree_id)
+                    .superset_file_changes(_workspace_id, _worktree_id)
                     .await
             }
         }
@@ -425,10 +296,10 @@ impl Backend {
 
     pub async fn superset_runtime(
         &self,
-        workspace_id: &str,
-        method: &str,
-        operation: &str,
-        body: Option<&serde_json::Value>,
+        _workspace_id: &str,
+        _method: &str,
+        _operation: &str,
+        _body: Option<&serde_json::Value>,
     ) -> Result<serde_json::Value> {
         match self {
             Self::Fake(_) => Err(RuntimeError::Unavailable(
@@ -437,7 +308,7 @@ impl Backend {
             #[cfg(target_os = "linux")]
             Self::Firecracker(backend) => {
                 backend
-                    .superset_runtime(workspace_id, method, operation, body)
+                    .superset_runtime(_workspace_id, _method, _operation, _body)
                     .await
             }
         }
@@ -716,183 +587,6 @@ impl Backend {
             Self::Firecracker(backend) => {
                 backend.close_claude_setup(workspace_id, session_id).await
             }
-        }
-    }
-
-    pub async fn create_worktree(
-        &self,
-        workspace_id: &str,
-        request: WorktreeCreateRequest,
-    ) -> Result<()> {
-        match self {
-            Self::Fake(backend) => backend.create_worktree(workspace_id, request),
-            #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => backend.create_worktree(workspace_id, request).await,
-        }
-    }
-
-    pub async fn begin_session_restore(
-        &self,
-        workspace_id: &str,
-        request: SessionRestoreBeginRequest,
-    ) -> Result<()> {
-        match self {
-            Self::Fake(backend) => backend.begin_session_restore(workspace_id, request),
-            #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => {
-                backend.begin_session_restore(workspace_id, request).await
-            }
-        }
-    }
-
-    pub async fn append_session_restore_chunk(
-        &self,
-        workspace_id: &str,
-        operation_id: &str,
-        request: SessionRestoreChunkRequest,
-    ) -> Result<u64> {
-        match self {
-            Self::Fake(backend) => {
-                backend.append_session_restore_chunk(workspace_id, operation_id, request)
-            }
-            #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => {
-                backend
-                    .append_session_restore_chunk(workspace_id, operation_id, request)
-                    .await
-            }
-        }
-    }
-
-    pub async fn finalize_session_restore(
-        &self,
-        workspace_id: &str,
-        operation_id: &str,
-    ) -> Result<SessionRestoreFinalizeResponse> {
-        match self {
-            Self::Fake(backend) => backend.finalize_session_restore(workspace_id, operation_id),
-            #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => {
-                backend
-                    .finalize_session_restore(workspace_id, operation_id)
-                    .await
-            }
-        }
-    }
-
-    pub async fn abort_session_restore(
-        &self,
-        workspace_id: &str,
-        operation_id: &str,
-    ) -> Result<()> {
-        match self {
-            Self::Fake(backend) => backend.abort_session_restore(workspace_id, operation_id),
-            #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => {
-                backend
-                    .abort_session_restore(workspace_id, operation_id)
-                    .await
-            }
-        }
-    }
-
-    pub async fn delete_worktree(&self, workspace_id: &str, worktree_id: &str) -> Result<()> {
-        match self {
-            Self::Fake(backend) => backend.delete_worktree(workspace_id, worktree_id),
-            #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => backend.delete_worktree(workspace_id, worktree_id).await,
-        }
-    }
-
-    pub async fn checkpoint_worktree(
-        &self,
-        workspace_id: &str,
-        worktree_id: &str,
-        request: WorktreeCheckpointRequest,
-    ) -> Result<WorktreeCheckpointResponse> {
-        match self {
-            Self::Fake(backend) => backend.checkpoint_worktree(workspace_id, worktree_id, request),
-            #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => {
-                backend
-                    .checkpoint_worktree(workspace_id, worktree_id, request)
-                    .await
-            }
-        }
-    }
-
-    pub async fn review_worktree(
-        &self,
-        workspace_id: &str,
-        worktree_id: &str,
-        base_sha: &str,
-    ) -> Result<WorktreeReviewResponse> {
-        match self {
-            Self::Fake(backend) => backend.review_worktree(workspace_id, worktree_id, base_sha),
-            #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => {
-                backend
-                    .review_worktree(workspace_id, worktree_id, base_sha)
-                    .await
-            }
-        }
-    }
-
-    pub async fn rebase_worktree(
-        &self,
-        workspace_id: &str,
-        worktree_id: &str,
-        request: WorktreeRebaseRequest,
-    ) -> Result<WorktreeRebaseResponse> {
-        match self {
-            Self::Fake(backend) => backend.rebase_worktree(workspace_id, worktree_id, request),
-            #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => {
-                backend
-                    .rebase_worktree(workspace_id, worktree_id, request)
-                    .await
-            }
-        }
-    }
-
-    pub async fn merge_worktree(
-        &self,
-        workspace_id: &str,
-        worktree_id: &str,
-        request: WorktreeMergeRequest,
-    ) -> Result<WorktreeMergeResponse> {
-        match self {
-            Self::Fake(backend) => backend.merge_worktree(workspace_id, worktree_id, request),
-            #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => {
-                backend
-                    .merge_worktree(workspace_id, worktree_id, request)
-                    .await
-            }
-        }
-    }
-
-    pub async fn export_publication(
-        &self,
-        workspace_id: &str,
-        request: PublicationExportRequest,
-    ) -> Result<PublicationExportResponse> {
-        match self {
-            Self::Fake(backend) => backend.export_publication(workspace_id, request),
-            #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => backend.export_publication(workspace_id, request).await,
-        }
-    }
-
-    pub async fn snapshot_workspace(
-        &self,
-        workspace_id: &str,
-        request: PublicationExportRequest,
-    ) -> Result<PublicationExportResponse> {
-        match self {
-            Self::Fake(backend) => backend.snapshot_workspace(workspace_id, request),
-            #[cfg(target_os = "linux")]
-            Self::Firecracker(backend) => backend.snapshot_workspace(workspace_id, request).await,
         }
     }
 
@@ -1273,135 +967,6 @@ impl FakeBackend {
         Ok("## main".into())
     }
 
-    fn create_worktree(&self, workspace_id: &str, _request: WorktreeCreateRequest) -> Result<()> {
-        self.get(workspace_id)?;
-        Ok(())
-    }
-
-    fn begin_session_restore(
-        &self,
-        workspace_id: &str,
-        _request: SessionRestoreBeginRequest,
-    ) -> Result<()> {
-        self.get(workspace_id)?;
-        Ok(())
-    }
-
-    fn append_session_restore_chunk(
-        &self,
-        workspace_id: &str,
-        _operation_id: &str,
-        request: SessionRestoreChunkRequest,
-    ) -> Result<u64> {
-        self.get(workspace_id)?;
-        let decoded = BASE64
-            .decode(request.content_base64)
-            .map_err(|_| RuntimeError::BadRequest("invalid restore chunk".into()))?;
-        request
-            .offset
-            .checked_add(decoded.len() as u64)
-            .ok_or_else(|| RuntimeError::BadRequest("restore chunk offset is invalid".into()))
-    }
-
-    fn finalize_session_restore(
-        &self,
-        workspace_id: &str,
-        _operation_id: &str,
-    ) -> Result<SessionRestoreFinalizeResponse> {
-        self.get(workspace_id)?;
-        Ok(SessionRestoreFinalizeResponse {
-            status: SessionRestoreStatus::Restored,
-            conflict_paths: Vec::new(),
-        })
-    }
-
-    fn abort_session_restore(&self, workspace_id: &str, _operation_id: &str) -> Result<()> {
-        self.get(workspace_id)?;
-        Ok(())
-    }
-
-    fn delete_worktree(&self, workspace_id: &str, _worktree_id: &str) -> Result<()> {
-        self.get(workspace_id)?;
-        Ok(())
-    }
-
-    fn checkpoint_worktree(
-        &self,
-        workspace_id: &str,
-        _worktree_id: &str,
-        request: WorktreeCheckpointRequest,
-    ) -> Result<WorktreeCheckpointResponse> {
-        self.get(workspace_id)?;
-        Ok(WorktreeCheckpointResponse {
-            head_sha: request.expected_head_sha,
-        })
-    }
-
-    fn review_worktree(
-        &self,
-        workspace_id: &str,
-        _worktree_id: &str,
-        base_sha: &str,
-    ) -> Result<WorktreeReviewResponse> {
-        self.get(workspace_id)?;
-        Ok(WorktreeReviewResponse {
-            base_sha: base_sha.into(),
-            head_sha: base_sha.into(),
-            diff: String::new(),
-            diff_digest: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".into(),
-        })
-    }
-
-    fn rebase_worktree(
-        &self,
-        workspace_id: &str,
-        _worktree_id: &str,
-        request: WorktreeRebaseRequest,
-    ) -> Result<WorktreeRebaseResponse> {
-        self.get(workspace_id)?;
-        Ok(WorktreeRebaseResponse {
-            head_sha: request.expected_head_sha,
-        })
-    }
-
-    fn merge_worktree(
-        &self,
-        workspace_id: &str,
-        _worktree_id: &str,
-        request: WorktreeMergeRequest,
-    ) -> Result<WorktreeMergeResponse> {
-        self.get(workspace_id)?;
-        Ok(WorktreeMergeResponse {
-            head_sha: request.expected_worktree_head_sha,
-        })
-    }
-
-    fn export_publication(
-        &self,
-        workspace_id: &str,
-        request: PublicationExportRequest,
-    ) -> Result<PublicationExportResponse> {
-        self.get(workspace_id)?;
-        Ok(PublicationExportResponse {
-            head_sha: request.expected_head_sha,
-            files: Vec::new(),
-            total_bytes: 0,
-        })
-    }
-
-    fn snapshot_workspace(
-        &self,
-        workspace_id: &str,
-        request: PublicationExportRequest,
-    ) -> Result<PublicationExportResponse> {
-        self.get(workspace_id)?;
-        Ok(PublicationExportResponse {
-            head_sha: request.expected_head_sha,
-            files: Vec::new(),
-            total_bytes: 0,
-        })
-    }
-
     fn git_diff(&self, workspace_id: &str, _worktree_id: Option<&str>) -> Result<String> {
         self.get(workspace_id)?;
         Ok(String::new())
@@ -1425,6 +990,7 @@ mod tests {
             base_sha: "fc1ba2947ffdaf8c1961e5342387e1079afface6".into(),
             expires_at: Utc::now() + Duration::hours(1),
             resume_from_snapshot: false,
+            require_saved_state: false,
             persistent_disk_lun: None,
             lifecycle: SandboxLifecycleOptions {
                 timeout_ms: 14_400_000,

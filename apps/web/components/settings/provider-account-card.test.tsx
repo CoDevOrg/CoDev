@@ -28,8 +28,6 @@ function subscription(
     connectMode: "device_code",
     command: "codev codex-auth",
     provenance: null,
-    enabledForRooms: false,
-    enabledForWorkspace: false,
     allowInSharedWorkspaces: true,
     ...overrides,
   };
@@ -47,8 +45,6 @@ function connection(
     suppliedBy: null,
     scope: "personal",
     provenance: null,
-    enabledForRooms: false,
-    enabledForWorkspace: false,
     allowInSharedWorkspaces: true,
     ...overrides,
   };
@@ -57,8 +53,6 @@ function connection(
 const NO_CLI_TOKEN = {
   status: "not_connected" as const,
   lastFour: null,
-  enabledForRooms: false,
-  enabledForWorkspace: false,
   allowInSharedWorkspaces: true,
 };
 
@@ -450,7 +444,7 @@ describe("ProviderAccountCard", () => {
 
       // Named the way the sidebar names them, so "where does this work" is
       // answered in the member's own vocabulary.
-      expect(screen.getByText("Gen 2")).toBeInTheDocument();
+      expect(screen.getByText("Workspaces")).toBeInTheDocument();
       expect(screen.getByText("Rooms")).toBeInTheDocument();
     });
 
@@ -481,8 +475,6 @@ describe("ProviderAccountCard", () => {
           claudeCliToken={{
             status: "connected",
             lastFour: "wxyz",
-            enabledForRooms: true,
-            enabledForWorkspace: false,
             allowInSharedWorkspaces: true,
           }}
           connection={connection({ provider: "anthropic", label: "Anthropic" })}
@@ -613,8 +605,6 @@ describe("ProviderAccountCard", () => {
           claudeCliToken={{
             status: "connected",
             lastFour: "wxyz",
-            enabledForRooms: true,
-            enabledForWorkspace: false,
             allowInSharedWorkspaces: true,
           }}
           connection={connection({ provider: "anthropic", label: "Anthropic" })}

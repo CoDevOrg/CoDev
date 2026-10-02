@@ -1,5 +1,6 @@
 import { mkdir, realpath } from "node:fs/promises";
 import { relative, resolve, sep } from "node:path";
+import { parseCoDevWorktrees } from "./worktree-paths";
 import { timingSafeEqual } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { Hono } from "hono";
@@ -10,9 +11,9 @@ import type { EventBus } from "../events";
 import {
 	createTerminalSessionInternal,
 	disposeSessionAndWait,
-	readTerminalOutput,
 	resizeTerminalSession,
-	writeRawInputToSession,
+	snapshotSession,
+	writeFramedInputToSession,
 } from "../terminal/terminal";
 import { CODEV_PRIMARY_WORKTREE_ID, resolveCoDevWorktreeRoot } from "./files";
 
@@ -34,10 +35,7 @@ const terminalStartSchema = dimensionsSchema.extend({
 	worktreeId: worktreeIdSchema,
 });
 const terminalInputSchema = z.object({ data: z.string().max(64 * 1024) });
-const terminalPollSchema = z.object({
-	after: z.number().int().nonnegative(),
-	waitMilliseconds: z.number().int().min(0).max(25_000).default(0),
-});
+const terminalPollSchema = z.object({ after: z.number().int().nonnegative() });
 const worktreeCreateSchema = z.object({
 	worktreeId: worktreeIdSchema.refine((id) => id !== CODEV_PRIMARY_WORKTREE_ID),
 	branch: branchSchema,
@@ -56,6 +54,8 @@ export type CoDevRuntimeBridgeOptions = {
 	bridgeSecret: string;
 };
 
+type TerminalPollState = { sequence: number; text: string };
+const terminalPollStates = new Map<string, TerminalPollState>();
 let terminalSequence = 0;
 
 function secretMatches(actual: string | undefined, expected: string) {
@@ -119,30 +119,7 @@ function terminalError(error: unknown) {
 }
 
 function parseWorktreeList(output: string, primaryRoot: string) {
-	const managedRoot = resolve(primaryRoot, ".git", "codev-agent-worktrees");
-	const entries: Array<{ worktreeId: string; branch: string }> = [];
-	for (const block of output.trim().split("\n\n")) {
-		const values = new Map(
-			block
-				.split("\n")
-				.map((line) => {
-					const [key, ...rest] = line.split(" ");
-					return [key, rest.join(" ")];
-				}),
-		);
-		const path = values.get("worktree");
-		if (!path) continue;
-		let worktreeId: string | null = null;
-		if (path === primaryRoot) worktreeId = CODEV_PRIMARY_WORKTREE_ID;
-		else if (isWithin(managedRoot, path)) worktreeId = path.slice(managedRoot.length + 1);
-		if (!worktreeId || !worktreeIdSchema.safeParse(worktreeId).success) continue;
-		const branchRef = values.get("branch") ?? "";
-		entries.push({
-			worktreeId,
-			branch: branchRef.startsWith("refs/heads/") ? branchRef.slice(11) : "HEAD",
-		});
-	}
-	return entries.sort((left, right) => left.worktreeId.localeCompare(right.worktreeId));
+	return parseCoDevWorktrees(output, primaryRoot).map(({ worktreeId, branch }) => ({ worktreeId, branch }));
 }
 
 /**
@@ -257,6 +234,7 @@ export function registerCoDevRuntimeBridge({
 				],
 			});
 			if ("error" in created) return context.json({ error: terminalError(created) }, 400);
+			terminalPollStates.set(terminalId, { sequence: 0, text: "" });
 			return context.json({ sessionId: terminalId }, 201);
 		} catch (error) {
 			return context.json({ error: error instanceof Error ? error.message : "Could not start terminal." }, 400);
@@ -269,8 +247,7 @@ export function registerCoDevRuntimeBridge({
 		const worktreeId = worktreeIdSchema.safeParse(context.req.query("worktreeId"));
 		if (!parsed.success || !worktreeId.success) return context.json({ error: "Invalid terminal input request." }, 400);
 		try {
-			const workspace = await ensureTerminalWorkspace({ db, git, workspaceRoot, worktreeId: worktreeId.data });
-			const result = await writeRawInputToSession({ terminalId: context.req.param("terminalId"), workspaceId: workspace.id, data: parsed.data.data, db, eventBus });
+			const result = await writeFramedInputToSession({ terminalId: context.req.param("terminalId"), workspaceId: hostWorkspaceId(worktreeId.data), text: parsed.data.data, submit: false, db, eventBus });
 			if ("error" in result) return context.json({ error: terminalError(result) }, 400);
 			return context.json({ ok: true });
 		} catch (error) {
@@ -284,8 +261,7 @@ export function registerCoDevRuntimeBridge({
 		const worktreeId = worktreeIdSchema.safeParse(context.req.query("worktreeId"));
 		if (!parsed.success || !worktreeId.success) return context.json({ error: "Invalid terminal resize request." }, 400);
 		try {
-			const workspace = await ensureTerminalWorkspace({ db, git, workspaceRoot, worktreeId: worktreeId.data });
-			const result = await resizeTerminalSession({ terminalId: context.req.param("terminalId"), workspaceId: workspace.id, columns: parsed.data.columns, rows: parsed.data.rows, db, eventBus });
+			const result = await resizeTerminalSession({ terminalId: context.req.param("terminalId"), workspaceId: hostWorkspaceId(worktreeId.data), columns: parsed.data.columns, rows: parsed.data.rows, db, eventBus });
 			if ("error" in result) return context.json({ error: terminalError(result) }, 400);
 			return context.json({ ok: true });
 		} catch (error) {
@@ -299,22 +275,19 @@ export function registerCoDevRuntimeBridge({
 		const worktreeId = worktreeIdSchema.safeParse(context.req.query("worktreeId"));
 		if (!parsed.success || !worktreeId.success) return context.json({ error: "Invalid terminal poll request." }, 400);
 		try {
-			const workspace = await ensureTerminalWorkspace({ db, git, workspaceRoot, worktreeId: worktreeId.data });
-			const output = await readTerminalOutput({
-				terminalId: context.req.param("terminalId"),
-				workspaceId: workspace.id,
-				afterSeq: parsed.data.after,
-				waitMs: parsed.data.waitMilliseconds,
-				db,
-				eventBus,
-			});
-			if ("error" in output) return context.json({ error: terminalError(output) }, 400);
-			const data = Buffer.from(output.bytes).toString("utf8");
+			const snapshot = await snapshotSession({ terminalId: context.req.param("terminalId"), workspaceId: hostWorkspaceId(worktreeId.data), maxLines: 1_000, db, eventBus });
+			if ("error" in snapshot) return context.json({ error: terminalError(snapshot) }, 400);
+			const state = terminalPollStates.get(context.req.param("terminalId")) ?? { sequence: 0, text: "" };
+			if (snapshot.text !== state.text) {
+				state.sequence += 1;
+				state.text = snapshot.text;
+				terminalPollStates.set(context.req.param("terminalId"), state);
+			}
 			return context.json({
-				chunks: data ? [{ sequence: parsed.data.after, data }] : [],
-				nextSequence: output.nextSeq,
-				exited: output.exited,
-				exitCode: output.exited ? output.exitCode : null,
+				chunks: parsed.data.after < state.sequence ? [{ sequence: state.sequence, data: `\u001b[2J\u001b[H${state.text}` }] : [],
+				nextSequence: state.sequence,
+				exited: false,
+				exitCode: null,
 			});
 		} catch (error) {
 			return context.json({ error: error instanceof Error ? error.message : "Could not poll terminal." }, 400);
@@ -334,6 +307,7 @@ export function registerCoDevRuntimeBridge({
 				return context.json({ error: "Terminal session is not in this worktree." }, 400);
 			}
 			await disposeSessionAndWait(terminalId, db);
+			terminalPollStates.delete(terminalId);
 			return context.json({ ok: true });
 		} catch (error) {
 			return context.json({ error: error instanceof Error ? error.message : "Could not close terminal." }, 400);

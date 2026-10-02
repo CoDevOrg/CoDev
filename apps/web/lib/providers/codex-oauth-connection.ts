@@ -1,7 +1,5 @@
 import "server-only";
 
-import type { ScopeType } from "@codev/shared-types";
-
 import { persistHostedCodexConnection } from "./hosted-codex-subscription-credentials";
 
 /**
@@ -78,27 +76,19 @@ export function buildCodexAuthCacheJson(tokens: CodexOAuthTokens): string {
 
 /**
  * Persist a ChatGPT subscription connection obtained through OAuth as the
- * `HOSTED_CODEX_SUBSCRIPTION` credential used by `codex exec` (chat replies,
- * agents, and IDE seeding).
+ * `HOSTED_CODEX_SUBSCRIPTION` credential used by `codex exec` (chat replies and
+ * Gen 2 agents).
  */
 export async function persistCodexSubscriptionFromOAuth(input: {
   userId: string;
-  scopeType: ScopeType;
-  scopeId: string;
   tokens: CodexOAuthTokens;
 }) {
   const authCacheJson = buildCodexAuthCacheJson(input.tokens);
-  // A Codex login is either the member's own or the workspace's.
-  const scopeType = input.scopeType === "USER" ? "USER" : "WORKSPACE";
   await persistHostedCodexConnection({
     userId: input.userId,
-    scopeType,
-    scopeId: input.scopeId,
     material: { authCacheJson },
     accountLabel: "ChatGPT",
     // Codex OAuth produces the same refreshable auth cache as `codex login`.
-    // The workspace runtime materializes it into the member-scoped CODEX_HOME,
-    // so one browser sign-in can power both rooms and coding workspaces.
     connectedVia: "browser",
   });
 }

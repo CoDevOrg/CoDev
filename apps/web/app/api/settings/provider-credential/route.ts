@@ -9,13 +9,7 @@ import {
 
 const requestSchema = z
   .object({
-    provider: z.enum([
-      "anthropic",
-      "openai",
-      "bedrock",
-      "azure_foundry",
-      "cursor",
-    ]),
+    provider: z.enum(["anthropic", "openai", "bedrock", "azure_foundry"]),
     credentialType: z.enum(["API_KEY", "AWS_BEDROCK_ROLE", "AZURE_ENDPOINT"]),
     apiKey: z.string().trim().min(20).max(512).optional(),
     awsRoleArn: z
@@ -59,8 +53,7 @@ export async function PUT(request: Request) {
   try {
     const input = requestSchema.parse(await request.json());
     await saveProviderCredential({
-      scopeType: "USER",
-      scopeId: user.id,
+      userId: user.id,
       provider: input.provider,
       credentialType: input.credentialType,
       apiKey: input.apiKey?.trim(),
@@ -79,9 +72,9 @@ export async function DELETE(request: Request) {
   if (!user) return apiError(new Error("Authentication required."), 401);
   try {
     const provider = z
-      .enum(["anthropic", "openai", "bedrock", "azure_foundry", "cursor"])
+      .enum(["anthropic", "openai", "bedrock", "azure_foundry"])
       .parse(new URL(request.url).searchParams.get("provider"));
-    await deleteProviderCredential("USER", user.id, provider);
+    await deleteProviderCredential(user.id, provider);
     return new Response(null, { status: 204 });
   } catch (error) {
     return apiError(error);
@@ -93,11 +86,9 @@ export async function GET(request: Request) {
   if (!user) return apiError(new Error("Authentication required."), 401);
   try {
     const provider = z
-      .enum(["anthropic", "openai", "bedrock", "azure_foundry", "cursor"])
+      .enum(["anthropic", "openai", "bedrock", "azure_foundry"])
       .parse(new URL(request.url).searchParams.get("provider"));
-    return Response.json(
-      await getProviderCredentialStatus("USER", user.id, provider),
-    );
+    return Response.json(await getProviderCredentialStatus(user.id, provider));
   } catch (error) {
     return apiError(error);
   }

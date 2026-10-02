@@ -55,8 +55,7 @@ export function ProviderAccountCard({
     hostedOpenAIConnect && subscription.provider === "codex";
   const showHostedConnect = showClaudeConnect || showCodexConnect;
   const cliTokenConnected = claudeCliToken?.status === "connected";
-  const runsInSharedWorkspace =
-    runsIn.includes("workspace") || runsIn.includes("gen2");
+  const runsInSharedWorkspace = runsIn.includes("gen2");
   const anythingConnected =
     account.connected ||
     cliTokenConnected ||

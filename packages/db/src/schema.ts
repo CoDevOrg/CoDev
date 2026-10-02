@@ -1760,6 +1760,30 @@ export const userComputeUsage = pgTable("user_compute_usage", {
     .notNull(),
 });
 
+/** Completed and active VM intervals; retained when a workspace is deleted. */
+export const gen2ComputeSessions = pgTable(
+  "gen2_compute_sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id").notNull(),
+    ownerId: uuid("owner_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    lastActivityAt: timestamp("last_activity_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("gen2_compute_sessions_owner_start_idx").on(
+      table.ownerId,
+      table.startedAt,
+    ),
+    uniqueIndex("gen2_compute_sessions_active_workspace_idx")
+      .on(table.workspaceId)
+      .where(sql`${table.endedAt} IS NULL`),
+  ],
+);
+
 /**
  * Human conversation inside a workspace. Distinct from `coordinationMessages`,
  * which is the agent-to-agent negotiation channel: these rows are what the

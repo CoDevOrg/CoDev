@@ -182,8 +182,7 @@ async function setSharedWorkspaceUse(
       body: JSON.stringify({
         provider: handlers.provider,
         kind,
-        surface: "workspace",
-        enabled,
+        allowInSharedWorkspaces: enabled,
       }),
     });
     const payload = await readPayload(response);

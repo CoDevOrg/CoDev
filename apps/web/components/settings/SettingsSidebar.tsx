@@ -4,7 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
-import { ArrowLeft, Blocks, Plug, Search, User } from "lucide-react";
+import {
+  ArrowLeft,
+  Blocks,
+  CreditCard,
+  Plug,
+  Search,
+  User,
+} from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { LinkButton } from "@/components/ui/button";
@@ -25,6 +32,12 @@ type SettingsNavItem = {
 
 const personalNav: SettingsNavItem[] = [
   { name: "Profile", href: "/settings/personal/profile", icon: User },
+  {
+    name: "Billing",
+    href: "/settings/personal/billing",
+    icon: CreditCard,
+    keywords: ["stripe", "plan", "subscription", "payment"],
+  },
   {
     name: "AI Provider Accounts",
     href: "/settings/personal/providers",

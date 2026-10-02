@@ -2,23 +2,18 @@ import "server-only";
 
 import type { CredentialType } from "@codev/shared-types";
 
+import { saveCursorCredential } from "./cursor-api-key";
 import {
   deleteProviderCredential,
-  getClaudeCliTokenPublicStatus,
   getProviderCredentialStatus,
   saveAnthropicCredential,
-  saveCursorCredential,
   saveOpenAICredential,
-  updateCredentialSurfaces,
-  type CredentialSurface,
+  updateCredentialSharedWorkspacePermission,
 } from "./credentials";
 import { isHostedClaudeConnectEnabled } from "./claude-connection-runner";
 import { isHostedCodexSubscriptionEnabled } from "./hosted-codex-subscription-flag";
 import { disconnectClaudeRuntime } from "./claude-connection-session";
-import {
-  disconnectHostedCodexSubscription,
-  getHostedCodexPublicStatus,
-} from "./hosted-codex-subscription-credentials";
+import { disconnectHostedCodexSubscription } from "./hosted-codex-subscription-credentials";
 import { getOAuthFlowMode } from "./oauth";
 import {
   publicProviderConnectionPayload,
@@ -27,7 +22,6 @@ import {
   type ProviderConnectionProvider,
   type ProviderConnectionSnapshot,
 } from "./provider-connection-view";
-import { displayMemberName } from "../chat/shared-session-view";
 
 type ConnectionUser = {
   id: string;
@@ -37,72 +31,41 @@ type ConnectionUser = {
 
 export async function loadProviderConnectionSnapshot(
   user: ConnectionUser,
-  /** When given, also reports whether *this* workspace has a connected,
-   *  shared (`--org`) login per provider — `sharedWorkspaceLogin` on the
-   *  result. The caller must already know the viewer belongs to this
-   *  workspace (e.g. `getWorkspaceForMember` succeeded); this does not
-   *  re-check membership. */
-  workspaceId?: string,
 ): Promise<ProviderConnectionSnapshot> {
   const [
     openai,
     anthropic,
-    cursorKey,
+    cursor,
     hostedCodex,
     codexOAuth,
     claudeCliToken,
-    cursorOAuth,
-    sharedCodex,
-    sharedClaude,
+    cursorCli,
   ] = await Promise.all([
-    getProviderCredentialStatus("USER", user.id, "openai", "API_KEY"),
-    getProviderCredentialStatus("USER", user.id, "anthropic", "API_KEY"),
-    getProviderCredentialStatus("USER", user.id, "cursor", "API_KEY"),
-    getProviderCredentialStatus(
-      "USER",
-      user.id,
-      "openai",
-      "HOSTED_CODEX_SUBSCRIPTION",
-    ),
-    getProviderCredentialStatus("USER", user.id, "openai", "OAUTH_TOKEN"),
+    getProviderCredentialStatus(user.id, "openai", "API_KEY"),
+    getProviderCredentialStatus(user.id, "anthropic", "API_KEY"),
+    getProviderCredentialStatus(user.id, "cursor", "API_KEY"),
+    getProviderCredentialStatus(user.id, "openai", "HOSTED_CODEX_SUBSCRIPTION"),
+    getProviderCredentialStatus(user.id, "openai", "OAUTH_TOKEN"),
     // Only a CLI-stamped setup-token is reported; a browser-era token is not.
-    getProviderCredentialStatus("USER", user.id, "anthropic", "OAUTH_TOKEN"),
-    getProviderCredentialStatus("USER", user.id, "cursor", "OAUTH_TOKEN"),
-    workspaceId
-      ? getHostedCodexPublicStatus({
-          scopeType: "WORKSPACE",
-          scopeId: workspaceId,
-          canManage: false,
-        })
-      : null,
-    workspaceId
-      ? getClaudeCliTokenPublicStatus({
-          scopeType: "WORKSPACE",
-          scopeId: workspaceId,
-          canManage: false,
-        })
-      : null,
+    getProviderCredentialStatus(user.id, "anthropic", "OAUTH_TOKEN"),
+    getProviderCredentialStatus(user.id, "cursor", "OAUTH_TOKEN"),
   ]);
   return toProviderConnectionSnapshot({
     viewer: {
       id: user.id,
-      name: displayMemberName(user.name, user.githubLogin),
+      name: user.name?.trim() || user.githubLogin?.trim() || "Unknown user",
     },
     statuses: {
       openai,
       anthropic,
-      cursor: cursorKey,
+      cursor,
     },
     cliSubscriptionStatuses: {
-      // Codex counts as signed in whether the login arrived through the CoDev
-      // CLI or the in-page device-code flow. Both produce the refreshable auth
-      // cache that the member-scoped workspace runtime consumes.
+      // The CLI and in-page device-code flow both produce the same auth cache.
       codex: hostedCodex ?? codexOAuth,
-      // One Claude login, whichever way it was made: the browser sign-in
-      // captures the same setup-token the CLI upload sends, so both land in
-      // the same row and this card and `claudeCliToken` describe one thing.
+      // Claude's CLI setup-token stays separate from the hosted login.
       claude: claudeCliToken,
-      cursor: cursorOAuth,
+      cursor: cursorCli,
     },
     claudeCliToken,
     connectModes: {
@@ -110,20 +73,9 @@ export async function loadProviderConnectionSnapshot(
       // Claude has no CoDev-run OAuth flow: the in-app button drives the
       // official login runtime, and the fallback is `codev claude-auth`.
       claude: "manual_code",
-      cursor: "cursor_deeplink",
     },
     hostedClaudeConnect: isHostedClaudeConnectEnabled(),
     hostedOpenAIConnect: isHostedCodexSubscriptionEnabled(),
-    ...(workspaceId
-      ? {
-          sharedWorkspaceLogin: {
-            // A workspace-scoped login belongs to that workspace's members;
-            // there is no second sharing flag to consult any more.
-            openai: sharedCodex?.status === "connected",
-            anthropic: sharedClaude?.status === "connected",
-          },
-        }
-      : {}),
   });
 }
 
@@ -142,10 +94,10 @@ export async function savePersonalProviderConnection(
 ): Promise<ProviderConnectionSnapshot> {
   if (provider === "openai") {
     await saveOpenAICredential(user.id, apiKey);
-  } else if (provider === "cursor") {
-    await saveCursorCredential(user.id, apiKey);
-  } else {
+  } else if (provider === "anthropic") {
     await saveAnthropicCredential(user.id, apiKey);
+  } else {
+    await saveCursorCredential(user.id, apiKey);
   }
   return publicProviderConnectionPayload(
     await loadProviderConnectionSnapshot(user),
@@ -165,9 +117,9 @@ export async function revokePersonalProviderConnection(
   if (kind === "claude_cli_token") {
     if (provider !== "anthropic")
       throw new Error("Only Claude has a CLI token.");
-    await deleteProviderCredential("USER", user.id, "anthropic", "OAUTH_TOKEN");
+    await deleteProviderCredential(user.id, "anthropic", "OAUTH_TOKEN");
   } else {
-    await deleteProviderCredential("USER", user.id, provider, "API_KEY");
+    await deleteProviderCredential(user.id, provider, "API_KEY");
   }
   return publicProviderConnectionPayload(
     await loadProviderConnectionSnapshot(user),
@@ -183,26 +135,16 @@ export type PersonalCredentialKind =
   | "claude_cli_token";
 
 /**
- * Flip whether a credential may fund a turn inside a shared workspace — the
- * member's one remaining per-credential choice. `surface` is accepted for the
- * existing route shape; only the workspace setting is stored, because rooms
- * always run on the member's own credential in their own session.
+ * Flip whether a credential may fund a turn inside a shared workspace.
  */
-export async function setPersonalCredentialSurface(
+export async function setPersonalSharedWorkspaceUse(
   user: ConnectionUser,
   input: {
     provider: ProviderConnectionProvider;
     kind: PersonalCredentialKind;
-    surface: CredentialSurface;
     enabled: boolean;
   },
 ): Promise<ProviderConnectionSnapshot> {
-  if (input.surface === "rooms") {
-    // Nothing to store: a room reply always runs on the sender's own login.
-    return publicProviderConnectionPayload(
-      await loadProviderConnectionSnapshot(user),
-    );
-  }
   let credentialType: CredentialType;
   if (input.kind === "api_key") {
     credentialType = "API_KEY";
@@ -211,17 +153,12 @@ export async function setPersonalCredentialSurface(
       throw new Error("Only Claude has a CLI token.");
     }
     credentialType = "OAUTH_TOKEN";
-  } else if (input.provider === "openai") {
+  } else if (input.provider === "openai" && input.kind === "subscription") {
     credentialType = "HOSTED_CODEX_SUBSCRIPTION";
-  } else if (input.provider === "cursor") {
-    credentialType = "OAUTH_TOKEN";
   } else {
-    throw new Error(
-      "The Claude browser login is used by chat rooms only and cannot be changed here.",
-    );
+    credentialType = "OAUTH_TOKEN";
   }
-  await updateCredentialSurfaces(
-    "USER",
+  await updateCredentialSharedWorkspacePermission(
     user.id,
     input.provider,
     credentialType,
@@ -244,17 +181,15 @@ export async function revokePersonalSubscription(
 ): Promise<ProviderConnectionSnapshot> {
   if (provider === "claude") {
     await disconnectClaudeRuntime(user.id);
-    await deleteProviderCredential("USER", user.id, "anthropic", "OAUTH_TOKEN");
+    await deleteProviderCredential(user.id, "anthropic", "OAUTH_TOKEN");
   } else if (provider === "cursor") {
-    await deleteProviderCredential("USER", user.id, "cursor", "OAUTH_TOKEN");
+    await deleteProviderCredential(user.id, "cursor", "OAUTH_TOKEN");
   } else {
     await Promise.all([
       disconnectHostedCodexSubscription({
         userId: user.id,
-        scopeType: "USER",
-        scopeId: user.id,
       }),
-      deleteProviderCredential("USER", user.id, "openai", "OAUTH_TOKEN"),
+      deleteProviderCredential(user.id, "openai", "OAUTH_TOKEN"),
     ]);
   }
   return publicProviderConnectionPayload(

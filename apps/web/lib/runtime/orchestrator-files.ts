@@ -18,10 +18,14 @@ export async function readSandboxFile(
   path: string,
   worktreeId?: string,
 ) {
+  const effectiveWorktreeId = worktreeId === "main" ? undefined : worktreeId;
   const response = await orchestratorRequest(
     "POST",
     `/v1/sandboxes/${workspaceId}/files/read`,
-    { path, worktreeId },
+    {
+      path,
+      ...(effectiveWorktreeId ? { worktreeId: effectiveWorktreeId } : {}),
+    },
   );
   return z
     .object({
@@ -45,10 +49,15 @@ export async function writeSandboxFile(
     createParents?: boolean;
   },
 ) {
+  const effectiveWorktreeId =
+    input.worktreeId === "main" ? undefined : input.worktreeId;
   const response = await orchestratorRequest(
     "POST",
     `/v1/sandboxes/${workspaceId}/files/write`,
-    input,
+    {
+      ...input,
+      ...(effectiveWorktreeId ? { worktreeId: effectiveWorktreeId } : {}),
+    },
   );
   return z.object({ revision: z.string() }).parse(await response.json());
 }
@@ -60,10 +69,13 @@ export async function executeInSandbox(
   // The guest exec endpoint uses a PTY. Give non-interactive commands a wide
   // viewport so file paths, Git porcelain, and search matches are not wrapped
   // before the website parses them.
+  const effectiveWorktreeId =
+    input.worktreeId === "main" ? undefined : input.worktreeId;
   const command = {
     rows: 1_000,
     columns: 4_096,
     ...input,
+    ...(effectiveWorktreeId ? { worktreeId: effectiveWorktreeId } : {}),
   };
   const response = await orchestratorRequest(
     "POST",
@@ -85,8 +97,9 @@ export async function getSandboxGitOutput(
   operation: "status" | "diff",
   worktreeId?: string,
 ) {
-  const query = worktreeId
-    ? `?worktreeId=${encodeURIComponent(worktreeId)}`
+  const effectiveWorktreeId = worktreeId === "main" ? undefined : worktreeId;
+  const query = effectiveWorktreeId
+    ? `?worktreeId=${encodeURIComponent(effectiveWorktreeId)}`
     : "";
   const response = await orchestratorRequest(
     "GET",

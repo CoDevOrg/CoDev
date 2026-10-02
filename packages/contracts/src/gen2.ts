@@ -38,7 +38,10 @@ export const gen2WorkspaceMemberSchema = z.object({
   userId: identifierSchema,
   login: z.string().min(1),
   name: z.string().nullable(),
+  email: z.string().nullable().optional(),
+  avatarUrl: z.string().nullable().optional(),
   role: gen2WorkspaceRoleSchema,
+  joinedAt: timestampSchema.optional(),
 });
 
 export const gen2WorkspaceSchema = z.object({
@@ -57,8 +60,22 @@ export const gen2WorkspaceDetailSchema = gen2WorkspaceSchema.extend({
   members: z.array(gen2WorkspaceMemberSchema),
 });
 
+export const gen2ShareRequestSchema = z.object({
+  role: gen2WorkspaceRoleSchema.optional().default("editor"),
+});
+
 export const gen2ShareResponseSchema = z.object({
   inviteUrl: z.url(),
+  role: gen2WorkspaceRoleSchema.optional(),
+});
+
+export const gen2AddMemberRequestSchema = z.object({
+  emailOrLogin: z.string().trim().min(1).max(256),
+  role: gen2WorkspaceRoleSchema,
+});
+
+export const gen2UpdateMemberRoleRequestSchema = z.object({
+  role: gen2WorkspaceRoleSchema,
 });
 
 export const gen2JoinRequestSchema = z.object({
@@ -80,12 +97,42 @@ export const gen2AgentProviderSchema = z.enum(
   ],
 );
 
+export const gen2ModelInfoSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  description: z.string().optional(),
+});
+
+export type Gen2ModelInfo = z.infer<typeof gen2ModelInfoSchema>;
+
+export const GEN2_PROVIDER_MODELS: Record<
+  Gen2AgentProviderName,
+  Gen2ModelInfo[]
+> = {
+  claude: [
+    { id: "sonnet", label: "Claude 3.7 Sonnet" },
+    { id: "opus", label: "Claude 3 Opus" },
+    { id: "haiku", label: "Claude 3.5 Haiku" },
+  ],
+  codex: [
+    { id: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
+    { id: "gpt-4o", label: "GPT-4o" },
+    { id: "o3-mini", label: "o3-mini" },
+  ],
+};
+
+export type Gen2ProviderModelId = string;
+
 export const gen2AgentStartRequestSchema = z.object({
   chatId: identifierSchema,
   /** Which agent runs the turn. */
   provider: gen2AgentProviderSchema,
   prompt: z.string().trim().min(1).max(20_000),
   idempotencyKey: z.string().trim().min(8).max(128),
+  /** Optional target worktree to execute in. */
+  worktreeId: z.string().trim().min(1).max(128).optional(),
+  /** Optional model override for the agent turn. */
+  model: z.string().trim().min(1).max(128).optional(),
 });
 
 export const gen2AgentStartResponseSchema = z.object({
@@ -215,6 +262,11 @@ export const gen2ChatSchema = z.object({
   title: z.string().min(1).max(80),
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
+  messageCount: z.number().int().nonnegative().optional(),
+});
+
+export const gen2RenameChatRequestSchema = z.object({
+  title: z.string().trim().min(1).max(80),
 });
 
 export const gen2ChatDetailSchema = gen2ChatSchema.extend({
@@ -557,6 +609,12 @@ export type Gen2WorkspaceRole = z.infer<typeof gen2WorkspaceRoleSchema>;
 export type Gen2Workspace = z.infer<typeof gen2WorkspaceSchema>;
 export type Gen2WorkspaceDetail = z.infer<typeof gen2WorkspaceDetailSchema>;
 export type Gen2WorkspaceMember = z.infer<typeof gen2WorkspaceMemberSchema>;
+export type Gen2ShareRequest = z.infer<typeof gen2ShareRequestSchema>;
+export type Gen2ShareResponse = z.infer<typeof gen2ShareResponseSchema>;
+export type Gen2AddMemberRequest = z.infer<typeof gen2AddMemberRequestSchema>;
+export type Gen2UpdateMemberRoleRequest = z.infer<
+  typeof gen2UpdateMemberRoleRequestSchema
+>;
 export type Gen2AgentProviderName = z.infer<typeof gen2AgentProviderSchema>;
 export type Gen2AgentStartRequest = z.infer<typeof gen2AgentStartRequestSchema>;
 export type Gen2AgentPollResponse = z.infer<typeof gen2AgentPollResponseSchema>;

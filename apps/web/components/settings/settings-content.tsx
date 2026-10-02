@@ -229,7 +229,7 @@ export function OrganizationSettingsPage({
     <SettingsPageShell>
       <SettingsSectionHeader
         badge={roleLabel}
-        description={`${context.workspace.repository}. ${description}`}
+        description={`${context.organization.name}. ${description}`}
         title={title}
       />
       <p className="text-sm text-muted-foreground">

@@ -1,16 +1,15 @@
 # Gen 2 workspace
 
 **Status:** Current  
-**Date:** 2026-09-27
+**Date:** 2026-09-30
 
-Gen 2 is a new workspace, isolated from `lib/workspaces`. The product is:
+Gen 2 is CoDev's active workspace implementation. The product is:
 
 > A workspace is a Firecracker cloud instance you can share, and you and Codex
 > work on it together.
 
-The thing Gen 1 could never offer: **one filesystem**. Gen 1's interactive IDE
-session and its agent sandbox are separate filesystems (`AGENTS.md`, "Runtime
-isolation"). In Gen 2 there is only the guest — Codex runs
+Unlike the previous workspace design, Gen 2 has **one filesystem**. There is
+only the guest — Codex runs
 `codex exec --cd .` in `/workspace`, and the editor, terminal, and Git panel
 address that same `/workspace` through the orchestrator. The file you open is
 the file the agent just edited.
@@ -35,6 +34,9 @@ the file the agent just edited.
   free an ownership slot
 - Run up to six active sandboxes per host; idle guests hibernate after 15
   minutes and a quiet host deallocates after one minute
+- Use up to 6,000 VM minutes per UTC month across all workspaces you own;
+  shared workspace time is charged to its owner while the VM runs, including
+  agent work after the browser closes
 - Upload a local file onto the machine
 - A workbench beside the chat — file tree with Git status, a CodeMirror 6
   editor with revision-checked saves, a shell, and a live Git status/diff
@@ -47,9 +49,14 @@ should not have to wait for the owner to press something. The composer is
 never disabled either: type into a cold workspace and the machine is brought
 up as part of sending. The orchestrator hibernates an idle guest after fifteen
 minutes, preserving its workspace disk while releasing its sandbox slot. Once
-no guest or recently used Orca IDE session keeps the host active, it deallocates
-after a one-minute quiet window checked every thirty seconds. Opening the
-workspace resumes it from the saved disk.
+no active guest keeps the host active, it deallocates after a one-minute quiet
+window checked every thirty seconds. Opening the workspace resumes it from the
+saved disk. Owner-initiated stops also checkpoint durable guests. Graceful
+orchestrator shutdown drains requests and saves guest disks before stopping
+Firecracker; interrupted live disks are recovered on the next open. Recovery
+includes both the workspace disk (Git worktrees and uncommitted files) and the
+root disk (Superset host state). Existing workspace recovery fails explicitly
+when saved data is missing; it must not create a fresh checkout as a fallback.
 
 ## Interface
 
@@ -130,8 +137,8 @@ stack against it.
 
 ## Out of scope
 
-Gen 1 agent sessions, worktrees, GitHub, OpenFGA, the original
-`workspaces` table, and the embedded Orca IDE.
+The previous Gen 1 workspace runtime and its application code have been
+removed. Historical database migrations and stored records remain intact.
 
 Concurrent agents: the guest serialises Codex (`start_codex_exec` waits on
 `codex_busy`), so one turn runs at a time per machine. Parallelism today means
@@ -150,8 +157,7 @@ not a browser mock. Future Superset work must extend that host service to
 replace the matching Gen 2 terminal, Git/worktree, and agent mechanics; do not
 add duplicate `codev-guestd` implementations. CoDev continues to own member
 authorization, provider credentials, quotas, Yjs documents, conflicts, and
-durable product history. The adoption contract and stop/go gate live in
-[`SUPERSET_ADOPTION_MANIFEST.md`](./SUPERSET_ADOPTION_MANIFEST.md).
+durable product history.
 
 ## Routes
 
@@ -164,3 +170,33 @@ API under `/api/gen2/workspaces/[id]`: `instance`, `share`, `chats`, `agent`,
 
 Code lives under `apps/web/lib/gen2`, `apps/web/components/gen2`, and
 `apps/web/app/gen2`.
+
+### Workspace connection UI
+
+Connected workspaces show no machine or VM badge. A live, authenticated connection
+check runs every 30 seconds while the page is visible and does not wake a sleeping
+guest. Keyboard, input, pointer, and scroll activity send throttled keepalives;
+hidden or idle pages stop sending them. The runtime hibernates after its configured
+idle timeout (15 minutes by default). Agent work also counts as activity.
+
+A sleeping or unavailable workspace shows **Reconnect** in the top navigation.
+One click shares a single reconnect attempt, shows **Reconnecting…**, then refreshes
+the panels without remounting the editor or clearing drafts. Existing workspaces
+are not silently awakened by status checks; new pending workspaces connect once.
+Connection failure leaves a retry action and a useful error. Runtime status reads
+must not extend the idle timer, and the persisted `ready` database status alone is
+not proof of connectivity.
+
+The initial check runs even when the workspace opens in a background tab. Later
+checks pause while hidden. Connection checks bound network and response-body
+waiting to 10 seconds; reconnect has a 90-second client budget and returns to the
+retry action on expiry. These deadlines must also abort outstanding requests.
+Local development uses Webpack (matching the production build); `127.0.0.1`
+is explicitly allowed for Next.js development resources.
+
+The guest bridge discovers live Git worktrees from `git worktree list --porcelain`.
+It accepts CoDev-managed checkouts under `.git/codev-agent-worktrees/<id>` and
+single-directory agent/terminal checkouts under the primary workspace root. A
+worktree must still be registered with Git and remain inside that root before
+file, Git, or terminal operations resolve it. The switcher refreshes whenever it
+opens, so a branch created by an agent or terminal appears without a reload.

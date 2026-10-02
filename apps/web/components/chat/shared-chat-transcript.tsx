@@ -9,13 +9,14 @@ import {
   type ImportedConversationMessage,
 } from "@codev/contracts";
 
-import { CHANNEL_MESSAGE_POLL_MS } from "@/lib/chat/team-chat-view";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { MarkdownContent } from "@/components/markdown/markdown-content";
 import { cn } from "@/lib/platform/utils";
 
 import { avatarColor, avatarInitials } from "./shared-chat-avatar";
 import { SharedChatComposer } from "./shared-chat-composer";
+
+export const ROOM_TRANSCRIPT_POLL_MS = 3_000;
 
 function messageLabel(message: ImportedConversationMessage) {
   if (message.authorName) return message.authorName;
@@ -147,7 +148,7 @@ export function SharedChatTranscript({
     const controller = new AbortController();
     const timer = window.setInterval(() => {
       if (!streamConnected.current) void refreshMessages(controller.signal);
-    }, CHANNEL_MESSAGE_POLL_MS);
+    }, ROOM_TRANSCRIPT_POLL_MS);
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         void refreshMessages(controller.signal);

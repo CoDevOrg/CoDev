@@ -170,7 +170,7 @@ describe("shared chat message route", () => {
         await POST(
           request({
             body: "Continue",
-            reply: { provider: "cursor", model: "m" },
+            reply: { provider: "unsupported", model: "m" },
           }),
           context,
         )

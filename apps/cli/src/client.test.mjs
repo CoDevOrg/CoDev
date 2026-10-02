@@ -4,11 +4,10 @@ import assert from "node:assert/strict";
 import {
   apiUrl,
   configPath,
+  cursorAuthFileCandidates,
   describeSpawnError,
   extractClaudeOAuthToken,
-  organizationSharingWarning,
 } from "./client.mjs";
-import { cursorAuthFileCandidates } from "./cursor-auth.mjs";
 
 test("uses an explicit CoDev API URL without a trailing slash", () => {
   assert.equal(
@@ -50,14 +49,6 @@ test("looks for Cursor CLI auth in an isolated home", () => {
     "/tmp/codev-cursor/.cursor/auth.json",
     "/tmp/codev-cursor/.config/cursor/auth.json",
   ]);
-});
-
-test("warns that an --org login is shared with the whole workspace", () => {
-  for (const provider of ["Codex", "Claude", "Cursor"]) {
-    const message = organizationSharingWarning(provider);
-    assert.match(message, new RegExp(`connects ${provider}`));
-    assert.match(message, /every member of this CoDev workspace/);
-  }
 });
 
 test("passes through non-ENOENT spawn errors unchanged", () => {

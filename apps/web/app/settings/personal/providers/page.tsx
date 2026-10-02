@@ -1,9 +1,6 @@
+import { CursorLogo } from "@/components/gen2/provider-logos";
 import { ProviderAccountCard } from "@/components/settings/provider-account-card";
-import {
-  ClaudeMark,
-  CursorMark,
-  OpenAIMark,
-} from "@/components/settings/provider-logos";
+import { ClaudeMark, OpenAIMark } from "@/components/settings/provider-logos";
 import {
   SettingsPageHeader,
   SettingsPageShell,
@@ -29,7 +26,7 @@ const CARDS = [
   },
   {
     label: "Cursor",
-    logo: <CursorMark className="size-5" />,
+    logo: <CursorLogo className="size-5" size={20} />,
     subscription: "cursor",
     connection: "cursor",
   },

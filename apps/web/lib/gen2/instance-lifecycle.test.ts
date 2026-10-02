@@ -90,6 +90,14 @@ vi.mock("../platform/database", () => ({
   getDatabase: () => mocks.database,
 }));
 
+vi.mock("./compute-quota", () => ({
+  workspaceOwnerId: vi.fn(async () => "user-1"),
+  assertComputeAvailable: vi.fn(async () => undefined),
+  reconcileWorkspaceComputeSession: vi.fn(async () => undefined),
+  startComputeSession: vi.fn(async () => undefined),
+  endComputeSession: vi.fn(async () => undefined),
+}));
+
 vi.mock("../platform/crypto", () => ({
   createInviteToken: vi.fn(),
   hashInviteToken: vi.fn(),
@@ -140,6 +148,7 @@ describe("gen2 instance lifecycle", () => {
     expect(mocks.provision).toHaveBeenCalledWith(
       mocks.member.id,
       expect.any(Date),
+      false,
     );
     expect(mocks.updates.map((update) => update.status)).toEqual([
       "provisioning",
@@ -148,6 +157,38 @@ describe("gen2 instance lifecycle", () => {
     expect(workspace.status).toBe("ready");
     expect(workspace.sandboxId).toBe("sandbox-1");
     expect(mocks.ensureHostReady).toHaveBeenCalledWith(60_000);
+  });
+
+  it("requires saved disks when reopening a previously ready workspace", async () => {
+    mocks.member.status = "ready";
+    mocks.member.sandboxId = "sandbox-1";
+    const current = vi.fn().mockResolvedValue(null);
+    await ensureGen2Instance(mocks.member.id, "user-1", {
+      provision: mocks.provision,
+      destroy: mocks.destroy,
+      current,
+    });
+    expect(mocks.provision).toHaveBeenCalledWith(
+      mocks.member.id,
+      expect.any(Date),
+      true,
+    );
+  });
+
+  it("keeps missing-disk protection on a failed recovery retry", async () => {
+    mocks.member.status = "failed";
+    mocks.member.sandboxId = null;
+    mocks.member.lastError =
+      "Saved workspace data is unavailable. Refusing to replace an existing workspace with a fresh checkout.";
+    await ensureGen2Instance(mocks.member.id, "user-1", {
+      provision: mocks.provision,
+      destroy: mocks.destroy,
+    });
+    expect(mocks.provision).toHaveBeenCalledWith(
+      mocks.member.id,
+      expect.any(Date),
+      true,
+    );
   });
 
   it("reattaches when the Firecracker machine is already on the host", async () => {
@@ -381,6 +422,11 @@ describe("gen2 instance lifecycle", () => {
       runtime,
     );
 
+    expect(mocks.provision).toHaveBeenCalledWith(
+      mocks.member.id,
+      expect.any(Date),
+      true,
+    );
     expect(mocks.destroy).toHaveBeenCalledOnce();
     expect(mocks.provision).toHaveBeenCalledOnce();
     expect(mocks.updates.map((update) => update.status)).toEqual([

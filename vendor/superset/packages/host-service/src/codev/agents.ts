@@ -283,7 +283,7 @@ export function registerCoDevAgentBridge({
 			return context.json({
 				chunks:
 					parsed.data.after < state.sequence
-						? [{ sequence: state.sequence, data: `\u001b[2J\u001b[H${state.text}` }]
+						? [{ sequence: state.sequence, data: `\u001b[2J\u001b[H${state.text}`, dataBase64: Buffer.from(`\u001b[2J\u001b[H${state.text}`, "utf8").toString("base64") }]
 						: [],
 				nextSequence: state.sequence,
 				exited,
@@ -316,21 +316,53 @@ export function registerCoDevAgentBridge({
 	});
 
 	app.get("/codev/agents/:agentId/recovery", async (context) => {
-		if (!requireBridge(context.req.raw)) return context.json({ error: "Unauthorized" }, 401);
+		if (!requireBridge(context.req.raw))
+			return context.json({ error: "Unauthorized" }, 401);
 		const agentId = context.req.param("agentId");
 		try {
-			const session = db.query.terminalSessions.findFirst({ where: eq(terminalSessions.id, agentId) }).sync();
-			if (!session || session.endedAt) return context.json({ adoptable: false });
+			const session = db.query.terminalSessions
+				.findFirst({ where: eq(terminalSessions.id, agentId) })
+				.sync();
+			if (!session)
+				return context.json({ adoptable: false, status: "not_found" });
+			if (session.endedAt)
+				return context.json({
+					adoptable: false,
+					status: "exited",
+					exitCode: 0,
+				});
+
 			const snapshot = await snapshotSession({
 				terminalId: agentId,
 				workspaceId: session.originWorkspaceId ?? "",
-				maxLines: 1,
+				maxLines: 1_000,
 				db,
 				eventBus,
 			});
-			return context.json({ adoptable: !("error" in snapshot) });
+			if ("error" in snapshot) {
+				return context.json({ adoptable: false, status: "failed" });
+			}
+
+			// Restore and rehydrate the in-memory poll state so subsequent polls
+			// can resume seamlessly after a host/VM restart instead of starting from sequence 0.
+			const state = agentPollStates.get(agentId) ?? { sequence: 0, text: "" };
+			if (snapshot.text !== state.text) {
+				state.sequence += 1;
+				state.text = snapshot.text;
+				agentPollStates.set(agentId, state);
+			}
+
+			return context.json({
+				adoptable: true,
+				status: "running",
+				sequence: state.sequence,
+				bufferLength: state.text.length,
+				worktreeId: session.originWorkspaceId?.startsWith("codev-")
+					? session.originWorkspaceId.slice("codev-".length)
+					: undefined,
+			});
 		} catch {
-			return context.json({ adoptable: false });
+			return context.json({ adoptable: false, status: "failed" });
 		}
 	});
 }
