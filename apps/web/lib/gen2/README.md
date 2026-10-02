@@ -38,7 +38,7 @@ closed tab and why the other members of a shared workspace can see the turn.
 
 ## Files, Git, and terminals
 
-`workbench.ts` and `terminals.ts` wrap the orchestrator clients. Both check
+`workbench.ts` and `terminals.ts` wrap the orchestrator clients. A checkout with more than 5,000 files is listed from the cloned GitHub commit so the guest walk does not hide the tree. Both check
 membership **before** touching `lib/runtime/orchestrator-*`, which performs no
 authorization of its own — a route reaching those clients directly would be an
 IDOR across every gen 2 workspace. Keeping the guard in this layer means a new
