@@ -5,11 +5,11 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yousef20920/CoDev.git",
+    "url": "git+https://github.com/CoDevOrg/CoDev.git",
     "directory": "apps/cli"
   },
   "bin": {
-    "codev": "./bin/codev.mjs"
+    "codev": "bin/codev.mjs"
   },
   "files": [
     "bin",
