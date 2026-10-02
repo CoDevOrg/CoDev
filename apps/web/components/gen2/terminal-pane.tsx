@@ -81,7 +81,7 @@ export function Gen2TerminalPane({
   visible: boolean;
   canStart: boolean;
   autoStart?: boolean | undefined;
-  workspaceConnection?: "ready" | "waking" | "asleep" | undefined;
+  workspaceConnection?: "ready" | "waking" | "asleep" | "blocked" | undefined;
   onExit: () => void;
   onResumeWorkspace?: (() => Promise<boolean>) | undefined;
 }) {
@@ -333,7 +333,26 @@ export function Gen2TerminalPane({
 
   return (
     <div className="gen2-term">
-      {workspaceConnection === "waking" && !workspacePaused ? (
+      {workspaceConnection === "blocked" && !workspacePaused ? (
+        <div className="gen2-term-start is-loading">
+          <WorkspaceLoading
+            busy={false}
+            title="An Individual plan is required"
+            description="The shell opens after the workspace owner subscribes."
+            action={
+              <WorkspaceButton
+                tone="secondary"
+                type="button"
+                onClick={() => {
+                  window.location.assign("/settings/personal/billing");
+                }}
+              >
+                Open billing
+              </WorkspaceButton>
+            }
+          />
+        </div>
+      ) : workspaceConnection === "waking" && !workspacePaused ? (
         <div className="gen2-term-start is-loading">
           <WorkspaceLoading
             title="Waiting for the workspace"

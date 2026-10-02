@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 
 import { connectGitHubAccount } from "@/app/actions/github";
@@ -63,18 +62,18 @@ export function ProfileMenu({
           <span>Account</span>
           <strong>{user.name ?? user.githubLogin ?? "Your account"}</strong>
         </div>
-        <Link
+        <a
           className="profile-menu-link"
           href={publicAppHref("/settings", isAdminHost)}
         >
           Settings
-        </Link>
-        <Link
+        </a>
+        <a
           className="profile-menu-link"
           href={publicAppHref("/settings/personal/billing", isAdminHost)}
         >
           Billing
-        </Link>
+        </a>
         {showConnectGitHub ? (
           <form action={connectGitHubAccount.bind(null, returnTo)}>
             <button className="profile-menu-action" type="submit">

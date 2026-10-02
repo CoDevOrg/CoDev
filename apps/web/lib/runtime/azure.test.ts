@@ -30,7 +30,10 @@ describe("createClientSecretCredential", () => {
     expect(first?.token).toBe("vault-token");
     expect(second?.token).toBe("vault-token");
     expect(fetchMock).toHaveBeenCalledOnce();
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
     expect(url).toBe(
       "https://login.microsoftonline.com/tenant/oauth2/v2.0/token",
     );

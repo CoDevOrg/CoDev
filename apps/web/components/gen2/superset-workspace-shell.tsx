@@ -1258,7 +1258,7 @@ export function SupersetWorkspaceShell({
                             onClick={() => setActiveProvider(provider.id)}
                             aria-label={`${provider.name} provider`}
                           >
-                            <ProviderLogo provider={provider.id} size={16} />
+                            <ProviderLogo provider={provider.id} size={20} />
                           </WorkspaceButton>
                         </TooltipTrigger>
                         <TooltipContent side="right">
@@ -1548,7 +1548,7 @@ export function SupersetWorkspaceShell({
                                     <div className="gen2-sidebar-provider-label">
                                       <ProviderLogo
                                         provider={provider.id}
-                                        size={14}
+                                        size={18}
                                         className="gen2-sidebar-provider-logo"
                                       />
                                       <span className="gen2-sidebar-provider-name">
@@ -1684,9 +1684,9 @@ export function SupersetWorkspaceShell({
                   className="gen2-ide-session"
                   aria-label="Workspace session"
                 >
-                  {notice || connection.error ? (
+                  {notice ? (
                     <p className="gen2-superset-runtime-notice" role="status">
-                      {connection.error || notice}
+                      {notice}
                     </p>
                   ) : null}
 
@@ -1726,25 +1726,50 @@ export function SupersetWorkspaceShell({
                     {connection.state === "connected" ? null : (
                       <WorkspaceLoading
                         className="gen2-ide-loading"
-                        busy={connection.state !== "disconnected"}
+                        busy={
+                          !connection.subscriptionRequired &&
+                          connection.state !== "disconnected"
+                        }
                         title={
-                          connection.state === "disconnected"
-                            ? "This workspace is asleep"
-                            : "Waking your workspace"
+                          connection.subscriptionRequired
+                            ? "An Individual plan is required"
+                            : connection.state === "disconnected"
+                              ? workspace?.status === "pending"
+                                ? "This workspace hasn't started"
+                                : "This workspace is asleep"
+                              : "Waking your workspace"
                         }
                         description={
-                          connection.state === "disconnected"
-                            ? connection.error || "Your files are still saved."
-                            : "This usually takes a moment. Your files stay where you left them."
+                          connection.subscriptionRequired
+                            ? connection.error ||
+                              "Workspace owners can subscribe in Settings, then open this workspace again."
+                            : connection.state === "disconnected"
+                              ? connection.error ||
+                                "Your files are still saved."
+                              : "This usually takes a moment. Your files stay where you left them."
                         }
                         action={
-                          connection.state === "disconnected" ? (
+                          connection.subscriptionRequired ? (
+                            <WorkspaceButton
+                              tone="secondary"
+                              type="button"
+                              onClick={() => {
+                                window.location.assign(
+                                  "/settings/personal/billing",
+                                );
+                              }}
+                            >
+                              Open billing
+                            </WorkspaceButton>
+                          ) : connection.state === "disconnected" ? (
                             <WorkspaceButton
                               tone="secondary"
                               type="button"
                               onClick={() => void ensureRunning()}
                             >
-                              Reconnect workspace
+                              {workspace?.status === "pending"
+                                ? "Start workspace"
+                                : "Reconnect workspace"}
                             </WorkspaceButton>
                           ) : null
                         }
@@ -1813,9 +1838,11 @@ export function SupersetWorkspaceShell({
                         workspaceConnection={
                           connection.state === "connected"
                             ? "ready"
-                            : connection.state === "disconnected"
-                              ? "asleep"
-                              : "waking"
+                            : connection.subscriptionRequired
+                              ? "blocked"
+                              : connection.state === "disconnected"
+                                ? "asleep"
+                                : "waking"
                         }
                         onResumeWorkspace={ensureRunning}
                         onExit={() => undefined}

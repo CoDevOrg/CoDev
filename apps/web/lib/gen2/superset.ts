@@ -51,8 +51,8 @@ export async function getGen2SupersetHealth(
   const workspace = await requireGen2Member(workspaceId, userId);
   if (!canRunGen2Agent(workspace.status)) {
     throw new Gen2LifecycleError(
-      workspace.status === "provisioning"
-        ? "The instance is still starting."
+      workspace.status === "pending" || workspace.status === "provisioning"
+        ? "The workspace is still starting."
         : "Start the instance first.",
     );
   }
@@ -69,8 +69,8 @@ async function requireReadySupersetMember(workspaceId: string, userId: string) {
   const membership = await requireGen2Member(workspaceId, userId);
   if (!canRunGen2Agent(membership.status)) {
     throw new Gen2LifecycleError(
-      membership.status === "provisioning"
-        ? "The instance is still starting."
+      membership.status === "pending" || membership.status === "provisioning"
+        ? "The workspace is still starting."
         : "Start the instance first.",
     );
   }

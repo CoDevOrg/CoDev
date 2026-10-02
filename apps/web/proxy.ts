@@ -10,7 +10,11 @@ import {
   apiEdgeLimiter,
   retryAfterSeconds,
 } from "@/lib/platform/upstash-rate-limit";
-import { isAdminHostname } from "@/lib/platform/site-hosts";
+import {
+  adminHostKeepsPath,
+  isAdminHostname,
+  publicAppUrl,
+} from "@/lib/platform/site-hosts";
 
 // NextAuth's `auth` is the documented middleware (`export { auth as
 // middleware }`); its overloads just do not spell out the middleware call
@@ -44,21 +48,19 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   const adminHost = isAdminHostname(request.nextUrl.hostname);
 
   // The admin hostname is an application boundary, not just an alias. Only
-  // the admin page, its sign-in flow, and framework assets are valid there.
+  // the admin page, its sign-in flow, and framework assets are served there.
+  // Workspaces and the rest of the product live on the public site.
   if (adminHost) {
     if (pathname === "/") {
       const url = request.nextUrl.clone();
       url.pathname = "/admin";
       return NextResponse.rewrite(url);
     }
-    if (
-      !pathname.startsWith("/admin") &&
-      !pathname.startsWith("/sign-in") &&
-      !pathname.startsWith("/api/auth/") &&
-      !pathname.startsWith("/_next/") &&
-      pathname !== "/favicon.ico"
-    ) {
-      return new NextResponse("Not Found", { status: 404 });
+    if (!adminHostKeepsPath(pathname)) {
+      return NextResponse.redirect(
+        publicAppUrl(pathname, request.nextUrl.search),
+        307,
+      );
     }
   } else if (pathname === "/admin" || pathname.startsWith("/admin/")) {
     // Do not leave a second entry point to the internal console on the public
