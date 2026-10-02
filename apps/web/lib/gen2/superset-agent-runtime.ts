@@ -305,9 +305,20 @@ export async function reconcileGen2SupersetAgentSession(input: {
     await markGen2SupersetRunRecoveryRequired({
       runId: run.id,
       workspaceId: input.workspaceId,
-      lastError: "Host could not verify the run after a restart.",
+      lastError:
+        recovery.status === "exited"
+          ? "Agent process exited while host was unreachable."
+          : "Host could not verify the run after a restart.",
       actorId: input.userId,
     });
+  } else {
+    // If adoptable and actively running, ensure the credential seat lease is renewed
+    if (run.leaseClaimed && run.connectionId) {
+      await heartbeatCredentialSeat({
+        credentialId: run.connectionId,
+        ref: run.id,
+      });
+    }
   }
   return recovery;
 }
@@ -363,15 +374,15 @@ export async function startGen2SupersetAgentTurn(input: {
   prompt: string;
   idempotencyKey: string;
   provider: Gen2AgentProvider;
+  worktreeId?: string | undefined;
 }) {
   requireEnabled();
   await requireGen2Member(input.workspaceId, input.userId);
   await requireGen2Chat(input.workspaceId, input.chatId);
   const history = await listGen2ChatMessages(input.chatId);
-  const worktreeId = await ensureGen2SupersetAgentWorktree(
-    input.workspaceId,
-    input.chatId,
-  );
+  const worktreeId =
+    input.worktreeId ??
+    (await ensureGen2SupersetAgentWorktree(input.workspaceId, input.chatId));
   const provider = input.provider;
   const command = buildGen2AgentCommand(provider, input.prompt, history);
 

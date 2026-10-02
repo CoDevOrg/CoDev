@@ -3,9 +3,10 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Search } from "lucide-react";
 
-import { Card } from "@/components/ui/card";
+import { SettingsConnectionRow } from "@/components/settings/settings-connection-row";
+import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/platform/utils";
+import { Separator } from "@/components/ui/separator";
 
 export type IntegrationRow = {
   id: string;
@@ -26,13 +27,14 @@ export function IntegrationsList({ rows }: { rows: IntegrationRow[] }) {
   const installedCount = rows.filter((row) => row.connected).length;
 
   return (
-    <div className="space-y-5">
+    <div className="flex flex-col gap-5">
       <div className="relative">
         <Search
           aria-hidden
           className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
         />
         <Input
+          aria-label="Search integrations"
           className="pl-9"
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search integrations"
@@ -40,42 +42,31 @@ export function IntegrationsList({ rows }: { rows: IntegrationRow[] }) {
         />
       </div>
 
-      <div className="space-y-3">
-        <p className="text-xs font-medium tracking-[0.05em] text-muted-foreground uppercase">
+      <div className="flex flex-col gap-3">
+        <p className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
           Installed {installedCount}
         </p>
         {filtered.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No integrations match &ldquo;{query}&rdquo;.
-          </p>
+          <Empty>
+            <EmptyHeader>
+              <EmptyTitle>
+                No integrations match &ldquo;{query}&rdquo;.
+              </EmptyTitle>
+            </EmptyHeader>
+          </Empty>
         ) : (
-          <div className="space-y-2">
-            {filtered.map((row) => (
-              <Card
-                className="flex items-center justify-between gap-3 px-4 py-3"
-                key={row.id}
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background">
-                    {row.icon}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">{row.name}</p>
-                    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <span
-                        className={cn(
-                          "size-1.5 shrink-0 rounded-full",
-                          row.connected
-                            ? "bg-emerald-400"
-                            : "bg-muted-foreground/50",
-                        )}
-                      />
-                      {row.statusText}
-                    </p>
-                  </div>
-                </div>
-                {row.action}
-              </Card>
+          <div className="flex flex-col gap-3">
+            {filtered.map((row, index) => (
+              <div className="flex flex-col gap-3" key={row.id}>
+                {index > 0 ? <Separator /> : null}
+                <SettingsConnectionRow
+                  action={row.action}
+                  connected={row.connected}
+                  icon={row.icon}
+                  name={row.name}
+                  statusText={row.statusText}
+                />
+              </div>
             ))}
           </div>
         )}

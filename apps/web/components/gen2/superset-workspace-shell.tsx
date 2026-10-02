@@ -4,29 +4,36 @@ import {
   type FormEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
 import Link from "next/link";
+import { useWorkspaceConnection } from "./use-workspace-connection";
 import {
-  Bot,
+  ArrowLeft,
   Check,
   ChevronDown,
   ChevronUp,
   GitBranch,
   Kanban,
+  LoaderCircle,
+  Cloud,
   PanelLeft,
   PanelLeftClose,
   PanelRight,
+  Pencil,
   Plus,
-  RefreshCw,
   SquareTerminal,
+  UserPlus,
 } from "lucide-react";
 import type { Gen2Chat, Gen2WorkspaceDetail } from "@codev/contracts";
 import { parseGitStatus } from "@/lib/runtime/ide";
-import { Badge } from "@/components/ui/badge";
-import { ensureGen2WorkspaceReady } from "@/lib/gen2/startup-client";
 
+import { WorkspaceButton } from "./workspace-button";
+import { cn } from "@/lib/platform/utils";
+import { WorkspaceShareDialog } from "./workspace-share-dialog";
+import { ThemeToggle } from "@/components/shell/theme-toggle";
 import { Gen2ChatPanel } from "./chat-panel";
 import { Gen2TerminalPane } from "./terminal-pane";
 import {
@@ -36,6 +43,7 @@ import {
   SupersetFileApiError,
 } from "./superset-file-client";
 import { SupersetFilePane } from "./superset-file-pane";
+import { SupersetChangesPane } from "./superset-changes-pane";
 import {
   SupersetWorkspacesBoard,
   type BoardWorktreeItem,
@@ -46,9 +54,46 @@ import {
   type SupportedAiProvider,
 } from "./provider-logos";
 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Separator } from "@/components/ui/separator";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable";
+
 type Tab = "files" | "changes" | "review";
 
 type Worktree = { worktreeId: string; branch: string };
+
+/** Auto-collapse the left rail below this viewport. User toggles pin the choice. */
+export const GEN2_SIDEBAR_COLLAPSE_QUERY = "(max-width: 1279px)";
+/** Auto-collapse the inspector below this viewport. User toggles pin the choice. */
+export const GEN2_INSPECTOR_COLLAPSE_QUERY = "(max-width: 1023px)";
 
 function formatRelativeTime(dateString?: string) {
   if (!dateString) return "Just now";
@@ -76,10 +121,6 @@ function changedPaths(status: string) {
   return [...parseGitStatus(status)].map(([path, code]) => ({ path, code }));
 }
 
-function fileName(path: string) {
-  return path.split("/").at(-1) ?? path;
-}
-
 async function readGit(
   workspaceId: string,
   worktreeId: string,
@@ -97,115 +138,6 @@ async function readGit(
     throw new Error(payload.error ?? "Couldn’t read Git.");
   }
   return payload.output ?? "";
-}
-
-function SupersetChangesPane({
-  workspaceId,
-  worktreeId,
-  visible,
-  mode,
-}: {
-  workspaceId: string;
-  worktreeId: string;
-  visible: boolean;
-  mode: "changes" | "review";
-}) {
-  const [status, setStatus] = useState("");
-  const [diff, setDiff] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [nextStatus, nextDiff] = await Promise.all([
-        readGit(workspaceId, worktreeId, "status"),
-        readGit(workspaceId, worktreeId, "diff").catch(() => ""),
-      ]);
-      setStatus(nextStatus);
-      setDiff(nextDiff);
-      setError("");
-    } catch (caught) {
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : "Couldn’t reach CoDev. Try refreshing Changes.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [workspaceId, worktreeId]);
-
-  useEffect(() => {
-    // The request settles after the pane is shown and updates only its own copy.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (visible) void refresh();
-  }, [visible, refresh]);
-
-  const files = changedPaths(status);
-
-  return (
-    <section
-      id={
-        mode === "changes" ? "superset-panel-changes" : "superset-panel-review"
-      }
-      role="tabpanel"
-      aria-labelledby={
-        mode === "changes" ? "superset-tab-changes" : "superset-tab-review"
-      }
-      hidden={!visible}
-      className="gen2-superset-tool-panel gen2-ide-panel"
-    >
-      <header className="gen2-ide-panel-bar">
-        <p>
-          {files.length
-            ? `${files.length} changed file${files.length === 1 ? "" : "s"}`
-            : "Working tree is clean"}
-        </p>
-        <button
-          type="button"
-          className="gen2-ide-icon-button"
-          onClick={() => void refresh()}
-          disabled={loading}
-          aria-label={mode === "review" ? "Refresh review" : "Refresh changes"}
-        >
-          <RefreshCw aria-hidden="true" size={15} />
-        </button>
-      </header>
-      {error ? (
-        <p className="gen2-superset-tool-error" role="alert">
-          {error}
-        </p>
-      ) : null}
-      {mode === "changes" && files.length ? (
-        <ul className="gen2-superset-change-list" aria-label="Changed files">
-          {files.map((file) => (
-            <li key={file.path}>
-              <code data-status={file.code}>{file.code}</code>
-              <span>{file.path}</span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {mode === "review" && diff.trim() ? (
-        <pre className="gen2-superset-diff" aria-label="Working tree diff">
-          {diff}
-        </pre>
-      ) : null}
-      {mode === "changes" && !files.length && !error ? (
-        <p className="gen2-superset-tool-empty">
-          Edit a file on this branch to see it here.
-        </p>
-      ) : null}
-      {mode === "review" && !diff.trim() && !error ? (
-        <p className="gen2-superset-tool-empty">
-          {files.length
-            ? "New files have no diff until Git tracks them."
-            : "This branch has nothing to review yet."}
-        </p>
-      ) : null}
-    </section>
-  );
 }
 
 /**
@@ -226,14 +158,22 @@ export function SupersetWorkspaceShell({
   runtimeEnabled: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("files");
+  const [requestedFilePath, setRequestedFilePath] = useState<string | null>(
+    null,
+  );
   const [worktrees, setWorktrees] = useState<Worktree[]>([
     { worktreeId: DEFAULT_SUPERSET_WORKTREE_ID, branch: "main" },
   ]);
   const [worktreeId, setWorktreeId] = useState(DEFAULT_SUPERSET_WORKTREE_ID);
   const [fileCounts, setFileCounts] = useState<Record<string, number>>({});
   const [dirty, setDirty] = useState(false);
+  const [pendingWorktreeId, setPendingWorktreeId] = useState<string | null>(
+    null,
+  );
+  const [showDiscardDialog, setShowDiscardDialog] = useState(false);
   const [terminalExpanded, setTerminalExpanded] = useState(false);
   const [viewMode, setViewMode] = useState<"ide" | "board">("ide");
+  const [shareOpen, setShareOpen] = useState(false);
   const [activeRuns, setActiveRuns] = useState<
     Array<{
       id: string;
@@ -253,11 +193,16 @@ export function SupersetWorkspaceShell({
   const [baseRef, setBaseRef] = useState("");
 
   const [chats, setChats] = useState<Gen2Chat[]>([]);
+  const [renamingChatId, setRenamingChatId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [renamePending, setRenamePending] = useState(false);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [activeProvider, setActiveProvider] =
     useState<SupportedAiProvider>("codex");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
+  const sidebarFollowViewport = useRef(true);
+  const inspectorFollowViewport = useRef(true);
   const [worktreeDropdownOpen, setWorktreeDropdownOpen] = useState(false);
   const worktreeDropdownRef = useRef<HTMLDivElement>(null);
   const [providerStatuses, setProviderStatuses] = useState<
@@ -359,6 +304,55 @@ export function SupersetWorkspaceShell({
     }
   }, [workspaceId, activeProvider, recordChatProvider]);
 
+  function beginRename(chat: Gen2Chat) {
+    if (renamePending) return;
+    setRenamingChatId(chat.id);
+    setRenameDraft(chat.title);
+  }
+
+  async function submitRename(event: FormEvent) {
+    event.preventDefault();
+    const chatId = renamingChatId;
+    const title = renameDraft.trim();
+    if (!chatId || !title || renamePending) return;
+    const current = chats.find((chat) => chat.id === chatId);
+    if (current?.title === title) {
+      setRenamingChatId(null);
+      return;
+    }
+    setRenamePending(true);
+    try {
+      const response = await fetch(
+        `/api/gen2/workspaces/${encodeURIComponent(workspaceId)}/chats/${encodeURIComponent(chatId)}`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ title }),
+        },
+      );
+      const payload = (await response.json().catch(() => null)) as {
+        chat?: Gen2Chat;
+        error?: string;
+      } | null;
+      if (!response.ok || !payload?.chat?.title) {
+        setNotice(payload?.error || "Couldn't rename that chat.");
+        return;
+      }
+      const savedTitle = payload.chat.title;
+      setChats((prev) =>
+        prev.map((chat) =>
+          chat.id === chatId ? { ...chat, title: savedTitle } : chat,
+        ),
+      );
+      setRenamingChatId(null);
+      setNotice("");
+    } catch {
+      setNotice("Couldn't rename that chat.");
+    } finally {
+      setRenamePending(false);
+    }
+  }
+
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (
@@ -368,13 +362,68 @@ export function SupersetWorkspaceShell({
         setWorktreeDropdownOpen(false);
       }
     }
-    if (worktreeDropdownOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => {
-        document.removeEventListener("mousedown", handleClickOutside);
-      };
-    }
+    if (!worktreeDropdownOpen) return;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setWorktreeDropdownOpen(false);
+      worktreeDropdownRef.current
+        ?.querySelector<HTMLElement>("button")
+        ?.focus();
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
   }, [worktreeDropdownOpen]);
+
+  useLayoutEffect(() => {
+    const sidebarMq = window.matchMedia(GEN2_SIDEBAR_COLLAPSE_QUERY);
+    const inspectorMq = window.matchMedia(GEN2_INSPECTOR_COLLAPSE_QUERY);
+
+    const apply = () => {
+      if (sidebarFollowViewport.current) {
+        setSidebarCollapsed(
+          window.matchMedia(GEN2_SIDEBAR_COLLAPSE_QUERY).matches,
+        );
+      }
+      if (inspectorFollowViewport.current) {
+        setInspectorCollapsed(
+          window.matchMedia(GEN2_INSPECTOR_COLLAPSE_QUERY).matches,
+        );
+      }
+    };
+
+    apply();
+    sidebarMq.addEventListener("change", apply);
+    inspectorMq.addEventListener("change", apply);
+    window.addEventListener("resize", apply);
+    const observer =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(apply);
+    observer?.observe(document.documentElement);
+    return () => {
+      sidebarMq.removeEventListener("change", apply);
+      inspectorMq.removeEventListener("change", apply);
+      window.removeEventListener("resize", apply);
+      observer?.disconnect();
+    };
+  }, []);
+
+  const collapseSidebarByUser = useCallback((collapsed: boolean) => {
+    sidebarFollowViewport.current = false;
+    setSidebarCollapsed(collapsed);
+  }, []);
+
+  const toggleSidebarByUser = useCallback(() => {
+    sidebarFollowViewport.current = false;
+    setSidebarCollapsed((collapsed) => !collapsed);
+  }, []);
+
+  const toggleInspectorByUser = useCallback(() => {
+    inspectorFollowViewport.current = false;
+    setInspectorCollapsed((collapsed) => !collapsed);
+  }, []);
 
   const activeWorkspace: Gen2WorkspaceDetail = workspace ?? {
     id: workspaceId,
@@ -389,20 +438,49 @@ export function SupersetWorkspaceShell({
     members: [],
   };
 
+  // Truthful branch file status: unknown counts are NEVER rendered as "Clean"
+  const getBranchStatus = useCallback(
+    (
+      wtId: string,
+    ): { label: string; tone: "clean" | "changes" | "unknown" } => {
+      const count = fileCounts[wtId];
+      if (count === undefined) {
+        return { label: "—", tone: "unknown" };
+      }
+      if (count === 0) {
+        return { label: "Clean", tone: "clean" };
+      }
+      return {
+        label: `${count} ${count === 1 ? "file" : "files"}`,
+        tone: "changes",
+      };
+    },
+    [fileCounts],
+  );
+
   const [refreshToken, setRefreshToken] = useState(0);
 
-  const ensureRunning = useCallback(async () => {
-    setNotice("Connecting to workspace machine…");
-    const result = await ensureGen2WorkspaceReady(workspaceId);
-    if (result.workspace) {
+  const [connectedWorkspace, setConnectedWorkspace] =
+    useState<Gen2WorkspaceDetail | null>(null);
+  const connection = useWorkspaceConnection(
+    workspaceId,
+    runtimeEnabled,
+    (next) => {
+      setConnectedWorkspace(next);
       setNotice("");
-      setRefreshToken((r) => r + 1);
-      void refreshWorktrees();
-      return true;
-    }
-    setNotice(result.error ?? "Failed to connect to workspace machine.");
-    return false;
-  }, [workspaceId]);
+    },
+  );
+  const ensureRunning = connection.reconnect;
+  const currentWorkspace = {
+    ...activeWorkspace,
+    ...connectedWorkspace,
+    status:
+      connection.state === "connected"
+        ? ("ready" as const)
+        : connection.state === "connecting" || connection.state === "checking"
+          ? ("provisioning" as const)
+          : ("stopped" as const),
+  };
 
   const refreshRuns = useCallback(async () => {
     if (!runtimeEnabled) return;
@@ -433,7 +511,8 @@ export function SupersetWorkspaceShell({
 
   const boardItems: BoardWorktreeItem[] = worktrees.map((wt) => {
     const run = activeRuns.find((r) => r.worktreeId === wt.worktreeId);
-    const count = fileCounts[wt.worktreeId] ?? 0;
+    const count = fileCounts[wt.worktreeId];
+    const changesKnown = count !== undefined;
     let agentStatus: BoardWorktreeItem["agentStatus"] = "idle";
     if (run) {
       if (run.status === "running" || run.status === "creating") {
@@ -444,14 +523,15 @@ export function SupersetWorkspaceShell({
       ) {
         agentStatus = "attention";
       }
-    } else if (count > 0) {
+    } else if (changesKnown && count > 0) {
       agentStatus = "review";
     }
 
     return {
       worktreeId: wt.worktreeId,
       branch: wt.branch,
-      fileCount: count,
+      fileCount: count ?? 0,
+      changesKnown,
       agentStatus,
       agentError: run?.lastError ?? null,
       agentProvider: run?.provider ?? null,
@@ -473,7 +553,7 @@ export function SupersetWorkspaceShell({
             );
             counts[worktree.worktreeId] = changedPaths(status).length;
           } catch {
-            // A missing count stays blank. "Clean" is only for a real status.
+            // A missing count stays blank/undefined. Never falsely assume clean.
           }
         }),
       );
@@ -496,25 +576,67 @@ export function SupersetWorkspaceShell({
     }
   }, [refreshCounts, runtimeEnabled, workspaceId]);
 
+  useEffect(() => {
+    if (connection.state !== "connected") return;
+    queueMicrotask(() => {
+      setRefreshToken((value) => value + 1);
+      void refreshWorktrees();
+    });
+  }, [connection.state, refreshWorktrees]);
+
+  // Agents and terminals can create Git worktrees outside the browser flow.
+  // Refresh when the switcher opens so those branches appear immediately.
+  useEffect(() => {
+    if (worktreeDropdownOpen && connection.state === "connected") {
+      queueMicrotask(() => void refreshWorktrees());
+    }
+  }, [connection.state, refreshWorktrees, worktreeDropdownOpen]);
+
+  // New workspaces start automatically; sleeping existing workspaces offer Reconnect.
   const bootedRef = useRef(false);
   useEffect(() => {
-    if (bootedRef.current) return;
+    if (
+      !runtimeEnabled ||
+      bootedRef.current ||
+      !workspace ||
+      workspace.status !== "pending"
+    )
+      return;
     bootedRef.current = true;
     void ensureRunning();
-  }, [ensureRunning]);
+  }, [ensureRunning, runtimeEnabled, workspace]);
 
-  function selectWorktree(next: string) {
-    if (next === worktreeId) return true;
-    if (
-      dirty &&
-      !window.confirm("Discard unsaved changes and switch branches?")
-    )
-      return false;
-    setWorktreeId(next);
-    setDirty(false);
-    setNotice("");
-    return true;
-  }
+  // Protected worktree selection with shadcn AlertDialog confirmation when dirty
+  const selectWorktree = useCallback(
+    (next: string) => {
+      if (next === worktreeId) return true;
+      if (dirty) {
+        setPendingWorktreeId(next);
+        setShowDiscardDialog(true);
+        return false;
+      }
+      setWorktreeId(next);
+      setDirty(false);
+      setNotice("");
+      return true;
+    },
+    [dirty, worktreeId],
+  );
+
+  const confirmDiscardAndSwitch = useCallback(() => {
+    if (pendingWorktreeId) {
+      setWorktreeId(pendingWorktreeId);
+      setDirty(false);
+      setNotice("");
+      setPendingWorktreeId(null);
+    }
+    setShowDiscardDialog(false);
+  }, [pendingWorktreeId]);
+
+  const cancelDiscard = useCallback(() => {
+    setPendingWorktreeId(null);
+    setShowDiscardDialog(false);
+  }, []);
 
   async function createWorktree(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -547,7 +669,7 @@ export function SupersetWorkspaceShell({
   const selected =
     worktrees.find((worktree) => worktree.worktreeId === worktreeId) ??
     worktrees[0];
-  const selectedCount = selected ? (fileCounts[selected.worktreeId] ?? 0) : 0;
+  const selectedStatus = selected ? getBranchStatus(selected.worktreeId) : null;
 
   const activeChat =
     chats.find((chat) => chat.id === selectedChatId) ?? chats[0] ?? null;
@@ -569,717 +691,1185 @@ export function SupersetWorkspaceShell({
   }
 
   return (
-    <div className="gen2-ide-container">
-      {/* Top navigation bar spanning all three sections */}
-      <header className="gen2-ide-top-navbar" aria-label="Top navigation">
-        {/* Left section: sidebar toggle, brand badge, workspace breadcrumb, branch indicator */}
-        <div className="gen2-ide-top-navbar-left">
-          <button
-            type="button"
-            className="gen2-ide-icon-button"
-            onClick={() => setSidebarCollapsed((c) => !c)}
-            aria-label={
-              sidebarCollapsed ? "Expand sidebar" : "Minimize sidebar"
-            }
-            title={sidebarCollapsed ? "Expand sidebar" : "Minimize sidebar"}
-          >
-            <PanelLeft size={16} />
-          </button>
-          <div className="gen2-brand-badge" aria-hidden="true">
-            C
-          </div>
-          <div className="gen2-workspace-breadcrumb">
-            <span className="gen2-workspace-breadcrumb-name">
-              {activeWorkspace.name}
-            </span>
-            <span className="gen2-workspace-breadcrumb-sep">/</span>
-            <span className="gen2-workspace-breadcrumb-repo">
-              {activeWorkspace.repository?.fullName ?? "repository"}
-            </span>
-          </div>
-          <span className="gen2-topbar-divider" aria-hidden="true">
-            |
-          </span>
-          <div className="gen2-topbar-branch-pill">
-            <GitBranch size={13} className="text-blue-500 flex-shrink-0" />
-            <span className="font-mono text-xs">
-              {selected?.branch ?? "main"}
-            </span>
-            <span className="gen2-topbar-branch-status">
-              {fileCounts[worktreeId] !== undefined
-                ? fileCounts[worktreeId] === 0
-                  ? "Clean"
-                  : `${fileCounts[worktreeId]} changed`
-                : "Active"}
-            </span>
-          </div>
-        </div>
-
-        {/* Center section: active session title with provider badge and live agent status */}
-        <div className="gen2-ide-top-navbar-center">
-          <div className="gen2-topbar-session-card">
-            <div className="gen2-topbar-provider-avatar">
-              <ProviderLogo provider={activeProvider} size={14} />
-            </div>
-            <span className="gen2-topbar-session-title">
-              {activeChat?.title ?? "Initial Workspace Session"}
-            </span>
-            {agentRunning ? (
-              <span className="gen2-topbar-session-status running">
-                <span className="size-1.5 rounded-full bg-amber-500 animate-pulse" />
-                Agent working…
-              </span>
-            ) : (
-              <span className="gen2-topbar-session-status idle">
-                {activeProvider.toUpperCase()}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Right section: board toggle, machine status, quick inspector tabs, and inspector toggle */}
-        <div className="gen2-ide-top-navbar-right">
-          <button
-            type="button"
-            className={`gen2-topbar-nav-button ${viewMode === "board" ? "active" : ""}`}
-            onClick={() =>
-              setViewMode((m) => (m === "board" ? "ide" : "board"))
-            }
-            aria-label={
-              viewMode === "board" ? "Switch to IDE Stage" : "Switch to Board"
-            }
-            title={
-              viewMode === "board"
-                ? "Switch to IDE Stage"
-                : "Open Workspaces Board"
-            }
-          >
-            <Kanban size={14} />
-            <span>{viewMode === "board" ? "IDE Stage" : "Board"}</span>
-          </button>
-
-          <span className="gen2-topbar-divider" aria-hidden="true">
-            |
-          </span>
-
-          <div className="gen2-topbar-status-pill" title="Workspace VM status">
-            <span className="size-2 rounded-full bg-emerald-500" />
-            <span className="text-xs text-muted-foreground font-mono">
-              Machine: Online
-            </span>
-          </div>
-
-          {viewMode === "ide" ? (
-            <>
-              <span className="gen2-topbar-divider" aria-hidden="true">
-                |
-              </span>
-
-              <button
-                type="button"
-                className={`gen2-ide-icon-button ${inspectorCollapsed ? "active" : ""}`}
-                onClick={() => setInspectorCollapsed((c) => !c)}
-                aria-label={
-                  inspectorCollapsed ? "Expand inspector" : "Collapse inspector"
-                }
-                title={
-                  inspectorCollapsed ? "Expand inspector" : "Collapse inspector"
-                }
-              >
-                <PanelRight size={16} />
-              </button>
-            </>
-          ) : null}
-        </div>
-      </header>
-
-      <main
-        className={`gen2-ide ${sidebarCollapsed ? "sidebar-collapsed" : ""} ${
-          inspectorCollapsed ? "inspector-collapsed" : ""
-        }`}
-        data-view-mode={viewMode}
+    <TooltipProvider delayDuration={300}>
+      <div
+        className="gen2-ide-container"
+        data-sidebar-collapsed={sidebarCollapsed ? "true" : "false"}
+        data-inspector-collapsed={inspectorCollapsed ? "true" : "false"}
       >
-        <aside
-          className={`gen2-ide-branches ${sidebarCollapsed ? "collapsed" : ""}`}
-          aria-label="Branches"
-        >
-          {sidebarCollapsed ? (
-            <div className="gen2-sidebar-compact">
-              {/* Worktree Trigger Dropdown */}
-              <div
-                className="gen2-worktree-dropdown-wrapper"
-                ref={worktreeDropdownRef}
-              >
+        {/* Top navigation bar: quiet, unified, non-repeating context */}
+        <header className="gen2-ide-top-navbar" aria-label="Top navigation">
+          {/* Left section: sidebar toggle, brand badge, workspace & branch context grouped together */}
+          <div className="gen2-ide-top-navbar-left">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link
+                  href="/"
+                  className="gen2-workspace-button gen2-ide-icon-button"
+                  data-slot="button"
+                  data-tone="ghost"
+                  data-size="icon"
+                  aria-label="Back to home"
+                >
+                  <ArrowLeft aria-hidden="true" />
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Home</TooltipContent>
+            </Tooltip>
+
+            <img
+              className="gen2-brand-mark"
+              src="/brand/codev-mark-v3.png"
+              alt="CoDev"
+              width={22}
+              height={22}
+            />
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <WorkspaceButton
+                  size="icon"
+                  type="button"
+                  className="gen2-ide-icon-button"
+                  onClick={toggleSidebarByUser}
+                  aria-label={
+                    sidebarCollapsed ? "Expand sidebar" : "Minimize sidebar"
+                  }
+                >
+                  {sidebarCollapsed ? (
+                    <PanelLeft size={16} />
+                  ) : (
+                    <PanelLeftClose size={16} />
+                  )}
+                </WorkspaceButton>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                {sidebarCollapsed ? "Expand sidebar" : "Minimize sidebar"}
+              </TooltipContent>
+            </Tooltip>
+
+            {/* Grouped workspace and repository breadcrumb */}
+            <div className="gen2-workspace-breadcrumb">
+              <span className="gen2-workspace-breadcrumb-name">
+                {activeWorkspace.name}
+              </span>
+              <span className="gen2-workspace-breadcrumb-sep">/</span>
+              {activeWorkspace.repository ? (
+                <>
+                  <span className="gen2-workspace-breadcrumb-repo">
+                    {activeWorkspace.repository.fullName}
+                  </span>
+                  <span className="gen2-workspace-breadcrumb-sep gen2-workspace-breadcrumb-repo">
+                    /
+                  </span>
+                </>
+              ) : null}
+            </div>
+
+            {/* Header Branch Dropdown: unified context with keyboard accessibility */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="gen2-sidebar-compact-btn"
-                  onClick={() => setWorktreeDropdownOpen((open) => !open)}
-                  aria-expanded={worktreeDropdownOpen}
-                  aria-label={`Active worktree: ${selected?.branch ?? "main"}`}
-                  title={`Active worktree: ${selected?.branch ?? "main"} (${worktrees.length} branches)`}
+                  className="gen2-topbar-branch-pill"
+                  aria-label={`Active branch: ${selected?.branch ?? "main"}`}
                 >
-                  <GitBranch className="size-4 text-blue-500" />
-                  {worktrees.length > 1 ? (
-                    <span className="gen2-sidebar-compact-badge">
-                      {worktrees.length}
+                  <GitBranch size={13} className="gen2-topbar-branch-icon" />
+                  <span className="gen2-topbar-branch-name">
+                    {selected?.branch ?? "main"}
+                  </span>
+                  {selectedStatus ? (
+                    <span
+                      className={cn(
+                        "gen2-topbar-branch-status",
+                        selectedStatus.tone,
+                      )}
+                    >
+                      {selectedStatus.label}
                     </span>
                   ) : null}
+                  <ChevronDown
+                    size={11}
+                    className="text-muted-foreground ml-0.5 shrink-0 opacity-70"
+                  />
                 </button>
-
-                {/* Floating Dropdown Menu */}
-                <div
-                  className={`gen2-worktree-dropdown-menu gen2-worktree-dropdown-menu-compact ${
-                    worktreeDropdownOpen ? "open" : ""
-                  }`}
-                  role="menu"
-                >
-                  <div className="gen2-worktree-dropdown-header">
-                    <span>Switch worktree</span>
-                  </div>
-                  <ul className="gen2-worktree-dropdown-list">
-                    {worktrees.map((wt) => {
-                      const isSelected = wt.worktreeId === worktreeId;
-                      const count = fileCounts[wt.worktreeId] ?? 0;
-                      return (
-                        <li key={wt.worktreeId}>
-                          <button
-                            type="button"
-                            className={`gen2-worktree-dropdown-item ${isSelected ? "selected" : ""}`}
-                            onClick={() => {
-                              selectWorktree(wt.worktreeId);
-                              setWorktreeDropdownOpen(false);
-                            }}
-                          >
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                              <GitBranch
-                                className={`size-3.5 flex-shrink-0 ${
-                                  isSelected
-                                    ? "text-blue-500"
-                                    : "text-muted-foreground"
-                                }`}
-                              />
-                              <span className="font-mono text-xs truncate">
-                                {wt.branch}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground">
-                                {count ? `${count} files` : "Clean"}
-                              </span>
-                              {isSelected ? (
-                                <Check size={13} className="text-blue-500" />
-                              ) : null}
-                            </div>
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                  {canEdit ? (
-                    <div className="gen2-worktree-dropdown-footer">
-                      <button
-                        type="button"
-                        className="gen2-worktree-create-btn"
-                        onClick={() => {
-                          setSidebarCollapsed(false);
-                          setShowCreate((current) => !current);
-                          setWorktreeDropdownOpen(false);
-                        }}
-                        aria-label="New branch"
-                      >
-                        <Plus size={13} />
-                        <span>New branch</span>
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-
-              {/* New Chat Button */}
-              <button
-                type="button"
-                className="gen2-sidebar-compact-btn primary"
-                onClick={() => void handleNewChat()}
-                aria-label="New Chat"
-                title="New Chat"
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                className="w-60 gen2-workspace-surface"
               >
-                <Plus size={16} strokeWidth={2.5} />
-              </button>
-
-              <div className="gen2-sidebar-compact-divider" />
-
-              {/* Connected Providers */}
-              <div className="gen2-sidebar-compact-providers">
-                {connectedProviders.map((provider) => (
-                  <button
-                    key={provider.id}
-                    type="button"
-                    className={`gen2-sidebar-compact-btn provider ${
-                      activeProvider === provider.id ? "active" : ""
-                    }`}
-                    onClick={() => setActiveProvider(provider.id)}
-                    title={`${provider.name} (${chats.filter((c) => chatProviders[c.id] === provider.id || (connectedProviders.length === 1 && !chatProviders[c.id])).length} chats)`}
-                    aria-label={`${provider.name} provider`}
-                  >
-                    <ProviderLogo provider={provider.id} size={16} />
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <>
-              {/* Section 1: ACTIVE WORKTREE */}
-              <div className="gen2-sidebar-section">
-                <div className="gen2-sidebar-section-header">
-                  <span className="gen2-sidebar-section-title">
-                    ACTIVE WORKTREE
-                  </span>
-                  <span className="gen2-sidebar-section-count">
-                    {worktrees.length}{" "}
-                    {worktrees.length === 1 ? "BRANCH" : "BRANCHES"}
-                  </span>
-                </div>
-
-                {/* Worktree Dropdown */}
-                <div
-                  className="gen2-worktree-dropdown-wrapper"
-                  ref={worktreeDropdownRef}
-                >
-                  <button
-                    type="button"
-                    className="gen2-worktree-trigger-btn"
-                    onClick={() => setWorktreeDropdownOpen((open) => !open)}
-                    aria-expanded={worktreeDropdownOpen}
-                    aria-label={`Active worktree: ${selected?.branch ?? "main"}`}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <GitBranch className="size-3.5 text-blue-400 flex-shrink-0" />
-                      <span className="gen2-worktree-branch-name">
-                        {selected?.branch ?? "main"}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                      <span
-                        className={`gen2-worktree-status-pill ${
-                          selectedCount > 0 ? "has-changes" : "clean"
-                        }`}
+                <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground">
+                  Switch branch
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  {worktrees.map((wt) => {
+                    const isSelected = wt.worktreeId === worktreeId;
+                    const st = getBranchStatus(wt.worktreeId);
+                    return (
+                      <DropdownMenuItem
+                        key={wt.worktreeId}
+                        onClick={() => selectWorktree(wt.worktreeId)}
+                        className="flex items-center justify-between cursor-pointer py-1.5 px-2 text-xs"
                       >
-                        {selectedCount > 0 ? `${selectedCount} files` : "Clean"}
-                      </span>
-                      <ChevronDown
-                        className={`size-3.5 text-muted-foreground transition-transform duration-200 ${
-                          worktreeDropdownOpen
-                            ? "rotate-180 text-foreground"
-                            : ""
-                        }`}
-                      />
-                    </div>
-                  </button>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <GitBranch
+                            size={13}
+                            className={cn(
+                              "shrink-0",
+                              isSelected
+                                ? "text-primary font-medium"
+                                : "text-muted-foreground",
+                            )}
+                          />
+                          <span
+                            className={cn(
+                              "truncate font-mono",
+                              isSelected && "font-semibold text-primary",
+                            )}
+                          >
+                            {wt.branch}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                          <span
+                            className={cn("gen2-worktree-status-pill", st.tone)}
+                          >
+                            {st.label}
+                          </span>
+                          {isSelected ? (
+                            <Check size={13} className="text-primary" />
+                          ) : null}
+                        </div>
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </DropdownMenuGroup>
+                {canEdit ? (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => {
+                        collapseSidebarByUser(false);
+                        setShowCreate(true);
+                      }}
+                      className="cursor-pointer py-1.5 px-2 text-xs"
+                    >
+                      <Plus size={13} className="mr-2 shrink-0" />
+                      <span>New branch…</span>
+                    </DropdownMenuItem>
+                  </>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
 
-                  {/* Dropdown Menu (rendered and toggled with open class) */}
+          {/* Center section: quiet active session context, gracefully hides on narrow screens */}
+          <div className="gen2-ide-top-navbar-center">
+            <div className="gen2-topbar-session-card">
+              <div className="gen2-topbar-provider-avatar">
+                <ProviderLogo provider={activeProvider} size={14} />
+              </div>
+              <span className="gen2-topbar-session-title">
+                {activeChat?.title ?? "Initial Workspace Session"}
+              </span>
+              {agentRunning ? (
+                <span className="gen2-topbar-session-status running">
+                  <span
+                    className="gen2-status-dot working"
+                    aria-hidden="true"
+                  />
+                  Working…
+                </span>
+              ) : null}
+            </div>
+          </div>
+
+          {/* Right section: share, board view toggle, truthful machine status, theme, inspector */}
+          <div className="gen2-ide-top-navbar-right">
+            <WorkspaceButton
+              tone="secondary"
+              onClick={() => setShareOpen(true)}
+              aria-label="Share workspace"
+            >
+              <UserPlus data-icon="inline-start" aria-hidden="true" />
+              <span className="gen2-topbar-action-label">Share</span>
+            </WorkspaceButton>
+
+            <WorkspaceButton
+              tone="ghost"
+              type="button"
+              className={cn(
+                "gen2-topbar-nav-button",
+                viewMode === "board" && "active",
+              )}
+              aria-pressed={viewMode === "board"}
+              onClick={() =>
+                setViewMode((m) => (m === "board" ? "ide" : "board"))
+              }
+              aria-label={
+                viewMode === "board" ? "Switch to IDE Stage" : "Switch to Board"
+              }
+            >
+              <Kanban data-icon="inline-start" aria-hidden="true" />
+              <span className="gen2-topbar-action-label">
+                {viewMode === "board" ? "IDE Stage" : "Board"}
+              </span>
+            </WorkspaceButton>
+
+            {connection.state !== "connected" ? (
+              <WorkspaceButton
+                tone="secondary"
+                size="toolbar"
+                disabled={
+                  connection.state === "connecting" ||
+                  connection.state === "checking"
+                }
+                onClick={() => void ensureRunning()}
+                aria-label={
+                  connection.state === "connecting"
+                    ? "Reconnecting workspace"
+                    : connection.state === "checking"
+                      ? "Checking workspace connection"
+                      : "Reconnect workspace"
+                }
+              >
+                {connection.state === "disconnected" ? (
+                  <Cloud data-icon="inline-start" aria-hidden="true" />
+                ) : (
+                  <LoaderCircle
+                    data-icon="inline-start"
+                    className="animate-spin"
+                    aria-hidden="true"
+                  />
+                )}
+                <span className="gen2-topbar-action-label">
+                  {connection.state === "connecting"
+                    ? "Reconnecting…"
+                    : connection.state === "checking"
+                      ? "Connecting…"
+                      : "Reconnect"}
+                </span>
+              </WorkspaceButton>
+            ) : null}
+
+            <Separator
+              orientation="vertical"
+              className="h-4 my-auto opacity-40"
+            />
+
+            <ThemeToggle compact />
+
+            {viewMode === "ide" ? (
+              <>
+                <Separator
+                  orientation="vertical"
+                  className="h-4 my-auto opacity-40"
+                />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <WorkspaceButton
+                      size="icon"
+                      type="button"
+                      className={cn(
+                        "gen2-ide-icon-button",
+                        inspectorCollapsed && "active",
+                      )}
+                      onClick={toggleInspectorByUser}
+                      aria-label={
+                        inspectorCollapsed
+                          ? "Expand inspector"
+                          : "Collapse inspector"
+                      }
+                    >
+                      <PanelRight size={16} />
+                    </WorkspaceButton>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    {inspectorCollapsed
+                      ? "Expand inspector"
+                      : "Collapse inspector"}
+                  </TooltipContent>
+                </Tooltip>
+              </>
+            ) : null}
+          </div>
+        </header>
+
+        {viewMode === "board" ? (
+          <main
+            className={cn("gen2-ide", sidebarCollapsed && "sidebar-collapsed")}
+            data-view-mode="board"
+          >
+            <aside
+              className={cn(
+                "gen2-ide-branches",
+                sidebarCollapsed && "collapsed",
+              )}
+              aria-label="Branches"
+            >
+              {sidebarCollapsed ? (
+                <div className="gen2-sidebar-compact">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <WorkspaceButton
+                        tone="ghost"
+                        size="icon"
+                        type="button"
+                        className="gen2-sidebar-compact-btn"
+                        onClick={() => collapseSidebarByUser(false)}
+                        aria-label={`Active worktree: ${selected?.branch ?? "main"}`}
+                      >
+                        <GitBranch className="size-4 text-foreground/80" />
+                        {worktrees.length > 1 ? (
+                          <span className="gen2-sidebar-compact-badge">
+                            {worktrees.length}
+                          </span>
+                        ) : null}
+                      </WorkspaceButton>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">
+                      {`Active worktree: ${selected?.branch ?? "main"} (${worktrees.length} branches)`}
+                    </TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <WorkspaceButton
+                        tone="primary"
+                        size="icon"
+                        type="button"
+                        className="gen2-sidebar-compact-btn primary"
+                        onClick={() => void handleNewChat()}
+                        aria-label="New Chat"
+                      >
+                        <Plus size={16} strokeWidth={2.5} />
+                      </WorkspaceButton>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">New Chat</TooltipContent>
+                  </Tooltip>
+                </div>
+              ) : (
+                <div className="gen2-sidebar-section">
+                  <div className="gen2-sidebar-section-header">
+                    <span className="gen2-sidebar-section-title">
+                      ACTIVE WORKTREE
+                    </span>
+                    <span className="gen2-sidebar-section-count">
+                      {worktrees.length}{" "}
+                      {worktrees.length === 1 ? "BRANCH" : "BRANCHES"}
+                    </span>
+                  </div>
+                  <div className="gen2-worktree-dropdown-wrapper">
+                    <button
+                      type="button"
+                      className="gen2-worktree-trigger-btn"
+                      onClick={() => setWorktreeDropdownOpen((open) => !open)}
+                      aria-expanded={worktreeDropdownOpen}
+                      aria-label={`Active worktree: ${selected?.branch ?? "main"}`}
+                    >
+                      <div className="gen2-worktree-trigger-left">
+                        <GitBranch
+                          size={14}
+                          className="gen2-worktree-trigger-icon"
+                        />
+                        <span className="gen2-worktree-branch-name">
+                          {selected?.branch ?? "main"}
+                        </span>
+                      </div>
+                      <div className="gen2-worktree-trigger-right">
+                        {selectedStatus ? (
+                          <span
+                            className={cn(
+                              "gen2-worktree-status-pill",
+                              selectedStatus.tone,
+                            )}
+                          >
+                            {selectedStatus.label}
+                          </span>
+                        ) : null}
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </aside>
+            <SupersetWorkspacesBoard
+              items={boardItems}
+              selectedWorktreeId={worktreeId}
+              onSelectWorktree={(id) => {
+                selectWorktree(id);
+                setViewMode("ide");
+              }}
+              onCreateWorktree={canEdit ? () => setShowCreate(true) : undefined}
+              canEdit={canEdit}
+            />
+          </main>
+        ) : (
+          <main className="gen2-ide-main-shell flex-1 h-[calc(100vh-48px)] min-h-0 overflow-hidden flex">
+            {sidebarCollapsed ? (
+              <aside
+                className="gen2-ide-branches collapsed shrink-0 border-r border-border z-10"
+                aria-label="Branches"
+              >
+                <div className="gen2-sidebar-compact">
                   <div
-                    className={`gen2-worktree-dropdown-menu ${worktreeDropdownOpen ? "open" : ""}`}
-                    role="menu"
+                    className="gen2-worktree-dropdown-wrapper"
+                    ref={worktreeDropdownRef}
                   >
-                    <div className="gen2-worktree-dropdown-header">
-                      <span>Switch worktree</span>
-                    </div>
-                    <ul className="gen2-worktree-dropdown-list">
-                      {worktrees.map((wt) => {
-                        const isSelected = wt.worktreeId === worktreeId;
-                        const count = fileCounts[wt.worktreeId] ?? 0;
-                        return (
-                          <li key={wt.worktreeId}>
-                            <button
-                              type="button"
-                              className={`gen2-worktree-dropdown-item ${isSelected ? "selected" : ""}`}
-                              onClick={() => {
-                                selectWorktree(wt.worktreeId);
-                                setWorktreeDropdownOpen(false);
-                              }}
-                            >
-                              <div className="flex items-center gap-2 min-w-0 flex-1">
-                                <GitBranch
-                                  className={`size-3.5 flex-shrink-0 ${
-                                    isSelected
-                                      ? "text-blue-500"
-                                      : "text-muted-foreground"
-                                  }`}
-                                />
-                                <span className="font-mono text-xs truncate">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <WorkspaceButton
+                          tone="ghost"
+                          size="icon"
+                          type="button"
+                          className="gen2-sidebar-compact-btn"
+                          onClick={() =>
+                            setWorktreeDropdownOpen((open) => !open)
+                          }
+                          aria-expanded={worktreeDropdownOpen}
+                          aria-label={`Active worktree: ${selected?.branch ?? "main"}`}
+                        >
+                          <GitBranch className="size-4 text-foreground/80" />
+                          {worktrees.length > 1 ? (
+                            <span className="gen2-sidebar-compact-badge">
+                              {worktrees.length}
+                            </span>
+                          ) : null}
+                        </WorkspaceButton>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">
+                        {`Active worktree: ${selected?.branch ?? "main"} (${worktrees.length} branches)`}
+                      </TooltipContent>
+                    </Tooltip>
+                    <div
+                      className={cn(
+                        "gen2-worktree-dropdown-menu gen2-worktree-dropdown-menu-compact",
+                        worktreeDropdownOpen && "open",
+                      )}
+                      role="menu"
+                    >
+                      <div className="gen2-worktree-dropdown-header">
+                        <span>Switch worktree</span>
+                      </div>
+                      <ul className="gen2-worktree-dropdown-list">
+                        {worktrees.map((wt) => {
+                          const isSelected = wt.worktreeId === worktreeId;
+                          const st = getBranchStatus(wt.worktreeId);
+                          return (
+                            <li key={wt.worktreeId}>
+                              <button
+                                type="button"
+                                className={cn(
+                                  "gen2-worktree-dropdown-item",
+                                  isSelected && "selected",
+                                )}
+                                onClick={() => {
+                                  selectWorktree(wt.worktreeId);
+                                  setWorktreeDropdownOpen(false);
+                                }}
+                              >
+                                <span className="gen2-worktree-dropdown-item-branch">
                                   {wt.branch}
                                 </span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground">
-                                  {count ? `${count} files` : "Clean"}
+                                <span
+                                  className={cn(
+                                    "gen2-worktree-status-pill",
+                                    st.tone,
+                                  )}
+                                >
+                                  {st.label}
                                 </span>
-                                {isSelected ? (
-                                  <Check size={13} className="text-blue-500" />
-                                ) : null}
-                              </div>
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                    {canEdit ? (
-                      <div className="gen2-worktree-dropdown-footer">
-                        <button
-                          type="button"
-                          className="gen2-worktree-create-btn"
-                          onClick={() => {
-                            setShowCreate((current) => !current);
-                            setWorktreeDropdownOpen(false);
-                          }}
-                          aria-label="New branch"
-                        >
-                          <Plus size={13} />
-                          <span>New branch</span>
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-
-                {/* Inline creation form if showCreate is open */}
-                {showCreate ? (
-                  <form
-                    className="gen2-ide-branch-form"
-                    onSubmit={(event) => void createWorktree(event)}
-                  >
-                    <label>
-                      Worktree ID
-                      <input
-                        value={newWorktreeId}
-                        onChange={(event) =>
-                          setNewWorktreeId(event.target.value)
-                        }
-                        placeholder="feature-auth"
-                        required
-                      />
-                    </label>
-                    <label>
-                      Branch
-                      <input
-                        value={newBranch}
-                        onChange={(event) => setNewBranch(event.target.value)}
-                        placeholder="feature/auth"
-                        required
-                      />
-                    </label>
-                    <label>
-                      Base ref <span>(optional)</span>
-                      <input
-                        value={baseRef}
-                        onChange={(event) => setBaseRef(event.target.value)}
-                        placeholder="main"
-                      />
-                    </label>
-                    <div className="flex items-center gap-2 mt-2">
-                      <button
-                        type="submit"
-                        disabled={creating}
-                        className="flex-1 primary"
-                      >
-                        {creating ? "Creating…" : "Create worktree"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setShowCreate(false)}
-                        className="px-2 py-1 text-xs border rounded"
-                      >
-                        Cancel
-                      </button>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
                     </div>
-                  </form>
-                ) : null}
-              </div>
-
-              {/* Primary Action: + New Chat */}
-              <button
-                type="button"
-                className="gen2-sidebar-new-chat-btn"
-                onClick={() => void handleNewChat()}
-                aria-label="New Chat"
-              >
-                <div className="flex items-center gap-2">
-                  <Plus size={14} strokeWidth={2.5} />
-                  <span>New Chat</span>
-                </div>
-                <kbd className="gen2-sidebar-new-chat-kbd">⌘N</kbd>
-              </button>
-
-              {/* Section 2: RECENT CHATS */}
-              <div className="gen2-sidebar-section gen2-sidebar-recent-chats">
-                <div className="gen2-sidebar-section-header">
-                  <span className="gen2-sidebar-section-title">
-                    RECENT CHATS
-                  </span>
-                  <span className="gen2-sidebar-section-count">
-                    {chats.length}
-                  </span>
-                </div>
-
-                {connectedProviders.length === 0 ? (
-                  <div className="gen2-sidebar-no-providers">
-                    <p className="text-xs text-muted-foreground">
-                      No AI providers connected.
-                    </p>
-                    <Link
-                      href="/settings/personal/providers#coding-workspaces"
-                      className="text-xs text-blue-500 hover:underline mt-1 inline-block"
-                    >
-                      Connect in Settings
-                    </Link>
                   </div>
-                ) : (
-                  <div className="gen2-sidebar-providers-list">
-                    {connectedProviders.map((provider) => {
-                      const providerChats = chats.filter((c) => {
-                        const mapped = chatProviders[c.id];
-                        if (mapped) return mapped === provider.id;
-                        if (connectedProviders.length === 1) return true;
-                        return provider.id === activeProvider;
-                      });
 
-                      return (
+                  {/* New Chat Button */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <WorkspaceButton
+                        tone="primary"
+                        size="icon"
+                        type="button"
+                        className="gen2-sidebar-compact-btn primary"
+                        onClick={() => void handleNewChat()}
+                        aria-label="New Chat"
+                      >
+                        <Plus size={16} strokeWidth={2.5} />
+                      </WorkspaceButton>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">New Chat</TooltipContent>
+                  </Tooltip>
+
+                  <div className="gen2-sidebar-compact-divider" />
+
+                  {/* Connected Providers */}
+                  <div className="gen2-sidebar-compact-providers">
+                    {connectedProviders.map((provider) => (
+                      <Tooltip key={provider.id}>
+                        <TooltipTrigger asChild>
+                          <WorkspaceButton
+                            tone="ghost"
+                            size="icon"
+                            type="button"
+                            className={cn(
+                              "gen2-sidebar-compact-btn provider",
+                              activeProvider === provider.id && "active",
+                            )}
+                            onClick={() => setActiveProvider(provider.id)}
+                            aria-label={`${provider.name} provider`}
+                          >
+                            <ProviderLogo provider={provider.id} size={16} />
+                          </WorkspaceButton>
+                        </TooltipTrigger>
+                        <TooltipContent side="right">
+                          {`${provider.name} (${chats.filter((c) => chatProviders[c.id] === provider.id || (connectedProviders.length === 1 && !chatProviders[c.id])).length} chats)`}
+                        </TooltipContent>
+                      </Tooltip>
+                    ))}
+                  </div>
+                </div>
+              </aside>
+            ) : null}
+
+            <ResizablePanelGroup
+              direction="horizontal"
+              className={cn(
+                "gen2-ide flex-1",
+                sidebarCollapsed && "sidebar-collapsed",
+                inspectorCollapsed && "inspector-collapsed",
+              )}
+              data-view-mode="ide"
+            >
+              {!sidebarCollapsed ? (
+                <>
+                  <ResizablePanel
+                    defaultSize="288px"
+                    minSize="220px"
+                    maxSize="360px"
+                    groupResizeBehavior="preserve-pixel-size"
+                    className="gen2-ide-branches"
+                  >
+                    <aside
+                      className="h-full w-full overflow-hidden flex flex-col"
+                      aria-label="Branches"
+                    >
+                      {/* Section 1: ACTIVE WORKTREE */}
+                      <div className="gen2-sidebar-section">
+                        <div className="gen2-sidebar-section-header">
+                          <span className="gen2-sidebar-section-title">
+                            ACTIVE WORKTREE
+                          </span>
+                          <span className="gen2-sidebar-section-count">
+                            {worktrees.length}{" "}
+                            {worktrees.length === 1 ? "BRANCH" : "BRANCHES"}
+                          </span>
+                        </div>
+
+                        {/* Worktree Switcher Trigger */}
                         <div
-                          key={provider.id}
-                          className="gen2-sidebar-provider-group"
+                          className="gen2-worktree-dropdown-wrapper"
+                          ref={worktreeDropdownRef}
                         >
-                          <div className="gen2-sidebar-provider-header">
-                            <div className="gen2-sidebar-provider-label">
-                              <ProviderLogo
-                                provider={provider.id}
+                          <button
+                            type="button"
+                            className="gen2-worktree-trigger-btn"
+                            onClick={() =>
+                              setWorktreeDropdownOpen((open) => !open)
+                            }
+                            aria-expanded={worktreeDropdownOpen}
+                            aria-label={`Active worktree: ${selected?.branch ?? "main"}`}
+                          >
+                            <div className="gen2-worktree-trigger-left">
+                              <GitBranch
                                 size={14}
-                                className="gen2-sidebar-provider-logo"
+                                className="gen2-worktree-trigger-icon"
                               />
-                              <span className="gen2-sidebar-provider-name">
-                                {provider.name}
+                              <span className="gen2-worktree-branch-name">
+                                {selected?.branch ?? "main"}
                               </span>
                             </div>
-                            <span className="gen2-sidebar-provider-count">
-                              {providerChats.length}
-                            </span>
-                          </div>
+                            <div className="gen2-worktree-trigger-right">
+                              {selectedStatus ? (
+                                <span
+                                  className={cn(
+                                    "gen2-worktree-status-pill",
+                                    selectedStatus.tone,
+                                  )}
+                                >
+                                  {selectedStatus.label}
+                                </span>
+                              ) : null}
+                              <ChevronDown
+                                size={14}
+                                className={cn(
+                                  "gen2-worktree-trigger-chevron",
+                                  worktreeDropdownOpen && "open",
+                                )}
+                              />
+                            </div>
+                          </button>
 
-                          {providerChats.length === 0 ? (
-                            <p className="gen2-sidebar-chat-empty">
-                              No {provider.name} chats yet
-                            </p>
-                          ) : (
-                            <ul className="gen2-sidebar-chat-list">
-                              {providerChats.map((chat) => {
-                                const isSelected =
-                                  chat.id === (selectedChatId ?? chats[0]?.id);
+                          {/* Worktrees Menu */}
+                          <div
+                            className={cn(
+                              "gen2-worktree-dropdown-menu",
+                              worktreeDropdownOpen && "open",
+                            )}
+                            role="menu"
+                          >
+                            <div className="gen2-worktree-dropdown-header">
+                              <span>Switch worktree</span>
+                            </div>
+                            <ul className="gen2-worktree-dropdown-list">
+                              {worktrees.map((wt) => {
+                                const isSelected = wt.worktreeId === worktreeId;
+                                const st = getBranchStatus(wt.worktreeId);
                                 return (
-                                  <li key={chat.id}>
+                                  <li key={wt.worktreeId}>
                                     <button
                                       type="button"
-                                      className={`gen2-sidebar-chat-card ${
-                                        isSelected ? "selected" : ""
-                                      }`}
+                                      className={cn(
+                                        "gen2-worktree-dropdown-item",
+                                        isSelected && "selected",
+                                      )}
                                       onClick={() => {
-                                        setSelectedChatId(chat.id);
-                                        setActiveProvider(provider.id);
+                                        selectWorktree(wt.worktreeId);
+                                        setWorktreeDropdownOpen(false);
                                       }}
                                     >
-                                      <span className="gen2-sidebar-chat-title">
-                                        {chat.title}
-                                      </span>
-                                      <div className="gen2-sidebar-chat-meta">
-                                        <span>
-                                          {chat.messageCount ?? 1} msgs
+                                      <div className="gen2-worktree-dropdown-item-left">
+                                        <GitBranch
+                                          size={14}
+                                          className={cn(
+                                            "gen2-worktree-dropdown-item-icon",
+                                            isSelected && "selected",
+                                          )}
+                                        />
+                                        <span className="gen2-worktree-dropdown-item-branch">
+                                          {wt.branch}
                                         </span>
-                                        <span className="gen2-sidebar-chat-dot">
-                                          •
+                                      </div>
+                                      <div className="gen2-worktree-dropdown-item-right">
+                                        <span
+                                          className={cn(
+                                            "gen2-worktree-status-pill",
+                                            st.tone,
+                                          )}
+                                        >
+                                          {st.label}
                                         </span>
-                                        <span>
-                                          {formatRelativeTime(chat.updatedAt)}
-                                        </span>
+                                        {isSelected ? (
+                                          <Check
+                                            size={13}
+                                            className="gen2-worktree-dropdown-item-check"
+                                          />
+                                        ) : null}
                                       </div>
                                     </button>
                                   </li>
                                 );
                               })}
                             </ul>
-                          )}
+                            {canEdit ? (
+                              <div className="gen2-worktree-dropdown-footer">
+                                <WorkspaceButton
+                                  tone="ghost"
+                                  type="button"
+                                  className="gen2-worktree-create-btn"
+                                  onClick={() => {
+                                    setShowCreate((current) => !current);
+                                    setWorktreeDropdownOpen(false);
+                                  }}
+                                  aria-label="New branch"
+                                >
+                                  <Plus size={13} />
+                                  <span>New branch</span>
+                                </WorkspaceButton>
+                              </div>
+                            ) : null}
+                          </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </aside>
 
-        {viewMode === "board" ? (
-          <SupersetWorkspacesBoard
-            items={boardItems}
-            selectedWorktreeId={worktreeId}
-            onSelectWorktree={(id) => {
-              selectWorktree(id);
-              setViewMode("ide");
-            }}
-            onCreateWorktree={canEdit ? () => setShowCreate(true) : undefined}
-            canEdit={canEdit}
-          />
-        ) : (
-          <>
-            <section
-              className="gen2-ide-session"
-              aria-label="Workspace session"
-            >
-              {notice ? (
-                <p className="gen2-superset-runtime-notice" role="status">
-                  {notice}
-                </p>
+                        {/* Inline creation form if showCreate is open */}
+                        {showCreate ? (
+                          <form
+                            className="gen2-ide-branch-form"
+                            onSubmit={(event) => void createWorktree(event)}
+                          >
+                            <label>
+                              Worktree ID
+                              <input
+                                value={newWorktreeId}
+                                onChange={(event) =>
+                                  setNewWorktreeId(event.target.value)
+                                }
+                                placeholder="feature-auth"
+                                required
+                              />
+                            </label>
+                            <label>
+                              Branch
+                              <input
+                                value={newBranch}
+                                onChange={(event) =>
+                                  setNewBranch(event.target.value)
+                                }
+                                placeholder="feature/auth"
+                                required
+                              />
+                            </label>
+                            <label>
+                              Base ref <span>(optional)</span>
+                              <input
+                                value={baseRef}
+                                onChange={(event) =>
+                                  setBaseRef(event.target.value)
+                                }
+                                placeholder="main"
+                              />
+                            </label>
+                            <div className="gen2-worktree-create-actions">
+                              <WorkspaceButton
+                                tone="primary"
+                                type="submit"
+                                disabled={creating}
+                                className="gen2-worktree-form-submit-btn"
+                              >
+                                {creating ? "Creating…" : "Create worktree"}
+                              </WorkspaceButton>
+                              <WorkspaceButton
+                                tone="ghost"
+                                type="button"
+                                onClick={() => setShowCreate(false)}
+                                className="gen2-worktree-form-cancel-btn"
+                              >
+                                Cancel
+                              </WorkspaceButton>
+                            </div>
+                          </form>
+                        ) : null}
+                      </div>
+
+                      {/* Primary Action: + New Chat */}
+                      <WorkspaceButton
+                        tone="primary"
+                        size="action"
+                        type="button"
+                        className="gen2-sidebar-new-chat-btn"
+                        onClick={() => void handleNewChat()}
+                        aria-label="New Chat"
+                      >
+                        <div className="gen2-sidebar-new-chat-content">
+                          <Plus size={14} strokeWidth={2.5} />
+                          <span>New Chat</span>
+                        </div>
+                      </WorkspaceButton>
+
+                      {/* Section 2: RECENT CHATS */}
+                      <div className="gen2-sidebar-section gen2-sidebar-recent-chats">
+                        <div className="gen2-sidebar-section-header">
+                          <span className="gen2-sidebar-section-title">
+                            RECENT CHATS
+                          </span>
+                          <span className="gen2-sidebar-section-count">
+                            {chats.length}
+                          </span>
+                        </div>
+
+                        {connectedProviders.length === 0 ? (
+                          <div className="gen2-sidebar-no-providers">
+                            <p className="text-xs text-muted-foreground">
+                              No AI providers connected.
+                            </p>
+                            <Link
+                              href="/settings/personal/providers#coding-workspaces"
+                              className="text-xs text-primary hover:underline mt-1 inline-block"
+                            >
+                              Connect in Settings
+                            </Link>
+                          </div>
+                        ) : (
+                          <div className="gen2-sidebar-providers-list">
+                            {connectedProviders.map((provider) => {
+                              const providerChats = chats.filter((c) => {
+                                const mapped = chatProviders[c.id];
+                                if (mapped) return mapped === provider.id;
+                                if (connectedProviders.length === 1)
+                                  return true;
+                                return provider.id === activeProvider;
+                              });
+
+                              return (
+                                <div
+                                  key={provider.id}
+                                  className="gen2-sidebar-provider-group"
+                                >
+                                  <div className="gen2-sidebar-provider-header">
+                                    <div className="gen2-sidebar-provider-label">
+                                      <ProviderLogo
+                                        provider={provider.id}
+                                        size={14}
+                                        className="gen2-sidebar-provider-logo"
+                                      />
+                                      <span className="gen2-sidebar-provider-name">
+                                        {provider.name}
+                                      </span>
+                                    </div>
+                                    <span className="gen2-sidebar-provider-count">
+                                      {providerChats.length}
+                                    </span>
+                                  </div>
+
+                                  {providerChats.length === 0 ? (
+                                    <p className="gen2-sidebar-chat-empty">
+                                      No {provider.name} chats yet
+                                    </p>
+                                  ) : (
+                                    <ul className="gen2-sidebar-chat-list">
+                                      {providerChats.map((chat) => {
+                                        const isSelected =
+                                          chat.id ===
+                                          (selectedChatId ?? chats[0]?.id);
+                                        return (
+                                          <li
+                                            key={chat.id}
+                                            className="gen2-sidebar-chat-item"
+                                          >
+                                            {renamingChatId === chat.id ? (
+                                              <form
+                                                className="gen2-sidebar-chat-rename-form"
+                                                onSubmit={(event) =>
+                                                  void submitRename(event)
+                                                }
+                                              >
+                                                <input
+                                                  aria-label="Chat title"
+                                                  value={renameDraft}
+                                                  maxLength={80}
+                                                  autoFocus
+                                                  disabled={renamePending}
+                                                  onChange={(event) =>
+                                                    setRenameDraft(
+                                                      event.target.value,
+                                                    )
+                                                  }
+                                                  onKeyDown={(event) => {
+                                                    if (
+                                                      event.key === "Escape" &&
+                                                      !renamePending
+                                                    ) {
+                                                      event.preventDefault();
+                                                      setRenamingChatId(null);
+                                                    }
+                                                  }}
+                                                />
+                                              </form>
+                                            ) : (
+                                              <>
+                                                <button
+                                                  type="button"
+                                                  aria-current={
+                                                    isSelected
+                                                      ? "page"
+                                                      : undefined
+                                                  }
+                                                  className={cn(
+                                                    "gen2-sidebar-chat-card",
+                                                    isSelected && "selected",
+                                                  )}
+                                                  onClick={() => {
+                                                    setSelectedChatId(chat.id);
+                                                    setActiveProvider(
+                                                      provider.id,
+                                                    );
+                                                  }}
+                                                  onDoubleClick={() =>
+                                                    beginRename(chat)
+                                                  }
+                                                >
+                                                  <span className="gen2-sidebar-chat-title">
+                                                    {chat.title}
+                                                  </span>
+                                                  <div className="gen2-sidebar-chat-meta">
+                                                    <span>
+                                                      {chat.messageCount ?? 1}{" "}
+                                                      msgs
+                                                    </span>
+                                                    <span className="gen2-sidebar-chat-dot">
+                                                      •
+                                                    </span>
+                                                    <span>
+                                                      {formatRelativeTime(
+                                                        chat.updatedAt,
+                                                      )}
+                                                    </span>
+                                                  </div>
+                                                </button>
+                                                <WorkspaceButton
+                                                  tone="ghost"
+                                                  size="icon"
+                                                  className="gen2-sidebar-chat-rename"
+                                                  aria-label={`Rename ${chat.title}`}
+                                                  onClick={() =>
+                                                    beginRename(chat)
+                                                  }
+                                                >
+                                                  <Pencil aria-hidden="true" />
+                                                </WorkspaceButton>
+                                              </>
+                                            )}
+                                          </li>
+                                        );
+                                      })}
+                                    </ul>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </aside>
+                  </ResizablePanel>
+                  <ResizableHandle withHandle className="gen2-ide-resizer" />
+                </>
               ) : null}
 
-              {/* Middle part is ALWAYS the agent chat */}
-              <div className="gen2-ide-chat-stage">
-                <Gen2ChatPanel
-                  workspace={activeWorkspace}
-                  worktreeId={worktreeId}
-                  activeChatId={selectedChatId}
-                  onSelectChatId={setSelectedChatId}
-                  onChatsChange={setChats}
-                  activeProvider={activeProvider as any}
-                  onActiveProviderChange={setActiveProvider as any}
-                  hideChatBar={true}
-                  onRunningChange={setAgentRunning}
-                  onFilesChanged={() => {
-                    void refreshWorktrees();
-                  }}
-                  onOpenFile={() => {
-                    setTab("files");
-                  }}
-                  onNeedsMachine={ensureRunning}
-                />
-              </div>
-
-              {/* Bottom terminal dock: click to expand / collapse */}
-              <div
-                className={`gen2-ide-terminal-dock ${terminalExpanded ? "expanded" : "collapsed"}`}
-                aria-label="Terminal dock"
+              {/* Center Main Stage: Agent Chat & Docked Terminal */}
+              <ResizablePanel
+                minSize="240px"
+                className="gen2-ide-session-panel"
               >
-                <div
-                  className="gen2-ide-terminal-dock-bar"
-                  onClick={() => setTerminalExpanded((expanded) => !expanded)}
-                  role="button"
-                  tabIndex={0}
-                  aria-expanded={terminalExpanded}
-                  aria-label={
-                    terminalExpanded ? "Collapse terminal" : "Expand terminal"
-                  }
+                <section
+                  className="gen2-ide-session"
+                  aria-label="Workspace session"
                 >
-                  <div className="flex items-center gap-2">
-                    <SquareTerminal
-                      aria-hidden="true"
-                      size={14}
-                      className="text-muted-foreground"
+                  {notice || connection.error ? (
+                    <p className="gen2-superset-runtime-notice" role="status">
+                      {connection.error || notice}
+                    </p>
+                  ) : null}
+
+                  {/* Middle part is ALWAYS the agent chat */}
+                  <div className="gen2-ide-chat-stage">
+                    <Gen2ChatPanel
+                      workspace={currentWorkspace}
+                      worktreeId={worktreeId}
+                      activeChatId={selectedChatId}
+                      onSelectChatId={setSelectedChatId}
+                      onChatsChange={setChats}
+                      activeProvider={activeProvider as any}
+                      onActiveProviderChange={setActiveProvider as any}
+                      hideChatBar={true}
+                      onRunningChange={setAgentRunning}
+                      onFilesChanged={() => {
+                        void refreshWorktrees();
+                      }}
+                      onOpenFile={(path) => {
+                        setRequestedFilePath(path);
+                        setTab("files");
+                      }}
+                      onNeedsMachine={ensureRunning}
                     />
-                    <span className="text-xs font-medium">Terminal</span>
-                    <Badge
-                      variant="outline"
-                      className="text-[10px] px-1.5 py-0 h-4 font-mono text-muted-foreground"
-                    >
-                      {selected?.branch ?? "main"}
-                    </Badge>
                   </div>
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <span className="text-[11px]">
-                      {terminalExpanded ? "Collapse" : "Expand"}
-                    </span>
-                    {terminalExpanded ? (
-                      <ChevronDown aria-hidden="true" size={14} />
-                    ) : (
-                      <ChevronUp aria-hidden="true" size={14} />
+
+                  {/* Bottom terminal dock: click to expand / collapse */}
+                  <div
+                    className={cn(
+                      "gen2-ide-terminal-dock",
+                      terminalExpanded ? "expanded" : "collapsed",
                     )}
-                  </div>
-                </div>
-
-                <div
-                  className="gen2-ide-terminal-dock-content"
-                  hidden={!terminalExpanded}
-                >
-                  <Gen2TerminalPane
-                    key={worktreeId}
-                    workspaceId={workspaceId}
-                    worktreeId={worktreeId}
-                    visible={terminalExpanded}
-                    canStart
-                    autoStart
-                    onResumeWorkspace={ensureRunning}
-                    onExit={() => undefined}
-                  />
-                </div>
-              </div>
-            </section>
-
-            <aside
-              className={`gen2-ide-inspector ${inspectorCollapsed ? "collapsed" : ""}`}
-              aria-label="Branch files"
-            >
-              <div
-                role="tablist"
-                aria-label="Branch files"
-                className="gen2-ide-tabs"
-              >
-                {(
-                  [
-                    ["files", "Files"],
-                    ["changes", "Changes"],
-                    ["review", "Review"],
-                  ] as const
-                ).map(([id, label]) => (
-                  <button
-                    key={id}
-                    id={`superset-tab-${id}`}
-                    type="button"
-                    role="tab"
-                    aria-selected={tab === id}
-                    aria-controls={`superset-panel-${id}`}
-                    onClick={() => setTab(id)}
+                    aria-label="Terminal dock"
                   >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <div
-                id="superset-panel-files"
-                role="tabpanel"
-                aria-labelledby="superset-tab-files"
-                hidden={tab !== "files"}
-                className="gen2-ide-files"
-              >
-                <SupersetFilePane
-                  key={worktreeId}
-                  workspaceId={workspaceId}
-                  canEdit={canEdit}
-                  worktreeId={worktreeId}
-                  refreshToken={refreshToken}
-                  onDirtyChange={setDirty}
-                />
-              </div>
-              <SupersetChangesPane
-                workspaceId={workspaceId}
-                worktreeId={worktreeId}
-                visible={tab === "changes"}
-                mode="changes"
-              />
-              <SupersetChangesPane
-                workspaceId={workspaceId}
-                worktreeId={worktreeId}
-                visible={tab === "review"}
-                mode="review"
-              />
-            </aside>
-          </>
+                    <div
+                      className="gen2-ide-terminal-dock-bar"
+                      onClick={() =>
+                        setTerminalExpanded((expanded) => !expanded)
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter" && event.key !== " ") return;
+                        event.preventDefault();
+                        setTerminalExpanded((expanded) => !expanded);
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={terminalExpanded}
+                      aria-label={
+                        terminalExpanded
+                          ? "Collapse terminal"
+                          : "Expand terminal"
+                      }
+                    >
+                      <div className="gen2-ide-terminal-dock-label">
+                        <SquareTerminal
+                          aria-hidden="true"
+                          className="gen2-ide-terminal-dock-icon"
+                        />
+                        <span className="gen2-ide-terminal-dock-title">
+                          Terminal
+                        </span>
+                        <span className="gen2-ide-terminal-dock-badge">
+                          {selected?.branch ?? "main"}
+                        </span>
+                      </div>
+                      <div
+                        className="gen2-ide-terminal-dock-action"
+                        aria-hidden="true"
+                      >
+                        {terminalExpanded ? <ChevronDown /> : <ChevronUp />}
+                      </div>
+                    </div>
+
+                    <div
+                      className="gen2-ide-terminal-dock-content"
+                      hidden={!terminalExpanded}
+                    >
+                      <Gen2TerminalPane
+                        key={worktreeId}
+                        workspaceId={workspaceId}
+                        worktreeId={worktreeId}
+                        visible={terminalExpanded}
+                        canStart
+                        autoStart
+                        onResumeWorkspace={ensureRunning}
+                        onExit={() => undefined}
+                      />
+                    </div>
+                  </div>
+                </section>
+              </ResizablePanel>
+
+              {/* Right Inspector: Files, Changes, Review */}
+              {!inspectorCollapsed ? (
+                <>
+                  <ResizableHandle withHandle className="gen2-ide-resizer" />
+                  <ResizablePanel
+                    defaultSize="400px"
+                    minSize="280px"
+                    maxSize="480px"
+                    groupResizeBehavior="preserve-pixel-size"
+                    className="gen2-ide-inspector"
+                  >
+                    <aside
+                      className="h-full w-full overflow-hidden flex flex-col"
+                      aria-label="Branch files"
+                    >
+                      <div
+                        role="tablist"
+                        aria-label="Branch files"
+                        className="gen2-ide-tabs"
+                      >
+                        {(
+                          [
+                            ["files", "Files"],
+                            ["changes", "Changes"],
+                            ["review", "Review"],
+                          ] as const
+                        ).map(([id, label]) => (
+                          <button
+                            key={id}
+                            id={`superset-tab-${id}`}
+                            type="button"
+                            role="tab"
+                            aria-selected={tab === id}
+                            aria-controls={`superset-panel-${id}`}
+                            onClick={() => setTab(id)}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <div
+                        id="superset-panel-files"
+                        role="tabpanel"
+                        aria-labelledby="superset-tab-files"
+                        hidden={tab !== "files"}
+                        className="gen2-ide-files"
+                      >
+                        <SupersetFilePane
+                          key={worktreeId}
+                          workspaceId={workspaceId}
+                          canEdit={canEdit}
+                          worktreeId={worktreeId}
+                          refreshToken={refreshToken}
+                          onDirtyChange={setDirty}
+                          requestedPath={requestedFilePath}
+                          onRequestedPathConsumed={() =>
+                            setRequestedFilePath(null)
+                          }
+                        />
+                      </div>
+                      <SupersetChangesPane
+                        workspaceId={workspaceId}
+                        worktreeId={worktreeId}
+                        visible={tab === "changes"}
+                        mode="changes"
+                        onOpenFile={(path) => {
+                          setRequestedFilePath(path);
+                          setTab("files");
+                        }}
+                      />
+                      <SupersetChangesPane
+                        workspaceId={workspaceId}
+                        worktreeId={worktreeId}
+                        visible={tab === "review"}
+                        mode="review"
+                        onOpenFile={(path) => {
+                          setRequestedFilePath(path);
+                          setTab("files");
+                        }}
+                      />
+                    </aside>
+                  </ResizablePanel>
+                </>
+              ) : null}
+            </ResizablePanelGroup>
+          </main>
         )}
-      </main>
-    </div>
+
+        {/* Share Dialog */}
+        <WorkspaceShareDialog
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+          workspaceId={workspaceId}
+          workspaceName={activeWorkspace.name}
+          currentUserRole={activeWorkspace.role}
+          initialMembers={activeWorkspace.members}
+        />
+
+        {/* Unsaved changes confirmation AlertDialog */}
+        <AlertDialog
+          open={showDiscardDialog}
+          onOpenChange={setShowDiscardDialog}
+        >
+          <AlertDialogContent className="gen2-workspace-surface">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
+              <AlertDialogDescription>
+                You have unsaved changes on this branch. Switching worktrees
+                will discard your unsaved editor changes. Are you sure you want
+                to proceed?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={cancelDiscard}>
+                Keep Editing
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmDiscardAndSwitch}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Discard & Switch
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    </TooltipProvider>
   );
 }

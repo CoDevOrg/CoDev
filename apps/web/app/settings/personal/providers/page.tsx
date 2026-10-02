@@ -1,3 +1,4 @@
+import { CursorLogo } from "@/components/gen2/provider-logos";
 import { ProviderAccountCard } from "@/components/settings/provider-account-card";
 import { ClaudeMark, OpenAIMark } from "@/components/settings/provider-logos";
 import {
@@ -22,6 +23,12 @@ const CARDS = [
     logo: <OpenAIMark className="size-5" />,
     subscription: "codex",
     connection: "openai",
+  },
+  {
+    label: "Cursor",
+    logo: <CursorLogo className="size-5" size={20} />,
+    subscription: "cursor",
+    connection: "cursor",
   },
 ] as const;
 
@@ -56,7 +63,7 @@ export default async function PersonalProvidersPage() {
         description="Connect the accounts your agents run on. Each card shows where that account can be used once it is connected. Everything is encrypted on the CoDev server and never shown again after you save it."
         title="AI Provider Accounts"
       />
-      <div className="space-y-3">
+      <div className="flex flex-col gap-3">
         {CARDS.map((card) => {
           const subscription = snapshot.cliSubscriptions.find(
             (row) => row.provider === card.subscription,

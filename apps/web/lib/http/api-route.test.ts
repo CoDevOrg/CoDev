@@ -15,12 +15,7 @@ vi.mock("@/lib/http/api", () => ({
   getApiUser: mocks.getApiUser,
   getApiUserAnyAuth: mocks.getApiUserAnyAuth,
 }));
-import {
-  ApiError,
-  errorStatus,
-  readJson,
-  withUser,
-} from "./api-route";
+import { ApiError, errorStatus, readJson, withUser } from "./api-route";
 
 const user = { id: "2f2387ed-4a63-4b05-88cc-266d65f7b82b" };
 
@@ -151,6 +146,34 @@ describe("errorResponse via the wrappers", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getApiUser.mockResolvedValue(user);
+  });
+
+  it("handles nested database failures without exposing SQL or parameters", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const response = await withUser(() => {
+      throw new Error("Failed query: select private_data params: secret", {
+        cause: Object.assign(new Error("relation missing"), { code: "42P01" }),
+      });
+    })(new Request("http://test"), context({}));
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Retry-After")).toBe("5");
+    expect(await response.json()).toMatchObject({
+      code: "storage_schema_unavailable",
+    });
+    expect(JSON.stringify(log.mock.calls)).not.toContain("secret");
+    log.mockRestore();
+  });
+
+  it("handles query failures even when their database cause is unavailable", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const response = await withUser(() => {
+      throw new Error("Failed query: select private_data params: secret");
+    })(new Request("http://test"), context({}));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      code: "storage_unavailable",
+    });
+    log.mockRestore();
   });
 
   it("lets an error supply its whole response", async () => {

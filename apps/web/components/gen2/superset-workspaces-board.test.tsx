@@ -166,4 +166,28 @@ describe("SupersetWorkspacesBoard component", () => {
     fireEvent.click(promptButtons[0]!);
     expect(onSelect).toHaveBeenCalledWith(expect.any(String), true);
   });
+
+  it("does not describe an unloaded git status as clean", () => {
+    render(
+      <SupersetWorkspacesBoard
+        items={[
+          {
+            worktreeId: "main",
+            branch: "main",
+            fileCount: 0,
+            changesKnown: false,
+          },
+        ]}
+        selectedWorktreeId="main"
+        onSelectWorktree={vi.fn()}
+        canEdit
+      />,
+    );
+
+    expect(screen.getByText("Git status not loaded")).toBeInTheDocument();
+    expect(
+      screen.queryByText("No uncommitted changes"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Clean working tree")).not.toBeInTheDocument();
+  });
 });

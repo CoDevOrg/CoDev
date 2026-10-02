@@ -103,6 +103,7 @@ export async function login({ launchBrowser = true } = {}) {
 const INSTALL_HINT = {
   codex: "npm install -g @openai/codex",
   claude: "npm install -g @anthropic-ai/claude-code",
+  agent: "curl https://cursor.com/install -fsS | bash",
 };
 
 export function describeSpawnError(command, error) {
@@ -216,4 +217,53 @@ export async function claudeAuth() {
     body: JSON.stringify({ oauthToken }),
   });
   process.stdout.write("Claude Code is connected to your CoDev account.\n");
+}
+
+/** Paths `agent login` may write when the credential store is a file. */
+export function cursorAuthFileCandidates(home) {
+  return [
+    join(home, ".cursor", "auth.json"),
+    join(home, ".config", "cursor", "auth.json"),
+  ];
+}
+
+async function readCursorAuthFile(home) {
+  for (const path of cursorAuthFileCandidates(home)) {
+    try {
+      return JSON.parse(await readFile(path, "utf8"));
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+  }
+  throw new Error(
+    "Could not read Cursor's auth.json after `agent login`. Run it again with the file credential store.",
+  );
+}
+
+export async function cursorAuth() {
+  await loadConfig();
+  const { mkdtemp } = await import("node:fs/promises");
+  const home = await mkdtemp(join(tmpdir(), "codev-cursor-auth-"));
+  await chmod(home, 0o700);
+  try {
+    process.stdout.write("Starting the official Cursor CLI login…\n");
+    const env = {
+      ...process.env,
+      HOME: home,
+      USERPROFILE: home,
+      XDG_CONFIG_HOME: join(home, ".config"),
+      AGENT_CLI_CREDENTIAL_STORE: "file",
+    };
+    delete env.CURSOR_API_KEY;
+    await run("agent", ["login"], { env });
+    const auth = await readCursorAuthFile(home);
+    await authenticatedRequest("/api/cli/cursor-auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ auth }),
+    });
+    process.stdout.write("Cursor is connected to your CoDev account.\n");
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
 }

@@ -62,3 +62,10 @@ ready-gate on each function follows that split, and
 
 The Azure orchestrator is reused (`provisionSandbox` / `destroySandbox`). Gen 2
 uses its own `gen2_*` tables and does not access the original `workspaces` table.
+
+`compute-quota.ts` bills each running Gen 2 VM interval to its current workspace
+owner. The 6,000-minute allowance is shared across that owner's workspaces and
+resets at the UTC month boundary. `compute-reconcile.ts` checks runtime state
+without waking guests, closes hibernated intervals, and stops active guests at
+the limit. The authenticated per-minute scheduler route invokes it; startup
+checks the same live interval total before provisioning.

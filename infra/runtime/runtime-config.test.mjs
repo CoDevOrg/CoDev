@@ -57,6 +57,10 @@ test("both guest images provision a searchable, host-owned agent profile root", 
     );
     assert.match(unit, /StateDirectory=codev-superset codev-agent-profiles/);
     assert.match(unit, /StateDirectoryMode=0700/);
+    assert.match(
+      unit,
+      /ExecStart=\/bin\/sh -c '\/bin\/chmod 0711 \/var\/lib\/codev-agent-profiles && exec \/usr\/local\/bin\/node/,
+    );
     assert.match(unit, /After=workspace\.mount codev-guestd\.service/);
     assert.match(unit, /UMask=0002/);
     assert.match(
@@ -264,7 +268,7 @@ test("a bootstrap stage stamp tracks its key and honours the force switch", () =
   const helpers = between(
     bootstrap,
     "codev_stage_key() {",
-    "codev_public_ipv4() {",
+    "codev_read_direct_secret() {",
   );
   const harness = `
 set -euo pipefail

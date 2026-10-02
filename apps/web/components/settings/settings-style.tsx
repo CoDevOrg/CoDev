@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/platform/utils";
 
 export function SettingsPageShell({
@@ -9,61 +10,27 @@ export function SettingsPageShell({
   children: ReactNode;
   className?: string;
 }) {
-  return (
-    <div className="settings-scope h-full overflow-y-auto">
-      <div
-        className={cn(
-          "mx-auto flex w-full max-w-4xl flex-col gap-10 px-8 py-10",
-          className,
-        )}
-      >
-        {children}
-      </div>
-    </div>
-  );
+  return <div className={cn("flex flex-col gap-4", className)}>{children}</div>;
 }
 
 export function SettingsPageHeader({
-  title,
-  description,
   badge,
-}: {
-  title: string;
-  description: string;
-  badge?: string;
-}) {
-  return (
-    <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border/60 pb-5">
-      <div className="min-w-0 space-y-2">
-        <h2 className="flex flex-wrap items-center gap-2 text-2xl leading-tight font-semibold text-foreground">
-          {title}
-          {badge ? (
-            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium tracking-[0.05em] text-muted-foreground uppercase">
-              {badge}
-            </span>
-          ) : null}
-        </h2>
-        <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-          {description}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-export function SettingsSubsectionHeader({
-  title,
   description,
+  title,
 }: {
+  badge?: string;
+  description: string;
   title: string;
-  description?: string;
 }) {
   return (
-    <div className="space-y-1">
-      <h3 className="text-sm font-semibold">{title}</h3>
-      {description ? (
-        <p className="text-xs text-muted-foreground">{description}</p>
-      ) : null}
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <h1 className="text-lg font-semibold tracking-tight text-foreground">
+          {title}
+        </h1>
+        {badge ? <Badge variant="muted">{badge}</Badge> : null}
+      </div>
+      <p className="max-w-2xl text-sm text-muted-foreground">{description}</p>
     </div>
   );
 }

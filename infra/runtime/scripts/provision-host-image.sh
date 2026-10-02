@@ -266,7 +266,9 @@ Requires=workspace.mount
 [Service]
 Type=simple
 ExecStartPre=/bin/chmod 0711 /var/lib/codev-agent-profiles
-ExecStart=/usr/local/bin/node /opt/codev/superset-host/host-service.js
+# systemd reapplies StateDirectoryMode for each ExecStart command, after
+# ExecStartPre. Set the searchable profile-parent mode inside the final exec.
+ExecStart=/bin/sh -c '/bin/chmod 0711 /var/lib/codev-agent-profiles && exec /usr/local/bin/node /opt/codev/superset-host/host-service.js'
 Environment=HOME=/var/lib/codev-superset
 Environment=CODEV_WORKSPACE_ROOT=/workspace
 EnvironmentFile=/etc/codev/superset-bridge.env

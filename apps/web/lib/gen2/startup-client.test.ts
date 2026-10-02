@@ -47,6 +47,23 @@ function fetchSequence(responses: Response[]) {
 }
 
 describe("Gen 2 workspace startup polling", () => {
+  it("returns retry when the startup request never responds", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetcher = vi.fn(() => new Promise<Response>(() => {}));
+      const pending = ensureGen2WorkspaceReady("workspace-1", { fetcher });
+      await vi.advanceTimersByTimeAsync(90_000);
+      expect(await pending).toEqual({
+        error:
+          "The workspace is taking longer to reconnect. Please try again in a moment.",
+      });
+      expect(fetcher.mock.calls.length).toBeGreaterThan(0);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("retries bounded host-wake failures until the server returns ready", async () => {
     const { calls, fetcher } = fetchSequence([
       response(503, { error: "The Firecracker host is still starting." }),
@@ -133,7 +150,8 @@ describe("Gen 2 workspace startup polling", () => {
     });
 
     expect(result).toEqual({
-      error: "The Firecracker host is still starting. Try again in a moment.",
+      error:
+        "The workspace is taking longer to reconnect. Please try again in a moment.",
     });
     expect(calls).toHaveLength(2);
   });

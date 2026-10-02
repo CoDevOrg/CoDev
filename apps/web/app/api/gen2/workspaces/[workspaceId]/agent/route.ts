@@ -20,6 +20,7 @@ export const POST = withUser<Params>(
         prompt: input.prompt,
         provider: input.provider,
         idempotencyKey: input.idempotencyKey,
+        worktreeId: input.worktreeId,
       }),
     );
   },

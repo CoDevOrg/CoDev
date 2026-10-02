@@ -49,7 +49,7 @@ export default async function PersonalIntegrationsPage() {
             target="_blank"
             variant="outline"
           >
-            <Settings aria-hidden className="size-3.5" />
+            <Settings aria-hidden data-icon="inline-start" />
             Configure
           </LinkButton>
         ) : (

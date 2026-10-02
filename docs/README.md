@@ -23,6 +23,13 @@ intent that may have drifted; confirm details against the code.
 | [SUPERSET_AGENT_SESSION_PLAN.md](./SUPERSET_AGENT_SESSION_PLAN.md)   | Design  | Superset agent sessions, CoDev provider ownership, and rollout gates     |
 | [GIT_PROXY.md](./GIT_PROXY.md)                                       | Design  | Git over the control plane without credentials in the guest (unbuilt)    |
 
+## UI implementation
+
+| Document                                                             | Status  | Covers                                                             |
+| -------------------------------------------------------------------- | ------- | ------------------------------------------------------------------ |
+| [design/workspace-controls.md](./design/workspace-controls.md)       | Current | Workspace buttons, navigation states, and contributor review rules |
+| [design/superset-workspace-ui.md](./design/superset-workspace-ui.md) | Design  | Gen 2 Superset workspace layout, tokens, and visual contract       |
+
 ## Product
 
 | Document                                                           | Status | Covers                                                    |

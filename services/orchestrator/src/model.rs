@@ -84,6 +84,9 @@ pub struct CreateRequest {
     pub expires_at: DateTime<Utc>,
     #[serde(default)]
     pub resume_from_snapshot: bool,
+    /// Existing workspaces must never silently fall back to an empty checkout.
+    #[serde(default)]
+    pub require_saved_state: bool,
     /// LUN of an Azure managed disk carrying the durable workspace.ext4 image.
     /// The host attaches the disk before sending this request; the orchestrator
     /// mounts it and binds the image into the Firecracker jail.

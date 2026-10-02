@@ -76,7 +76,7 @@ describe("Gen2TerminalPane", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Start terminal" }));
     const resume = await screen.findByRole("button", {
-      name: "Resume workspace",
+      name: "Reconnect workspace",
     });
     expect(screen.getByRole("alert")).toHaveTextContent(
       "The terminal disconnected when the workspace stopped.",
@@ -86,7 +86,7 @@ describe("Gen2TerminalPane", () => {
     await waitFor(() => expect(onResumeWorkspace).toHaveBeenCalledOnce());
   });
 
-  it("serializes rapid terminal input so characters arrive in order", async () => {
+  it("batches input typed while a request is in flight without changing order", async () => {
     let releaseFirstInput!: () => void;
     const firstInput = new Promise<void>((resolve) => {
       releaseFirstInput = resolve;
@@ -143,7 +143,47 @@ describe("Gen2TerminalPane", () => {
       releaseFirstInput();
     }
 
-    await waitFor(() => expect(inputCalls).toEqual(["p", "w", "d"]));
+    await waitFor(() => expect(inputCalls).toEqual(["p", "wd"]));
     unmount();
+  });
+
+  it("auto-starts terminal when autoStart is true without requiring button click", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(
+        async (_input: RequestInfo | URL, init?: RequestInit) => {
+          const request = JSON.parse(String(init?.body ?? "{}")) as {
+            action?: string;
+          };
+          if (request.action === "start") {
+            return new Response(
+              JSON.stringify({ sessionId: "terminal-autostart" }),
+              { status: 201 },
+            );
+          }
+          return new Response(null, { status: 204 });
+        },
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <Gen2TerminalPane
+        workspaceId={workspaceId}
+        visible
+        canStart
+        autoStart
+        onExit={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/gen2/workspaces/${workspaceId}/terminal`,
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining('"action":"start"'),
+        }),
+      );
+    });
   });
 });

@@ -9,7 +9,7 @@ import {
 } from "@/lib/providers/provider-connection-server";
 import { publicProviderConnectionPayload } from "@/lib/providers/provider-connection-view";
 
-const providerSchema = z.enum(["openai", "anthropic"]);
+const providerSchema = z.enum(["openai", "anthropic", "cursor"]);
 const putSchema = z.object({
   provider: providerSchema,
   apiKey: z.string().trim().min(20).max(512),

@@ -9,15 +9,17 @@ import type {
   ProviderConnectionSnapshot,
 } from "./provider-connection-view";
 
-const PROVIDER_FOR_VENDOR: Record<ProviderConnectionProvider, ProviderId> = {
+type RegistryVendor = Exclude<ProviderConnectionProvider, "cursor">;
+
+const PROVIDER_FOR_VENDOR: Record<RegistryVendor, ProviderId> = {
   openai: "codex",
   anthropic: "claude",
 };
 
-const VENDOR_SUBSCRIPTION: Record<
-  ProviderConnectionProvider,
-  "codex" | "claude"
-> = { openai: "codex", anthropic: "claude" };
+const VENDOR_SUBSCRIPTION: Record<RegistryVendor, "codex" | "claude"> = {
+  openai: "codex",
+  anthropic: "claude",
+};
 
 const SUBSCRIPTION_KIND: Record<ProviderId, CredentialKind> = {
   codex: "codex_auth_cache",
@@ -37,6 +39,9 @@ export function providerRunsIn(
   snapshot: ProviderConnectionSnapshot,
   vendor: ProviderConnectionProvider,
 ): ExecutorSurface[] {
+  // Cursor is offered in the workspace composer, which treats a stored
+  // credential as connected. It is not a rooms agent.
+  if (vendor === "cursor") return cursorRunsIn(snapshot);
   const provider = PROVIDER_FOR_VENDOR[vendor];
   const connected = new Set<CredentialKind>();
   const subscription = snapshot.cliSubscriptions.find(
@@ -48,7 +53,11 @@ export function providerRunsIn(
   if (provider === "claude" && snapshot.claudeCliToken.status === "connected") {
     connected.add("claude_setup_token");
   }
-  if (snapshot.connections.some((row) => row.provider === vendor && row.status === "connected")) {
+  if (
+    snapshot.connections.some(
+      (row) => row.provider === vendor && row.status === "connected",
+    )
+  ) {
     connected.add("api_key");
   }
 
@@ -56,4 +65,15 @@ export function providerRunsIn(
   return SURFACES.filter((surface) =>
     kinds.some((entry) => entry.runs[surface] && connected.has(entry.kind)),
   );
+}
+
+function cursorRunsIn(snapshot: ProviderConnectionSnapshot): ExecutorSurface[] {
+  const connected =
+    snapshot.connections.some(
+      (row) => row.provider === "cursor" && row.status === "connected",
+    ) ||
+    snapshot.cliSubscriptions.some(
+      (row) => row.provider === "cursor" && row.status === "connected",
+    );
+  return connected ? ["gen2"] : [];
 }

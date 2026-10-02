@@ -36,6 +36,7 @@ vi.mock("../runtime/orchestrator-superset-runtime", () => ({
 }));
 
 const {
+  clearGen2TerminalMemberCache,
   closeGen2Terminal,
   pollGen2Terminal,
   sendGen2TerminalInput,
@@ -50,6 +51,7 @@ const originalSupersetRuntime = process.env.CODEV_SUPERSET_RUNTIME_ENABLED;
 describe("gen2 terminals", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    clearGen2TerminalMemberCache();
     delete process.env.CODEV_SUPERSET_RUNTIME_ENABLED;
     mocks.requireMember.mockResolvedValue({
       id: workspaceId,

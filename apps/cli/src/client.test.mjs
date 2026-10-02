@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   apiUrl,
   configPath,
+  cursorAuthFileCandidates,
   describeSpawnError,
   extractClaudeOAuthToken,
 } from "./client.mjs";
@@ -36,6 +37,18 @@ test("explains a missing codex/claude binary with an install hint", () => {
   const error = describeSpawnError("codex", { code: "ENOENT" });
   assert.match(error.message, /npm install -g @openai\/codex/);
   assert.match(error.message, /npm config set prefix/);
+});
+
+test("explains a missing Cursor CLI with the official install command", () => {
+  const error = describeSpawnError("agent", { code: "ENOENT" });
+  assert.match(error.message, /curl https:\/\/cursor.com\/install/);
+});
+
+test("looks for Cursor CLI auth in an isolated home", () => {
+  assert.deepEqual(cursorAuthFileCandidates("/tmp/codev-cursor"), [
+    "/tmp/codev-cursor/.cursor/auth.json",
+    "/tmp/codev-cursor/.config/cursor/auth.json",
+  ]);
 });
 
 test("passes through non-ENOENT spawn errors unchanged", () => {

@@ -1,4 +1,4 @@
-export type ProviderConnectionProvider = "openai" | "anthropic";
+export type ProviderConnectionProvider = "openai" | "anthropic" | "cursor";
 
 export type ProviderConnectionStatus = "connected" | "not_connected";
 
@@ -29,13 +29,11 @@ export type ProviderConnectionViewer = {
 };
 
 /**
- * The agent accounts a member can sign into. Claude and Codex connect with an
- * API key or the CoDev CLI (which delegates to each provider's own
- * official CLI login) — Anthropic and OpenAI both restrict consumer-plan
- * OAuth tokens obtained outside their first-party clients, so CoDev no
- * longer offers its own browser OAuth flow for either.
+ * The agent accounts a member can sign into. Claude, Codex, and Cursor
+ * connect with an API key or the CoDev CLI (which delegates to each
+ * provider's own official CLI login).
  */
-export type CliSubscriptionProvider = "codex" | "claude";
+export type CliSubscriptionProvider = "codex" | "claude" | "cursor";
 
 export type SubscriptionConnectMode =
   | "app_callback"
@@ -81,6 +79,12 @@ const CLI_SUBSCRIPTIONS: Array<{
     provider: "claude",
     label: "Claude Code",
     command: "codev claude-auth",
+    connectMode: "manual_code",
+  },
+  {
+    provider: "cursor",
+    label: "Cursor",
+    command: "codev cursor-auth",
     connectMode: "manual_code",
   },
 ];
@@ -149,6 +153,7 @@ const PROVIDERS: Array<{
 }> = [
   { provider: "openai", label: "OpenAI" },
   { provider: "anthropic", label: "Anthropic" },
+  { provider: "cursor", label: "Cursor" },
 ];
 
 const SECRET_KEYS = new Set([
@@ -169,7 +174,7 @@ const SECRET_KEYS = new Set([
 export function isProviderConnectionProvider(
   value: string,
 ): value is ProviderConnectionProvider {
-  return value === "openai" || value === "anthropic";
+  return value === "openai" || value === "anthropic" || value === "cursor";
 }
 
 function publicCredentialType(
@@ -198,7 +203,10 @@ function surfaceFlags(
   status: ProviderCredentialStatus | null,
 ): ProviderSurfaceFlags {
   return {
-    allowInSharedWorkspaces: status?.allowInSharedWorkspaces ?? false,
+    // Missing means the stored default (allowed). No row means off.
+    allowInSharedWorkspaces: status
+      ? status.allowInSharedWorkspaces !== false
+      : false,
   };
 }
 

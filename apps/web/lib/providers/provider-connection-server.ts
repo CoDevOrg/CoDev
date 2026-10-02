@@ -2,6 +2,7 @@ import "server-only";
 
 import type { CredentialType } from "@codev/shared-types";
 
+import { saveCursorCredential } from "./cursor-api-key";
 import {
   deleteProviderCredential,
   getProviderCredentialStatus,
@@ -34,20 +35,20 @@ export async function loadProviderConnectionSnapshot(
   const [
     openai,
     anthropic,
+    cursor,
     hostedCodex,
     codexOAuth,
     claudeCliToken,
+    cursorCli,
   ] = await Promise.all([
     getProviderCredentialStatus(user.id, "openai", "API_KEY"),
     getProviderCredentialStatus(user.id, "anthropic", "API_KEY"),
-    getProviderCredentialStatus(
-      user.id,
-      "openai",
-      "HOSTED_CODEX_SUBSCRIPTION",
-    ),
+    getProviderCredentialStatus(user.id, "cursor", "API_KEY"),
+    getProviderCredentialStatus(user.id, "openai", "HOSTED_CODEX_SUBSCRIPTION"),
     getProviderCredentialStatus(user.id, "openai", "OAUTH_TOKEN"),
     // Only a CLI-stamped setup-token is reported; a browser-era token is not.
     getProviderCredentialStatus(user.id, "anthropic", "OAUTH_TOKEN"),
+    getProviderCredentialStatus(user.id, "cursor", "OAUTH_TOKEN"),
   ]);
   return toProviderConnectionSnapshot({
     viewer: {
@@ -57,12 +58,14 @@ export async function loadProviderConnectionSnapshot(
     statuses: {
       openai,
       anthropic,
+      cursor,
     },
     cliSubscriptionStatuses: {
       // The CLI and in-page device-code flow both produce the same auth cache.
       codex: hostedCodex ?? codexOAuth,
       // Claude's CLI setup-token stays separate from the hosted login.
       claude: claudeCliToken,
+      cursor: cursorCli,
     },
     claudeCliToken,
     connectModes: {
@@ -91,8 +94,10 @@ export async function savePersonalProviderConnection(
 ): Promise<ProviderConnectionSnapshot> {
   if (provider === "openai") {
     await saveOpenAICredential(user.id, apiKey);
-  } else {
+  } else if (provider === "anthropic") {
     await saveAnthropicCredential(user.id, apiKey);
+  } else {
+    await saveCursorCredential(user.id, apiKey);
   }
   return publicProviderConnectionPayload(
     await loadProviderConnectionSnapshot(user),
@@ -177,6 +182,8 @@ export async function revokePersonalSubscription(
   if (provider === "claude") {
     await disconnectClaudeRuntime(user.id);
     await deleteProviderCredential(user.id, "anthropic", "OAUTH_TOKEN");
+  } else if (provider === "cursor") {
+    await deleteProviderCredential(user.id, "cursor", "OAUTH_TOKEN");
   } else {
     await Promise.all([
       disconnectHostedCodexSubscription({

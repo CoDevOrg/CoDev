@@ -106,6 +106,9 @@ jobs:
       - name: Build
         run: vercel build ${{ steps.target.outputs.flag }}
 
+      - name: Verify database schema before deployment
+        run: pnpm exec dotenv -e .vercel/.env.${{ steps.target.outputs.env }}.local -- pnpm --filter @codev/db db:check
+
       - name: Deploy
         id: deploy
         run: |

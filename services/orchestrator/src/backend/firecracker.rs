@@ -453,7 +453,8 @@ impl FirecrackerBackend {
         };
         backend.health().await?;
         let workspaces = backend.config.runtime_dir.join("workspaces");
-        remove_directory_if_present(&workspaces).await?;
+        // Live disks may belong to a guest interrupted by a host/service restart.
+        // Recover them on the next create; startup must never erase them.
         fs::create_dir_all(&workspaces)
             .await
             .map_err(RuntimeError::internal)?;
@@ -467,7 +468,9 @@ impl FirecrackerBackend {
                 .file_name()
                 .ok_or_else(|| RuntimeError::Internal("invalid Firecracker path".into()))?,
         );
-        remove_directory_if_present(&jails).await?;
+        fs::create_dir_all(&jails)
+            .await
+            .map_err(RuntimeError::internal)?;
         fs::create_dir_all(&backend.config.jailer_dir)
             .await
             .map_err(RuntimeError::internal)?;
@@ -683,7 +686,9 @@ impl FirecrackerBackend {
     }
 
     pub async fn get(&self, workspace_id: &str) -> Result<Instance> {
-        let machine = self.machine(workspace_id).await?;
+        // Status polling is transport, not member activity.
+        let machine = self.machine_without_activity(workspace_id).await?;
+        machine.guest.health().await?;
         Ok(machine.instance.read().expect("machine lock").clone())
     }
 
@@ -707,8 +712,28 @@ impl FirecrackerBackend {
             .get(workspace_id)
             .cloned()
             .ok_or(RuntimeError::SandboxNotFound)?;
-        self.stop_machine(machine).await?;
+        if machine.hibernate_on_idle {
+            self.hibernate_machine(machine).await?;
+        } else {
+            self.stop_machine(machine).await?;
+        }
         self.machines.write().await.remove(workspace_id);
+        Ok(())
+    }
+
+    pub async fn shutdown(&self) -> Result<()> {
+        let _guard = self.provision.lock().await;
+        self.host_shutdown_pending.store(true, Ordering::Release);
+        let machines: Vec<_> = self.machines.read().await.values().cloned().collect();
+        for machine in machines {
+            let workspace_id = machine.workspace_id();
+            if machine.hibernate_on_idle {
+                self.hibernate_machine(machine).await?;
+            } else {
+                self.stop_machine(machine).await?;
+            }
+            self.machines.write().await.remove(&workspace_id);
+        }
         Ok(())
     }
 
@@ -722,7 +747,29 @@ impl FirecrackerBackend {
     pub async fn discard_snapshot(&self, workspace_id: &str) -> Result<()> {
         let _guard = self.provision.lock().await;
         remove_directory_if_present(&self.snapshot_dir(workspace_id)).await?;
-        remove_directory_if_present(&self.previous_snapshot_dir(workspace_id)).await
+        remove_directory_if_present(&self.previous_snapshot_dir(workspace_id)).await?;
+        match fs::remove_file(self.workspace_state_path(workspace_id)).await {
+            Ok(()) => {}
+            Err(error) if error.kind() == ErrorKind::NotFound => {}
+            Err(error) => return Err(RuntimeError::internal(error)),
+        }
+        // A deleted workspace may have disks left by an interrupted guest.
+        if !self.machines.read().await.contains_key(workspace_id) {
+            let name = self
+                .config
+                .firecracker_bin
+                .file_name()
+                .ok_or_else(|| RuntimeError::Internal("invalid Firecracker path".into()))?;
+            remove_directory_if_present(
+                &self
+                    .config
+                    .jailer_dir
+                    .join(name)
+                    .join(workspace_id.replace('-', "")),
+            )
+            .await?;
+        }
+        Ok(())
     }
 
     pub async fn read_file(
@@ -976,7 +1023,15 @@ impl FirecrackerBackend {
         // matches poll_terminal's reasoning for not marking activity here.
         let machine = self.machine_without_activity(workspace_id).await?;
         let _reaper_exempt = ReaperExemptRequest::new(&machine.reaper_exempt_requests);
-        machine.guest.poll_superset_agent(agent_id, &request).await
+        let result = machine
+            .guest
+            .poll_superset_agent(agent_id, &request)
+            .await?;
+        // A running agent is actual work, even while the member is away.
+        if !result.exited || !result.chunks.is_empty() {
+            self.mark_activity(&machine);
+        }
+        Ok(result)
     }
 
     pub async fn close_superset_agent(&self, workspace_id: &str, agent_id: &str) -> Result<()> {
@@ -1113,6 +1168,13 @@ impl FirecrackerBackend {
             .last_activity_at = Utc::now();
     }
 
+    fn workspace_state_path(&self, workspace_id: &str) -> PathBuf {
+        self.config
+            .jailer_dir
+            .join("workspace-state")
+            .join(format!("{workspace_id}.json"))
+    }
+
     fn snapshot_dir(&self, workspace_id: &str) -> PathBuf {
         self.config.jailer_dir.join("snapshots").join(workspace_id)
     }
@@ -1161,6 +1223,73 @@ impl FirecrackerBackend {
             }
         }
         Ok(Some((directory, metadata)))
+    }
+
+    /// A systemd restart kills old Firecracker processes, but their latest
+    /// writable disks remain. Promote both disks before recreating the jail.
+    async fn recover_interrupted_workspace(&self, workspace_id: &str) -> Result<()> {
+        let name = self
+            .config
+            .firecracker_bin
+            .file_name()
+            .ok_or_else(|| RuntimeError::Internal("invalid Firecracker path".into()))?;
+        let root = self
+            .config
+            .jailer_dir
+            .join(name)
+            .join(workspace_id.replace('-', ""))
+            .join("root");
+        let metadata = match fs::read(root.join("recovery.json")).await {
+            Ok(contents) => serde_json::from_slice::<MicroVmSnapshotMetadata>(&contents)
+                .map_err(RuntimeError::internal)?,
+            Err(error) if error.kind() == ErrorKind::NotFound => {
+                if root.join("workspace.ext4").exists() {
+                    return Err(RuntimeError::Unavailable(
+                        "Interrupted workspace disks exist without recovery metadata. Refusing to erase them.".into(),
+                    ));
+                }
+                return Ok(());
+            }
+            Err(error) => return Err(RuntimeError::internal(error)),
+        };
+        let staging = self
+            .config
+            .jailer_dir
+            .join("snapshots")
+            .join(format!(".{workspace_id}.recovery.next"));
+        fs::create_dir_all(&staging)
+            .await
+            .map_err(RuntimeError::internal)?;
+        for name in ["rootfs.ext4", "workspace.ext4"] {
+            // Recovery must preserve the source even on storage without reflinks.
+            let mut copy = Command::new("cp");
+            copy.args(["--reflink=auto", "--sparse=auto"])
+                .arg(root.join(name))
+                .arg(staging.join(name));
+            run_command(copy, "preserve interrupted workspace disk").await?;
+        }
+        fs::write(
+            staging.join("metadata.json"),
+            serde_json::to_vec(&metadata).map_err(RuntimeError::internal)?,
+        )
+        .await
+        .map_err(RuntimeError::internal)?;
+        let destination = self.snapshot_dir(workspace_id);
+        let previous = self.previous_snapshot_dir(workspace_id);
+        remove_directory_if_present(&previous).await?;
+        let had_previous = match fs::rename(&destination, &previous).await {
+            Ok(()) => true,
+            Err(error) if error.kind() == ErrorKind::NotFound => false,
+            Err(error) => return Err(RuntimeError::internal(error)),
+        };
+        if let Err(error) = fs::rename(&staging, &destination).await {
+            if had_previous {
+                let _ = fs::rename(&previous, &destination).await;
+            }
+            return Err(RuntimeError::internal(error));
+        }
+        info!(%workspace_id, "recovered interrupted workspace disks");
+        Ok(())
     }
 
     async fn snapshot_machine(&self, machine: &RunningMachine, head_sha: &str) -> Result<()> {
@@ -1360,12 +1489,25 @@ impl FirecrackerBackend {
         restore_from_saved_disks: bool,
         full_snapshot_restore_failed: &mut bool,
     ) -> Result<RunningMachine> {
+        if request.resume_from_snapshot && request.persistent_disk_lun.is_none() {
+            self.recover_interrupted_workspace(&request.workspace_id)
+                .await?;
+        }
         let snapshot_state =
             if request.resume_from_snapshot && request.persistent_disk_lun.is_none() {
                 self.snapshot_metadata(&request.workspace_id).await?
             } else {
                 None
             };
+        if (request.require_saved_state
+            || self.workspace_state_path(&request.workspace_id).exists())
+            && snapshot_state.is_none()
+            && request.persistent_disk_lun.is_none()
+        {
+            return Err(RuntimeError::Unavailable(
+                "Saved workspace data is unavailable. Refusing to replace an existing workspace with a fresh checkout.".into(),
+            ));
+        }
         let snapshot_metadata = snapshot_state.as_ref().map(|(_, metadata)| metadata);
         let snapshot_directory = snapshot_state
             .as_ref()
@@ -1633,10 +1775,34 @@ impl FirecrackerBackend {
         .await;
         match ready {
             Ok(Ok(())) => {
-                if snapshot_state.is_some() {
-                    remove_directory_if_present(&self.snapshot_dir(&request.workspace_id)).await?;
-                    remove_directory_if_present(&self.previous_snapshot_dir(&request.workspace_id))
-                        .await?;
+                if request.hibernate_on_idle && request.persistent_disk_lun.is_none() {
+                    // Record how to recover the current writable disks before exposing
+                    // this guest. Keep the prior checkpoint until a newer one is saved.
+                    let metadata = MicroVmSnapshotMetadata {
+                        head_sha: machine
+                            .instance
+                            .read()
+                            .expect("machine lock")
+                            .head_sha
+                            .clone(),
+                        slot,
+                        kind: SnapshotKind::WorkspaceDisks,
+                    };
+                    fs::write(
+                        machine.jail_dir.join("root/recovery.json"),
+                        serde_json::to_vec(&metadata).map_err(RuntimeError::internal)?,
+                    )
+                    .await
+                    .map_err(RuntimeError::internal)?;
+                }
+                if request.hibernate_on_idle {
+                    let state_path = self.workspace_state_path(&request.workspace_id);
+                    fs::create_dir_all(state_path.parent().expect("state directory"))
+                        .await
+                        .map_err(RuntimeError::internal)?;
+                    fs::write(state_path, b"{\"initialized\":true}")
+                        .await
+                        .map_err(RuntimeError::internal)?;
                 }
                 Ok(machine)
             }
@@ -2195,14 +2361,16 @@ mod tests {
         has_reaper_blocking_requests, host_ip, parse_duration,
         restore_snapshot_while_firecracker_runs, tap_name,
     };
-    use crate::model::RuntimeError;
+    use crate::model::{CreateRequest, RuntimeError};
+    use serde_json::json;
     use std::{
         collections::HashMap,
-        path::PathBuf,
+        path::{Path, PathBuf},
         sync::atomic::{AtomicBool, Ordering},
         time::{Duration, Instant},
     };
     use tokio::{
+        fs,
         process::Command,
         sync::{Mutex, RwLock as AsyncRwLock},
     };
@@ -2254,6 +2422,130 @@ mod tests {
             let guest_cid = GUEST_CID_BASE + slot;
             assert_eq!((guest_cid - GUEST_CID_BASE) as usize, slot as usize);
         }
+    }
+
+    fn persistence_test_backend(root: &Path) -> FirecrackerBackend {
+        FirecrackerBackend {
+            config: FirecrackerConfig {
+                runtime_dir: root.join("runtime"),
+                kernel_image: root.join("vmlinux"),
+                rootfs_image: root.join("base.ext4"),
+                firecracker_bin: PathBuf::from("/usr/local/bin/firecracker"),
+                jailer_bin: PathBuf::from("/usr/local/bin/jailer"),
+                jailer_dir: root.join("jailer"),
+                max_sandboxes: 1,
+                vcpu_count: 1,
+                memory_mib: 256,
+                workspace_disk_gib: 1,
+                idle_timeout: Duration::from_secs(60),
+                guest_network: false,
+            },
+            machines: AsyncRwLock::new(HashMap::new()),
+            provision: Mutex::new(()),
+            host_shutdown_pending: AtomicBool::new(false),
+        }
+    }
+
+    #[tokio::test]
+    async fn restart_recovers_latest_workspace_and_host_state_without_mutating_source() {
+        let directory = tempfile::tempdir().unwrap();
+        let backend = persistence_test_backend(directory.path());
+        let id = "11111111-1111-4111-8111-111111111111";
+        let root = backend
+            .config
+            .jailer_dir
+            .join("firecracker")
+            .join(id.replace('-', ""))
+            .join("root");
+        fs::create_dir_all(&root).await.unwrap();
+        fs::write(
+            root.join("workspace.ext4"),
+            b"dirty-worktree-and-untracked-files",
+        )
+        .await
+        .unwrap();
+        fs::write(
+            root.join("rootfs.ext4"),
+            b"superset-host-db-and-agent-state",
+        )
+        .await
+        .unwrap();
+        fs::write(
+            root.join("recovery.json"),
+            br#"{"head_sha":"new-head","slot":0,"kind":"workspace_disks"}"#,
+        )
+        .await
+        .unwrap();
+        let old = backend.snapshot_dir(id);
+        fs::create_dir_all(&old).await.unwrap();
+        fs::write(old.join("workspace.ext4"), b"older-checkpoint")
+            .await
+            .unwrap();
+
+        backend.recover_interrupted_workspace(id).await.unwrap();
+        let (checkpoint, metadata) = backend.snapshot_metadata(id).await.unwrap().unwrap();
+        assert_eq!(metadata.head_sha, "new-head");
+        assert_eq!(metadata.kind, SnapshotKind::WorkspaceDisks);
+        assert_eq!(
+            fs::read(checkpoint.join("workspace.ext4")).await.unwrap(),
+            b"dirty-worktree-and-untracked-files"
+        );
+        assert_eq!(
+            fs::read(checkpoint.join("rootfs.ext4")).await.unwrap(),
+            b"superset-host-db-and-agent-state"
+        );
+        assert!(root.join("workspace.ext4").exists());
+        fs::write(root.join("workspace.ext4"), b"later-write")
+            .await
+            .unwrap();
+        assert_eq!(
+            fs::read(checkpoint.join("workspace.ext4")).await.unwrap(),
+            b"dirty-worktree-and-untracked-files"
+        );
+    }
+
+    #[tokio::test]
+    async fn interrupted_legacy_disks_are_not_erased_without_recovery_metadata() {
+        let directory = tempfile::tempdir().unwrap();
+        let backend = persistence_test_backend(directory.path());
+        let root = backend.config.jailer_dir.join("firecracker/test/root");
+        fs::create_dir_all(&root).await.unwrap();
+        fs::write(root.join("workspace.ext4"), b"user-work")
+            .await
+            .unwrap();
+        assert!(matches!(
+            backend.recover_interrupted_workspace("test").await,
+            Err(RuntimeError::Unavailable(_))
+        ));
+        assert_eq!(
+            fs::read(root.join("workspace.ext4")).await.unwrap(),
+            b"user-work"
+        );
+    }
+
+    #[tokio::test]
+    async fn initialized_workspace_cannot_silently_start_from_empty_source() {
+        let directory = tempfile::tempdir().unwrap();
+        let backend = persistence_test_backend(directory.path());
+        let path = backend.workspace_state_path("test");
+        fs::create_dir_all(path.parent().unwrap()).await.unwrap();
+        fs::write(path, b"initialized").await.unwrap();
+        let request: CreateRequest = serde_json::from_value(json!({
+            "workspaceId":"test", "repositoryUrl":null,
+            "repositorySnapshot":{"files":[],"totalBytes":0},
+            "baseSha":"0000000000000000000000000000000000000000",
+            "expiresAt":"2026-10-02T00:00:00Z", "resumeFromSnapshot":true,
+            "lifecycle":{"timeoutMs":14400000,"lifecycle":{"onTimeout":"pause","autoResume":true}}
+        }))
+        .unwrap();
+        let error = backend
+            .prepare_and_start(&request)
+            .await
+            .err()
+            .expect("must refuse fresh checkout");
+        assert!(
+            matches!(error, RuntimeError::Unavailable(message) if message.contains("Refusing to replace"))
+        );
     }
 
     #[test]

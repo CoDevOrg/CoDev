@@ -35,10 +35,11 @@ async fn main() -> Result<()> {
         .await
         .map_err(RuntimeError::internal)?;
     info!(port, "orchestrator listening");
-    axum::serve(listener, http_api::router(backend))
+    axum::serve(listener, http_api::router(backend.clone()))
         .with_graceful_shutdown(shutdown_signal())
         .await
-        .map_err(RuntimeError::internal)
+        .map_err(RuntimeError::internal)?;
+    backend.shutdown().await
 }
 
 async fn reap_expired_sandboxes(backend: SharedBackend) {

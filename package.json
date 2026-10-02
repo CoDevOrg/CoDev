@@ -7,7 +7,7 @@
     "node": ">=24"
   },
   "scripts": {
-    "dev": "dotenv -e .env.local -- pnpm --filter @codev/web dev",
+    "dev": "pnpm db:check && dotenv -e .env.local -- pnpm --filter @codev/web dev",
     "build": "pnpm -r --if-present build",
     "lint": "pnpm -r --if-present lint",
     "typecheck": "pnpm -r --if-present typecheck",
@@ -19,7 +19,8 @@
     "db:generate": "pnpm --filter @codev/db db:generate",
     "db:migrate": "pnpm --filter @codev/db db:migrate",
     "rust:check": "cd services/orchestrator && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test",
-    "prepare": "husky"
+    "prepare": "husky",
+    "db:check": "dotenv -e .env.local -- pnpm --filter @codev/db db:check"
   },
   "devDependencies": {
     "@eslint/js": "9.39.2",
@@ -37,6 +38,6 @@
     "blockExoticSubdeps": false
   },
   "lint-staged": {
-    "!vendor/superset/***.{js,jsx,ts,tsx,json,md,mdx,css,yml,yaml}": "prettier --write"
+    "!vendor/superset/***.{js,jsx,ts,tsx,json,md,mdx,css,yml,yaml}": "prettier --write --ignore-unknown"
   }
 }

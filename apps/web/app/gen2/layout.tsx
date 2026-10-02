@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import "./gen2-theme.css";
 import "./gen2.css";
 import "./workspace.css";
 

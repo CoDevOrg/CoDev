@@ -62,7 +62,10 @@ export default function RootLayout({
             query already handles that case without JS. */}
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
-      <body className={`${sans.variable} ${mono.variable}`}>
+      <body
+        className={`${sans.variable} ${mono.variable}`}
+        suppressHydrationWarning
+      >
         {children}
         <Analytics />
         <Suspense fallback={null}>

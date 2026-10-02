@@ -2,6 +2,7 @@ import "server-only";
 
 import { apiError, getApiUser, getApiUserAnyAuth } from "@/lib/http/api";
 import type { AppUser } from "@/lib/auth/identity";
+import { databaseErrorResponse } from "./database-error";
 
 /**
  * The one way an `app/api` route authenticates, reads its body, and turns a
@@ -40,6 +41,8 @@ function hasOwnResponse(error: unknown): error is ResponseError {
  * `Retry-After`) provide `toResponse()`; everything else is `{ error }`.
  */
 export function errorResponse(error: unknown, fallbackStatus = 400) {
+  const databaseResponse = databaseErrorResponse(error);
+  if (databaseResponse) return databaseResponse;
   if (hasOwnResponse(error)) return error.toResponse();
   return apiError(error, errorStatus(error, fallbackStatus));
 }
@@ -99,11 +102,11 @@ export function withUser<P extends RouteParams = Record<string, never>>(
   options: RouteOptions = {},
 ) {
   return async (request: Request, context: RouteContext<P>) => {
-    const user = options.anyAuth
-      ? await getApiUserAnyAuth(request)
-      : await getApiUser();
-    if (!user) return apiError(new Error("Authentication required."), 401);
     try {
+      const user = options.anyAuth
+        ? await getApiUserAnyAuth(request)
+        : await getApiUser();
+      if (!user) return apiError(new Error("Authentication required."), 401);
       const params = ((await context?.params) ?? {}) as P;
       return await handler({ request, user, params });
     } catch (error) {

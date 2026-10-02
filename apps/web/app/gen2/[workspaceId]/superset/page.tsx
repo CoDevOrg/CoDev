@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import type { Gen2WorkspaceDetail } from "@codev/contracts";
 
 import { SupersetWorkspaceShell } from "@/components/gen2/superset-workspace-shell";
 import { requireUser } from "@/lib/auth/session";
@@ -8,7 +9,7 @@ import { isGen2SupersetFilePaneEnabled } from "@/lib/gen2/superset-file-feature"
 import { isGen2SupersetRuntimeEnabled } from "@/lib/gen2/superset-runtime-feature";
 import { getGen2WorkspaceDetail } from "@/lib/gen2/workspaces";
 
-export const metadata: Metadata = { title: "Superset files" };
+export const metadata: Metadata = { title: "Workspace" };
 
 export default async function Gen2SupersetFilesPage({
   params,
@@ -19,10 +20,9 @@ export default async function Gen2SupersetFilesPage({
 
   const { workspaceId } = await params;
   const user = await requireUser(`/gen2/${workspaceId}/superset`);
-  let role: "owner" | "editor" | "viewer";
+  let workspace: Gen2WorkspaceDetail;
   try {
-    const workspace = await getGen2WorkspaceDetail(workspaceId, user.id);
-    role = workspace.role;
+    workspace = await getGen2WorkspaceDetail(workspaceId, user.id);
   } catch (error) {
     if (error instanceof Gen2AccessError) notFound();
     throw error;
@@ -30,8 +30,9 @@ export default async function Gen2SupersetFilesPage({
 
   return (
     <SupersetWorkspaceShell
+      workspace={workspace}
       workspaceId={workspaceId}
-      canEdit={role !== "viewer"}
+      canEdit={workspace.role !== "viewer"}
       runtimeEnabled={isGen2SupersetRuntimeEnabled()}
     />
   );

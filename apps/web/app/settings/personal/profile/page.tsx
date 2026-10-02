@@ -2,19 +2,27 @@ import { isGitHubAuthConfigured } from "@codev/config";
 import { KeyRound, Mail } from "lucide-react";
 
 import { connectGitHubAccount } from "@/app/actions/github";
-import { Button } from "@/components/ui/button";
 import { GithubMark } from "@/components/settings/github-mark";
 import { GoogleMark } from "@/components/settings/google-mark";
+import { SettingsConnectionRow } from "@/components/settings/settings-connection-row";
 import {
   SettingsPageHeader,
   SettingsPageShell,
-  SettingsSubsectionHeader,
 } from "@/components/settings/settings-style";
 import { SetPasswordForm } from "@/components/settings/set-password-form";
-import { Card } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { getConnectedAccounts } from "@/lib/auth/identity";
 import { requireUser } from "@/lib/auth/session";
-import { cn } from "@/lib/platform/utils";
 
 const passwordErrorCopy: Record<string, string> = {
   match: "Those passwords did not match. Try again.",
@@ -33,49 +41,6 @@ function initials(
     return `${parts[0]?.[0] ?? ""}${parts[1]?.[0] ?? ""}`.toUpperCase();
   }
   return source.slice(0, 2).toUpperCase();
-}
-
-function StatusDot({ connected }: { connected: boolean }) {
-  return (
-    <span
-      className={cn(
-        "size-1.5 shrink-0 rounded-full",
-        connected ? "bg-emerald-400" : "bg-muted-foreground/50",
-      )}
-    />
-  );
-}
-
-function SignInMethodRow({
-  icon,
-  name,
-  connected,
-  statusText,
-  action,
-}: {
-  icon: React.ReactNode;
-  name: string;
-  connected: boolean;
-  statusText: string;
-  action?: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-border/50 px-4 py-3">
-      <div className="flex min-w-0 items-center gap-3">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background">
-          {icon}
-        </span>
-        <div className="min-w-0">
-          <p className="text-sm font-medium">{name}</p>
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <StatusDot connected={connected} />
-            {statusText}
-          </p>
-        </div>
-      </div>
-      {action}
-    </div>
-  );
 }
 
 export default async function PersonalProfilePage({
@@ -99,11 +64,13 @@ export default async function PersonalProfilePage({
         title="Profile"
       />
 
-      <Card className="flex items-center gap-4 px-6 py-5">
-        <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-foreground text-lg font-semibold text-background">
-          {initials(user.name, user.email)}
-        </span>
-        <div className="min-w-0 space-y-1">
+      <Card className="flex flex-row items-center gap-4 p-4">
+        <Avatar className="size-14">
+          <AvatarFallback className="text-sm">
+            {initials(user.name, user.email)}
+          </AvatarFallback>
+        </Avatar>
+        <div className="flex min-w-0 flex-col gap-1">
           <p className="truncate text-base font-semibold">
             {user.name || "Unnamed"}
           </p>
@@ -114,18 +81,22 @@ export default async function PersonalProfilePage({
         </div>
       </Card>
 
-      <Card className="space-y-4 px-6 py-5">
-        <SettingsSubsectionHeader
-          description="Sign in with any of these, or link more."
-          title="Sign-in methods"
-        />
-        {githubJustConnected ? (
-          <p className="text-xs text-emerald-400" role="status">
-            GitHub account connected to this CoDev account.
-          </p>
-        ) : null}
-        <div className="space-y-2">
-          <SignInMethodRow
+      <Card className="flex flex-col gap-4 p-4">
+        <CardHeader>
+          <CardTitle>Sign-in methods</CardTitle>
+          <CardDescription>
+            Sign in with any of these, or link more.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          {githubJustConnected ? (
+            <Alert role="status">
+              <AlertDescription>
+                GitHub account connected to this CoDev account.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+          <SettingsConnectionRow
             connected={connectedAccounts.google.connected}
             icon={<GoogleMark className="size-5" />}
             name="Google"
@@ -133,7 +104,8 @@ export default async function PersonalProfilePage({
               connectedAccounts.google.connected ? "Connected" : "Not connected"
             }
           />
-          <SignInMethodRow
+          <Separator />
+          <SettingsConnectionRow
             action={
               !connectedAccounts.github.connected &&
               isGitHubAuthConfigured() ? (
@@ -160,40 +132,48 @@ export default async function PersonalProfilePage({
                 : "Not connected"
             }
           />
-          <SignInMethodRow
+          <Separator />
+          <SettingsConnectionRow
             connected={connectedAccounts.hasPassword}
             icon={<KeyRound aria-hidden className="size-4" />}
             name="Password"
             statusText={connectedAccounts.hasPassword ? "Set" : "Not set"}
           />
-        </div>
-        {connectedAccounts.sameCoDevUser ? (
-          <p className="text-xs text-muted-foreground" role="status">
-            Google and GitHub are connected to this same CoDev account.
-          </p>
-        ) : null}
+          {connectedAccounts.sameCoDevUser ? (
+            <p className="text-sm text-muted-foreground" role="status">
+              Google and GitHub are connected to this same CoDev account.
+            </p>
+          ) : null}
+        </CardContent>
       </Card>
 
       {connectedAccounts.hasPassword ? null : (
-        <Card className="space-y-4 px-6 py-5">
-          <SettingsSubsectionHeader
-            description="You signed in with Google or GitHub, so this account has no password yet. Set one to also be able to sign in with your email."
-            title="Set a password"
-          />
-          {passwordJustSet ? (
-            <p className="text-xs text-emerald-400" role="status">
-              Password set. You can now sign in with your email too.
-            </p>
-          ) : (
-            <>
-              {passwordError ? (
-                <p className="text-xs text-red-400" role="alert">
-                  {passwordError}
-                </p>
-              ) : null}
-              <SetPasswordForm redirectTo="/settings/personal/profile" />
-            </>
-          )}
+        <Card className="flex flex-col gap-4 p-4">
+          <CardHeader>
+            <CardTitle>Set a password</CardTitle>
+            <CardDescription>
+              You signed in with Google or GitHub, so this account has no
+              password yet. Set one to also be able to sign in with your email.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {passwordJustSet ? (
+              <Alert role="status">
+                <AlertDescription>
+                  Password set. You can now sign in with your email too.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {passwordError ? (
+                  <Alert variant="destructive">
+                    <AlertDescription>{passwordError}</AlertDescription>
+                  </Alert>
+                ) : null}
+                <SetPasswordForm redirectTo="/settings/personal/profile" />
+              </div>
+            )}
+          </CardContent>
         </Card>
       )}
     </SettingsPageShell>

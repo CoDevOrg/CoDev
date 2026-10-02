@@ -209,7 +209,7 @@
   color: rgba(23, 59, 45, 0.78);
 }
 
-select,
+.picker-grid select,
 .credential-form input,
 .feedback-form textarea {
   border-color: var(--line-strong);
@@ -1329,7 +1329,7 @@ button {
   text-transform: uppercase;
 }
 
-select,
+.picker-grid select,
 .credential-form input,
 .feedback-form textarea {
   width: 100%;

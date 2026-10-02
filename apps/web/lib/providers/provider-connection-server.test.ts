@@ -38,10 +38,12 @@ const user = { id: "user-1", name: "CoDev Test Jordan" };
 const LOOKUPS = [
   ["openai", "API_KEY"],
   ["anthropic", "API_KEY"],
+  ["cursor", "API_KEY"],
   ["openai", "HOSTED_CODEX_SUBSCRIPTION"],
   ["openai", "OAUTH_TOKEN"],
   // The Claude CLI setup-token; only a `cli`-stamped row is ever reported.
   ["anthropic", "OAUTH_TOKEN"],
+  ["cursor", "OAUTH_TOKEN"],
 ] as const;
 
 describe("provider connection server", () => {
@@ -72,7 +74,6 @@ describe("provider connection server", () => {
     LOOKUPS.forEach(([provider, credentialType], index) => {
       expect(mocks.getProviderCredentialStatus).toHaveBeenNthCalledWith(
         index + 1,
-        "USER",
         user.id,
         provider,
         credentialType,
@@ -84,6 +85,7 @@ describe("provider connection server", () => {
     mocks.getProviderCredentialStatus
       .mockResolvedValueOnce(null) // openai API_KEY
       .mockResolvedValueOnce(null) // anthropic API_KEY
+      .mockResolvedValueOnce(null) // cursor API_KEY
       .mockResolvedValueOnce({
         credentialType: "HOSTED_CODEX_SUBSCRIPTION",
         lastFour: "Codex CLI",
@@ -94,7 +96,7 @@ describe("provider connection server", () => {
         lastFour: "wxyz",
         connectedVia: "browser",
       }) // anthropic OAUTH_TOKEN (the one Claude login)
-      .mockResolvedValueOnce(null); // anthropic OAUTH_TOKEN
+      .mockResolvedValueOnce(null); // cursor OAUTH_TOKEN
 
     await expect(loadProviderConnectionSnapshot(user)).resolves.toMatchObject({
       cliSubscriptions: [
@@ -106,6 +108,7 @@ describe("provider connection server", () => {
           provenance: "browser",
           allowInSharedWorkspaces: true,
         },
+        { provider: "cursor", status: "not_connected" },
       ],
       // The same row the Claude card reads; one login, reported once.
       claudeCliToken: { status: "connected" },
@@ -116,6 +119,7 @@ describe("provider connection server", () => {
     mocks.getProviderCredentialStatus
       .mockResolvedValueOnce(null) // openai API_KEY
       .mockResolvedValueOnce(null) // anthropic API_KEY
+      .mockResolvedValueOnce(null) // cursor API_KEY
       .mockResolvedValueOnce(null) // no hosted CLI auth cache
       .mockResolvedValueOnce({ credentialType: "OAUTH_TOKEN" });
 
@@ -130,7 +134,6 @@ describe("provider connection server", () => {
     await revokePersonalProviderConnection(user, "openai");
 
     expect(mocks.deleteProviderCredential).toHaveBeenCalledWith(
-      "USER",
       user.id,
       "openai",
       "API_KEY",
@@ -144,11 +147,8 @@ describe("provider connection server", () => {
       hostedCodexMocks.disconnectHostedCodexSubscription,
     ).toHaveBeenCalledWith({
       userId: user.id,
-      scopeType: "USER",
-      scopeId: user.id,
     });
     expect(mocks.deleteProviderCredential).toHaveBeenCalledWith(
-      "USER",
       user.id,
       "openai",
       "OAUTH_TOKEN",
@@ -159,16 +159,25 @@ describe("provider connection server", () => {
     await revokePersonalSubscription(user, "claude");
 
     expect(mocks.deleteProviderCredential).toHaveBeenCalledWith(
-      "USER",
       user.id,
       "anthropic",
       "OAUTH_TOKEN",
     );
     expect(mocks.deleteProviderCredential).not.toHaveBeenCalledWith(
-      "USER",
       user.id,
       expect.anything(),
       "API_KEY",
     );
+  });
+
+  it("disconnects the Cursor CLI login without removing the API key", async () => {
+    await revokePersonalSubscription(user, "cursor");
+
+    expect(mocks.deleteProviderCredential).toHaveBeenCalledWith(
+      user.id,
+      "cursor",
+      "OAUTH_TOKEN",
+    );
+    expect(mocks.deleteProviderCredential).toHaveBeenCalledTimes(1);
   });
 });

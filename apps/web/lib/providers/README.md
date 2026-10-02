@@ -1,6 +1,6 @@
 # Providers
 
-This module owns the registry, configuration, and integration of external service providers, most notably AI model providers (Anthropic, Codex, etc.). It manages model capabilities, user credentials for these providers, and OAuth connections.
+This module owns the registry, configuration, and integration of external service providers, most notably AI model providers (Anthropic, Codex, Cursor). It manages model capabilities, user credentials for these providers, and OAuth connections.
 
 **Does not own:** UI implementations for the chat interface or the parsing of the streamed model output.
 

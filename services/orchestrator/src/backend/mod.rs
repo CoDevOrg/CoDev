@@ -35,6 +35,15 @@ impl Backend {
         Self::Fake(FakeBackend::new())
     }
 
+    /// Preserve durable workspaces after draining requests during a service restart.
+    pub async fn shutdown(&self) -> Result<()> {
+        match self {
+            Self::Fake(_) => Ok(()),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => backend.shutdown().await,
+        }
+    }
+
     pub async fn health(&self) -> Result<()> {
         match self {
             Self::Fake(backend) => backend.health(),
@@ -975,6 +984,7 @@ mod tests {
             base_sha: "fc1ba2947ffdaf8c1961e5342387e1079afface6".into(),
             expires_at: Utc::now() + Duration::hours(1),
             resume_from_snapshot: false,
+            require_saved_state: false,
             persistent_disk_lun: None,
             lifecycle: SandboxLifecycleOptions {
                 timeout_ms: 14_400_000,

@@ -1955,6 +1955,9 @@ impl GuestService {
         let Some(worktree_id) = worktree_id else {
             return Ok(self.workspace_root.clone());
         };
+        if worktree_id == "main" {
+            return Ok(self.workspace_root.clone());
+        }
         validate_worktree_id(worktree_id)?;
         let worktrees_root = self.worktrees_root()?;
         let resolved = fs::canonicalize(worktrees_root.join(worktree_id)).map_err(|error| {

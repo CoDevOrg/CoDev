@@ -1,7 +1,10 @@
 .markdown {
   color: inherit;
+  max-width: 100%;
+  min-width: 0;
   font-size: inherit;
   line-height: 1.6;
+  overflow-x: hidden;
   overflow-wrap: anywhere;
 }
 
@@ -76,7 +79,10 @@
 .markdown :not(pre) > code {
   border-radius: 0.3rem;
   background: var(--color-muted);
-  padding: 0.1rem 0.3rem;
+  padding: 0.15rem 0.35rem;
+  font-family:
+    var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, monospace;
   font-size: 0.88em;
 }
 
@@ -87,31 +93,93 @@
   border-radius: 0.6rem;
   background: var(--color-muted);
   padding: 0.75rem 0.85rem;
+  font-family:
+    var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, monospace;
   font-size: 0.85em;
   line-height: 1.55;
   overflow-wrap: normal;
 }
 
 .markdown pre code {
+  font-family: inherit;
   font-size: inherit;
+}
+
+.preContainer {
+  position: relative;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.codeCopyButton {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 0.375rem;
+  background: var(--color-muted);
+  color: var(--color-muted-foreground);
+  opacity: 0;
+  transition:
+    opacity 120ms ease,
+    color 120ms ease,
+    background 120ms ease;
+  cursor: pointer;
+}
+
+.preContainer:hover .codeCopyButton,
+.codeCopyButton:focus-visible {
+  opacity: 1;
+}
+
+.codeCopyButton:hover {
+  background: var(--color-accent);
+  color: var(--color-foreground);
+}
+
+.codeCopied {
+  color: var(--color-primary);
 }
 
 .tableScroll {
   max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  margin-block: 0.8rem;
 }
 
 .tableScroll table {
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
-  font-size: 0.92em;
+  font-size: 0.9em;
 }
 
 .tableScroll :is(th, td) {
-  border: 1px solid var(--color-border);
-  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--color-border);
+  border-right: 1px solid var(--color-border);
+  padding: 0.45rem 0.75rem;
   text-align: left;
   vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.tableScroll tr:last-child td {
+  border-bottom: 0;
+}
+
+.tableScroll :is(th, td):last-child {
+  border-right: 0;
 }
 
 .tableScroll th {

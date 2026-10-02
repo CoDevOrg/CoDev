@@ -21,6 +21,13 @@ import {
   isGen2HostUnreachable,
 } from "./errors";
 import { requireGen2Member } from "./workspaces";
+import {
+  assertComputeAvailable,
+  endComputeSession,
+  reconcileWorkspaceComputeSession,
+  startComputeSession,
+  workspaceOwnerId,
+} from "./compute-quota";
 
 /** Orchestrator create validation requires a 40-character hex SHA. */
 export const GEN2_BLANK_BASE_SHA = "0".repeat(40);
@@ -112,7 +119,11 @@ export async function buildGen2SandboxSource(
 }
 
 export type Gen2SandboxRuntime = {
-  provision(workspaceId: string, expiresAt: Date): Promise<{ id: string }>;
+  provision(
+    workspaceId: string,
+    expiresAt: Date,
+    requireSavedState?: boolean,
+  ): Promise<{ id: string }>;
   destroy(workspaceId: string): Promise<void>;
   current?(workspaceId: string): Promise<{ id: string } | null>;
 };
@@ -134,13 +145,14 @@ export function createFirecrackerRuntime(
         throw error;
       }
     },
-    async provision(workspaceId, expiresAt) {
+    async provision(workspaceId, expiresAt, requireSavedState = false) {
       const sandbox = await provisionSandbox(
         {
           workspaceId,
           ...source,
           expiresAt: expiresAt.toISOString(),
           resumeFromSnapshot: true,
+          requireSavedState,
           hibernateOnIdle: true,
           lifecycle: GEN2_SANDBOX_LIFECYCLE,
         },
@@ -247,6 +259,15 @@ export async function ensureGen2Instance(
   runtime?: Gen2SandboxRuntime,
 ) {
   const membership = await requireGen2Member(workspaceId, userId);
+  const ownerId = await workspaceOwnerId(workspaceId);
+  try {
+    await assertComputeAvailable(ownerId);
+  } catch (error) {
+    if (!(error instanceof Gen2LifecycleError) || error.status !== 429)
+      throw error;
+    await reconcileWorkspaceComputeSession(workspaceId);
+  }
+  await assertComputeAvailable(ownerId);
   const currentRuntime = runtime ?? createFirecrackerRuntime();
   let hostReady = false;
 
@@ -258,7 +279,10 @@ export async function ensureGen2Instance(
     try {
       await ensureHostReady(GEN2_HOST_READY_TIMEOUT_MS);
       hostReady = true;
-      if (await currentRuntime.current(workspaceId)) return membership;
+      if (await currentRuntime.current(workspaceId)) {
+        await startComputeSession(workspaceId, ownerId);
+        return membership;
+      }
     } catch (error) {
       const message = describeGen2RuntimeFailure(error);
       logEvent("error", "gen2.instance.host_unready", {
@@ -321,7 +345,18 @@ export async function ensureGen2Instance(
         new Date(
           Date.now() + GEN2_SANDBOX_LIFECYCLE.timeoutMs - GEN2_EXPIRES_SLACK_MS,
         ),
+        Boolean(membership.sandboxId) ||
+          membership.status === "ready" ||
+          membership.status === "stopped" ||
+          Boolean(
+            membership.lastError?.includes(
+              "Saved workspace data is unavailable",
+            ),
+          ),
       ));
+    const billingOwnerId = await workspaceOwnerId(workspaceId);
+    await assertComputeAvailable(billingOwnerId);
+    await startComputeSession(workspaceId, billingOwnerId);
     const committed = await writeGen2Instance(
       workspaceId,
       {
@@ -420,6 +455,8 @@ export async function stopGen2Instance(
       detail: error instanceof Error ? error.message : "unknown",
     });
   }
+
+  await endComputeSession(workspaceId);
 
   const committed = await writeGen2Instance(
     workspaceId,
