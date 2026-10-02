@@ -199,6 +199,12 @@ export function SupersetWorkspaceShell({
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [activeProvider, setActiveProvider] =
     useState<SupportedAiProvider>("codex");
+  // The chat panel only runs Codex and Claude; Cursor has no Gen 2 agent, so
+  // it leaves the panel on whatever agent it already has.
+  const gen2ActiveAgent =
+    activeProvider === "codex" || activeProvider === "claude"
+      ? activeProvider
+      : undefined;
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
   const sidebarFollowViewport = useRef(true);
@@ -264,6 +270,8 @@ export function SupersetWorkspaceShell({
   }, [activeProvider]);
 
   useEffect(() => {
+    // Fetch on mount: provider connection state lives on the server.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshProviderStatuses();
   }, [refreshProviderStatuses]);
 
@@ -283,6 +291,8 @@ export function SupersetWorkspaceShell({
   }, [workspaceId]);
 
   useEffect(() => {
+    // Fetch on mount: chats live on the server.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshChats();
   }, [refreshChats]);
 
@@ -506,6 +516,8 @@ export function SupersetWorkspaceShell({
   }, [runtimeEnabled, workspaceId]);
 
   useEffect(() => {
+    // Fetch on mount: runs live on the server.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshRuns();
   }, [refreshRuns]);
 
@@ -1680,8 +1692,8 @@ export function SupersetWorkspaceShell({
                       activeChatId={selectedChatId}
                       onSelectChatId={setSelectedChatId}
                       onChatsChange={setChats}
-                      activeProvider={activeProvider as any}
-                      onActiveProviderChange={setActiveProvider as any}
+                      activeProvider={gen2ActiveAgent}
+                      onActiveProviderChange={setActiveProvider}
                       hideChatBar={true}
                       onRunningChange={setAgentRunning}
                       onFilesChanged={() => {

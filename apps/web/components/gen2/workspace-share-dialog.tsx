@@ -97,16 +97,13 @@ export function WorkspaceShareDialog({
   const [transferring, setTransferring] = useState(false);
   const [transferError, setTransferError] = useState("");
   const restoreFocusRef = useRef<HTMLElement | null>(null);
-  const wasOpenRef = useRef(false);
   const membersListRef = useRef<HTMLDivElement | null>(null);
   const linkRoleRef = useRef(linkRole);
-  linkRoleRef.current = linkRole;
 
-  if (open && !wasOpenRef.current) {
-    const active = document.activeElement;
-    if (active instanceof HTMLElement) restoreFocusRef.current = active;
-  }
-  wasOpenRef.current = open;
+  // Callbacks read the latest role through the ref without being recreated.
+  useEffect(() => {
+    linkRoleRef.current = linkRole;
+  });
 
   const self = members.find((member) => member.userId === currentUserId);
   const effectiveRole = self?.role ?? currentUserRole;
@@ -176,6 +173,8 @@ export function WorkspaceShareDialog({
 
   useEffect(() => {
     if (!open) {
+      // Reset the transient form state when the controlled dialog closes.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setNotice(null);
       setInviteInput("");
       setCopied(false);
@@ -369,6 +368,12 @@ export function WorkspaceShareDialog({
         <DialogContent
           showCloseButton={false}
           className="gen2-workspace-surface sm:max-w-[540px]"
+          // Radix fires this just before it moves focus into the dialog, so the
+          // active element here is still whatever opened it.
+          onOpenAutoFocus={() => {
+            const active = document.activeElement;
+            if (active instanceof HTMLElement) restoreFocusRef.current = active;
+          }}
           onCloseAutoFocus={(event) => {
             const target = restoreFocusRef.current;
             restoreFocusRef.current = null;
