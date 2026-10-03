@@ -85,7 +85,7 @@ CoDev Superset is a hosted developer workspace. **Chat and code are the main con
 
 ### Principles
 
-- **One product, two themes.** Use `theme-tokens.css` `--brand-*` via `--ws-*` aliases. Light = paper cream + navy ink + blue accent. Dark = Midnight Blueprint (`#070c1a` / `#0b1226` / `#101a35`) + cream ink + electric blue. Toggle through existing `ThemeToggle`.
+- **One product, two themes.** Use `theme-tokens.css` `--brand-*` via `--ws-*` aliases. Light = paper cream + navy ink + blue accent. Dark = Midnight Blueprint (`#060a17` / `#0d152d` / `#131f42`) + ice ink + Miami blue accent + brushed brass. Toggle through existing `ThemeToggle`.
 - **Three surfaces, no glass.** Canvas, panels, and raised controls differ by a small lightness shift and a 1px low-alpha border. No gradients, blurs, or large shadows.
 - **One accent.** `--brand-accent` only for primary actions, focus, and the current selection. Status color only for machine/agent/git state.
 - **Quiet type.** Geist Sans for UI and chat; Geist Mono for paths, branches, terminal, diffs. No oversized page titles inside the IDE.
@@ -143,9 +143,9 @@ Bind only inside `.gen2-ide-container`, `.gen2-ide`, `.gen2-workspace-surface`, 
 
 | Role     | Token                 | Light                            | Dark      | Use                                         |
 | -------- | --------------------- | -------------------------------- | --------- | ------------------------------------------- |
-| Canvas   | `--ws-surface-1`      | `--brand-paper` `#f2e9d6`        | `#070c1a` | Chat stage, editor, terminal body           |
-| Panel    | `--ws-surface-2`      | `--brand-paper-bright` `#fffdf7` | `#0b1226` | Top bar, sidebar, inspector, dock bar       |
-| Raised   | `--ws-surface-3`      | `--brand-paper-tan` `#e8dcc0`    | `#101a35` | Composer, session card, selected tab, menus |
+| Canvas   | `--ws-surface-1`      | `--brand-paper` `#f2e9d6`        | `#060a17` | Chat stage, editor, terminal body           |
+| Panel    | `--ws-surface-2`      | `--brand-paper-bright` `#fffdf7` | `#0d152d` | Top bar, sidebar, inspector, dock bar       |
+| Raised   | `--ws-surface-3`      | `--brand-paper-tan` `#e8dcc0`    | `#131f42` | Composer, session card, selected tab, menus |
 | Hover    | `--ws-surface-hover`  | 8% ink on surface-2              | same mix  | Rows, ghost buttons                         |
 | Selected | `--ws-surface-active` | 14% ink on surface-2             | same mix  | Current chat / branch                       |
 
@@ -153,10 +153,10 @@ Bind only inside `.gen2-ide-container`, `.gen2-ide`, `.gen2-workspace-surface`, 
 
 | Role      | Token                 | Light                   | Dark      | Use                             |
 | --------- | --------------------- | ----------------------- | --------- | ------------------------------- |
-| Primary   | `--ws-text-primary`   | `--brand-ink` `#0e2f7e` | `#f2e9d6` | Chat, titles, inputs            |
-| Secondary | `--ws-text-secondary` | `--brand-ink-muted`     | `#96918a` | Meta, inactive tabs, file names |
-| Muted     | `--ws-text-muted`     | `--brand-ink-faint`     | `#726d64` | Placeholders, hints             |
-| Inverse   | `--ws-text-inverse`   | `--brand-on-accent`     | `#070c1a` | On solid accent                 |
+| Primary   | `--ws-text-primary`   | `--brand-ink` `#0e2f7e` | `#f4f6fb` | Chat, titles, inputs            |
+| Secondary | `--ws-text-secondary` | `--brand-ink-muted`     | `#8ea3c7` | Meta, inactive tabs, file names |
+| Muted     | `--ws-text-muted`     | `--brand-ink-faint`     | `#5c7094` | Placeholders, hints             |
+| Inverse   | `--ws-text-inverse`   | `--brand-on-accent`     | `#060a17` | On solid accent                 |
 
 ### Borders and accent
 

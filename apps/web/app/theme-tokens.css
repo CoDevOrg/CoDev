@@ -42,6 +42,9 @@
   --brand-orange: #9e4a2a;
   --brand-violet: #5b4fa8;
   --brand-destructive: #b3261e;
+  --brand-gold: #b38628;
+  --brand-gold-bright: #c99832;
+  --brand-gold-soft: rgba(179, 134, 40, 0.14);
 
   /* RGB channel triplets (no alpha), for rgba()/rgb() call sites that need
      to flip a translucent wash or glass-panel tint with the theme -- borders,
@@ -52,7 +55,9 @@
   --brand-paper-rgb: 255, 253, 247;
   --brand-ink-rgb: 14, 47, 126;
   --brand-accent-rgb: 27, 99, 179;
+  --brand-gold-rgb: 179, 134, 40;
   --brand-teal-rgb: 42, 109, 98;
+  --brand-orange-rgb: 158, 74, 42;
 
   /* A var, not just a bare `color-scheme: light` here, so every consumer
      (app-theme.css, product-theme.css, settings-theme.css) can write
@@ -72,25 +77,30 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --brand-paper: #070c1a;
-    --brand-paper-bright: #0b1226;
-    --brand-paper-tan: #101a35;
-    --brand-paper-deep: #172244;
-    --brand-ink: #f2e9d6;
-    --brand-ink-2: #c9ba95;
-    --brand-ink-muted: #96918a;
-    --brand-ink-faint: #726d64;
-    --brand-accent: #3d8fe0;
-    --brand-accent-bright: #5aa6ec;
-    --brand-on-accent: #070c1a;
-    --brand-teal: #3fae9c;
-    --brand-orange: #e08a54;
-    --brand-violet: #a08cf0;
-    --brand-destructive: #e0574a;
-    --brand-paper-rgb: 16, 26, 53;
-    --brand-ink-rgb: 242, 233, 214;
-    --brand-accent-rgb: 61, 143, 224;
-    --brand-teal-rgb: 63, 174, 156;
+    --brand-paper: #060a17;
+    --brand-paper-bright: #0d152d;
+    --brand-paper-tan: #131f42;
+    --brand-paper-deep: #182854;
+    --brand-ink: #f4f6fb;
+    --brand-ink-2: #c5d3ea;
+    --brand-ink-muted: #8ea3c7;
+    --brand-ink-faint: #5c7094;
+    --brand-accent: #00bde8;
+    --brand-accent-bright: #33ccf0;
+    --brand-on-accent: #060a17;
+    --brand-gold: #caa252;
+    --brand-gold-bright: #dfba73;
+    --brand-gold-soft: rgba(202, 162, 82, 0.16);
+    --brand-teal: #2dd4bf;
+    --brand-orange: #f59e0b;
+    --brand-violet: #a78bfa;
+    --brand-destructive: #f43f5e;
+    --brand-paper-rgb: 13, 21, 45;
+    --brand-ink-rgb: 244, 246, 251;
+    --brand-accent-rgb: 0, 189, 232;
+    --brand-gold-rgb: 202, 162, 82;
+    --brand-teal-rgb: 45, 212, 191;
+    --brand-orange-rgb: 245, 158, 11;
     --brand-color-scheme: dark;
     color-scheme: dark;
     --brand-logo-filter: brightness(0) saturate(100%) invert(92%) sepia(24%)
@@ -99,25 +109,30 @@
 }
 
 :root[data-theme="dark"] {
-  --brand-paper: #070c1a;
-  --brand-paper-bright: #0b1226;
-  --brand-paper-tan: #101a35;
-  --brand-paper-deep: #172244;
-  --brand-ink: #f2e9d6;
-  --brand-ink-2: #c9ba95;
-  --brand-ink-muted: #96918a;
-  --brand-ink-faint: #726d64;
-  --brand-accent: #3d8fe0;
-  --brand-accent-bright: #5aa6ec;
-  --brand-on-accent: #070c1a;
-  --brand-teal: #3fae9c;
-  --brand-orange: #e08a54;
-  --brand-violet: #a08cf0;
-  --brand-destructive: #e0574a;
-  --brand-paper-rgb: 16, 26, 53;
-  --brand-ink-rgb: 242, 233, 214;
-  --brand-accent-rgb: 61, 143, 224;
-  --brand-teal-rgb: 63, 174, 156;
+  --brand-paper: #060a17;
+  --brand-paper-bright: #0d152d;
+  --brand-paper-tan: #131f42;
+  --brand-paper-deep: #182854;
+  --brand-ink: #f4f6fb;
+  --brand-ink-2: #c5d3ea;
+  --brand-ink-muted: #8ea3c7;
+  --brand-ink-faint: #5c7094;
+  --brand-accent: #00bde8;
+  --brand-accent-bright: #33ccf0;
+  --brand-on-accent: #060a17;
+  --brand-gold: #caa252;
+  --brand-gold-bright: #dfba73;
+  --brand-gold-soft: rgba(202, 162, 82, 0.16);
+  --brand-teal: #2dd4bf;
+  --brand-orange: #f59e0b;
+  --brand-violet: #a78bfa;
+  --brand-destructive: #f43f5e;
+  --brand-paper-rgb: 13, 21, 45;
+  --brand-ink-rgb: 244, 246, 251;
+  --brand-accent-rgb: 0, 189, 232;
+  --brand-gold-rgb: 202, 162, 82;
+  --brand-teal-rgb: 45, 212, 191;
+  --brand-orange-rgb: 245, 158, 11;
   --brand-color-scheme: dark;
   color-scheme: dark;
   --brand-logo-filter: brightness(0) saturate(100%) invert(92%) sepia(24%)

@@ -24,17 +24,18 @@ function cssVar(name: string, fallback: string) {
 }
 
 function resolveTerminalTheme() {
-  const surface = cssVar("--ws-surface-1", "#070c1a");
-  const text = cssVar("--ws-text-primary", "#f2e9d6");
-  const secondary = cssVar("--ws-text-secondary", "#96918a");
-  const muted = cssVar("--ws-text-muted", "#726d64");
-  const accent = cssVar("--ws-accent", "#3d8fe0");
+  const surface = cssVar("--ws-surface-1", "#060a17");
+  const text = cssVar("--ws-text-primary", "#f4f6fb");
+  const secondary = cssVar("--ws-text-secondary", "#8ea3c7");
+  const muted = cssVar("--ws-text-muted", "#5c7094");
+  const accent = cssVar("--ws-accent", "#00bde8");
   const accentBright = cssVar("--brand-accent-bright", accent);
-  const teal = cssVar("--brand-teal", "#3fae9c");
-  const orange = cssVar("--brand-orange", "#e08a54");
-  const violet = cssVar("--brand-violet", "#a08cf0");
-  const destructive = cssVar("--brand-destructive", "#e0574a");
-  const selection = cssVar("--ws-accent-soft", "rgba(61, 143, 224, 0.28)");
+  const teal = cssVar("--brand-teal", "#2dd4bf");
+  const orange = cssVar("--brand-orange", "#f59e0b");
+  const gold = cssVar("--brand-gold", "#caa252");
+  const violet = cssVar("--brand-violet", "#a78bfa");
+  const destructive = cssVar("--brand-destructive", "#f43f5e");
+  const selection = cssVar("--ws-accent-soft", "rgba(0, 189, 232, 0.28)");
   return {
     background: surface,
     foreground: text,
@@ -46,7 +47,7 @@ function resolveTerminalTheme() {
     black: muted,
     red: destructive,
     green: teal,
-    yellow: orange,
+    yellow: gold,
     blue: accent,
     magenta: violet,
     cyan: accentBright,

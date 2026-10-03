@@ -39,43 +39,43 @@
    untouched since the embedded IDE surface is intentionally dark already. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --ink: #f2e9d6;
-    --muted: #96918a;
-    --muted-2: #726d64;
-    --line: rgba(242, 233, 214, 0.14);
-    --line-strong: rgba(242, 233, 214, 0.24);
-    --surface: #070c1a;
-    --surface-2: #0b1226;
-    --surface-3: #101a35;
-    --navy: #f2e9d6;
-    --gold: #3d8fe0;
-    --gold-bright: #5aa6ec;
-    --gold-soft: rgba(61, 143, 224, 0.17);
-    --teal: #3fae9c;
-    --teal-soft: rgba(63, 174, 156, 0.16);
-    --orange: #e08a54;
-    --violet: #a08cf0;
+    --ink: #f4f6fb;
+    --muted: #8ea3c7;
+    --muted-2: #5c7094;
+    --line: rgba(244, 246, 251, 0.14);
+    --line-strong: rgba(244, 246, 251, 0.24);
+    --surface: #060a17;
+    --surface-2: #0d152d;
+    --surface-3: #131f42;
+    --navy: #f4f6fb;
+    --gold: #caa252;
+    --gold-bright: #dfba73;
+    --gold-soft: rgba(202, 162, 82, 0.16);
+    --teal: #2dd4bf;
+    --teal-soft: rgba(45, 212, 191, 0.16);
+    --orange: #f59e0b;
+    --violet: #a78bfa;
     color-scheme: dark;
   }
 }
 
 :root[data-theme="dark"] {
-  --ink: #f2e9d6;
-  --muted: #96918a;
-  --muted-2: #726d64;
-  --line: rgba(242, 233, 214, 0.14);
-  --line-strong: rgba(242, 233, 214, 0.24);
-  --surface: #070c1a;
-  --surface-2: #0b1226;
-  --surface-3: #101a35;
-  --navy: #f2e9d6;
-  --gold: #3d8fe0;
-  --gold-bright: #5aa6ec;
-  --gold-soft: rgba(61, 143, 224, 0.17);
-  --teal: #3fae9c;
-  --teal-soft: rgba(63, 174, 156, 0.16);
-  --orange: #e08a54;
-  --violet: #a08cf0;
+  --ink: #f4f6fb;
+  --muted: #8ea3c7;
+  --muted-2: #5c7094;
+  --line: rgba(244, 246, 251, 0.14);
+  --line-strong: rgba(244, 246, 251, 0.24);
+  --surface: #060a17;
+  --surface-2: #0d152d;
+  --surface-3: #131f42;
+  --navy: #f4f6fb;
+  --gold: #caa252;
+  --gold-bright: #dfba73;
+  --gold-soft: rgba(202, 162, 82, 0.16);
+  --teal: #2dd4bf;
+  --teal-soft: rgba(45, 212, 191, 0.16);
+  --orange: #f59e0b;
+  --violet: #a78bfa;
   color-scheme: dark;
 }
 

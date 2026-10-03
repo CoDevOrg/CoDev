@@ -463,7 +463,15 @@
 .gen2-composer:focus-within textarea,
 .gen2-composer:focus-within .gen2-composer-row,
 .gen2-composer:focus-within .gen2-composer-files {
-  border-color: color-mix(in srgb, var(--gold) 55%, var(--line));
+  border-color: color-mix(
+    in srgb,
+    var(--brand-orange, #f59e0b) 45%,
+    color-mix(in srgb, var(--gold) 55%, var(--line))
+  );
+}
+
+.gen2-composer:focus-within {
+  box-shadow: 0 0 24px -2px rgba(var(--brand-orange-rgb, 245, 158, 11), 0.16);
 }
 
 .gen2-composer-row {
@@ -1185,10 +1193,14 @@
   --ws-accent: var(--brand-accent);
   --ws-accent-soft: rgba(var(--brand-accent-rgb), 0.14);
   --ws-ring: var(--brand-accent);
+  --ws-gold: var(--brand-gold, #caa252);
+  --ws-gold-soft: var(--brand-gold-soft, rgba(202, 162, 82, 0.16));
 
   --ws-status-ready: var(--brand-teal);
   --ws-status-working: var(--brand-orange);
   --ws-status-error: var(--brand-destructive);
+  --ws-glow-solar: rgba(var(--brand-orange-rgb, 245, 158, 11), 0.18);
+  --ws-glow-solar-strong: rgba(var(--brand-orange-rgb, 245, 158, 11), 0.35);
 
   /* Scoped Bridge to standard theme variables for Tailwind / shadcn */
   --surface: var(--ws-surface-1);
@@ -1199,8 +1211,8 @@
   --muted-2: var(--ws-text-muted);
   --line: var(--ws-border-subtle);
   --line-strong: var(--ws-border-medium);
-  --gold: var(--ws-accent);
-  --gold-soft: var(--ws-accent-soft);
+  --gold: var(--ws-gold);
+  --gold-soft: var(--ws-gold-soft);
   color-scheme: var(--brand-color-scheme, light);
 
   /* Tailwind v4 theme color overrides for workspace */
@@ -1437,6 +1449,7 @@
   padding: 0 14px;
   border-bottom: 1px solid var(--ws-border-medium);
   background: var(--ss-card);
+  box-shadow: 0 1px 16px -4px rgba(var(--brand-orange-rgb, 245, 158, 11), 0.06);
   z-index: 30;
   gap: 12px;
   flex-shrink: 0;
@@ -1556,6 +1569,7 @@
 
 .gen2-status-dot.working {
   background: var(--ws-status-working);
+  box-shadow: 0 0 10px 1px rgba(var(--brand-orange-rgb, 245, 158, 11), 0.6);
 }
 
 .gen2-status-dot.error {
@@ -1564,7 +1578,19 @@
 
 @media (prefers-reduced-motion: no-preference) {
   .gen2-status-dot.working {
-    animation: gen2-board-pulse 1.4s ease-in-out infinite;
+    animation: gen2-working-glow 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes gen2-working-glow {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 8px 1px rgba(var(--brand-orange-rgb, 245, 158, 11), 0.5);
+  }
+  50% {
+    opacity: 0.6;
+    box-shadow: 0 0 16px 3px rgba(var(--brand-orange-rgb, 245, 158, 11), 0.9);
   }
 }
 
@@ -1578,7 +1604,7 @@
 }
 
 .gen2-topbar-branch-icon {
-  color: var(--ws-text-secondary);
+  color: var(--ws-gold);
   flex-shrink: 0;
 }
 
@@ -1600,6 +1626,18 @@
   max-width: 520px;
   min-width: 0;
   overflow: hidden;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.gen2-topbar-session-card:has(.running) {
+  border-color: color-mix(
+    in srgb,
+    var(--ws-status-working) 35%,
+    var(--ws-border-subtle)
+  );
+  box-shadow: 0 0 20px -4px rgba(var(--brand-orange-rgb, 245, 158, 11), 0.18);
 }
 
 .gen2-topbar-provider-avatar {
@@ -1609,9 +1647,9 @@
   width: 20px;
   height: 20px;
   border-radius: 4px;
-  background: var(--ws-accent-soft);
+  background: var(--ws-surface-2);
   border: 1px solid var(--ws-border-subtle);
-  color: var(--ws-accent);
+  color: var(--ws-text-primary);
   flex-shrink: 0;
 }
 
@@ -1641,6 +1679,7 @@
   color: var(--ws-status-working);
   border: 1px solid
     color-mix(in srgb, var(--ws-status-working) 35%, transparent);
+  box-shadow: 0 0 12px -2px rgba(var(--brand-orange-rgb, 245, 158, 11), 0.35);
 }
 
 .gen2-topbar-session-status.idle {
@@ -1901,7 +1940,7 @@
 .gen2-worktree-trigger-icon {
   width: 14px;
   height: 14px;
-  color: var(--ws-text-secondary);
+  color: var(--ws-gold);
   flex-shrink: 0;
 }
 
@@ -2803,6 +2842,11 @@
   min-width: 0;
   overflow: auto;
   padding: 24px 16px;
+  background: radial-gradient(
+    ellipse 680px 340px at 50% 28%,
+    rgba(var(--brand-orange-rgb, 245, 158, 11), 0.05),
+    transparent 70%
+  );
 }
 
 .gen2-chat-empty-inner {
@@ -2855,11 +2899,20 @@
   cursor: pointer;
   font: inherit;
   text-align: left;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
 }
 
 .gen2-chat-panel .gen2-chat-suggestion:hover {
   background: var(--ws-surface-hover, var(--color-accent));
-  border-color: var(--ws-border-medium, var(--color-input));
+  border-color: color-mix(
+    in srgb,
+    var(--brand-orange, #f59e0b) 40%,
+    var(--ws-border-medium, var(--color-input))
+  );
+  box-shadow: 0 4px 20px -4px rgba(var(--brand-orange-rgb, 245, 158, 11), 0.12);
 }
 
 .gen2-chat-panel .gen2-chat-suggestion:focus-visible {
@@ -2999,10 +3052,24 @@
 }
 
 .gen2-chat-thinking {
-  color: var(--ws-text-muted, var(--color-muted-foreground));
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ws-status-working, var(--brand-orange));
   font-size: 12px;
   font-style: italic;
   line-height: 16px;
+}
+
+.gen2-chat-thinking::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ws-status-working, var(--brand-orange));
+  box-shadow: 0 0 8px var(--ws-status-working, var(--brand-orange));
+  animation: gen2-working-glow 1.4s ease-in-out infinite;
 }
 
 .gen2-chat-message-actions {
@@ -3024,6 +3091,21 @@
   width: min(44rem, 100%);
   margin: 0 auto;
   padding: 0 16px 16px;
+  position: relative;
+}
+
+.gen2-chat-dock::before {
+  content: "";
+  position: absolute;
+  inset: auto 5% 0 5%;
+  height: 100px;
+  background: radial-gradient(
+    ellipse at bottom,
+    rgba(var(--brand-orange-rgb, 245, 158, 11), 0.08),
+    transparent 70%
+  );
+  pointer-events: none;
+  z-index: 0;
 }
 
 .gen2-chat-alert {
@@ -3051,12 +3133,30 @@
   border: 1px solid var(--ws-border-medium, var(--color-input));
   border-radius: 12px;
   background: var(--ws-surface-3, var(--color-secondary));
+  position: relative;
+  z-index: 1;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .gen2-chat-composer:focus-within {
-  border-color: var(--ws-border-focus, var(--color-ring));
-  outline: 2px solid var(--ws-accent, var(--color-ring));
+  border-color: color-mix(
+    in srgb,
+    var(--brand-orange, #f59e0b) 50%,
+    var(--ws-border-focus, var(--color-ring))
+  );
+  outline: 2px solid
+    color-mix(
+      in srgb,
+      var(--brand-orange, #f59e0b) 40%,
+      var(--ws-accent, var(--color-ring))
+    );
   outline-offset: 1px;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--brand-orange, #f59e0b) 25%, transparent),
+    0 0 28px -2px rgba(var(--brand-orange-rgb, 245, 158, 11), 0.2),
+    0 10px 28px -6px rgba(var(--brand-orange-rgb, 245, 158, 11), 0.12);
 }
 
 .gen2-chat-composer[data-dragging="true"] {
@@ -3146,6 +3246,13 @@
   align-items: center;
   gap: 8px;
   margin-left: auto;
+}
+
+.gen2-chat-composer-actions
+  .gen2-workspace-button[tone="primary"]:not(:disabled):hover,
+.gen2-chat-composer-actions
+  .gen2-workspace-button[data-tone="primary"]:not(:disabled):hover {
+  box-shadow: 0 0 16px -1px rgba(var(--brand-orange-rgb, 245, 158, 11), 0.45);
 }
 
 .gen2-turn {
@@ -3484,7 +3591,7 @@
   border: 0;
   /* The shell is painted on the dark canvas. Match it here so the light page
      cannot show through under the character grid. */
-  background: #070c1a;
+  background: var(--ws-surface-1, #060a17);
 }
 
 .gen2-ide-terminal-dock-label {
@@ -4690,7 +4797,7 @@
   box-sizing: border-box;
   padding: 0;
   overflow: hidden;
-  background: #070c1a;
+  background: var(--ws-surface-1, #060a17);
   color: var(--ws-text-primary);
 }
 
@@ -4711,7 +4818,7 @@
 .gen2-term-host .xterm,
 .gen2-term-host .xterm-viewport,
 .gen2-term-host .xterm-scrollable-element {
-  background-color: #070c1a !important;
+  background-color: var(--ws-surface-1, #060a17) !important;
 }
 
 .gen2-term-host .xterm .xterm-viewport {

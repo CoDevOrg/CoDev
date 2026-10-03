@@ -63,6 +63,7 @@ import {
   useGen2ProviderStatus,
   type Gen2AgentChoice,
 } from "./connect-provider";
+import { ProviderLogo } from "./provider-logos";
 import { Gen2TurnActivity } from "./turn-activity";
 import { useGen2ChatScroll } from "./use-gen2-chat-scroll";
 import { WorkspaceButton } from "./workspace-button";
@@ -769,6 +770,11 @@ export function Gen2ChatPanel({
                 disabled={busy}
                 aria-label="Agent"
               >
+                <ProviderLogo
+                  provider={agent}
+                  size={14}
+                  className="shrink-0 mr-1.5"
+                />
                 <span>
                   {agentLabel} · {currentModelLabel}
                 </span>
@@ -801,9 +807,15 @@ export function Gen2ChatPanel({
                     >
                       <span
                         className={cn(
+                          "flex items-center gap-2",
                           isSelectedProvider && "font-semibold text-primary",
                         )}
                       >
+                        <ProviderLogo
+                          provider={entry.id}
+                          size={14}
+                          className="shrink-0"
+                        />
                         {entry.label}
                       </span>
                     </DropdownMenuSubTrigger>

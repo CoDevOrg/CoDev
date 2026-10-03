@@ -36,9 +36,9 @@ describe("CoDev product theme", () => {
     expect(themeTokens).toContain("--brand-accent: #1b63b3;");
     expect(themeTokens).toContain("@media (prefers-color-scheme: dark) {");
     expect(themeTokens).toContain('[data-theme="dark"] {');
-    expect(themeTokens).toContain("--brand-paper: #070c1a;");
-    expect(themeTokens).toContain("--brand-ink: #f2e9d6;");
-    expect(themeTokens).toContain("--brand-accent: #3d8fe0;");
+    expect(themeTokens).toContain("--brand-paper: #060a17;");
+    expect(themeTokens).toContain("--brand-ink: #f4f6fb;");
+    expect(themeTokens).toContain("--brand-accent: #00bde8;");
   });
 
   it("sets one cream/navy palette for every AppChrome product page", () => {
@@ -83,7 +83,7 @@ describe("CoDev product theme", () => {
     // No separate dark-mode block needed: every value above already flips
     // because theme-tokens.css's swatches do.
     expect(productTheme).not.toContain("@media (prefers-color-scheme: dark)");
-    expect(productTheme).not.toContain("#070c1a");
+    expect(productTheme).not.toContain("#060a17");
   });
 
   it("gives Settings the same shared theme, with its own opaque surfaces", () => {
@@ -94,7 +94,7 @@ describe("CoDev product theme", () => {
     // it for a translucent card to let show through.
     expect(settingsTheme).toContain("--color-card: var(--brand-paper-bright);");
     expect(settingsTheme).not.toContain("@media (prefers-color-scheme: dark)");
-    expect(settingsTheme).not.toContain("#070c1a");
+    expect(settingsTheme).not.toContain("#060a17");
   });
 
   it("keeps every profile menu action legible on the light product surface", () => {

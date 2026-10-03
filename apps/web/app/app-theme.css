@@ -61,9 +61,9 @@
   --surface-2: var(--codev-black-900);
   --surface-3: var(--codev-black-800);
   --navy: var(--codev-beige-100);
-  --gold: var(--codev-gold-500);
-  --gold-bright: var(--codev-gold-400);
-  --gold-soft: rgba(var(--accent-rgb), 0.12);
+  --gold: var(--brand-gold, var(--codev-gold-500));
+  --gold-bright: var(--brand-gold-bright, var(--codev-gold-400));
+  --gold-soft: var(--brand-gold-soft, rgba(var(--accent-rgb), 0.12));
   --teal: var(--codev-teal);
   --teal-soft: rgba(var(--teal-rgb), 0.12);
   --orange: var(--codev-terracotta);

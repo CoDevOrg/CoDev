@@ -614,9 +614,9 @@
 }
 
 .gen2-filter-pill.is-active {
-  border-color: var(--ink, #0e2f7e);
-  background: var(--ink, #0e2f7e);
-  color: #ffffff;
+  border-color: var(--brand-accent, #00bde8);
+  background: var(--brand-accent, #00bde8);
+  color: var(--brand-on-accent, #060a17);
 }
 
 .gen2-toolbar-right {
@@ -651,9 +651,9 @@
 }
 
 .gen2-view-btn.is-active {
-  border-color: var(--ink, #0e2f7e);
-  background: var(--ink, #0e2f7e);
-  color: #ffffff;
+  border-color: var(--brand-accent, #00bde8);
+  background: var(--brand-accent, #00bde8);
+  color: var(--brand-on-accent, #060a17);
 }
 
 /* --------------------------------------------- Grid View */
@@ -762,8 +762,9 @@
 .gen2-role-badge {
   padding: 2px 8px;
   border-radius: 9999px;
-  background: rgba(var(--ink-rgb, 14, 47, 126), 0.06);
-  color: var(--ink, #0e2f7e);
+  background: var(--gold-soft, rgba(202, 162, 82, 0.14));
+  color: var(--gold, #caa252);
+  border: 1px solid rgba(var(--brand-gold-rgb, 202, 162, 82), 0.28);
   font-size: 0.6875rem;
   font-weight: 600;
   text-transform: capitalize;
