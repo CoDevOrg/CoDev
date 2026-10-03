@@ -45,6 +45,8 @@
   --brand-gold: #b38628;
   --brand-gold-bright: #c99832;
   --brand-gold-soft: rgba(179, 134, 40, 0.14);
+  --brand-redwood: #9e2a2b;
+  --brand-redwood-rgb: 158, 42, 43;
 
   /* RGB channel triplets (no alpha), for rgba()/rgb() call sites that need
      to flip a translucent wash or glass-panel tint with the theme -- borders,
@@ -95,6 +97,8 @@
     --brand-orange: #f59e0b;
     --brand-violet: #a78bfa;
     --brand-destructive: #f43f5e;
+    --brand-redwood: #e04848;
+    --brand-redwood-rgb: 224, 72, 72;
     --brand-paper-rgb: 13, 21, 45;
     --brand-ink-rgb: 244, 246, 251;
     --brand-accent-rgb: 0, 189, 232;
@@ -127,6 +131,8 @@
   --brand-orange: #f59e0b;
   --brand-violet: #a78bfa;
   --brand-destructive: #f43f5e;
+  --brand-redwood: #e04848;
+  --brand-redwood-rgb: 224, 72, 72;
   --brand-paper-rgb: 13, 21, 45;
   --brand-ink-rgb: 244, 246, 251;
   --brand-accent-rgb: 0, 189, 232;

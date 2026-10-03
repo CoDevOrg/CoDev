@@ -216,6 +216,11 @@
   min-height: 0;
   padding: 24px;
   overflow: auto;
+  background: radial-gradient(
+    ellipse 720px 360px at 50% 28%,
+    rgba(var(--brand-redwood-rgb, 224, 72, 72), 0.07),
+    transparent 70%
+  );
 }
 
 .gen2-chat-hero-inner {
@@ -463,15 +468,22 @@
 .gen2-composer:focus-within textarea,
 .gen2-composer:focus-within .gen2-composer-row,
 .gen2-composer:focus-within .gen2-composer-files {
-  border-color: color-mix(
-    in srgb,
-    var(--brand-orange, #f59e0b) 45%,
-    color-mix(in srgb, var(--gold) 55%, var(--line))
-  );
+  border-color: var(--brand-accent-bright, #33ccf0);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .gen2-composer {
+    animation: gen2-composer-idle-glow 4s ease-in-out infinite;
+  }
+  .gen2-composer:focus-within {
+    animation: gen2-composer-glow 2.4s ease-in-out infinite;
+  }
 }
 
 .gen2-composer:focus-within {
-  box-shadow: 0 0 24px -2px rgba(var(--brand-orange-rgb, 245, 158, 11), 0.16);
+  box-shadow:
+    0 0 0 1px var(--brand-accent, #00bde8),
+    0 0 24px -2px rgba(var(--brand-accent-rgb, 0, 189, 232), 0.35);
 }
 
 .gen2-composer-row {
@@ -1197,10 +1209,10 @@
   --ws-gold-soft: var(--brand-gold-soft, rgba(202, 162, 82, 0.16));
 
   --ws-status-ready: var(--brand-teal);
-  --ws-status-working: var(--brand-orange);
+  --ws-status-working: var(--brand-redwood, #e04848);
   --ws-status-error: var(--brand-destructive);
-  --ws-glow-solar: rgba(var(--brand-orange-rgb, 245, 158, 11), 0.18);
-  --ws-glow-solar-strong: rgba(var(--brand-orange-rgb, 245, 158, 11), 0.35);
+  --ws-glow-redwood: rgba(var(--brand-redwood-rgb, 224, 72, 72), 0.18);
+  --ws-glow-redwood-strong: rgba(var(--brand-redwood-rgb, 224, 72, 72), 0.38);
 
   /* Scoped Bridge to standard theme variables for Tailwind / shadcn */
   --surface: var(--ws-surface-1);
@@ -1449,7 +1461,7 @@
   padding: 0 14px;
   border-bottom: 1px solid var(--ws-border-medium);
   background: var(--ss-card);
-  box-shadow: 0 1px 16px -4px rgba(var(--brand-orange-rgb, 245, 158, 11), 0.06);
+  box-shadow: 0 1px 16px -4px rgba(var(--brand-redwood-rgb, 224, 72, 72), 0.08);
   z-index: 30;
   gap: 12px;
   flex-shrink: 0;
@@ -1569,7 +1581,7 @@
 
 .gen2-status-dot.working {
   background: var(--ws-status-working);
-  box-shadow: 0 0 10px 1px rgba(var(--brand-orange-rgb, 245, 158, 11), 0.6);
+  box-shadow: 0 0 10px 1px rgba(var(--brand-redwood-rgb, 224, 72, 72), 0.65);
 }
 
 .gen2-status-dot.error {
@@ -1586,11 +1598,11 @@
   0%,
   100% {
     opacity: 1;
-    box-shadow: 0 0 8px 1px rgba(var(--brand-orange-rgb, 245, 158, 11), 0.5);
+    box-shadow: 0 0 8px 1px rgba(var(--brand-redwood-rgb, 224, 72, 72), 0.5);
   }
   50% {
     opacity: 0.6;
-    box-shadow: 0 0 16px 3px rgba(var(--brand-orange-rgb, 245, 158, 11), 0.9);
+    box-shadow: 0 0 16px 3px rgba(var(--brand-redwood-rgb, 224, 72, 72), 0.95);
   }
 }
 
@@ -1637,7 +1649,7 @@
     var(--ws-status-working) 35%,
     var(--ws-border-subtle)
   );
-  box-shadow: 0 0 20px -4px rgba(var(--brand-orange-rgb, 245, 158, 11), 0.18);
+  box-shadow: 0 0 20px -4px rgba(var(--brand-redwood-rgb, 224, 72, 72), 0.22);
 }
 
 .gen2-topbar-provider-avatar {
@@ -1679,7 +1691,7 @@
   color: var(--ws-status-working);
   border: 1px solid
     color-mix(in srgb, var(--ws-status-working) 35%, transparent);
-  box-shadow: 0 0 12px -2px rgba(var(--brand-orange-rgb, 245, 158, 11), 0.35);
+  box-shadow: 0 0 12px -2px rgba(var(--brand-redwood-rgb, 224, 72, 72), 0.45);
 }
 
 .gen2-topbar-session-status.idle {
@@ -2843,8 +2855,8 @@
   overflow: auto;
   padding: 24px 16px;
   background: radial-gradient(
-    ellipse 680px 340px at 50% 28%,
-    rgba(var(--brand-orange-rgb, 245, 158, 11), 0.05),
+    ellipse 720px 360px at 50% 28%,
+    rgba(var(--brand-redwood-rgb, 224, 72, 72), 0.07),
     transparent 70%
   );
 }
@@ -2909,10 +2921,10 @@
   background: var(--ws-surface-hover, var(--color-accent));
   border-color: color-mix(
     in srgb,
-    var(--brand-orange, #f59e0b) 40%,
+    var(--brand-redwood, #e04848) 40%,
     var(--ws-border-medium, var(--color-input))
   );
-  box-shadow: 0 4px 20px -4px rgba(var(--brand-orange-rgb, 245, 158, 11), 0.12);
+  box-shadow: 0 4px 20px -4px rgba(var(--brand-redwood-rgb, 224, 72, 72), 0.16);
 }
 
 .gen2-chat-panel .gen2-chat-suggestion:focus-visible {
@@ -3055,7 +3067,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: var(--ws-status-working, var(--brand-orange));
+  color: var(--ws-status-working, var(--brand-redwood, #e04848));
   font-size: 12px;
   font-style: italic;
   line-height: 16px;
@@ -3067,8 +3079,8 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--ws-status-working, var(--brand-orange));
-  box-shadow: 0 0 8px var(--ws-status-working, var(--brand-orange));
+  background: var(--ws-status-working, var(--brand-redwood, #e04848));
+  box-shadow: 0 0 8px var(--ws-status-working, var(--brand-redwood, #e04848));
   animation: gen2-working-glow 1.4s ease-in-out infinite;
 }
 
@@ -3098,10 +3110,10 @@
   content: "";
   position: absolute;
   inset: auto 5% 0 5%;
-  height: 100px;
+  height: 110px;
   background: radial-gradient(
     ellipse at bottom,
-    rgba(var(--brand-orange-rgb, 245, 158, 11), 0.08),
+    rgba(var(--brand-redwood-rgb, 224, 72, 72), 0.1),
     transparent 70%
   );
   pointer-events: none;
@@ -3125,6 +3137,55 @@
   line-height: 16px;
 }
 
+@keyframes gen2-composer-glow {
+  0%,
+  100% {
+    border-color: color-mix(
+      in srgb,
+      var(--brand-accent, #00bde8) 75%,
+      var(--ws-border-focus, var(--color-ring))
+    );
+    box-shadow:
+      0 0 0 1px
+        color-mix(in srgb, var(--brand-accent, #00bde8) 50%, transparent),
+      0 0 20px -2px rgba(var(--brand-accent-rgb, 0, 189, 232), 0.35),
+      0 8px 24px -4px rgba(var(--brand-accent-rgb, 0, 189, 232), 0.2);
+  }
+  50% {
+    border-color: var(--brand-accent-bright, #33ccf0);
+    box-shadow:
+      0 0 0 1.5px var(--brand-accent-bright, #33ccf0),
+      0 0 36px 2px rgba(var(--brand-accent-rgb, 0, 189, 232), 0.6),
+      0 12px 32px -2px rgba(51, 204, 240, 0.35);
+  }
+}
+
+@keyframes gen2-composer-idle-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px
+        color-mix(
+          in srgb,
+          var(--brand-accent, #00bde8) 22%,
+          var(--ws-border-medium, var(--color-input))
+        ),
+      0 0 14px -3px rgba(var(--brand-accent-rgb, 0, 189, 232), 0.14),
+      0 4px 12px -4px rgba(var(--brand-accent-rgb, 0, 189, 232), 0.08);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px
+        color-mix(
+          in srgb,
+          var(--brand-accent-bright, #33ccf0) 42%,
+          var(--ws-border-medium, var(--color-input))
+        ),
+      0 0 24px 0px rgba(var(--brand-accent-rgb, 0, 189, 232), 0.28),
+      0 6px 16px -2px rgba(51, 204, 240, 0.18);
+  }
+}
+
 .gen2-chat-composer {
   display: flex;
   flex-direction: column;
@@ -3140,23 +3201,23 @@
     box-shadow 160ms ease;
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  .gen2-chat-composer {
+    animation: gen2-composer-idle-glow 4s ease-in-out infinite;
+  }
+  .gen2-chat-composer:focus-within {
+    animation: gen2-composer-glow 2.4s ease-in-out infinite;
+  }
+}
+
 .gen2-chat-composer:focus-within {
-  border-color: color-mix(
-    in srgb,
-    var(--brand-orange, #f59e0b) 50%,
-    var(--ws-border-focus, var(--color-ring))
-  );
-  outline: 2px solid
-    color-mix(
-      in srgb,
-      var(--brand-orange, #f59e0b) 40%,
-      var(--ws-accent, var(--color-ring))
-    );
+  border-color: var(--brand-accent-bright, #33ccf0);
+  outline: 2px solid var(--brand-accent, #00bde8);
   outline-offset: 1px;
   box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--brand-orange, #f59e0b) 25%, transparent),
-    0 0 28px -2px rgba(var(--brand-orange-rgb, 245, 158, 11), 0.2),
-    0 10px 28px -6px rgba(var(--brand-orange-rgb, 245, 158, 11), 0.12);
+    0 0 0 1px var(--brand-accent, #00bde8),
+    0 0 28px -2px rgba(var(--brand-accent-rgb, 0, 189, 232), 0.4),
+    0 8px 24px -4px rgba(var(--brand-accent-rgb, 0, 189, 232), 0.25);
 }
 
 .gen2-chat-composer[data-dragging="true"] {
@@ -3252,7 +3313,7 @@
   .gen2-workspace-button[tone="primary"]:not(:disabled):hover,
 .gen2-chat-composer-actions
   .gen2-workspace-button[data-tone="primary"]:not(:disabled):hover {
-  box-shadow: 0 0 16px -1px rgba(var(--brand-orange-rgb, 245, 158, 11), 0.45);
+  box-shadow: 0 0 18px 0px rgba(var(--brand-accent-rgb, 0, 189, 232), 0.6);
 }
 
 .gen2-turn {
