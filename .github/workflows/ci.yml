@@ -76,14 +76,8 @@ jobs:
       - name: Test terminal and daemon integration
         working-directory: vendor/superset/packages/host-service
         run: |
-          node --experimental-strip-types --test \
-            src/terminal/terminal.initial-command.node-test.ts \
-            src/terminal/terminal.ungated-launch.node-test.ts \
-            src/terminal/terminal.shell-ready-learning.node-test.ts \
-            src/terminal/terminal.fish-prompt-transport.node-test.ts \
-            src/codev/agent-command-policy.node-test.ts \
-            src/codev/agent-isolation.node-test.ts
-          node --import tsx --test src/terminal/terminal.raw-stream.node-test.ts
+          bun run test:integration:terminal
+          bun run test:integration:terminal-raw
           bun run test:integration:daemon
 
       - name: Test agent hooks and bindings
