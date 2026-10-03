@@ -1,4 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { join, relative, resolve } from "node:path";
 import { eq } from "drizzle-orm";
 import type { Hono } from "hono";
 import { z } from "zod";
@@ -74,6 +76,7 @@ type AgentSession = {
 	launch?: AgentLaunch;
 };
 const agentPollStates = new Map<string, AgentPollState>();
+const agentRefreshCaches = new Map<string, string>();
 /** The only terminal IDs that this private bridge may operate on. */
 const agentSessions = new Map<string, AgentSession>();
 /** Exit codes are supplied by the PTY while this host process is alive. */
@@ -157,6 +160,50 @@ async function releaseAgentLaunch(agentId: string) {
 	const launch = session?.launch;
 	if (session) session.launch = undefined;
 	await removeAgentLaunch(launch);
+}
+
+function isProfileDirectory(root: string, directory: string | null | undefined) {
+	if (!directory) return false;
+	const path = resolve(directory);
+	const pathFromRoot = relative(resolve(root), path);
+	return (
+		pathFromRoot.startsWith("agent-") &&
+		!pathFromRoot.includes("/") &&
+		!pathFromRoot.includes("\\") &&
+		!pathFromRoot.startsWith("..")
+	);
+}
+
+async function captureAgentRefresh(agentId: string, profileDir?: string | null) {
+	const directory = profileDir ?? agentSessions.get(agentId)?.launch?.directory;
+	const root = process.env.CODEV_AGENT_PROFILE_ROOT;
+	if (!root || !isProfileDirectory(root, directory)) return;
+	try {
+		const authCache = await readFile(join(directory!, ".codex", "auth.json"), "utf8");
+		if (Buffer.byteLength(authCache) > 128 << 10) return;
+		const parsed = JSON.parse(authCache) as unknown;
+		if (
+			parsed &&
+			typeof parsed === "object" &&
+			!Array.isArray(parsed)
+		) {
+			agentRefreshCaches.set(agentId, authCache);
+		}
+	} catch {
+		// Claude and API-key profiles do not have a refreshable Codex cache.
+	}
+}
+
+async function cleanupEndedAgent(agentId: string, profileDir?: string | null) {
+	await captureAgentRefresh(agentId, profileDir);
+	const session = agentSessions.get(agentId);
+	if (session?.launch) {
+		await releaseAgentLaunch(agentId);
+		return;
+	}
+	const root = process.env.CODEV_AGENT_PROFILE_ROOT;
+	if (!root || !isProfileDirectory(root, profileDir)) return;
+	await removeAgentLaunch({ directory: profileDir!, uid: -1, command: "", hookToken: "" });
 }
 
 function persistedAgentFor(db: HostDb, agentId: string) {
@@ -304,6 +351,7 @@ export function registerCoDevAgentBridge({
 					provider,
 					idempotencyKey,
 					hookTokenHash: hookTokenHash(hookToken),
+					profileDir: launch.directory,
 				})
 				.run();
 			agentSessions.set(createdAgentId, { workspaceId: workspace.id, launch });
@@ -311,7 +359,7 @@ export function registerCoDevAgentBridge({
 				agentExitCodes.set(createdAgentId, exitCode);
 				// A natural exit does not pass through DELETE. Remove the private
 				// credential profile as soon as its terminal has ended.
-				void releaseAgentLaunch(createdAgentId).catch(() => {
+				void cleanupEndedAgent(createdAgentId).catch(() => {
 					console.error("[codev-agent-bridge] could not remove an isolated launch profile", {
 						agentId: createdAgentId,
 					});
@@ -394,6 +442,7 @@ export function registerCoDevAgentBridge({
 			}
 			const recordedExitCode = agentExitCodes.get(agentId);
 			const exited = Boolean(session.endedAt) || recordedExitCode !== undefined;
+			if (exited) await cleanupEndedAgent(agentId, agent.profileDir);
 			return context.json({
 				chunks:
 					parsed.data.after < state.sequence
@@ -403,6 +452,7 @@ export function registerCoDevAgentBridge({
 				exited,
 				exitCode: exited ? (recordedExitCode ?? null) : null,
 				refreshReady: exited,
+				refreshedCodexAuthCache: agentRefreshCaches.get(agentId),
 			});
 		} catch (error) {
 			return context.json(
@@ -424,10 +474,13 @@ export function registerCoDevAgentBridge({
 			}
 			await disposeSessionAndWait(agentId, db);
 			agentPollStates.delete(agentId);
-			await releaseAgentLaunch(agentId);
+			await cleanupEndedAgent(agentId, agent.profileDir);
 			agentExitCodes.delete(agentId);
 			agentSessions.delete(agentId);
-			return context.json({ ok: true });
+			return context.json({
+				ok: true,
+				refreshedCodexAuthCache: agentRefreshCaches.get(agentId),
+			});
 		} catch (error) {
 			return context.json(
 				{ error: error instanceof Error ? error.message : "Could not close Superset agent." },
@@ -448,12 +501,15 @@ export function registerCoDevAgentBridge({
 				.sync();
 			if (!session || !agentMatchesTerminal(agent, session))
 				return context.json({ adoptable: false, status: "not_found" });
-			if (session.endedAt)
+			if (session.endedAt) {
+				await cleanupEndedAgent(agentId, agent.profileDir);
 				return context.json({
 					adoptable: false,
 					status: "exited",
 					exitCode: agentExitCodes.get(agentId) ?? null,
+					refreshedCodexAuthCache: agentRefreshCaches.get(agentId),
 				});
+			}
 
 			const snapshot = await snapshotSession({
 				terminalId: agentId,

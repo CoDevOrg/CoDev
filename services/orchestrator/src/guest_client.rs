@@ -12,6 +12,7 @@ use crate::model::{
     ClaudeSetupStartRequest, CodexExecPollRequest, CodexExecPollResponse, CodexExecStartRequest,
     ExecRequest, ExecResponse, FileResponse, Result, RuntimeError, SupersetAgentInputRequest,
     SupersetAgentPollRequest, SupersetAgentPollResponse, SupersetAgentRecoveryResponse,
+    SupersetAgentStopResponse,
     SupersetAgentStartRequest, SupersetAgentStartResponse, SupersetCreateEntryRequest,
     SupersetDeleteEntryRequest, SupersetMoveEntryRequest, TerminalInputRequest,
     TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
@@ -299,14 +300,13 @@ impl GuestClient {
         .await
     }
 
-    pub async fn close_superset_agent(&self, agent_id: &str) -> Result<()> {
-        self.request::<(), serde_json::Value>(
+    pub async fn close_superset_agent(&self, agent_id: &str) -> Result<SupersetAgentStopResponse> {
+        self.request(
             "DELETE",
             &format!("/v1/superset-agents/{agent_id}"),
             None,
         )
         .await
-        .map(|_| ())
     }
 
     pub async fn recover_superset_agent(

@@ -412,12 +412,23 @@ pub struct SupersetAgentPollResponse {
     /// Set once the launched process has exited and a refresh capture is safe.
     #[serde(default)]
     pub refresh_ready: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refreshed_codex_auth_cache: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupersetAgentStopResponse {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refreshed_codex_auth_cache: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SupersetAgentRecoveryResponse {
     pub adoptable: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refreshed_codex_auth_cache: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

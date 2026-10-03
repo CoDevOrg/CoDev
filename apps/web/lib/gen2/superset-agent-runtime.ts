@@ -22,6 +22,7 @@ import { Gen2LifecycleError } from "./errors";
 import { logEvent } from "../platform/observability";
 import { resolveGen2Credential, type Gen2AgentProvider } from "./providers";
 import { providerVendor } from "../providers/registry";
+import { updateHostedCodexAuthCacheForUser } from "../providers/hosted-codex-subscription-credentials";
 import {
   checkSupersetAgentRecovery,
   pollSupersetAgent,
@@ -233,6 +234,29 @@ type PollSessionInput = {
   after: number;
 };
 
+async function captureRefreshedCredential(
+  run: { connectionId: string | null; createdBy: string; provider: string },
+  refreshedCodexAuthCache: string | undefined,
+) {
+  if (
+    !refreshedCodexAuthCache ||
+    !run.connectionId ||
+    run.provider !== "openai"
+  ) {
+    return;
+  }
+  await updateHostedCodexAuthCacheForUser({
+    credentialId: run.connectionId,
+    userId: run.createdBy,
+    authCacheJson: refreshedCodexAuthCache,
+  });
+}
+
+function exitReason(exitCode: number | null) {
+  if (exitCode === 0) return "completed";
+  return exitCode === null ? "exit_unknown" : `exit_code:${exitCode}`;
+}
+
 export async function pollGen2SupersetAgentSession(input: PollSessionInput) {
   return pollSession(input, "persistent");
 }
@@ -261,9 +285,9 @@ async function pollSession(
     input.after,
   );
 
-  // Being polled is what holding the seat means; a run that stops polling
-  // stops blocking the member's other surfaces.
-  if (run.leaseClaimed && run.connectionId && !result.exited) {
+  // A changed terminal snapshot proves the agent is working. An empty browser
+  // poll does not extend a paid credential seat.
+  if (run.leaseClaimed && run.connectionId && result.chunks.length > 0) {
     await heartbeatCredentialSeat({
       credentialId: run.connectionId,
       ref: run.id,
@@ -271,11 +295,11 @@ async function pollSession(
   }
 
   if (result.exited) {
+    await captureRefreshedCredential(run, result.refreshedCodexAuthCache);
     await markGen2SupersetRunFinished({
       runId: run.id,
       workspaceId: input.workspaceId,
-      exitReason:
-        result.exitCode === 0 ? "completed" : `exit_code:${result.exitCode}`,
+      exitReason: exitReason(result.exitCode),
       actorId: input.userId,
     });
     if (run.leaseClaimed && run.connectionId) {
@@ -291,7 +315,8 @@ async function pollSession(
     });
   }
 
-  return result;
+  const { refreshedCodexAuthCache: _, ...safeResult } = result;
+  return safeResult;
 }
 
 type CancelSessionInput = {
@@ -326,10 +351,24 @@ async function cancelSession(
     workspaceId: input.workspaceId,
     actorId: input.userId,
   });
+  let cancelled = false;
   try {
     if (run.hostAgentSessionId) {
-      await stopSupersetAgent(input.workspaceId, run.hostAgentSessionId);
+      const stopped = await stopSupersetAgent(
+        input.workspaceId,
+        run.hostAgentSessionId,
+      );
+      await captureRefreshedCredential(run, stopped?.refreshedCodexAuthCache);
     }
+    cancelled = true;
+  } catch (error) {
+    await markGen2SupersetRunRecoveryRequired({
+      runId: run.id,
+      workspaceId: input.workspaceId,
+      lastError: "Host could not confirm agent cancellation.",
+      actorId: input.userId,
+    });
+    throw error;
   } finally {
     if (run.leaseClaimed && run.connectionId) {
       await releaseCredentialSeat({
@@ -342,12 +381,14 @@ async function cancelSession(
       workspaceId: input.workspaceId,
       actorId: input.userId,
     });
-    await markGen2SupersetRunFinished({
-      runId: run.id,
-      workspaceId: input.workspaceId,
-      exitReason: "cancelled",
-      actorId: input.userId,
-    });
+    if (cancelled) {
+      await markGen2SupersetRunFinished({
+        runId: run.id,
+        workspaceId: input.workspaceId,
+        exitReason: "cancelled",
+        actorId: input.userId,
+      });
+    }
   }
 }
 
@@ -377,6 +418,7 @@ export async function reconcileGen2SupersetAgentSession(input: {
     input.workspaceId,
     run.hostAgentSessionId,
   );
+  await captureRefreshedCredential(run, recovery.refreshedCodexAuthCache);
   if (!recovery.adoptable) {
     await markGen2SupersetRunRecoveryRequired({
       runId: run.id,
@@ -396,7 +438,8 @@ export async function reconcileGen2SupersetAgentSession(input: {
       });
     }
   }
-  return recovery;
+  const { refreshedCodexAuthCache: _, ...safeRecovery } = recovery;
+  return safeRecovery;
 }
 
 /**

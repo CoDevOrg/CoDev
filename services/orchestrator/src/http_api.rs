@@ -23,6 +23,7 @@ use crate::{
         ClaudeSetupCodeRequest, ClaudeSetupPollRequest, ClaudeSetupStartRequest,
         CodexExecPollRequest, CodexExecStartRequest, CreateRequest, ExecRequest, Result,
         RuntimeError, SupersetAgentInputRequest, SupersetAgentPollRequest,
+        SupersetAgentStopResponse,
         SupersetAgentStartRequest, SupersetCreateEntryRequest, SupersetDeleteEntryRequest,
         SupersetMoveEntryRequest, TerminalInputRequest, TerminalPollRequest, TerminalResizeRequest,
         TerminalStartRequest, WriteFileRequest,
@@ -306,7 +307,7 @@ async fn park_sandbox(
 async fn destroy_sandbox(
     State(backend): State<SharedBackend>,
     Path(workspace_id): Path<String>,
-) -> Result<StatusCode> {
+) -> Result<Json<SupersetAgentStopResponse>> {
     validate_workspace_id(&workspace_id)?;
     backend.destroy(&workspace_id).await?;
     Ok(StatusCode::NO_CONTENT)
@@ -755,10 +756,10 @@ async fn close_superset_agent(
 ) -> Result<StatusCode> {
     validate_workspace_id(&workspace_id)?;
     validate_superset_agent_id(&agent_id)?;
-    backend
+    let result = backend
         .close_superset_agent(&workspace_id, &agent_id)
         .await?;
-    Ok(StatusCode::NO_CONTENT)
+    Ok(Json(result))
 }
 
 async fn recover_superset_agent(

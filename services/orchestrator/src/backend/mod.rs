@@ -11,6 +11,7 @@ use crate::model::{
     CreateRequest, ExecRequest, ExecResponse, FileResponse, Instance, Result, RuntimeError,
     SupersetAgentInputRequest, SupersetAgentPollRequest, SupersetAgentPollResponse,
     SupersetAgentRecoveryResponse, SupersetAgentStartRequest, SupersetAgentStartResponse,
+    SupersetAgentStopResponse,
     SupersetCreateEntryRequest, SupersetDeleteEntryRequest, SupersetMoveEntryRequest,
     TerminalInputRequest, TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest,
     TerminalStartRequest, WriteFileRequest,
@@ -504,7 +505,7 @@ impl Backend {
         }
     }
 
-    pub async fn close_superset_agent(&self, workspace_id: &str, agent_id: &str) -> Result<()> {
+    pub async fn close_superset_agent(&self, workspace_id: &str, agent_id: &str) -> Result<SupersetAgentStopResponse> {
         match self {
             Self::Fake(backend) => backend.close_superset_agent(workspace_id, agent_id),
             #[cfg(target_os = "linux")]
@@ -915,12 +916,13 @@ impl FakeBackend {
             exited: true,
             exit_code: Some(0),
             refresh_ready: true,
+            refreshed_codex_auth_cache: None,
         })
     }
 
-    fn close_superset_agent(&self, workspace_id: &str, _agent_id: &str) -> Result<()> {
+    fn close_superset_agent(&self, workspace_id: &str, _agent_id: &str) -> Result<SupersetAgentStopResponse> {
         self.get(workspace_id)?;
-        Ok(())
+        Ok(SupersetAgentStopResponse { refreshed_codex_auth_cache: None })
     }
 
     fn recover_superset_agent(
@@ -931,7 +933,10 @@ impl FakeBackend {
         self.get(workspace_id)?;
         // No real Superset host backs the fake backend, so there is never
         // anything to adopt.
-        Ok(SupersetAgentRecoveryResponse { adoptable: false })
+        Ok(SupersetAgentRecoveryResponse {
+            adoptable: false,
+            refreshed_codex_auth_cache: None,
+        })
     }
 
     fn start_claude_setup(&self, workspace_id: &str) -> Result<serde_json::Value> {

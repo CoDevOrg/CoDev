@@ -102,6 +102,10 @@ Validation on this Windows host: focused host bridge/profile/migration/lifecycle
 
 **Pass:** Fault-injection tests around each state transition produce exactly one durable outcome, no duplicate process, no leaked profile, and no held seat. A host restart cannot convert an unknown exit into success or silently relaunch with stale credentials.
 
+**Slice E implementation checkpoint (2026-10-03):** The host persists each private profile directory so an ended terminal can capture the refreshed Codex cache and remove the profile after a host restart. Refresh data stays on the private bridge and is written only to the run creator's matching encrypted connection; it is removed before any CoDev response reaches a browser. Terminal exit without a code is recorded as `exit_unknown`, and terminal outcomes transition once. Empty browser polls no longer heartbeat a credential seat; changed terminal output and verified recovery do. An unconfirmed cancellation becomes `recovery_required` rather than `finished`.
+
+Validation on this Windows host: focused web lifecycle, run-state, and bridge-client tests passed (44 tests); host bridge and migration tests passed (7 tests); web typecheck passed. Host-service typecheck remains blocked by pre-existing vendored auth and generated-locale diagnostics, and Rust validation remains unavailable because `cargo` is not installed. Linux fault-injection and VM acceptance remain required for the Slice E pass condition.
+
 ### Slice F — CoDev facade and safe output
 
 **Touch:** `apps/web/lib/gen2/superset-agent-runtime.ts`, the existing orchestrator client, matching Gen 2 API routes, `packages/contracts/src/gen2.ts`, and output tests. Use current main's terminal transport where appropriate; do not copy its raw terminal payload into an agent progress API.

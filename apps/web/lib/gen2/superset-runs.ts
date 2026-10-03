@@ -299,6 +299,7 @@ async function transitionGen2SupersetRun(input: {
   auditType: Gen2SupersetRunAuditEventType;
   auditResult: "success" | "failure";
   actorId?: string | null;
+  from: Gen2SupersetRunStatus[];
 }) {
   return getDatabase().transaction(async (transaction) => {
     await lockSupersetRunWorkspace(transaction, input.workspaceId);
@@ -314,12 +315,11 @@ async function transitionGen2SupersetRun(input: {
         and(
           eq(schema.gen2SupersetRuns.id, input.runId),
           eq(schema.gen2SupersetRuns.workspaceId, input.workspaceId),
+          inArray(schema.gen2SupersetRuns.status, input.from),
         ),
       )
       .returning({ id: schema.gen2SupersetRuns.id });
-    if (!run) {
-      throw new Error("Superset run not found.");
-    }
+    if (!run) return false;
     await recordGen2SupersetRunAuditEvent(transaction, {
       runId: input.runId,
       workspaceId: input.workspaceId,
@@ -327,6 +327,7 @@ async function transitionGen2SupersetRun(input: {
       type: input.auditType,
       result: input.auditResult,
     });
+    return true;
   });
 }
 
@@ -338,6 +339,7 @@ export async function markGen2SupersetRunStopping(input: {
   return transitionGen2SupersetRun({
     ...input,
     status: "stopping",
+    from: ["creating", "running"],
     auditType: "run_stopping",
     auditResult: "success",
   });
@@ -352,6 +354,7 @@ export async function markGen2SupersetRunFinished(input: {
   return transitionGen2SupersetRun({
     ...input,
     status: "finished",
+    from: ["creating", "running", "stopping"],
     auditType: "run_finished",
     auditResult: "success",
   });
@@ -366,6 +369,7 @@ export async function markGen2SupersetRunFailed(input: {
   return transitionGen2SupersetRun({
     ...input,
     status: "failed",
+    from: ["creating", "running", "stopping"],
     auditType: "run_failed",
     auditResult: "failure",
   });
@@ -396,12 +400,15 @@ export async function markGen2SupersetRunRecoveryRequired(input: {
         and(
           eq(schema.gen2SupersetRuns.id, input.runId),
           eq(schema.gen2SupersetRuns.workspaceId, input.workspaceId),
+          inArray(schema.gen2SupersetRuns.status, [
+            "creating",
+            "running",
+            "stopping",
+          ]),
         ),
       )
       .returning({ id: schema.gen2SupersetRuns.id });
-    if (!run) {
-      throw new Error("Superset run not found.");
-    }
+    if (!run) return false;
     await recordGen2SupersetRunAuditEvent(transaction, {
       runId: input.runId,
       workspaceId: input.workspaceId,
@@ -409,5 +416,6 @@ export async function markGen2SupersetRunRecoveryRequired(input: {
       type: "recovery_required",
       result: "failure",
     });
+    return true;
   });
 }

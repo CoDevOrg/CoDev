@@ -56,6 +56,11 @@ const supersetAgentPollResponseSchema = z.object({
   exitCode: z.number().int().nullable(),
   /** Set once the launched process has exited and a refresh capture is safe. */
   refreshReady: z.boolean(),
+  /** Private bridge data. The runtime consumes this before returning to a client. */
+  refreshedCodexAuthCache: z
+    .string()
+    .max(128 * 1024)
+    .optional(),
 });
 
 const supersetAgentRecoveryResponseSchema = z.object({
@@ -65,6 +70,10 @@ const supersetAgentRecoveryResponseSchema = z.object({
   sequence: z.number().int().nonnegative().optional(),
   bufferLength: z.number().int().nonnegative().optional(),
   worktreeId: z.string().optional(),
+  refreshedCodexAuthCache: z
+    .string()
+    .max(128 * 1024)
+    .optional(),
 });
 
 export type SupersetAgentPollChunk = z.infer<
@@ -160,12 +169,20 @@ export async function pollSupersetAgent(
 }
 
 export async function stopSupersetAgent(workspaceId: string, agentId: string) {
-  await codexExecRequest(
+  const response = await codexExecRequest(
     "DELETE",
     `/v1/sandboxes/${workspaceId}/superset-agents/${agentId}`,
     undefined,
     20_000,
   );
+  return z
+    .object({
+      refreshedCodexAuthCache: z
+        .string()
+        .max(128 * 1024)
+        .optional(),
+    })
+    .parse(await response.json());
 }
 
 export async function checkSupersetAgentRecovery(

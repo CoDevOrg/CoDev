@@ -100,6 +100,8 @@ export const codevAgentRuns = sqliteTable(
 		idempotencyKey: text("idempotency_key").notNull(),
 		/** SHA-256 of the private launch hook token; never store the token itself. */
 		hookTokenHash: text("hook_token_hash").notNull().default(""),
+		/** Private profile retained only long enough to capture a refreshed cache. */
+		profileDir: text("profile_dir"),
 		createdAt: integer("created_at")
 			.notNull()
 			.$defaultFn(() => Date.now()),

@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   resolveCredential: vi.fn(),
   claim: vi.fn(),
   release: vi.fn(),
+  heartbeat: vi.fn(),
   register: vi.fn(),
   claimLease: vi.fn(),
   releaseLease: vi.fn(),
@@ -28,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   createWorktree: vi.fn(),
   createTurn: vi.fn(),
   recordOutput: vi.fn(),
+  refreshCredential: vi.fn(),
 }));
 
 vi.mock("../billing/gate", () => ({
@@ -42,8 +44,12 @@ vi.mock("../providers/credential-seat", () => ({
   waitForCredentialSeat: (...args: unknown[]) => mocks.claim(...args),
   releaseCredentialSeat: (...args: unknown[]) => mocks.release(...args),
   retagCredentialSeat: vi.fn(async () => undefined),
-  heartbeatCredentialSeat: vi.fn(async () => undefined),
+  heartbeatCredentialSeat: (...args: unknown[]) => mocks.heartbeat(...args),
   describeSeatHolder: () => "a workspace turn is still using this connection.",
+}));
+vi.mock("../providers/hosted-codex-subscription-credentials", () => ({
+  updateHostedCodexAuthCacheForUser: (...args: unknown[]) =>
+    mocks.refreshCredential(...args),
 }));
 vi.mock("./providers", () => ({
   resolveGen2Credential: (...args: unknown[]) =>
@@ -117,6 +123,7 @@ const RUN = {
   createdBy: userId,
   hostAgentSessionId: "agent-1",
   connectionId: credentialId,
+  provider: "openai",
   leaseClaimed: true,
 };
 
@@ -438,6 +445,74 @@ describe("gen2 Superset agent runtime adapter", () => {
     expect(mocks.releaseLease).not.toHaveBeenCalled();
   });
 
+  it("does not renew a seat for an empty browser poll", async () => {
+    mocks.getRunById.mockResolvedValue(RUN);
+    mocks.poll.mockResolvedValue({
+      chunks: [],
+      nextSequence: 5,
+      exited: false,
+      exitCode: null,
+      refreshReady: false,
+    });
+
+    await pollGen2SupersetAgentSession({
+      workspaceId,
+      userId,
+      runId,
+      after: 0,
+    });
+
+    expect(mocks.heartbeat).not.toHaveBeenCalled();
+  });
+
+  it("keeps an unavailable exit result unknown", async () => {
+    mocks.getRunById.mockResolvedValue(RUN);
+    mocks.poll.mockResolvedValue({
+      chunks: [],
+      nextSequence: 5,
+      exited: true,
+      exitCode: null,
+      refreshReady: true,
+    });
+
+    await pollGen2SupersetAgentSession({
+      workspaceId,
+      userId,
+      runId,
+      after: 0,
+    });
+
+    expect(mocks.markFinished).toHaveBeenCalledWith(
+      expect.objectContaining({ exitReason: "exit_unknown" }),
+    );
+  });
+
+  it("writes a refreshed cache only to the creator's credential", async () => {
+    mocks.getRunById.mockResolvedValue(RUN);
+    mocks.poll.mockResolvedValue({
+      chunks: [],
+      nextSequence: 5,
+      exited: true,
+      exitCode: 0,
+      refreshReady: true,
+      refreshedCodexAuthCache: '{"token":"fresh"}',
+    });
+
+    const result = await pollGen2SupersetAgentSession({
+      workspaceId,
+      userId,
+      runId,
+      after: 0,
+    });
+
+    expect(mocks.refreshCredential).toHaveBeenCalledWith({
+      credentialId,
+      userId,
+      authCacheJson: '{"token":"fresh"}',
+    });
+    expect(result).not.toHaveProperty("refreshedCodexAuthCache");
+  });
+
   it("rejects a run id from a different workspace instead of leaking it", async () => {
     mocks.getRunById.mockResolvedValue({
       ...RUN,
@@ -449,7 +524,7 @@ describe("gen2 Superset agent runtime adapter", () => {
     ).rejects.toThrow("Superset run not found.");
   });
 
-  it("stops the host process and releases the lease on cancel, even if stop fails", async () => {
+  it("requires recovery when cancellation cannot be confirmed", async () => {
     mocks.getRunById.mockResolvedValue(RUN);
     mocks.stop.mockRejectedValue(new Error("host unreachable"));
 
@@ -462,8 +537,9 @@ describe("gen2 Superset agent runtime adapter", () => {
       expect.objectContaining({ credentialId }),
     );
     expect(mocks.releaseLease).toHaveBeenCalled();
-    expect(mocks.markFinished).toHaveBeenCalledWith(
-      expect.objectContaining({ runId, exitReason: "cancelled" }),
+    expect(mocks.markFinished).not.toHaveBeenCalled();
+    expect(mocks.markRecoveryRequired).toHaveBeenCalledWith(
+      expect.objectContaining({ runId }),
     );
   });
 
@@ -481,6 +557,27 @@ describe("gen2 Superset agent runtime adapter", () => {
     expect(mocks.markRecoveryRequired).toHaveBeenCalledWith(
       expect.objectContaining({ runId }),
     );
+  });
+
+  it("writes a recovered profile cache without returning it to the caller", async () => {
+    mocks.getRunById.mockResolvedValue(RUN);
+    mocks.checkRecovery.mockResolvedValue({
+      adoptable: false,
+      refreshedCodexAuthCache: '{"token":"fresh"}',
+    });
+
+    const result = await reconcileGen2SupersetAgentSession({
+      workspaceId,
+      userId,
+      runId,
+    });
+
+    expect(mocks.refreshCredential).toHaveBeenCalledWith({
+      credentialId,
+      userId,
+      authCacheJson: '{"token":"fresh"}',
+    });
+    expect(result).not.toHaveProperty("refreshedCodexAuthCache");
   });
 
   it("leaves an adoptable run alone", async () => {

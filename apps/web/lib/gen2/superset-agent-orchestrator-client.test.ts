@@ -219,8 +219,12 @@ describe("Superset agent orchestrator client", () => {
   });
 
   it("stops with DELETE", async () => {
-    mocks.codexExecRequest.mockResolvedValue(jsonResponse({}));
-    await stopSupersetAgent(workspaceId, agentId);
+    mocks.codexExecRequest.mockResolvedValue(
+      jsonResponse({ refreshedCodexAuthCache: '{"token":"fresh"}' }),
+    );
+    await expect(stopSupersetAgent(workspaceId, agentId)).resolves.toEqual({
+      refreshedCodexAuthCache: '{"token":"fresh"}',
+    });
     expect(mocks.codexExecRequest).toHaveBeenCalledWith(
       "DELETE",
       `/v1/sandboxes/${workspaceId}/superset-agents/${agentId}`,

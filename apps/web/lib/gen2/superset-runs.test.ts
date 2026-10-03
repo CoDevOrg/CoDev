@@ -179,7 +179,7 @@ describe("gen2 Superset run lifecycle", () => {
     );
   });
 
-  it("throws instead of silently no-oping when the run row is missing", async () => {
+  it("does not duplicate a terminal outcome", async () => {
     const runUpdate = updateQuery([]);
     const transaction = {
       execute: vi.fn().mockResolvedValue(undefined),
@@ -196,7 +196,7 @@ describe("gen2 Superset run lifecycle", () => {
         workspaceId: WORKSPACE_ID,
         lastError: "boom",
       }),
-    ).rejects.toThrow("Superset run not found.");
+    ).resolves.toBe(false);
   });
 
   it("is a no-op releasing a lease that was never claimed", async () => {

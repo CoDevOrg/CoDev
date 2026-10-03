@@ -34,7 +34,7 @@ use crate::{
         CodexExecStartRequest, CreateRequest, ExecRequest, ExecResponse, FileResponse, Instance,
         RepositorySnapshot, Result, RuntimeError, SupersetAgentInputRequest,
         SupersetAgentPollRequest, SupersetAgentPollResponse, SupersetAgentRecoveryResponse,
-        SupersetAgentStartRequest, SupersetAgentStartResponse, SupersetCreateEntryRequest,
+        SupersetAgentStartRequest, SupersetAgentStartResponse, SupersetAgentStopResponse, SupersetCreateEntryRequest,
         SupersetDeleteEntryRequest, SupersetMoveEntryRequest, TerminalInputRequest,
         TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
         WriteFileRequest,
@@ -1028,11 +1028,11 @@ impl FirecrackerBackend {
         Ok(result)
     }
 
-    pub async fn close_superset_agent(&self, workspace_id: &str, agent_id: &str) -> Result<()> {
+    pub async fn close_superset_agent(&self, workspace_id: &str, agent_id: &str) -> Result<SupersetAgentStopResponse> {
         let machine = self.machine(workspace_id).await?;
-        machine.guest.close_superset_agent(agent_id).await?;
+        let result = machine.guest.close_superset_agent(agent_id).await?;
         self.mark_activity(&machine);
-        Ok(())
+        Ok(result)
     }
 
     pub async fn recover_superset_agent(

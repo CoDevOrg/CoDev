@@ -69,6 +69,47 @@ export async function updateHostedCodexAuthCache(
     .where(eq(schema.providerCredentials.id, credentialId));
 }
 
+/**
+ * A guest profile may only refresh the credential that launched it. Keeping
+ * the creator check in this write-back path prevents a durable run mapping
+ * from ever updating another member's encrypted connection.
+ */
+export async function updateHostedCodexAuthCacheForUser(input: {
+  credentialId: string;
+  userId: string;
+  authCacheJson: string;
+}) {
+  validateAuthCache(input.authCacheJson);
+  const updated = await getDatabase()
+    .update(schema.providerCredentials)
+    .set({
+      encryptedMaterial: await encryptHostedMaterial({
+        authCacheJson: input.authCacheJson,
+      }),
+      lastRefreshedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(schema.providerCredentials.id, input.credentialId),
+        eq(schema.providerCredentials.scopeType, "USER"),
+        eq(schema.providerCredentials.scopeId, input.userId),
+        eq(schema.providerCredentials.provider, "openai"),
+        eq(
+          schema.providerCredentials.credentialType,
+          "HOSTED_CODEX_SUBSCRIPTION",
+        ),
+      ),
+    )
+    .returning({ id: schema.providerCredentials.id });
+  if (!updated[0]) {
+    throw new HostedCodexSubscriptionError(
+      "The agent credential is no longer connected.",
+      409,
+    );
+  }
+}
+
 export async function persistHostedCodexConnection(input: {
   userId: string;
   material: HostedCodexMaterial;
