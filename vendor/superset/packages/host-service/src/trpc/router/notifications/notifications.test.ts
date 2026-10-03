@@ -63,6 +63,7 @@ function createContext(
 	const workspaceFindFirst = mock(() => ({
 		sync: () => ({ taskId: options?.taskId ?? null }),
 	}));
+	const codevRunFindFirst = mock(() => ({ sync: () => null }));
 	const taskStart = mock((_input: { id: string }) => Promise.resolve({}));
 	const terminalAgentStore = new TerminalAgentStore();
 
@@ -74,6 +75,9 @@ function createContext(
 				},
 				workspaces: {
 					findFirst: workspaceFindFirst,
+				},
+				codevAgentRuns: {
+					findFirst: codevRunFindFirst,
 				},
 			},
 			// The activity touch (workspaces/local-workspace-store) reads and
