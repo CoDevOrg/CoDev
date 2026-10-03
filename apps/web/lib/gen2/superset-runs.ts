@@ -174,6 +174,69 @@ export async function getGen2SupersetRunById(runId: string) {
   return run ?? null;
 }
 
+/**
+ * Persist one filtered whole-terminal snapshot. The cursor belongs to CoDev,
+ * not the host, so reconnects and host restarts cannot replay raw output or
+ * duplicate a snapshot.
+ */
+export async function recordGen2SupersetRunProgress(input: {
+  runId: string;
+  workspaceId: string;
+  output: string;
+}) {
+  return getDatabase().transaction(async (transaction) => {
+    await lockSupersetRunWorkspace(transaction, input.workspaceId);
+    const [run] = await transaction
+      .select({
+        progressOutput: schema.gen2SupersetRuns.progressOutput,
+        progressSequence: schema.gen2SupersetRuns.progressSequence,
+      })
+      .from(schema.gen2SupersetRuns)
+      .where(
+        and(
+          eq(schema.gen2SupersetRuns.id, input.runId),
+          eq(schema.gen2SupersetRuns.workspaceId, input.workspaceId),
+        ),
+      )
+      .limit(1);
+    if (!run) throw new Error("Superset run not found.");
+    if (run.progressOutput === input.output) {
+      return { sequence: run.progressSequence, changed: false };
+    }
+    const sequence = run.progressSequence + 1;
+    await transaction
+      .update(schema.gen2SupersetRuns)
+      .set({
+        progressOutput: input.output,
+        progressSequence: sequence,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.gen2SupersetRuns.id, input.runId));
+    return { sequence, changed: true };
+  });
+}
+
+export async function getGen2SupersetRunProgress(input: {
+  runId: string;
+  workspaceId: string;
+}) {
+  const [run] = await getDatabase()
+    .select({
+      output: schema.gen2SupersetRuns.progressOutput,
+      sequence: schema.gen2SupersetRuns.progressSequence,
+    })
+    .from(schema.gen2SupersetRuns)
+    .where(
+      and(
+        eq(schema.gen2SupersetRuns.id, input.runId),
+        eq(schema.gen2SupersetRuns.workspaceId, input.workspaceId),
+      ),
+    )
+    .limit(1);
+  if (!run) throw new Error("Superset run not found.");
+  return run;
+}
+
 /** Nonterminal runs for a workspace, for host-restart reconciliation (Phase 5). */
 export async function listActiveGen2SupersetRuns(workspaceId: string) {
   return getDatabase()

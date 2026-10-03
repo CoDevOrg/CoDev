@@ -34,6 +34,7 @@ import { isGen2SupersetAgentSessionsEnabled } from "./superset-agent-sessions-fe
 import {
   claimGen2SupersetRunLease,
   getGen2SupersetRunById,
+  getGen2SupersetRunProgress,
   markGen2SupersetRunFailed,
   markGen2SupersetRunFinished,
   markGen2SupersetRunRecoveryRequired,
@@ -41,12 +42,14 @@ import {
   markGen2SupersetRunStopping,
   registerGen2SupersetRun,
   releaseGen2SupersetRunLease,
+  recordGen2SupersetRunProgress,
 } from "./superset-runs";
 import { createGen2Turn, recordGen2SupersetRunOutput } from "./turns";
 import { toAgentExecChunks } from "./agent-output";
 import { requireWorkspaceOwnerPlan } from "../billing/gate";
 import { requireGen2Member } from "./workspaces";
 import { requireGen2SupersetAgentAccess } from "./superset-agent-access";
+import { filterSupersetAgentOutput } from "./superset-agent-output";
 
 /**
  * The server-only CoDev runtime adapter docs/SUPERSET_AGENT_SESSION_PLAN.md
@@ -549,6 +552,90 @@ export async function startGen2SupersetAgentTurn(input: {
     userId: input.userId,
   });
   return { sessionId: session.runId };
+}
+
+/** Start a persistent run through the CoDev facade with a server-built command. */
+export async function startGen2SupersetPersistentAgent(input: {
+  workspaceId: string;
+  userId: string;
+  chatId: string;
+  prompt: string;
+  idempotencyKey: string;
+  provider: Gen2AgentProvider;
+  worktreeId?: string | undefined;
+  model?: string | undefined;
+}) {
+  requireEnabled();
+  await requireGen2Chat(input.workspaceId, input.chatId);
+  const history = await listGen2ChatMessages(input.chatId);
+  const worktreeId =
+    input.worktreeId ??
+    (await ensureGen2SupersetAgentWorktree(
+      input.workspaceId,
+      input.idempotencyKey,
+    ));
+  const session = await startSession(
+    {
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      chatId: input.chatId,
+      worktreeId,
+      command: buildGen2AgentCommand(
+        input.provider,
+        input.prompt,
+        history,
+        input.model,
+      ),
+      provider: input.provider,
+      idempotencyKey: input.idempotencyKey,
+    },
+    "persistent",
+  );
+  return { runId: session.runId, status: session.status };
+}
+
+function latestSnapshot(chunks: { sequence: number; data: string }[]) {
+  return chunks.reduce<{ sequence: number; data: string } | null>(
+    (latest, chunk) =>
+      !latest || chunk.sequence > latest.sequence ? chunk : latest,
+    null,
+  );
+}
+
+export async function pollGen2SupersetAgentProgress(input: PollSessionInput) {
+  const result = await pollSession(input, "persistent");
+  const snapshot = latestSnapshot(result.chunks);
+  if (snapshot) {
+    await recordGen2SupersetRunProgress({
+      runId: input.runId,
+      workspaceId: input.workspaceId,
+      output: filterSupersetAgentOutput(snapshot.data),
+    });
+  }
+  return getGen2SupersetAgentProgress(input);
+}
+
+export async function getGen2SupersetAgentProgress(input: PollSessionInput) {
+  const run = await requireGen2SupersetAgentAccess({
+    action: "progress",
+    workspaceId: input.workspaceId,
+    userId: input.userId,
+    runId: input.runId,
+  });
+  const progress = await getGen2SupersetRunProgress({
+    runId: run.id,
+    workspaceId: input.workspaceId,
+  });
+  return {
+    chunks:
+      input.after < progress.sequence
+        ? [{ sequence: progress.sequence, text: progress.output }]
+        : [],
+    nextSequence: progress.sequence,
+    status: run.status,
+    exited: ["finished", "failed"].includes(run.status),
+    exitCode: run.exitReason === "completed" ? 0 : null,
+  };
 }
 
 /**

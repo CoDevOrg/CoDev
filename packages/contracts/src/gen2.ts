@@ -600,8 +600,43 @@ export const gen2SupersetRunSchema = z.object({
   updatedAt: timestampSchema,
 });
 
+/** Server-filtered progress for a persistent Superset agent. */
+export const gen2SupersetAgentProgressChunkSchema = z.object({
+  sequence: z.number().int().nonnegative(),
+  text: z.string().max(32 * 1_024),
+});
+
+export const gen2SupersetAgentStartRequestSchema = gen2AgentStartRequestSchema;
+
+export const gen2SupersetAgentStartResponseSchema = z.object({
+  runId: identifierSchema,
+  status: gen2SupersetRunStatusSchema,
+});
+
+export const gen2SupersetAgentInputRequestSchema = z.object({
+  data: z.string().max(64 * 1_024),
+});
+
+export const gen2SupersetAgentPollRequestSchema = z.object({
+  after: z.number().int().nonnegative(),
+});
+
+export const gen2SupersetAgentPollResponseSchema = z.object({
+  chunks: z.array(gen2SupersetAgentProgressChunkSchema).max(1),
+  nextSequence: z.number().int().nonnegative(),
+  status: gen2SupersetRunStatusSchema,
+  exited: z.boolean(),
+  exitCode: z.number().int().nullable(),
+});
+
 export type Gen2SupersetRunStatus = z.infer<typeof gen2SupersetRunStatusSchema>;
 export type Gen2SupersetRun = z.infer<typeof gen2SupersetRunSchema>;
+export type Gen2SupersetAgentStartRequest = z.infer<
+  typeof gen2SupersetAgentStartRequestSchema
+>;
+export type Gen2SupersetAgentPollResponse = z.infer<
+  typeof gen2SupersetAgentPollResponseSchema
+>;
 
 export type Gen2Repository = z.infer<typeof gen2RepositorySchema>;
 export type Gen2WorkspaceStatus = z.infer<typeof gen2WorkspaceStatusSchema>;

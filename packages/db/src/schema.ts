@@ -2335,6 +2335,9 @@ export const gen2SupersetRuns = pgTable(
     leaseClaimed: boolean("lease_claimed").default(false).notNull(),
     exitReason: text("exit_reason"),
     recoveryCount: integer("recovery_count").default(0).notNull(),
+    /** Filtered terminal snapshot for the shared progress API; never raw PTY text. */
+    progressOutput: text("progress_output").default("").notNull(),
+    progressSequence: integer("progress_sequence").default(0).notNull(),
     /** Caller-supplied key; a retry with the same key returns the same run. */
     idempotencyKey: text("idempotency_key").notNull(),
     lastError: text("last_error"),

@@ -29,6 +29,8 @@ const mocks = vi.hoisted(() => ({
   createWorktree: vi.fn(),
   createTurn: vi.fn(),
   recordOutput: vi.fn(),
+  recordProgress: vi.fn(),
+  getProgress: vi.fn(),
   refreshCredential: vi.fn(),
 }));
 
@@ -88,6 +90,10 @@ vi.mock("./superset-runs", () => ({
   markGen2SupersetRunRecoveryRequired: (...args: unknown[]) =>
     mocks.markRecoveryRequired(...args),
   getGen2SupersetRunById: (...args: unknown[]) => mocks.getRunById(...args),
+  recordGen2SupersetRunProgress: (...args: unknown[]) =>
+    mocks.recordProgress(...args),
+  getGen2SupersetRunProgress: (...args: unknown[]) =>
+    mocks.getProgress(...args),
 }));
 
 vi.mock("./superset-agent-orchestrator-client", () => ({
@@ -104,6 +110,8 @@ import {
   cancelGen2SupersetAgentSession,
   cancelGen2SupersetAgentTurn,
   pollGen2SupersetAgentSession,
+  pollGen2SupersetAgentProgress,
+  getGen2SupersetAgentProgress,
   pollGen2SupersetAgentTurn,
   reconcileGen2SupersetAgentSession,
   sendGen2SupersetAgentInput,
@@ -124,6 +132,7 @@ const RUN = {
   hostAgentSessionId: "agent-1",
   connectionId: credentialId,
   provider: "openai",
+  status: "running",
   leaseClaimed: true,
 };
 
@@ -146,6 +155,7 @@ describe("gen2 Superset agent runtime adapter", () => {
       worktreeId: "agent-chat",
       branch: "codev/agent-chat",
     });
+    mocks.getProgress.mockResolvedValue({ output: "", sequence: 0 });
   });
 
   it("refuses every call while the flag is off", async () => {
@@ -511,6 +521,52 @@ describe("gen2 Superset agent runtime adapter", () => {
       authCacheJson: '{"token":"fresh"}',
     });
     expect(result).not.toHaveProperty("refreshedCodexAuthCache");
+  });
+
+  it("persists filtered snapshots with a CoDev-owned cursor", async () => {
+    mocks.getRunById.mockResolvedValue(RUN);
+    mocks.poll.mockResolvedValue({
+      chunks: [{ sequence: 8, data: "OPENAI_API_KEY=secret\nDone" }],
+      nextSequence: 8,
+      exited: false,
+      exitCode: null,
+      refreshReady: false,
+    });
+    mocks.getProgress.mockResolvedValue({
+      output: "[private agent data removed]\nDone",
+      sequence: 3,
+    });
+
+    const result = await pollGen2SupersetAgentProgress({
+      workspaceId,
+      userId,
+      runId,
+      after: 0,
+    });
+
+    expect(mocks.recordProgress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runId,
+        output: expect.stringContaining("removed"),
+      }),
+    );
+    expect(result).toMatchObject({ nextSequence: 3, status: "running" });
+    expect(result.chunks[0]?.text).not.toContain("secret");
+  });
+
+  it("lets another member read stored progress without polling the host", async () => {
+    mocks.getRunById.mockResolvedValue({ ...RUN, createdBy: "another-user" });
+    mocks.getProgress.mockResolvedValue({ output: "Done", sequence: 3 });
+
+    const result = await getGen2SupersetAgentProgress({
+      workspaceId,
+      userId,
+      runId,
+      after: 0,
+    });
+
+    expect(result.chunks).toEqual([{ sequence: 3, text: "Done" }]);
+    expect(mocks.poll).not.toHaveBeenCalled();
   });
 
   it("rejects a run id from a different workspace instead of leaking it", async () => {
