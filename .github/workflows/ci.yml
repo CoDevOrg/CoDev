@@ -73,6 +73,10 @@ jobs:
         working-directory: vendor/superset
         run: CI=1 ELECTRON_SKIP_BINARY_DOWNLOAD=1 bun install --frozen-lockfile
 
+      - name: Build the PTY daemon bundle
+        working-directory: vendor/superset/packages/pty-daemon
+        run: bun run build:daemon
+
       - name: Test terminal and daemon integration
         working-directory: vendor/superset/packages/host-service
         run: |
