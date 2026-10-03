@@ -652,11 +652,10 @@ describe("DaemonSupervisor.update (Phase 2 fd-handoff)", () => {
 		}
 	});
 
-	test("auto-update defers when live sessions exist", async () => {
+	test("auto-update preserves live sessions across handoff", async () => {
 		// Heavy path: auto-update fires on every adopt with version drift.
-		// If the stale daemon owns live shells, the background path should
-		// not silently handoff/restart under the user's typing. The visible
-		// Settings action remains available for a user-approved update.
+		// A session opened before adoption must survive the background handoff
+		// with its original shell process intact.
 		const orgId = "org-autoupdate-live-defer";
 		const socketPath = path.join(
 			os.tmpdir(),
@@ -685,8 +684,8 @@ describe("DaemonSupervisor.update (Phase 2 fd-handoff)", () => {
 			const ready = await waitForSocket(socketPath, 5000);
 			assert.equal(ready, true);
 
-			// Open a session BEFORE auto-update kicks in. This is the
-			// "user has live shells" path — the failure must leave them alone.
+			// Open a session before auto-update kicks in so the handoff must
+			// preserve a user's live shell.
 			const { DaemonClient } = await import(
 				"../terminal/DaemonClient/index.ts"
 			);
@@ -716,46 +715,46 @@ describe("DaemonSupervisor.update (Phase 2 fd-handoff)", () => {
 
 			const sup = new DaemonSupervisor({ scriptPath: DAEMON_BUNDLE });
 			supervisorsToCleanup.push({ sup, orgId });
-			let runUpdateCalled = false;
-			(
-				sup as unknown as {
-					runUpdate: () => Promise<{ ok: false; reason: string }>;
-				}
-			).runUpdate = async () => {
-				runUpdateCalled = true;
-				return {
-					ok: false as const,
-					reason: "auto-update should have deferred before runUpdate",
-				};
-			};
-
 			const adopted = await sup.ensure(orgId);
 			assert.equal(adopted.updatePending, true);
 			const predecessorPid = adopted.pid;
 
-			await new Promise((r) => setTimeout(r, 500));
-			const inst = (
-				sup as unknown as { instances: Map<string, { pid: number }> }
-			).instances.get(orgId);
-			assert.equal(inst?.pid, predecessorPid);
-			assert.equal(isAlive(predecessorPid), true);
-			assert.equal(runUpdateCalled, false);
+			const deadline = Date.now() + 5000;
+			let successor: { pid: number; socketPath: string } = adopted;
+			while (Date.now() < deadline) {
+				const inst = (
+					sup as unknown as {
+						instances: Map<
+							string,
+							{ pid: number; socketPath: string; updatePending: boolean }
+						>;
+					}
+				).instances.get(orgId);
+				if (inst && inst.pid !== predecessorPid) {
+					successor = inst;
+					break;
+				}
+				await new Promise((r) => setTimeout(r, 100));
+			}
+			assert.notEqual(successor.pid, predecessorPid);
+			await new Promise((r) => setTimeout(r, 300));
+			assert.equal(isAlive(predecessorPid), false);
 
 			const status = sup.getUpdateStatus(orgId);
 			assert.ok(status);
 			assert.equal(
 				status.pending,
-				true,
-				`pending should remain visible for manual update (running=${status.running})`,
+				false,
+				`pending should clear after handoff (running=${status.running})`,
 			);
 
-			const verifyClient = new DaemonClient({ socketPath });
+			const verifyClient = new DaemonClient({ socketPath: successor.socketPath });
 			await verifyClient.connect();
 			const sessions = await verifyClient.list();
 			const survivor = sessions.find((s) => s.id === "survivor");
 			assert.ok(
 				survivor,
-				`live session should remain on predecessor: ${JSON.stringify(sessions)}`,
+				`live session should remain on successor: ${JSON.stringify(sessions)}`,
 			);
 			assert.equal(survivor.pid, shellPid);
 			await verifyClient.dispose();
