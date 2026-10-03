@@ -18,10 +18,15 @@ describe("agentTerminalLaunchOptions", () => {
 		expect(
 			agentTerminalLaunchOptions({
 				...shared,
-				privateProfile: { directory: "/private/agent-1", uid: 2301 },
+				privateProfile: {
+					directory: "/private/agent-1",
+					uid: 2301,
+					hookToken: "private-token",
+				},
 			}),
 		).toMatchObject({
 			includeDefaultAccountEnv: false,
+			codevHookToken: "private-token",
 			homeDirectory: "/private/agent-1",
 			shell: "/usr/bin/setpriv",
 			shellArgs: [

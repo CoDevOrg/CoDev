@@ -6,6 +6,7 @@ const codexPrefix = [
 	"--json",
 	"--ephemeral",
 	"--ignore-user-config",
+	"--dangerously-bypass-hook-trust",
 	"--skip-git-repo-check",
 	"--sandbox",
 	"danger-full-access",
@@ -43,11 +44,11 @@ export function isApprovedAgentCommand(provider: CoDevAgentProvider, command: st
 		return (
 			command.length === codexPrefix.length + 5 &&
 			matchesPrefix(command, codexPrefix) &&
-			command[10] === "--model" &&
-			command[11]!.length > 0 &&
-			command[12] === "--cd" &&
-			command[13] === "." &&
-			command[14]!.length > 0
+			command[11] === "--model" &&
+			command[12]!.length > 0 &&
+			command[13] === "--cd" &&
+			command[14] === "." &&
+			command[15]!.length > 0
 		);
 	}
 	return (

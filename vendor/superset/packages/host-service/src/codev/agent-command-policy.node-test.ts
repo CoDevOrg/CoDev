@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { isApprovedAgentCommand } from "./agent-command-policy.ts";
 
 const codex = [
-	"codex", "exec", "--json", "--ephemeral", "--ignore-user-config", "--skip-git-repo-check",
+	"codex", "exec", "--json", "--ephemeral", "--ignore-user-config", "--dangerously-bypass-hook-trust", "--skip-git-repo-check",
 	"--sandbox", "danger-full-access", "-c", 'approval_policy="never"', "--model", "gpt-5", "--cd", ".", "prompt",
 ];
 const claude = [

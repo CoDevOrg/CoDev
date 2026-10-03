@@ -90,6 +90,10 @@ Validation on this Windows host: the shared launch-option test, CoDev registrati
 
 **Pass:** A real Claude launch, then a real Codex launch, creates the expected persisted binding and status transitions in a headless VM. Forged, replayed, and cross-terminal events cannot alter another run. Child subagents attach to the correct parent without gaining separate credential access.
 
+**Slice D implementation checkpoint (2026-10-02):** Each new CoDev launch now receives a random token that is stored only as a SHA-256 hash with its durable host registration. Its private provider profile supplies the existing Superset Codex or Claude hook configuration and passes that token through the existing hook payload. Codex launches explicitly enable trusted execution of this host-created private hook configuration, and the exact command gate requires that flag. The public notification endpoint looks up the CoDev registration before mutating `TerminalAgentStore`; missing, forged, replayed, and cross-terminal tokens are ignored. The profile config also gives Claude its private `CLAUDE_CONFIG_DIR`. PTY exit continues to determine terminal liveness separately, while absent hooks create no synthetic agent lifecycle.
+
+Validation on this Windows host: focused host bridge/profile/migration/lifecycle tests passed (18 passed, one Linux-only UID test skipped) and the focused Gen 2 command test passed (17/17). Repository typecheck passed; lint completed with pre-existing warnings. Host-service typecheck has no Slice D diagnostics, but remains blocked by pre-existing vendored auth and generated-locale errors. The real headless Claude/Codex VM test, Linux PTY/UID suite, and child-subagent acceptance remain required for Slice D's pass condition.
+
 ### Slice E — lifecycle, credential refresh, and safe recovery
 
 **Touch:** `src/codev/agents.ts`, profile cleanup, `apps/web/lib/gen2/superset-agent-runtime.ts`, `superset-runs.ts`, and the existing credential write-back path. Do not change `resolveCredential` or the provider registry.

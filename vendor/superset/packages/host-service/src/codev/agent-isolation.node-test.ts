@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import {
 	agentLaunchScript,
+	buildCoDevAgentProfile,
 	prepareAgentLaunch,
 	removeAgentLaunch,
 	validateAgentLaunchProfile,
@@ -38,6 +39,23 @@ test("launch profiles cannot escape the private directory or inject shell enviro
 	);
 });
 
+test("CoDev installs provider hooks beside the private credential profile", () => {
+	const codex = buildCoDevAgentProfile(
+		{ env: { CODEX_HOME: "{{profileDir}}/.codex" } },
+		"openai",
+	);
+	const claude = buildCoDevAgentProfile({}, "anthropic");
+	const codexHooks = JSON.parse(codex.files?.[0]?.contents ?? "{}") as {
+		hooks?: Record<string, unknown>;
+	};
+
+	assert.equal(codex.files?.[0]?.path, ".codex/hooks.json");
+	assert.ok(codexHooks.hooks?.SessionStart);
+	assert.ok(codexHooks.hooks?.SubagentStart);
+	assert.equal(claude.files?.[0]?.path, ".claude/settings.json");
+	assert.equal(claude.env?.CLAUDE_CONFIG_DIR, "{{profileDir}}/.claude");
+});
+
 const canExerciseLinuxPermissions =
 	process.platform === "linux" && process.getuid?.() === 0 && existsSync("/usr/bin/setpriv");
 
@@ -54,19 +72,31 @@ test(
 		let second: Awaited<ReturnType<typeof prepareAgentLaunch>> | undefined;
 		try {
 			await assert.rejects(
-				prepareAgentLaunch({ root, command: ["/usr/bin/true"] }),
+				prepareAgentLaunch({
+					root,
+					command: ["/usr/bin/true"],
+					provider: "openai",
+					hookToken: "a".repeat(64),
+				}),
 				/not provisioned safely/,
 			);
 			await chmod(root, 0o711);
 			first = await prepareAgentLaunch({
 				root,
 				command: ["/usr/bin/printf", "%s", longArgument],
+				provider: "openai",
+				hookToken: "a".repeat(64),
 				profile: {
 					files: [{ path: ".codex/auth.json", contents: secret }],
 					env: { CODEX_HOME: "{{profileDir}}/.codex" },
 				},
 			});
-			second = await prepareAgentLaunch({ root, command: ["/usr/bin/true"] });
+			second = await prepareAgentLaunch({
+				root,
+				command: ["/usr/bin/true"],
+				provider: "anthropic",
+				hookToken: "b".repeat(64),
+			});
 			assert.notEqual(first.uid, second.uid);
 			assert.ok(first.command.length < 512);
 			assert.equal((await stat(first.directory)).mode & 0o777, 0o700);

@@ -2998,6 +2998,8 @@ export interface CreateTerminalSessionOptions {
 	shellArgs?: string[];
 	/** Trusted host callers may set a private home before the shell starts. */
 	homeDirectory?: string;
+	/** Per-CoDev-launch token accepted only by the hook receiver for this terminal. */
+	codevHookToken?: string;
 	/** Only recover an already-live daemon session; never spawn a new PTY. */
 	adoptOnly?: boolean;
 	/**
@@ -3088,6 +3090,7 @@ async function createTerminalSessionUnlocked({
 	shell: shellOverride,
 	shellArgs: shellArgsOverride,
 	homeDirectory,
+	codevHookToken,
 	adoptOnly = false,
 	restoredNotice = false,
 }: CreateTerminalSessionOptions): Promise<
@@ -3201,7 +3204,8 @@ async function createTerminalSessionUnlocked({
 		// path; the agent wrappers re-resolve later switches at launch time.
 		...(includeDefaultAccountEnv ? resolveDefaultAccountTerminalEnv(db) : {}),
 		...(homeDirectory ? { HOME: homeDirectory } : {}),
-		SUPERSET_ACCOUNT_ATTRIBUTION_TOKEN: issueAttributionToken(terminalId),
+		SUPERSET_ACCOUNT_ATTRIBUTION_TOKEN:
+			codevHookToken ?? issueAttributionToken(terminalId),
 	};
 
 	let daemon: DaemonClient;

@@ -13,6 +13,32 @@ const MAX_PROFILE_ENV_VALUE_BYTES = 32 << 10;
 const PROFILE_DIR_TOKEN = "{{profileDir}}";
 const reservedUids = new Set<number>();
 
+type HookEvent = { name: string; matcher?: string };
+
+const CODEX_HOOK_EVENTS: HookEvent[] = [
+	{ name: "SessionStart" },
+	{ name: "SessionEnd" },
+	{ name: "UserPromptSubmit" },
+	{ name: "PreToolUse", matcher: "^request_user_input$" },
+	{ name: "PostToolUse", matcher: "*" },
+	{ name: "Stop" },
+	{ name: "Interrupt" },
+	{ name: "SubagentStart" },
+	{ name: "SubagentStop" },
+];
+const CLAUDE_HOOK_EVENTS: HookEvent[] = [
+	{ name: "SessionStart" },
+	{ name: "SessionEnd" },
+	{ name: "UserPromptSubmit" },
+	{ name: "Stop" },
+	{ name: "StopFailure" },
+	{ name: "SubagentStart" },
+	{ name: "SubagentStop" },
+	{ name: "PostToolUse", matcher: "*" },
+	{ name: "PostToolUseFailure", matcher: "*" },
+	{ name: "PermissionRequest", matcher: "*" },
+];
+
 export type AgentLaunchProfile = {
 	files?: Array<{ path: string; contents: string }>;
 	env?: Record<string, string>;
@@ -22,6 +48,7 @@ export type AgentLaunch = {
 	directory: string;
 	uid: number;
 	command: string;
+	hookToken: string;
 };
 
 function quote(value: string): string {
@@ -105,8 +132,10 @@ export async function prepareAgentLaunch(input: {
 	root: string;
 	command: string[];
 	profile?: AgentLaunchProfile;
+	provider: "openai" | "anthropic";
+	hookToken: string;
 }): Promise<AgentLaunch> {
-	const profile = input.profile ?? {};
+	const profile = buildCoDevAgentProfile(input.profile ?? {}, input.provider);
 	validateAgentLaunchProfile(profile);
 	const root = await lstat(input.root);
 	if (
@@ -129,7 +158,10 @@ export async function prepareAgentLaunch(input: {
 			await chown(path, uid, WORKSPACE_GID);
 		}
 		const scriptPath = join(directory, "launch.sh");
-		await writeFile(scriptPath, agentLaunchScript(directory, input.command, profile.env), {
+		await writeFile(scriptPath, agentLaunchScript(directory, input.command, {
+			...profile.env,
+			SUPERSET_ACCOUNT_ATTRIBUTION_TOKEN: input.hookToken,
+		}), {
 			mode: 0o600,
 			flag: "wx",
 		});
@@ -137,12 +169,51 @@ export async function prepareAgentLaunch(input: {
 		await chown(directory, uid, WORKSPACE_GID);
 		// This short source line avoids Superset's root-owned /tmp staging for
 		// initialCommand strings longer than 512 bytes.
-		return { directory, uid, command: `. ${quote(scriptPath)}` };
+		return { directory, uid, command: `. ${quote(scriptPath)}`, hookToken: input.hookToken };
 	} catch (error) {
 		if (directory) await rm(directory, { recursive: true, force: true });
 		reservedUids.delete(uid);
 		throw error;
 	}
+}
+
+/**
+ * CoDev owns this file alongside the member credential. The CLI reads hooks
+ * from the same private profile, so another guest user cannot replace them.
+ */
+export function buildCoDevAgentProfile(
+	profile: AgentLaunchProfile,
+	provider: "openai" | "anthropic",
+): AgentLaunchProfile {
+	if ((profile.files?.length ?? 0) >= MAX_PROFILE_FILES) {
+		throw new Error("Launch profile must leave room for the CoDev hook configuration.");
+	}
+	const harness = provider === "openai" ? "codex" : "claude";
+	const command = `[ -n "$SUPERSET_HOME_DIR" ] && [ -x "$SUPERSET_HOME_DIR/hooks/notify.sh" ] && SUPERSET_HOOK_HARNESS=${harness} "$SUPERSET_HOME_DIR/hooks/notify.sh" || true`;
+	const events = provider === "openai" ? CODEX_HOOK_EVENTS : CLAUDE_HOOK_EVENTS;
+	const hooks = Object.fromEntries(
+		events.map(({ name, matcher }) => [
+			name,
+			[
+				{
+					...(matcher ? { matcher } : {}),
+					hooks: [{ type: "command", command }],
+				},
+			],
+		]),
+	);
+	const path = provider === "openai" ? ".codex/hooks.json" : ".claude/settings.json";
+	const contents = JSON.stringify({ hooks });
+	return {
+		...profile,
+		files: [...(profile.files ?? []), { path, contents }],
+		env: {
+			...profile.env,
+			...(provider === "anthropic"
+				? { CLAUDE_CONFIG_DIR: `${PROFILE_DIR_TOKEN}/.claude` }
+				: {}),
+		},
+	};
 }
 
 export async function removeAgentLaunch(launch: AgentLaunch | undefined): Promise<void> {

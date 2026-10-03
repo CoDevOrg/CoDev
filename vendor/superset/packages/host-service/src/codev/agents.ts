@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { Hono } from "hono";
 import { z } from "zod";
@@ -85,6 +85,14 @@ function secretMatches(actual: string | undefined, expected: string) {
 	const received = Buffer.from(actual);
 	const configured = Buffer.from(expected);
 	return received.length === configured.length && timingSafeEqual(received, configured);
+}
+
+function newHookToken(): string {
+	return randomBytes(32).toString("hex");
+}
+
+function hookTokenHash(token: string): string {
+	return createHash("sha256").update(token).digest("hex");
 }
 
 function hostWorkspaceId(worktreeId: string) {
@@ -259,9 +267,12 @@ export function registerCoDevAgentBridge({
 			if (!profileRoot) {
 				return context.json({ error: "Isolated agent profiles are not configured." }, 503);
 			}
+			const hookToken = newHookToken();
 			launch = await prepareAgentLaunch({
 				root: profileRoot,
 				command,
+				provider,
+				hookToken,
 				// A new control plane sends the provider-neutral profile. Keep the
 				// Codex cache only as a compatibility fallback for a rolling deploy.
 				profile: launchProfile ?? legacyCodexProfile(codexAuthCacheJson),
@@ -292,6 +303,7 @@ export function registerCoDevAgentBridge({
 					worktreeId,
 					provider,
 					idempotencyKey,
+					hookTokenHash: hookTokenHash(hookToken),
 				})
 				.run();
 			agentSessions.set(createdAgentId, { workspaceId: workspace.id, launch });

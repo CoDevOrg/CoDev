@@ -98,6 +98,8 @@ export const codevAgentRuns = sqliteTable(
 		worktreeId: text("worktree_id").notNull(),
 		provider: text("provider").notNull(),
 		idempotencyKey: text("idempotency_key").notNull(),
+		/** SHA-256 of the private launch hook token; never store the token itself. */
+		hookTokenHash: text("hook_token_hash").notNull().default(""),
 		createdAt: integer("created_at")
 			.notNull()
 			.$defaultFn(() => Date.now()),

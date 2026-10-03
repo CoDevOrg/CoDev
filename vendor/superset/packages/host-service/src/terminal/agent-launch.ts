@@ -5,6 +5,7 @@ import type { CreateTerminalSessionOptions } from "./terminal";
 type PrivateAgentProfile = {
 	directory: string;
 	uid: number;
+	hookToken: string;
 };
 
 type AgentTerminalLaunch = {
@@ -33,6 +34,7 @@ export function agentTerminalLaunchOptions(
 		cols: 4_096,
 		includeDefaultAccountEnv: false,
 		homeDirectory: privateProfile.directory,
+		codevHookToken: privateProfile.hookToken,
 		shell: "/usr/bin/setpriv",
 		shellArgs: [
 			`--reuid=${privateProfile.uid}`,

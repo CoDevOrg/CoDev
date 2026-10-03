@@ -20,6 +20,7 @@ export function buildGen2CodexCommand(
     "--json",
     "--ephemeral",
     "--ignore-user-config",
+    "--dangerously-bypass-hook-trust",
     "--skip-git-repo-check",
     "--sandbox",
     "danger-full-access",
