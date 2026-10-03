@@ -611,7 +611,8 @@ export function SupersetWorkspaceShell({
     }
   }, [connection.state, refreshWorktrees, worktreeDropdownOpen]);
 
-  // New workspaces start automatically; sleeping existing workspaces offer Reconnect.
+  // A brand-new workspace starts immediately. A sleeping one starts from the
+  // connection check that runs because this page was opened.
   const bootedRef = useRef(false);
   useEffect(() => {
     if (

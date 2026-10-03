@@ -19,6 +19,8 @@ vi.mock("@xterm/xterm", () => ({
       this.onDataHandler = handler;
     }
 
+    attachCustomKeyEventHandler() {}
+
     loadAddon() {}
     open() {}
     dispose() {}
@@ -178,8 +180,12 @@ describe("Gen2TerminalPane", () => {
     });
   });
 
-  it("waits for the workspace before opening a shell", () => {
-    const fetchMock = vi.fn();
+  it("opens the shell while the workspace check is still running", async () => {
+    const fetchMock = vi.fn(async () => {
+      return new Response(JSON.stringify({ sessionId: "terminal-waking" }), {
+        status: 201,
+      });
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     render(
@@ -193,9 +199,17 @@ describe("Gen2TerminalPane", () => {
       />,
     );
 
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Waiting for the workspace",
-    );
-    expect(fetchMock).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/gen2/workspaces/${workspaceId}/terminal`,
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining('"action":"start"'),
+        }),
+      );
+    });
+    expect(
+      screen.queryByText("Waiting for the workspace"),
+    ).not.toBeInTheDocument();
   });
 });

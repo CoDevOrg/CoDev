@@ -1,6 +1,10 @@
 "use client";
 
 import {
+  applyCommandHistory,
+  createCommandHistory,
+} from "./terminal-command-history";
+import {
   attachTerminalTransport,
   type TerminalTransport,
 } from "./terminal-transport";
@@ -93,6 +97,8 @@ export function Gen2TerminalPane({
   const dimensionsRef = useRef("");
   const transportRef = useRef<TerminalTransport | null>(null);
   const pendingInputRef = useRef("");
+  const historyRef = useRef(createCommandHistory());
+  const triedWhileWakingRef = useRef(false);
   const [status, setStatus] = useState<"idle" | "starting" | "live" | "ended">(
     "idle",
   );
@@ -167,6 +173,10 @@ export function Gen2TerminalPane({
       };
       if (!response.ok || !payload.sessionId) {
         if ([404, 502, 503].includes(response.status)) {
+          if (workspaceConnection === "waking") {
+            setStatus("idle");
+            return;
+          }
           markWorkspacePaused();
           return;
         }
@@ -178,16 +188,33 @@ export function Gen2TerminalPane({
       afterRef.current = 0;
       pendingInputRef.current = "";
       setStatus("live");
-      term.onData((data) => {
+      const sendToShell = (data: string) => {
         const transport = transportRef.current;
         if (transport) transport.sendInput(data);
         else pendingInputRef.current += data;
+      };
+      term.attachCustomKeyEventHandler((event) => {
+        if (event.type !== "keydown") return true;
+        if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return true;
+        if (event.altKey || event.ctrlKey || event.metaKey) return true;
+        const effect = applyCommandHistory(
+          historyRef.current,
+          event.key === "ArrowUp" ? "\u001b[A" : "\u001b[B",
+        );
+        historyRef.current = effect.history;
+        if (effect.send) sendToShell(effect.send);
+        return false;
+      });
+      term.onData((data) => {
+        const effect = applyCommandHistory(historyRef.current, data);
+        historyRef.current = effect.history;
+        sendToShell(effect.send ?? data);
       });
     } catch {
       setError("Couldn't reach CoDev. Try again.");
       setStatus("idle");
     }
-  }, [markWorkspacePaused, post]);
+  }, [markWorkspacePaused, post, workspaceConnection]);
 
   // The socket closes while the pane is hidden, and resumes from the last
   // output sequence when it is shown again.
@@ -306,17 +333,18 @@ export function Gen2TerminalPane({
 
   const autoStartedRef = useRef(false);
   useEffect(() => {
-    if (
-      autoStart &&
-      workspaceConnection === "ready" &&
-      visible &&
-      canStart &&
-      status === "idle" &&
-      !autoStartedRef.current
-    ) {
-      autoStartedRef.current = true;
+    if (!autoStart || !visible || !canStart || status !== "idle") return;
+    if (workspaceConnection === "blocked" || workspaceConnection === "asleep")
+      return;
+    if (workspaceConnection === "waking") {
+      if (triedWhileWakingRef.current) return;
+      triedWhileWakingRef.current = true;
       void start();
+      return;
     }
+    if (autoStartedRef.current) return;
+    autoStartedRef.current = true;
+    void start();
   }, [autoStart, workspaceConnection, visible, canStart, status, start]);
 
   const handleResume = useCallback(async () => {
@@ -352,7 +380,10 @@ export function Gen2TerminalPane({
             }
           />
         </div>
-      ) : workspaceConnection === "waking" && !workspacePaused ? (
+      ) : workspaceConnection === "waking" &&
+        !workspacePaused &&
+        status !== "starting" &&
+        status !== "live" ? (
         <div className="gen2-term-start is-loading">
           <WorkspaceLoading
             title="Waiting for the workspace"

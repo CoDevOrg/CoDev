@@ -20,6 +20,8 @@ type Session = Attachment & {
   resize: { rows: number; columns: number } | null;
   socket: WebSocket | null;
   usingHttp: boolean;
+  /** Keystrokes post on their own so a parked poll cannot hold them. */
+  inputFlight: boolean;
   everOpened: boolean;
   httpWake: (() => void) | null;
 };
@@ -48,6 +50,7 @@ export function attachTerminalTransport(
     resize: null,
     socket: null,
     usingHttp: false,
+    inputFlight: false,
     everOpened: false,
     httpWake: null,
   };
@@ -71,6 +74,7 @@ export function attachTerminalTransport(
 
 function flush(session: Session) {
   if (session.usingHttp) {
+    void sendHttpInput(session);
     session.httpWake?.();
     return;
   }
@@ -95,11 +99,40 @@ function takePending(session: Session) {
   return data;
 }
 
+/**
+ * A poll parks until the shell prints something. Input has to leave while that
+ * request is still open, or a keystroke waits for the empty poll to time out.
+ */
+async function sendHttpInput(session: Session) {
+  if (session.inputFlight || session.stopped || !session.pending) return;
+  session.inputFlight = true;
+  try {
+    while (session.pending && !session.stopped) {
+      const data = takePending(session);
+      const response = await session.post({
+        action: "input",
+        sessionId: session.sessionId,
+        data,
+      });
+      if (PAUSED.has(response.status)) {
+        session.onPaused();
+        return;
+      }
+    }
+  } catch {
+    // The poll loop reports a workspace that can no longer be reached.
+  } finally {
+    session.inputFlight = false;
+    if (session.pending && !session.stopped) void sendHttpInput(session);
+  }
+}
+
 function startHttp(session: Session) {
   if (session.usingHttp || session.stopped) return;
   session.usingHttp = true;
   session.socket?.close();
   session.socket = null;
+  void sendHttpInput(session);
   void pumpHttp(session);
 }
 
@@ -107,14 +140,6 @@ async function pumpHttp(session: Session) {
   let backoff = 1_000;
   let failures = 0;
   while (!session.stopped) {
-    if (session.pending) {
-      const response = await session.post({
-        action: "input",
-        sessionId: session.sessionId,
-        data: takePending(session),
-      });
-      if (PAUSED.has(response.status)) return session.onPaused();
-    }
     const size = session.resize;
     if (size) {
       session.resize = null;

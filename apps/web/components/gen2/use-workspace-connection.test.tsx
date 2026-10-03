@@ -108,7 +108,7 @@ describe("workspace connection", () => {
     expect(mocks.connect).not.toHaveBeenCalled();
   });
 
-  it("a sleeping workspace stays disconnected until one explicit reconnect", async () => {
+  it("starts waking a sleeping workspace as soon as it is opened", async () => {
     vi.mocked(fetch).mockResolvedValue(Response.json({ connected: false }));
     let finish!: (value: unknown) => void;
     mocks.connect.mockImplementation(
@@ -122,22 +122,25 @@ describe("workspace connection", () => {
       useWorkspaceConnection("w", true, onConnected),
     );
     await flush();
-    expect(result.current.state).toBe("disconnected");
-    expect(mocks.connect).not.toHaveBeenCalled();
-    let first!: Promise<boolean>, second!: Promise<boolean>;
+    expect(result.current.state).toBe("connecting");
+    expect(mocks.connect).toHaveBeenCalledTimes(1);
+    let second!: Promise<boolean>;
     act(() => {
-      first = result.current.reconnect();
       second = result.current.reconnect();
     });
-    expect(first).toBe(second);
-    expect(result.current.state).toBe("connecting");
+    expect(mocks.connect).toHaveBeenCalledTimes(1);
     await act(async () => {
       finish({ workspace: { id: "w", status: "ready" } });
-      await first;
+      await second;
     });
-    expect(mocks.connect).toHaveBeenCalledTimes(1);
     expect(result.current.state).toBe("connected");
     expect(onConnected).toHaveBeenCalledTimes(1);
+    vi.mocked(fetch).mockClear();
+    mocks.connect.mockClear();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(CONNECTION_CHECK_MS);
+    });
+    expect(mocks.connect).not.toHaveBeenCalled();
   });
 
   it("shows a retryable failure and does not touch while hidden", async () => {

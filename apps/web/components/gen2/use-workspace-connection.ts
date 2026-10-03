@@ -26,6 +26,8 @@ export function useWorkspaceConnection(
   const mounted = useRef(true);
   const revision = useRef(0);
   const activityAt = useRef(0);
+  /** The open that brought the member here starts one wake. Later checks do not. */
+  const wakeOnOpen = useRef(true);
   useEffect(() => {
     onConnectedRef.current = onConnected;
     stateRef.current = state;
@@ -66,6 +68,7 @@ export function useWorkspaceConnection(
   useEffect(() => {
     mounted.current = true;
     activityAt.current = Date.now();
+    wakeOnOpen.current = true;
     if (!enabled) return;
     const abort = new AbortController();
     let checking = false;
@@ -99,16 +102,30 @@ export function useWorkspaceConnection(
           checkRevision === revision.current
         ) {
           const connected = response.ok && payload.connected === true;
-          setState(connected ? "connected" : "disconnected");
-          if (connected) setError("");
+          if (connected) {
+            wakeOnOpen.current = false;
+            setState("connected");
+            setError("");
+          } else if (initial && wakeOnOpen.current) {
+            wakeOnOpen.current = false;
+            void reconnect();
+          } else {
+            setState("disconnected");
+          }
         }
       } catch {
         if (
           !abort.signal.aborted &&
           !connectRef.current &&
           checkRevision === revision.current
-        )
-          setState("disconnected");
+        ) {
+          if (initial && wakeOnOpen.current) {
+            wakeOnOpen.current = false;
+            void reconnect();
+          } else {
+            setState("disconnected");
+          }
+        }
       } finally {
         checking = false;
       }
@@ -138,7 +155,7 @@ export function useWorkspaceConnection(
       window.removeEventListener("online", visible);
       window.removeEventListener("offline", offline);
     };
-  }, [enabled, workspaceId]);
+  }, [enabled, reconnect, workspaceId]);
 
   return { state, error, subscriptionRequired, reconnect };
 }

@@ -585,8 +585,10 @@ describe("SupersetWorkspaceShell", () => {
       screen.getByRole("button", { name: "Collapse inspector" }),
     ).toBeInTheDocument();
   });
-  it("hides healthy status and offers a single reconnect action when disconnected", async () => {
+  it("wakes a sleeping workspace when the page opens", async () => {
     mocks.connected = false;
+    const { ensureGen2WorkspaceReady } =
+      await import("@/lib/gen2/startup-client");
     render(
       <SupersetWorkspaceShell
         workspaceId="e010bd2c-a3c1-438f-acef-166287a3b1cb"
@@ -594,19 +596,15 @@ describe("SupersetWorkspaceShell", () => {
         runtimeEnabled
       />,
     );
-    expect(
-      await screen.findByText("This workspace is asleep"),
-    ).toBeInTheDocument();
-    const reconnect = await screen.findByRole("button", {
-      name: "Reconnect workspace",
-    });
-    expect(screen.queryByText(/Machine:|^Ready$/)).not.toBeInTheDocument();
-    fireEvent.click(reconnect);
+    await waitFor(() => expect(ensureGen2WorkspaceReady).toHaveBeenCalled());
     await waitFor(() =>
       expect(
-        screen.queryByRole("button", { name: "Reconnect workspace" }),
+        screen.queryByText("This workspace is asleep"),
       ).not.toBeInTheDocument(),
     );
+    expect(
+      screen.queryByRole("button", { name: "Reconnect workspace" }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText(/Machine:|^Ready$/)).not.toBeInTheDocument();
   });
 });
