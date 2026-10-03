@@ -27,7 +27,11 @@ import {
   SquareTerminal,
   UserPlus,
 } from "lucide-react";
-import type { Gen2Chat, Gen2WorkspaceDetail } from "@codev/contracts";
+import type {
+  Gen2AgentProviderName,
+  Gen2Chat,
+  Gen2WorkspaceDetail,
+} from "@codev/contracts";
 import { parseGitStatus } from "@/lib/runtime/ide";
 
 import { WorkspaceButton } from "./workspace-button";
@@ -115,7 +119,9 @@ function formatRelativeTime(dateString?: string) {
 }
 
 function errorMessage(error: unknown, fallback: string) {
-  return error instanceof SupersetFileApiError ? error.message : fallback;
+  if (!(error instanceof SupersetFileApiError) || error.status === 503)
+    return fallback;
+  return error.message;
 }
 
 function changedPaths(status: string) {
@@ -187,7 +193,9 @@ export function SupersetWorkspaceShell({
   >([]);
   const [agentRunning, setAgentRunning] = useState(false);
   const [notice, setNotice] = useState("");
+  const [branchLoadError, setBranchLoadError] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [showProviderPicker, setShowProviderPicker] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [newWorktreeId, setNewWorktreeId] = useState("");
   const [newBranch, setNewBranch] = useState("");
@@ -213,6 +221,7 @@ export function SupersetWorkspaceShell({
     claude: { connected: false, via: null },
     cursor: { connected: false, via: null },
   });
+  const [providerStatusesLoaded, setProviderStatusesLoaded] = useState(false);
 
   const [chatProviders, setChatProviders] = useState<
     Record<string, SupportedAiProvider>
@@ -263,10 +272,10 @@ export function SupersetWorkspaceShell({
         claude: status("claude"),
         cursor: status("cursor"),
       });
+      setProviderStatusesLoaded(true);
       if (!data[activeProvider]?.connected) {
         if (data.codex?.connected) setActiveProvider("codex");
         else if (data.claude?.connected) setActiveProvider("claude");
-        else if (data.cursor?.connected) setActiveProvider("cursor");
       }
     } catch {
       /* Background check */
@@ -302,23 +311,44 @@ export function SupersetWorkspaceShell({
     return () => clearTimeout(timeout);
   }, [refreshChats]);
 
-  const handleNewChat = useCallback(async () => {
-    try {
-      const response = await fetch(
-        `/api/gen2/workspaces/${encodeURIComponent(workspaceId)}/chats`,
-        {
-          method: "POST",
-        },
-      );
-      if (!response.ok) return;
-      const { chat } = (await response.json()) as { chat: Gen2Chat };
-      setChats((prev) => [chat, ...prev]);
-      setSelectedChatId(chat.id);
-      recordChatProvider(chat.id, activeProvider);
-    } catch {
-      /* Ignore error */
+  const createChat = useCallback(
+    async (provider: Gen2AgentProviderName) => {
+      try {
+        const response = await fetch(
+          `/api/gen2/workspaces/${encodeURIComponent(workspaceId)}/chats`,
+          {
+            method: "POST",
+          },
+        );
+        if (!response.ok) return;
+        const { chat } = (await response.json()) as { chat: Gen2Chat };
+        setChats((prev) => [chat, ...prev]);
+        setSelectedChatId(chat.id);
+        setActiveProvider(provider);
+        recordChatProvider(chat.id, provider);
+      } catch {
+        /* Ignore error */
+      }
+    },
+    [workspaceId, recordChatProvider],
+  );
+
+  const connectedChatProviders = SUPPORTED_AI_PROVIDERS.filter(
+    (
+      provider,
+    ): provider is (typeof SUPPORTED_AI_PROVIDERS)[number] & {
+      id: Gen2AgentProviderName;
+    } => provider.id !== "cursor" && providerStatuses[provider.id]?.connected,
+  );
+
+  const handleNewChat = useCallback(() => {
+    if (!providerStatusesLoaded || connectedChatProviders.length === 0) return;
+    if (connectedChatProviders.length === 1) {
+      void createChat(connectedChatProviders[0]!.id);
+      return;
     }
-  }, [workspaceId, activeProvider, recordChatProvider]);
+    setShowProviderPicker(true);
+  }, [connectedChatProviders, createChat, providerStatusesLoaded]);
 
   function beginRename(chat: Gen2Chat) {
     if (renamePending) return;
@@ -589,9 +619,9 @@ export function SupersetWorkspaceShell({
         setWorktrees(next);
         void refreshCounts(next);
       }
-      setNotice("");
-    } catch (error) {
-      setNotice(errorMessage(error, "Couldn’t load branches."));
+      setBranchLoadError(false);
+    } catch {
+      setBranchLoadError(true);
     }
   }, [refreshCounts, runtimeEnabled, workspaceId]);
 
@@ -695,7 +725,7 @@ export function SupersetWorkspaceShell({
     chats.find((chat) => chat.id === selectedChatId) ?? chats[0] ?? null;
 
   const connectedProviders = SUPPORTED_AI_PROVIDERS.filter(
-    (p) => providerStatuses[p.id]?.connected,
+    (p) => p.id !== "cursor" && providerStatuses[p.id]?.connected,
   );
 
   if (!runtimeEnabled) {
@@ -705,7 +735,11 @@ export function SupersetWorkspaceShell({
           The workspace machine’s terminal, changes, and branches are disabled
           for this environment.
         </p>
-        <SupersetFilePane workspaceId={workspaceId} canEdit={canEdit} />
+        <SupersetFilePane
+          workspaceId={workspaceId}
+          canEdit={canEdit}
+          workspaceReady={activeWorkspace.status === "ready"}
+        />
       </>
     );
   }
@@ -822,6 +856,14 @@ export function SupersetWorkspaceShell({
                   Switch branch
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                {branchLoadError ? (
+                  <DropdownMenuItem
+                    onSelect={() => void refreshWorktrees()}
+                    className="cursor-pointer py-1.5 px-2 text-xs text-muted-foreground"
+                  >
+                    Branch details unavailable · Retry
+                  </DropdownMenuItem>
+                ) : null}
                 <DropdownMenuGroup>
                   {worktrees.map((wt) => {
                     const isSelected = wt.worktreeId === worktreeId;
@@ -887,9 +929,13 @@ export function SupersetWorkspaceShell({
           {/* Center section: quiet active session context, gracefully hides on narrow screens */}
           <div className="gen2-ide-top-navbar-center">
             <div className="gen2-topbar-session-card">
-              <div className="gen2-topbar-provider-avatar">
-                <ProviderLogo provider={activeProvider} size={14} />
-              </div>
+              {connectedProviders.some(
+                (provider) => provider.id === activeProvider,
+              ) ? (
+                <div className="gen2-topbar-provider-avatar">
+                  <ProviderLogo provider={activeProvider} size={14} />
+                </div>
+              ) : null}
               <span className="gen2-topbar-session-title">
                 {activeChat?.title ?? "Initial Workspace Session"}
               </span>
@@ -1076,7 +1122,11 @@ export function SupersetWorkspaceShell({
                         size="icon"
                         type="button"
                         className="gen2-sidebar-compact-btn primary"
-                        onClick={() => void handleNewChat()}
+                        onClick={handleNewChat}
+                        disabled={
+                          !providerStatusesLoaded ||
+                          connectedChatProviders.length === 0
+                        }
                         aria-label="New Chat"
                       >
                         <Plus size={16} strokeWidth={2.5} />
@@ -1232,7 +1282,11 @@ export function SupersetWorkspaceShell({
                         size="icon"
                         type="button"
                         className="gen2-sidebar-compact-btn primary"
-                        onClick={() => void handleNewChat()}
+                        onClick={handleNewChat}
+                        disabled={
+                          !providerStatusesLoaded ||
+                          connectedChatProviders.length === 0
+                        }
                         aria-label="New Chat"
                       >
                         <Plus size={16} strokeWidth={2.5} />
@@ -1497,7 +1551,11 @@ export function SupersetWorkspaceShell({
                         size="action"
                         type="button"
                         className="gen2-sidebar-new-chat-btn"
-                        onClick={() => void handleNewChat()}
+                        onClick={handleNewChat}
+                        disabled={
+                          !providerStatusesLoaded ||
+                          connectedChatProviders.length === 0
+                        }
                         aria-label="New Chat"
                       >
                         <div className="gen2-sidebar-new-chat-content">
@@ -1520,7 +1578,7 @@ export function SupersetWorkspaceShell({
                         {connectedProviders.length === 0 ? (
                           <div className="gen2-sidebar-no-providers">
                             <p className="text-xs text-muted-foreground">
-                              No AI providers connected.
+                              Connect Codex or Claude to start a workspace chat.
                             </p>
                             <Link
                               href="/settings/personal/providers#coding-workspaces"
@@ -1708,6 +1766,9 @@ export function SupersetWorkspaceShell({
                         activeChatId={selectedChatId}
                         onSelectChatId={setSelectedChatId}
                         onChatsChange={setChats}
+                        connectedProviders={connectedChatProviders.map(
+                          (provider) => provider.id,
+                        )}
                         activeProvider={
                           activeProvider === "cursor" ? "codex" : activeProvider
                         }
@@ -1904,6 +1965,7 @@ export function SupersetWorkspaceShell({
                           key={worktreeId}
                           workspaceId={workspaceId}
                           canEdit={canEdit}
+                          workspaceReady={connection.state === "connected"}
                           worktreeId={worktreeId}
                           refreshToken={refreshToken}
                           onDirtyChange={setDirty}
@@ -1950,6 +2012,44 @@ export function SupersetWorkspaceShell({
           currentUserRole={activeWorkspace.role}
           initialMembers={activeWorkspace.members}
         />
+
+        <AlertDialog
+          open={showProviderPicker}
+          onOpenChange={setShowProviderPicker}
+        >
+          <AlertDialogContent className="gen2-workspace-surface">
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                Which provider do you want to use?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                Choose the AI provider for this chat.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              {connectedChatProviders.map((provider) => (
+                <AlertDialogAction
+                  key={provider.id}
+                  asChild
+                  onClick={() => {
+                    setShowProviderPicker(false);
+                    void createChat(provider.id);
+                  }}
+                >
+                  <WorkspaceButton tone="secondary" type="button">
+                    <ProviderLogo provider={provider.id} size={16} />
+                    {provider.name}
+                  </WorkspaceButton>
+                </AlertDialogAction>
+              ))}
+              <AlertDialogCancel asChild>
+                <WorkspaceButton tone="ghost" type="button">
+                  Cancel
+                </WorkspaceButton>
+              </AlertDialogCancel>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Unsaved changes confirmation AlertDialog */}
         <AlertDialog

@@ -16,6 +16,7 @@ import {
 import {
   GEN2_AGENT_PROVIDERS,
   GEN2_PROVIDER_MODELS,
+  type Gen2AgentProviderName,
   type Gen2Chat,
   type Gen2ChatDetail,
   type Gen2ChatMessage,
@@ -40,6 +41,16 @@ import {
   type AgentExecChunk,
 } from "@/lib/gen2/agent-output";
 import { finalizeGen2Turn, reduceGen2Turn } from "@/lib/gen2/turn-reducer";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -145,6 +156,7 @@ export function Gen2ChatPanel({
   onSelectChatId,
   onChatsChange,
   activeProvider,
+  connectedProviders,
   onActiveProviderChange,
   hideChatBar = false,
 }: {
@@ -159,6 +171,7 @@ export function Gen2ChatPanel({
   onSelectChatId?: (chatId: string) => void;
   onChatsChange?: (chats: Gen2Chat[]) => void;
   activeProvider?: Gen2AgentChoice;
+  connectedProviders?: Gen2AgentProviderName[];
   onActiveProviderChange?: (provider: Gen2AgentChoice) => void;
   hideChatBar?: boolean;
 }) {
@@ -172,6 +185,7 @@ export function Gen2ChatPanel({
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
   const [starting, setStarting] = useState(false);
+  const [showProviderPicker, setShowProviderPicker] = useState(false);
   const [dragging, setDragging] = useState(false);
   const sendingRef = useRef(false);
   const drivingRef = useRef(false);
@@ -193,6 +207,10 @@ export function Gen2ChatPanel({
   const [modelsByProvider, setModelsByProvider] = useState<
     Record<string, Gen2ModelInfo[]>
   >({});
+  const [detectedConnectedProviders, setDetectedConnectedProviders] = useState<
+    Gen2AgentProviderName[]
+  >([]);
+  const availableProviders = connectedProviders ?? detectedConnectedProviders;
   const [selectedModel, setSelectedModel] = useState<string>(() => {
     if (typeof window === "undefined") return "sonnet";
     try {
@@ -220,10 +238,15 @@ export function Gen2ChatPanel({
       .then((res) => (res.ok ? res.json() : null))
       .then((value) => {
         const data = value as {
-          claude?: { models?: Gen2ModelInfo[] };
-          codex?: { models?: Gen2ModelInfo[] };
+          claude?: { connected?: boolean; models?: Gen2ModelInfo[] };
+          codex?: { connected?: boolean; models?: Gen2ModelInfo[] };
         } | null;
         if (!mounted || !data) return;
+        setDetectedConnectedProviders(
+          GEN2_AGENT_PROVIDERS.filter(
+            (entry) => data[entry.id as keyof typeof data]?.connected,
+          ).map((entry) => entry.id),
+        );
         setModelsByProvider({
           claude: data.claude?.models ?? [],
           codex: data.codex?.models ?? [],
@@ -620,7 +643,8 @@ export function Gen2ChatPanel({
     }).catch(() => undefined);
   }
 
-  async function newChat() {
+  async function newChat(provider: Gen2AgentChoice) {
+    handleProviderSelect(provider);
     const response = await fetch(`/api/gen2/workspaces/${workspace.id}/chats`, {
       method: "POST",
     });
@@ -632,6 +656,14 @@ export function Gen2ChatPanel({
     onChatsChange?.(next);
     onSelectChatId?.(chat.id);
     pinToLatest();
+  }
+
+  function requestNewChat() {
+    if (availableProviders.length === 1) {
+      void newChat(availableProviders[0]!);
+      return;
+    }
+    if (availableProviders.length > 1) setShowProviderPicker(true);
   }
 
   const handleProviderSelect = (
@@ -770,13 +802,19 @@ export function Gen2ChatPanel({
                 disabled={busy}
                 aria-label="Agent"
               >
-                <ProviderLogo
-                  provider={agent}
-                  size={14}
-                  className="shrink-0 mr-1.5"
-                />
+                {availableProviders.includes(agent) ? (
+                  <ProviderLogo
+                    provider={agent}
+                    size={14}
+                    className="shrink-0 mr-1.5"
+                  />
+                ) : null}
                 <span>
-                  {agentLabel} · {currentModelLabel}
+                  {availableProviders.includes(agent)
+                    ? `${agentLabel} · ${currentModelLabel}`
+                    : availableProviders.length > 0
+                      ? "Choose a provider"
+                      : "No provider connected"}
                 </span>
                 <ChevronDown aria-hidden="true" size={13} />
               </WorkspaceButton>
@@ -789,7 +827,9 @@ export function Gen2ChatPanel({
                 Provider & Model
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {GEN2_AGENT_PROVIDERS.map((entry) => {
+              {GEN2_AGENT_PROVIDERS.filter((entry) =>
+                availableProviders.includes(entry.id),
+              ).map((entry) => {
                 const isSelectedProvider = agent === entry.id;
                 const models: Gen2ModelInfo[] = modelsByProvider[entry.id]
                   ?.length
@@ -914,7 +954,8 @@ export function Gen2ChatPanel({
               type="button"
               tone="secondary"
               size="toolbar"
-              onClick={() => void newChat()}
+              onClick={requestNewChat}
+              disabled={availableProviders.length === 0}
             >
               <Plus aria-hidden="true" /> New chat
             </WorkspaceButton>
@@ -950,8 +991,9 @@ export function Gen2ChatPanel({
               <div className="gen2-chat-empty-intro">
                 <h2>What should we build?</h2>
                 <p className="gen2-chat-empty-copy">
-                  {agentLabel} can help you explore files, run commands, and
-                  build in this workspace.
+                  {availableProviders.includes(agent)
+                    ? `${agentLabel} can help you explore files, run commands, and build in this workspace.`
+                    : "Connect Codex or Claude to start a chat in this workspace."}
                 </p>
               </div>
 
@@ -1076,6 +1118,49 @@ export function Gen2ChatPanel({
           </div>
         )}
       </section>
+      <AlertDialog
+        open={showProviderPicker}
+        onOpenChange={setShowProviderPicker}
+      >
+        <AlertDialogContent className="gen2-workspace-surface">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Which provider do you want to use?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Choose the AI provider for this chat.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            {availableProviders.map((provider) => {
+              const option = GEN2_AGENT_PROVIDERS.find(
+                (entry) => entry.id === provider,
+              );
+              if (!option) return null;
+              return (
+                <AlertDialogAction
+                  key={provider}
+                  asChild
+                  onClick={() => {
+                    setShowProviderPicker(false);
+                    void newChat(provider);
+                  }}
+                >
+                  <WorkspaceButton tone="secondary" type="button">
+                    <ProviderLogo provider={provider} size={16} />
+                    {option.label}
+                  </WorkspaceButton>
+                </AlertDialogAction>
+              );
+            })}
+            <AlertDialogCancel asChild>
+              <WorkspaceButton tone="ghost" type="button">
+                Cancel
+              </WorkspaceButton>
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </TooltipProvider>
   );
 }

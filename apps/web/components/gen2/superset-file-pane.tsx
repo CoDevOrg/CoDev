@@ -77,7 +77,11 @@ type FileTree = {
   files: Gen2SupersetFileEntry[];
 };
 
-type Notice = { kind: "error" | "info" | "success" | "conflict"; text: string };
+type Notice = {
+  kind: "error" | "info" | "success" | "conflict";
+  text: string;
+  transient?: boolean;
+};
 
 function buildFileTree(entries: Gen2SupersetEntry[]): FileTree {
   const root: FileTree = { name: "", path: "", folders: new Map(), files: [] };
@@ -118,7 +122,31 @@ function isPathOrDescendant(path: string, ancestor: string) {
 }
 
 function errorMessage(error: unknown, fallback: string) {
-  return error instanceof SupersetFileApiError ? error.message : fallback;
+  if (!(error instanceof SupersetFileApiError) || error.status === 503)
+    return fallback;
+  return error.message;
+}
+
+async function listFilesWhenReady(
+  workspaceId: string,
+  worktreeId: string,
+  signal?: AbortSignal,
+) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await listSupersetFiles(workspaceId, worktreeId, signal);
+    } catch (error) {
+      if (
+        signal?.aborted ||
+        !(error instanceof SupersetFileApiError) ||
+        error.message !== "The workspace is still starting." ||
+        attempt >= 2
+      ) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+    }
+  }
 }
 
 function TreeEntryMenu({
@@ -158,6 +186,7 @@ function TreeEntryMenu({
 export function SupersetFilePane({
   workspaceId,
   canEdit,
+  workspaceReady = true,
   worktreeId = DEFAULT_SUPERSET_WORKTREE_ID,
   refreshToken,
   onDirtyChange,
@@ -168,6 +197,7 @@ export function SupersetFilePane({
 }: {
   workspaceId: string;
   canEdit: boolean;
+  workspaceReady?: boolean;
   worktreeId?: string | undefined;
   refreshToken?: number | undefined;
   onDirtyChange?: ((dirty: boolean) => void) | undefined;
@@ -185,6 +215,7 @@ export function SupersetFilePane({
   const [contents, setContents] = useState("");
   const [openingPath, setOpeningPath] = useState<string | null>(null);
   const [loadingFiles, setLoadingFiles] = useState(true);
+  const isLoadingFiles = workspaceReady && loadingFiles;
   const [saving, setSaving] = useState(false);
   const [stale, setStale] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -299,7 +330,7 @@ export function SupersetFilePane({
       const requestId = ++listRequestId.current;
       if (!quiet) setLoadingFiles(true);
       try {
-        const nextFiles = await listSupersetFiles(
+        const nextFiles = await listFilesWhenReady(
           workspaceId,
           worktreeId,
           signal,
@@ -322,12 +353,18 @@ export function SupersetFilePane({
         }
         if (!quiet)
           setNotice((current) =>
-            current?.kind === "error" && !openFileRef.current ? null : current,
+            current?.transient ||
+            (current?.kind === "error" && !openFileRef.current)
+              ? null
+              : current,
           );
       } catch (error) {
         if (!signal?.aborted && requestId === listRequestId.current) {
           setNotice({
             kind: "error",
+            transient:
+              error instanceof SupersetFileApiError &&
+              error.message === "The workspace is still starting.",
             text: errorMessage(
               error,
               "Couldn’t load files. Use Refresh files to retry.",
@@ -347,12 +384,13 @@ export function SupersetFilePane({
   );
 
   useEffect(() => {
+    if (!workspaceReady) return;
     const controller = new AbortController();
     // The client API request starts here after the authenticated page mounts.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshFiles(true, false, controller.signal);
     return () => controller.abort();
-  }, [refreshFiles, refreshToken]);
+  }, [refreshFiles, refreshToken, workspaceReady]);
 
   async function save() {
     const file = openFileRef.current;
@@ -944,7 +982,14 @@ export function SupersetFilePane({
           onSave={() => void save()}
         />
       ) : (
-        <p className="gen2-superset-empty-state">Select a file to open it.</p>
+        <p
+          className="gen2-superset-empty-state"
+          role={!workspaceReady ? "status" : undefined}
+        >
+          {workspaceReady
+            ? "Select a file to open it."
+            : "Files load when the workspace is connected."}
+        </p>
       )}
     </section>
   );
@@ -1018,7 +1063,7 @@ export function SupersetFilePane({
                       type="button"
                       className="gen2-superset-icon-button"
                       aria-label="Refresh files"
-                      disabled={loadingFiles}
+                      disabled={isLoadingFiles || !workspaceReady}
                       onClick={() => void refreshFiles(true)}
                     >
                       <RefreshCw aria-hidden="true" />
@@ -1128,7 +1173,7 @@ export function SupersetFilePane({
                 </div>
               </form>
             ) : null}
-            {loadingFiles ? (
+            {isLoadingFiles ? (
               <p className="gen2-superset-list-state" role="status">
                 Loading files…
               </p>
