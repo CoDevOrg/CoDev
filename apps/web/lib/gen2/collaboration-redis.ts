@@ -13,7 +13,11 @@ export const REPLAY_LIMIT = 250;
 const LOCK_TTL_MS = 75_000;
 
 /** Distinguishes this process's own stream writes from another instance's. */
-export const INSTANCE_ID = randomUUID();
+let instanceId: string | undefined;
+
+export function getInstanceId() {
+  return (instanceId ??= randomUUID());
+}
 
 let redis: Redis | undefined;
 

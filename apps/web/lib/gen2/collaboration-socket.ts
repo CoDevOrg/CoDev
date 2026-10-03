@@ -25,9 +25,9 @@ import { logEvent } from "../platform/observability";
 import { send, sendError, type Connection } from "./collaboration-connection";
 import {
   HEARTBEAT_INTERVAL_MS,
-  INSTANCE_ID,
   MAX_SOCKET_PAYLOAD_BYTES,
   STREAM_MAX_LENGTH,
+  getInstanceId,
   redisClient,
   streamKey,
   withDocumentLock,
@@ -212,7 +212,7 @@ async function applyUpdate(
     STREAM_MAX_LENGTH,
     "*",
     "instance",
-    INSTANCE_ID,
+    getInstanceId(),
     "payload",
     JSON.stringify({
       type: "update",
@@ -305,7 +305,7 @@ async function publishAwareness(
     STREAM_MAX_LENGTH,
     "*",
     "instance",
-    INSTANCE_ID,
+    getInstanceId(),
     "payload",
     JSON.stringify({
       type: "awareness",

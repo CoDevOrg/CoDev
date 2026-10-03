@@ -8,9 +8,9 @@ import type Redis from "ioredis";
 
 import { send, type Connection } from "./collaboration-connection";
 import {
-  INSTANCE_ID,
   REPLAY_LIMIT,
   STREAM_MAX_LENGTH,
+  getInstanceId,
   redisClient,
   streamKey,
 } from "./collaboration-redis";
@@ -146,7 +146,7 @@ async function pollRoom(workspaceId: string, room: LocalRoom) {
       );
       for (const event of parseStreamResult(result)) {
         room.cursor = event.id;
-        if (event.instance !== INSTANCE_ID) {
+        if (event.instance !== getInstanceId()) {
           broadcastLocal(workspaceId, event.message);
         }
       }
@@ -179,7 +179,7 @@ export async function publish(workspaceId: string, message: StreamEvent) {
     STREAM_MAX_LENGTH,
     "*",
     "instance",
-    INSTANCE_ID,
+    getInstanceId(),
     "payload",
     JSON.stringify(message),
   );
