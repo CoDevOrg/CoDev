@@ -202,12 +202,47 @@ describe("CreateGen2WorkspaceForm", () => {
     render(<CreateGen2WorkspaceForm githubConnected />);
     fireEvent.click(screen.getByRole("radio", { name: /GitHub repository/ }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Couldn't load your repositories",
+      "Couldn\u2019t load your repositories",
     );
 
     failing = false;
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText("ada/looms")).toBeInTheDocument();
+  });
+
+  it("creates shared repositories using their source installation", async () => {
+    const shared = {
+      ...REPOS[0],
+      full_name: "friend/shared",
+      installationId: 99,
+      sharedWith: ["friend", "grace"],
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.endsWith("/installations"))
+          return Response.json({
+            installations: [{ id: 1, account: { login: "ada" } }],
+          });
+        if (url.endsWith("/repositories"))
+          return Response.json({ repositories: [shared] });
+        return Response.json({ workspace: { id: "ws-1" } });
+      }),
+    );
+    render(<CreateGen2WorkspaceForm githubConnected />);
+    fireEvent.click(screen.getByRole("radio", { name: /GitHub repository/ }));
+    expect(
+      await screen.findByText("Shared with @friend, @grace"),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /friend\/shared/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Create workspace" }));
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/gen2/ws-1"));
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/gen2/workspaces",
+      expect.objectContaining({
+        body: JSON.stringify({ installationId: 99, repositoryId: 7 }),
+      }),
+    );
   });
 
   it("reports a create failure instead of navigating", async () => {

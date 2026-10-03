@@ -12,3 +12,4 @@ export * from "./team-chat";
 export * from "./terminal";
 export * from "./workspace-brain";
 export * from "@codev/shared-types";
+export * from "./github";

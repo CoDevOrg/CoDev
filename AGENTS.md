@@ -26,6 +26,8 @@
 - Preserve durable guest disks across stops/restarts; never treat missing saved workspace data as permission to initialize a fresh checkout.
 - Superset worktree discovery uses Git’s registered worktrees. Guest agents may create direct-child worktrees under `/workspace`; the bridge must resolve them safely as well as CoDev-managed worktrees under `.git/codev-agent-worktrees/`.
 
+- GitHub account choices show the authenticated member and organizations only; shared personal repositories belong under the member and must retain their original installation ID for workspace creation.
+
 ## Code standards
 
 - Solve the problem in the fewest lines that remain readable. If a function exceeds 50 lines or a file exceeds 300 (excluding tests), split it.

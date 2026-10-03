@@ -1,5 +1,7 @@
 import { apiError, getApiUserAnyAuth } from "@/lib/http/api";
-import { listRepositories } from "@/lib/github/github";
+import { GitHubApiError } from "@/lib/github/github";
+
+import { listPickerRepositories } from "@/lib/github/repository-picker";
 
 export async function GET(
   request: Request,
@@ -16,9 +18,12 @@ export async function GET(
     }
 
     return Response.json({
-      repositories: await listRepositories(user.id, parsedInstallationId),
+      repositories: await listPickerRepositories(user.id, parsedInstallationId),
     });
   } catch (error) {
-    return apiError(error);
+    return apiError(
+      error,
+      error instanceof GitHubApiError ? error.status : 400,
+    );
   }
 }

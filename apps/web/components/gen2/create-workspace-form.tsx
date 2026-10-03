@@ -4,6 +4,11 @@ import { startTransition, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, LoaderCircle, Plus, Search } from "lucide-react";
 
+import type {
+  GitHubPickerAccount as Installation,
+  GitHubPickerRepository as Repository,
+} from "@codev/contracts";
+
 import { GithubMark } from "@/components/settings/github-mark";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,18 +25,12 @@ import { Label } from "@/components/ui/label";
 import { GEN2_MAX_OWNED_WORKSPACES } from "@/lib/gen2/constants";
 import { cn } from "@/lib/platform/utils";
 
-type Installation = {
-  id: number;
-  account: { login: string; avatar_url: string };
+type Loaded<T> = {
+  key: string;
+  status: "ok" | "error";
+  authFailed?: boolean;
+  items: T[];
 };
-type Repository = {
-  id: number;
-  full_name: string;
-  private: boolean;
-  default_branch: string;
-};
-
-type Loaded<T> = { key: string; status: "ok" | "error"; items: T[] };
 
 const REPOSITORY_PAGE_SIZE = 40;
 
@@ -91,12 +90,14 @@ export function CreateGen2WorkspaceForm({
       let loaded: Loaded<Installation>;
       try {
         const response = await fetch("/api/github/installations");
+        const authFailed = response.status === 401;
         const payload = response.ok
           ? ((await response.json()) as { installations?: Installation[] })
           : null;
         loaded = {
           key: installKey,
           status: payload ? "ok" : "error",
+          authFailed,
           items: payload?.installations ?? [],
         };
       } catch {
@@ -104,7 +105,11 @@ export function CreateGen2WorkspaceForm({
       }
       if (cancelled) return;
       setInstalls(loaded);
-      setInstallationId((current) => current ?? loaded.items[0]?.id ?? null);
+      setInstallationId((current) =>
+        loaded.items.some((item) => item.id === current)
+          ? current
+          : (loaded.items[0]?.id ?? null),
+      );
     })();
     return () => {
       cancelled = true;
@@ -120,12 +125,14 @@ export function CreateGen2WorkspaceForm({
         const response = await fetch(
           `/api/github/installations/${installationId}/repositories`,
         );
+        const authFailed = response.status === 401;
         const payload = response.ok
           ? ((await response.json()) as { repositories?: Repository[] })
           : null;
         loaded = {
           key: repoKey,
           status: payload ? "ok" : "error",
+          authFailed,
           items: payload?.repositories ?? [],
         };
       } catch {
@@ -153,10 +160,13 @@ export function CreateGen2WorkspaceForm({
   const visible = matches.slice(0, REPOSITORY_PAGE_SIZE);
   const selectedRepo =
     repositories.find((repo) => repo.id === selectedRepoId) ?? null;
-  const loadFailed =
-    installs?.key === installKey && installs.status === "error"
-      ? true
-      : repos?.key === repoKey && repos.status === "error";
+  const installsFailed =
+    installs?.key === installKey && installs.status === "error";
+  const reposFailed = repos?.key === repoKey && repos.status === "error";
+  const loadFailed = installsFailed || reposFailed;
+  const authFailed =
+    (installsFailed && installs?.authFailed === true) ||
+    (reposFailed && repos?.authFailed === true);
   const canCreate =
     !busy && !atWorkspaceLimit && (source === "blank" || selectedRepo !== null);
 
@@ -165,7 +175,7 @@ export function CreateGen2WorkspaceForm({
     const body: Record<string, unknown> = {};
     if (trimmedName) body.name = trimmedName;
     if (source === "github" && selectedRepo && installationId !== null) {
-      body.installationId = installationId;
+      body.installationId = selectedRepo.installationId ?? installationId;
       body.repositoryId = selectedRepo.id;
     }
 
@@ -331,16 +341,29 @@ export function CreateGen2WorkspaceForm({
                     role="alert"
                   >
                     <span className="text-destructive">
-                      Couldn&apos;t load your repositories from GitHub.
+                      {authFailed
+                        ? "Your GitHub authorization has expired."
+                        : "Couldn\u2019t load your repositories from GitHub."}
                     </span>
-                    <Button
-                      onClick={() => setReloadKey((value) => value + 1)}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                    >
-                      Try again
-                    </Button>
+                    {authFailed && connectGitHub ? (
+                      <Button
+                        onClick={() => startTransition(() => connectGitHub())}
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                      >
+                        Reconnect GitHub
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={() => setReloadKey((value) => value + 1)}
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                      >
+                        Try again
+                      </Button>
+                    )}
                   </div>
                 ) : visible.length > 0 ? (
                   <>
@@ -364,8 +387,18 @@ export function CreateGen2WorkspaceForm({
                               type="button"
                             >
                               <GithubMark className="size-4 shrink-0" />
-                              <span className="min-w-0 flex-1 truncate font-medium">
-                                {repo.full_name}
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate font-medium">
+                                  {repo.full_name}
+                                </span>
+                                {repo.sharedWith?.length ? (
+                                  <span className="block truncate text-xs text-muted-foreground">
+                                    Shared with{" "}
+                                    {repo.sharedWith
+                                      .map((login) => `@${login}`)
+                                      .join(", ")}
+                                  </span>
+                                ) : null}
                               </span>
                               {repo.private ? (
                                 <Badge variant="outline">Private</Badge>
