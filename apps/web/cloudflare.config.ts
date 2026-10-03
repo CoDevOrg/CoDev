@@ -19,7 +19,7 @@ export default defineConfig({
         head_sampling_rate: 1,
       },
     },
-    
+
     env: {
       ACCESS_REQUEST_NOTIFY_EMAIL: bindings.secret(),
       AUTH_GITHUB_ID: bindings.secret(),
