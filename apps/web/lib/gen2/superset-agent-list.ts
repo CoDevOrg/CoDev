@@ -8,7 +8,11 @@ export async function listGen2SupersetAgentRuns(
   workspaceId: string,
   userId: string,
 ) {
-  await requireGen2SupersetAgentAccess({ action: "list", workspaceId, userId });
+  const member = await requireGen2SupersetAgentAccess({
+    action: "list",
+    workspaceId,
+    userId,
+  });
   const runs = await listActiveGen2SupersetRuns(workspaceId);
   return runs.map((run) => ({
     id: run.id,
@@ -19,5 +23,8 @@ export async function listGen2SupersetAgentRuns(
     status: run.status,
     createdAt: run.createdAt,
     updatedAt: run.updatedAt,
+    canInput: run.createdBy === userId && member?.role !== "viewer",
+    canCancel: run.createdBy === userId || member?.role === "owner",
+    canRecover: run.createdBy === userId && member?.role !== "viewer",
   }));
 }

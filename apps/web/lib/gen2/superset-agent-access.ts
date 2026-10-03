@@ -18,14 +18,18 @@ type AccessInput = {
   runId?: string;
 };
 type Run = NonNullable<Awaited<ReturnType<typeof getGen2SupersetRunById>>>;
+type Member = Awaited<ReturnType<typeof requireGen2Member>>;
 
 /** Recheck membership and authorize a persistent-agent operation before host access. */
 export function requireGen2SupersetAgentAccess(
   input: AccessInput & { action: RunAction; runId: string },
 ): Promise<Run>;
 export function requireGen2SupersetAgentAccess(
+  input: AccessInput & { action: "list" },
+): Promise<Member>;
+export function requireGen2SupersetAgentAccess(
   input: AccessInput,
-): Promise<Run | null>;
+): Promise<Run | Member | null>;
 export async function requireGen2SupersetAgentAccess(input: AccessInput) {
   const member = await requireGen2Member(input.workspaceId, input.userId);
   if (input.action === "start") {
@@ -37,7 +41,7 @@ export async function requireGen2SupersetAgentAccess(input: AccessInput) {
     }
     return null;
   }
-  if (input.action === "list") return null;
+  if (input.action === "list") return member;
 
   const run = input.runId ? await getGen2SupersetRunById(input.runId) : null;
   if (!run || run.workspaceId !== input.workspaceId) {

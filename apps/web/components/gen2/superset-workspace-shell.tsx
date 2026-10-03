@@ -30,6 +30,7 @@ import {
 import type {
   Gen2AgentProviderName,
   Gen2Chat,
+  Gen2SupersetAgentListItem,
   Gen2WorkspaceDetail,
 } from "@codev/contracts";
 import { parseGitStatus } from "@/lib/runtime/ide";
@@ -49,6 +50,7 @@ import {
 } from "./superset-file-client";
 import { SupersetFilePane } from "./superset-file-pane";
 import { SupersetChangesPane } from "./superset-changes-pane";
+import { SupersetAgentRoster } from "./superset-agent-roster";
 import {
   SupersetWorkspacesBoard,
   type BoardWorktreeItem,
@@ -181,17 +183,8 @@ export function SupersetWorkspaceShell({
   const [terminalExpanded, setTerminalExpanded] = useState(false);
   const [viewMode, setViewMode] = useState<"ide" | "board">("ide");
   const [shareOpen, setShareOpen] = useState(false);
-  const [activeRuns, setActiveRuns] = useState<
-    Array<{
-      id: string;
-      worktreeId: string;
-      status: string;
-      provider: string;
-      lastError: string | null;
-      updatedAt: string;
-    }>
-  >([]);
-  const [agentRunning, setAgentRunning] = useState(false);
+  const [activeRuns, setActiveRuns] = useState<Gen2SupersetAgentListItem[]>([]);
+  const [chatAgentRunning, setChatAgentRunning] = useState(false);
   const [notice, setNotice] = useState("");
   const [branchLoadError, setBranchLoadError] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -532,19 +525,12 @@ export function SupersetWorkspaceShell({
     if (!runtimeEnabled) return;
     try {
       const res = await fetch(
-        `/api/gen2/workspaces/${encodeURIComponent(workspaceId)}/superset/runs`,
+        `/api/gen2/workspaces/${encodeURIComponent(workspaceId)}/superset/agents`,
       );
       if (!res.ok) return;
       const payload = (await res.json()) as { runs?: typeof activeRuns };
       if (Array.isArray(payload.runs)) {
         setActiveRuns(payload.runs);
-        if (
-          payload.runs.some(
-            (r) => r.status === "running" || r.status === "creating",
-          )
-        ) {
-          setAgentRunning(true);
-        }
       }
     } catch {
       /* Background polling */
@@ -557,6 +543,12 @@ export function SupersetWorkspaceShell({
     }, 0);
     return () => clearTimeout(timeout);
   }, [refreshRuns]);
+
+  const agentRunning =
+    chatAgentRunning ||
+    activeRuns.some(
+      (run) => run.status === "running" || run.status === "creating",
+    );
 
   const boardItems: BoardWorktreeItem[] = worktrees.map((wt) => {
     const run = activeRuns.find((r) => r.worktreeId === wt.worktreeId);
@@ -582,7 +574,7 @@ export function SupersetWorkspaceShell({
       fileCount: count ?? 0,
       changesKnown,
       agentStatus,
-      agentError: run?.lastError ?? null,
+      agentError: null,
       agentProvider: run?.provider ?? null,
       lastActivity: run?.updatedAt,
     };
@@ -624,6 +616,36 @@ export function SupersetWorkspaceShell({
       setBranchLoadError(true);
     }
   }, [refreshCounts, runtimeEnabled, workspaceId]);
+
+  const startPersistentAgent = useCallback(
+    async (prompt: string, provider: "codex" | "claude") => {
+      if (!selectedChatId) {
+        setNotice("Create a chat before starting an agent.");
+        return;
+      }
+      const response = await fetch(
+        `/api/gen2/workspaces/${encodeURIComponent(workspaceId)}/superset/agents`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            chatId: selectedChatId,
+            provider,
+            prompt,
+            idempotencyKey: crypto.randomUUID(),
+          }),
+        },
+      );
+      if (!response.ok) {
+        setNotice("Couldn’t start that agent.");
+        return;
+      }
+      setNotice("");
+      await refreshRuns();
+      void refreshWorktrees();
+    },
+    [refreshRuns, refreshWorktrees, selectedChatId, workspaceId],
+  );
 
   useEffect(() => {
     if (connection.state !== "connected") return;
@@ -1564,6 +1586,25 @@ export function SupersetWorkspaceShell({
                         </div>
                       </WorkspaceButton>
 
+                      <SupersetAgentRoster
+                        workspaceId={workspaceId}
+                        runs={activeRuns}
+                        members={activeWorkspace.members}
+                        branches={Object.fromEntries(
+                          worktrees.map((tree) => [
+                            tree.worktreeId,
+                            tree.branch,
+                          ]),
+                        )}
+                        canStart={canEdit}
+                        provider={
+                          activeProvider === "claude" ? "claude" : "codex"
+                        }
+                        onSelectWorktree={selectWorktree}
+                        onStart={startPersistentAgent}
+                        onChanged={() => void refreshRuns()}
+                      />
+
                       {/* Section 2: RECENT CHATS */}
                       <div className="gen2-sidebar-section gen2-sidebar-recent-chats">
                         <div className="gen2-sidebar-section-header">
@@ -1774,7 +1815,7 @@ export function SupersetWorkspaceShell({
                         }
                         onActiveProviderChange={setActiveProvider}
                         hideChatBar={true}
-                        onRunningChange={setAgentRunning}
+                        onRunningChange={setChatAgentRunning}
                         onFilesChanged={() => {
                           void refreshWorktrees();
                         }}

@@ -606,6 +606,21 @@ export const gen2SupersetAgentProgressChunkSchema = z.object({
   text: z.string().max(32 * 1_024),
 });
 
+/** Metadata and allowed controls for one persistent agent in the workspace UI. */
+export const gen2SupersetAgentListItemSchema = z.object({
+  id: identifierSchema,
+  chatId: identifierSchema.nullable(),
+  createdBy: identifierSchema,
+  worktreeId: gen2SupersetWorktreeIdSchema,
+  provider: z.string().min(1),
+  status: gen2SupersetRunStatusSchema,
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
+  canInput: z.boolean(),
+  canCancel: z.boolean(),
+  canRecover: z.boolean(),
+});
+
 export const gen2SupersetAgentStartRequestSchema = gen2AgentStartRequestSchema;
 
 export const gen2SupersetAgentStartResponseSchema = z.object({
@@ -631,6 +646,9 @@ export const gen2SupersetAgentPollResponseSchema = z.object({
 
 export type Gen2SupersetRunStatus = z.infer<typeof gen2SupersetRunStatusSchema>;
 export type Gen2SupersetRun = z.infer<typeof gen2SupersetRunSchema>;
+export type Gen2SupersetAgentListItem = z.infer<
+  typeof gen2SupersetAgentListItemSchema
+>;
 export type Gen2SupersetAgentStartRequest = z.infer<
   typeof gen2SupersetAgentStartRequestSchema
 >;

@@ -42,6 +42,9 @@ describe("Superset agent metadata list", () => {
         status: "running",
         createdAt: new Date(0),
         updatedAt: new Date(0),
+        canInput: false,
+        canCancel: false,
+        canRecover: false,
       },
     ]);
   });
@@ -52,5 +55,27 @@ describe("Superset agent metadata list", () => {
       listGen2SupersetAgentRuns("workspace-1", "former-member"),
     ).rejects.toThrow("Workspace not found.");
     expect(mocks.list).not.toHaveBeenCalled();
+  });
+
+  it("returns controls only when the server policy permits them", async () => {
+    mocks.member.mockResolvedValue({ role: "owner" });
+    mocks.list.mockResolvedValue([
+      {
+        id: "run-1",
+        chatId: null,
+        createdBy: "creator-1",
+        worktreeId: "agent-1",
+        provider: "codex",
+        status: "running",
+        createdAt: new Date(0),
+        updatedAt: new Date(0),
+      },
+    ]);
+
+    await expect(
+      listGen2SupersetAgentRuns("workspace-1", "owner-1"),
+    ).resolves.toMatchObject([
+      { canInput: false, canCancel: true, canRecover: false },
+    ]);
   });
 });

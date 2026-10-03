@@ -5538,3 +5538,121 @@
   font-family: var(--font-geist-mono), ui-monospace, monospace;
   font-size: 0.75rem;
 }
+
+/* ------------------------------------------------ agent roster */
+
+.gen2-agent-roster {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 12px;
+}
+
+.gen2-agent-roster-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gen2-agent-roster-start {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gen2-agent-roster-start label,
+.gen2-agent-roster-empty {
+  color: var(--ws-text-secondary);
+  font-size: 12px;
+}
+
+.gen2-agent-roster-start textarea {
+  min-height: 72px;
+  resize: vertical;
+  border: 1px solid var(--ws-border-medium);
+  border-radius: 6px;
+  background: var(--ws-surface-3);
+  color: var(--ws-text-primary);
+  padding: 8px;
+  font: inherit;
+}
+
+.gen2-agent-roster-item {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--ws-border-subtle);
+  border-radius: 6px;
+  background: var(--ws-surface-3);
+}
+
+.gen2-agent-roster-heading,
+.gen2-agent-roster-meta,
+.gen2-agent-roster-actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.gen2-agent-roster-heading > span:first-of-type {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gen2-agent-roster-meta {
+  color: var(--ws-text-secondary);
+  font-size: 12px;
+}
+
+.gen2-agent-roster-meta button {
+  min-width: 0;
+  overflow: hidden;
+  color: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--ws-accent);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gen2-agent-roster-status {
+  flex: 0 0 auto;
+  font-size: 11px;
+}
+
+.gen2-agent-roster-status.creating,
+.gen2-agent-roster-status.running,
+.gen2-agent-roster-status.stopping {
+  color: var(--ws-status-working);
+}
+
+.gen2-agent-roster-status.failed,
+.gen2-agent-roster-status.recovery_required {
+  color: var(--ws-status-error);
+}
+
+.gen2-agent-roster-item pre {
+  max-height: 96px;
+  margin: 0;
+  overflow: auto;
+  color: var(--ws-text-secondary);
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+}
+
+.gen2-agent-roster-actions {
+  flex-wrap: wrap;
+}
