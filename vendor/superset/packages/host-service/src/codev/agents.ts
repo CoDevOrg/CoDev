@@ -5,19 +5,20 @@ import { z } from "zod";
 import type { HostDb } from "../db";
 import { codevAgentRuns, terminalSessions, workspaces } from "../db/schema";
 import type { EventBus } from "../events";
+import { agentTerminalLaunchOptions } from "../terminal/agent-launch";
 import {
 	createTerminalSessionInternal,
 	disposeSessionAndWait,
 	snapshotSession,
 	writeFramedInputToSession,
 } from "../terminal/terminal";
+import { isApprovedAgentCommand } from "./agent-command-policy";
 import {
-	prepareAgentLaunch,
-	removeAgentLaunch,
 	type AgentLaunch,
 	type AgentLaunchProfile,
+	prepareAgentLaunch,
+	removeAgentLaunch,
 } from "./agent-isolation";
-import { isApprovedAgentCommand } from "./agent-command-policy";
 import { resolveCoDevWorktreeRoot } from "./files";
 
 const worktreeIdSchema = z
@@ -175,7 +176,8 @@ function agentMatchesTerminal(
  * There is no headless "run this process" primitive to reuse here: a
  * Superset terminal-agent is an agent CLI running inside a tracked terminal
  * (see terminal-agents/types.ts's TerminalAgentBinding doc comment), so this
- * reuses the same terminal primitives registerCoDevRuntimeBridge's
+ * reuses the same agent terminal launch path and terminal primitives
+ * registerCoDevRuntimeBridge's
  * /codev/terminal routes already use -- createTerminalSessionInternal,
  * writeFramedInputToSession, snapshotSession, disposeSessionAndWait -- with
  * the agent's command delivered via `initialCommand` instead of the
@@ -267,28 +269,16 @@ export function registerCoDevAgentBridge({
 
 			const createdAgentId = `agent-${Date.now()}-${++agentSequence}`;
 			agentId = createdAgentId;
-			const created = await createTerminalSessionInternal({
-				terminalId: createdAgentId,
-				workspaceId: workspace.id,
-				db,
-				eventBus,
-				rows: 1_000,
-				cols: 4_096,
-				includeDefaultAccountEnv: false,
-				homeDirectory: launch.directory,
-				// Each agent has its own uid; gid 2000 keeps the selected
-				// worktree writable alongside ordinary codev-shell terminals.
-				shell: "/usr/bin/setpriv",
-				shellArgs: [
-					`--reuid=${launch.uid}`,
-					"--regid=2000",
-					"--clear-groups",
-					"--",
-					"/bin/sh",
-					"-l",
-				],
-				initialCommand: launch.command,
-			});
+			const created = await createTerminalSessionInternal(
+				agentTerminalLaunchOptions({
+					terminalId: createdAgentId,
+					workspaceId: workspace.id,
+					db,
+					eventBus,
+					privateProfile: launch,
+					initialCommand: launch.command,
+				}),
+			);
 			if ("error" in created) {
 				await removeAgentLaunch(launch);
 				return context.json({ error: terminalError(created) }, 400);

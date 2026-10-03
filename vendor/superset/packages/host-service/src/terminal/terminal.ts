@@ -2979,7 +2979,7 @@ export async function disposeSessionsByWorktreePath(
 	return { terminated, failed };
 }
 
-interface CreateTerminalSessionOptions {
+export interface CreateTerminalSessionOptions {
 	terminalId: string;
 	workspaceId: string;
 	themeType?: "dark" | "light";

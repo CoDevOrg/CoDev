@@ -78,6 +78,10 @@ Validation on this Windows host: focused CoDev tests passed (41/41); focused Sup
 
 **Pass:** One CoDev agent launches through the shared path in the intended worktree; native launcher tests still pass; ordinary shells and a second agent cannot read its profile; arbitrary command, environment, path, and provider substitutions fail.
 
+**Slice C checkpoint (2026-10-02):** Native Superset and CoDev agent launches now share terminal launch-option construction. Native launches retain their existing command builder, prompt framing, continuation checks, and default-account behavior. CoDev deliberately supplies only its prepared profile: the common path disables the host default account, sets the private home, and starts the terminal under that profile's distinct UID. The CoDev launch script remains the safe argv-framing boundary, while its exact provider command gate and the guest proxy's profile validation remain in force. Native command construction and continuation binding cannot be shared with CoDev yet because the former reads a host-wide account and the latter relies on hook-created bindings; Slice D supplies those trusted bindings.
+
+Validation on this Windows host: the shared launch-option test, CoDev registration/migration/policy/profile tests, and all compatible native agent tests passed (71 passed; one Linux-only UID test skipped). One native fork-preflight fixture is Windows-path-incompatible, so that test must be rerun on Linux with the host suite. Repository typecheck passed; lint passed with existing warnings. Superset's formatter check still reports pre-existing formatting/import issues in large touched upstream files; the newly added helper and test conform to its formatter.
+
 ### Slice D — genuine headless hooks and Superset bindings
 
 **Touch:** Superset's guest/host startup integration, `terminal-agents/`, `trpc/router/notifications/notifications.ts`, and the CoDev bridge. Use the existing hook harnesses for Codex and Claude.
@@ -120,6 +124,6 @@ Validation on this Windows host: focused CoDev tests passed (41/41); focused Sup
 ## Handoff notes
 
 - The integration branch is checked out at `C:\Users\qais4\.codex\worktrees\superset-agent-isolation\CoDev`; the primary checkout is on another branch with unrelated untracked files. Use the integration worktree explicitly.
-- The merge commit is local and unpushed as of this handoff. The worktree has an untracked `apps/mobile/` directory; preserve it until its owner is known.
+- The merge commit and Slices A and B are pushed. The worktree has an untracked `apps/mobile/` directory; preserve it until its owner is known.
 - Read `docs/README.md`, `docs/SUPERSET_AGENT_SESSION_PLAN.md`, `docs/SUPERSET_WORKSPACE_OWNERSHIP.md`, and the applicable `lib/` README before editing. The earlier session plan describes the existing flag-gated chat replacement; this handoff changes the rollout order, not CoDev's credential foundation.
 - Do not run the web app before `pnpm db:check`. Use Node 24+ and `pnpm`. The full host PTY and Rust suites need Linux; no Gen 2 VM acceptance run has been completed for this integration.
