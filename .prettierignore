@@ -4,11 +4,14 @@ coverage
 node_modules
 playwright-report
 test-results
+.claude/settings.local.json
 .claude/worktrees
 pnpm-lock.yaml
 packages/db/drizzle
 apps/web/app/.well-known/workflow
 apps/web/.swc
+apps/web/.cloudflare
+apps/web/.vinext
 
 # Superset is vendored as an upstream snapshot and uses its own toolchain.
 # Keep root format and format:check from rewriting or checking its sources.

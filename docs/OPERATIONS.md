@@ -30,25 +30,40 @@ are in [EMAIL.md](./EMAIL.md).
    Watch that run rather than deploying by hand, and let the host return to
    `stopped` afterwards. `infra/runtime/deploy.sh` stays runnable locally, and the
    workflow can be started by hand from the Actions tab.
-4. Push. The **Deploy web** workflow
+4. Push. On `main`, the **CI** workflow runs its checks, builds the
+   Cloudflare Worker on a GitHub-hosted runner, and deploys it with `cf deploy`.
+   The Worker serves `trycodev.com`; use the Cloudflare Dashboard or CLI to
+   verify the active deployment. The Cloudflare Workers Builds trigger should
+   stay disabled after this path is enabled, so one system owns production
+   deployments.
+5. The **Deploy web** workflow
    ([`.github/workflows/deploy-web.yml`](../.github/workflows/deploy-web.yml))
-   deploys `apps/web` on every push — a branch gets a Vercel preview, `main`
-   gets built and promoted to production with `--prod`. Vercel's own Git
-   integration is off (`git.deploymentEnabled: false`), so this workflow is
-   the only path; watch its run rather than deploying by hand. It can also be
-   started from the Actions tab, and `vercel` runs locally against the linked
-   project.
-5. Run `scripts/verify-deployment.sh <preview-url>` against the preview the
-   branch run printed.
-6. Merge to `main`. The run on `main` rebuilds the same source for the
-   production environment so production-scoped credentials are applied, then
-   promotes it.
-7. Re-run the verification script and scan Vercel error logs.
+   continues to deploy the Vercel project on pushes. Vercel's Git integration
+   is off (`git.deploymentEnabled: false`), so this workflow remains its
+   deployment path.
+6. Run `scripts/verify-deployment.sh <preview-url>` against the Vercel preview
+   the branch run printed when validating a preview.
+7. Re-run the verification script against the production URL and scan the
+   Cloudflare and Vercel logs.
 
-## Web deploy credentials
+## Cloudflare deploy credentials
 
-The **Deploy web** workflow deploys with the Vercel CLI, so it needs one
-repository secret and refuses to run with a clear error until it is set:
+The production deploy job in **CI** requires:
+
+- `CLOUDFLARE_API_TOKEN` — a GitHub repository secret with Cloudflare Workers
+  deploy access, scoped to the CoDev account and the `trycodev.com` zone.
+- `CLOUDFLARE_ACCOUNT_ID` — a GitHub repository variable containing the
+  Cloudflare account ID.
+
+The workflow reuses the repository's locked `cf` CLI and its existing
+`vite build` / `cf deploy --prebuilt` commands. Worker secrets remain stored in
+Cloudflare; the deploy does not copy application credentials into GitHub.
+
+## Vercel deploy credentials
+
+The **Deploy web** workflow deploys the Vercel project with the Vercel CLI, so it
+needs one repository secret and refuses to run with a clear error until it is
+set:
 
 - `VERCEL_TOKEN` — a Vercel access token scoped to the team that owns the
   `codev` project (Vercel → Account Settings → Tokens). The team and project

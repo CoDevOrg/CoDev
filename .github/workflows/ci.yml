@@ -91,3 +91,49 @@ jobs:
       - name: Test private profiles across Linux UIDs
         working-directory: vendor/superset/packages/host-service
         run: sudo --preserve-env=PATH node --experimental-strip-types --test src/codev/agent-isolation.node-test.ts
+
+  deploy-cloudflare:
+    name: Deploy Cloudflare production Worker
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: [verify, rust, superset-host]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    concurrency:
+      group: cloudflare-production
+      cancel-in-progress: false
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Check Cloudflare credentials
+        shell: bash
+        run: |
+          if [[ -z "$CLOUDFLARE_API_TOKEN" ]]; then
+            echo "::error::Add the CLOUDFLARE_API_TOKEN repository secret before deploying the production Worker." >&2
+            exit 1
+          fi
+          if [[ -z "$CLOUDFLARE_ACCOUNT_ID" ]]; then
+            echo "::error::Add the CLOUDFLARE_ACCOUNT_ID repository variable before deploying the production Worker." >&2
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.0
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Cloudflare Worker
+        run: pnpm --filter @codev/web exec vite build
+
+      - name: Deploy Cloudflare Worker
+        run: pnpm --filter @codev/web exec cf deploy --prebuilt --message "GitHub Actions ${GITHUB_SHA}"

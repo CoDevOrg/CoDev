@@ -1,8 +1,6 @@
-# Ships apps/web to the Vercel project. trycodev.com is served by the
-# Cloudflare Worker, which Workers Builds deploys on every push to main.
-# This workflow keeps the Vercel project building so a push still has a
-# GitHub check for the Next.js build. The Vercel Git integration is off
-# (git.deploymentEnabled = false in vercel.json).
+# Ships apps/web to the Vercel project. The public trycodev.com Worker is
+# built and deployed by the Cloudflare job in ci.yml. The Vercel Git
+# integration is off (git.deploymentEnabled = false in vercel.json).
 name: Deploy web
 
 on:

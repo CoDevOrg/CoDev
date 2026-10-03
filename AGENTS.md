@@ -19,7 +19,7 @@
 
 - Before starting or deploying the web app, run `pnpm db:check`. A newer migration ledger entry does not prove older tables exist; repair skipped schema with a forward migration instead of editing applied history.
 
-- CoDev is a hosted web app. `apps/web` is the Vercel control plane; active Gen 2 workspaces run in Azure Firecracker guests.
+- CoDev is a hosted web app. `apps/web` deploys to Cloudflare Workers for `trycodev.com` and to Vercel for Vercel-hosted endpoints; active Gen 2 workspaces run in Azure Firecracker guests.
 - In Gen 2, the agent, editor, terminal, and Git use the same guest filesystem.
 - Use Node.js 24+ and `pnpm` for this repository.
 - Use the web package’s `dev` script (Webpack, matching production); allow `127.0.0.1` development resources. Initial connection checks must run in background tabs and have a request/body timeout.

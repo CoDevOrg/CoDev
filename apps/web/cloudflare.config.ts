@@ -14,9 +14,9 @@ export default defineConfig({
       enabled: true,
       logs: {
         enabled: true,
-        invocation_logs: true,
+        invocationLogs: true,
         persist: true,
-        head_sampling_rate: 1,
+        headSamplingRate: 1,
       },
     },
 
