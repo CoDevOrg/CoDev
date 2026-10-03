@@ -6,7 +6,7 @@ This module owns foundational infrastructure integrations and platform-level cro
 
 **Key files:**
 
-- `database.ts`: Shared Postgres client. On Cloudflare Workers it connects through the `HYPERDRIVE` binding; on Vercel it uses `POSTGRES_URL`.
+- `database.ts`: Shared Postgres client. On Cloudflare Workers each request opens its own pool through the `HYPERDRIVE` binding and closes it when the response finishes. On Vercel it keeps one pool on `POSTGRES_URL`.
 - `observability.ts`: Application logging and metrics.
 - `rate-limit.ts`, `upstash-rate-limit.ts`: API and action rate limiting.
 - `kms.ts`, `crypto.ts`: Key management and encryption utilities.

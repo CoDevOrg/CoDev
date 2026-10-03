@@ -1,10 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  after: vi.fn(),
   attachDatabasePool: vi.fn(),
   createDatabase: vi.fn(() => ({
     db: { source: "shared" },
-    pool: { on: vi.fn(), idleCount: 0 },
+    pool: {
+      on: vi.fn(),
+      idleCount: 0,
+      end: vi.fn(() => Promise.resolve()),
+    },
   })),
   readServerEnvironment: vi.fn(() => ({
     DATABASE_URL: "postgresql://example.test/codev",
@@ -22,12 +27,14 @@ vi.mock("@vercel/functions", () => ({
 vi.mock("cloudflare:workers", () => ({
   env: mocks.workersEnv,
 }));
+vi.mock("next/server", () => ({ after: mocks.after }));
 
 describe("database client", () => {
   beforeEach(() => {
     delete (
       globalThis as typeof globalThis & { __codevDatabaseClient?: unknown }
     ).__codevDatabaseClient;
+    mocks.after.mockClear();
     mocks.attachDatabasePool.mockClear();
     mocks.createDatabase.mockClear();
     mocks.readServerEnvironment.mockClear();
@@ -46,6 +53,7 @@ describe("database client", () => {
     expect(second).toBe(first);
     expect(mocks.createDatabase).toHaveBeenCalledTimes(1);
     expect(mocks.attachDatabasePool).toHaveBeenCalledTimes(1);
+    expect(mocks.after).not.toHaveBeenCalled();
   });
 
   it("uses the Hyperdrive connection string on Workers", async () => {
@@ -58,8 +66,13 @@ describe("database client", () => {
 
     expect(mocks.createDatabase).toHaveBeenCalledWith(
       "postgres://hyperdrive.local/codev?sslmode=disable",
-      { maxUses: 1 },
+      { max: 10, maxUses: 1 },
     );
     expect(mocks.attachDatabasePool).not.toHaveBeenCalled();
+    expect(mocks.after).toHaveBeenCalledTimes(1);
+
+    const pool = mocks.createDatabase.mock.results[0]?.value.pool;
+    await mocks.after.mock.calls[0]?.[0]();
+    expect(pool.end).toHaveBeenCalledTimes(1);
   });
 });

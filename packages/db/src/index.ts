@@ -6,11 +6,11 @@ import * as schema from "./schema";
 
 export function createDatabase(
   connectionString: string,
-  options?: { maxUses?: number },
+  options?: { max?: number; maxUses?: number },
 ) {
   const pool = new Pool({
     connectionString: normalizePostgresConnectionString(connectionString),
-    max: 5,
+    max: options?.max ?? 5,
     maxUses: options?.maxUses,
     idleTimeoutMillis: 10_000,
     connectionTimeoutMillis: 5_000,
