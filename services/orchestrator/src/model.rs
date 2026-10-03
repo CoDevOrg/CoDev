@@ -361,6 +361,8 @@ pub struct CodexExecPollResponse {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SupersetAgentStartRequest {
+    pub codev_run_id: String,
+    pub codev_workspace_id: String,
     pub worktree_id: String,
     pub provider: String,
     /// Superseded by `launch_profile`; see `CodexExecStartRequest`.

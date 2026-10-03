@@ -52,3 +52,42 @@ jobs:
 
       - run: rustup toolchain install 1.97.1 --profile minimal --component rustfmt,clippy
       - run: pnpm rust:check
+
+  superset-host:
+    # These tests exercise node-pty, the PTY daemon, private credential
+    # profiles, and hook attribution. They need Linux; the UID-isolation
+    # case also needs root and setpriv, which the hosted Ubuntu runner has.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: vendor/superset/.bun-version
+
+      - name: Install Superset host dependencies
+        working-directory: vendor/superset
+        run: CI=1 ELECTRON_SKIP_BINARY_DOWNLOAD=1 bun install --frozen-lockfile
+
+      - name: Build the PTY daemon bundle
+        working-directory: vendor/superset/packages/pty-daemon
+        run: bun run build:daemon
+
+      - name: Test terminal and daemon integration
+        working-directory: vendor/superset/packages/host-service
+        run: |
+          bun run test:integration:terminal
+          bun run test:integration:terminal-raw
+          bun run test:integration:daemon
+
+      - name: Test agent hooks and bindings
+        working-directory: vendor/superset/packages/host-service
+        run: bun test src/codev/agents.test.ts src/trpc/router/notifications/notifications.test.ts src/terminal-agents/store.test.ts src/terminal-agents/subagent-harnesses.test.ts
+
+      - name: Test private profiles across Linux UIDs
+        working-directory: vendor/superset/packages/host-service
+        run: sudo --preserve-env=PATH node --experimental-strip-types --test src/codev/agent-isolation.node-test.ts

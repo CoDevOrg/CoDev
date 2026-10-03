@@ -89,9 +89,9 @@ test("defaults the Firecracker host to a six-sandbox nested-KVM size", () => {
   assert.doesNotMatch(azureTemplate, /priority:\s*'Spot'/);
 });
 
-test("hibernates idle sandboxes after fifteen minutes and quickly deallocates the host", () => {
+test("hibernates idle sandboxes after fifteen minutes while keeping the host awake", () => {
   assert.match(bootstrap, /CODEV_IDLE_TIMEOUT=15m/);
-  assert.match(bootstrap, /CODEV_HOST_IDLE_TIMEOUT=1m/);
+  assert.match(bootstrap, /CODEV_HOST_IDLE_TIMEOUT=0/);
   const orchestrator = read(
     "../../services/orchestrator/src/bin/orchestrator.rs",
   );

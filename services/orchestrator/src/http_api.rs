@@ -1321,6 +1321,8 @@ mod tests {
                     .header("content-type", "application/json")
                     .body(Body::from(
                         serde_json::json!({
+                            "codevRunId": "11111111-1111-4111-8111-111111111111",
+                            "codevWorkspaceId": "22222222-2222-4222-8222-222222222222",
                             "worktreeId": "../escape",
                             "provider": "openai",
                             "command": ["codex", "exec"],
@@ -1343,6 +1345,8 @@ mod tests {
                     .header("content-type", "application/json")
                     .body(Body::from(
                         serde_json::json!({
+                            "codevRunId": "11111111-1111-4111-8111-111111111111",
+                            "codevWorkspaceId": "22222222-2222-4222-8222-222222222222",
                             "worktreeId": "main",
                             "provider": "openai",
                             "command": ["codex", "exec"],

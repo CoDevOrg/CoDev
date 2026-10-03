@@ -1,10 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
-vi.mock("../billing/gate", () => ({
-  requireWorkspaceOwnerPlan: async () => undefined,
-}));
+import { createHash } from "node:crypto";
 
 const mocks = vi.hoisted(() => ({
+  bill: vi.fn(),
   requireMember: vi.fn(),
   resolveCredential: vi.fn(),
   claim: vi.fn(),
@@ -30,6 +28,10 @@ const mocks = vi.hoisted(() => ({
   createWorktree: vi.fn(),
   createTurn: vi.fn(),
   recordOutput: vi.fn(),
+}));
+
+vi.mock("../billing/gate", () => ({
+  requireWorkspaceOwnerPlan: (...args: unknown[]) => mocks.bill(...args),
 }));
 
 vi.mock("./workspaces", () => ({
@@ -98,6 +100,7 @@ import {
   pollGen2SupersetAgentSession,
   pollGen2SupersetAgentTurn,
   reconcileGen2SupersetAgentSession,
+  sendGen2SupersetAgentInput,
   startGen2SupersetAgentSession,
   startGen2SupersetAgentTurn,
 } from "./superset-agent-runtime";
@@ -111,6 +114,7 @@ const chatId = "55555555-5555-4555-8555-555555555555";
 const RUN = {
   id: runId,
   workspaceId,
+  createdBy: userId,
   hostAgentSessionId: "agent-1",
   connectionId: credentialId,
   leaseClaimed: true,
@@ -120,7 +124,8 @@ describe("gen2 Superset agent runtime adapter", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     process.env.CODEV_SUPERSET_AGENT_SESSIONS_ENABLED = "true";
-    mocks.requireMember.mockResolvedValue({ status: "ready" });
+    mocks.requireMember.mockResolvedValue({ status: "ready", role: "editor" });
+    mocks.bill.mockResolvedValue(undefined);
     mocks.claim.mockResolvedValue({ held: true });
     mocks.resolveCredential.mockResolvedValue({
       credentialId,
@@ -151,6 +156,124 @@ describe("gen2 Superset agent runtime adapter", () => {
     expect(mocks.register).not.toHaveBeenCalled();
   });
 
+  it("rejects a viewer before resolving credentials or creating a run", async () => {
+    mocks.requireMember.mockResolvedValue({ status: "ready", role: "viewer" });
+    await expect(
+      startGen2SupersetAgentSession({
+        workspaceId,
+        userId,
+        worktreeId: "main",
+        provider: "codex",
+        command: ["codex"],
+        idempotencyKey: "key-1",
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(mocks.resolveCredential).not.toHaveBeenCalled();
+    expect(mocks.register).not.toHaveBeenCalled();
+    expect(mocks.start).not.toHaveBeenCalled();
+  });
+
+  it("rejects a billing gate failure before credential or host access", async () => {
+    mocks.bill.mockRejectedValue(new Error("Workspace plan required."));
+    await expect(
+      startGen2SupersetAgentSession({
+        workspaceId,
+        userId,
+        worktreeId: "main",
+        provider: "codex",
+        command: ["codex"],
+        idempotencyKey: "key-1",
+      }),
+    ).rejects.toThrow("Workspace plan required.");
+    expect(mocks.resolveCredential).not.toHaveBeenCalled();
+    expect(mocks.register).not.toHaveBeenCalled();
+    expect(mocks.start).not.toHaveBeenCalled();
+  });
+
+  it("hides another editor's run before input, stop, or host poll", async () => {
+    mocks.getRunById.mockResolvedValue({ ...RUN, createdBy: "another-user" });
+    await expect(
+      sendGen2SupersetAgentInput({
+        workspaceId,
+        userId,
+        runId,
+        data: "secret",
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(
+      cancelGen2SupersetAgentSession({
+        workspaceId,
+        userId,
+        runId,
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(
+      pollGen2SupersetAgentSession({
+        workspaceId,
+        userId,
+        runId,
+        after: 0,
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+    expect(mocks.sendInput).not.toHaveBeenCalled();
+    expect(mocks.stop).not.toHaveBeenCalled();
+    expect(mocks.poll).not.toHaveBeenCalled();
+    expect(mocks.claim).not.toHaveBeenCalled();
+  });
+
+  it("allows an owner to stop another member's run but not send input", async () => {
+    mocks.requireMember.mockResolvedValue({ status: "ready", role: "owner" });
+    mocks.getRunById.mockResolvedValue({ ...RUN, createdBy: "another-user" });
+    await expect(
+      sendGen2SupersetAgentInput({
+        workspaceId,
+        userId,
+        runId,
+        data: "secret",
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+    await cancelGen2SupersetAgentSession({ workspaceId, userId, runId });
+    expect(mocks.sendInput).not.toHaveBeenCalled();
+    expect(mocks.stop).toHaveBeenCalledWith(workspaceId, "agent-1");
+  });
+
+  it("does not let a demoted creator input or read raw output", async () => {
+    mocks.requireMember.mockResolvedValue({ status: "ready", role: "viewer" });
+    mocks.getRunById.mockResolvedValue(RUN);
+    await expect(
+      sendGen2SupersetAgentInput({
+        workspaceId,
+        userId,
+        runId,
+        data: "command",
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(
+      pollGen2SupersetAgentSession({
+        workspaceId,
+        userId,
+        runId,
+        after: 0,
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+    expect(mocks.sendInput).not.toHaveBeenCalled();
+    expect(mocks.poll).not.toHaveBeenCalled();
+  });
+
+  it("denies a removed member before looking up a run or contacting the host", async () => {
+    mocks.requireMember.mockRejectedValue(new Error("Workspace not found."));
+    await expect(
+      pollGen2SupersetAgentSession({
+        workspaceId,
+        userId,
+        runId,
+        after: 0,
+      }),
+    ).rejects.toThrow("Workspace not found.");
+    expect(mocks.getRunById).not.toHaveBeenCalled();
+    expect(mocks.poll).not.toHaveBeenCalled();
+  });
+
   it("claims a lease, starts the run, and records host identifiers", async () => {
     mocks.register.mockResolvedValue({
       runId,
@@ -175,11 +298,19 @@ describe("gen2 Superset agent runtime adapter", () => {
     expect(mocks.claim).toHaveBeenCalledWith(
       expect.objectContaining({ credentialId, surface: "gen2" }),
     );
+    expect(mocks.resolveCredential).toHaveBeenCalledWith(userId, "codex");
     expect(mocks.claimLease).toHaveBeenCalledWith(
       expect.objectContaining({ runId }),
     );
     expect(mocks.markStarted).toHaveBeenCalledWith(
       expect.objectContaining({ runId, hostAgentSessionId: "agent-1" }),
+    );
+    expect(mocks.start).toHaveBeenCalledWith(
+      workspaceId,
+      expect.objectContaining({
+        codevRunId: runId,
+        codevWorkspaceId: workspaceId,
+      }),
     );
     expect(result).toEqual({ runId, status: "running", created: true });
   });
@@ -366,7 +497,8 @@ describe("gen2 Superset agent turn (Phase 4 browser-facing delegate)", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     process.env.CODEV_SUPERSET_AGENT_SESSIONS_ENABLED = "true";
-    mocks.requireMember.mockResolvedValue({ status: "ready" });
+    mocks.requireMember.mockResolvedValue({ status: "ready", role: "editor" });
+    mocks.bill.mockResolvedValue(undefined);
     mocks.claim.mockResolvedValue({ held: true });
     mocks.resolveCredential.mockResolvedValue({
       credentialId,
@@ -383,13 +515,14 @@ describe("gen2 Superset agent turn (Phase 4 browser-facing delegate)", () => {
     mocks.getRunById.mockResolvedValue({
       id: runId,
       workspaceId,
+      createdBy: userId,
       hostAgentSessionId: "agent-1",
       connectionId: credentialId,
       leaseClaimed: true,
     });
   });
 
-  it("provisions a per-chat worktree, starts the run, and persists the prompt", async () => {
+  it("provisions a per-agent worktree, starts the run, and persists the prompt", async () => {
     mocks.register.mockResolvedValue({
       runId,
       status: "creating",
@@ -430,9 +563,12 @@ describe("gen2 Superset agent turn (Phase 4 browser-facing delegate)", () => {
     );
   });
 
-  it("reuses an existing chat worktree instead of creating a second one", async () => {
+  it("reuses the idempotent start worktree instead of creating a second one", async () => {
     mocks.listWorktrees.mockResolvedValue([
-      { worktreeId: `agent-${chatId.replace(/-/g, "")}`, branch: "x" },
+      {
+        worktreeId: `agent-${createHash("sha256").update("key-1").digest("hex").slice(0, 40)}`,
+        branch: "x",
+      },
     ]);
     mocks.register.mockResolvedValue({
       runId,
@@ -455,6 +591,42 @@ describe("gen2 Superset agent turn (Phase 4 browser-facing delegate)", () => {
     });
 
     expect(mocks.createWorktree).not.toHaveBeenCalled();
+  });
+
+  it("uses distinct worktrees for independent starts in the same chat", async () => {
+    mocks.register
+      .mockResolvedValueOnce({ runId, status: "creating", created: true })
+      .mockResolvedValueOnce({
+        runId: "66666666-6666-4666-8666-666666666666",
+        status: "creating",
+        created: true,
+      });
+    mocks.start.mockResolvedValue({
+      hostWorkspaceId: "host-ws-1",
+      hostTerminalId: "term-1",
+      hostAgentSessionId: "agent-1",
+    });
+    await startGen2SupersetAgentTurn({
+      workspaceId,
+      userId,
+      chatId,
+      prompt: "first",
+      provider: "codex",
+      idempotencyKey: "key-1",
+    });
+    await startGen2SupersetAgentTurn({
+      workspaceId,
+      userId,
+      chatId,
+      prompt: "second",
+      provider: "codex",
+      idempotencyKey: "key-2",
+    });
+    const worktrees = mocks.createWorktree.mock.calls.map(
+      ([, value]) => (value as { worktreeId: string }).worktreeId,
+    );
+    expect(worktrees).toHaveLength(2);
+    expect(worktrees[0]).not.toBe(worktrees[1]);
   });
 
   it("polls the run, records output, and reports the persisted reply", async () => {

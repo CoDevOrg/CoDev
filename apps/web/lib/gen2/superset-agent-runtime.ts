@@ -1,5 +1,7 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
+
 import {
   createSupersetWorktree,
   listSupersetWorktrees,
@@ -43,6 +45,7 @@ import { createGen2Turn, recordGen2SupersetRunOutput } from "./turns";
 import { toAgentExecChunks } from "./agent-output";
 import { requireWorkspaceOwnerPlan } from "../billing/gate";
 import { requireGen2Member } from "./workspaces";
+import { requireGen2SupersetAgentAccess } from "./superset-agent-access";
 
 /**
  * The server-only CoDev runtime adapter docs/SUPERSET_AGENT_SESSION_PLAN.md
@@ -72,7 +75,16 @@ async function requireOwnRun(workspaceId: string, runId: string) {
   return run;
 }
 
-export async function startGen2SupersetAgentSession(input: {
+async function requireTurnRun(
+  workspaceId: string,
+  userId: string,
+  runId: string,
+) {
+  await requireGen2Member(workspaceId, userId);
+  return requireOwnRun(workspaceId, runId);
+}
+
+type StartSessionInput = {
   workspaceId: string;
   userId: string;
   chatId?: string | null;
@@ -80,9 +92,26 @@ export async function startGen2SupersetAgentSession(input: {
   command: string[];
   idempotencyKey: string;
   provider: Gen2AgentProvider;
-}) {
+};
+
+export async function startGen2SupersetAgentSession(input: StartSessionInput) {
+  return startSession(input, "persistent");
+}
+
+async function startSession(
+  input: StartSessionInput,
+  mode: "persistent" | "turn",
+) {
   requireEnabled();
-  await requireGen2Member(input.workspaceId, input.userId);
+  if (mode === "persistent") {
+    await requireGen2SupersetAgentAccess({
+      action: "start",
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+    });
+  } else {
+    await requireGen2Member(input.workspaceId, input.userId);
+  }
   await requireWorkspaceOwnerPlan(input.workspaceId);
   const provider = input.provider;
   const credential = await resolveGen2Credential(input.userId, provider);
@@ -134,6 +163,8 @@ export async function startGen2SupersetAgentSession(input: {
 
   try {
     const started = await startSupersetAgent(input.workspaceId, {
+      codevRunId: registration.runId,
+      codevWorkspaceId: input.workspaceId,
       worktreeId: input.worktreeId,
       provider: providerVendor(provider),
       launchProfile: credential.launchProfile,
@@ -178,9 +209,13 @@ export async function sendGen2SupersetAgentInput(input: {
   data: string;
 }) {
   requireEnabled();
-  await requireGen2Member(input.workspaceId, input.userId);
+  const run = await requireGen2SupersetAgentAccess({
+    action: "input",
+    workspaceId: input.workspaceId,
+    userId: input.userId,
+    runId: input.runId,
+  });
   await requireWorkspaceOwnerPlan(input.workspaceId);
-  const run = await requireOwnRun(input.workspaceId, input.runId);
   if (!run.hostAgentSessionId) {
     throw new Gen2LifecycleError("This run has not started yet.", 409);
   }
@@ -191,15 +226,31 @@ export async function sendGen2SupersetAgentInput(input: {
   );
 }
 
-export async function pollGen2SupersetAgentSession(input: {
+type PollSessionInput = {
   workspaceId: string;
   userId: string;
   runId: string;
   after: number;
-}) {
+};
+
+export async function pollGen2SupersetAgentSession(input: PollSessionInput) {
+  return pollSession(input, "persistent");
+}
+
+async function pollSession(
+  input: PollSessionInput,
+  mode: "persistent" | "turn",
+) {
   requireEnabled();
-  await requireGen2Member(input.workspaceId, input.userId);
-  const run = await requireOwnRun(input.workspaceId, input.runId);
+  const run =
+    mode === "persistent"
+      ? await requireGen2SupersetAgentAccess({
+          action: "poll",
+          workspaceId: input.workspaceId,
+          userId: input.userId,
+          runId: input.runId,
+        })
+      : await requireTurnRun(input.workspaceId, input.userId, input.runId);
   if (!run.hostAgentSessionId) {
     throw new Gen2LifecycleError("This run has not started yet.", 409);
   }
@@ -243,14 +294,32 @@ export async function pollGen2SupersetAgentSession(input: {
   return result;
 }
 
-export async function cancelGen2SupersetAgentSession(input: {
+type CancelSessionInput = {
   workspaceId: string;
   userId: string;
   runId: string;
-}) {
+};
+
+export async function cancelGen2SupersetAgentSession(
+  input: CancelSessionInput,
+) {
+  return cancelSession(input, "persistent");
+}
+
+async function cancelSession(
+  input: CancelSessionInput,
+  mode: "persistent" | "turn",
+) {
   requireEnabled();
-  await requireGen2Member(input.workspaceId, input.userId);
-  const run = await requireOwnRun(input.workspaceId, input.runId);
+  const run =
+    mode === "persistent"
+      ? await requireGen2SupersetAgentAccess({
+          action: "cancel",
+          workspaceId: input.workspaceId,
+          userId: input.userId,
+          runId: input.runId,
+        })
+      : await requireTurnRun(input.workspaceId, input.userId, input.runId);
 
   await markGen2SupersetRunStopping({
     runId: run.id,
@@ -294,8 +363,12 @@ export async function reconcileGen2SupersetAgentSession(input: {
   runId: string;
 }) {
   requireEnabled();
-  await requireGen2Member(input.workspaceId, input.userId);
-  const run = await requireOwnRun(input.workspaceId, input.runId);
+  const run = await requireGen2SupersetAgentAccess({
+    action: "recover",
+    workspaceId: input.workspaceId,
+    userId: input.userId,
+    runId: input.runId,
+  });
   if (!run.hostAgentSessionId) {
     return { adoptable: false as const };
   }
@@ -327,20 +400,18 @@ export async function reconcileGen2SupersetAgentSession(input: {
 }
 
 /**
- * One worktree per chat, so two members' agents in two different chats never
- * collide on the same checkout, matching Plan Phase 4 step 2 ("concurrent
- * independent agents receive distinct worktrees"). Idempotent: a chat's
- * worktree is created once and reused by every later turn in that chat.
+ * One worktree per start idempotency key. A retry gets the same checkout;
+ * independent agents in the same chat get different checkouts.
  */
-function agentWorktreeIdForChat(chatId: string) {
-  return `agent-${chatId.replace(/-/g, "")}`.slice(0, 64);
+function agentWorktreeIdForStart(idempotencyKey: string) {
+  return `agent-${createHash("sha256").update(idempotencyKey).digest("hex").slice(0, 40)}`;
 }
 
 async function ensureGen2SupersetAgentWorktree(
   workspaceId: string,
-  chatId: string,
+  idempotencyKey: string,
 ) {
-  const worktreeId = agentWorktreeIdForChat(chatId);
+  const worktreeId = agentWorktreeIdForStart(idempotencyKey);
   const existing = await listSupersetWorktrees(workspaceId);
   if (existing.some((worktree) => worktree.worktreeId === worktreeId)) {
     return worktreeId;
@@ -352,7 +423,7 @@ async function ensureGen2SupersetAgentWorktree(
       baseRef: "HEAD",
     });
   } catch (error) {
-    // Two turns racing to create the same chat's first worktree: the loser's
+    // Two retries racing to create the same agent worktree: the loser's
     // `git worktree add` fails, but the worktree it wanted now exists anyway.
     const retried = await listSupersetWorktrees(workspaceId);
     if (!retried.some((worktree) => worktree.worktreeId === worktreeId)) {
@@ -387,7 +458,10 @@ export async function startGen2SupersetAgentTurn(input: {
   const history = await listGen2ChatMessages(input.chatId);
   const worktreeId =
     input.worktreeId ??
-    (await ensureGen2SupersetAgentWorktree(input.workspaceId, input.chatId));
+    (await ensureGen2SupersetAgentWorktree(
+      input.workspaceId,
+      input.idempotencyKey,
+    ));
   const provider = input.provider;
   const command = buildGen2AgentCommand(
     provider,
@@ -396,15 +470,18 @@ export async function startGen2SupersetAgentTurn(input: {
     input.model,
   );
 
-  const session = await startGen2SupersetAgentSession({
-    workspaceId: input.workspaceId,
-    userId: input.userId,
-    chatId: input.chatId,
-    worktreeId,
-    command,
-    provider,
-    idempotencyKey: input.idempotencyKey,
-  });
+  const session = await startSession(
+    {
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      chatId: input.chatId,
+      worktreeId,
+      command,
+      provider,
+      idempotencyKey: input.idempotencyKey,
+    },
+    "turn",
+  );
 
   try {
     await appendGen2ChatMessage({
@@ -442,12 +519,15 @@ export async function pollGen2SupersetAgentTurn(input: {
   after: number;
 }) {
   requireEnabled();
-  const result = await pollGen2SupersetAgentSession({
-    workspaceId: input.workspaceId,
-    userId: input.userId,
-    runId: input.sessionId,
-    after: input.after,
-  });
+  const result = await pollSession(
+    {
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      runId: input.sessionId,
+      after: input.after,
+    },
+    "turn",
+  );
 
   const persisted = await recordGen2SupersetRunOutput({
     sessionId: input.sessionId,
@@ -475,9 +555,12 @@ export async function cancelGen2SupersetAgentTurn(input: {
   sessionId: string;
 }) {
   requireEnabled();
-  await cancelGen2SupersetAgentSession({
-    workspaceId: input.workspaceId,
-    userId: input.userId,
-    runId: input.sessionId,
-  });
+  await cancelSession(
+    {
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      runId: input.sessionId,
+    },
+    "turn",
+  );
 }

@@ -1,17 +1,24 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { Hono } from "hono";
 import { z } from "zod";
 import type { HostDb } from "../db";
-import { terminalSessions, workspaces } from "../db/schema";
+import { codevAgentRuns, terminalSessions, workspaces } from "../db/schema";
 import type { EventBus } from "../events";
+import { agentTerminalLaunchOptions } from "../terminal/agent-launch";
 import {
 	createTerminalSessionInternal,
 	disposeSessionAndWait,
 	snapshotSession,
 	writeFramedInputToSession,
 } from "../terminal/terminal";
-import { prepareAgentLaunch, removeAgentLaunch, type AgentLaunch } from "./agent-isolation";
+import { isApprovedAgentCommand } from "./agent-command-policy";
+import {
+	type AgentLaunch,
+	type AgentLaunchProfile,
+	prepareAgentLaunch,
+	removeAgentLaunch,
+} from "./agent-isolation";
 import { resolveCoDevWorktreeRoot } from "./files";
 
 const worktreeIdSchema = z
@@ -20,14 +27,30 @@ const worktreeIdSchema = z
 	.max(64)
 	.regex(/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/);
 
+const launchProfileSchema = z.object({
+	files: z
+		.array(
+			z.object({
+				path: z.string().min(1).max(512),
+				contents: z.string().max(128 << 10),
+			}),
+		)
+		.max(8)
+		.optional(),
+	env: z.record(z.string(), z.string().max(32 << 10)).optional(),
+});
+
 const agentStartSchema = z.object({
+	codevRunId: z.string().uuid(),
+	codevWorkspaceId: z.string().uuid(),
 	worktreeId: worktreeIdSchema,
-	provider: z.string().min(1).max(32),
+	provider: z.enum(["openai", "anthropic"]),
+	launchProfile: launchProfileSchema.optional(),
 	codexAuthCacheJson: z
 		.string()
 		.max(128 * 1024)
 		.optional(),
-	command: z.array(z.string().min(1)).min(1).max(32),
+	command: z.array(z.string().max(64 * 1024)).min(1).max(32),
 	idempotencyKey: z.string().min(1).max(128),
 });
 const agentInputSchema = z.object({ data: z.string().max(64 * 1024) });
@@ -46,11 +69,15 @@ export type CoDevAgentBridgeOptions = {
 };
 
 type AgentPollState = { sequence: number; text: string };
+type AgentSession = {
+	workspaceId: string;
+	launch?: AgentLaunch;
+};
 const agentPollStates = new Map<string, AgentPollState>();
-/** Private process identity and launch directory, keyed by agent ID. */
-const agentLaunches = new Map<string, AgentLaunch>();
-/** idempotencyKey -> agentId, so a retried start reattaches instead of relaunching. */
-const agentIdempotency = new Map<string, string>();
+/** The only terminal IDs that this private bridge may operate on. */
+const agentSessions = new Map<string, AgentSession>();
+/** Exit codes are supplied by the PTY while this host process is alive. */
+const agentExitCodes = new Map<string, number>();
 let agentSequence = 0;
 
 function secretMatches(actual: string | undefined, expected: string) {
@@ -60,8 +87,25 @@ function secretMatches(actual: string | undefined, expected: string) {
 	return received.length === configured.length && timingSafeEqual(received, configured);
 }
 
+function newHookToken(): string {
+	return randomBytes(32).toString("hex");
+}
+
+function hookTokenHash(token: string): string {
+	return createHash("sha256").update(token).digest("hex");
+}
+
 function hostWorkspaceId(worktreeId: string) {
 	return `codev-${worktreeId}`;
+}
+
+/** Compatibility only for hosts reached through an older control-plane rollout. */
+function legacyCodexProfile(authCacheJson: string | undefined): AgentLaunchProfile | undefined {
+	if (!authCacheJson) return undefined;
+	return {
+		files: [{ path: "auth.json", contents: authCacheJson }],
+		env: { CODEX_HOME: "{{profileDir}}" },
+	};
 }
 
 async function branchAt(git: GitFactory, root: string) {
@@ -108,6 +152,29 @@ function terminalError(error: unknown) {
 		: "Superset agent operation failed.";
 }
 
+async function releaseAgentLaunch(agentId: string) {
+	const session = agentSessions.get(agentId);
+	const launch = session?.launch;
+	if (session) session.launch = undefined;
+	await removeAgentLaunch(launch);
+}
+
+function persistedAgentFor(db: HostDb, agentId: string) {
+	return db.query.codevAgentRuns
+		.findFirst({ where: eq(codevAgentRuns.terminalId, agentId) })
+		.sync();
+}
+
+function agentMatchesTerminal(
+	agent: { hostWorkspaceId: string; worktreeId: string },
+	terminal: { originWorkspaceId: string | null },
+) {
+	return (
+		agent.hostWorkspaceId === hostWorkspaceId(agent.worktreeId) &&
+		terminal.originWorkspaceId === agent.hostWorkspaceId
+	);
+}
+
 /**
  * Fixed, bridge-secret-protected operations that launch and drive a
  * terminal-agent session for CoDev's Superset Agent Session Plan Phase 3.
@@ -117,7 +184,8 @@ function terminalError(error: unknown) {
  * There is no headless "run this process" primitive to reuse here: a
  * Superset terminal-agent is an agent CLI running inside a tracked terminal
  * (see terminal-agents/types.ts's TerminalAgentBinding doc comment), so this
- * reuses the same terminal primitives registerCoDevRuntimeBridge's
+ * reuses the same agent terminal launch path and terminal primitives
+ * registerCoDevRuntimeBridge's
  * /codev/terminal routes already use -- createTerminalSessionInternal,
  * writeFramedInputToSession, snapshotSession, disposeSessionAndWait -- with
  * the agent's command delivered via `initialCommand` instead of the
@@ -146,78 +214,120 @@ export function registerCoDevAgentBridge({
 		if (!requireBridge(context.req.raw)) return context.json({ error: "Unauthorized" }, 401);
 		const parsed = agentStartSchema.safeParse(await context.req.json().catch(() => undefined));
 		if (!parsed.success) return context.json({ error: "Invalid Superset agent start request." }, 400);
-		const { worktreeId, codexAuthCacheJson, command, idempotencyKey } = parsed.data;
+		const {
+			codevRunId,
+			codevWorkspaceId,
+			worktreeId,
+			provider,
+			codexAuthCacheJson,
+			launchProfile,
+			command,
+			idempotencyKey,
+		} = parsed.data;
+		if (!isApprovedAgentCommand(provider, command)) {
+			return context.json({ error: "Unsupported Superset agent launch command." }, 400);
+		}
 
-		const existingAgentId = agentIdempotency.get(idempotencyKey);
-		if (existingAgentId) {
-			const existing = db.query.terminalSessions
-				.findFirst({ where: eq(terminalSessions.id, existingAgentId) })
+		const existing = db.query.codevAgentRuns
+			.findFirst({ where: eq(codevAgentRuns.codevRunId, codevRunId) })
+			.sync() ?? db.query.codevAgentRuns
+				.findFirst({ where: eq(codevAgentRuns.idempotencyKey, idempotencyKey) })
 				.sync();
-			if (existing && !existing.endedAt) {
+		if (existing) {
+			if (
+				existing.codevRunId !== codevRunId ||
+				existing.codevWorkspaceId !== codevWorkspaceId ||
+				existing.worktreeId !== worktreeId ||
+				existing.provider !== provider ||
+				existing.idempotencyKey !== idempotencyKey
+			) {
+				return context.json({ error: "Idempotency key belongs to a different agent launch." }, 409);
+			}
+			const terminal = db.query.terminalSessions
+				.findFirst({ where: eq(terminalSessions.id, existing.terminalId) })
+				.sync();
+			if (terminal && agentMatchesTerminal(existing, terminal)) {
 				return context.json(
 					{
-						hostWorkspaceId: existing.originWorkspaceId ?? hostWorkspaceId(worktreeId),
-						hostTerminalId: existingAgentId,
-						hostAgentSessionId: existingAgentId,
+						hostWorkspaceId: existing.hostWorkspaceId,
+						hostTerminalId: existing.terminalId,
+						hostAgentSessionId: existing.terminalId,
 					},
 					201,
 				);
 			}
-			agentIdempotency.delete(idempotencyKey);
+			return context.json({ error: "Agent launch record does not match its terminal." }, 409);
 		}
 
 		let launch: AgentLaunch | undefined;
+		let agentId: string | undefined;
 		try {
 			const workspace = await ensureAgentWorkspace({ db, git, workspaceRoot, worktreeId });
 			const profileRoot = process.env.CODEV_AGENT_PROFILE_ROOT;
 			if (!profileRoot) {
 				return context.json({ error: "Isolated agent profiles are not configured." }, 503);
 			}
+			const hookToken = newHookToken();
 			launch = await prepareAgentLaunch({
 				root: profileRoot,
 				command,
-				authCacheJson: codexAuthCacheJson,
+				provider,
+				hookToken,
+				// A new control plane sends the provider-neutral profile. Keep the
+				// Codex cache only as a compatibility fallback for a rolling deploy.
+				profile: launchProfile ?? legacyCodexProfile(codexAuthCacheJson),
 			});
 
-			const agentId = `agent-${Date.now()}-${++agentSequence}`;
-			const created = await createTerminalSessionInternal({
-				terminalId: agentId,
-				workspaceId: workspace.id,
-				db,
-				eventBus,
-				rows: 1_000,
-				cols: 4_096,
-				includeDefaultAccountEnv: false,
-				homeDirectory: launch.directory,
-				// Each agent has its own uid; gid 2000 keeps the selected
-				// worktree writable alongside ordinary codev-shell terminals.
-				shell: "/usr/bin/setpriv",
-				shellArgs: [
-					`--reuid=${launch.uid}`,
-					"--regid=2000",
-					"--clear-groups",
-					"--",
-					"/bin/sh",
-					"-l",
-				],
-				initialCommand: launch.command,
-			});
+			const createdAgentId = `agent-${Date.now()}-${++agentSequence}`;
+			agentId = createdAgentId;
+			const created = await createTerminalSessionInternal(
+				agentTerminalLaunchOptions({
+					terminalId: createdAgentId,
+					workspaceId: workspace.id,
+					db,
+					eventBus,
+					privateProfile: launch,
+					initialCommand: launch.command,
+				}),
+			);
 			if ("error" in created) {
 				await removeAgentLaunch(launch);
 				return context.json({ error: terminalError(created) }, 400);
 			}
-			agentLaunches.set(agentId, launch);
-			agentIdempotency.set(idempotencyKey, agentId);
-			agentPollStates.set(agentId, { sequence: 0, text: "" });
+			db.insert(codevAgentRuns)
+				.values({
+					codevRunId,
+					codevWorkspaceId,
+					terminalId: createdAgentId,
+					hostWorkspaceId: workspace.id,
+					worktreeId,
+					provider,
+					idempotencyKey,
+					hookTokenHash: hookTokenHash(hookToken),
+				})
+				.run();
+			agentSessions.set(createdAgentId, { workspaceId: workspace.id, launch });
+			created.pty.onExit(({ exitCode }) => {
+				agentExitCodes.set(createdAgentId, exitCode);
+				// A natural exit does not pass through DELETE. Remove the private
+				// credential profile as soon as its terminal has ended.
+				void releaseAgentLaunch(createdAgentId).catch(() => {
+					console.error("[codev-agent-bridge] could not remove an isolated launch profile", {
+						agentId: createdAgentId,
+					});
+				});
+			});
+			agentPollStates.set(createdAgentId, { sequence: 0, text: "" });
 			return context.json(
 				{
 					hostWorkspaceId: workspace.id,
-					hostTerminalId: agentId,
-					hostAgentSessionId: agentId,
+					hostTerminalId: createdAgentId,
+					hostAgentSessionId: createdAgentId,
 				},
 				201,
 			);
 		} catch (error) {
+			if (agentId) await disposeSessionAndWait(agentId, db).catch(() => undefined);
 			await removeAgentLaunch(launch);
 			return context.json(
 				{ error: error instanceof Error ? error.message : "Could not start Superset agent." },
@@ -232,11 +342,15 @@ export function registerCoDevAgentBridge({
 		if (!parsed.success) return context.json({ error: "Invalid Superset agent input request." }, 400);
 		const agentId = context.req.param("agentId");
 		try {
+			const agent = persistedAgentFor(db, agentId);
+			if (!agent) return context.json({ error: "Superset agent session not found." }, 400);
 			const session = db.query.terminalSessions.findFirst({ where: eq(terminalSessions.id, agentId) }).sync();
-			if (!session) return context.json({ error: "Superset agent session not found." }, 400);
+			if (!session || !agentMatchesTerminal(agent, session)) {
+				return context.json({ error: "Superset agent session does not match its launch record." }, 400);
+			}
 			const result = await writeFramedInputToSession({
 				terminalId: agentId,
-				workspaceId: session.originWorkspaceId ?? "",
+				workspaceId: agent.hostWorkspaceId,
 				text: parsed.data.data,
 				submit: false,
 				db,
@@ -258,11 +372,15 @@ export function registerCoDevAgentBridge({
 		if (!parsed.success) return context.json({ error: "Invalid Superset agent poll request." }, 400);
 		const agentId = context.req.param("agentId");
 		try {
+			const agent = persistedAgentFor(db, agentId);
+			if (!agent) return context.json({ error: "Superset agent session not found." }, 400);
 			const session = db.query.terminalSessions.findFirst({ where: eq(terminalSessions.id, agentId) }).sync();
-			if (!session) return context.json({ error: "Superset agent session not found." }, 400);
+			if (!session || !agentMatchesTerminal(agent, session)) {
+				return context.json({ error: "Superset agent session does not match its launch record." }, 400);
+			}
 			const snapshot = await snapshotSession({
 				terminalId: agentId,
-				workspaceId: session.originWorkspaceId ?? "",
+				workspaceId: agent.hostWorkspaceId,
 				maxLines: 1_000,
 				db,
 				eventBus,
@@ -274,12 +392,8 @@ export function registerCoDevAgentBridge({
 				state.text = snapshot.text;
 				agentPollStates.set(agentId, state);
 			}
-			// The bridge does not expose the underlying process's real exit
-			// code (only this package's own terminal.ts tracks it, in
-			// memory, on the session object) -- 0 is reported on any
-			// detected exit as a reasonable default until that is threaded
-			// through.
-			const exited = Boolean(session.endedAt);
+			const recordedExitCode = agentExitCodes.get(agentId);
+			const exited = Boolean(session.endedAt) || recordedExitCode !== undefined;
 			return context.json({
 				chunks:
 					parsed.data.after < state.sequence
@@ -287,7 +401,7 @@ export function registerCoDevAgentBridge({
 						: [],
 				nextSequence: state.sequence,
 				exited,
-				exitCode: exited ? 0 : null,
+				exitCode: exited ? (recordedExitCode ?? null) : null,
 				refreshReady: exited,
 			});
 		} catch (error) {
@@ -302,10 +416,17 @@ export function registerCoDevAgentBridge({
 		if (!requireBridge(context.req.raw)) return context.json({ error: "Unauthorized" }, 401);
 		const agentId = context.req.param("agentId");
 		try {
+			const agent = persistedAgentFor(db, agentId);
+			if (!agent) return context.json({ error: "Superset agent session not found." }, 400);
+			const session = db.query.terminalSessions.findFirst({ where: eq(terminalSessions.id, agentId) }).sync();
+			if (!session || !agentMatchesTerminal(agent, session)) {
+				return context.json({ error: "Superset agent session does not match its launch record." }, 400);
+			}
 			await disposeSessionAndWait(agentId, db);
 			agentPollStates.delete(agentId);
-			await removeAgentLaunch(agentLaunches.get(agentId));
-			agentLaunches.delete(agentId);
+			await releaseAgentLaunch(agentId);
+			agentExitCodes.delete(agentId);
+			agentSessions.delete(agentId);
 			return context.json({ ok: true });
 		} catch (error) {
 			return context.json(
@@ -320,21 +441,23 @@ export function registerCoDevAgentBridge({
 			return context.json({ error: "Unauthorized" }, 401);
 		const agentId = context.req.param("agentId");
 		try {
+			const agent = persistedAgentFor(db, agentId);
+			if (!agent) return context.json({ adoptable: false, status: "not_found" });
 			const session = db.query.terminalSessions
 				.findFirst({ where: eq(terminalSessions.id, agentId) })
 				.sync();
-			if (!session)
+			if (!session || !agentMatchesTerminal(agent, session))
 				return context.json({ adoptable: false, status: "not_found" });
 			if (session.endedAt)
 				return context.json({
 					adoptable: false,
 					status: "exited",
-					exitCode: 0,
+					exitCode: agentExitCodes.get(agentId) ?? null,
 				});
 
 			const snapshot = await snapshotSession({
 				terminalId: agentId,
-				workspaceId: session.originWorkspaceId ?? "",
+				workspaceId: agent.hostWorkspaceId,
 				maxLines: 1_000,
 				db,
 				eventBus,
@@ -357,9 +480,7 @@ export function registerCoDevAgentBridge({
 				status: "running",
 				sequence: state.sequence,
 				bufferLength: state.text.length,
-				worktreeId: session.originWorkspaceId?.startsWith("codev-")
-					? session.originWorkspaceId.slice("codev-".length)
-					: undefined,
+				worktreeId: agent.worktreeId,
 			});
 		} catch {
 			return context.json({ adoptable: false, status: "failed" });

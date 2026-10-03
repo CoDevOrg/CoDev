@@ -23,6 +23,7 @@ import { and, asc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import type { HostDb } from "../../../db";
 import { hostAgentConfigs, workspaces } from "../../../db/schema";
+import { agentTerminalLaunchOptions } from "../../../terminal/agent-launch";
 import { hasHarnessSession } from "../../../terminal/harness-transcript";
 import {
 	createTerminalSessionInternal,
@@ -579,13 +580,15 @@ async function runTerminalAgent(
 	const { fullCommand, label } = buildTerminalAgentLaunch(ctx.db, input);
 
 	const terminalId = crypto.randomUUID();
-	const result = await createTerminalSessionInternal({
-		terminalId,
-		workspaceId: input.workspaceId,
-		db: ctx.db,
-		eventBus: ctx.eventBus,
-		initialCommand: fullCommand,
-	});
+	const result = await createTerminalSessionInternal(
+		agentTerminalLaunchOptions({
+			terminalId,
+			workspaceId: input.workspaceId,
+			db: ctx.db,
+			eventBus: ctx.eventBus,
+			initialCommand: fullCommand,
+		}),
+	);
 
 	if ("error" in result) {
 		throw toTerminalSessionError(result);

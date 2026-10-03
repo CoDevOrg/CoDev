@@ -137,6 +137,7 @@ describe("host.db migrations", () => {
 		expect(tables(sqlite)).toContain("workspaces");
 		expect(tables(sqlite)).toContain("workspace_tags");
 		expect(tables(sqlite)).toContain("tag_folder_settings");
+		expect(tables(sqlite)).toContain("codev_agent_runs");
 	});
 
 	test("every shipped journal entry has a distinct `when`", () => {

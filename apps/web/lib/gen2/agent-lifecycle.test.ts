@@ -157,12 +157,13 @@ describe("gen2 Codex agent", () => {
 
   it("runs Codex with full guest access so the inner sandbox can use the shell", () => {
     const command = buildGen2CodexCommand("List the files");
-    expect(command.slice(0, 11)).toEqual([
+    expect(command.slice(0, 12)).toEqual([
       "codex",
       "exec",
       "--json",
       "--ephemeral",
       "--ignore-user-config",
+      "--dangerously-bypass-hook-trust",
       "--skip-git-repo-check",
       "--sandbox",
       "danger-full-access",

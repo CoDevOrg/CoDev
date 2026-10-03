@@ -1,7 +1,8 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import type { AgentIdentity } from "@superset/shared/agent-identity";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { terminalSessions, workspaces } from "../../../db/schema";
+import { codevAgentRuns, terminalSessions, workspaces } from "../../../db/schema";
 import { mapEventType } from "../../../events";
 import { verifyAttributionToken } from "../../../terminal-agents/attribution-token";
 import type { HostServiceContext } from "../../../types";
@@ -46,6 +47,15 @@ const hookInput = z.object({
 	apiKey: z.boolean().optional(),
 	attributionToken: z.string().max(128).optional(),
 });
+
+function trustedCoDevHook(
+	expectedHash: string,
+	token: string | undefined,
+): boolean {
+	if (!token || !expectedHash) return false;
+	const actual = createHash("sha256").update(token).digest("hex");
+	return timingSafeEqual(Buffer.from(actual), Buffer.from(expectedHash));
+}
 
 function trimOrUndefined(value: string | undefined): string | undefined {
 	const trimmed = value?.trim();
@@ -103,10 +113,11 @@ export const notificationsRouter = router({
 	 * Agent lifecycle hook. The shell hook POSTs here; we normalize, resolve
 	 * the terminal's workspace, and fan out over the WS event bus.
 	 *
-	 * Intentionally unauthenticated: a caller can only trigger a chime, a
-	 * sidebar indicator, and the idempotent forward-only "linked task →
-	 * In Progress" nudge for a real workspace. Reusing the host-service PSK
-	 * would leak it into every agent shell's env for zero practical gain.
+	 * Ordinary Superset terminals are intentionally unauthenticated: a caller
+	 * can only trigger a chime, a sidebar indicator, and the idempotent
+	 * forward-only "linked task → In Progress" nudge for a real workspace.
+	 * CoDev terminals additionally require their private per-launch token
+	 * before lifecycle or subagent state can change.
 	 */
 	hook: publicProcedure.input(hookInput).mutation(async ({ ctx, input }) => {
 		const subagentId = trimOrUndefined(input.subagent?.id);
@@ -126,6 +137,15 @@ export const notificationsRouter = router({
 			})
 			.sync();
 		if (!terminalSession?.originWorkspaceId) {
+			return { success: true, ignored: true as const };
+		}
+		const codevRun = ctx.db.query.codevAgentRuns
+			.findFirst({
+				where: eq(codevAgentRuns.terminalId, input.terminalId),
+				columns: { hookTokenHash: true },
+			})
+			.sync();
+		if (codevRun && !trustedCoDevHook(codevRun.hookTokenHash, input.attributionToken)) {
 			return { success: true, ignored: true as const };
 		}
 
