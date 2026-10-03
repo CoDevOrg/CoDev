@@ -9,6 +9,17 @@ export default defineConfig({
     compatibilityDate: "2026-09-28",
     compatibilityFlags: ["nodejs_compat"],
     assets: { notFoundHandling: "none" },
+
+    observability: {
+      enabled: true,
+      logs: {
+        enabled: true,
+        invocation_logs: true,
+        persist: true,
+        head_sampling_rate: 1,
+      },
+    },
+    
     env: {
       ACCESS_REQUEST_NOTIFY_EMAIL: bindings.secret(),
       AUTH_GITHUB_ID: bindings.secret(),
