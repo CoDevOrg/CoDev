@@ -21,6 +21,7 @@ function fixture() {
         generation: 0,
         dataDiskId: null,
         diskUuid: null,
+        lastVmGeneration: null,
         operation: null,
       };
     },
@@ -55,6 +56,9 @@ function fixture() {
     },
     async requireUnattachedDisk() {
       calls.push("unattached-disk");
+    },
+    async requireGenerationDeleted(_workspace, generation) {
+      calls.push(`absent-${generation}`);
     },
     async createVm(_workspace, generation) {
       calls.push(`vm-${generation}`);
@@ -146,6 +150,7 @@ test("start is idempotent and saved disk identity survives stop and reopen", asy
   assert.equal(f.calls.filter((call) => call === "disk").length, 1);
   assert.ok(f.calls.indexOf("revoke-1") < f.calls.indexOf("cleanup-1"));
   assert.ok(f.calls.indexOf("unattached-disk") < f.calls.indexOf("vm-1"));
+  assert.ok(f.calls.indexOf("absent-1") < f.calls.indexOf("vm-3"));
 });
 
 test("transient Azure conflict persists failure, backoff, then reconciles old generation", async () => {

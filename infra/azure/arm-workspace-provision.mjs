@@ -12,13 +12,18 @@ async function prepareCompute(service, workspaceId, current, move, ensure) {
   if (current().status === "provisioning") {
     await ensure();
     const state = current();
+    if (state.lastVmGeneration)
+      await service.azure.requireGenerationDeleted(
+        workspaceId,
+        state.lastVmGeneration,
+      );
     await service.azure.requireUnattachedDisk(state.dataDiskId, workspaceId);
     const vm = await service.azure.createVm(
       workspaceId,
       state.generation,
       state.dataDiskId,
     );
-    await move("booting", { vmId: vm.id });
+    await move("booting", { vmId: vm.id, lastVmGeneration: state.generation });
   }
   if (current().status === "booting") {
     await ensure();

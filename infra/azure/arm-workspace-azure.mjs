@@ -155,6 +155,29 @@ export class ArmWorkspaceAzure {
       throw new Error("DISK_ATTACH_CONFLICT");
   }
 
+  async requireGenerationDeleted(workspaceId, generation) {
+    const name = `${baseName(workspaceId)}-g${generation}`;
+    try {
+      const vm = JSON.parse(
+        await azureCli([
+          "vm",
+          "show",
+          "-g",
+          this.group,
+          "-n",
+          name,
+          "-o",
+          "json",
+        ]),
+      );
+      checkOwned(vm, workspaceId);
+    } catch (error) {
+      if (error.code === "ResourceNotFound") return;
+      throw error;
+    }
+    throw new Error("PREVIOUS_GENERATION_EXISTS");
+  }
+
   async waitRunning(vmId) {
     for (let attempt = 0; attempt < 60; attempt++) {
       const view = JSON.parse(
