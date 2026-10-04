@@ -49,7 +49,7 @@ export class ArmWorkspaceAzure {
       "-o",
       "json",
     ]);
-    if (existing !== "null") {
+    if (existing && existing !== "null") {
       const disk = JSON.parse(existing);
       checkOwned(disk, workspaceId);
       if (
