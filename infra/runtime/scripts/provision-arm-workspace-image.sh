@@ -130,6 +130,7 @@ if ! getent passwd codev-shell >/dev/null; then
     --shell /bin/bash --no-create-home --comment 'CoDev workspace shell' codev-shell
 fi
 chown root:codev-shell /workspace
+git config --system --replace-all safe.directory '*'
 chmod 2775 /workspace
 install -d -o root -g root -m 0700 "${runtime_dir}/codev-agent-profiles"
 
@@ -204,7 +205,6 @@ Type=simple
 ExecStartPre=-/bin/chgrp -R codev-shell /workspace
 ExecStartPre=-/bin/chmod -R g+w /workspace
 ExecStartPre=-/usr/bin/find /workspace -type d -exec /bin/chmod g+s {} +
-ExecStartPre=-/usr/bin/git config --system --replace-all safe.directory '*'
 ExecStart=/usr/local/bin/codev-guestd
 Environment=CODEV_WORKSPACE_ROOT=/workspace
 Environment=CODEV_GUESTD_LISTEN_ADDR=127.0.0.1:5252
