@@ -275,8 +275,20 @@ profile cleanup, and restart-safe agent-record recovery.
 
 Exists: `reconcileGen2SupersetAgentSession` moves a missing or ambiguous
 nonterminal run to `recovery_required` and increments the bounded recovery
-count. Refresh state is not yet captured from the Superset host, even though
-the web-side credential store has the existing encrypted write-back path.
+count. Exit, cancellation, and recovery responses capture a refreshed Codex
+cache and write it only to the run creator's encrypted credential. A host poll
+that verifies the process is still running renews its credential seat even when
+the terminal produced no new output.
+
+Exists: new launches dispatch a server-owned workflow monitor. It long-polls
+the host, renews a live run's seat, persists output, captures refreshed Codex
+auth before marking an exited run finished, and marks failed monitoring as
+`recovery_required`. Monitor dispatch failure cancels the newly started run so
+it cannot be left unowned.
+
+Gap: profile cleanup still relies on the host and is not verified. Hibernation
+must refuse to checkpoint until live agents have stopped, refresh state has
+been persisted, and profile removal has been confirmed.
 
 Gap: the host `/recovery` endpoint is a liveness check against the terminal
 session, not resume-candidate tracking, so adoption after a host restart can

@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => ({
   recordProgress: vi.fn(),
   getProgress: vi.fn(),
   refreshCredential: vi.fn(),
+  startMonitor: vi.fn(),
 }));
 
 vi.mock("../billing/gate", () => ({
@@ -104,6 +105,10 @@ vi.mock("./superset-agent-orchestrator-client", () => ({
   checkSupersetAgentRecovery: (...args: unknown[]) =>
     mocks.checkRecovery(...args),
 }));
+vi.mock("./superset-agent-monitor-start", () => ({
+  startGen2SupersetAgentMonitor: (...args: unknown[]) =>
+    mocks.startMonitor(...args),
+}));
 
 import { Gen2LifecycleError } from "./errors";
 import {
@@ -118,6 +123,7 @@ import {
   startGen2SupersetAgentSession,
   startGen2SupersetAgentTurn,
 } from "./superset-agent-runtime";
+import { monitorGen2SupersetAgentRun } from "./superset-agent-monitor";
 
 const workspaceId = "11111111-1111-4111-8111-111111111111";
 const userId = "22222222-2222-4222-8222-222222222222";
@@ -149,6 +155,7 @@ describe("gen2 Superset agent runtime adapter", () => {
       via: "subscription",
     });
     mocks.requireChat.mockResolvedValue({ id: chatId });
+    mocks.startMonitor.mockResolvedValue(undefined);
     mocks.listMessages.mockResolvedValue([]);
     mocks.listWorktrees.mockResolvedValue([]);
     mocks.createWorktree.mockResolvedValue({
@@ -329,6 +336,7 @@ describe("gen2 Superset agent runtime adapter", () => {
         codevWorkspaceId: workspaceId,
       }),
     );
+    expect(mocks.startMonitor).toHaveBeenCalledWith(runId);
     expect(result).toEqual({ runId, status: "running", created: true });
   });
 
@@ -408,6 +416,37 @@ describe("gen2 Superset agent runtime adapter", () => {
     );
   });
 
+  it("stops a new run when durable monitor dispatch fails", async () => {
+    mocks.register.mockResolvedValue({
+      runId,
+      status: "creating",
+      created: true,
+    });
+    mocks.start.mockResolvedValue({
+      hostWorkspaceId: "host-workspace",
+      hostTerminalId: "terminal-1",
+      hostAgentSessionId: "agent-1",
+    });
+    mocks.getRunById.mockResolvedValue(RUN);
+    mocks.startMonitor.mockRejectedValue(new Error("workflow unavailable"));
+
+    await expect(
+      startGen2SupersetAgentSession({
+        workspaceId,
+        userId,
+        worktreeId: "main",
+        provider: "codex",
+        command: ["codex"],
+        idempotencyKey: "key-1",
+      }),
+    ).rejects.toThrow("workflow unavailable");
+
+    expect(mocks.stop).toHaveBeenCalledWith(workspaceId, "agent-1");
+    expect(mocks.release).toHaveBeenCalledWith(
+      expect.objectContaining({ credentialId, ref: runId }),
+    );
+  });
+
   it("marks the run finished and releases the lease once it exits", async () => {
     mocks.getRunById.mockResolvedValue(RUN);
     mocks.poll.mockResolvedValue({
@@ -455,7 +494,7 @@ describe("gen2 Superset agent runtime adapter", () => {
     expect(mocks.releaseLease).not.toHaveBeenCalled();
   });
 
-  it("does not renew a seat for an empty browser poll", async () => {
+  it("renews a seat when the host verifies a quiet run is still alive", async () => {
     mocks.getRunById.mockResolvedValue(RUN);
     mocks.poll.mockResolvedValue({
       chunks: [],
@@ -472,7 +511,56 @@ describe("gen2 Superset agent runtime adapter", () => {
       after: 0,
     });
 
-    expect(mocks.heartbeat).not.toHaveBeenCalled();
+    expect(mocks.heartbeat).toHaveBeenCalledWith({
+      credentialId,
+      ref: runId,
+    });
+  });
+
+  it("lets the monitor persist a filtered persistent-agent snapshot", async () => {
+    mocks.getRunById.mockResolvedValue(RUN);
+    mocks.poll.mockResolvedValue({
+      chunks: [{ sequence: 5, data: "Done" }],
+      nextSequence: 5,
+      exited: false,
+      exitCode: null,
+      refreshReady: false,
+    });
+
+    await expect(
+      monitorGen2SupersetAgentRun({ runId, after: 0 }),
+    ).resolves.toEqual({ nextSequence: 5, exited: false });
+
+    expect(mocks.recordProgress).toHaveBeenCalledWith({
+      runId,
+      workspaceId,
+      output: "Done",
+    });
+    expect(mocks.heartbeat).toHaveBeenCalledWith({ credentialId, ref: runId });
+  });
+
+  it("lets the monitor capture refreshed auth before releasing an exited run", async () => {
+    mocks.getRunById.mockResolvedValue(RUN);
+    mocks.poll.mockResolvedValue({
+      chunks: [],
+      nextSequence: 5,
+      exited: true,
+      exitCode: 0,
+      refreshReady: true,
+      refreshedCodexAuthCache: '{"tokens":{"refresh":"new"}}',
+    });
+
+    await monitorGen2SupersetAgentRun({ runId, after: 0 });
+
+    expect(mocks.refreshCredential).toHaveBeenCalledWith({
+      credentialId,
+      userId,
+      authCacheJson: '{"tokens":{"refresh":"new"}}',
+    });
+    expect(mocks.markFinished).toHaveBeenCalledWith(
+      expect.objectContaining({ runId, exitReason: "completed" }),
+    );
+    expect(mocks.release).toHaveBeenCalledWith({ credentialId, ref: runId });
   });
 
   it("keeps an unavailable exit result unknown", async () => {
@@ -714,6 +802,7 @@ describe("gen2 Superset agent turn (Phase 4 browser-facing delegate)", () => {
     expect(mocks.createTurn).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: runId, chatId, workspaceId }),
     );
+    expect(mocks.startMonitor).toHaveBeenCalledWith(runId);
   });
 
   it("reuses the idempotent start worktree instead of creating a second one", async () => {

@@ -22,7 +22,6 @@ import { Gen2LifecycleError } from "./errors";
 import { logEvent } from "../platform/observability";
 import { resolveGen2Credential, type Gen2AgentProvider } from "./providers";
 import { providerVendor } from "../providers/registry";
-import { updateHostedCodexAuthCacheForUser } from "../providers/hosted-codex-subscription-credentials";
 import {
   checkSupersetAgentRecovery,
   pollSupersetAgent,
@@ -50,6 +49,11 @@ import { requireWorkspaceOwnerPlan } from "../billing/gate";
 import { requireGen2Member } from "./workspaces";
 import { requireGen2SupersetAgentAccess } from "./superset-agent-access";
 import { filterSupersetAgentOutput } from "./superset-agent-output";
+import { startGen2SupersetAgentMonitor } from "./superset-agent-monitor-start";
+import {
+  captureRefreshedSupersetCredential,
+  supersetAgentExitReason,
+} from "./superset-agent-lifecycle";
 
 /**
  * The server-only CoDev runtime adapter docs/SUPERSET_AGENT_SESSION_PLAN.md
@@ -99,7 +103,30 @@ type StartSessionInput = {
 };
 
 export async function startGen2SupersetAgentSession(input: StartSessionInput) {
-  return startSession(input, "persistent");
+  const session = await startSession(input, "persistent");
+  await monitorStartedSession(input, session, "persistent");
+  return session;
+}
+
+async function monitorStartedSession(
+  input: Pick<StartSessionInput, "workspaceId" | "userId">,
+  session: { created: boolean; runId: string },
+  mode: "persistent" | "turn",
+) {
+  if (!session.created) return;
+  try {
+    await startGen2SupersetAgentMonitor(session.runId);
+  } catch (error) {
+    await cancelSession(
+      {
+        workspaceId: input.workspaceId,
+        userId: input.userId,
+        runId: session.runId,
+      },
+      mode,
+    ).catch(() => undefined);
+    throw error;
+  }
 }
 
 async function startSession(
@@ -237,29 +264,6 @@ type PollSessionInput = {
   after: number;
 };
 
-async function captureRefreshedCredential(
-  run: { connectionId: string | null; createdBy: string; provider: string },
-  refreshedCodexAuthCache: string | undefined,
-) {
-  if (
-    !refreshedCodexAuthCache ||
-    !run.connectionId ||
-    run.provider !== "openai"
-  ) {
-    return;
-  }
-  await updateHostedCodexAuthCacheForUser({
-    credentialId: run.connectionId,
-    userId: run.createdBy,
-    authCacheJson: refreshedCodexAuthCache,
-  });
-}
-
-function exitReason(exitCode: number | null) {
-  if (exitCode === 0) return "completed";
-  return exitCode === null ? "exit_unknown" : `exit_code:${exitCode}`;
-}
-
 export async function pollGen2SupersetAgentSession(input: PollSessionInput) {
   return pollSession(input, "persistent");
 }
@@ -288,9 +292,11 @@ async function pollSession(
     input.after,
   );
 
-  // A changed terminal snapshot proves the agent is working. An empty browser
-  // poll does not extend a paid credential seat.
-  if (run.leaseClaimed && run.connectionId && result.chunks.length > 0) {
+  // The host just verified that the process is still live. Renew from that
+  // liveness result rather than terminal output: a quiet run still owns its
+  // credential, and letting its seat expire would allow a second workspace to
+  // launch with a refresh token the first process may rotate.
+  if (run.leaseClaimed && run.connectionId && !result.exited) {
     await heartbeatCredentialSeat({
       credentialId: run.connectionId,
       ref: run.id,
@@ -298,11 +304,14 @@ async function pollSession(
   }
 
   if (result.exited) {
-    await captureRefreshedCredential(run, result.refreshedCodexAuthCache);
+    await captureRefreshedSupersetCredential(
+      run,
+      result.refreshedCodexAuthCache,
+    );
     await markGen2SupersetRunFinished({
       runId: run.id,
       workspaceId: input.workspaceId,
-      exitReason: exitReason(result.exitCode),
+      exitReason: supersetAgentExitReason(result.exitCode),
       actorId: input.userId,
     });
     if (run.leaseClaimed && run.connectionId) {
@@ -361,7 +370,10 @@ async function cancelSession(
         input.workspaceId,
         run.hostAgentSessionId,
       );
-      await captureRefreshedCredential(run, stopped?.refreshedCodexAuthCache);
+      await captureRefreshedSupersetCredential(
+        run,
+        stopped?.refreshedCodexAuthCache,
+      );
     }
     cancelled = true;
   } catch (error) {
@@ -421,7 +433,10 @@ export async function reconcileGen2SupersetAgentSession(input: {
     input.workspaceId,
     run.hostAgentSessionId,
   );
-  await captureRefreshedCredential(run, recovery.refreshedCodexAuthCache);
+  await captureRefreshedSupersetCredential(
+    run,
+    recovery.refreshedCodexAuthCache,
+  );
   if (!recovery.adoptable) {
     await markGen2SupersetRunRecoveryRequired({
       runId: run.id,
@@ -551,6 +566,7 @@ export async function startGen2SupersetAgentTurn(input: {
     chatId: input.chatId,
     userId: input.userId,
   });
+  await monitorStartedSession(input, session, "turn");
   return { sessionId: session.runId };
 }
 
@@ -591,6 +607,7 @@ export async function startGen2SupersetPersistentAgent(input: {
     },
     "persistent",
   );
+  await monitorStartedSession(input, session, "persistent");
   return { runId: session.runId, status: session.status };
 }
 
