@@ -477,6 +477,13 @@
       "when": 1791146517373,
       "tag": "0067_gen2_runtime_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1791156014813,
+      "tag": "0068_gen2_arm_turn_cursor",
+      "breakpoints": true
     }
   ]
 }

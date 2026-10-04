@@ -37,7 +37,8 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-InaccessiblePaths=/etc/codev/tunnel-token /workspace/.codev-runtime /var/lib/codev/codev-agent-profiles
+ReadWritePaths=/workspace
+InaccessiblePaths=/etc/codev/tunnel-token /workspace/.codev-runtime/superset /var/lib/codev/codev-agent-profiles
 RestrictAddressFamilies=AF_UNIX AF_INET
 MemoryMax=256M
 [Install]

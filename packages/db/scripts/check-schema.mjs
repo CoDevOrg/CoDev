@@ -24,7 +24,11 @@ try {
     FROM public.gen2_superset_run_events LIMIT 0`);
   await pool.query(`SELECT id, workspace_id, owner_id, started_at, ended_at, last_activity_at
     FROM public.gen2_compute_sessions LIMIT 0`);
-  console.log("Superset agent storage schema is ready.");
+  await pool.query(`SELECT session_id, next_sequence
+    FROM public.gen2_agent_turns LIMIT 0`);
+  await pool.query(`SELECT id, runtime_provider, runtime_status, runtime_generation,
+    runtime_route_host FROM public.gen2_workspaces LIMIT 0`);
+  console.log("Gen 2 runtime and agent storage schema is ready.");
 } catch (error) {
   console.error(
     `Database schema check failed (${error.code ?? "connection_error"}). Run pnpm db:migrate against the same database before starting or deploying the app.`,

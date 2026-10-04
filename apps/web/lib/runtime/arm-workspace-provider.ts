@@ -5,6 +5,7 @@ import { createClientSecretCredential } from "./azure";
 import armDiskPreparation from "../../../../infra/runtime/scripts/prepare-arm-workspace-disk.sh?raw";
 import armConnectionInstaller from "../../../../infra/runtime/scripts/install-arm-workspace-connection.sh?raw";
 import armGatewayCapability from "../../../../infra/runtime/scripts/arm-workspace-capability.mjs?raw";
+import armBootstrap from "../../../../infra/runtime/scripts/arm-workspace-bootstrap.mjs?raw";
 import armGateway from "../../../../infra/runtime/scripts/arm-workspace-gateway.mjs?raw";
 import armGatewayEntrypoint from "../../../../infra/runtime/scripts/start-arm-workspace-gateway.mjs?raw";
 
@@ -482,6 +483,7 @@ export async function capabilityToken(
   host: string,
   workspaceId: string,
   generation: number,
+  request = { method: "GET", path: "/v1/health", scope: "health", body: "" },
 ) {
   const config = readArmWorkspaceConfig();
   const key = await crypto.subtle.importKey(
@@ -500,10 +502,10 @@ export async function capabilityToken(
     aud: host,
     workspaceId,
     generation,
-    method: "GET",
-    path: "/v1/health",
-    scope: "health",
-    bodySha256: await sha256Hex(""),
+    method: request.method,
+    path: request.path,
+    scope: request.scope,
+    bodySha256: await sha256Hex(request.body),
     iat: issuedAt,
     exp: issuedAt + 60,
   });
@@ -898,6 +900,7 @@ async function installConnection(
   const scripts = [
     ["arm-workspace-capability.mjs", armGatewayCapability],
     ["arm-workspace-gateway.mjs", armGateway],
+    ["arm-workspace-bootstrap.mjs", armBootstrap],
     ["start-arm-workspace-gateway.mjs", armGatewayEntrypoint],
   ];
   for (const [name, contents] of scripts) {

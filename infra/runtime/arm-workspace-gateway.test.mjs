@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
+import { createServer, request as httpRequest } from "node:http";
 import { once } from "node:events";
 import test from "node:test";
 import { authorizeCapability } from "./scripts/arm-workspace-capability.mjs";
@@ -94,13 +95,84 @@ test("authenticated health is read-only; unknown and privileged routes fail clos
   assert.equal((await response.json()).generation, 2);
   assert.equal(checks, 1);
   for (const path of [
-    "/v1/pty/exec",
-    "/v1/codex-execs",
+    "/v1/claude-auth-login",
+    "/v1/workspace/flush",
     "/healthz",
-    "/v1/files/%2e%2e/pty/exec",
   ])
     assert.equal(
       (await fetch(`${url}${path}`, { method: "POST" })).status,
       404,
     );
+  const traversalStatus = await new Promise((resolve, reject) => {
+    const request = httpRequest(
+      {
+        hostname: "127.0.0.1",
+        port: server.address().port,
+        path: "/v1/files/%2e%2e/pty/exec",
+        method: "POST",
+      },
+      (response) => {
+        response.resume();
+        resolve(response.statusCode);
+      },
+    );
+    request.on("error", reject);
+    request.end();
+  });
+  assert.equal(traversalStatus, 404);
+});
+
+test("signed workspace commands reach only the guest and bind the exact body", async (t) => {
+  const seen = [];
+  const guest = createServer(async (req, res) => {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    seen.push({
+      path: req.url,
+      body: Buffer.concat(chunks).toString(),
+      authorization: req.headers.authorization,
+    });
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ output: "workspace", exitCode: 0 }));
+  });
+  guest.listen(0, "127.0.0.1");
+  await once(guest, "listening");
+  const gateway = createWorkspaceGateway(
+    identity,
+    async () => ({ ready: true }),
+    guest.address().port,
+  );
+  gateway.listen(0, "127.0.0.1");
+  await once(gateway, "listening");
+  t.after(async () => {
+    await new Promise((resolve) => gateway.close(resolve));
+    await new Promise((resolve) => guest.close(resolve));
+  });
+  const url = `http://127.0.0.1:${gateway.address().port}`;
+  const body = JSON.stringify({ command: ["pwd"] });
+  const seconds = Math.floor(Date.now() / 1000);
+  const capability = token({
+    method: "POST",
+    path: "/v1/pty/exec",
+    scope: "workspace",
+    bodySha256: createHash("sha256").update(body).digest("hex"),
+    iat: seconds,
+    exp: seconds + 60,
+  });
+  const init = {
+    method: "POST",
+    headers: { authorization: `Bearer ${capability}` },
+    body,
+  };
+  const response = await fetch(`${url}/v1/pty/exec`, init);
+  assert.equal(response.status, 200);
+  assert.deepEqual(seen, [
+    { path: "/v1/pty/exec", body, authorization: undefined },
+  ]);
+  assert.equal(
+    (await fetch(`${url}/v1/pty/exec`, { ...init, body: "{}" })).status,
+    403,
+  );
+  assert.equal((await fetch(`${url}/v1/codex-execs`, init)).status, 403);
+  assert.equal(seen.length, 1);
 });

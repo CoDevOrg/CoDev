@@ -9,6 +9,7 @@ const scripts = new URL("../runtime/scripts/", import.meta.url);
 const names = [
   "arm-workspace-capability.mjs",
   "arm-workspace-gateway.mjs",
+  "arm-workspace-bootstrap.mjs",
   "start-arm-workspace-gateway.mjs",
 ];
 

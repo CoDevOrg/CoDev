@@ -11,6 +11,7 @@ import type {
 } from "@codev/contracts";
 
 import { Gen2LifecycleError } from "./errors";
+import { initializeGen2ArmWorkspace } from "./arm-workspace-initialize";
 import { getDatabase } from "../platform/database";
 import { logEvent } from "../platform/observability";
 import {
@@ -97,6 +98,10 @@ function errorMessage(code: string) {
     case "RUNTIME_CONFIGURATION_MISSING":
     case "RUNTIME_CONFIGURATION_INVALID":
       return "ARM workspace runtime configuration is incomplete.";
+    case "GUEST_RUNTIME_UPDATE_REQUIRED":
+      return "The ARM workspace image needs an update before this workspace can start.";
+    case "WORKSPACE_INITIALIZATION_FAILED":
+      return "The workspace repository could not be initialized. Saved workspace data was left untouched.";
     case "AZURE_AUTHENTICATION_FAILED":
       return "The ARM workspace service could not authenticate with Azure.";
     case "CLOUDFLARE_TUNNEL_FAILED":
@@ -598,6 +603,12 @@ async function executeOperation(
         },
         progress,
       );
+      await initializeGen2ArmWorkspace(db, {
+        workspaceId: row.id,
+        generation: params.resourceGeneration,
+        host: ready.routeHost,
+      });
+      await currentOperation(db, params);
       const result = await db.transaction(async (transaction) => {
         const [completed] = await transaction
           .update(schema.gen2Workspaces)

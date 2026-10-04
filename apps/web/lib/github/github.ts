@@ -44,6 +44,7 @@ interface GitHubConnection {
 async function refreshGitHubToken(
   userId: string,
   connection: GitHubConnection,
+  database: ReturnType<typeof getDatabase>,
 ) {
   if (!connection.encryptedRefreshToken) {
     throw new GitHubApiError(
@@ -96,7 +97,7 @@ async function refreshGitHubToken(
   }
 
   const now = Date.now();
-  await getDatabase()
+  await database
     .update(schema.githubConnections)
     .set({
       encryptedAccessToken: await encryptSecret(payload.access_token),
@@ -149,8 +150,11 @@ export async function resolveGithubConnection(
   return { connected, login: connected ? (record?.login ?? null) : null };
 }
 
-export async function getGitHubUserToken(userId: string) {
-  const [connection] = await getDatabase()
+export async function getGitHubUserToken(
+  userId: string,
+  database = getDatabase(),
+) {
+  const [connection] = await database
     .select()
     .from(schema.githubConnections)
     .where(eq(schema.githubConnections.userId, userId))
@@ -164,7 +168,7 @@ export async function getGitHubUserToken(userId: string) {
     connection.accessTokenExpiresAt &&
     connection.accessTokenExpiresAt.getTime() <= Date.now() + 60_000
   ) {
-    return refreshGitHubToken(userId, connection);
+    return refreshGitHubToken(userId, connection, database);
   }
 
   return decryptSecret(connection.encryptedAccessToken);
@@ -195,9 +199,10 @@ export async function githubRequest<T>(
   options: {
     method?: "GET" | "POST";
     body?: unknown;
+    database?: ReturnType<typeof getDatabase> | undefined;
   } = {},
 ): Promise<T> {
-  const token = await getGitHubUserToken(userId);
+  const token = await getGitHubUserToken(userId, options.database);
   const response = await fetch(`https://api.github.com${path}`, {
     method: options.method ?? "GET",
     headers: {
@@ -293,6 +298,7 @@ export async function getRepositorySnapshot(
   userId: string,
   repository: string,
   commitSha: string,
+  database?: ReturnType<typeof getDatabase>,
 ): Promise<RepositorySnapshot> {
   const tree = await githubRequest<{
     truncated: boolean;
@@ -306,6 +312,7 @@ export async function getRepositorySnapshot(
   }>(
     userId,
     `/repos/${repository}/git/trees/${encodeURIComponent(commitSha)}?recursive=1`,
+    { database },
   );
   if (tree.truncated) {
     throw new Error("The repository tree is too large for a CoDev snapshot.");
@@ -335,6 +342,7 @@ export async function getRepositorySnapshot(
         githubRequest<{ content: string; encoding: string }>(
           userId,
           `/repos/${repository}/git/blobs/${entry.sha}`,
+          { database },
         ),
       ),
     );

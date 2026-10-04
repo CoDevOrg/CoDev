@@ -20,17 +20,18 @@ intent that may have drifted; confirm details against the code.
 
 ## Architecture and integration
 
-| Document                                                                   | Status  | Covers                                                                        |
-| -------------------------------------------------------------------------- | ------- | ----------------------------------------------------------------------------- |
-| [gen2-workspace.md](./gen2-workspace.md)                                   | Current | Gen 2 workspace: Firecracker instance, shareable membership, Codex chats      |
-| [SUPERSET_WORKSPACE_OWNERSHIP.md](./SUPERSET_WORKSPACE_OWNERSHIP.md)       | Design  | Phase 1 ownership contract for a first-party Superset-powered workspace       |
-| [SUPERSET_AGENT_SESSION_PLAN.md](./SUPERSET_AGENT_SESSION_PLAN.md)         | Design  | Superset agent sessions, CoDev provider ownership, and rollout gates          |
-| [SUPERSET_MULTI_AGENT_HANDOFF.md](./SUPERSET_MULTI_AGENT_HANDOFF.md)       | Design  | Stepwise multi-agent integration plan and implementation handoff              |
-| [GIT_PROXY.md](./GIT_PROXY.md)                                             | Design  | Git over the control plane without credentials in the guest (unbuilt)         |
-| [arm-workspace-free-tier-phase-0.md](./arm-workspace-free-tier-phase-0.md) | Review  | ARM free-tier Phase 0 decisions, evidence, costs, and open gates              |
-| [arm-workspace-free-tier-phase-1.md](./arm-workspace-free-tier-phase-1.md) | Review  | ARM64 image build, smoke evidence, image publication, and VM acceptance gates |
-| [arm-workspace-free-tier-phase-2.md](./arm-workspace-free-tier-phase-2.md) | Review  | Phase 2 lifecycle evidence; integration and launch gates                      |
-| [arm-workspace-free-tier-phase-3.md](./arm-workspace-free-tier-phase-3.md) | Review  | ARM lifecycle API, Worker workflow, Azure provider, and release gates         |
+| Document                                                                   | Status  | Covers                                                                          |
+| -------------------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------- |
+| [gen2-workspace.md](./gen2-workspace.md)                                   | Current | Gen 2 workspace: Firecracker instance, shareable membership, Codex chats        |
+| [SUPERSET_WORKSPACE_OWNERSHIP.md](./SUPERSET_WORKSPACE_OWNERSHIP.md)       | Design  | Phase 1 ownership contract for a first-party Superset-powered workspace         |
+| [SUPERSET_AGENT_SESSION_PLAN.md](./SUPERSET_AGENT_SESSION_PLAN.md)         | Design  | Superset agent sessions, CoDev provider ownership, and rollout gates            |
+| [SUPERSET_MULTI_AGENT_HANDOFF.md](./SUPERSET_MULTI_AGENT_HANDOFF.md)       | Design  | Stepwise multi-agent integration plan and implementation handoff                |
+| [GIT_PROXY.md](./GIT_PROXY.md)                                             | Design  | Git over the control plane without credentials in the guest (unbuilt)           |
+| [arm-workspace-free-tier-phase-0.md](./arm-workspace-free-tier-phase-0.md) | Review  | ARM free-tier Phase 0 decisions, evidence, costs, and open gates                |
+| [arm-workspace-free-tier-phase-1.md](./arm-workspace-free-tier-phase-1.md) | Review  | ARM64 image build, smoke evidence, image publication, and VM acceptance gates   |
+| [arm-workspace-free-tier-phase-2.md](./arm-workspace-free-tier-phase-2.md) | Review  | Phase 2 lifecycle evidence; integration and launch gates                        |
+| [arm-workspace-free-tier-phase-4.md](./arm-workspace-free-tier-phase-4.md) | Review  | Provider-aware guest bridge, startup, background transcripts, and staging gates |
+| [arm-workspace-free-tier-phase-3.md](./arm-workspace-free-tier-phase-3.md) | Review  | ARM lifecycle API, Worker workflow, Azure provider, and release gates           |
 
 ## UI implementation
 

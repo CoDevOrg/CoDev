@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { workspaceBootstrap } from "./arm-workspace-bootstrap.mjs";
 import { authorizeCapability } from "./arm-workspace-capability.mjs";
 
 const limit = 2 << 20;
@@ -11,8 +12,12 @@ function scopeFor(method, path) {
   )
     return null;
   if (method === "GET" && path === "/v1/health") return "health";
+  if (method === "POST" && path === "/v1/workspace/initialize")
+    return "workspace";
+  if (method === "GET" && path === "/v1/runtime-activity") return "workspace";
+  if (method === "POST" && path === "/v1/pty/exec") return "workspace";
   if (/^\/v1\/(?:files|superset|git)\//.test(path)) return "workspace";
-  if (/^\/v1\/(?:terminals|superset-agents)(?:\/|$)/.test(path))
+  if (/^\/v1\/(?:terminals|codex-execs|superset-agents)(?:\/|$)/.test(path))
     return "workspace";
   return null;
 }
@@ -46,7 +51,14 @@ async function forward(request, body, guestUrl) {
   });
 }
 
-async function handle(request, response, identity, guestUrl, readiness) {
+async function handle(
+  request,
+  response,
+  identity,
+  guestUrl,
+  readiness,
+  initialize,
+) {
   const scope = scopeFor(request.method, request.url);
   if (!scope || !["GET", "POST", "DELETE"].includes(request.method))
     return reply(response, 404, { error: "NOT_FOUND" });
@@ -77,6 +89,10 @@ async function handle(request, response, identity, guestUrl, readiness) {
     if (payload.codevWorkspaceId !== identity.workspaceId)
       return reply(response, 403, { error: "WORKSPACE_MISMATCH" });
   }
+  if (request.url === "/v1/workspace/initialize") {
+    const value = await initialize(JSON.parse(body));
+    return reply(response, 200, value);
+  }
   const upstream = await forward(request, body, guestUrl);
   response.writeHead(upstream.status, {
     "content-type": "application/json",
@@ -89,13 +105,16 @@ export function createWorkspaceGateway(identity, readiness, guestPort = 5252) {
   if (identity.verificationKey.asymmetricKeyType !== "ed25519")
     throw new Error("Ed25519 verification key required");
   const guestUrl = `http://127.0.0.1:${guestPort}`;
+  const initialize = workspaceBootstrap();
   const server = createServer((request, response) => {
-    handle(request, response, identity, guestUrl, readiness).catch((error) => {
-      // Never return upstream exceptions or log headers, bodies or credentials.
-      reply(response, error.message === "REQUEST_TOO_LARGE" ? 413 : 503, {
-        error: "RUNTIME_UNAVAILABLE",
-      });
-    });
+    handle(request, response, identity, guestUrl, readiness, initialize).catch(
+      (error) => {
+        // Never return upstream exceptions or log headers, bodies or credentials.
+        reply(response, error.message === "REQUEST_TOO_LARGE" ? 413 : 503, {
+          error: "RUNTIME_UNAVAILABLE",
+        });
+      },
+    );
   });
   server.requestTimeout = 10_000;
   server.headersTimeout = 10_000;

@@ -10,6 +10,7 @@ import { getHostState } from "../runtime/host";
 import { getSandbox } from "../runtime/orchestrator-sandbox";
 import { OrchestratorError } from "../runtime/orchestrator-request";
 import { ArmWorkspaceProvider } from "../runtime/arm-workspace-provider";
+import { armWorkspaceAgentRunning } from "../runtime/arm-workspace-activity";
 import {
   MONTHLY_COMPUTE_LIMIT_MS,
   endComputeSession,
@@ -17,6 +18,8 @@ import {
   startComputeSession,
   usedComputeMs,
 } from "./compute-quota";
+import { reconcileArmWorkspaceTurns } from "./arm-workspace-turns-reconcile";
+import { hasPendingArmWorkspaceTurns } from "./arm-workspace-pending-turns";
 import { stopGen2Instance } from "./instance";
 
 const IDLE_TIMEOUT_MS = 15 * 60_000;
@@ -69,6 +72,14 @@ async function observeSession(
         session.runtimeStatus === "ready" &&
         now.getTime() - lastActivity.getTime() >= IDLE_TIMEOUT_MS
       ) {
+        if (await armWorkspaceAgentRunning(session.workspaceId)) {
+          await getDatabase()
+            .update(schema.gen2ComputeSessions)
+            .set({ lastActivityAt: now })
+            .where(eq(schema.gen2ComputeSessions.id, session.id));
+          return;
+        }
+        if (await hasPendingArmWorkspaceTurns(session.workspaceId)) return;
         await stopGen2Instance(session.workspaceId, session.ownerId);
       }
     } catch (error) {
@@ -175,6 +186,7 @@ async function stopExhaustedOwner(ownerId: string, now: Date) {
 
 /** Reconcile active VM time and hibernate every guest once its owner's pool is spent. */
 export async function reconcileComputeQuota(now = new Date()) {
+  await reconcileArmWorkspaceTurns(now);
   const hostStopped =
     !fakeGuestEnabled() &&
     (await getHostState().then(

@@ -225,17 +225,24 @@ export async function saveGen2AssistantReply(input: {
   });
 }
 
-export async function appendGen2ChatMessage(input: {
-  chatId: string;
-  role: "user" | "assistant";
-  body: string;
-  items?: Gen2TurnItem[];
-}) {
+type ChatTransaction = Parameters<
+  Parameters<ReturnType<typeof getDatabase>["transaction"]>[0]
+>[0];
+
+export async function appendGen2ChatMessage(
+  input: {
+    chatId: string;
+    role: "user" | "assistant";
+    body: string;
+    items?: Gen2TurnItem[];
+  },
+  existingTransaction?: ChatTransaction,
+) {
   const body = input.body.trim();
   if (!body) {
     return null;
   }
-  return getDatabase().transaction(async (transaction) => {
+  const save = async (transaction: ChatTransaction) => {
     if (input.role === "assistant") {
       const existing = await transaction
         .select({
@@ -284,5 +291,8 @@ export async function appendGen2ChatMessage(input: {
       .set(patch)
       .where(eq(schema.gen2Chats.id, input.chatId));
     return toMessage(created);
-  });
+  };
+  return existingTransaction
+    ? save(existingTransaction)
+    : getDatabase().transaction(save);
 }

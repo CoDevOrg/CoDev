@@ -2319,6 +2319,8 @@ export const gen2AgentTurns = pgTable(
     provider: text("provider").notNull(),
     /** Decoded NDJSON so far, capped; see GEN2_TURN_OUTPUT_LIMIT. */
     output: text("output").default("").notNull(),
+    /** First guest sequence not yet persisted; background polling never acknowledges ahead. */
+    nextSequence: integer("next_sequence").default(0).notNull(),
     /** Trailing bytes of a UTF-8 character split across two polls. */
     pendingBase64: text("pending_base64").default("").notNull(),
     exited: boolean("exited").default(false).notNull(),

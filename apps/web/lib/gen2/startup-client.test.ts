@@ -200,3 +200,83 @@ describe("Gen 2 workspace startup polling", () => {
     expect(calls).toHaveLength(2);
   });
 });
+
+it("verifies live ARM health before accepting a persisted ready row", async () => {
+  const ready = {
+    ...workspace("ready"),
+    runtimeProvider: "azure_arm",
+    runtimeStatus: "ready",
+  };
+  const { fetcher, calls } = fetchSequence([
+    response(200, { workspace: ready }),
+    response(200, { connected: false }),
+    response(200, { workspace: ready }),
+    response(200, { connected: true }),
+  ]);
+  const progress = vi.fn();
+  const result = await ensureGen2WorkspaceReady("workspace-1", {
+    fetcher,
+    pause: async () => {},
+    onProgress: progress,
+  });
+  expect(result.workspace).toEqual(ready);
+  expect(calls.map((call) => call.method)).toEqual([
+    "POST",
+    "GET",
+    "GET",
+    "GET",
+  ]);
+  expect(calls[1]?.url).toBe("/api/gen2/workspaces/workspace-1/activity");
+  expect(progress).toHaveBeenCalledTimes(2);
+});
+
+it("joins an ARM startup and reports persisted progress without waiting on allocation", async () => {
+  const starting = {
+    ...workspace("provisioning"),
+    runtimeProvider: "azure_arm",
+    runtimeStatus: "booting",
+  };
+  const ready = { ...starting, status: "ready", runtimeStatus: "ready" };
+  const { fetcher, calls } = fetchSequence([
+    response(202, { workspace: starting }),
+    response(200, { workspace: ready }),
+    response(200, { connected: true }),
+  ]);
+  const progress = vi.fn();
+  await ensureGen2WorkspaceReady("workspace-1", {
+    fetcher,
+    pause: async () => {},
+    onProgress: progress,
+  });
+  expect(calls.filter((call) => call.method === "POST")).toHaveLength(1);
+  expect(progress.mock.calls[0]?.[0].runtimeStatus).toBe("booting");
+});
+
+it("starts once in a hidden tab and pauses later startup reads until visible", async () => {
+  const starting = {
+    ...workspace("provisioning"),
+    runtimeProvider: "azure_arm",
+    runtimeStatus: "booting",
+  };
+  const ready = { ...starting, status: "ready", runtimeStatus: "ready" };
+  const sequence = [
+    response(202, { workspace: starting }),
+    response(200, { workspace: ready }),
+    response(200, { connected: true }),
+  ];
+  let visible = false;
+  let waits = 0;
+  const fetcher = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.method === "GET") expect(visible).toBe(true);
+    return sequence.shift()!;
+  });
+  const result = await ensureGen2WorkspaceReady("workspace-1", {
+    fetcher,
+    isVisible: () => visible,
+    pause: async () => {
+      if (++waits === 3) visible = true;
+    },
+  });
+  expect(result.workspace).toEqual(ready);
+  expect(fetcher).toHaveBeenCalledTimes(3);
+});

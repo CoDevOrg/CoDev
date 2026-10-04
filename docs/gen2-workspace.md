@@ -189,8 +189,10 @@ not proof of connectivity.
 
 The initial check runs even when the workspace opens in a background tab. Later
 checks pause while hidden. Connection checks bound network and response-body
-waiting to 10 seconds; reconnect has a 240-second client budget and returns to the
-retry action on expiry. These deadlines must also abort outstanding requests.
+waiting to 10 seconds; reconnect has a 480-second client budget and returns to the
+retry action on expiry. ARM startup verifies
+a bounded live connection before accepting persisted ready state. These
+deadlines also abort outstanding requests.
 Local development uses Webpack (matching the production build); `127.0.0.1`
 is explicitly allowed for Next.js development resources.
 
@@ -200,3 +202,17 @@ single-directory agent/terminal checkouts under the primary workspace root. A
 worktree must still be registered with Git and remain inside that root before
 file, Git, or terminal operations resolve it. The switcher refreshes whenever it
 opens, so a branch created by an agent or terminal appears without a reload.
+
+## ARM bridge implementation
+
+ARM workspaces reuse the workbench, agent, Superset, and collaboration clients
+through signed per-workspace requests. The guest response adapter preserves
+revision conflicts and terminal/agent stream shapes. New disks initialize their
+checkout under protected staging; saved disks are never replaced with a fresh
+checkout. Migration `0068` adds a persisted agent output cursor so cron can
+finish saving turns after members close their tabs. Connection checks and poll
+requests do not extend activity; live agent work and member input do.
+
+This is implemented but awaits ARM image publication and live staging
+acceptance. Existing Firecracker workspaces remain the default. See the
+[Phase 4 review](./arm-workspace-free-tier-phase-4.md) for the remaining gates.

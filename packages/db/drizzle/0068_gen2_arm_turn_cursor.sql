@@ -1,0 +1,1 @@
+ALTER TABLE "gen2_agent_turns" ADD COLUMN "next_sequence" integer DEFAULT 0 NOT NULL;

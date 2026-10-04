@@ -34,6 +34,9 @@ type StartupDependencies = {
   random?: () => number;
   maxWaitMs?: number;
   recheckMs?: number;
+  signal?: AbortSignal;
+  onProgress?: (workspace: Gen2WorkspaceDetail) => void;
+  isVisible?: () => boolean;
 };
 
 const pause = (milliseconds: number) =>
@@ -53,6 +56,26 @@ function readyWorkspace(
       ? workspace.runtimeStatus === "ready"
       : workspace.sandboxId),
   );
+}
+
+async function liveReadyWorkspace(
+  workspace: Gen2WorkspaceDetail | undefined,
+  url: string,
+  dependencies: StartupDependencies,
+  timeoutMs: number,
+) {
+  if (!readyWorkspace(workspace)) return false;
+  if (workspace.runtimeProvider !== "azure_arm") return true;
+  if (dependencies.isVisible?.() === false) return false;
+  const { response, payload } = await boundedJsonRequest<{
+    connected?: boolean;
+  }>(
+    `${url}/activity`,
+    { method: "GET", cache: "no-store", signal: dependencies.signal ?? null },
+    Math.min(10_000, timeoutMs),
+    dependencies.fetcher,
+  );
+  return response.ok && payload.connected === true;
 }
 
 /**
@@ -76,9 +99,15 @@ export async function ensureGen2WorkspaceReady(
   let attempt = 0;
   let lastPostAt = Number.NEGATIVE_INFINITY;
   let postNext = true;
+  let posted = false;
 
-  while (now() < deadline) {
+  while (now() < deadline && !dependencies.signal?.aborted) {
+    if (posted && dependencies.isVisible?.() === false) {
+      await wait(Math.min(1_000, deadline - now()));
+      continue;
+    }
     if (postNext) {
+      posted = true;
       lastPostAt = now();
       postNext = false;
       try {
@@ -89,11 +118,20 @@ export async function ensureGen2WorkspaceReady(
               method: "POST",
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ idempotencyKey }),
+              signal: dependencies.signal ?? null,
             },
             Math.min(STARTUP_REQUEST_TIMEOUT_MS, deadline - now()),
             fetcher,
           );
-        if (readyWorkspace(payload.workspace)) {
+        if (payload.workspace) dependencies.onProgress?.(payload.workspace);
+        if (
+          await liveReadyWorkspace(
+            payload.workspace,
+            url,
+            dependencies,
+            deadline - now(),
+          )
+        ) {
           return { workspace: payload.workspace! };
         }
         if (payload.workspace) {
@@ -155,7 +193,7 @@ export async function ensureGen2WorkspaceReady(
         const { response, payload } =
           await boundedJsonRequest<WorkspaceResponse>(
             url,
-            { method: "GET" },
+            { method: "GET", signal: dependencies.signal ?? null },
             Math.min(10_000, deadline - now()),
             fetcher,
           );
@@ -169,7 +207,17 @@ export async function ensureGen2WorkspaceReady(
           continue;
         }
         const workspace = payload.workspace;
-        if (workspace && readyWorkspace(workspace)) return { workspace };
+        if (workspace) dependencies.onProgress?.(workspace);
+        if (
+          workspace &&
+          (await liveReadyWorkspace(
+            workspace,
+            url,
+            dependencies,
+            deadline - now(),
+          ))
+        )
+          return { workspace };
         if (!workspace) {
           return { error: "The workspace status could not be loaded." };
         }

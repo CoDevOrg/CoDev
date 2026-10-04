@@ -52,19 +52,28 @@ operation, generation, and internal error code without logging credentials.
   startup-client, instance API, and Firecracker lifecycle tests.
 - Database schema tests pass for the new provider/status enums and cleanup
   generation column. `pnpm db:generate` reports no additional migration is
-  needed; migration `0067` has not been applied.
+  needed. On 2026-10-04, `pnpm db:check` passed before and after applying
+  migration `0067` to the PostgreSQL database configured by `.env.local`. The
+  check and migration connection URLs resolve to the same database. Post-migrate
+  verification confirmed the ledger entry, all 14 runtime columns and three
+  enums, and that all four existing workspaces remain Firecracker, stopped, and
+  at generation 0.
 - The Phase 2 isolated infrastructure suite previously passed 41 tests and the
   lifecycle canary `37230952626`; see the [Phase 2 review](arm-workspace-free-tier-phase-2.md).
   Those tests validate the isolated CLI/Blob-lease controller, not this new
   Worker adapter.
-- No migration was applied, no Cloudflare deployment was run, and no Azure or
-  Cloudflare resource was changed in this phase.
+- No Cloudflare deployment was run, and no Azure or Cloudflare resource was
+  changed during this database rollout.
 
 ## Open risks and release gates
 
-1. **Validate the database rollout.** Checks and migration generation pass, but
-   the forward migration is not applied. Apply it only after `pnpm db:check` and
-   a reviewed rollout plan.
+1. **Track environment-specific database rollout.** Migration `0067` is applied
+   and verified on the database configured by `.env.local`. Confirm that this
+   is the intended deployment environment and repeat the reviewed rollout for
+   any other database. The migration is additive; on application rollback,
+   leave its columns and enums in place so any runtime state remains available.
+   Do not drop them unless ARM use is disabled and the runtime data is confirmed
+   disposable.
 2. **Prove Worker lifecycle recovery.** Add/complete adapter-level tests for
    stop/delete authorization, missing disks, lost/restarted Workflow execution,
    stale completions, partial teardown, and retry after an expired operation
@@ -94,16 +103,16 @@ operation, generation, and internal error code without logging credentials.
 
 ## Acceptance criteria
 
-| Criterion                                                                                       | Current result                                                                         |
-| ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Forward migration preserves existing Firecracker rows and sandbox IDs                           | **Implemented; database validation pending**                                           |
-| Start is asynchronous, generation-fenced, and idempotent; readiness requires signed live health | **Implemented; Worker recovery tests pending**                                         |
-| Membership/owner checks precede every operation and health request                              | **Implemented in domain/routes; dedicated ARM authorization tests pending**            |
-| Stop/delete preserve the saved disk correctly and remove owned resources after deallocation     | **Implemented; targeted shutdown regressions pass; full failure/retry matrix pending** |
-| Firecracker behavior remains unchanged                                                          | **Existing Firecracker path retained; full regression suite passes**                   |
-| All required runtime secrets/RBAC exist in the deployed Cloudflare Worker                       | **Not configured or verified**                                                         |
-| ARM editor/Git/terminal/agent/collaboration path works end to end                               | **Phase 4 outstanding**                                                                |
-| Startup and direct Azure cost gates pass                                                        | **Not met / not measured**                                                             |
+| Criterion                                                                                       | Current result                                                                                                  |
+| ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Forward migration preserves existing Firecracker rows and sandbox IDs                           | **Applied and post-validated on the `.env.local` database; other environments remain separate rollout targets** |
+| Start is asynchronous, generation-fenced, and idempotent; readiness requires signed live health | **Implemented; Worker recovery tests pending**                                                                  |
+| Membership/owner checks precede every operation and health request                              | **Implemented in domain/routes; dedicated ARM authorization tests pending**                                     |
+| Stop/delete preserve the saved disk correctly and remove owned resources after deallocation     | **Implemented; targeted shutdown regressions pass; full failure/retry matrix pending**                          |
+| Firecracker behavior remains unchanged                                                          | **Existing Firecracker path retained; full regression suite passes**                                            |
+| All required runtime secrets/RBAC exist in the deployed Cloudflare Worker                       | **Not configured or verified**                                                                                  |
+| ARM editor/Git/terminal/agent/collaboration path works end to end                               | **Phase 4 outstanding**                                                                                         |
+| Startup and direct Azure cost gates pass                                                        | **Not met / not measured**                                                                                      |
 
 **Phase 3 is not accepted for production enablement.** Continue the adapter
 recovery and authorization tests, complete the repository checks, then start
