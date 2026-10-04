@@ -9,13 +9,22 @@ import {
   setUserFeatureOverride,
 } from "@/lib/admin/admin-feature-access";
 import {
+  setAccountSubscription,
+  setApplicationAdmin,
+  setOrganizationMemberRole,
+} from "@/lib/admin/admin-account-access";
+import {
   parseOrganizationOverride,
   parsePlanAssignment,
   parseUserOverride,
 } from "@/lib/admin/admin-feature-access-input";
 import {
+  parseAccountSubscription,
+  parseApplicationAdmin,
+  parseOrganizationMemberRole,
+} from "@/lib/admin/admin-account-access-input";
+import {
   declineAccessRequest,
-  issueAccessRequestInvite,
   type WaitlistActionResult,
 } from "@/lib/admin/access-requests";
 
@@ -71,26 +80,58 @@ export async function updateUserFeatureOverride(
   }
 }
 
+export async function updateOrganizationMemberRole(
+  formData: FormData,
+): Promise<AdminFeatureActionResult> {
+  await requireAdmin();
+  try {
+    await setOrganizationMemberRole(parseOrganizationMemberRole(formData));
+    revalidatePath("/admin");
+    return { ok: true, message: "Organization role updated." };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+export async function updateAccountSubscription(
+  formData: FormData,
+): Promise<AdminFeatureActionResult> {
+  await requireAdmin();
+  try {
+    await setAccountSubscription(parseAccountSubscription(formData));
+    revalidatePath("/admin");
+    return { ok: true, message: "Account subscription updated." };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+export async function updateApplicationAdmin(
+  formData: FormData,
+): Promise<AdminFeatureActionResult> {
+  const actor = await requireAdmin();
+  try {
+    await setApplicationAdmin({
+      ...parseApplicationAdmin(formData),
+      actorUserId: actor.id,
+    });
+    revalidatePath("/admin");
+    return { ok: true, message: "Application administrator access updated." };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
 export async function inviteWaitlistEntry(
   id: string,
 ): Promise<WaitlistActionResult> {
   await requireAdmin();
-  try {
-    const { email, emailSent } = await issueAccessRequestInvite(id);
-    revalidatePath("/admin");
-    return {
-      ok: true,
-      message: emailSent
-        ? `Invitation sent to ${email}.`
-        : `Marked ${email} as invited, but the email failed to send — check RESEND_API_KEY.`,
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      message:
-        error instanceof Error ? error.message : "Could not send that invite.",
-    };
-  }
+  void id;
+  return {
+    ok: false,
+    message:
+      "Registration is closed. Waitlist invitations are disabled until launch.",
+  };
 }
 
 export async function declineWaitlistEntry(
