@@ -22,7 +22,7 @@ import { Gen2LifecycleError } from "./errors";
 import { logEvent } from "../platform/observability";
 import { resolveGen2Credential, type Gen2AgentProvider } from "./providers";
 import { providerVendor } from "../providers/registry";
-import { updateHostedCodexAuthCache } from "../providers/hosted-codex-subscription-credentials";
+import { updateHostedCodexAuthCacheIfCurrent } from "../providers/hosted-codex-subscription-credentials";
 import {
   captureSupersetAgentCredential,
   checkSupersetAgentRecovery,
@@ -248,6 +248,7 @@ async function persistSupersetAgentCredential(
   if (
     run.provider !== "openai" ||
     !run.connectionId ||
+    !run.credentialRevision ||
     !run.hostAgentSessionId
   ) {
     return;
@@ -257,7 +258,11 @@ async function persistSupersetAgentCredential(
     run.hostAgentSessionId,
   );
   if (authCacheJson) {
-    await updateHostedCodexAuthCache(run.connectionId, authCacheJson);
+    await updateHostedCodexAuthCacheIfCurrent(
+      run.connectionId,
+      run.credentialRevision,
+      authCacheJson,
+    );
   }
 }
 

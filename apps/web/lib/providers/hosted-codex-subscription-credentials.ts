@@ -69,6 +69,41 @@ export async function updateHostedCodexAuthCache(
     .where(eq(schema.providerCredentials.id, credentialId));
 }
 
+/**
+ * Saves a guest refresh only when the member has not reconnected this
+ * credential since the launch profile was issued. A newer explicit login is
+ * authoritative and must never be overwritten by a retiring VM.
+ */
+export async function updateHostedCodexAuthCacheIfCurrent(
+  credentialId: string,
+  credentialRevision: string,
+  authCacheJson: string,
+) {
+  validateAuthCache(authCacheJson);
+  const expectedUpdatedAt = new Date(credentialRevision);
+  if (Number.isNaN(expectedUpdatedAt.valueOf())) {
+    throw new HostedCodexSubscriptionError(
+      "The credential revision is invalid.",
+    );
+  }
+  const updatedAt = new Date();
+  const updated = await getDatabase()
+    .update(schema.providerCredentials)
+    .set({
+      encryptedMaterial: await encryptHostedMaterial({ authCacheJson }),
+      lastRefreshedAt: updatedAt,
+      updatedAt,
+    })
+    .where(
+      and(
+        eq(schema.providerCredentials.id, credentialId),
+        eq(schema.providerCredentials.updatedAt, expectedUpdatedAt),
+      ),
+    )
+    .returning({ id: schema.providerCredentials.id });
+  return updated.length === 1;
+}
+
 export async function persistHostedCodexConnection(input: {
   userId: string;
   material: HostedCodexMaterial;

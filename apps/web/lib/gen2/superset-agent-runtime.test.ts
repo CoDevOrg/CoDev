@@ -31,7 +31,7 @@ const mocks = vi.hoisted(() => ({
   createWorktree: vi.fn(),
   createTurn: vi.fn(),
   recordOutput: vi.fn(),
-  updateAuthCache: vi.fn(),
+  updateAuthCacheIfCurrent: vi.fn(),
 }));
 
 vi.mock("../billing/gate", () => ({
@@ -102,8 +102,8 @@ vi.mock("./superset-agent-orchestrator-client", () => ({
 }));
 
 vi.mock("../providers/hosted-codex-subscription-credentials", () => ({
-  updateHostedCodexAuthCache: (...args: unknown[]) =>
-    mocks.updateAuthCache(...args),
+  updateHostedCodexAuthCacheIfCurrent: (...args: unknown[]) =>
+    mocks.updateAuthCacheIfCurrent(...args),
 }));
 
 import { Gen2LifecycleError } from "./errors";
@@ -133,6 +133,7 @@ const RUN = {
   connectionId: credentialId,
   leaseClaimed: true,
   provider: "openai",
+  credentialRevision: "2026-10-04T00:00:00.000Z",
 };
 
 describe("gen2 Superset agent runtime adapter", () => {
@@ -157,6 +158,7 @@ describe("gen2 Superset agent runtime adapter", () => {
       branch: "codev/agent-chat",
     });
     mocks.captureCredential.mockResolvedValue({ authCacheJson: null });
+    mocks.updateAuthCacheIfCurrent.mockResolvedValue(true);
   });
 
   it("refuses every call while the flag is off", async () => {
