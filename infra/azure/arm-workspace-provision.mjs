@@ -12,6 +12,7 @@ async function prepareCompute(service, workspaceId, current, move, ensure) {
   if (current().status === "provisioning") {
     await ensure();
     const state = current();
+    await service.azure.requireUnattachedDisk(state.dataDiskId, workspaceId);
     const vm = await service.azure.createVm(
       workspaceId,
       state.generation,
