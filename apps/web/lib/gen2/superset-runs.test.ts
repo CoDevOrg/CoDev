@@ -92,6 +92,7 @@ describe("gen2 Superset run lifecycle", () => {
         worktreeId: "main",
         provider: "openai",
         connectionId: null,
+        credentialRevision: "revision-1",
       },
     ]);
     const transaction = {
@@ -109,6 +110,7 @@ describe("gen2 Superset run lifecycle", () => {
         createdBy: USER_ID,
         worktreeId: "main",
         provider: "openai",
+        credentialRevision: "revision-1",
         idempotencyKey: "key-1",
       }),
     ).resolves.toEqual({ runId: RUN_ID, status: "running", created: false });
@@ -124,6 +126,7 @@ describe("gen2 Superset run lifecycle", () => {
       worktreeId: "main",
       provider: "openai",
       connectionId: null,
+      credentialRevision: "revision-1",
     };
     const transaction = {
       execute: vi.fn().mockResolvedValue(undefined),
@@ -138,6 +141,7 @@ describe("gen2 Superset run lifecycle", () => {
       createdBy: USER_ID,
       worktreeId: "main",
       provider: "openai",
+      credentialRevision: "revision-1",
       idempotencyKey: "key-1",
     };
     await expect(
@@ -150,6 +154,12 @@ describe("gen2 Superset run lifecycle", () => {
       registerGen2SupersetRun({
         ...request,
         worktreeId: "another-worktree",
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    await expect(
+      registerGen2SupersetRun({
+        ...request,
+        credentialRevision: "revision-2",
       }),
     ).rejects.toMatchObject({ status: 409 });
     expect(transaction.insert).not.toHaveBeenCalled();

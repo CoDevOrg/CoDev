@@ -110,6 +110,7 @@ export async function registerGen2SupersetRun(
         worktreeId: schema.gen2SupersetRuns.worktreeId,
         provider: schema.gen2SupersetRuns.provider,
         connectionId: schema.gen2SupersetRuns.connectionId,
+        credentialRevision: schema.gen2SupersetRuns.credentialRevision,
       })
       .from(schema.gen2SupersetRuns)
       .where(
@@ -127,7 +128,8 @@ export async function registerGen2SupersetRun(
         existing.chatId !== (input.chatId ?? null) ||
         existing.worktreeId !== input.worktreeId ||
         existing.provider !== input.provider ||
-        existing.connectionId !== (input.connectionId ?? null)
+        existing.connectionId !== (input.connectionId ?? null) ||
+        existing.credentialRevision !== (input.credentialRevision ?? null)
       ) {
         throw new Gen2LifecycleError(
           "This agent request conflicts with an existing run.",
