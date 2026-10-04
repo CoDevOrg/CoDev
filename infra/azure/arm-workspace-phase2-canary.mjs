@@ -82,6 +82,7 @@ try {
       "git -C /workspace init -q; git -C /workspace -c user.name=Canary " +
       "-c user.email=canary@example.invalid commit -q --allow-empty -m seed; " +
       "git -C /workspace worktree add -q -b canary /workspace/canary-tree; " +
+      "printf stale >/workspace/.git/index.lock; " +
       "printf worktree-saved >/workspace/canary-tree/proof.txt'; " +
       "setpriv --reuid=2101 --regid=2000 --clear-groups -- sh -ec 'umask 0002; " +
       "mkdir /workspace/ownership-proof; " +
@@ -107,6 +108,7 @@ try {
     second.vmId,
     "set -e; runuser -u codev-shell -- sh -ec 'cat /workspace/phase2-canary.txt; " +
       "cat /workspace/canary-tree/proof.txt; git -C /workspace worktree list; " +
+      "test ! -e /workspace/.git/index.lock; " +
       "test ! -r /workspace/.codev-runtime/superset/phase2-canary.txt'; " +
       "setpriv --reuid=2102 --regid=2000 --clear-groups -- sh -ec 'umask 0002; " +
       "printf -- -second-writer >>/workspace/ownership-proof/proof.txt'; " +

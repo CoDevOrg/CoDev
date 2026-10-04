@@ -49,6 +49,21 @@ fi
 chmod 00700 "${metadata}"
 install -d -o root -g root -m 0700 "${metadata}/superset"
 chmod 00700 "${metadata}/superset"
+recover_git_state() {
+  [[ -d /workspace/.git ]] || return
+  git -C /workspace worktree prune
+  local git_dir
+  git_dir=$(git -C /workspace rev-parse --path-format=absolute --git-common-dir)
+  [[ ${git_dir} == /workspace/.git ]] || {
+    echo 'WORKSPACE_GIT_DIR_INVALID' >&2
+    exit 1
+  }
+  while IFS= read -r -d '' lock; do
+    fuser -s "${lock}" && continue
+    rm -f -- "${lock}"
+  done < <(find -P "${git_dir}" -type f -name '*.lock' -print0)
+}
+recover_git_state
 install -d -m 0755 /etc/systemd/system/codev-guestd.service.d
 cat >/etc/systemd/system/codev-guestd.service.d/durable-disk.conf <<'UNIT'
 [Service]
