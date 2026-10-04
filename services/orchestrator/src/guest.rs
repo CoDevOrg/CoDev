@@ -247,6 +247,9 @@ impl GuestService {
         let result = match (method, path) {
             ("GET", "/healthz") => self.health(),
             ("GET", "/v1/superset/health") => self.superset_health(),
+            ("GET", "/v1/agent-activity") => {
+                return self.superset_bridge_request("GET", "/codev/agents/activity", &[]);
+            }
             ("POST", "/v1/workspace/flush") => self.flush_workspace(),
             ("POST", "/v1/files/read") => self.read_file(body),
             ("POST", "/v1/files/write") => self.write_file(body),

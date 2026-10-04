@@ -1,8 +1,9 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 import type { Hono } from "hono";
 import { z } from "zod";
 import type { HostDb } from "../db";
+import { getSupervisor } from "../daemon";
 import { codevAgentRuns, terminalSessions, workspaces } from "../db/schema";
 import type { EventBus } from "../events";
 import { agentTerminalLaunchOptions } from "../terminal/agent-launch";
@@ -209,6 +210,22 @@ export function registerCoDevAgentBridge({
 }: CoDevAgentBridgeOptions) {
 	const requireBridge = (request: Request) =>
 		secretMatches(request.headers.get("x-codev-bridge-secret") ?? undefined, bridgeSecret);
+
+	app.get("/codev/agents/activity", async (context) => {
+		if (!requireBridge(context.req.raw)) return context.json({ error: "Unauthorized" }, 401);
+		const liveRuns = db.select({ terminalId: codevAgentRuns.terminalId })
+			.from(codevAgentRuns)
+			.innerJoin(terminalSessions, eq(codevAgentRuns.terminalId, terminalSessions.id))
+			.where(isNull(terminalSessions.endedAt)).all();
+		if (liveRuns.length === 0) return context.json({ running: false });
+		const organizationId = process.env.ORGANIZATION_ID;
+		if (!organizationId) return context.json({ running: true, uncertain: true });
+		const sessions = await getSupervisor().listSessions(organizationId);
+		if (!sessions) return context.json({ running: true, uncertain: true });
+		const ids = new Set(liveRuns.map((run) => run.terminalId));
+		return context.json({ running: sessions.some((session) =>
+			session.alive && ids.has(session.id)) });
+	});
 
 	app.post("/codev/agents", async (context) => {
 		if (!requireBridge(context.req.raw)) return context.json({ error: "Unauthorized" }, 401);
