@@ -35,6 +35,8 @@ const azureImageBuild = read("../azure/build-host-image.sh");
 test("both guest images provision a searchable, host-owned agent profile root", () => {
   assert.match(imageProvision, /codev-shell:x:2000:2000:CoDev shell/);
   for (const source of [bootstrap, imageProvision]) {
+    assert.match(source, /proc \/proc proc defaults,hidepid=2 0 0/);
+    assert.match(source, /kernel\.yama\.ptrace_scope = 2/);
     const guestUnit = between(
       source,
       'cat >"${work_dir}/rootfs/etc/systemd/system/codev-guestd.service"',
@@ -253,7 +255,7 @@ test("every expensive bootstrap stage is skipped when already current", () => {
     "if codev_stage_done rootfs",
   );
   for (const input of [
-    "rootfs-v2",
+    "rootfs-v3",
     "ubuntu-24.04.squashfs",
     "codev_fingerprint /usr/local/bin/codev-guestd",
     "superset_guest_archive}.sha256",

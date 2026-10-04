@@ -181,6 +181,17 @@ cp -a /usr/share/git-core "${work_dir}/rootfs/usr/share/"
 install -d -m 0755 "${work_dir}/rootfs/workspace"
 install -d -m 0755 "${work_dir}/rootfs/etc/systemd/system/multi-user.target.wants"
 
+# Agent and terminal users share this kernel but must not enumerate or trace
+# one another. Root-only guest services retain the visibility they need to
+# supervise PTYs and clean private launch profiles.
+cat >>"${work_dir}/rootfs/etc/fstab" <<'FSTAB'
+proc /proc proc defaults,hidepid=2 0 0
+FSTAB
+install -d -m 0755 "${work_dir}/rootfs/etc/sysctl.d"
+cat >"${work_dir}/rootfs/etc/sysctl.d/99-codev-agent-isolation.conf" <<'SYSCTL'
+kernel.yama.ptrace_scope = 2
+SYSCTL
+
 # The guest's interactive shell and the isolated agents share this workspace
 # group, but the agents use separate numeric uids for private credentials.
 if ! grep -q '^codev-shell:' "${work_dir}/rootfs/etc/group"; then
@@ -332,7 +343,7 @@ node_key="$(codev_stage_key node-v1 "${node_setup_url}" "${pnpm_version}" \
 caddy_key="$(codev_stage_key caddy-v1 "https://dl.cloudsmith.io/public/caddy/stable")"
 firecracker_key="$(codev_stage_key firecracker-v1 "${firecracker_version}" "${firecracker_arch}")"
 kernel_key="$(codev_stage_key kernel-v1 "${firecracker_ci_base}/${guest_kernel}")"
-rootfs_key="$(codev_stage_key rootfs-v2 \
+rootfs_key="$(codev_stage_key rootfs-v3 \
   "${firecracker_ci_base}/ubuntu-24.04.squashfs" \
   "$(codev_fingerprint /usr/local/bin/codev-guestd)" \
   "$(cat "${work_dir}/${superset_guest_archive}.sha256")" \

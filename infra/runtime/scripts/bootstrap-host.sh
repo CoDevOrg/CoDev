@@ -491,7 +491,7 @@ fi
 # of /usr/lib on every boot would cost a good part of what this saves.
 readonly superset_guest_archive="superset-host-linux-${artifact_arch}.tar.gz"
 codev_fetch "${superset_guest_archive}.sha256" "${work_dir}/${superset_guest_archive}.sha256"
-rootfs_key="$(codev_stage_key rootfs-v2 \
+rootfs_key="$(codev_stage_key rootfs-v3 \
   "${firecracker_ci_base}/ubuntu-24.04.squashfs" \
   "$(codev_fingerprint /usr/local/bin/codev-guestd)" \
   "$(cat "${work_dir}/${superset_guest_archive}.sha256")" \
@@ -533,6 +533,17 @@ ln -s "../lib/node_modules/@anthropic-ai/claude-code/${claude_bin_rel}" \
 cp -a /usr/lib/git-core "${work_dir}/rootfs/usr/lib/"
 cp -a /usr/share/git-core "${work_dir}/rootfs/usr/share/"
 install -d -m 0755 "${work_dir}/rootfs/workspace"
+
+# Agent and terminal users share this kernel but must not enumerate or trace
+# one another. Root-only guest services retain the visibility they need to
+# supervise PTYs and clean private launch profiles.
+cat >>"${work_dir}/rootfs/etc/fstab" <<'FSTAB'
+proc /proc proc defaults,hidepid=2 0 0
+FSTAB
+install -d -m 0755 "${work_dir}/rootfs/etc/sysctl.d"
+cat >"${work_dir}/rootfs/etc/sysctl.d/99-codev-agent-isolation.conf" <<'SYSCTL'
+kernel.yama.ptrace_scope = 2
+SYSCTL
 
 # An unprivileged account for interactive shells. Codex writes its provider
 # token into a private CODEX_HOME while a turn runs; a root shell in the same
