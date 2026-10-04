@@ -31,6 +31,8 @@ const mocks = vi.hoisted(() => ({
   recordOutput: vi.fn(),
   recordProgress: vi.fn(),
   getProgress: vi.fn(),
+  listActiveRuns: vi.fn(),
+  listActiveRunsForCredential: vi.fn(),
   refreshCredential: vi.fn(),
   startMonitor: vi.fn(),
 }));
@@ -95,6 +97,10 @@ vi.mock("./superset-runs", () => ({
     mocks.recordProgress(...args),
   getGen2SupersetRunProgress: (...args: unknown[]) =>
     mocks.getProgress(...args),
+  listActiveGen2SupersetRuns: (...args: unknown[]) =>
+    mocks.listActiveRuns(...args),
+  listActiveGen2SupersetRunsForCredential: (...args: unknown[]) =>
+    mocks.listActiveRunsForCredential(...args),
 }));
 
 vi.mock("./superset-agent-orchestrator-client", () => ({
@@ -119,6 +125,8 @@ import {
   getGen2SupersetAgentProgress,
   pollGen2SupersetAgentTurn,
   reconcileGen2SupersetAgentSession,
+  revokeGen2SupersetCredentialRuns,
+  revokeGen2SupersetMemberRuns,
   sendGen2SupersetAgentInput,
   startGen2SupersetAgentSession,
   startGen2SupersetAgentTurn,
@@ -163,6 +171,8 @@ describe("gen2 Superset agent runtime adapter", () => {
       branch: "codev/agent-chat",
     });
     mocks.getProgress.mockResolvedValue({ output: "", sequence: 0 });
+    mocks.listActiveRuns.mockResolvedValue([]);
+    mocks.listActiveRunsForCredential.mockResolvedValue([]);
   });
 
   it("refuses every call while the flag is off", async () => {
@@ -447,6 +457,32 @@ describe("gen2 Superset agent runtime adapter", () => {
     );
   });
 
+  it("stops a departing member's live runs before revocation", async () => {
+    mocks.listActiveRuns.mockResolvedValue([RUN]);
+    mocks.stop.mockResolvedValue({});
+
+    await revokeGen2SupersetMemberRuns({
+      workspaceId,
+      memberId: userId,
+      actorId: "owner-id",
+    });
+
+    expect(mocks.stop).toHaveBeenCalledWith(workspaceId, "agent-1");
+    expect(mocks.release).toHaveBeenCalledWith({ credentialId, ref: runId });
+  });
+
+  it("stops all live runs backed by a disconnected credential", async () => {
+    mocks.listActiveRunsForCredential.mockResolvedValue([RUN]);
+    mocks.stop.mockResolvedValue({});
+
+    await revokeGen2SupersetCredentialRuns(credentialId);
+
+    expect(mocks.stop).toHaveBeenCalledWith(workspaceId, "agent-1");
+    expect(mocks.releaseLease).toHaveBeenCalledWith(
+      expect.objectContaining({ runId }),
+    );
+  });
+
   it("marks the run finished and releases the lease once it exits", async () => {
     mocks.getRunById.mockResolvedValue(RUN);
     mocks.poll.mockResolvedValue({
@@ -677,10 +713,8 @@ describe("gen2 Superset agent runtime adapter", () => {
     ).rejects.toThrow("host unreachable");
 
     expect(mocks.markStopping).toHaveBeenCalled();
-    expect(mocks.release).toHaveBeenCalledWith(
-      expect.objectContaining({ credentialId }),
-    );
-    expect(mocks.releaseLease).toHaveBeenCalled();
+    expect(mocks.release).not.toHaveBeenCalled();
+    expect(mocks.releaseLease).not.toHaveBeenCalled();
     expect(mocks.markFinished).not.toHaveBeenCalled();
     expect(mocks.markRecoveryRequired).toHaveBeenCalledWith(
       expect.objectContaining({ runId }),

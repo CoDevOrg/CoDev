@@ -299,6 +299,10 @@ Terminal access now requires the workspace owner on every operation, including
 stream rechecks. Member grants remain unimplemented until terminals can be
 assigned member-specific guest identities.
 
+Member removal and provider-credential deletion now first stop all matching
+Superset runs. A failed host cancellation blocks the revocation rather than
+leaving an authenticated profile running after access has been removed.
+
 Gap: the host `/recovery` endpoint is a liveness check against the terminal
 session, not resume-candidate tracking, so adoption after a host restart can
 only confirm a live terminal, not resume agent state. A missing or ambiguous

@@ -390,7 +390,17 @@ export async function deleteProviderCredential(
       ),
     );
   }
-  await getDatabase()
-    .delete(schema.providerCredentials)
+  const database = getDatabase();
+  const credentials = await database
+    .select({ id: schema.providerCredentials.id })
+    .from(schema.providerCredentials)
     .where(and(...predicates));
+  const { revokeGen2SupersetCredentialRuns } =
+    await import("../gen2/superset-agent-runtime");
+  await Promise.all(
+    credentials.map((credential) =>
+      revokeGen2SupersetCredentialRuns(credential.id),
+    ),
+  );
+  await database.delete(schema.providerCredentials).where(and(...predicates));
 }

@@ -58,3 +58,5 @@ receive a separate credential-free boundary.
   the guest so launches are not left permanently blocked.
 - Terminal operations and stream rechecks are now owner-only. Explicit member
   terminal grants, with separate guest identities, remain future work.
+- Member removal and credential deletion now stop affected Superset agents
+  before revoking access, releasing seats and removing live profiles first.

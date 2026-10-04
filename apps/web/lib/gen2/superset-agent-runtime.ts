@@ -34,6 +34,8 @@ import {
   claimGen2SupersetRunLease,
   getGen2SupersetRunById,
   getGen2SupersetRunProgress,
+  listActiveGen2SupersetRuns,
+  listActiveGen2SupersetRunsForCredential,
   markGen2SupersetRunFailed,
   markGen2SupersetRunFinished,
   markGen2SupersetRunRecoveryRequired,
@@ -337,6 +339,10 @@ type CancelSessionInput = {
   runId: string;
 };
 
+type ActiveSupersetRun = NonNullable<
+  Awaited<ReturnType<typeof getGen2SupersetRunById>>
+>;
+
 export async function cancelGen2SupersetAgentSession(
   input: CancelSessionInput,
 ) {
@@ -358,16 +364,20 @@ async function cancelSession(
         })
       : await requireTurnRun(input.workspaceId, input.userId, input.runId);
 
+  return stopSupersetRun(run, input.userId);
+}
+
+async function stopSupersetRun(run: ActiveSupersetRun, actorId: string) {
   await markGen2SupersetRunStopping({
     runId: run.id,
-    workspaceId: input.workspaceId,
-    actorId: input.userId,
+    workspaceId: run.workspaceId,
+    actorId,
   });
   let cancelled = false;
   try {
     if (run.hostAgentSessionId) {
       const stopped = await stopSupersetAgent(
-        input.workspaceId,
+        run.workspaceId,
         run.hostAgentSessionId,
       );
       await captureRefreshedSupersetCredential(
@@ -379,32 +389,52 @@ async function cancelSession(
   } catch (error) {
     await markGen2SupersetRunRecoveryRequired({
       runId: run.id,
-      workspaceId: input.workspaceId,
+      workspaceId: run.workspaceId,
       lastError: "Host could not confirm agent cancellation.",
-      actorId: input.userId,
+      actorId,
     });
     throw error;
   } finally {
-    if (run.leaseClaimed && run.connectionId) {
-      await releaseCredentialSeat({
-        credentialId: run.connectionId,
-        ref: run.id,
-      });
-    }
-    await releaseGen2SupersetRunLease({
-      runId: run.id,
-      workspaceId: input.workspaceId,
-      actorId: input.userId,
-    });
     if (cancelled) {
+      if (run.leaseClaimed && run.connectionId) {
+        await releaseCredentialSeat({
+          credentialId: run.connectionId,
+          ref: run.id,
+        });
+      }
+      await releaseGen2SupersetRunLease({
+        runId: run.id,
+        workspaceId: run.workspaceId,
+        actorId,
+      });
       await markGen2SupersetRunFinished({
         runId: run.id,
-        workspaceId: input.workspaceId,
+        workspaceId: run.workspaceId,
         exitReason: "cancelled",
-        actorId: input.userId,
+        actorId,
       });
     }
   }
+}
+
+/** Stops every live run owned by a departing member before access is revoked. */
+export async function revokeGen2SupersetMemberRuns(input: {
+  workspaceId: string;
+  memberId: string;
+  actorId: string;
+}) {
+  const runs = await listActiveGen2SupersetRuns(input.workspaceId);
+  await Promise.all(
+    runs
+      .filter((run) => run.createdBy === input.memberId)
+      .map((run) => stopSupersetRun(run, input.actorId)),
+  );
+}
+
+/** Stops every live run backed by a credential before its record is deleted. */
+export async function revokeGen2SupersetCredentialRuns(credentialId: string) {
+  const runs = await listActiveGen2SupersetRunsForCredential(credentialId);
+  await Promise.all(runs.map((run) => stopSupersetRun(run, run.createdBy)));
 }
 
 /**

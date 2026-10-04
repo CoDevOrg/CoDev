@@ -775,6 +775,14 @@ export async function removeGen2WorkspaceMember(
     );
   }
 
+  const { revokeGen2SupersetMemberRuns } =
+    await import("./superset-agent-runtime");
+  await revokeGen2SupersetMemberRuns({
+    workspaceId,
+    memberId: targetUserId,
+    actorId: currentUserId,
+  });
+
   await database
     .delete(schema.gen2WorkspaceMembers)
     .where(
