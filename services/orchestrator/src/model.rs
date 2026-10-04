@@ -416,6 +416,12 @@ pub struct SupersetAgentPollResponse {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SupersetAgentCredentialResponse {
+    pub auth_cache_json: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SupersetAgentRecoveryResponse {
     pub adoptable: bool,
 }

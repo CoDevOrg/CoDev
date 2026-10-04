@@ -22,7 +22,9 @@ import { Gen2LifecycleError } from "./errors";
 import { logEvent } from "../platform/observability";
 import { resolveGen2Credential, type Gen2AgentProvider } from "./providers";
 import { providerVendor } from "../providers/registry";
+import { updateHostedCodexAuthCache } from "../providers/hosted-codex-subscription-credentials";
 import {
+  captureSupersetAgentCredential,
   checkSupersetAgentRecovery,
   pollSupersetAgent,
   sendSupersetAgentInput,
@@ -235,6 +237,30 @@ type PollSessionInput = {
   after: number;
 };
 
+type SupersetRun = NonNullable<
+  Awaited<ReturnType<typeof getGen2SupersetRunById>>
+>;
+
+async function persistSupersetAgentCredential(
+  run: SupersetRun,
+  workspaceId: string,
+) {
+  if (
+    run.provider !== "openai" ||
+    !run.connectionId ||
+    !run.hostAgentSessionId
+  ) {
+    return;
+  }
+  const { authCacheJson } = await captureSupersetAgentCredential(
+    workspaceId,
+    run.hostAgentSessionId,
+  );
+  if (authCacheJson) {
+    await updateHostedCodexAuthCache(run.connectionId, authCacheJson);
+  }
+}
+
 export async function pollGen2SupersetAgentSession(input: PollSessionInput) {
   return pollSession(input, "persistent");
 }
@@ -273,6 +299,19 @@ async function pollSession(
   }
 
   if (result.exited) {
+    try {
+      if (result.refreshReady) {
+        await persistSupersetAgentCredential(run, input.workspaceId);
+      }
+    } catch (error) {
+      await markGen2SupersetRunRecoveryRequired({
+        runId: run.id,
+        workspaceId: input.workspaceId,
+        lastError: "Could not save refreshed provider credentials.",
+        actorId: input.userId,
+      });
+      throw error;
+    }
     await markGen2SupersetRunFinished({
       runId: run.id,
       workspaceId: input.workspaceId,
@@ -291,6 +330,13 @@ async function pollSession(
       workspaceId: input.workspaceId,
       actorId: input.userId,
     });
+    await stopSupersetAgent(input.workspaceId, run.hostAgentSessionId).catch(
+      (error) =>
+        logEvent("warn", "gen2.superset_agent.profile_cleanup_failed", {
+          detail: error instanceof Error ? error.message : "unknown",
+          runId: run.id,
+        }),
+    );
   }
 
   return result;
@@ -330,27 +376,35 @@ async function cancelSession(
   });
   try {
     if (run.hostAgentSessionId) {
+      await persistSupersetAgentCredential(run, input.workspaceId);
       await stopSupersetAgent(input.workspaceId, run.hostAgentSessionId);
     }
-  } finally {
-    if (run.leaseClaimed && run.connectionId) {
-      await releaseCredentialSeat({
-        credentialId: run.connectionId,
-        ref: run.id,
-      });
-    }
-    await releaseGen2SupersetRunLease({
+  } catch (error) {
+    await markGen2SupersetRunRecoveryRequired({
       runId: run.id,
       workspaceId: input.workspaceId,
+      lastError: "Could not save refreshed provider credentials.",
       actorId: input.userId,
     });
-    await markGen2SupersetRunFinished({
-      runId: run.id,
-      workspaceId: input.workspaceId,
-      exitReason: "cancelled",
-      actorId: input.userId,
+    throw error;
+  }
+  if (run.leaseClaimed && run.connectionId) {
+    await releaseCredentialSeat({
+      credentialId: run.connectionId,
+      ref: run.id,
     });
   }
+  await releaseGen2SupersetRunLease({
+    runId: run.id,
+    workspaceId: input.workspaceId,
+    actorId: input.userId,
+  });
+  await markGen2SupersetRunFinished({
+    runId: run.id,
+    workspaceId: input.workspaceId,
+    exitReason: "cancelled",
+    actorId: input.userId,
+  });
 }
 
 /**

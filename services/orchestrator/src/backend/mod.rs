@@ -9,7 +9,7 @@ use crate::model::{
     ClaudeSetupCodeRequest, ClaudeSetupPollRequest, ClaudeSetupPollResponse,
     ClaudeSetupStartRequest, CodexExecPollRequest, CodexExecPollResponse, CodexExecStartRequest,
     CreateRequest, ExecRequest, ExecResponse, FileResponse, Instance, Result, RuntimeError,
-    SupersetAgentInputRequest, SupersetAgentPollRequest, SupersetAgentPollResponse,
+    SupersetAgentCredentialResponse, SupersetAgentInputRequest, SupersetAgentPollRequest, SupersetAgentPollResponse,
     SupersetAgentRecoveryResponse, SupersetAgentStartRequest, SupersetAgentStartResponse,
     SupersetCreateEntryRequest, SupersetDeleteEntryRequest, SupersetMoveEntryRequest,
     TerminalInputRequest, TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest,
@@ -514,6 +514,20 @@ impl Backend {
         }
     }
 
+    pub async fn capture_superset_agent_credential(
+        &self,
+        workspace_id: &str,
+        agent_id: &str,
+    ) -> Result<SupersetAgentCredentialResponse> {
+        match self {
+            Self::Fake(backend) => backend.capture_superset_agent_credential(workspace_id, agent_id),
+            #[cfg(target_os = "linux")]
+            Self::Firecracker(backend) => {
+                backend.capture_superset_agent_credential(workspace_id, agent_id).await
+            }
+        }
+    }
+
     pub async fn recover_superset_agent(
         &self,
         workspace_id: &str,
@@ -921,6 +935,15 @@ impl FakeBackend {
     fn close_superset_agent(&self, workspace_id: &str, _agent_id: &str) -> Result<()> {
         self.get(workspace_id)?;
         Ok(())
+    }
+
+    fn capture_superset_agent_credential(
+        &self,
+        workspace_id: &str,
+        _agent_id: &str,
+    ) -> Result<SupersetAgentCredentialResponse> {
+        self.get(workspace_id)?;
+        Ok(SupersetAgentCredentialResponse { auth_cache_json: None })
     }
 
     fn recover_superset_agent(

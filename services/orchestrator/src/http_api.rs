@@ -141,6 +141,10 @@ pub fn router(backend: SharedBackend) -> Router {
             post(poll_superset_agent),
         )
         .route(
+            "/v1/sandboxes/{workspace_id}/superset-agents/{agent_id}/credential",
+            post(capture_superset_agent_credential),
+        )
+        .route(
             "/v1/sandboxes/{workspace_id}/superset-agents/{agent_id}",
             delete(close_superset_agent),
         )
@@ -759,6 +763,18 @@ async fn close_superset_agent(
         .close_superset_agent(&workspace_id, &agent_id)
         .await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+async fn capture_superset_agent_credential(
+    State(backend): State<SharedBackend>,
+    Path((workspace_id, agent_id)): Path<(String, String)>,
+) -> Result<Json<serde_json::Value>> {
+    validate_workspace_id(&workspace_id)?;
+    validate_superset_agent_id(&agent_id)?;
+    let result = backend
+        .capture_superset_agent_credential(&workspace_id, &agent_id)
+        .await?;
+    Ok(Json(serde_json::json!({ "result": result })))
 }
 
 async fn recover_superset_agent(

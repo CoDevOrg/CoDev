@@ -10,7 +10,7 @@ use tokio::{
 use crate::model::{
     ClaudeSetupCodeRequest, ClaudeSetupPollRequest, ClaudeSetupPollResponse,
     ClaudeSetupStartRequest, CodexExecPollRequest, CodexExecPollResponse, CodexExecStartRequest,
-    ExecRequest, ExecResponse, FileResponse, Result, RuntimeError, SupersetAgentInputRequest,
+    ExecRequest, ExecResponse, FileResponse, Result, RuntimeError, SupersetAgentCredentialResponse, SupersetAgentInputRequest,
     SupersetAgentPollRequest, SupersetAgentPollResponse, SupersetAgentRecoveryResponse,
     SupersetAgentStartRequest, SupersetAgentStartResponse, SupersetCreateEntryRequest,
     SupersetDeleteEntryRequest, SupersetMoveEntryRequest, TerminalInputRequest,
@@ -307,6 +307,18 @@ impl GuestClient {
         )
         .await
         .map(|_| ())
+    }
+
+    pub async fn capture_superset_agent_credential(
+        &self,
+        agent_id: &str,
+    ) -> Result<SupersetAgentCredentialResponse> {
+        self.request::<(), _>(
+            "POST",
+            &format!("/v1/superset-agents/{agent_id}/credential"),
+            None,
+        )
+        .await
     }
 
     pub async fn recover_superset_agent(
