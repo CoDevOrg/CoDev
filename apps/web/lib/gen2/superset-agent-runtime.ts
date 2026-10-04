@@ -36,6 +36,7 @@ import {
   claimGen2SupersetRunLease,
   getGen2SupersetRunById,
   listMonitorableGen2SupersetRuns,
+  listCheckpointableGen2SupersetRuns,
   markGen2SupersetRunFailed,
   markGen2SupersetRunFinished,
   markGen2SupersetRunRecoveryRequired,
@@ -515,6 +516,18 @@ export async function monitorGen2SupersetAgentSessions() {
     }),
   );
   return { checked: runs.length, running, recoveryRequired };
+}
+
+/** Called by the ARM lifecycle before it flushes and destroys a guest VM. */
+export async function checkpointGen2SupersetAgentCredentials(
+  workspaceId: string,
+) {
+  const runs = await listCheckpointableGen2SupersetRuns(workspaceId);
+  for (const run of runs) {
+    if (!run.hostAgentSessionId) continue;
+    await persistSupersetAgentCredential(run, workspaceId);
+  }
+  return { checkpointed: runs.length };
 }
 
 /**

@@ -202,6 +202,18 @@ export async function listMonitorableGen2SupersetRuns() {
     .where(inArray(schema.gen2SupersetRuns.status, MONITORABLE_STATUSES));
 }
 
+export async function listCheckpointableGen2SupersetRuns(workspaceId: string) {
+  return getDatabase()
+    .select()
+    .from(schema.gen2SupersetRuns)
+    .where(
+      and(
+        eq(schema.gen2SupersetRuns.workspaceId, workspaceId),
+        inArray(schema.gen2SupersetRuns.status, MONITORABLE_STATUSES),
+      ),
+    );
+}
+
 /** Claim the run's hosted-subscription execution lease exactly once. */
 export async function claimGen2SupersetRunLease(input: {
   runId: string;
