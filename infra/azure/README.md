@@ -187,8 +187,9 @@ attach that identity to the temporary build VM. Keyless Sigstore signatures
 are checked inside the image builder before artifacts are installed.
 
 The candidate builder is an unzoned native ARM64 VM with all inbound traffic denied.
-Azure Run Command installs and verifies signed artifacts, checks runtime health,
-generalizes the VM, and publishes an immutable gallery version excluded from
+Azure Run Command installs and verifies signed artifacts and checks runtime health.
+Host-key-pinned SSH restricted to the runner IPv4 generalizes the VM; its temporary
+inbound rule is then removed. The pipeline publishes an immutable gallery version excluded from
 `latest`. Temporary build compute and networking are deleted on exit. Azure Image
 Builder template creation failed before VM allocation in two recorded attempts;
 this direct native build avoids that service dependency.

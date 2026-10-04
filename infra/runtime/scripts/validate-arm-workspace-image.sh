@@ -31,4 +31,5 @@ for attempt in {1..20}; do
 done
 test "${healthy}" = true
 ss -ltnH sport = :5252 | grep -q '127.0.0.1:5252'
+printf 'CODEV_BUILDER_HOST_KEY %s\n' "$(cat /etc/ssh/ssh_host_ed25519_key.pub)"
 echo 'CODEV_ARM_IMAGE_VALIDATED'

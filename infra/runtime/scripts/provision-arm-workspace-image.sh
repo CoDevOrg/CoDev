@@ -29,9 +29,18 @@ apt-get -o DPkg::Lock::Timeout=300 install -y \
 if ! command -v az >/dev/null 2>&1; then
   curl -sL https://aka.ms/InstallAzureCLIDeb | bash
 fi
-until az login --identity --allow-no-subscriptions >/dev/null 2>&1; do
+identity_ready=false
+for attempt in {1..24}; do
+  if az login --identity --allow-no-subscriptions >/dev/null 2>&1; then
+    identity_ready=true
+    break
+  fi
   sleep 5
 done
+if [[ "${identity_ready}" != true ]]; then
+  echo "Builder managed identity authentication did not become ready within two minutes." >&2
+  exit 1
+fi
 
 curl -fsSL \
   "https://github.com/sigstore/cosign/releases/download/v${cosign_version}/cosign-linux-arm64" \

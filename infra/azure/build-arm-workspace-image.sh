@@ -98,9 +98,37 @@ if ! grep -q CODEV_ARM_IMAGE_VALIDATED <<<"${provision_result}"; then
   exit 1
 fi
 
-# Generalization removes the ephemeral administrator and its SSH key.
-az vm run-command invoke -g "${resource_group}" -n "${builder_name}" \
-  --command-id RunShellScript --scripts 'sudo waagent -deprovision+user -force' --output none
+# waagent removes its own Run Command state, so deprovision over pinned SSH
+# instead of awaiting a response from the agent being removed.
+readonly builder_ip="$(az network public-ip show -g "${resource_group}" -n "${builder_name}-ip" --query ipAddress -o tsv)"
+readonly operator_ip="$(curl --max-time 15 -fsS https://api.ipify.org)"
+readonly host_key="$(awk '$1 == "CODEV_BUILDER_HOST_KEY" {print $2 " " $3}' <<<"${provision_result}")"
+if [[ -z "${host_key}" || ! "${operator_ip}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "Missing pinned builder host key or operator IPv4 address." >&2
+  exit 1
+fi
+printf '%s %s\n' "${builder_ip}" "${host_key}" >"${build_dir}/known-hosts"
+az network nsg rule update -g "${resource_group}" --nsg-name "${builder_name}-nsg" \
+  -n DenyAllInbound --priority 200 --output none
+az network nsg rule create -g "${resource_group}" --nsg-name "${builder_name}-nsg" \
+  -n TemporaryBuilderSsh --priority 100 --access Allow --direction Inbound --protocol Tcp \
+  --source-address-prefixes "${operator_ip}/32" --destination-port-ranges 22 --output none
+readonly ssh_options=(-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes
+  -o ServerAliveInterval=15 -o ServerAliveCountMax=4
+  -o "UserKnownHostsFile=${build_dir}/known-hosts" -i "${build_dir}/builder-key"
+  "codevbuilder@${builder_ip}")
+ssh_ready=false
+for attempt in {1..12}; do
+  if ssh "${ssh_options[@]}" true; then
+    ssh_ready=true
+    break
+  fi
+  sleep 5
+done
+test "${ssh_ready}" = true
+ssh "${ssh_options[@]}" 'sudo waagent -deprovision+user -force'
+az network nsg rule delete -g "${resource_group}" --nsg-name "${builder_name}-nsg" \
+  -n TemporaryBuilderSsh --output none
 az vm deallocate -g "${resource_group}" -n "${builder_name}" --only-show-errors
 az vm generalize -g "${resource_group}" -n "${builder_name}" --only-show-errors
 az sig image-version create -g "${resource_group}" --gallery-name codevarmworkspacegallery \
