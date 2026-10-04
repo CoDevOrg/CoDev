@@ -70,6 +70,10 @@ test "$(jq -r .releaseVersion "${artifact_dir}/runtime-manifest.json")" = "${rel
 test "$(jq -r .architecture "${artifact_dir}/runtime-manifest.json")" = arm64
 
 readonly host_packages=(
+  build-essential
+  pkg-config
+  file
+  python3-venv
   ca-certificates
   curl
   git
