@@ -169,6 +169,7 @@ resource networkInterface 'Microsoft.Network/networkInterfaces@2024-05-01' = {
   location: location
   tags: tags
   properties: {
+    enableAcceleratedNetworking: true
     networkSecurityGroup: { id: networkSecurityGroup.id }
     ipConfigurations: [{
       name: 'primary'
@@ -191,7 +192,6 @@ resource builder 'Microsoft.Compute/virtualMachines@2024-07-01' = {
   }
   properties: {
     hardwareProfile: { vmSize: imageBuilderVmSize }
-    securityProfile: { securityType: 'Standard' }
     storageProfile: {
       imageReference: {
         publisher: 'Canonical'
