@@ -142,6 +142,22 @@ codev_read_direct_secret() {
     --query value --output tsv 2>/dev/null || true
 }
 
+codev_read_control_plane_secret() {
+  [[ -n "${CODEV_KEY_VAULT_NAME:-}" ]] || return 0
+  az keyvault secret show \
+    --vault-name "${CODEV_KEY_VAULT_NAME}" \
+    --name control-plane-callback-secret \
+    --query value --output tsv 2>/dev/null || true
+}
+
+codev_read_control_plane_url() {
+  [[ -n "${CODEV_KEY_VAULT_NAME:-}" ]] || return 0
+  az keyvault secret show \
+    --vault-name "${CODEV_KEY_VAULT_NAME}" \
+    --name control-plane-callback-url \
+    --query value --output tsv 2>/dev/null || true
+}
+
 # Caddy certificate persistence, in both directions.
 codev_caddy_sync() {
   local direction="$1" local_dir="$2"
@@ -341,6 +357,16 @@ direct_secret="$(codev_read_direct_secret)"
 if [[ ! "${direct_secret}" =~ ^[A-Za-z0-9]+$ ]]; then
   echo "direct secret missing or not alphanumeric; not serving /v1/*" >&2
   direct_secret=""
+fi
+
+control_plane_url="$(codev_read_control_plane_url)"
+control_plane_secret="$(codev_read_control_plane_secret)"
+if [[ -n "${control_plane_url}" || -n "${control_plane_secret}" ]]; then
+  if [[ ! "${control_plane_url}" =~ ^https://[^[:space:]]+$ \
+    || ! "${control_plane_secret}" =~ ^[A-Za-z0-9]+$ ]]; then
+    echo "control-plane callback configuration is invalid" >&2
+    exit 1
+  fi
 fi
 
 # /healthz rides on the same bearer route because on Azure this is the only
@@ -797,6 +823,8 @@ Environment=CODEV_VM_DISK_GIB=10
 Environment=CODEV_IDLE_TIMEOUT=15m
 Environment=CODEV_HOST_IDLE_TIMEOUT=0
 Environment=CODEV_DIRECT_SECRET=${direct_secret}
+Environment=CODEV_CONTROL_PLANE_URL=${control_plane_url}
+Environment=CODEV_CONTROL_PLANE_SECRET=${control_plane_secret}
 # /healthz reports unhealthy while this unit is still running, so no session
 # opens on a host that is about to restart the orchestrator under it.
 Environment=CODEV_BOOTSTRAP_UNIT=codev-bootstrap.service

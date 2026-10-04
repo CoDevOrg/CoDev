@@ -48,6 +48,7 @@ export default defineConfig({
       NEXT_PUBLIC_SUPABASE_URL: bindings.secret(),
       ORCHESTRATOR_DIRECT_SECRET: bindings.secret(),
       ORCHESTRATOR_DIRECT_URL: bindings.secret(),
+      CODEV_CONTROL_PLANE_SECRET: bindings.secret(),
       POSTGRES_DATABASE: bindings.secret(),
       POSTGRES_HOST: bindings.secret(),
       POSTGRES_PASSWORD: bindings.secret(),

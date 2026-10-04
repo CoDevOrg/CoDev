@@ -128,10 +128,44 @@ pub struct FirecrackerConfig {
     /// vsock to the host, which is how they ran before outbound access was
     /// needed for OAuth device flows like `claude setup-token`.
     pub guest_network: bool,
+    /// Authenticated control-plane callback run before a durable checkpoint.
+    /// It persists refreshed provider credentials and stops live Superset
+    /// agents before the guest proves its profile directory is empty.
+    pub checkpoint_control_plane: Option<CheckpointControlPlane>,
+}
+
+#[derive(Clone, Debug)]
+pub struct CheckpointControlPlane {
+    pub url: String,
+    pub secret: String,
 }
 
 impl FirecrackerConfig {
     pub fn from_environment() -> Result<Self> {
+        let checkpoint_control_plane = match (
+            environment_nonempty("CODEV_CONTROL_PLANE_URL"),
+            environment_nonempty("CODEV_CONTROL_PLANE_SECRET"),
+        ) {
+            (None, None) => None,
+            (Some(url), Some(secret))
+                if url.starts_with("https://")
+                    && !url.contains(&['"', '\\'][..])
+                    && !url.chars().any(char::is_whitespace)
+                    && secret.chars().all(|character| character.is_ascii_alphanumeric()) =>
+            {
+                Some(CheckpointControlPlane { url, secret })
+            }
+            (Some(_), Some(_)) => {
+                return Err(RuntimeError::BadRequest(
+                    "invalid control-plane callback configuration".into(),
+                ));
+            }
+            _ => {
+                return Err(RuntimeError::BadRequest(
+                    "CODEV_CONTROL_PLANE_URL and CODEV_CONTROL_PLANE_SECRET must be configured together".into(),
+                ));
+            }
+        };
         let config = Self {
             runtime_dir: environment_path("CODEV_RUNTIME_DIR", "/var/lib/codev"),
             kernel_image: environment_path("CODEV_KERNEL_IMAGE", "/var/lib/codev/base/vmlinux"),
@@ -150,6 +184,7 @@ impl FirecrackerConfig {
                 std::env::var("CODEV_GUEST_NETWORK").as_deref(),
                 Ok("0") | Ok("false")
             ),
+            checkpoint_control_plane,
             idle_timeout: environment_duration(
                 "CODEV_IDLE_TIMEOUT",
                 Duration::from_secs(4 * 60 * 60),
@@ -1290,6 +1325,7 @@ impl FirecrackerBackend {
     /// slot. A later create boots these disks into a fresh microVM, which can
     /// use any free tap/CID instead of pinning capacity to the old slot.
     async fn hibernate_machine(&self, machine: Arc<RunningMachine>) -> Result<()> {
+        self.quiesce_control_plane(&machine.workspace_id()).await?;
         if machine.persistent_mount_dir.is_some() {
             // The attached Azure disk is already durable; just flush and stop.
             return self.stop_machine(machine).await;
@@ -1368,6 +1404,50 @@ impl FirecrackerBackend {
         }
 
         self.stop_machine(machine).await
+    }
+
+    async fn quiesce_control_plane(&self, workspace_id: &str) -> Result<()> {
+        let Some(control_plane) = &self.config.checkpoint_control_plane else {
+            return Ok(());
+        };
+        let endpoint = format!(
+            "{}/api/internal/gen2/workspaces/{workspace_id}/hibernate",
+            control_plane.url.trim_end_matches('/'),
+        );
+        // curl is installed by the host bootstrap for artifact and TLS work.
+        // Feed its config over stdin so the callback bearer never appears in
+        // argv, process listings, or a temporary file.
+        let config = format!(
+            "url = \"{endpoint}\"\nrequest = \"POST\"\nheader = \"Authorization: Bearer {}\"\n",
+            control_plane.secret,
+        );
+        let mut command = Command::new("curl");
+        command
+            .args(["--fail", "--silent", "--show-error", "--max-time", "30", "--config", "-"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null());
+        let mut child = command.spawn().map_err(RuntimeError::internal)?;
+        let mut stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| RuntimeError::Internal("could not open callback stdin".into()))?;
+        stdin
+            .write_all(config.as_bytes())
+            .await
+            .map_err(RuntimeError::internal)?;
+        drop(stdin);
+        let status = timeout(Duration::from_secs(31), child.wait())
+            .await
+            .map_err(|_| RuntimeError::Timeout(
+                "control-plane checkpoint callback timed out".into(),
+            ))?
+            .map_err(RuntimeError::internal)?;
+        if status.success() {
+            return Ok(());
+        }
+        Err(RuntimeError::Unavailable(
+            "control plane refused to quiesce workspace before checkpointing".into(),
+        ))
     }
 
     async fn prepare_and_start(&self, request: &CreateRequest) -> Result<RunningMachine> {
@@ -2226,6 +2306,10 @@ fn environment_path(name: &str, fallback: &str) -> PathBuf {
         .unwrap_or_else(|| PathBuf::from(fallback))
 }
 
+fn environment_nonempty(name: &str) -> Option<String> {
+    std::env::var(name).ok().filter(|value| !value.is_empty())
+}
+
 fn environment_number<T>(name: &str, fallback: T) -> Result<T>
 where
     T: std::str::FromStr,
@@ -2352,6 +2436,7 @@ mod tests {
                 workspace_disk_gib: 1,
                 idle_timeout: Duration::from_secs(60),
                 guest_network: false,
+                checkpoint_control_plane: None,
             },
             machines: AsyncRwLock::new(HashMap::new()),
             provision: Mutex::new(()),
@@ -2515,6 +2600,7 @@ mod tests {
                 workspace_disk_gib: 1,
                 idle_timeout: Duration::from_secs(60),
                 guest_network: false,
+                checkpoint_control_plane: None,
             },
             machines: AsyncRwLock::new(HashMap::new()),
             provision: Mutex::new(()),

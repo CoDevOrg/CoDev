@@ -124,6 +124,7 @@ import {
   pollGen2SupersetAgentProgress,
   getGen2SupersetAgentProgress,
   pollGen2SupersetAgentTurn,
+  quiesceGen2SupersetWorkspace,
   reconcileGen2SupersetAgentSession,
   revokeGen2SupersetCredentialRuns,
   revokeGen2SupersetMemberRuns,
@@ -481,6 +482,20 @@ describe("gen2 Superset agent runtime adapter", () => {
     expect(mocks.stop).toHaveBeenCalledWith(workspaceId, "agent-1");
     expect(mocks.releaseLease).toHaveBeenCalledWith(
       expect.objectContaining({ runId }),
+    );
+  });
+
+  it("quiesces every active run before a runtime checkpoint", async () => {
+    mocks.listActiveRuns.mockResolvedValueOnce([RUN]).mockResolvedValueOnce([]);
+    mocks.stop.mockResolvedValue({});
+
+    await expect(quiesceGen2SupersetWorkspace(workspaceId)).resolves.toEqual({
+      stopped: 1,
+    });
+
+    expect(mocks.stop).toHaveBeenCalledWith(workspaceId, "agent-1");
+    expect(mocks.markFinished).toHaveBeenCalledWith(
+      expect.objectContaining({ runId, exitReason: "cancelled" }),
     );
   });
 

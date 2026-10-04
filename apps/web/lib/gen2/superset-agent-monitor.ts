@@ -126,7 +126,12 @@ export async function monitorGen2SupersetAgentRun(input: {
 /** Mark an unverified workflow failure for member-visible recovery. */
 export async function failGen2SupersetAgentMonitor(runId: string) {
   const run = await getGen2SupersetRunById(runId);
-  if (!run) return;
+  if (
+    !run ||
+    ["finished", "failed", "recovery_required"].includes(run.status)
+  ) {
+    return;
+  }
   await markGen2SupersetRunRecoveryRequired({
     runId: run.id,
     workspaceId: run.workspaceId,

@@ -49,6 +49,13 @@ param releaseVersion string
 @secure()
 param orchestratorDirectSecret string
 
+@description('Base URL of apps/web for authenticated idle-checkpoint callbacks.')
+param controlPlaneUrl string
+
+@description('Dedicated secret the Firecracker host presents to apps/web before checkpointing.')
+@secure()
+param controlPlaneCallbackSecret string
+
 @description('Create a Consumption budget. Requires billing-scope permission, which a Contributor on a sponsorship subscription may not have, so this defaults off and the stack still deploys without it.')
 param enableBudget bool = false
 
@@ -275,6 +282,24 @@ resource directSecret 'Microsoft.KeyVault/vaults/secrets@2024-11-01' = {
   name: 'orchestrator-direct-secret'
   properties: {
     value: orchestratorDirectSecret
+    contentType: 'text/plain'
+  }
+}
+
+resource controlPlaneCallbackSecret 'Microsoft.KeyVault/vaults/secrets@2024-11-01' = {
+  parent: vault
+  name: 'control-plane-callback-secret'
+  properties: {
+    value: controlPlaneCallbackSecret
+    contentType: 'text/plain'
+  }
+}
+
+resource controlPlaneCallbackUrl 'Microsoft.KeyVault/vaults/secrets@2024-11-01' = {
+  parent: vault
+  name: 'control-plane-callback-url'
+  properties: {
+    value: controlPlaneUrl
     contentType: 'text/plain'
   }
 }

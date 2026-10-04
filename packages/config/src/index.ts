@@ -122,6 +122,8 @@ export const serverEnvironmentSchema = z.object({
    */
   ORCHESTRATOR_DIRECT_URL: optionalUrl,
   ORCHESTRATOR_DIRECT_SECRET: z.string().min(32).optional(),
+  /** Authenticates idle-checkpoint callbacks from the Firecracker host. */
+  CODEV_CONTROL_PLANE_SECRET: z.string().min(32).optional(),
   CRON_SECRET: z.string().min(32).optional(),
 });
 

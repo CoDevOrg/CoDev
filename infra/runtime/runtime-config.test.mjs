@@ -104,6 +104,15 @@ test("hibernates idle sandboxes after fifteen minutes while keeping the host awa
     orchestrator,
     /http_api::host_bootstrap_still_running\(\)\.await/,
   );
+  assert.match(bootstrap, /--name control-plane-callback-url/);
+  assert.match(
+    bootstrap,
+    /CODEV_CONTROL_PLANE_SECRET=\$\{control_plane_secret\}/,
+  );
+  assert.match(azureTemplate, /param controlPlaneUrl string/);
+  assert.match(azureTemplate, /control-plane-callback-secret/);
+  assert.match(azureTemplate, /control-plane-callback-url/);
+  assert.match(azureDeploy, /CODEV_CONTROL_PLANE_URL is required/);
 });
 
 test("builds and bootstraps architecture-specific runtime artifacts", () => {

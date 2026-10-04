@@ -56,6 +56,10 @@ receive a separate credential-free boundary.
 - Checkpointing now blocks new Superset launches and fails closed while an
   agent terminal or profile remains. A failed Firecracker checkpoint reopens
   the guest so launches are not left permanently blocked.
+- Idle checkpointing now calls the authenticated control plane first, which
+  stops tracked runs, captures refreshed credentials, and releases seats;
+  the guest then independently verifies private profile cleanup before disks
+  are copied. A refused or unavailable callback fails closed.
 - Terminal operations and stream rechecks are now owner-only. Explicit member
   terminal grants, with separate guest identities, remain future work.
 - Member removal and credential deletion now stop affected Superset agents

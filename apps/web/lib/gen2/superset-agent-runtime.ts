@@ -418,6 +418,24 @@ async function stopSupersetRun(run: ActiveSupersetRun, actorId: string) {
   }
 }
 
+/**
+ * Stops every live Superset run before the runtime checkpoints its disks.
+ * The host calls this through an authenticated control-plane callback, then
+ * the guest independently verifies that the private profile root is empty.
+ */
+export async function quiesceGen2SupersetWorkspace(workspaceId: string) {
+  const runs = await listActiveGen2SupersetRuns(workspaceId);
+  await Promise.all(runs.map((run) => stopSupersetRun(run, run.createdBy)));
+  const remaining = await listActiveGen2SupersetRuns(workspaceId);
+  if (remaining.length) {
+    throw new Gen2LifecycleError(
+      "Superset agents could not be quiesced for checkpointing.",
+      409,
+    );
+  }
+  return { stopped: runs.length };
+}
+
 /** Stops every live run owned by a departing member before access is revoked. */
 export async function revokeGen2SupersetMemberRuns(input: {
   workspaceId: string;

@@ -144,6 +144,27 @@ fi
 rm -f /tmp/codev-secret-read.err
 readonly direct_secret
 
+control_plane_url="${CODEV_CONTROL_PLANE_URL:?CODEV_CONTROL_PLANE_URL is required}"
+secret_read_error=""
+if existing_secret="$(az keyvault secret show \
+  --vault-name "${name_prefix}-kv" --name control-plane-callback-secret \
+  --query value -o tsv 2>/tmp/codev-secret-read.err)"; then
+  control_plane_callback_secret="${existing_secret}"
+else
+  secret_read_error="$(cat /tmp/codev-secret-read.err 2>/dev/null || true)"
+  if grep -qiE 'SecretNotFound|was not found|ResourceNotFound|VaultNotFound' \
+    <<<"${secret_read_error}"; then
+    echo "==> No existing control-plane callback secret; creating one (first deploy)"
+    control_plane_callback_secret="$(openssl rand -hex 32)"
+  else
+    echo "Could not read the existing control-plane callback secret; refusing to replace it." >&2
+    echo "${secret_read_error}" >&2
+    exit 1
+  fi
+fi
+rm -f /tmp/codev-secret-read.err
+readonly control_plane_url control_plane_callback_secret
+
 # Whether the host already exists decides if it needs restarting later. A VM
 # the stack is about to create boots with the right tag on its own; one that
 # is already running read its tag at its last boot and has to be rolled.
@@ -196,6 +217,8 @@ az deployment group create \
     artifactStorageName="${artifact_account}" \
     releaseVersion="${release_version}" \
     orchestratorDirectSecret="${direct_secret}" \
+    controlPlaneUrl="${control_plane_url}" \
+    controlPlaneCallbackSecret="${control_plane_callback_secret}" \
     enableBudget="${enable_budget}" \
     budgetAlertEmail="${budget_alert_email}" \
   --output none
@@ -298,6 +321,7 @@ Runtime deployed. Set these in the Vercel project:
   CREDENTIAL_KEY_VAULT_KEY_ID=${key_id}
   ORCHESTRATOR_DIRECT_URL=https://${host_host}
   ORCHESTRATOR_DIRECT_SECRET=<the value in Key Vault: orchestrator-direct-secret>
+  CODEV_CONTROL_PLANE_SECRET=<the value in Key Vault: control-plane-callback-secret>
 
 AZURE_CLIENT_ID is the app registration apps/web federates into; it is not
 printed here because it is not created by this script.
