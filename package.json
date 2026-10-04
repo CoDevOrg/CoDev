@@ -12,7 +12,7 @@
     "lint": "pnpm -r --if-present lint",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm run test:infra && pnpm -r --if-present test",
-    "test:infra": "node --test infra/runtime/runtime-config.test.mjs",
+    "test:infra": "node --test infra/runtime/*.test.mjs infra/azure/*.test.mjs",
     "test:e2e": "pnpm --filter @codev/web test:e2e",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

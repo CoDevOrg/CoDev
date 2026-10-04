@@ -1,7 +1,7 @@
 # ARM workspace free tier — Phase 1 review
 
 **Date:** 2026-10-04. **Scope:** standalone ARM workspace image and isolated workload proof.
-**Status:** Phase 1 complete for Codex. All six acceptance gates pass under the user-approved Codex-only scope. **Phase 2 is ready to start but has not started.**
+**Status:** Phase 1 complete for Codex. All six acceptance gates pass under the user-approved Codex-only scope. **Phase 2 started on 2026-10-04; see the [Phase 2 review](./arm-workspace-free-tier-phase-2.md).**
 
 See the [Phase 0 decisions and $6.50 workspace budget](./arm-workspace-free-tier-phase-0.md).
 Production runtime and web deployments were not changed. Commits use `[skip ci]` to suppress existing automatic production workflows; the ARM image workflow is dispatched manually.
@@ -118,4 +118,4 @@ All six gates are required. A published image alone is insufficient.
 
 Temporary builder and smoke VMs, their OS disks, test data disks, SSH IP/NIC/VNet/NSG, obsolete Image Builder templates, and unsafe intermediate gallery versions are removed. The final excluded gallery image, signed private release artifacts, gallery/definition, and scoped builder identity remain for review. No production runtime or web deployment was changed. Local ephemeral SSH keys and private repository fixture copies are removed after teardown.
 
-**Phase 1 is complete for Codex. Phase 2 is ready to start, pending a separate user instruction.** Claude remains deferred. The startup performance, metadata durability, public authentication, and budget risks above remain requirements for later integration and rollout.
+**Phase 1 is complete for Codex. The user authorized Phase 2 on 2026-10-04; it is in progress.** Claude remains deferred. The startup performance, metadata durability, public authentication, and budget risks above remain requirements for later integration and rollout.

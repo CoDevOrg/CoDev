@@ -198,6 +198,30 @@ The current Phase 1 review records the pinned Ubuntu ARM64 source, local build
 evidence, required RBAC, and outstanding VM smoke gates in
 [`arm-workspace-free-tier-phase-1.md`](../../docs/arm-workspace-free-tier-phase-1.md).
 
+## ARM workspace Phase 2 candidates
+
+`arm-workspace-vm.bicep` provisions one generation from an exact ARM gallery
+version and attaches an existing workspace disk at LUN 0 with `Detach` retention.
+It creates explicit outbound IPv4 connectivity with every inbound port denied.
+The trusted controller must serialize disk operations and fence the generation
+before deployment; this template is not a lifecycle controller.
+
+`infra/runtime/scripts/prepare-arm-workspace-disk.sh` formats only a new,
+signature-free 16 GiB disk, or verifies the saved UUID for an existing disk.
+It binds protected Superset metadata from the durable disk and masks its source
+path in runtime service namespaces. `install-arm-workspace-connection.sh` reads
+the VM identity and one tunnel token from stdin delivered through protected
+extension settings. Install the gateway modules into `/usr/local/lib/codev`
+before calling it. The gateway verifies Ed25519 request capabilities; only the
+control plane may hold the signing key or authorize membership.
+
+After revoking the tunnel, `stop-arm-workspace-vm.sh` checks generation ownership,
+observes actual Azure deallocation, and removes ephemeral resources. It retains
+the durable disk. These candidates are restricted to isolated ARM resource
+groups; do not connect them to production or invoke them without a fenced
+controller. See the [Phase 2 review](../../docs/arm-workspace-free-tier-phase-2.md)
+for evidence and remaining acceptance gates.
+
 ## Deploying
 
 ```bash
