@@ -3,7 +3,12 @@ import "server-only";
 import { updateHostedCodexAuthCacheForUser } from "../providers/hosted-codex-subscription-credentials";
 
 export async function captureRefreshedSupersetCredential(
-  run: { connectionId: string | null; createdBy: string; provider: string },
+  run: {
+    connectionId: string | null;
+    credentialRevision: string | null;
+    createdBy: string;
+    provider: string;
+  },
   refreshedCodexAuthCache: string | undefined,
 ) {
   if (
@@ -17,6 +22,7 @@ export async function captureRefreshedSupersetCredential(
     credentialId: run.connectionId,
     userId: run.createdBy,
     authCacheJson: refreshedCodexAuthCache,
+    expectedRevision: run.credentialRevision,
   });
 }
 

@@ -2296,7 +2296,7 @@ export const gen2AgentTurns = pgTable(
  * Superset's own SQLite database is never queried for that state. No
  * credential material is stored here -- `connectionId` points at the
  * existing encrypted `provider_credentials` row and `credentialRevision` is
- * a fingerprint only.
+ * an opaque compare-and-swap version only.
  */
 export const gen2SupersetRunStatus = pgEnum("gen2_superset_run_status", [
   "creating",

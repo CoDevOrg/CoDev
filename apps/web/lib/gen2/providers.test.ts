@@ -12,6 +12,7 @@ vi.mock("../providers/hosted-codex-subscription-credentials", () => ({
   resolveHostedCodexSubscription: (...args: unknown[]) =>
     mocks.resolveHosted(...args),
   decryptHostedMaterial: (...args: unknown[]) => mocks.decryptMaterial(...args),
+  hostedCodexCredentialRevision: (material: string) => `revision:${material}`,
 }));
 
 vi.mock("../platform/kms", () => ({
@@ -74,6 +75,7 @@ describe("gen2 provider resolution", () => {
     await expect(resolveGen2Credential(userId, "codex")).resolves.toMatchObject(
       {
         credentialId: "cred-1",
+        credentialRevision: "revision:enc",
         via: "subscription",
       },
     );

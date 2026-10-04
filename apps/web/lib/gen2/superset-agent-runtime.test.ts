@@ -145,6 +145,7 @@ const RUN = {
   createdBy: userId,
   hostAgentSessionId: "agent-1",
   connectionId: credentialId,
+  credentialRevision: "credential-revision-1",
   provider: "openai",
   status: "running",
   leaseClaimed: true,
@@ -592,6 +593,7 @@ describe("gen2 Superset agent runtime adapter", () => {
       credentialId,
       userId,
       authCacheJson: '{"tokens":{"refresh":"new"}}',
+      expectedRevision: "credential-revision-1",
     });
     expect(mocks.markFinished).toHaveBeenCalledWith(
       expect.objectContaining({ runId, exitReason: "completed" }),
@@ -643,6 +645,7 @@ describe("gen2 Superset agent runtime adapter", () => {
       credentialId,
       userId,
       authCacheJson: '{"token":"fresh"}',
+      expectedRevision: "credential-revision-1",
     });
     expect(result).not.toHaveProperty("refreshedCodexAuthCache");
   });
@@ -754,6 +757,7 @@ describe("gen2 Superset agent runtime adapter", () => {
       credentialId,
       userId,
       authCacheJson: '{"token":"fresh"}',
+      expectedRevision: "credential-revision-1",
     });
     expect(result).not.toHaveProperty("refreshedCodexAuthCache");
   });

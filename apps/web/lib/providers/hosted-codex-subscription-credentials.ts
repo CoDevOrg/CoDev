@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 
 import { schema } from "@codev/db";
@@ -26,6 +27,11 @@ export class HostedCodexSubscriptionError extends Error {
 }
 
 export type HostedCodexMaterial = { authCacheJson: string };
+
+/** An opaque, non-secret version of the encrypted credential at launch. */
+export function hostedCodexCredentialRevision(encryptedMaterial: string) {
+  return createHash("sha256").update(encryptedMaterial).digest("hex");
+}
 
 async function encryptHostedMaterial(material: HostedCodexMaterial) {
   return encryptSecret(JSON.stringify(material), HOSTED_CODEX_CONTEXT);
@@ -78,8 +84,30 @@ export async function updateHostedCodexAuthCacheForUser(input: {
   credentialId: string;
   userId: string;
   authCacheJson: string;
+  /** Refuse a refresh from a profile launched with older credential material. */
+  expectedRevision?: string | null;
 }) {
   validateAuthCache(input.authCacheJson);
+  const where = and(
+    eq(schema.providerCredentials.id, input.credentialId),
+    eq(schema.providerCredentials.scopeType, "USER"),
+    eq(schema.providerCredentials.scopeId, input.userId),
+    eq(schema.providerCredentials.provider, "openai"),
+    eq(schema.providerCredentials.credentialType, "HOSTED_CODEX_SUBSCRIPTION"),
+  );
+  const [current] = await getDatabase()
+    .select({ encryptedMaterial: schema.providerCredentials.encryptedMaterial })
+    .from(schema.providerCredentials)
+    .where(where)
+    .limit(1);
+  if (!current?.encryptedMaterial) return false;
+  if (
+    input.expectedRevision &&
+    hostedCodexCredentialRevision(current.encryptedMaterial) !==
+      input.expectedRevision
+  ) {
+    return false;
+  }
   const updated = await getDatabase()
     .update(schema.providerCredentials)
     .set({
@@ -90,24 +118,23 @@ export async function updateHostedCodexAuthCacheForUser(input: {
       updatedAt: new Date(),
     })
     .where(
-      and(
-        eq(schema.providerCredentials.id, input.credentialId),
-        eq(schema.providerCredentials.scopeType, "USER"),
-        eq(schema.providerCredentials.scopeId, input.userId),
-        eq(schema.providerCredentials.provider, "openai"),
-        eq(
-          schema.providerCredentials.credentialType,
-          "HOSTED_CODEX_SUBSCRIPTION",
-        ),
-      ),
+      input.expectedRevision
+        ? and(
+            where,
+            eq(
+              schema.providerCredentials.encryptedMaterial,
+              current.encryptedMaterial,
+            ),
+          )
+        : where,
     )
     .returning({ id: schema.providerCredentials.id });
-  if (!updated[0]) {
-    throw new HostedCodexSubscriptionError(
-      "The agent credential is no longer connected.",
-      409,
-    );
-  }
+  if (updated[0]) return true;
+  if (input.expectedRevision) return false;
+  throw new HostedCodexSubscriptionError(
+    "The agent credential is no longer connected.",
+    409,
+  );
 }
 
 export async function persistHostedCodexConnection(input: {

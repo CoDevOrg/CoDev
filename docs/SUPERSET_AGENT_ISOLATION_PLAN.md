@@ -60,5 +60,7 @@ receive a separate credential-free boundary.
   terminal grants, with separate guest identities, remain future work.
 - Member removal and credential deletion now stop affected Superset agents
   before revoking access, releasing seats and removing live profiles first.
+- Refresh write-back now compares the launch-time opaque credential revision,
+  so a stale profile cannot overwrite newer encrypted OAuth material.
 - Guest images now mount `/proc` with `hidepid=2` and set Yama ptrace scope 2.
   Namespace or bubblewrap compatibility remains to be evaluated on a live VM.

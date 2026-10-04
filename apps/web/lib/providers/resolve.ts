@@ -8,6 +8,7 @@ import { getDatabase } from "../platform/database";
 import { decryptSecret } from "../platform/kms";
 import {
   decryptHostedMaterial,
+  hostedCodexCredentialRevision,
   resolveHostedCodexSubscription,
 } from "./hosted-codex-subscription-credentials";
 import {
@@ -47,6 +48,8 @@ export type ResolvedCredentialRecord = {
   source: CredentialSource;
   /** Null for a credential with no row to lease (the browser runtime). */
   credentialId: string | null;
+  /** Opaque launch-time version for safe provider refresh write-back. */
+  credentialRevision?: string | undefined;
   /** Absent on a dry run. */
   secret?: ResolvedSecret;
 };
@@ -73,6 +76,7 @@ export type ResolveResult = ResolvedCredentialRecord | CredentialUnavailable;
 
 type Loaded = {
   credentialId: string | null;
+  credentialRevision?: string | undefined;
   source: CredentialSource;
   /** Whether the member allows this credential inside a shared workspace. */
   allowInSharedWorkspaces: boolean;
@@ -90,6 +94,7 @@ async function loadCodexAuthCache(input: ResolveInput): Promise<Loaded | null> {
   const material = hosted.credential.encryptedMaterial;
   return {
     credentialId: hosted.credential.id,
+    credentialRevision: hostedCodexCredentialRevision(material),
     source: "personal",
     allowInSharedWorkspaces:
       hosted.credential.allowInSharedWorkspaces !== false,
@@ -235,6 +240,7 @@ export async function resolveCredential(
         kind: entry.kind,
         source: loaded.source,
         credentialId: loaded.credentialId,
+        credentialRevision: loaded.credentialRevision,
       };
     }
     const secret = await loaded.read();
@@ -245,6 +251,7 @@ export async function resolveCredential(
       kind: entry.kind,
       source: loaded.source,
       credentialId: loaded.credentialId,
+      credentialRevision: loaded.credentialRevision,
       secret,
     };
   }

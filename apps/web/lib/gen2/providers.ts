@@ -35,6 +35,8 @@ export type Gen2Credential = {
   /** Set only for a credential that holds a one-turn-at-a-time seat (a Codex
    *  subscription); Claude and API keys carry none. */
   credentialId: string | null;
+  /** Opaque credential version captured when this launch profile was built. */
+  credentialRevision: string | null;
   /** The same credential in the provider-neutral shape, plus the member's
    *  own environment variables. The guest materialises it and knows nothing
    *  about which provider it belongs to. */
@@ -88,6 +90,10 @@ export async function resolveGen2Credential(
     // limit, so it carries no lease for the caller to claim.
     credentialId:
       resolved.kind === "codex_auth_cache" ? resolved.credentialId : null,
+    credentialRevision:
+      resolved.kind === "codex_auth_cache"
+        ? (resolved.credentialRevision ?? null)
+        : null,
     launchProfile,
     via: resolved.kind === "api_key" ? "api-key" : "subscription",
   };
