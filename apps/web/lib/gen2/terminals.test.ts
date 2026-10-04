@@ -73,6 +73,31 @@ describe("gen2 terminals", () => {
     expect(mocks.poll).not.toHaveBeenCalled();
   });
 
+  it("does not let an editor open or operate a terminal", async () => {
+    mocks.requireMember.mockResolvedValue({
+      id: workspaceId,
+      status: "ready",
+      role: "editor",
+    });
+
+    await expect(
+      startGen2Terminal(workspaceId, userId, { rows: 24, columns: 80 }),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      sendGen2TerminalInput(workspaceId, userId, sessionId, "ls\n"),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      pollGen2Terminal(workspaceId, userId, sessionId, 0),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      closeGen2Terminal(workspaceId, userId, sessionId),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(mocks.start).not.toHaveBeenCalled();
+    expect(mocks.input).not.toHaveBeenCalled();
+    expect(mocks.poll).not.toHaveBeenCalled();
+    expect(mocks.close).not.toHaveBeenCalled();
+  });
+
   it("requires a running instance only to open a terminal", async () => {
     // start_terminal waits for Codex to go idle in the guest; input, resize,
     // poll and close do not, which is why a terminal opened before a turn

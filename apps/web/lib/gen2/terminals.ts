@@ -15,7 +15,7 @@ import {
   startSupersetTerminal,
 } from "../runtime/orchestrator-superset-runtime";
 import { canRunGen2Agent } from "./agent-policy";
-import { Gen2LifecycleError } from "./errors";
+import { Gen2AccessError, Gen2LifecycleError } from "./errors";
 import { requireWorkspaceOwnerPlan } from "../billing/gate";
 import { requireGen2Member } from "./workspaces";
 import { isGen2SupersetRuntimeEnabled } from "./superset-runtime-feature";
@@ -56,6 +56,18 @@ async function getCachedGen2Member(workspaceId: string, userId: string) {
   return membership;
 }
 
+function requireTerminalOwner(
+  membership: Awaited<ReturnType<typeof requireGen2Member>>,
+) {
+  if (membership.role !== "owner") {
+    throw new Gen2AccessError(
+      "Only the workspace owner can use terminals.",
+      403,
+    );
+  }
+  return membership;
+}
+
 /**
  * A shell on the workspace's own machine — the same `/workspace` Codex edits.
  *
@@ -68,7 +80,9 @@ async function getCachedGen2Member(workspaceId: string, userId: string) {
  */
 
 async function requireReadyMember(workspaceId: string, userId: string) {
-  const membership = await requireGen2Member(workspaceId, userId);
+  const membership = requireTerminalOwner(
+    await requireGen2Member(workspaceId, userId),
+  );
   if (!canRunGen2Agent(membership.status)) {
     throw new Gen2LifecycleError(
       membership.status === "pending" || membership.status === "provisioning"
@@ -156,7 +170,7 @@ export async function recheckGen2TerminalMember(
   workspaceId: string,
   userId: string,
 ) {
-  await requireGen2Member(workspaceId, userId);
+  requireTerminalOwner(await requireGen2Member(workspaceId, userId));
 }
 
 export async function sendGen2TerminalInput(
@@ -166,7 +180,7 @@ export async function sendGen2TerminalInput(
   data: string,
   worktreeId = PRIMARY_WORKTREE_ID,
 ) {
-  await getCachedGen2Member(workspaceId, userId);
+  requireTerminalOwner(await getCachedGen2Member(workspaceId, userId));
   await requireWorkspaceOwnerPlan(workspaceId);
   if (isGen2SupersetRuntimeEnabled()) {
     await sendSupersetTerminalInput(workspaceId, {
@@ -186,7 +200,7 @@ export async function resizeGen2Terminal(
   size: { rows: number; columns: number },
   worktreeId = PRIMARY_WORKTREE_ID,
 ) {
-  await getCachedGen2Member(workspaceId, userId);
+  requireTerminalOwner(await getCachedGen2Member(workspaceId, userId));
   if (isGen2SupersetRuntimeEnabled()) {
     await resizeSupersetTerminal(workspaceId, {
       worktreeId,
@@ -205,7 +219,7 @@ export async function pollGen2Terminal(
   after: number,
   worktreeId = PRIMARY_WORKTREE_ID,
 ) {
-  await getCachedGen2Member(workspaceId, userId);
+  requireTerminalOwner(await getCachedGen2Member(workspaceId, userId));
   if (isGen2SupersetRuntimeEnabled()) {
     return pollSupersetTerminal(workspaceId, {
       worktreeId,
@@ -223,7 +237,7 @@ export async function closeGen2Terminal(
   worktreeId = PRIMARY_WORKTREE_ID,
 ) {
   try {
-    await getCachedGen2Member(workspaceId, userId);
+    requireTerminalOwner(await getCachedGen2Member(workspaceId, userId));
     if (isGen2SupersetRuntimeEnabled()) {
       await closeSupersetTerminal(workspaceId, { sessionId, worktreeId });
       return;

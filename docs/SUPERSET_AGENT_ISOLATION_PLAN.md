@@ -56,3 +56,5 @@ receive a separate credential-free boundary.
 - Checkpointing now blocks new Superset launches and fails closed while an
   agent terminal or profile remains. A failed Firecracker checkpoint reopens
   the guest so launches are not left permanently blocked.
+- Terminal operations and stream rechecks are now owner-only. Explicit member
+  terminal grants, with separate guest identities, remain future work.

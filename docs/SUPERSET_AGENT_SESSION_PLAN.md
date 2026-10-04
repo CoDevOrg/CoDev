@@ -295,6 +295,10 @@ Gap: this safety gate refuses a live run rather than actively stopping it. A
 future explicit quiesce operation must stop the run through the server monitor,
 acknowledge refreshed auth write-back, then retry the checkpoint.
 
+Terminal access now requires the workspace owner on every operation, including
+stream rechecks. Member grants remain unimplemented until terminals can be
+assigned member-specific guest identities.
+
 Gap: the host `/recovery` endpoint is a liveness check against the terminal
 session, not resume-candidate tracking, so adoption after a host restart can
 only confirm a live terminal, not resume agent state. A missing or ambiguous
