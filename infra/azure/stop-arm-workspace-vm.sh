@@ -37,6 +37,22 @@ while IFS= read -r id; do
 done <<<"${ids}"
 
 if [[ ${ids} == *"${vm_id}"* ]]; then
+  # Teardown is intentionally fail-closed. Stopping the host terminates every
+  # agent and terminal; profiles live only on the disposable OS disk, but
+  # removing them here narrows the window before Azure deletes that disk.
+  # Unmounting proves the durable filesystem is no longer live before a new
+  # generation is permitted to attach it.
+  az vm run-command invoke --ids "${vm_id}" --command-id RunShellScript \
+    --scripts '
+set -euo pipefail
+for unit in codev-arm-tunnel codev-arm-gateway codev-superset-host codev-guestd; do
+  systemctl cat --quiet "$unit" >/dev/null 2>&1 && systemctl stop "$unit"
+done
+find /var/lib/codev/codev-agent-profiles -mindepth 1 -maxdepth 1 -type d -exec rm -rf -- {} +
+sync
+umount /workspace
+mountpoint -q /workspace && exit 1
+' --query 'value[0].message' -o tsv >/dev/null
   az vm deallocate --ids "${vm_id}" --no-wait
   deallocated=false
   for _ in {1..60}; do
