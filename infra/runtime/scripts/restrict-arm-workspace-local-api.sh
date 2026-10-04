@@ -9,7 +9,7 @@ iptables-restore --noflush -w 5 <<'RULES'
 -F CODEV_LOCAL_API
 -A CODEV_LOCAL_API -m owner --uid-owner 0 -j RETURN
 -A CODEV_LOCAL_API -m owner --uid-owner 1000 -j RETURN
--A CODEV_LOCAL_API -j REJECT --reject-with tcp-reset
+-A CODEV_LOCAL_API -p tcp -j REJECT --reject-with tcp-reset
 COMMIT
 RULES
 if ! iptables -w 5 -C OUTPUT -o lo -d 127.0.0.1 -p tcp --dport 5252 -j CODEV_LOCAL_API 2>/dev/null; then
