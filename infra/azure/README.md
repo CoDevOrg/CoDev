@@ -217,12 +217,11 @@ control plane may hold the signing key or authorize membership.
 
 After revoking the tunnel, `stop-arm-workspace-vm.sh` checks generation ownership,
 observes actual Azure deallocation, and removes ephemeral resources. It retains
-the durable disk. These candidates are restricted to isolated ARM resource
-groups; do not connect them to production or invoke them outside the fenced
-controller. The manual `arm-workspace-phase2-canary.yml` workflow exercises the
-isolated path after the Cloudflare automation token has Tunnel Edit and DNS
-Edit permissions. See the [Phase 2 review](../../docs/arm-workspace-free-tier-phase-2.md)
-for evidence and remaining acceptance gates.
+the durable disk. The Phase 2 isolated infrastructure lifecycle acceptance has
+passed, but these candidates remain restricted to isolated ARM resource groups;
+do not connect them to production or invoke them outside the fenced controller.
+See the [Phase 2 review](../../docs/arm-workspace-free-tier-phase-2.md) for live
+evidence and the remaining integration and launch gates.
 
 ## Deploying
 

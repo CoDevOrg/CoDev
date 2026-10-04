@@ -1,8 +1,7 @@
 # ARM workspace Phase 2 — infrastructure review
 
-**Date:** 2026-10-04. **Status:** candidate implemented; exit canary blocked by
-Cloudflare automation permission. Phase 2 has not passed its exit gate. Codex
-remains the only accepted agent provider. Phase 3 product database/API
+**Date:** 2026-10-04. **Status:** Phase 2 infrastructure exit criteria passed.
+Codex remains the only accepted agent provider. Phase 3 product database/API
 integration and production enablement have not started.
 
 ## Decisions and code
@@ -69,6 +68,22 @@ configuration, or product database changed.
   returned HTTP 403 for the repository `CLOUDFLARE_API_TOKEN`. The failure
   cleanup deallocated and deleted the VM, network, OS disk, and disposable data
   disk. An Azure resource list scoped to that canary workspace returned `[]`.
+- After the repository secret was updated, the tunnel/DNS permission preflight
+  passed before VM allocation. The complete
+  [automated lifecycle canary `37230952626`](https://github.com/CoDevOrg/CoDev/actions/runs/37230952626)
+  passed in 11m36s on image `1.0.10`. Initial start took 218 seconds and reopen
+  took 348 seconds. Both ready generations used the same 16 GiB disk UUID. A
+  shell-user file, direct-child Git worktree, and root-owned mode-0700 Superset
+  metadata survived VM replacement; the private metadata remained unreadable to
+  the shell user. Same-key start was idempotent, stop waited for deallocation,
+  the live-agent-aware idle path stopped the VM after the test clock advanced
+  15 minutes, and deletion removed the owned data disk using a disposable
+  synthetic product-delete receipt.
+- Post-run Azure inventory returned no resources tagged
+  `WorkspaceId=phase2-37230952626`. A Cloudflare account/zone API inventory
+  returned zero active tunnels and zero DNS records for the canary preflight
+  name and lifecycle generations 1–3. The temporary preflight resources and
+  workspace routes were therefore absent after cleanup.
 
 The earlier manual tunnel canary's token transfer into local protected settings used an ephemeral encrypted
 envelope; tool output contained no plaintext connector token. The extension's
@@ -90,41 +105,51 @@ settings were removed. This cleanup does not validate the product-delete contrac
   forbidden routes, and generation-safe teardown.
 - Bicep compilation, Bash syntax checks, scoped formatting, and `git diff --check`
   pass.
+- `pnpm test:infra` passes all 41 tests. Coverage includes concurrent starts
+  under one durable lease, transient Azure conflicts and backoff, expired
+  operation recovery, retry exhaustion, partial-stop recovery, billable-compute
+  cleanup after tunnel failure, and capability rejection for wrong workspace,
+  generation, audience/host, issuer, scope, method, path, body digest, and time.
 - The rebuilt image `1.0.9` passed the previously failing VM replacement and
-  saved-metadata permission check. Image `1.0.10` published successfully, but
-  its automated full lifecycle canary has not passed.
+  saved-metadata permission check. Image `1.0.10` published successfully and
+  passed the full live lifecycle canary above.
 
-## Remaining work and acceptance criteria
+## Acceptance and remaining gates
 
-1. **Cloudflare automation credential:** update the repository
-   `CLOUDFLARE_API_TOKEN` with Account → Cloudflare Tunnel → Edit for account
-   `84a1d01866de04e04320feddfb199b83` and Zone → DNS → Edit for
-   `trycodev.com`. The current secret can list tunnels but receives 403 when
-   creating one. Do not send the token in chat. This is an external access gate.
-2. **Full isolated canary:** manually dispatch
-   `arm-workspace-phase2-canary.yml` after the secret is fixed. Its Cloudflare
-   preflight creates and deletes a temporary tunnel/DNS record before allocating
-   Azure compute. Require a ready
-   image `1.0.10` VM, signed HTTPS, a shell-user file and direct-child Git
-   worktree, private Superset metadata, actual Azure deallocation, an unchanged
-   UUID and fixtures on reopen, a live-agent-aware idle stop, and owned disk
-   deletion. Record start/reopen timings and verify no canary Azure or
-   Cloudflare resources remain.
-3. **Fault and security gate:** retain the Blob-lease concurrency and retry tests;
-   exercise Azure throttling/attach conflicts, a lost worker during an Azure
-   operation, tunnel failure, unhealthy bridge, wrong-host and stale-generation
-   capabilities, and partial deletion against the isolated controller. No stale
-   generation may alter a newer VM or data disk. Azure resources must be
-   reconciled after each injected failure.
-4. **Integration boundary:** Phase 3 must supply a committed product-delete
-   receipt, authenticated membership and capability signing, scheduling for
-   `idle()`/`reconcile()`, and its database/API adapter. The Phase 2 canary uses
-   a disposable synthetic delete receipt. Do not connect this controller
-   directly to product routes or enable free ARM workspaces before that work.
+| Phase 2 acceptance criterion                                                              | Result                                                                                 |
+| ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Create, open, idempotent retry, stop, reopen, idle-stop, and delete                       | **PASS** — live isolated canary `37230952626`                                          |
+| Same saved disk UUID and files after VM replacement                                       | **PASS** — workspace file, direct-child Git worktree, and private metadata verified    |
+| Azure concurrency, retries, stale-operation recovery, and partial cleanup                 | **PASS** — covered by the 41 passing infrastructure tests                              |
+| Signed transport, workspace/generation/host binding, guest readiness, and secret handling | **PASS** — isolated HTTPS canary plus capability rejection tests                       |
+| Canary resource cleanup                                                                   | **PASS** — no tagged Azure resources, active tunnels, or matching DNS records remained |
 
-**Phase 2 is not complete.** Production enablement and Phase 3 implementation are
-not approved by this review. The Cloudflare credential and the full canary are
-the immediate gates; the agreed $6.50 direct workspace budget is unchanged.
+Phase 2's infrastructure lifecycle exit is complete. The following remain
+explicit launch or later-phase gates:
+
+1. **Phase 3 integration:** persist the runtime mapping and operation journal
+   through a forward product database migration; expose thin authenticated APIs
+   with membership checks before every operation; keep capability signing in
+   the control plane; require a committed product-delete receipt; and schedule
+   `idle()` and `reconcile()`. The isolated canary used a synthetic delete
+   receipt. Do not connect this controller directly to product routes yet.
+2. **Startup performance:** the single end-to-end samples were 218 seconds for
+   initial start and 348 seconds for reopen. Both exceed Phase 0's later
+   prepared-image target of p95 at most 120 seconds. These two observations do
+   not establish a percentile; instrument the startup stages, optimize the
+   slow path, then collect the planned 20-start sample before production launch.
+3. **Budget proof:** the agreed $6.50 per-owner direct Azure workspace cap is
+   unchanged. This lifecycle canary does not validate posted billed meters,
+   full-allowance usage, variable disk I/O, egress, or applicable tax. Keep the
+   free-tier release gated on the Phase 0/rollout cost acceptance.
+4. **Production rollout:** Phase 2 used an isolated resource group and did not
+   change product runtime routing, database state, or production deployment.
+   Phase 3 integration, the cold-start target, and measured cost gates must pass
+   before connecting members to ARM workspaces.
+
+**Phase 2 is complete for its isolated infrastructure lifecycle scope.** This
+review does not approve production enablement; Phase 3 and the launch gates above
+remain outstanding. The agreed $6.50 direct workspace budget is unchanged.
 
 ## References
 

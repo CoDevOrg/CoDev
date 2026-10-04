@@ -1,7 +1,7 @@
 # ARM workspace free tier — Phase 1 review
 
 **Date:** 2026-10-04. **Scope:** standalone ARM workspace image and isolated workload proof.
-**Status:** Phase 1 complete for Codex. All six acceptance gates pass under the user-approved Codex-only scope. **Phase 2 started on 2026-10-04; see the [Phase 2 review](./arm-workspace-free-tier-phase-2.md).**
+**Status:** Phase 1 complete for Codex. All six acceptance gates pass under the user-approved Codex-only scope. **Phase 2 isolated infrastructure lifecycle acceptance passed on 2026-10-04; see the [Phase 2 review](./arm-workspace-free-tier-phase-2.md).**
 
 See the [Phase 0 decisions and $6.50 workspace budget](./arm-workspace-free-tier-phase-0.md).
 Production runtime and web deployments were not changed. Commits use `[skip ci]` to suppress existing automatic production workflows; the ARM image workflow is dispatched manually.
