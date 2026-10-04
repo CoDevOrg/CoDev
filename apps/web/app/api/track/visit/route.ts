@@ -1,6 +1,12 @@
 import { getApiUser } from "@/lib/http/api";
 import { hashCallerAddress, recordPageView } from "@/lib/admin/page-views";
 
+import {
+  analyticsAllowed,
+  analyticsPath,
+  analyticsReferrer,
+} from "@/lib/platform/privacy-preferences";
+
 export const runtime = "nodejs";
 
 type VisitPayload = {
@@ -16,6 +22,11 @@ type VisitPayload = {
  * an error from telemetry.
  */
 export async function POST(request: Request) {
+  const optedOut =
+    request.headers.get("sec-gpc") === "1" ||
+    request.headers.get("dnt") === "1";
+  if (!analyticsAllowed(request.headers.get("cookie") ?? "", optedOut))
+    return new Response(null, { status: 204 });
   try {
     const body = (await request.json()) as VisitPayload;
     const path = typeof body.path === "string" ? body.path : null;
@@ -26,12 +37,13 @@ export async function POST(request: Request) {
     const user = await getApiUser().catch(() => null);
 
     await recordPageView({
-      path,
+      path: analyticsPath(path),
       userId: user?.id ?? null,
-      referrer:
+      referrer: analyticsReferrer(
         typeof body.referrer === "string"
           ? body.referrer
           : request.headers.get("referer"),
+      ),
       userAgent: request.headers.get("user-agent"),
       ipHash: hashCallerAddress(request),
     });

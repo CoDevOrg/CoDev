@@ -86,9 +86,10 @@ export default async function SignInPage({
     error?: string;
     mode?: string;
     reset?: string;
+    deleted?: string;
   }>;
 }) {
-  const { callbackUrl, error, mode, reset } = await searchParams;
+  const { callbackUrl, error, mode, reset, deleted } = await searchParams;
   const safeCallback =
     callbackUrl?.startsWith("/") && !callbackUrl.startsWith("//")
       ? callbackUrl
@@ -130,6 +131,12 @@ export default async function SignInPage({
             : "Continue with Google or GitHub, or sign in with the email you already use. CoDev is invite-only — request access from the home page."}
         </p>
 
+        {deleted === "1" ? (
+          <div className="inline-alert" role="status">
+            Your account has been deleted and its CoDev subscriptions canceled.
+          </div>
+        ) : null}
+
         {reset ? (
           <div className="inline-alert" role="status">
             Your password was updated. Sign in with your new password.
@@ -160,6 +167,17 @@ export default async function SignInPage({
           </div>
         ) : null}
 
+        <p className="text-sm">
+          By continuing, you agree to the{" "}
+          <Link className="underline" href="/legal/terms">
+            Terms of service
+          </Link>{" "}
+          and confirm you are at least 18. Read our{" "}
+          <Link className="underline" href="/legal/privacy">
+            Privacy policy
+          </Link>{" "}
+          to understand how your information is used.
+        </p>
         <div className="auth-provider-stack">
           <div className="auth-oauth-buttons">
             <form

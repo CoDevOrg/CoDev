@@ -15,6 +15,8 @@ intent that may have drifted; confirm details against the code.
 | [EMAIL.md](./EMAIL.md)                                                                 | Current | `trycodev.com` email: Resend sending, ImprovMX receiving                |
 | [security/openai-hosted-codex-approval.md](./security/openai-hosted-codex-approval.md) | Current | Approval record for the hosted Codex CLI remote-auth pattern            |
 
+[Legal policies and account deletion](./LEGAL.md) — implementation, publication requirements and sources.
+
 ## Architecture and integration
 
 | Document                                                                   | Status  | Covers                                                                        |

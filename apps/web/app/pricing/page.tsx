@@ -244,6 +244,12 @@ export default async function PricingPage() {
           <Link className="hover:text-foreground" href="/legal/privacy">
             Privacy
           </Link>
+          <Link className="hover:text-foreground" href="/legal/terms">
+            Terms
+          </Link>
+          <Link className="hover:text-foreground" href="/legal/refunds">
+            Refunds & cancellation
+          </Link>
           <Link className="hover:text-foreground" href="/legal/retention">
             Data retention
           </Link>

@@ -9,3 +9,5 @@ This module owns user authentication, identity, and session management. It provi
 - `auth-cookie.ts`, `session.ts`: Managing user sessions and cookies.
 - `identity.ts`, `registration.ts`: Core user identity and signup flows.
 - `password-reset.ts`, `password-reset-mail.ts`: Password recovery mechanisms.
+
+- `account-deletion*.ts`: verified self-service deletion, resource checks, account erasure and shared-history attribution. See `docs/LEGAL.md` for retention limits.

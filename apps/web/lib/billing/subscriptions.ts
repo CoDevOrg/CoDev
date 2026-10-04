@@ -74,7 +74,14 @@ async function resolveOrganizationId(subscription: Stripe.Subscription) {
         ),
       )
       .limit(1);
-    if (byCustomer) return byCustomer.organizationId;
+    if (byCustomer) {
+      const [member] = await db
+        .select({ id: schema.users.id })
+        .from(schema.users)
+        .where(eq(schema.users.id, byCustomer.organizationId))
+        .limit(1);
+      return member?.id ?? null;
+    }
   }
   const userId = subscription.metadata?.userId;
   if (!userId) return null;

@@ -90,3 +90,12 @@ Apply migration `0064_stripe_billing` to the database before deploying.
   delivery log in Stripe. Re-sending the event repairs the row.
 - Webhooks 400: wrong `STRIPE_WEBHOOK_SECRET` for the mode (live vs sandbox).
 - Refunds, tax and invoices are handled in the Stripe Dashboard.
+
+## Legal disclosures and deletion
+
+Checkout requires Stripe terms consent and attaches policy version metadata.
+Configure public policy URLs in Stripe business settings before release; see
+[LEGAL.md](./LEGAL.md). Account deletion expires open checkouts and deletes the
+Stripe customer, so the restricted key also needs Checkout Sessions read/write
+and Customers write. Normal cancellation through the portal remains available.
+Support and refund requests go to admins@trycodev.com.

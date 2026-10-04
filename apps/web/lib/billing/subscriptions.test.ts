@@ -104,6 +104,7 @@ describe("syncStripeSubscription", () => {
   it("returns a canceled member to Free and keeps the customer", async () => {
     mocks.selects.push(
       [{ organizationId: "user-1" }],
+      [{ id: "user-1" }],
       [
         {
           providerSubscriptionId: "sub_new",
@@ -121,7 +122,7 @@ describe("syncStripeSubscription", () => {
   });
 
   it("flags a subscription that cancels at period end", async () => {
-    mocks.selects.push([{ organizationId: "user-1" }], []);
+    mocks.selects.push([{ organizationId: "user-1" }], [{ id: "user-1" }], []);
     await syncStripeSubscription(subscription({ cancel_at_period_end: true }));
     expect(mocks.written[0]).toMatchObject({
       status: "active",
@@ -132,6 +133,7 @@ describe("syncStripeSubscription", () => {
   it("ignores a late cancel of an old subscription when a newer one is live", async () => {
     mocks.selects.push(
       [{ organizationId: "user-1" }],
+      [{ id: "user-1" }],
       [
         {
           providerSubscriptionId: "sub_current",
@@ -146,6 +148,15 @@ describe("syncStripeSubscription", () => {
     expect(result).toEqual({
       synced: false,
       reason: "superseded_subscription",
+    });
+    expect(mocks.written).toHaveLength(0);
+  });
+
+  it("ignores late webhooks for a deleted account even when its billing record remains", async () => {
+    mocks.selects.push([{ organizationId: "deleted-user" }], []);
+    expect(await syncStripeSubscription(subscription())).toEqual({
+      synced: false,
+      reason: "no_matching_member",
     });
     expect(mocks.written).toHaveLength(0);
   });

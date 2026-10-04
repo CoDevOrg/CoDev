@@ -98,7 +98,11 @@ describe("createCheckoutSession customer", () => {
     await createCheckoutSession(member, "https://app.test");
     expect(stripeMock.customers.create).not.toHaveBeenCalled();
     expect(stripeMock.checkout.sessions.create).toHaveBeenCalledWith(
-      expect.objectContaining({ customer: "cus_old" }),
+      expect.objectContaining({
+        customer: "cus_old",
+        consent_collection: { terms_of_service: "required" },
+        metadata: expect.objectContaining({ termsVersion: "2026-10-04" }),
+      }),
     );
   });
 

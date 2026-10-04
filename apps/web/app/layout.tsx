@@ -1,13 +1,12 @@
-import { Suspense } from "react";
 import type { Metadata } from "next";
 import { Inter_Tight, JetBrains_Mono } from "next/font/google";
-import { Analytics } from "@vercel/analytics/next";
 
 import "./theme-tokens.css";
 import "./globals.css";
 import "./app-theme.css";
+import "./privacy-controls.css";
 
-import { VisitTracker } from "@/components/landing/visit-tracker";
+import { PrivacyChoices } from "@/components/landing/privacy-choices";
 import { THEME_INIT_SCRIPT } from "@/components/shell/theme-toggle";
 
 const sans = Inter_Tight({
@@ -67,10 +66,7 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         {children}
-        <Analytics />
-        <Suspense fallback={null}>
-          <VisitTracker />
-        </Suspense>
+        <PrivacyChoices />
       </body>
     </html>
   );
