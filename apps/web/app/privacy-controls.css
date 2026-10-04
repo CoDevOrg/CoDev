@@ -1,0 +1,64 @@
+/* Root-level privacy controls also render on pages without Tailwind. */
+.privacy-controls {
+  --color-background: var(--brand-paper);
+  --color-foreground: var(--brand-ink);
+  --color-primary-foreground: var(--brand-on-accent);
+  color: var(--brand-ink);
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.privacy-banner {
+  position: fixed;
+  z-index: 100;
+  bottom: 16px;
+  left: 16px;
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid rgba(var(--brand-ink-rgb), 0.25);
+  border-radius: 12px;
+  background: var(--brand-paper);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+}
+.privacy-banner h2 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+.privacy-banner p {
+  margin: 0 0 12px;
+}
+.privacy-banner a {
+  text-decoration: underline;
+}
+.privacy-banner > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.privacy-controls button {
+  border: 1px solid rgba(var(--brand-ink-rgb), 0.3);
+  border-radius: 6px;
+  padding: 8px 12px;
+  background: var(--brand-paper);
+  color: var(--brand-ink);
+  cursor: pointer;
+  font: inherit;
+}
+.privacy-controls button:focus-visible {
+  outline: 2px solid var(--brand-accent);
+  outline-offset: 3px;
+}
+.privacy-controls button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.privacy-controls .privacy-reopen {
+  position: fixed;
+  z-index: 90;
+  bottom: 8px;
+  left: 8px;
+  padding: 4px 8px;
+  font-size: 11px;
+}

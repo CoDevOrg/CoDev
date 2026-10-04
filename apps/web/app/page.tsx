@@ -248,6 +248,8 @@ export default async function HomePage() {
           <Link href="/pricing">Pricing</Link>
           <Link href="/sign-in">Sign in</Link>
           <Link href="/legal/privacy">Privacy</Link>
+          <Link href="/legal/terms">Terms</Link>
+          <Link href="/legal/refunds">Refunds & cancellation</Link>
           <Link href="/legal/retention">Data retention</Link>
         </nav>
       </footer>

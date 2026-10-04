@@ -93,7 +93,22 @@ export async function createCheckoutSession(member: Member, origin: string) {
     client_reference_id: member.id,
     line_items: [{ price: priceId, quantity: 1 }],
     subscription_data: { metadata: { userId: member.id } },
-    metadata: { userId: member.id },
+    metadata: {
+      userId: member.id,
+      termsVersion: "2026-10-04",
+      refundPolicyVersion: "2026-10-04",
+    },
+    consent_collection: { terms_of_service: "required" },
+    custom_text: {
+      terms_of_service_acceptance: {
+        message:
+          "I agree to the [CoDev Terms](https://trycodev.com/legal/terms) and [refund and cancellation policy](https://trycodev.com/legal/refunds).",
+      },
+      submit: {
+        message:
+          "Renews monthly until canceled. Cancel in Settings → Billing → Manage billing. Refunds are reviewed individually; statutory rights apply. Privacy: https://trycodev.com/legal/privacy",
+      },
+    },
     allow_promotion_codes: true,
     success_url: `${origin}${BILLING_PATH}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${origin}${BILLING_PATH}?checkout=canceled`,

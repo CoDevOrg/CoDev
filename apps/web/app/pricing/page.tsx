@@ -5,9 +5,8 @@ import { Check, ChevronDown, Lock } from "lucide-react";
 
 import "@/app/product-theme.css";
 
-import { BillingButton } from "@/components/billing/billing-button";
 import { INDIVIDUAL_FEATURES } from "@/components/billing/plan";
-import { LinkButton } from "@/components/ui/button";
+import { Button, LinkButton } from "@/components/ui/button";
 import { getCurrentAppUser } from "@/lib/auth/identity";
 import { getBillingStatus } from "@/lib/billing/access";
 import {
@@ -147,14 +146,9 @@ export default async function PricingPage() {
                 Manage plan
               </LinkButton>
             ) : (
-              <BillingButton
-                action="checkout"
-                fullWidth
-                size="lg"
-                variant="solid"
-              >
+              <Button className="w-full" disabled size="lg" variant="solid">
                 Subscribe for ${INDIVIDUAL_PRICE_USD_PER_MONTH}/month
-              </BillingButton>
+              </Button>
             )}
 
             <ul className="space-y-3 border-t border-border/60 pt-6 text-sm">
@@ -243,6 +237,12 @@ export default async function PricingPage() {
           </Link>
           <Link className="hover:text-foreground" href="/legal/privacy">
             Privacy
+          </Link>
+          <Link className="hover:text-foreground" href="/legal/terms">
+            Terms
+          </Link>
+          <Link className="hover:text-foreground" href="/legal/refunds">
+            Refunds & cancellation
           </Link>
           <Link className="hover:text-foreground" href="/legal/retention">
             Data retention

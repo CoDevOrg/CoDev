@@ -6,13 +6,11 @@ import { cookies } from "next/headers";
 import { schema } from "@codev/db";
 
 import { getDatabase } from "../platform/database";
-import { INVITE_GRANT_COOKIE, openInviteGrant } from "./invite-grant";
+import { INVITE_GRANT_COOKIE, type InviteGrant } from "./invite-grant";
 
 /**
- * CoDev is invite-only: a new account may be created only when the email was
- * moved to `invited` on the waitlist AND the browser carries a valid invite
- * grant (from following the invite link). A short comma-separated
- * `SIGNUP_ALLOWLIST` env lets the founding team bypass the waitlist.
+ * CoDev is closed while the product is being prepared: no new account may be
+ * created, including through an old invite link or the former allowlist.
  *
  * This gate governs *account creation only*. Anyone who already has a `users`
  * row keeps signing in normally.
@@ -42,18 +40,14 @@ export function isEmailAllowlisted(
   email: string | null | undefined,
   env: AllowlistEnv = process.env,
 ): boolean {
-  if (!email) return false;
-  return parseSignupAllowlist(env).includes(email.trim().toLowerCase());
+  void email;
+  void env;
+  return false;
 }
 
-/** Reads and verifies the signed invite-grant cookie, if present. */
-export async function readInviteGrant() {
-  try {
-    const raw = (await cookies()).get(INVITE_GRANT_COOKIE)?.value;
-    return openInviteGrant(raw);
-  } catch {
-    return null;
-  }
+/** Registration is closed, so invite links are never surfaced as usable. */
+export async function readInviteGrant(): Promise<InviteGrant | null> {
+  return null;
 }
 
 export type RegistrationDecision =
@@ -62,51 +56,17 @@ export type RegistrationDecision =
   | { allowed: false; code: RegistrationError["code"] };
 
 /**
- * Decides whether `email` may create an account right now. `email` may be
- * undefined for a GitHub account with no public address — in that case only a
- * valid invite grant (which carries its own invited address) can authorize it.
+ * Decides whether `email` may create an account right now. This remains a
+ * separate function so every identity provider passes through the same closed
+ * gate when registration is reopened.
  */
 export async function evaluateRegistration(input: {
   email?: string | null | undefined;
 }): Promise<RegistrationDecision> {
-  if (isEmailAllowlisted(input.email)) {
-    return { allowed: true, via: "allowlist" };
-  }
-
-  const grant = await readInviteGrant();
-  if (!grant) {
-    return { allowed: false, code: "invite_required" };
-  }
-
-  const [row] = await getDatabase()
-    .select({
-      id: schema.accessRequests.id,
-      email: schema.accessRequests.email,
-      status: schema.accessRequests.status,
-      acceptedAt: schema.accessRequests.acceptedAt,
-      inviteTokenExpiresAt: schema.accessRequests.inviteTokenExpiresAt,
-    })
-    .from(schema.accessRequests)
-    .where(eq(schema.accessRequests.id, grant.requestId))
-    .limit(1);
-
-  if (!row || row.email.toLowerCase() !== grant.email.toLowerCase()) {
-    return { allowed: false, code: "invite_required" };
-  }
-  if (row.acceptedAt) {
-    return { allowed: false, code: "invite_used" };
-  }
-  if (row.status !== "invited") {
-    return { allowed: false, code: "invite_required" };
-  }
-  if (
-    row.inviteTokenExpiresAt &&
-    row.inviteTokenExpiresAt.getTime() <= Date.now()
-  ) {
-    return { allowed: false, code: "invite_expired" };
-  }
-
-  return { allowed: true, via: "invite", requestId: row.id };
+  // Deliberately do this before reading any grant. A stale invite or a
+  // deployed SIGNUP_ALLOWLIST must never reopen registration by accident.
+  void input;
+  return { allowed: false, code: "invite_required" };
 }
 
 export async function assertCanRegister(input: {
@@ -119,7 +79,7 @@ export async function assertCanRegister(input: {
         ? "This invitation has already been used."
         : decision.code === "invite_expired"
           ? "This invitation link has expired. Ask us for a fresh one."
-          : "CoDev is invite-only right now. Join the waitlist and we'll email you a link when you're in.";
+          : "CoDev is not accepting new accounts yet. Join the waitlist and we'll email you when registration opens.";
     throw new RegistrationError(decision.code, message);
   }
   return decision;

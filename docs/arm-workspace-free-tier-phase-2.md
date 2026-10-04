@@ -1,10 +1,8 @@
 # ARM workspace Phase 2 — infrastructure review
 
-**Date:** 2026-10-04. **Status:** started; incomplete. The user authorized Phase 2.
-This change establishes and exercises candidate VM, disk, connection, and teardown
-primitives. It does not implement the autonomous lifecycle controller, satisfy the
-Phase 2 exit gate, or enable ARM workspaces in production. Codex remains the only
-accepted agent provider. Phase 3 product database/API integration has not started.
+**Date:** 2026-10-04. **Status:** Phase 2 infrastructure exit criteria passed.
+Codex remains the only accepted agent provider. Phase 3 product database/API
+integration and production enablement have not started.
 
 ## Decisions and code
 
@@ -19,10 +17,14 @@ accepted agent provider. Phase 3 product database/API integration has not starte
 | Initialize     | Format only an explicitly new, signature-free disk whose exact byte size is 17,179,869,184. Existing disks require the saved ext4 UUID and existing private metadata. Missing or altered saved state fails closed. A repeated `new` command refuses an already formatted disk.                                                                                       |
 | Stop           | Revoke routing first. Verify generation ownership, request Azure deallocation, observe `PowerState/deallocated`, delete compute, then remove remaining generation-owned networking/OS resources. Retain the data disk. A retry can clean surviving resources.                                                                                                        |
 
-Files are under `infra/azure` and `infra/runtime/scripts`; infrastructure tests run
-through `pnpm test:infra`. The template and shell helpers expect an already fenced
-controller. They are **not** sufficient to serialize startup or handle lease loss.
-Do not call them from product routes directly.
+The infrastructure controller persists a generation and operation journal in the
+private `arm-workspace-state` Blob container and takes a 60-second renewable Blob
+lease before mutation. It resumes expired operations under the same generation,
+uses deterministic generation-owned resource names, retains disk identity across
+VM replacement, and cleans failed generations before reuse. The controller is in
+`infra/azure`; infrastructure tests run through `pnpm test:infra`. Product routes
+must call it through the Phase 3 adapter after membership checks, never call the
+VM template or shell helpers directly.
 
 The existing disk setup is intended for disks initialized by this lifecycle path.
 It intentionally refuses a legacy saved disk without private metadata. Importing
@@ -35,23 +37,60 @@ Subscription inspection used the signed-in Azure CLI. The canary ran only in
 `codev-arm-workspace-phase1`; no production VM, web deployment, shared runtime
 configuration, or product database changed.
 
-| Check               | Observed result                                                                                                                                                                                                                                                                                                                                             |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| VM provisioning     | Bicep deployment succeeded using accepted image `1.0.8`, generation 1, D2ps_v6, existing 16 GiB data disk. No inbound allow rule was added.                                                                                                                                                                                                                 |
-| Initialization      | New-disk setup succeeded; saved UUID `0ca036ad-bf63-4bfa-abd3-638c430a2dcf`. Subsequent existing-disk setup verified that UUID.                                                                                                                                                                                                                             |
-| Private metadata    | Metadata directories root:root 0700. Terminal UID 2000 could not read the saved fixture. A correctly authorized `/v1/files/read` request for the private host DB failed; service namespace masking hides the source.                                                                                                                                        |
-| Actual named tunnel | Cloudflare account tunnel/configuration and temporary proxied DNS record succeeded. Protected Custom Script extension installed the connector and gateway successfully. This was a named account tunnel, not a Quick Tunnel.                                                                                                                                |
-| Public HTTPS        | Signed `/v1/health` returned 200 with ready/mount/bridge true and the correct workspace/generation. Anonymous, wrong-workspace, stale-generation, and expired capabilities returned 403. `/v1/pty/exec` returned 404.                                                                                                                                       |
-| Reboot              | Workspace fixture and private metadata fixture survived; UUID unchanged; guestd, Superset, gateway, and tunnel services were active after reboot. Signed HTTPS health recovered.                                                                                                                                                                            |
-| Stop                | DNS and tunnel connections were removed; tunnel deleted. Cleanup observed deallocation, deleted compute/network/OS resources, and left only the durable data disk, `Unattached` with no `managedBy`.                                                                                                                                                        |
-| Replacement         | A fresh generation-2 VM attached the same disk and reported the same UUID. **Failed acceptance:** image 1.0.8's boot-time recursive permissions changed metadata to root:codev-shell 2720, violating the saved metadata contract. The source fix removes those recursive ARM guest unit commands. A rebuilt image has not yet proved this replacement path. |
+| Check               | Observed result                                                                                                                                                                                                              |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| VM provisioning     | Bicep deployment succeeded using accepted image `1.0.8`, generation 1, D2ps_v6, existing 16 GiB data disk. No inbound allow rule was added.                                                                                  |
+| Initialization      | New-disk setup succeeded; saved UUID `0ca036ad-bf63-4bfa-abd3-638c430a2dcf`. Subsequent existing-disk setup verified that UUID.                                                                                              |
+| Private metadata    | Metadata directories root:root 0700. Terminal UID 2000 could not read the saved fixture. A correctly authorized `/v1/files/read` request for the private host DB failed; service namespace masking hides the source.         |
+| Actual named tunnel | Cloudflare account tunnel/configuration and temporary proxied DNS record succeeded. Protected Custom Script extension installed the connector and gateway successfully. This was a named account tunnel, not a Quick Tunnel. |
+| Public HTTPS        | Signed `/v1/health` returned 200 with ready/mount/bridge true and the correct workspace/generation. Anonymous, wrong-workspace, stale-generation, and expired capabilities returned 403. `/v1/pty/exec` returned 404.        |
+| Reboot              | Workspace fixture and private metadata fixture survived; UUID unchanged; guestd, Superset, gateway, and tunnel services were active after reboot. Signed HTTPS health recovered.                                             |
+| Stop                | DNS and tunnel connections were removed; tunnel deleted. Cleanup observed deallocation, deleted compute/network/OS resources, and left only the durable data disk, `Unattached` with no `managedBy`.                         |
+| Replacement         | Image 1.0.8 failed this check because boot-time recursive permissions changed metadata to root:codev-shell 2720. The replacement proof below validates the repaired image.                                                   |
 
-The token transfer into local protected settings used an ephemeral encrypted
+### Rebuilt image and lifecycle canary
+
+- [Image build `1.0.9`](https://github.com/CoDevOrg/CoDev/actions/runs/37224637267)
+  succeeded. A new VM initialized disk `codev-p2proof-data` with UUID
+  `7ddb1948-b876-4f47-80fe-7b9c8e0b6fad`; a generation-2 VM mounted the same
+  disk after complete generation-1 teardown. Both workspace and private
+  Superset fixtures survived, private metadata stayed `root:root 0700`, and
+  guestd, Superset, and the local caller firewall were active. All proof VM,
+  network, OS, and data disk resources were removed afterward.
+- [Image build `1.0.10`](https://github.com/CoDevOrg/CoDev/actions/runs/37226212644)
+  succeeded with the bridge-protected live agent activity route. Its native ARM
+  build ran Rust and host-service checks. It is the exact version pinned by the
+  candidate controller.
+- The private Blob state container was deployed in the isolated resource group.
+  [Automated canary run `37227590105`](https://github.com/CoDevOrg/CoDev/actions/runs/37227590105)
+  acquired state, created a 16 GiB disk, provisioned image `1.0.10`, verified
+  guest disk setup, and reached tunnel creation. `POST /accounts/.../cfd_tunnel`
+  returned HTTP 403 for the repository `CLOUDFLARE_API_TOKEN`. The failure
+  cleanup deallocated and deleted the VM, network, OS disk, and disposable data
+  disk. An Azure resource list scoped to that canary workspace returned `[]`.
+- After the repository secret was updated, the tunnel/DNS permission preflight
+  passed before VM allocation. The complete
+  [automated lifecycle canary `37230952626`](https://github.com/CoDevOrg/CoDev/actions/runs/37230952626)
+  passed in 11m36s on image `1.0.10`. Initial start took 218 seconds and reopen
+  took 348 seconds. Both ready generations used the same 16 GiB disk UUID. A
+  shell-user file, direct-child Git worktree, and root-owned mode-0700 Superset
+  metadata survived VM replacement; the private metadata remained unreadable to
+  the shell user. Same-key start was idempotent, stop waited for deallocation,
+  the live-agent-aware idle path stopped the VM after the test clock advanced
+  15 minutes, and deletion removed the owned data disk using a disposable
+  synthetic product-delete receipt.
+- Post-run Azure inventory returned no resources tagged
+  `WorkspaceId=phase2-37230952626`. A Cloudflare account/zone API inventory
+  returned zero active tunnels and zero DNS records for the canary preflight
+  name and lifecycle generations 1–3. The temporary preflight resources and
+  workspace routes were therefore absent after cleanup.
+
+The earlier manual tunnel canary's token transfer into local protected settings used an ephemeral encrypted
 envelope; tool output contained no plaintext connector token. The extension's
 public settings contained no token. This is scoped evidence, not a universal
 credential-leak audit.
 
-Both canary VM generations were torn down. After proving retained-disk behavior,
+Both earlier manual canary VM generations were torn down. After proving retained-disk behavior,
 the explicitly owned disposable test disk was deleted; it had no product workspace
 record or member data. Temporary DNS/tunnel resources, keys, and local protected
 settings were removed. This cleanup does not validate the product-delete contract.
@@ -60,56 +99,64 @@ settings were removed. This cleanup does not validate the product-delete contrac
 
 - `pnpm typecheck`, `pnpm lint`, and `pnpm test` passed. Lint has existing warnings;
   the candidate files introduce no new lint diagnostics.
-- 32 infrastructure tests pass, including capability rejection cases, HTTP health
-  authorization, forbidden routes, stale-generation teardown making zero Azure
-  mutations, and cleanup after a missing VM.
+- 41 infrastructure tests pass, including capability rejection cases, concurrent
+  start fencing, expired-operation recovery, six-failure exhaustion, 15-minute
+  idle decisions, partial stop retry, tunnel-revoke failure releasing compute,
+  forbidden routes, and generation-safe teardown.
 - Bicep compilation, Bash syntax checks, scoped formatting, and `git diff --check`
   pass.
-- The Azure canary caught inherited directory setgid bits during initialization;
-  explicit `chmod 00700` fixes those bits. It also caught the image permission
-  problem on VM replacement; that remains a release acceptance gate.
+- `pnpm test:infra` passes all 41 tests. Coverage includes concurrent starts
+  under one durable lease, transient Azure conflicts and backoff, expired
+  operation recovery, retry exhaustion, partial-stop recovery, billable-compute
+  cleanup after tunnel failure, and capability rejection for wrong workspace,
+  generation, audience/host, issuer, scope, method, path, body digest, and time.
+- The rebuilt image `1.0.9` passed the previously failing VM replacement and
+  saved-metadata permission check. Image `1.0.10` published successfully and
+  passed the full live lifecycle canary above.
 
-## Remaining work and acceptance criteria
+## Acceptance and remaining gates
 
-1. **Hardened image:** publish a new immutable candidate with the updated ARM guest
-   unit. Re-run live Codex, local caller firewall, profile privacy, disk boot, and
-   VM replacement checks. Keep image 1.0.8 out of production lifecycle selection.
-2. **Fenced controller:** implement a durable operation journal and generation/lease
-   handling against the Phase 0 contract. Two concurrent starts must create one
-   VM attachment; retries return the same operation. An expired worker cannot
-   initialize, attach, route, or delete a newer generation. Lost workers reconcile
-   Azure operations before another worker takes over. No in-memory-only lock.
-3. **Bounded failures:** inject allocation conflicts, starting/stopping/deallocating
-   states, throttling, missing disks, attach conflicts, tunnel failure, readiness
-   timeout, and partial deletion. Backoff and attempt/deadline limits must persist;
-   exhaustion leaves a terminal safe error and retryable cleanup work.
-4. **Idle and active work:** implement the 15-minute idle timer from recent member
-   input/running agent work. Polls and health checks never renew it. An agent keeps
-   running after browser closure; an idle stop confirms actual deallocation and
-   deletes ephemeral billable resources.
-5. **Connection lifecycle:** automate tunnel creation, encrypted token references,
-   protected delivery, route revocation, and recovery. Prove rejected capabilities
-   through the Worker path, wrong-host routing, signing-key rotation, unhealthy
-   bridge behavior, and token refresh. The canary used control-side signing, not
-   a deployed Worker membership/signing path.
-6. **Delete:** accept product deletion only after its database transaction commits;
-   revoke routing and stop compute before deleting exactly its owned data disk.
-   Fault retries must finish without deleting another workspace's data or leaving
-   billable orphan resources. The stop helper deliberately cannot delete data.
-7. **Full exit matrix:** automated create/open/idle/stop/reopen/delete with concurrent
-   requests and Azure faults; verify file contents, Git/worktrees, Superset
-   metadata, disk identity, and privacy at every transition. Record real start
-   timings and resource cleanup evidence.
+| Phase 2 acceptance criterion                                                              | Result                                                                                 |
+| ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Create, open, idempotent retry, stop, reopen, idle-stop, and delete                       | **PASS** — live isolated canary `37230952626`                                          |
+| Same saved disk UUID and files after VM replacement                                       | **PASS** — workspace file, direct-child Git worktree, and private metadata verified    |
+| Azure concurrency, retries, stale-operation recovery, and partial cleanup                 | **PASS** — covered by the 41 passing infrastructure tests                              |
+| Signed transport, workspace/generation/host binding, guest readiness, and secret handling | **PASS** — isolated HTTPS canary plus capability rejection tests                       |
+| Canary resource cleanup                                                                   | **PASS** — no tagged Azure resources, active tunnels, or matching DNS records remained |
 
-**Phase 2 is not complete.** Production enablement and Phase 3 implementation are
-not approved by this review. The VM replacement image fix and lifecycle controller
-are the next work; none of the remaining items requires changes to hosting cost or
-the agreed $6.50 direct workspace budget.
+Phase 2's infrastructure lifecycle exit is complete. The following remain
+explicit launch or later-phase gates:
+
+1. **Phase 3 integration:** persist the runtime mapping and operation journal
+   through a forward product database migration; expose thin authenticated APIs
+   with membership checks before every operation; keep capability signing in
+   the control plane; require a committed product-delete receipt; and schedule
+   `idle()` and `reconcile()`. The isolated canary used a synthetic delete
+   receipt. Do not connect this controller directly to product routes yet.
+2. **Startup performance:** the single end-to-end samples were 218 seconds for
+   initial start and 348 seconds for reopen. Both exceed Phase 0's later
+   prepared-image target of p95 at most 120 seconds. These two observations do
+   not establish a percentile; instrument the startup stages, optimize the
+   slow path, then collect the planned 20-start sample before production launch.
+3. **Budget proof:** the agreed $6.50 per-owner direct Azure workspace cap is
+   unchanged. This lifecycle canary does not validate posted billed meters,
+   full-allowance usage, variable disk I/O, egress, or applicable tax. Keep the
+   free-tier release gated on the Phase 0/rollout cost acceptance.
+4. **Production rollout:** Phase 2 used an isolated resource group and did not
+   change product runtime routing, database state, or production deployment.
+   Phase 3 integration, the cold-start target, and measured cost gates must pass
+   before connecting members to ARM workspaces.
+
+**Phase 2 is complete for its isolated infrastructure lifecycle scope.** This
+review does not approve production enablement; Phase 3 and the launch gates above
+remain outstanding. The agreed $6.50 direct workspace budget is unchanged.
 
 ## References
 
 - [Cloudflare run parameters](https://developers.cloudflare.com/tunnel/reference/run-parameters/)
   documents the connector's token-file option.
+- [Cloudflare API tunnel setup](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel-api/)
+  documents the account Tunnel Edit and zone DNS Edit token permissions.
 - [Azure Custom Script for Linux](https://learn.microsoft.com/en-us/azure/virtual-machines/extensions/custom-script-linux)
   documents protected settings for sensitive extension input.
 - [Cloudflared 2026.9.3](https://github.com/cloudflare/cloudflared/releases/tag/2026.9.3):

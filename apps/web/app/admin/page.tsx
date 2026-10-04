@@ -5,6 +5,7 @@ import "./admin.css";
 
 import { AdminWaitlist } from "@/components/admin/admin-waitlist";
 import { AdminFeatureControls } from "@/components/admin/admin-feature-controls";
+import { AdminAccountAccessControls } from "@/components/admin/admin-account-access-controls";
 import { AppChrome } from "@/components/shell/app-chrome";
 import { listAccessRequests } from "@/lib/admin/access-requests";
 import { requireAdmin } from "@/lib/admin/admin";
@@ -16,6 +17,7 @@ import {
   getUserDirectory,
 } from "@/lib/admin/admin-stats";
 import { getAdminFeatureAccessData } from "@/lib/admin/admin-feature-access";
+import { getAdminAccountAccessData } from "@/lib/admin/admin-account-access";
 
 export const metadata: Metadata = { title: "Admin" };
 export const dynamic = "force-dynamic";
@@ -54,6 +56,7 @@ export default async function AdminPage() {
     daily,
     waitlist,
     featureAccess,
+    accountAccess,
   ] = await Promise.all([
     getAdminSummary(),
     getUserDirectory(),
@@ -62,6 +65,7 @@ export default async function AdminPage() {
     getDailyTraffic(30),
     listAccessRequests(),
     getAdminFeatureAccessData(),
+    getAdminAccountAccessData(),
   ]);
 
   const waitlistPending = waitlist.filter(
@@ -126,6 +130,19 @@ export default async function AdminPage() {
         </div>
 
         <section className="admin-section">
+          <h2>Account control</h2>
+          <p className="admin-console-sub admin-section-intro">
+            Manage paid access and administrative or organization permissions
+            without editing database records manually.
+          </p>
+          <AdminAccountAccessControls
+            accounts={accountAccess}
+            members={featureAccess.members}
+            organizations={featureAccess.organizations}
+          />
+        </section>
+
+        <section className="admin-section">
           <h2>Feature access</h2>
           <p className="admin-console-sub admin-section-intro">
             Assign plan defaults, then add temporary or permanent organization
@@ -177,8 +194,8 @@ export default async function AdminPage() {
             ) : null}
           </h2>
           <p className="admin-console-sub" style={{ marginBottom: "1rem" }}>
-            Account creation is invite-only. &ldquo;Invite&rdquo; emails a
-            single-use link that lets that person sign up with any provider.
+            Registration is closed. Waitlist entries remain available for launch
+            planning, but invitations cannot create accounts yet.
           </p>
           <AdminWaitlist rows={waitlist} />
         </section>

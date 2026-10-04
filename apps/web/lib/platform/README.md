@@ -12,3 +12,5 @@ This module owns foundational infrastructure integrations and platform-level cro
 - `observability.ts`: Application logging and metrics.
 - `rate-limit.ts`, `upstash-rate-limit.ts`: API and action rate limiting.
 - `kms.ts`, `crypto.ts`: Key management and encryption utilities.
+
+- `privacy-preferences.ts`: analytics consent interpretation and URL minimization shared by browser and server ingestion.

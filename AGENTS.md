@@ -10,6 +10,7 @@
 - `infra/azure/` and `infra/runtime/`: Azure stack and runtime host scripts.
 - `vendor/superset/`: vendored Superset source; search it only for related work.
 - `docs/README.md`: documentation index with freshness status. Start there for deeper background.
+- `docs/WEB_HOSTING.md`: Cloudflare versus Vercel hosting and secret ownership; update it with any hosting, routing, or runtime-secret change.
 
 ## Key conventions and gotchas
 

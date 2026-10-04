@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
+
+import {
+  analyticsAllowed,
+  analyticsPath,
+  analyticsReferrer,
+} from "@/lib/platform/privacy-preferences";
 
 /**
  * Records one page view per client-side navigation. Mounted once in the root
@@ -13,13 +19,14 @@ import { usePathname, useSearchParams } from "next/navigation";
  */
 export function VisitTracker() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const lastSent = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!pathname) return;
-    const query = searchParams?.toString();
-    const path = query ? `${pathname}?${query}` : pathname;
+    const signal =
+      (navigator as Navigator & { globalPrivacyControl?: boolean })
+        .globalPrivacyControl === true || navigator.doNotTrack === "1";
+    if (!pathname || !analyticsAllowed(document.cookie, signal)) return;
+    const path = analyticsPath(pathname);
 
     // Guard against React re-running the effect for the same location.
     if (lastSent.current === path) return;
@@ -27,7 +34,7 @@ export function VisitTracker() {
 
     const payload = JSON.stringify({
       path,
-      referrer: typeof document !== "undefined" ? document.referrer : null,
+      referrer: analyticsReferrer(document.referrer),
     });
 
     try {
@@ -46,7 +53,7 @@ export function VisitTracker() {
       headers: { "content-type": "application/json" },
       keepalive: true,
     }).catch(() => {});
-  }, [pathname, searchParams]);
+  }, [pathname]);
 
   return null;
 }

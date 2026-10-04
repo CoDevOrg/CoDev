@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { LoaderCircle } from "lucide-react";
 
@@ -74,6 +75,28 @@ export function BillingButton({
         ) : null}
         {children}
       </Button>
+      {action === "checkout" ? (
+        <p className="max-w-sm text-xs text-muted-foreground">
+          Renews monthly until canceled. Cancel in Settings → Billing. Review
+          our{" "}
+          <Link className="underline" href="/legal/terms">
+            terms
+          </Link>
+          ,{" "}
+          <Link className="underline" href="/legal/privacy">
+            privacy policy
+          </Link>
+          , and{" "}
+          <Link className="underline" href="/legal/refunds">
+            refund and cancellation policy
+          </Link>{" "}
+          before checkout.
+        </p>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          Update payment details, view invoices or cancel your subscription.
+        </p>
+      )}
       {error ? (
         <p className="text-xs text-red-400" role="alert">
           {error}

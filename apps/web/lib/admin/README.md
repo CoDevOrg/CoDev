@@ -6,6 +6,6 @@ This module owns site administration and organization-level management functiona
 
 **Key files:**
 
-- `admin.ts`, `organization-settings.ts`: Core admin and organization management logic.
+- `admin.ts`, `organization-settings.ts`, `admin-account-access.ts`: Core admin and organization management logic, including account subscriptions and role changes.
 - `access-requests.ts`, `access-request-mail.ts`: Handling workspace or site access requests.
 - `admin-stats.ts`: High-level site usage and reporting.

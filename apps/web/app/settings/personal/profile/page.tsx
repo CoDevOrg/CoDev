@@ -1,5 +1,5 @@
 import { isGitHubAuthConfigured } from "@codev/config";
-import { Download, KeyRound, Mail } from "lucide-react";
+import { KeyRound, Mail } from "lucide-react";
 
 import { connectGitHubAccount } from "@/app/actions/github";
 import { updateDisplayName } from "@/app/actions/profile";
@@ -10,6 +10,7 @@ import {
   SettingsPageHeader,
   SettingsPageShell,
 } from "@/components/settings/settings-style";
+import { DeleteAccountPanel } from "@/components/settings/delete-account-panel";
 import { SetPasswordForm } from "@/components/settings/set-password-form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -266,25 +267,7 @@ export default async function PersonalProfilePage({
           </CardContent>
         </Card>
       )}
-
-      <Card className="flex flex-row flex-wrap items-center justify-between gap-4 p-4">
-        <CardHeader>
-          <CardTitle>Your data</CardTitle>
-          <CardDescription>
-            A JSON copy of your profile, sign-in methods, and the names of your
-            environment variables. Secrets are never included.
-          </CardDescription>
-        </CardHeader>
-        <LinkButton
-          download
-          href="/api/settings/export"
-          size="sm"
-          variant="outline"
-        >
-          <Download aria-hidden data-icon="inline-start" />
-          Download account data
-        </LinkButton>
-      </Card>
+      <DeleteAccountPanel />
     </SettingsPageShell>
   );
 }

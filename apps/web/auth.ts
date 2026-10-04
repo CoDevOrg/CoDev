@@ -473,6 +473,14 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
         }
       }
 
+      if (token.localUserId) {
+        const [current] = await getDatabase()
+          .select({ id: schema.users.id })
+          .from(schema.users)
+          .where(eq(schema.users.id, token.localUserId))
+          .limit(1);
+        if (!current) return null;
+      }
       return token;
     },
     session({ session, token }) {

@@ -123,6 +123,12 @@ export function RequestAccessForm() {
         </p>
       ) : null}
 
+      <p className="lp-form-note">
+        We use these details to review your request and email you about access.
+        Read our <a href="/legal/privacy">Privacy policy</a>. Contact{" "}
+        <a href="mailto:admins@trycodev.com">admins@trycodev.com</a> to remove
+        your request.
+      </p>
       <button
         className="lp-cta lp-cta-primary lp-form-submit"
         type="submit"

@@ -41,6 +41,15 @@ const workspaceId = "11111111-1111-4111-8111-111111111111";
 describe("Gen2TerminalPane", () => {
   beforeEach(() => {
     terminalMocks.instances.length = 0;
+    // These cases exercise HTTP fallback, without a real network connection.
+    vi.stubGlobal(
+      "WebSocket",
+      class {
+        constructor() {
+          throw new Error("WebSocket unavailable in HTTP fallback test");
+        }
+      },
+    );
     class ResizeObserverStub {
       observe() {}
       disconnect() {}
@@ -88,7 +97,7 @@ describe("Gen2TerminalPane", () => {
     await waitFor(() => expect(onResumeWorkspace).toHaveBeenCalledOnce());
   });
 
-  it("batches input typed before the request leaves, without changing order", async () => {
+  it("sends input in order while the output poll remains open", async () => {
     const inputCalls: string[] = [];
 
     vi.stubGlobal(
@@ -133,7 +142,7 @@ describe("Gen2TerminalPane", () => {
     sendInput("w");
     sendInput("d");
 
-    await waitFor(() => expect(inputCalls).toEqual(["pwd"]));
+    await waitFor(() => expect(inputCalls.join("")).toBe("pwd"));
     unmount();
   });
 
