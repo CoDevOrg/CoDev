@@ -28,7 +28,7 @@ export default defineConfig({
     },
 
     env: {
-      VERCEL_ENV: bindings.text("production"),
+      VERCEL_ENV: bindings.secret(),
       ACCESS_REQUEST_NOTIFY_EMAIL: bindings.secret(),
       AUTH_GITHUB_ID: bindings.secret(),
       AUTH_GITHUB_SECRET: bindings.secret(),
