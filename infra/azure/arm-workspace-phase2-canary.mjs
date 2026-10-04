@@ -66,6 +66,7 @@ const lifecycle = new ArmWorkspaceLifecycle(
   tunnel,
   guest,
   () => now,
+  async () => {},
 );
 const startedAt = Date.now();
 let completed = false;

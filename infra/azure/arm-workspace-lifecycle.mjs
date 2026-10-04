@@ -4,12 +4,20 @@ import { provisionArmWorkspace } from "./arm-workspace-provision.mjs";
 // Infrastructure worker. The Blob lease is the durable single-writer fence;
 // every side effect has a generation-scoped Azure/Cloudflare resource name.
 export class ArmWorkspaceLifecycle {
-  constructor(state, azure, tunnel, guest, clock = Date.now) {
+  constructor(
+    state,
+    azure,
+    tunnel,
+    guest,
+    clock = Date.now,
+    checkpointCredentials,
+  ) {
     this.state = state;
     this.azure = azure;
     this.tunnel = tunnel;
     this.guest = guest;
     this.clock = clock;
+    this.checkpointCredentials = checkpointCredentials;
   }
 
   async cleanupFailedGeneration(workspaceId, generation) {
@@ -160,6 +168,9 @@ export class ArmWorkspaceLifecycle {
           routeError = error;
         }
         if (state.vmId && state.flushRequired) {
+          if (typeof this.checkpointCredentials !== "function")
+            throw new Error("CREDENTIAL_CHECKPOINT_UNCONFIGURED");
+          await this.checkpointCredentials(workspaceId, state.vmId);
           await this.guest.flush(state.vmId);
           state = await write({ ...state, flushRequired: false });
         }
