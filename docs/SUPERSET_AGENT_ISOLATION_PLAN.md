@@ -52,4 +52,7 @@ receive a separate credential-free boundary.
 - New launches now dispatch a server-owned monitor that long-polls the host,
   renews seats from verified liveness, writes refreshed auth before marking a
   run finished, and marks a run recoverable if monitoring fails. Profile
-  cleanup verification and checkpoint quiescing remain next.
+  cleanup verification remains next.
+- Checkpointing now blocks new Superset launches and fails closed while an
+  agent terminal or profile remains. A failed Firecracker checkpoint reopens
+  the guest so launches are not left permanently blocked.

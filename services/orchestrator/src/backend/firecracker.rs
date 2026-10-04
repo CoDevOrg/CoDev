@@ -1297,7 +1297,10 @@ impl FirecrackerBackend {
 
         machine.guest.flush_workspace().await?;
         let api = FirecrackerApiClient::new(machine.api_socket.clone());
-        api.pause().await?;
+        if let Err(error) = api.pause().await {
+            let _ = machine.guest.resume_workspace().await;
+            return Err(error);
+        }
 
         let workspace_id = machine.workspace_id();
         let snapshots_root = self.config.jailer_dir.join("snapshots");
@@ -1359,6 +1362,7 @@ impl FirecrackerBackend {
             let _ = api
                 .request("PATCH", "/vm", json!({ "state": "Resumed" }))
                 .await;
+            let _ = machine.guest.resume_workspace().await;
             let _ = remove_directory_if_present(&staging).await;
             return Err(error);
         }

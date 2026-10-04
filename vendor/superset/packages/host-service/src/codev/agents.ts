@@ -1,5 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { lstat, readFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { eq } from "drizzle-orm";
 import type { Hono } from "hono";
@@ -212,6 +212,34 @@ function persistedAgentFor(db: HostDb, agentId: string) {
 		.sync();
 }
 
+async function hasRetainedAgentProfile(profileDir: string | null, root: string) {
+	if (!profileDir || !isProfileDirectory(root, profileDir)) return Boolean(profileDir);
+	try {
+		const metadata = await lstat(profileDir);
+		return metadata.isDirectory() && !metadata.isSymbolicLink();
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+		throw error;
+	}
+}
+
+async function quiesceAgents(db: HostDb) {
+	const agents = db.select().from(codevAgentRuns).all();
+	const active = agents.some((agent) => {
+		const terminal = db.query.terminalSessions
+			.findFirst({ where: eq(terminalSessions.id, agent.terminalId) })
+			.sync();
+		return terminal && agentMatchesTerminal(agent, terminal) && !terminal.endedAt;
+	});
+	if (active) return "active" as const;
+	const root = process.env.CODEV_AGENT_PROFILE_ROOT;
+	if (!root) return "quiescent" as const;
+	for (const agent of agents) {
+		if (await hasRetainedAgentProfile(agent.profileDir, root)) return "profile" as const;
+	}
+	return "quiescent" as const;
+}
+
 function agentMatchesTerminal(
 	agent: { hostWorkspaceId: string; worktreeId: string },
 	terminal: { originWorkspaceId: string | null },
@@ -256,6 +284,17 @@ export function registerCoDevAgentBridge({
 }: CoDevAgentBridgeOptions) {
 	const requireBridge = (request: Request) =>
 		secretMatches(request.headers.get("x-codev-bridge-secret") ?? undefined, bridgeSecret);
+
+	app.post("/codev/agents/quiesce", async (context) => {
+		if (!requireBridge(context.req.raw)) return context.json({ error: "Unauthorized" }, 401);
+		try {
+			const status = await quiesceAgents(db);
+			if (status === "quiescent") return context.json({ status });
+			return context.json({ error: `Superset agent ${status} prevents checkpointing.` }, 409);
+		} catch {
+			return context.json({ error: "Could not verify Superset agent cleanup." }, 503);
+		}
+	});
 
 	app.post("/codev/agents", async (context) => {
 		if (!requireBridge(context.req.raw)) return context.json({ error: "Unauthorized" }, 401);

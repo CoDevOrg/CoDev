@@ -286,9 +286,14 @@ auth before marking an exited run finished, and marks failed monitoring as
 `recovery_required`. Monitor dispatch failure cancels the newly started run so
 it cannot be left unowned.
 
-Gap: profile cleanup still relies on the host and is not verified. Hibernation
-must refuse to checkpoint until live agents have stopped, refresh state has
-been persisted, and profile removal has been confirmed.
+Exists: guest flush now blocks new Superset launches and asks the host bridge
+to verify that no agent terminal is live and no private profile remains before
+Firecracker copies either disk. A failed pause or snapshot reopens the guest;
+an active or unverifiable launch fails the checkpoint closed.
+
+Gap: this safety gate refuses a live run rather than actively stopping it. A
+future explicit quiesce operation must stop the run through the server monitor,
+acknowledge refreshed auth write-back, then retry the checkpoint.
 
 Gap: the host `/recovery` endpoint is a liveness check against the terminal
 session, not resume-candidate tracking, so adoption after a host restart can

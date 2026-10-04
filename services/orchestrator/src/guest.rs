@@ -8,7 +8,7 @@ use std::{
     process::{Command, Stdio},
     sync::{
         Arc, Condvar, Mutex,
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -179,6 +179,7 @@ pub struct GuestService {
     terminal_user: Option<TerminalUser>,
     terminals: Mutex<HashMap<String, Arc<TerminalSession>>>,
     mutations: Mutex<()>,
+    checkpoint_pending: AtomicBool,
     codex_execs: Mutex<HashMap<String, Arc<CodexExecSession>>>,
     /// True for the whole duration of a `start_codex_exec`-spawned run —
     /// unlike `mutations`, this is held across many RPCs (start, N polls,
@@ -211,6 +212,7 @@ impl GuestService {
             terminal_user: TerminalUser::detect(),
             terminals: Mutex::new(HashMap::new()),
             mutations: Mutex::new(()),
+            checkpoint_pending: AtomicBool::new(false),
             codex_execs: Mutex::new(HashMap::new()),
             codex_busy: Arc::new(Mutex::new(false)),
             codex_busy_changed: Arc::new(Condvar::new()),
@@ -246,6 +248,7 @@ impl GuestService {
             ("GET", "/healthz") => self.health(),
             ("GET", "/v1/superset/health") => self.superset_health(),
             ("POST", "/v1/workspace/flush") => self.flush_workspace(),
+            ("POST", "/v1/workspace/resume") => self.resume_workspace(),
             ("POST", "/v1/files/read") => self.read_file(body),
             ("POST", "/v1/files/write") => self.write_file(body),
             ("POST", "/v1/pty/exec") => self.exec(body),
@@ -675,6 +678,10 @@ impl GuestService {
     /// Agent Session Plan Phase 2 allows to see a credential -- see that
     /// plan's Phase 2 for the isolation guarantees this relies on.
     fn start_superset_agent(&self, body: &[u8]) -> GuestResponse {
+        let _mutation = self.mutations.lock().expect("mutation lock");
+        if self.checkpoint_pending.load(Ordering::Acquire) {
+            return GuestResponse::error(409, "workspace checkpoint is in progress");
+        }
         let request: SupersetAgentStartRequest = match decode(body) {
             Ok(request) => request,
             Err(error) => return GuestResponse::error(400, error),
@@ -798,16 +805,43 @@ impl GuestService {
 
     fn flush_workspace(&self) -> crate::model::Result<serde_json::Value> {
         let _mutation = self.mutations.lock().expect("mutation lock");
+        self.checkpoint_pending.store(true, Ordering::Release);
         self.wait_for_codex_idle();
+        if let Err(error) = self.quiesce_superset_agents() {
+            self.checkpoint_pending.store(false, Ordering::Release);
+            return Err(error);
+        }
         let status = Command::new("sync")
             .status()
             .map_err(RuntimeError::internal)?;
         if !status.success() {
+            self.checkpoint_pending.store(false, Ordering::Release);
             return Err(RuntimeError::Internal(
                 "workspace sync failed before shutdown".into(),
             ));
         }
         Ok(serde_json::json!({ "status": "flushed" }))
+    }
+
+    fn quiesce_superset_agents(&self) -> crate::model::Result<()> {
+        if std::env::var("CODEV_SUPERSET_BRIDGE_SECRET").ok().filter(|secret| !secret.is_empty()).is_none() {
+            return Ok(());
+        }
+        let response = self.superset_bridge_request("POST", "/codev/agents/quiesce", b"{}");
+        match response.status {
+            200 => Ok(()),
+            409 => Err(RuntimeError::Conflict(
+                "Superset agents or credential profiles prevent checkpointing".into(),
+            )),
+            _ => Err(RuntimeError::Unavailable(
+                "could not verify Superset agent cleanup before checkpointing".into(),
+            )),
+        }
+    }
+
+    fn resume_workspace(&self) -> crate::model::Result<serde_json::Value> {
+        self.checkpoint_pending.store(false, Ordering::Release);
+        Ok(serde_json::json!({ "status": "resumed" }))
     }
 
     fn read_file(&self, body: &[u8]) -> crate::model::Result<serde_json::Value> {
@@ -2778,6 +2812,38 @@ mod tests {
 
         let recovery = service.handle("GET", "/v1/superset-agents/agent-1/recovery", &[]);
         assert_eq!(recovery.status, 503);
+    }
+
+    #[test]
+    fn checkpoint_blocks_new_superset_agents_until_the_guest_resumes() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        service.checkpoint_pending.store(true, Ordering::Release);
+        let request = serde_json::json!({
+            "codevRunId": "11111111-1111-4111-8111-111111111111",
+            "codevWorkspaceId": "22222222-2222-4222-8222-222222222222",
+            "worktreeId": "main",
+            "provider": "openai",
+            "command": ["codex", "exec"],
+            "idempotencyKey": "key-1",
+        });
+        let blocked = service.handle(
+            "POST",
+            "/v1/superset-agents",
+            serde_json::to_vec(&request).expect("request").as_slice(),
+        );
+        assert_eq!(blocked.status, 409);
+
+        let resumed = service.handle("POST", "/v1/workspace/resume", &[]);
+        assert_eq!(resumed.status, 200);
+        let forwarded = service.handle(
+            "POST",
+            "/v1/superset-agents",
+            serde_json::to_vec(&request).expect("request").as_slice(),
+        );
+        // No bridge secret is configured in this test, so an unblocked launch
+        // reaches the bridge and fails as unavailable instead of checkpointed.
+        assert_eq!(forwarded.status, 503);
     }
 
     #[test]

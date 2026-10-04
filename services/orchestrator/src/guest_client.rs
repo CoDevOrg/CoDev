@@ -131,6 +131,12 @@ impl GuestClient {
             .map(|_| ())
     }
 
+    pub async fn resume_workspace(&self) -> Result<()> {
+        self.request::<(), serde_json::Value>("POST", "/v1/workspace/resume", None)
+            .await
+            .map(|_| ())
+    }
+
     pub async fn read_file(&self, path: String, worktree_id: Option<&str>) -> Result<FileResponse> {
         self.request(
             "POST",
