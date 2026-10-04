@@ -1,5 +1,6 @@
-import { EventEmitter } from "node:events";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { ServerWebSocket, WebSocketMessage } from "../platform/websocket";
 
 const mocks = vi.hoisted(() => ({
   input: vi.fn(),
@@ -23,11 +24,14 @@ import {
   handleGen2TerminalSocket,
 } from "./terminal-stream";
 
-class FakeSocket extends EventEmitter {
-  OPEN = 1;
+class FakeSocket implements ServerWebSocket {
+  openState = 1;
   readyState = 1;
   sent: Array<Record<string, unknown>> = [];
   closed = false;
+  private messageListeners: Array<(message: WebSocketMessage) => void> = [];
+  private closeListeners: Array<() => void> = [];
+  private errorListeners: Array<() => void> = [];
 
   send(data: string) {
     this.sent.push(JSON.parse(data));
@@ -36,7 +40,33 @@ class FakeSocket extends EventEmitter {
   close() {
     this.closed = true;
     this.readyState = 3;
-    this.emit("close");
+    this.closeListeners.splice(0).forEach((listener) => listener());
+  }
+
+  terminate() {
+    this.close();
+  }
+
+  onMessage(listener: (message: WebSocketMessage) => void) {
+    this.messageListeners.push(listener);
+  }
+
+  onceClose(listener: () => void) {
+    this.closeListeners.push(listener);
+  }
+
+  onceError(listener: () => void) {
+    this.errorListeners.push(listener);
+  }
+
+  emitMessage(data: string, isBinary = false) {
+    this.messageListeners.forEach((listener) =>
+      listener({ data: isBinary ? null : data, isBinary }),
+    );
+  }
+
+  emitError() {
+    this.errorListeners.splice(0).forEach((listener) => listener());
   }
 }
 
@@ -50,7 +80,7 @@ const target = {
 
 function open() {
   const socket = new FakeSocket();
-  const done = handleGen2TerminalSocket(socket as never, target);
+  const done = handleGen2TerminalSocket(socket, target);
   return { socket, done };
 }
 
@@ -111,7 +141,7 @@ describe("handleGen2TerminalSocket", () => {
 
     const { socket, done } = open();
     const message = (value: object) =>
-      socket.emit("message", Buffer.from(JSON.stringify(value)));
+      socket.emitMessage(JSON.stringify(value));
     message({ type: "input", data: "l" });
     message({ type: "input", data: "s" });
     message({ type: "resize", rows: 30, columns: 100 });
@@ -149,7 +179,7 @@ describe("handleGen2TerminalSocket", () => {
         }),
     );
     const { socket, done } = open();
-    socket.emit("message", Buffer.from("not json"));
+    socket.emitMessage("not json");
     expect(socket.sent).toContainEqual({
       type: "error",
       message: "Invalid terminal message.",
