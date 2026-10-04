@@ -1,13 +1,20 @@
-import { bindings, defineConfig, defineWorker } from "cf/config";
+import { bindings, defineConfig, defineWorker, triggers } from "cf/config";
 
 export default defineConfig({
   worker: defineWorker({
     name: "codev-cloudflare-preview",
     domains: ["trycodev.com", "www.trycodev.com"],
     workersDev: true,
-    entrypoint: "vinext/server/fetch-handler",
+    entrypoint: "./lib/platform/cloudflare-worker.ts",
     compatibilityDate: "2026-09-28",
     compatibilityFlags: ["nodejs_compat"],
+    triggers: [
+      triggers.fetch({
+        pattern: "admins.trycodev.com/*",
+        zone: "trycodev.com",
+      }),
+      triggers.scheduled({ schedule: "* * * * *" }),
+    ],
     assets: { notFoundHandling: "none" },
 
     observability: {
@@ -21,6 +28,7 @@ export default defineConfig({
     },
 
     env: {
+      VERCEL_ENV: bindings.secret(),
       ACCESS_REQUEST_NOTIFY_EMAIL: bindings.secret(),
       AUTH_GITHUB_ID: bindings.secret(),
       AUTH_GITHUB_SECRET: bindings.secret(),
@@ -68,6 +76,7 @@ export default defineConfig({
       CODEV_SUPERSET_FILE_PANE_ENABLED: bindings.secret(),
       CODEV_SUPERSET_RUNTIME_ENABLED: bindings.secret(),
       CODEV_SUPERSET_AGENT_SESSIONS_ENABLED: bindings.secret(),
+      CRON_SECRET: bindings.secret(),
       HYPERDRIVE: bindings.hyperdrive({
         id: "b8b29815a6154e37ab4ecdf4c81c08f4",
       }),

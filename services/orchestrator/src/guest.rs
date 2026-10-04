@@ -21,6 +21,8 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use wait_timeout::ChildExt;
 
+use crate::guest_executable_architecture::guest_executable_architecture_error;
+use crate::guest_spawn_error::guest_spawn_error;
 use crate::model::{
     ClaudeSetupCodeRequest, ClaudeSetupPollRequest, ClaudeSetupPollResponse,
     ClaudeSetupStartRequest, CodexExecChunk, CodexExecPollRequest, CodexExecPollResponse,
@@ -981,6 +983,16 @@ impl GuestService {
         for argument in &request.command[1..] {
             command.arg(argument);
         }
+        if let Some(error) =
+            guest_executable_architecture_error(&request.command[0], &working_directory, GUEST_PATH)
+        {
+            return serde_json::to_value(ExecResponse {
+                output: format!("{error}\n"),
+                exit_code: 127,
+                codex_auth_cache_json: None,
+            })
+            .map_err(RuntimeError::internal);
+        }
         command.cwd(working_directory);
         command.env("PATH", GUEST_PATH);
         command.env("TERM", "xterm-256color");
@@ -993,7 +1005,10 @@ impl GuestService {
             Ok(child) => child,
             Err(error) => {
                 return serde_json::to_value(ExecResponse {
-                    output: format!("Unable to spawn {}: {}\n", request.command[0], error),
+                    output: format!(
+                        "{}\n",
+                        guest_spawn_error(&request.command[0], error.as_ref())
+                    ),
                     exit_code: 127,
                     codex_auth_cache_json: None,
                 })
@@ -1431,6 +1446,11 @@ impl GuestService {
         for argument in &request.command[1..] {
             command.arg(argument);
         }
+        if let Some(error) =
+            guest_executable_architecture_error(&request.command[0], &working_directory, GUEST_PATH)
+        {
+            return Err(RuntimeError::BadRequest(error));
+        }
         command.cwd(working_directory);
         command.env("PATH", GUEST_PATH);
         command.env("TERM", "xterm-256color");
@@ -1444,9 +1464,9 @@ impl GuestService {
         let mut child = match pty.slave.spawn_command(command) {
             Ok(child) => child,
             Err(error) => {
-                return Err(RuntimeError::BadRequest(format!(
-                    "unable to spawn {}: {error}",
-                    request.command[0]
+                return Err(RuntimeError::BadRequest(guest_spawn_error(
+                    &request.command[0],
+                    error.as_ref(),
                 )));
             }
         };

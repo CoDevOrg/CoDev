@@ -7,7 +7,7 @@ import {
   presenceCursorSchema,
   type CollaborationUser,
 } from "@codev/contracts";
-import type { RawData, WebSocket } from "ws";
+import type { ServerWebSocket, WebSocketMessage } from "../platform/websocket";
 import {
   applyAwarenessUpdate,
   Awareness,
@@ -51,7 +51,7 @@ import { gen2CollaborationRoom } from "./collaboration-events";
 export const gen2CollaborationSocketMaxPayload = MAX_SOCKET_PAYLOAD_BYTES;
 
 function roomConnection(
-  socket: WebSocket,
+  socket: ServerWebSocket,
   user: CollaborationUser,
   canEdit: boolean,
 ): Connection {
@@ -68,7 +68,7 @@ function roomConnection(
     cursor: null,
     resumeFrom: null,
     replayedPaths: new Set(),
-    alive: true,
+    lastSeenAt: Date.now(),
     canEdit,
   };
 }
@@ -337,13 +337,14 @@ async function publishAwareness(
 async function handleMessage(
   workspaceId: string,
   connection: Connection,
-  data: RawData,
-  isBinary: boolean,
+  socketMessage: WebSocketMessage,
 ) {
-  const byteLength = Array.isArray(data)
-    ? data.reduce((total, part) => total + part.byteLength, 0)
-    : data.byteLength;
-  if (isBinary || byteLength > MAX_SOCKET_PAYLOAD_BYTES) {
+  const { data, isBinary } = socketMessage;
+  if (
+    isBinary ||
+    data === null ||
+    new TextEncoder().encode(data).byteLength > MAX_SOCKET_PAYLOAD_BYTES
+  ) {
     sendError(
       connection,
       "payload_too_large",
@@ -354,11 +355,7 @@ async function handleMessage(
   }
   let message;
   try {
-    message = collaborationClientMessageSchema.parse(
-      JSON.parse(
-        Array.isArray(data) ? Buffer.concat(data).toString() : data.toString(),
-      ),
-    );
+    message = collaborationClientMessageSchema.parse(JSON.parse(data));
   } catch {
     sendError(
       connection,
@@ -432,7 +429,6 @@ async function handleMessage(
         message.update,
       );
     else {
-      connection.alive = true;
       await refreshPresence(gen2CollaborationRoom(workspaceId), connection);
     }
   } catch (error) {
@@ -455,34 +451,54 @@ async function handleMessage(
 
 export async function handleGen2CollaborationSocket(
   workspaceId: string,
-  socket: WebSocket,
+  socket: ServerWebSocket,
   user: CollaborationUser,
   options: { canEdit: boolean },
 ) {
   const roomKey = gen2CollaborationRoom(workspaceId);
-  const room = await startRoom(roomKey);
   const connection = roomConnection(socket, user, options.canEdit);
-  room.connections.add(connection);
+  let room: Awaited<ReturnType<typeof startRoom>> | null = null;
+  let closed = false;
+  const pendingMessages: WebSocketMessage[] = [];
   const heartbeat = setInterval(() => {
-    if (!connection.alive) return socket.terminate();
-    connection.alive = false;
-    socket.ping();
-    void refreshPresence(roomKey, connection);
+    if (Date.now() - connection.lastSeenAt > HEARTBEAT_INTERVAL_MS * 2) {
+      socket.terminate();
+      return;
+    }
+    if (room) void refreshPresence(roomKey, connection);
   }, HEARTBEAT_INTERVAL_MS);
-  heartbeat.unref();
-  socket.on("pong", () => {
-    connection.alive = true;
+  socket.onMessage((message) => {
+    connection.lastSeenAt = Date.now();
+    if (!room) {
+      if (pendingMessages.length >= 16) {
+        socket.close(1013, "Collaboration is still starting.");
+        return;
+      }
+      pendingMessages.push(message);
+      return;
+    }
+    void handleMessage(workspaceId, connection, message);
   });
-  socket.on("message", (data, isBinary) => {
-    void handleMessage(workspaceId, connection, data, isBinary);
-  });
-  socket.once("close", () => {
+  socket.onceClose(() => {
+    closed = true;
     clearInterval(heartbeat);
-    room.connections.delete(connection);
-    void removePresence(roomKey, connection);
+    if (room) {
+      room.connections.delete(connection);
+      void removePresence(roomKey, connection);
+      closeRoomIfEmpty(roomKey, room);
+    }
+  });
+  socket.onceError(() => {
+    connection.lastSeenAt = 0;
+  });
+
+  room = await startRoom(roomKey);
+  if (closed) {
     closeRoomIfEmpty(roomKey, room);
-  });
-  socket.once("error", () => {
-    connection.alive = false;
-  });
+    return;
+  }
+  room.connections.add(connection);
+  for (const message of pendingMessages) {
+    void handleMessage(workspaceId, connection, message);
+  }
 }

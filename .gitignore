@@ -18,3 +18,5 @@ services/orchestrator/bin/
 services/orchestrator/target/
 .vercel
 .codev-local/
+# Local implementation handoff; intentionally not committed.
+docs/arm-workspace-free-tier-plan.md

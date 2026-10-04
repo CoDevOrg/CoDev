@@ -16,8 +16,11 @@
 - Workspace connection checks must not wake guests or count as activity. Keepalives come from recent member input or running agent work; persisted `ready` state alone does not establish connectivity.
 
 - In guest systemd units, set agent-profile parent permissions inside the final `ExecStart` wrapper; systemd reapplies `StateDirectoryMode` after `ExecStartPre`. Individual profiles and credential files must remain private.
+- ARM guest units must not recursively change permissions on saved workspace disks; they also carry protected Superset metadata.
+- Loopback alone does not isolate privileged workspace RPC from terminal processes. ARM VM images require the local caller firewall before guestd starts; generalized VM administrators use sudo for maintenance RPC.
 
 - Before starting or deploying the web app, run `pnpm db:check`. A newer migration ledger entry does not prove older tables exist; repair skipped schema with a forward migration instead of editing applied history.
+- For Azure subscription inspection, use the signed-in Azure CLI. If it is not authenticated, sign in with `az login --tenant 0841fce6-e7c1-4ea4-b4f1-a238d465137b`.
 
 - CoDev is a hosted web app. `apps/web` deploys to Cloudflare Workers for `trycodev.com` and to Vercel for Vercel-hosted endpoints; active Gen 2 workspaces run in Azure Firecracker guests.
 - In Gen 2, the agent, editor, terminal, and Git use the same guest filesystem.

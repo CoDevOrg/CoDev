@@ -169,6 +169,35 @@ rootfs. It does not contain credentials, certificates, repositories, member
 state, or the deployment's public hostname. The mutable bootstrap still
 installs release-specific services and configures the host after boot.
 
+## Candidate ARM workspace image
+
+The standalone ARM workspace VM has a separate, manual-only pipeline:
+[`Build ARM workspace image (Azure)`](../../.github/workflows/build-arm-workspace-image-azure.yml).
+It publishes only to the `codevarmworkspacegallery` gallery in a dedicated
+`codev-arm-workspace-*` resource group. Its `codev-workspace-arm64` definition
+is not the Firecracker `codev-host` definition. Never promote this candidate
+through `deploy.sh`.
+
+The `arm-workspace` GitHub environment must provide the Azure OIDC variables,
+`AZURE_RESOURCE_GROUP`, and `CODEV_ARTIFACT_ACCOUNT`. Scope the
+workflow identity to the dedicated resource group and artifact account. The
+template also assigns its image-builder identity read-only access to release
+blobs, contributor access to only its candidate gallery, and permission to
+attach that identity to the temporary build VM. Keyless Sigstore signatures
+are checked inside the image builder before artifacts are installed.
+
+The candidate builder is an unzoned native ARM64 VM with all inbound traffic denied.
+Azure Run Command installs and verifies signed artifacts and checks runtime health.
+Host-key-pinned SSH restricted to the runner IPv4 generalizes the VM; its temporary
+inbound rule is then removed. The pipeline publishes an immutable gallery version excluded from
+`latest`. Temporary build compute and networking are deleted on exit. Azure Image
+Builder template creation failed before VM allocation in two recorded attempts;
+this direct native build avoids that service dependency.
+
+The current Phase 1 review records the pinned Ubuntu ARM64 source, local build
+evidence, required RBAC, and outstanding VM smoke gates in
+[`arm-workspace-free-tier-phase-1.md`](../../docs/arm-workspace-free-tier-phase-1.md).
+
 ## Deploying
 
 ```bash

@@ -1,4 +1,3 @@
-import { experimental_upgradeWebSocket } from "@vercel/functions";
 import { eq } from "drizzle-orm";
 
 import { schema } from "@codev/db";
@@ -11,6 +10,7 @@ import { requireGen2Member } from "@/lib/gen2/workspaces";
 import { apiError } from "@/lib/http/api";
 import { withUser } from "@/lib/http/api-route";
 import { getDatabase } from "@/lib/platform/database";
+import { upgradeWebSocket } from "@/lib/platform/websocket";
 
 type Params = { workspaceId: string };
 
@@ -19,7 +19,7 @@ export const maxDuration = 300;
 
 /** Authenticated browser-only transport for a Gen 2 shared document. */
 export const GET = withUser<Params>(
-  async ({ user: sessionUser, params: { workspaceId } }) => {
+  async ({ request, user: sessionUser, params: { workspaceId } }) => {
     const [membership, user] = await Promise.all([
       requireGen2Member(workspaceId, sessionUser.id),
       getDatabase()
@@ -36,7 +36,8 @@ export const GET = withUser<Params>(
     ]);
     if (!user) return apiError(new Error("Workspace not found."), 404);
     try {
-      return await experimental_upgradeWebSocket(
+      return await upgradeWebSocket(
+        request,
         (socket) =>
           handleGen2CollaborationSocket(workspaceId, socket, user, {
             canEdit: membership.role !== "viewer",

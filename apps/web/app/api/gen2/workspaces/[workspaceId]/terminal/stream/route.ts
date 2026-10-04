@@ -1,6 +1,3 @@
-import { experimental_upgradeWebSocket } from "@vercel/functions";
-import type { WebSocket } from "ws";
-
 import { ApiError, withUser } from "@/lib/http/api-route";
 import {
   gen2TerminalStreamMaxPayload,
@@ -8,6 +5,7 @@ import {
   handleGen2TerminalSocket,
 } from "@/lib/gen2/terminal-stream";
 import { authorizeGen2TerminalStream } from "@/lib/gen2/terminals";
+import { upgradeWebSocket } from "@/lib/platform/websocket";
 
 export const dynamic = "force-dynamic";
 /** The socket ends at the function limit; the browser reconnects and resumes. */
@@ -30,9 +28,10 @@ export const GET = withUser<Params>(
       throw new ApiError("A valid terminal session is required.", 400);
     }
     await authorizeGen2TerminalStream(workspaceId, user.id);
-    return experimental_upgradeWebSocket(
+    return upgradeWebSocket(
+      request,
       (socket) =>
-        void handleGen2TerminalSocket(socket as WebSocket, {
+        handleGen2TerminalSocket(socket, {
           workspaceId,
           userId: user.id,
           sessionId: query.data.sessionId,

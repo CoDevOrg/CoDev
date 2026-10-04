@@ -5,12 +5,12 @@ import {
   type CollaborationServerMessage,
   type CollaborationUser,
 } from "@codev/contracts";
-import type { WebSocket } from "ws";
+import type { ServerWebSocket } from "../platform/websocket";
 
 /** One open collaboration socket and everything scoped to it. */
 export interface Connection {
   id: string;
-  socket: WebSocket;
+  socket: ServerWebSocket;
   user: CollaborationUser;
   joined: boolean;
   worktreeId: string | null;
@@ -19,7 +19,7 @@ export interface Connection {
   cursor: { anchor: number; head: number } | null;
   resumeFrom: string | null;
   replayedPaths: Set<string>;
-  alive: boolean;
+  lastSeenAt: number;
   canEdit: boolean;
 }
 
@@ -27,7 +27,7 @@ export function send(
   connection: Connection,
   message: CollaborationServerMessage,
 ) {
-  if (connection.socket.readyState !== connection.socket.OPEN) return;
+  if (connection.socket.readyState !== connection.socket.openState) return;
   const payload = collaborationServerMessageSchema.parse(message);
   connection.socket.send(JSON.stringify(payload));
 }
