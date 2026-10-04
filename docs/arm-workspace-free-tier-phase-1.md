@@ -1,12 +1,14 @@
 # ARM workspace free tier — Phase 1 review
 
 **Date:** 2026-10-04. **Scope:** standalone ARM workspace image and isolated workload proof.
-**Status:** image, lifecycle, compatibility, and security checks pass. Phase 1 remains blocked on the real Claude turn: the connected account has insufficient credits. **Phase 2 is not ready.**
+**Status:** Phase 1 complete for Codex. All six acceptance gates pass under the user-approved Codex-only scope. **Phase 2 is ready to start but has not started.**
 
 See the [Phase 0 decisions and $6.50 workspace budget](./arm-workspace-free-tier-phase-0.md).
 Production runtime and web deployments were not changed. Commits use `[skip ci]` to suppress existing automatic production workflows; the ARM image workflow is dispatched manually.
 
 ## Decisions
+
+**Scope amendment (2026-10-04):** the user confirmed “codex is enough for now.” Codex is the required provider for Phase 1; Claude support is deferred. Its failed credit-dependent turn remains recorded below and is not represented as a successful test. This approves the isolated image foundation, not production rollout.
 
 - Use Ubuntu 24.04 ARM64 on an unzoned `Standard_D2ps_v6`, one VM per workspace. Dpsv6 lacks nested virtualization, so the ARM image runs guestd and Superset directly. The existing x86 Firecracker gallery and runtime remain separate.
 - Pin the base to `Canonical:ubuntu-24_04-lts:server-arm64:24.04.202609040`. The source and captured OS disk are **30 GiB StandardSSD_LRS**, within the modeled E4 tier; the durable workspace disk is **16 GiB StandardSSD_LRS at LUN 0**.
@@ -22,9 +24,9 @@ Production runtime and web deployments were not changed. Commits use `[skip ci]`
 | --------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
 | `1.0.6`   | `16d251b43`, `2026.10.04.7`  | [Successful run 37186831592](https://github.com/CoDevOrg/CoDev/actions/runs/37186831592), in-VM signatures, CLI versions, bridge/Superset health, complete West US 2 gallery replication | Retired after final validation; lacked caller firewall             |
 | `1.0.7`   | `54b2b977c`, `2026.10.04.9`  | [Successful run 37188307476](https://github.com/CoDevOrg/CoDev/actions/runs/37188307476), `CODEV_ARM_LOCAL_API_ISOLATION_VALIDATED`, `CODEV_ARM_IMAGE_VALIDATED`, complete replication   | Retired after final validation; lacked the architecture correction |
-| `1.0.8`   | `2bd2f2515`, `2026.10.04.11` | [Final run 37189209416](https://github.com/CoDevOrg/CoDev/actions/runs/37189209416)                                                                                                      | VM checks pass; quarantined pending Claude credits                 |
+| `1.0.8`   | `2bd2f2515`, `2026.10.04.11` | [Final run 37189209416](https://github.com/CoDevOrg/CoDev/actions/runs/37189209416)                                                                                                      | Accepted for Phase 1, Codex only                                   |
 
-Gallery: `codevarmworkspacegallery`; definition: `codev-workspace-arm64`; resource group: `codev-arm-workspace-phase1`; private artifact account: `codevarm8ad43e43af644d36`. Final version `1.0.8` is excluded from latest and tagged `Phase1Status=BlockedClaudeCredit`; production does not select it. Intermediate `1.0.6` / `1.0.7` versions were removed after final validation. Their workflow logs remain the build history.
+Gallery: `codevarmworkspacegallery`; definition: `codev-workspace-arm64`; resource group: `codev-arm-workspace-phase1`; private artifact account: `codevarm8ad43e43af644d36`. Final version `1.0.8` is excluded from latest and tagged `Phase1Status=CompleteCodexOnly` and `SupportedProviders=codex`; production does not select it. Intermediate `1.0.6` / `1.0.7` versions were removed after final validation. Their workflow logs remain the build history.
 
 Each release contains `superset-host-linux-arm64.tar.gz`, `codev-guestd-linux-arm64`, `verify-superset-host-artifact.mjs`, and `runtime-manifest.json`, with SHA-256 files and Sigstore bundles. The verifier requires identity `https://github.com/CoDevOrg/CoDev/.github/workflows/build-arm-workspace-image-azure.yml@refs/heads/main` and issuer `https://token.actions.githubusercontent.com`. Cosign 3.1.3 is pinned to SHA-256 `c5d324e091826b0d7a78eb16fef316450b4eb9aaec045611c08ba06f5e73220a`. Failed verification prevents installation/publication.
 
@@ -46,7 +48,7 @@ Initial workload proof used candidate `1.0.6` with the corrected firewall instal
 | Public repository         | Anonymous CoDev clone; frozen pnpm installation and full repository typecheck pass on ARM64                                                                                                                                                                                                                                                                                          |
 | Private repository        | Authenticated GitHub fetch occurs on the control side. Credential-free bounded snapshot contains six files / 23,676 bytes; VM materialization and Git initialization pass. A separately imported Git bundle passes `git fsck`. No GitHub token is sent to the VM                                                                                                                     |
 | Codex                     | Actual authenticated turn through Superset returns `ARM_PROVIDER_OK`, exits 0 in 12.4 seconds on final `1.0.8` (16.3 seconds on the intermediate); private profile is removed on exit                                                                                                                                                                                                |
-| Claude                    | Both the local minimal turn and real Superset turn on final `1.0.8` return **“Credit balance is too low”**. ARM launch and private-profile isolation pass; the provider response gate remains blocked                                                                                                                                                                                |
+| Claude                    | Both the local minimal turn and real Superset turn on final `1.0.8` return **“Credit balance is too low”**. ARM launch and private-profile isolation pass; Claude support is deferred by the user; its authenticated response remains unverified                                                                                                                                     |
 | Disk occupancy            | ext4 capacity 16,729,894,912 bytes. After full CoDev install, native fixture, worktrees, and private checkout: 2,752,167,936 bytes used / 13,101,957,120 bytes available. CoDev checkout including dependencies: 2.0 GiB; shared pnpm store: 114 MiB                                                                                                                                 |
 | Reboot                    | Final `1.0.8`: both services return in **92.0 seconds** (intermediate: 92.7), including Azure restart request and SSH readiness polling. Saved markers, eight Git HEADs, worktrees, and filesystem UUID are unchanged                                                                                                                                                                |
 | Deallocated cold start    | Final `1.0.8`: both services return in **81.8 seconds** (intermediate: 81.9), including Azure start request and SSH polling; all saved state remains unchanged                                                                                                                                                                                                                       |
@@ -86,26 +88,26 @@ Build-essential, Python, and pkg-config are installed for dependencies without A
 
 All six gates are required. A published image alone is insufficient.
 
-| Gate                                        | Status                                                                            |
-| ------------------------------------------- | --------------------------------------------------------------------------------- |
-| 1. Repeatable native build                  | PASS — final workflow and two prior successful builds                             |
-| 2. In-VM artifact provenance                | PASS — exact-workflow signatures and checksums required before install            |
-| 3. Immutable isolated publication / cleanup | PASS — final version pinned, excluded from latest, no production change           |
-| 4. Fresh/saved disk and lifecycle           | PASS — final image, 16 GiB disks, reboot/start/replacement/capacity evidence      |
-| 5. Workloads and private credentials        | **BLOCKED** — all runtime/security checks and Codex pass; Claude requires credits |
-| 6. ARM compatibility and explicit failure   | PASS — native dependencies, full repo typecheck, live x86-only negative test      |
+| Gate                                        | Status                                                                       |
+| ------------------------------------------- | ---------------------------------------------------------------------------- |
+| 1. Repeatable native build                  | PASS — final workflow and two prior successful builds                        |
+| 2. In-VM artifact provenance                | PASS — exact-workflow signatures and checksums required before install       |
+| 3. Immutable isolated publication / cleanup | PASS — final version pinned, excluded from latest, no production change      |
+| 4. Fresh/saved disk and lifecycle           | PASS — final image, 16 GiB disks, reboot/start/replacement/capacity evidence |
+| 5. Workloads and private credentials        | PASS — runtime/security checks and real Codex turn; Claude deferred by user  |
+| 6. ARM compatibility and explicit failure   | PASS — native dependencies, full repo typecheck, live x86-only negative test |
 
 1. **Repeatable build:** manual workflow completes on `main` using native ARM64; its runtime and CLI validation/tests pass.
 2. **Provenance:** every artifact's checksum and Sigstore bundle match the exact repository/workflow/ref/issuer; validation occurs inside the VM before extraction/execution.
 3. **Isolation:** immutable final gallery version uses the pinned Ubuntu source; builder/network cleanup completes; no production gallery/runtime is changed.
 4. **Lifecycle:** final candidate boots an unzoned D2psv6 with a 30 GiB E4 OS disk and new 16 GiB E3 workspace disk, both services healthy. Reboot, deallocate/start, and replacement OS/VM preserve saved files, Git state, worktrees, and filesystem UUID without reformatting. Record times and capacity/recovery results.
-5. **Workload/security:** terminal/files/uploads/Git/worktrees/Superset plus **both real authenticated Codex and Claude turns** pass on the final candidate. Terminal/agent processes cannot reach privileged RPC or read other profiles; profile permissions/cleanup pass, and credential scans find no copied secrets in image files, logs, or metadata.
+5. **Workload/security:** terminal/files/uploads/Git/worktrees/Superset plus **a real authenticated Codex turn** pass on the final candidate. Terminal/agent processes cannot reach privileged RPC or read other profiles; profile permissions/cleanup pass, and credential scans find no copied secrets in image files, logs, or metadata.
 6. **Compatibility:** native dependency fixture and full repository installation/typecheck pass; direct x86-only execution produces the explicit unsupported-architecture result without degrading runtime health.
 
 ## Unresolved risks and handoff
 
-- **Blocking Phase 1:** a funded/usable Claude connection is required. The user has been asked to fund the current account or sign the local CLI into a usable account. Re-run the actual isolated Superset turn afterwards; do not substitute an unauthenticated CLI/version check.
-- **Claude retest:** create another isolated final-image smoke VM after the connection is usable, send credentials only through the trusted launch-profile path, require `ARM_PROVIDER_OK` and exit 0, verify profile cleanup, and tear the VM down. Only then clear the quarantine tag and mark Phase 1 complete; no production promotion is implied.
+- **Deferred Claude support:** a funded/usable Claude connection and a successful real isolated Superset turn are required before declaring Claude supported. This is outside the user-approved Codex-only Phase 1 acceptance scope.
+- **Future Claude acceptance:** create another isolated final-image smoke VM after the connection is usable, send credentials only through the trusted launch-profile path, require `ARM_PROVIDER_OK` and exit 0, verify profile cleanup, and tear the VM down before expanding supported providers.
 - **Cold-start SLO:** the Phase 0 later integration target remains 20 starts, at least 19 authenticated bridge successes, p50 ≤60 seconds / p95 ≤120 seconds. The current isolated measurements exclude public tunnel registration and browser-to-control-plane latency, and are not an SLO sample. Recursive chmod/chgrp on large checkouts can dominate boot; address it before runtime rollout.
 - **Superset metadata:** host SQLite state is currently on the OS disk under `/var/lib/codev/codev-superset`. Workspace files/Git survive a replacement OS, but Superset session metadata does not have that durability guarantee. Phase 2 must define persistence/migration before enabling members.
 - **Public authentication:** the privileged local bridge must not be exposed through Cloudflare Tunnel until workspace/generation capabilities and revocation are implemented.
@@ -116,4 +118,4 @@ All six gates are required. A published image alone is insufficient.
 
 Temporary builder and smoke VMs, their OS disks, test data disks, SSH IP/NIC/VNet/NSG, obsolete Image Builder templates, and unsafe intermediate gallery versions are removed. The final excluded gallery image, signed private release artifacts, gallery/definition, and scoped builder identity remain for review. No production runtime or web deployment was changed. Local ephemeral SSH keys and private repository fixture copies are removed after teardown.
 
-**Phase 1 is not complete because gate 5 is blocked by Claude credits. Phase 2 is not ready to start.** Azure permissions and the image/runtime checks are complete. The required user action is to fund the current Claude account or sign the local CLI into a usable account, then repeat its real isolated turn.
+**Phase 1 is complete for Codex. Phase 2 is ready to start, pending a separate user instruction.** Claude remains deferred. The startup performance, metadata durability, public authentication, and budget risks above remain requirements for later integration and rollout.
