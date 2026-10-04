@@ -202,9 +202,8 @@ Requires=workspace.mount codev-local-secrets.service codev-local-api-guard.servi
 
 [Service]
 Type=simple
-ExecStartPre=-/bin/chgrp -R codev-shell /workspace
-ExecStartPre=-/bin/chmod -R g+w /workspace
-ExecStartPre=-/usr/bin/find /workspace -type d -exec /bin/chmod g+s {} +
+# The fenced first-boot disk setup establishes permissions. Never recursively
+# change a saved disk: it includes private metadata and member-controlled trees.
 ExecStart=/usr/local/bin/codev-guestd
 Environment=CODEV_WORKSPACE_ROOT=/workspace
 Environment=CODEV_GUESTD_LISTEN_ADDR=127.0.0.1:5252
