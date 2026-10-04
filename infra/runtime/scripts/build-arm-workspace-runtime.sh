@@ -55,6 +55,7 @@ cp "${build_root}/output/superset-host-linux-arm64.tar.gz" "${output_dir}/"
 readonly crate="${build_root}/services/orchestrator"
 (cd "${crate}" && cargo fmt --check --all && cargo test --locked --release --bin guestd \
   && cargo test --locked --release --lib guest_spawn_error::tests \
+  && cargo test --locked --release --lib guest_executable_architecture::tests \
   && cargo build --locked --release --bin guestd)
 cp "${crate}/target/release/guestd" "${output_dir}/codev-guestd-linux-arm64"
 file "${output_dir}/codev-guestd-linux-arm64" | grep -q 'ARM aarch64' || {

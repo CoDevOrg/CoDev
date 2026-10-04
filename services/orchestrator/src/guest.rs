@@ -21,6 +21,7 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use wait_timeout::ChildExt;
 
+use crate::guest_executable_architecture::guest_executable_architecture_error;
 use crate::guest_spawn_error::guest_spawn_error;
 use crate::model::{
     ClaudeSetupCodeRequest, ClaudeSetupPollRequest, ClaudeSetupPollResponse,
@@ -948,6 +949,16 @@ impl GuestService {
         for argument in &request.command[1..] {
             command.arg(argument);
         }
+        if let Some(error) =
+            guest_executable_architecture_error(&request.command[0], &working_directory, GUEST_PATH)
+        {
+            return serde_json::to_value(ExecResponse {
+                output: format!("{error}\n"),
+                exit_code: 127,
+                codex_auth_cache_json: None,
+            })
+            .map_err(RuntimeError::internal);
+        }
         command.cwd(working_directory);
         command.env("PATH", GUEST_PATH);
         command.env("TERM", "xterm-256color");
@@ -1400,6 +1411,11 @@ impl GuestService {
         let mut command = CommandBuilder::new(&request.command[0]);
         for argument in &request.command[1..] {
             command.arg(argument);
+        }
+        if let Some(error) =
+            guest_executable_architecture_error(&request.command[0], &working_directory, GUEST_PATH)
+        {
+            return Err(RuntimeError::BadRequest(error));
         }
         command.cwd(working_directory);
         command.env("PATH", GUEST_PATH);

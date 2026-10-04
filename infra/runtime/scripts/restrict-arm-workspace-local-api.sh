@@ -2,7 +2,8 @@
 set -euo pipefail
 
 # The loopback RPC can launch privileged processes. Only root and the Azure
-# administrator (uid 1000) may call it; terminals use 2000 and agents higher uids.
+# image builder (uid 1000) may call it; terminals use 2000 and agents higher uids.
+# A replacement VM administrator uses sudo for trusted maintenance RPC.
 iptables -w 5 -N CODEV_LOCAL_API 2>/dev/null || true
 iptables-restore --noflush -w 5 <<'RULES'
 *filter
