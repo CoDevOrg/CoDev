@@ -61,6 +61,14 @@ readonly script_uri="$(az storage blob generate-sas \
   --expiry "${script_expiry}" \
   --auth-mode login --as-user --https-only --full-uri -o tsv)"
 
+CODEV_PROVISION_SCRIPT_URI="${script_uri}" python3 - "${provision_sha256}" <<'PY'
+import hashlib, os, sys, urllib.request
+with urllib.request.urlopen(os.environ['CODEV_PROVISION_SCRIPT_URI'], timeout=30) as response:
+    if hashlib.sha256(response.read()).hexdigest() != sys.argv[1]:
+        raise SystemExit('Provision script checksum mismatch')
+print('Verified access to the private provision script and its checksum.')
+PY
+
 deployment_json="$(az deployment group create \
   --resource-group "${resource_group}" \
   --name "arm-workspace-image-${image_version}" \

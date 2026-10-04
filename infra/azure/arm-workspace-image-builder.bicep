@@ -60,6 +60,9 @@ resource imageDefinition 'Microsoft.Compute/galleries/images@2022-03-03' = {
     osState: 'Generalized'
     hyperVGeneration: 'V2'
     architecture: 'Arm64'
+    features: [
+      { name: 'SecurityType', value: 'TrustedLaunchSupported' }
+    ]
     identifier: {
       publisher: 'CoDev'
       offer: 'codev-workspace'
