@@ -32,6 +32,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - name: Verify Cloudflare tunnel and DNS permissions before VM allocation
+        run: node infra/azure/arm-workspace-cloudflare-preflight.mjs
       - uses: azure/login@v2
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}

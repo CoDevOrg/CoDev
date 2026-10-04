@@ -203,8 +203,8 @@ evidence, required RBAC, and outstanding VM smoke gates in
 `arm-workspace-vm.bicep` provisions one generation from an exact ARM gallery
 version and attaches an existing workspace disk at LUN 0 with `Detach` retention.
 It creates explicit outbound IPv4 connectivity with every inbound port denied.
-The trusted controller must serialize disk operations and fence the generation
-before deployment; this template is not a lifecycle controller.
+`arm-workspace-lifecycle.mjs` serializes disk operations through a renewable
+Azure Blob lease and fences each VM generation before using this template.
 
 `infra/runtime/scripts/prepare-arm-workspace-disk.sh` formats only a new,
 signature-free 16 GiB disk, or verifies the saved UUID for an existing disk.
@@ -218,8 +218,10 @@ control plane may hold the signing key or authorize membership.
 After revoking the tunnel, `stop-arm-workspace-vm.sh` checks generation ownership,
 observes actual Azure deallocation, and removes ephemeral resources. It retains
 the durable disk. These candidates are restricted to isolated ARM resource
-groups; do not connect them to production or invoke them without a fenced
-controller. See the [Phase 2 review](../../docs/arm-workspace-free-tier-phase-2.md)
+groups; do not connect them to production or invoke them outside the fenced
+controller. The manual `arm-workspace-phase2-canary.yml` workflow exercises the
+isolated path after the Cloudflare automation token has Tunnel Edit and DNS
+Edit permissions. See the [Phase 2 review](../../docs/arm-workspace-free-tier-phase-2.md)
 for evidence and remaining acceptance gates.
 
 ## Deploying
