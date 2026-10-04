@@ -77,12 +77,13 @@ try {
   assert.ok(first.diskUuid);
   const saved = await guest.command(
     first.vmId,
-    "set -e; printf 'phase2-canary-file' >/workspace/phase2-canary.txt; " +
-      "printf 'phase2-canary-private' >/workspace/.codev-runtime/superset/phase2-canary.txt; " +
+    "set -e; runuser -u codev-shell -- sh -ec '" +
+      "printf phase2-canary-file >/workspace/phase2-canary.txt; " +
       "git -C /workspace init -q; git -C /workspace -c user.name=Canary " +
       "-c user.email=canary@example.invalid commit -q --allow-empty -m seed; " +
       "git -C /workspace worktree add -q -b canary /workspace/canary-tree; " +
-      "printf 'worktree-saved' >/workspace/canary-tree/proof.txt; " +
+      "printf worktree-saved >/workspace/canary-tree/proof.txt'; " +
+      "printf phase2-canary-private >/workspace/.codev-runtime/superset/phase2-canary.txt; " +
       "printf 'SAVED'",
   );
   assert.equal(saved, "SAVED");
@@ -101,10 +102,10 @@ try {
   assert.notEqual(second.vmId, first.vmId);
   const evidence = await guest.command(
     second.vmId,
-    "cat /workspace/phase2-canary.txt; " +
+    "set -e; runuser -u codev-shell -- sh -ec 'cat /workspace/phase2-canary.txt; " +
+      "cat /workspace/canary-tree/proof.txt; git -C /workspace worktree list; " +
+      "test ! -r /workspace/.codev-runtime/superset/phase2-canary.txt'; " +
       "cat /workspace/.codev-runtime/superset/phase2-canary.txt; " +
-      "cat /workspace/canary-tree/proof.txt; " +
-      "git -C /workspace worktree list; " +
       "stat -c '%u:%g:%a' /workspace/.codev-runtime; " +
       "blkid -s UUID -o value /dev/disk/azure/scsi1/lun0",
   );
