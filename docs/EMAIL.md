@@ -80,13 +80,13 @@ Vercel also has an **ImprovMX** DNS preset that writes the same MX/SPF records.
 Documented in `.env.example`. Local values live in `.env.local` and
 `apps/web/.env.local` (gitignored).
 
-| Variable                      | Purpose                                                             |
-| ----------------------------- | ------------------------------------------------------------------- |
-| `RESEND_API_KEY`              | Required in production to actually send mail                        |
-| `RESEND_EMAIL_DOMAIN`         | Present on the Vercel project; unused by app code                   |
-| `AUTH_EMAIL_FROM`             | Optional From header. Default `CoDev <noreply@trycodev.com>`        |
-| `ACCESS_REQUEST_NOTIFY_EMAIL` | Optional. Waitlist requests are forwarded here                      |
-| `SIGNUP_ALLOWLIST`            | Optional comma-separated emails that may register without an invite |
+| Variable                      | Purpose                                                      |
+| ----------------------------- | ------------------------------------------------------------ |
+| `RESEND_API_KEY`              | Required in production to actually send mail                 |
+| `RESEND_EMAIL_DOMAIN`         | Present on the Vercel project; unused by app code            |
+| `AUTH_EMAIL_FROM`             | Optional From header. Default `CoDev <noreply@trycodev.com>` |
+| `ACCESS_REQUEST_NOTIFY_EMAIL` | Optional. Waitlist requests are forwarded here               |
+| `SIGNUP_ALLOWLIST`            | Legacy setting; ignored while registration is closed         |
 
 `ACCESS_REQUEST_NOTIFY_EMAIL` and `SIGNUP_ALLOWLIST` are set locally to
 `yousef@trycodev.com`. Production Vercel still needs the same keys if waitlist
