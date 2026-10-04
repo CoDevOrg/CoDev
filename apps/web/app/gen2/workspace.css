@@ -1400,6 +1400,48 @@
   background: var(--ws-surface-1);
 }
 
+.gen2-ide-agent-sessions {
+  border-bottom: 1px solid var(--ws-border-subtle);
+  padding: 8px 12px;
+}
+
+.gen2-ide-agent-sessions-heading {
+  color: var(--ws-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.gen2-ide-agent-sessions-empty {
+  color: var(--ws-text-muted);
+  font-size: 12px;
+  margin: 4px 0 0;
+}
+
+.gen2-ide-agent-sessions-list {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 0;
+}
+
+.gen2-ide-agent-session-row {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+}
+
+.gen2-ide-agent-session-select {
+  flex: 1;
+  justify-content: flex-start;
+  min-width: 0;
+}
+
+.gen2-ide-agent-session-select span:last-child {
+  color: var(--ws-text-muted);
+  margin-left: auto;
+}
+
 .gen2-ide-stage {
   display: flex;
   flex-direction: column;

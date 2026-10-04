@@ -53,6 +53,7 @@ import {
   SupersetWorkspacesBoard,
   type BoardWorktreeItem,
 } from "./superset-workspaces-board";
+import { SupersetAgentSessionsPanel } from "./superset-agent-sessions-panel";
 import {
   ProviderLogo,
   SUPPORTED_AI_PROVIDERS,
@@ -184,6 +185,7 @@ export function SupersetWorkspaceShell({
   const [activeRuns, setActiveRuns] = useState<
     Array<{
       id: string;
+      createdBy: string;
       worktreeId: string;
       status: string;
       provider: string;
@@ -192,6 +194,7 @@ export function SupersetWorkspaceShell({
     }>
   >([]);
   const [agentRunning, setAgentRunning] = useState(false);
+  const [stoppingRunId, setStoppingRunId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const [branchLoadError, setBranchLoadError] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -550,6 +553,29 @@ export function SupersetWorkspaceShell({
       /* Background polling */
     }
   }, [runtimeEnabled, workspaceId]);
+
+  const stopRun = useCallback(
+    async (runId: string) => {
+      setStoppingRunId(runId);
+      try {
+        const response = await fetch(
+          `/api/gen2/workspaces/${encodeURIComponent(workspaceId)}/superset/runs/${encodeURIComponent(runId)}`,
+          { method: "DELETE" },
+        );
+        if (!response.ok) throw new Error("Couldn’t stop the agent session.");
+        await refreshRuns();
+      } catch (error) {
+        setNotice(
+          error instanceof Error
+            ? error.message
+            : "Couldn’t stop the agent session.",
+        );
+      } finally {
+        setStoppingRunId(null);
+      }
+    },
+    [refreshRuns, workspaceId],
+  );
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -1748,6 +1774,13 @@ export function SupersetWorkspaceShell({
                       {notice}
                     </p>
                   ) : null}
+                  <SupersetAgentSessionsPanel
+                    runs={activeRuns}
+                    canEdit={canEdit}
+                    onSelect={setWorktreeId}
+                    onStop={stopRun}
+                    stoppingRunId={stoppingRunId}
+                  />
 
                   {/* Middle part is ALWAYS the agent chat */}
                   <div
