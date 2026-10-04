@@ -12,6 +12,17 @@ export class ArmWorkspaceLifecycle {
     this.clock = clock;
   }
 
+  async cleanupFailedGeneration(workspaceId, generation) {
+    let routeError;
+    try {
+      await this.tunnel.revokeGeneration(workspaceId, generation);
+    } catch (error) {
+      routeError = error;
+    }
+    await this.azure.reconcileGeneration(workspaceId, generation);
+    if (routeError) throw routeError;
+  }
+
   async locked(workspaceId, action) {
     await this.state.initialize(workspaceId);
     const lease = await this.state.acquire(workspaceId);
@@ -65,8 +76,7 @@ export class ArmWorkspaceLifecycle {
         const next = transition.beginStart(state, key, this.clock());
         if (state.status === "failed" && state.cleanupPending) {
           await ensure();
-          await this.tunnel.revokeGeneration(workspaceId, state.generation);
-          await this.azure.reconcileGeneration(workspaceId, state.generation);
+          await this.cleanupFailedGeneration(workspaceId, state.generation);
         }
         state = await write(next);
       }
@@ -86,10 +96,10 @@ export class ArmWorkspaceLifecycle {
           throw error;
         state = (await this.state.read(workspaceId)).state;
         const result = transition.classifyAzureFailure(error.code);
-        const retryAt = result.retryable
-          ? transition.nextRetry(state.operation.attempts, this.clock())
-          : null;
         const failureAttempts = state.operation.attempts + 1;
+        const retryAt = result.retryable
+          ? transition.nextRetry(failureAttempts, this.clock())
+          : null;
         await write({
           ...state,
           status: "failed",
@@ -102,8 +112,7 @@ export class ArmWorkspaceLifecycle {
         });
         try {
           await ensure();
-          await this.tunnel.revokeGeneration(workspaceId, state.generation);
-          await this.azure.reconcileGeneration(workspaceId, state.generation);
+          await this.cleanupFailedGeneration(workspaceId, state.generation);
           state = (await this.state.read(workspaceId)).state;
           await write({
             ...state,
@@ -144,13 +153,19 @@ export class ArmWorkspaceLifecycle {
       }
       try {
         await ensure();
-        await this.tunnel.revokeGeneration(workspaceId, resourceGeneration);
+        let routeError;
+        try {
+          await this.tunnel.revokeGeneration(workspaceId, resourceGeneration);
+        } catch (error) {
+          routeError = error;
+        }
         if (state.vmId && state.flushRequired) {
           await this.guest.flush(state.vmId);
           state = await write({ ...state, flushRequired: false });
         }
         await ensure();
         await this.azure.cleanupGeneration(workspaceId, resourceGeneration);
+        if (routeError) throw routeError;
         state = await write({
           ...state,
           status: "stopped",
@@ -201,8 +216,7 @@ export class ArmWorkspaceLifecycle {
         if (current.status !== "failed" || !current.cleanupPending)
           return current;
         await ensure();
-        await this.tunnel.revokeGeneration(workspaceId, current.generation);
-        await this.azure.reconcileGeneration(workspaceId, current.generation);
+        await this.cleanupFailedGeneration(workspaceId, current.generation);
         return write({
           ...current,
           cleanupPending: false,

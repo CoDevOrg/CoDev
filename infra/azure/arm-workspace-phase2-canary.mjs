@@ -75,11 +75,13 @@ try {
   assert.equal(first.status, "ready");
   assert.equal(first.generation, 1);
   assert.ok(first.diskUuid);
-  await guest.command(
+  const saved = await guest.command(
     first.vmId,
-    "printf 'phase2-canary-file' >/workspace/phase2-canary.txt; " +
-      "printf 'phase2-canary-private' >/workspace/.codev-runtime/superset/phase2-canary.txt",
+    "set -e; printf 'phase2-canary-file' >/workspace/phase2-canary.txt; " +
+      "printf 'phase2-canary-private' >/workspace/.codev-runtime/superset/phase2-canary.txt; " +
+      "printf 'SAVED'",
   );
+  assert.equal(saved, "SAVED");
   const firstSeconds = Math.round((Date.now() - startedAt) / 1000);
   const again = await lifecycle.start(workspaceId, "canary-start-1");
   assert.equal(again.vmId, first.vmId);
@@ -133,6 +135,23 @@ try {
       console.log("Disposable canary cleaned up after failure");
     } catch (error) {
       console.error(`Canary cleanup needs operator review: ${error.message}`);
+      // This run owns only a disposable test workspace. Revoke compute even if
+      // a Cloudflare permission failure prevents normal route cleanup.
+      for (const generation of [1, 2, 3]) {
+        await azure
+          .cleanupGeneration(workspaceId, generation)
+          .catch((failure) =>
+            console.error(`Azure generation ${generation}: ${failure.message}`),
+          );
+      }
+      const diskId = (await state.read(workspaceId).catch(() => null))?.state
+        .dataDiskId;
+      if (diskId)
+        await azure
+          .deleteOwnedDisk(diskId, workspaceId)
+          .catch((failure) =>
+            console.error(`Disposable disk: ${failure.message}`),
+          );
     }
   }
 }

@@ -145,9 +145,11 @@ export class ArmWorkspaceGuest {
   }
 
   async flush(vmId) {
-    await this.command(
+    const output = await this.command(
       vmId,
       "curl --fail --silent --show-error --max-time 8 -X POST http://127.0.0.1:5252/v1/workspace/flush",
     );
+    if (JSON.parse(output).status !== "flushed")
+      throw new Error("WORKSPACE_FLUSH_FAILED");
   }
 }
