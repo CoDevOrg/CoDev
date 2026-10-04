@@ -123,6 +123,7 @@ async function startSession(
     worktreeId: input.worktreeId,
     provider: providerVendor(provider),
     connectionId: credential.credentialId,
+    credentialRevision: credential.credentialRevision,
     idempotencyKey: input.idempotencyKey,
   });
   if (!registration.created) {

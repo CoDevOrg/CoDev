@@ -129,6 +129,7 @@ describe("gen2 Superset agent runtime adapter", () => {
     mocks.claim.mockResolvedValue({ held: true });
     mocks.resolveCredential.mockResolvedValue({
       credentialId,
+      credentialRevision: "2026-10-04T00:00:00.000Z",
       launchProfile: { files: [], env: {} },
       via: "subscription",
     });
@@ -299,6 +300,11 @@ describe("gen2 Superset agent runtime adapter", () => {
       expect.objectContaining({ credentialId, surface: "gen2" }),
     );
     expect(mocks.resolveCredential).toHaveBeenCalledWith(userId, "codex");
+    expect(mocks.register).toHaveBeenCalledWith(
+      expect.objectContaining({
+        credentialRevision: "2026-10-04T00:00:00.000Z",
+      }),
+    );
     expect(mocks.claimLease).toHaveBeenCalledWith(
       expect.objectContaining({ runId }),
     );

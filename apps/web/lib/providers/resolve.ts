@@ -47,6 +47,8 @@ export type ResolvedCredentialRecord = {
   source: CredentialSource;
   /** Null for a credential with no row to lease (the browser runtime). */
   credentialId: string | null;
+  /** Changes whenever the saved credential material changes. */
+  credentialRevision: string | null;
   /** Absent on a dry run. */
   secret?: ResolvedSecret;
 };
@@ -73,11 +75,16 @@ export type ResolveResult = ResolvedCredentialRecord | CredentialUnavailable;
 
 type Loaded = {
   credentialId: string | null;
+  credentialRevision: string | null;
   source: CredentialSource;
   /** Whether the member allows this credential inside a shared workspace. */
   allowInSharedWorkspaces: boolean;
   read: () => Promise<ResolvedSecret | null>;
 };
+
+function credentialRevision(updatedAt: unknown): string | null {
+  return updatedAt instanceof Date ? updatedAt.toISOString() : null;
+}
 
 /* -------------------------------------------------------------------------
  * Loaders: one per credential kind. A new provider adds one of these and an
@@ -90,6 +97,7 @@ async function loadCodexAuthCache(input: ResolveInput): Promise<Loaded | null> {
   const material = hosted.credential.encryptedMaterial;
   return {
     credentialId: hosted.credential.id,
+    credentialRevision: credentialRevision(hosted.credential.updatedAt),
     source: "personal",
     allowInSharedWorkspaces:
       hosted.credential.allowInSharedWorkspaces !== false,
@@ -132,6 +140,7 @@ function loadedFromRow(
 ): Loaded {
   return {
     credentialId: row.id,
+    credentialRevision: credentialRevision(row.updatedAt),
     source: "personal",
     // NOT NULL default true in the schema; `!== false` keeps a row read
     // through a partial projection from reading as "denied".
@@ -235,6 +244,7 @@ export async function resolveCredential(
         kind: entry.kind,
         source: loaded.source,
         credentialId: loaded.credentialId,
+        credentialRevision: loaded.credentialRevision,
       };
     }
     const secret = await loaded.read();
@@ -245,6 +255,7 @@ export async function resolveCredential(
       kind: entry.kind,
       source: loaded.source,
       credentialId: loaded.credentialId,
+      credentialRevision: loaded.credentialRevision,
       secret,
     };
   }
