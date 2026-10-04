@@ -49,6 +49,8 @@ Only some guest handlers wait for Codex to go idle (`write_file`, `/pty/exec`,
 ready-gate on each function follows that split, and
 [`docs/gen2-workspace.md`](../../../../docs/gen2-workspace.md) has the table.
 
+The terminal stream and shared-document sockets use the platform WebSocket adapter in `lib/platform/websocket.ts`; Cloudflare Workers use native WebSocket pairs, and Vercel keeps its upgrade helper.
+
 ## Layout
 
 | Path                           | Role                                                                     |

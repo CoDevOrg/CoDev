@@ -1,6 +1,5 @@
 import "server-only";
 
-import type { RawData, WebSocket } from "ws";
 import { z } from "zod";
 
 import {
@@ -9,6 +8,7 @@ import {
 } from "@codev/contracts";
 
 import { gen2TerminalBackend, recheckGen2TerminalMember } from "./terminals";
+import type { ServerWebSocket } from "../platform/websocket";
 
 /**
  * Marwan's terminal socket (320c5f27). The workspace shell was rebuilt after
@@ -43,19 +43,14 @@ const MEMBERSHIP_RECHECK_MS = 60_000;
 const MIN_EMPTY_POLL_MS = 300;
 const EMPTY_POLL_PAUSE_MS = 60;
 
-function decode(data: RawData) {
-  const text = Buffer.isBuffer(data)
-    ? data.toString("utf8")
-    : Array.isArray(data)
-      ? Buffer.concat(data).toString("utf8")
-      : data instanceof ArrayBuffer
-        ? Buffer.from(data).toString("utf8")
-        : String(data);
-  return messageSchema.parse(JSON.parse(text));
+function decode(data: string) {
+  return messageSchema.parse(JSON.parse(data));
 }
 
-function send(socket: WebSocket, message: Record<string, unknown>) {
-  if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(message));
+function send(socket: ServerWebSocket, message: Record<string, unknown>) {
+  if (socket.readyState === socket.openState) {
+    socket.send(JSON.stringify(message));
+  }
 }
 
 function errorMessage(error: unknown) {
@@ -65,7 +60,7 @@ function errorMessage(error: unknown) {
 }
 
 export async function handleGen2TerminalSocket(
-  socket: WebSocket,
+  socket: ServerWebSocket,
   input: {
     workspaceId: string;
     userId: string;
@@ -114,11 +109,12 @@ export async function handleGen2TerminalSocket(
     }
   };
 
-  socket.on("message", (raw) => {
+  socket.onMessage(({ data, isBinary }) => {
     if (closed) return;
     let message: z.infer<typeof messageSchema>;
     try {
-      message = decode(raw);
+      if (isBinary || data === null) throw new Error("Expected text message.");
+      message = decode(data);
     } catch {
       send(socket, { type: "error", message: "Invalid terminal message." });
       return;
@@ -132,10 +128,10 @@ export async function handleGen2TerminalSocket(
         .catch((error) => fail(error));
     }
   });
-  socket.once("close", () => {
+  socket.onceClose(() => {
     closed = true;
   });
-  socket.once("error", () => {
+  socket.onceError(() => {
     closed = true;
   });
 

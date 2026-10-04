@@ -85,6 +85,7 @@ export function useGen2SharedFileDocument(input: {
 
     let disposed = false;
     let reconnectTimer: number | null = null;
+    let heartbeatTimer: number | null = null;
     let retryCount = 0;
     const doc = new Y.Doc();
     const nextText = doc.getText("content");
@@ -152,6 +153,13 @@ export function useGen2SharedFileDocument(input: {
         const message = parsed.data;
         if (message.type === "welcome") {
           setState("syncing");
+          if (heartbeatTimer !== null) {
+            window.clearInterval(heartbeatTimer);
+          }
+          heartbeatTimer = window.setInterval(
+            () => send({ type: "heartbeat" }),
+            Math.max(1_000, Math.floor(message.heartbeatIntervalMs / 2)),
+          );
           send({ type: "subscribe", path });
         } else if (message.type === "sync" && message.path === path) {
           Y.applyUpdate(doc, decodeBase64(message.update), REMOTE_ORIGIN);
@@ -207,6 +215,10 @@ export function useGen2SharedFileDocument(input: {
         }
       };
       socket.onclose = () => {
+        if (heartbeatTimer !== null) {
+          window.clearInterval(heartbeatTimer);
+          heartbeatTimer = null;
+        }
         if (socketRef.current === socket) socketRef.current = null;
         if (disposed) return;
         setState("disconnected");
@@ -234,6 +246,7 @@ export function useGen2SharedFileDocument(input: {
     return () => {
       disposed = true;
       if (reconnectTimer) window.clearTimeout(reconnectTimer);
+      if (heartbeatTimer !== null) window.clearInterval(heartbeatTimer);
       socketRef.current?.close();
       socketRef.current = null;
       doc.off("update", onDocumentUpdate);
