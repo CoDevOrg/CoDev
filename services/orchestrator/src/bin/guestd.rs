@@ -2,6 +2,7 @@
 use std::{
     env,
     io::{Read, Write},
+    net::{SocketAddr, TcpListener},
     sync::Arc,
 };
 
@@ -18,7 +19,7 @@ const MAX_BODY_BYTES: usize = 2 << 20;
 
 #[cfg(target_os = "linux")]
 fn main() -> Result<()> {
-    use std::{thread, time::Duration};
+    use std::time::Duration;
     use tracing::{error, info};
     use tracing_subscriber::EnvFilter;
     use vsock::{VsockAddr, VsockListener};
@@ -30,25 +31,65 @@ fn main() -> Result<()> {
         .init();
     let workspace = env::var("CODEV_WORKSPACE_ROOT").unwrap_or_else(|_| "/workspace".into());
     let service = Arc::new(GuestService::new(&workspace)?);
+    if let Ok(address) = env::var("CODEV_GUESTD_LISTEN_ADDR") {
+        let address = parse_loopback_address(&address)?;
+        let listener = TcpListener::bind(address).map_err(RuntimeError::internal)?;
+        info!(%workspace, %address, "guest daemon listening on loopback TCP");
+        for stream in listener.incoming() {
+            match stream {
+                Ok(stream) => {
+                    stream.set_read_timeout(Some(Duration::from_secs(70))).ok();
+                    stream.set_write_timeout(Some(Duration::from_secs(70))).ok();
+                    spawn_connection(stream, service.clone());
+                }
+                Err(error) => error!(%error, "failed to accept guest connection"),
+            }
+        }
+        return Ok(());
+    }
+
     let listener = VsockListener::bind(&VsockAddr::new(libc::VMADDR_CID_ANY, GUEST_PORT))
         .map_err(RuntimeError::internal)?;
     info!(%workspace, port = GUEST_PORT, "guest daemon listening");
     for stream in listener.incoming() {
         match stream {
-            Ok(mut stream) => {
-                let service = service.clone();
-                thread::spawn(move || {
-                    stream.set_read_timeout(Some(Duration::from_secs(70))).ok();
-                    stream.set_write_timeout(Some(Duration::from_secs(70))).ok();
-                    if let Err(error) = serve_connection(&mut stream, &service) {
-                        error!(%error, "guest request failed");
-                    }
-                });
+            Ok(stream) => {
+                stream.set_read_timeout(Some(Duration::from_secs(70))).ok();
+                stream.set_write_timeout(Some(Duration::from_secs(70))).ok();
+                spawn_connection(stream, service.clone());
             }
             Err(error) => error!(%error, "failed to accept guest connection"),
         }
     }
     Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn parse_loopback_address(address: &str) -> Result<SocketAddr> {
+    let address = address
+        .parse::<SocketAddr>()
+        .map_err(|_| RuntimeError::BadRequest("invalid guest daemon listen address".into()))?;
+    if !address.ip().is_loopback() {
+        return Err(RuntimeError::BadRequest(
+            "guest daemon TCP listener must use a loopback address".into(),
+        ));
+    }
+    Ok(address)
+}
+
+#[cfg(target_os = "linux")]
+fn spawn_connection<S>(mut stream: S, service: Arc<GuestService>)
+where
+    S: ReadWrite + Send + 'static,
+{
+    use std::thread;
+    use tracing::error;
+
+    thread::spawn(move || {
+        if let Err(error) = serve_connection(&mut stream, &service) {
+            error!(%error, "guest request failed");
+        }
+    });
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -137,3 +178,33 @@ fn serve_connection(stream: &mut impl ReadWrite, service: &GuestService) -> Resu
 trait ReadWrite: Read + Write {}
 #[cfg(target_os = "linux")]
 impl<T: Read + Write> ReadWrite for T {}
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    use super::parse_loopback_address;
+    use codev_runtime::model::RuntimeError;
+
+    #[test]
+    fn accepts_loopback_and_ephemeral_ports() {
+        assert_eq!(
+            parse_loopback_address("127.0.0.1:5252").unwrap(),
+            "127.0.0.1:5252".parse().unwrap()
+        );
+        assert_eq!(
+            parse_loopback_address("[::1]:0").unwrap(),
+            "[::1]:0".parse().unwrap()
+        );
+    }
+
+    #[test]
+    fn rejects_non_loopback_and_malformed_addresses() {
+        assert!(matches!(
+            parse_loopback_address("0.0.0.0:5252"),
+            Err(RuntimeError::BadRequest(_))
+        ));
+        assert!(matches!(
+            parse_loopback_address("localhost:5252"),
+            Err(RuntimeError::BadRequest(_))
+        ));
+    }
+}
