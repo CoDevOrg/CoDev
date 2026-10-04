@@ -44,17 +44,22 @@ const worker = {
     env: Env,
     ctx: ExecutionContext,
   ) {
-    const response = await application.fetch(
-      new Request("https://internal/api/gen2/compute/reconcile", {
-        headers: { Authorization: `Bearer ${env.CRON_SECRET}` },
-      }),
-      env,
-      ctx,
-    );
-    if (!response.ok) {
-      throw new Error(`Compute reconciliation failed with ${response.status}`);
+    for (const path of [
+      "/api/gen2/compute/reconcile",
+      "/api/gen2/agents/monitor",
+    ]) {
+      const response = await application.fetch(
+        new Request(`https://internal${path}`, {
+          headers: { Authorization: `Bearer ${env.CRON_SECRET}` },
+        }),
+        env,
+        ctx,
+      );
+      if (!response.ok) {
+        throw new Error(`Scheduled ${path} failed with ${response.status}`);
+      }
+      await response.text();
     }
-    await response.text();
   },
 } satisfies ExportedHandler<Env>;
 

@@ -29,6 +29,11 @@ const NONTERMINAL_STATUSES: Gen2SupersetRunStatus[] = [
   "stopping",
   "recovery_required",
 ];
+const MONITORABLE_STATUSES: Gen2SupersetRunStatus[] = [
+  "creating",
+  "running",
+  "stopping",
+];
 
 type Database = ReturnType<typeof getDatabase>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -187,6 +192,14 @@ export async function listActiveGen2SupersetRuns(workspaceId: string) {
         inArray(schema.gen2SupersetRuns.status, NONTERMINAL_STATUSES),
       ),
     );
+}
+
+/** Runs that need a liveness decision from the server-owned monitor. */
+export async function listMonitorableGen2SupersetRuns() {
+  return getDatabase()
+    .select()
+    .from(schema.gen2SupersetRuns)
+    .where(inArray(schema.gen2SupersetRuns.status, MONITORABLE_STATUSES));
 }
 
 /** Claim the run's hosted-subscription execution lease exactly once. */

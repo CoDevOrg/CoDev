@@ -33,6 +33,7 @@ import { isGen2SupersetAgentSessionsEnabled } from "./superset-agent-sessions-fe
 import {
   claimGen2SupersetRunLease,
   getGen2SupersetRunById,
+  listMonitorableGen2SupersetRuns,
   markGen2SupersetRunFailed,
   markGen2SupersetRunFinished,
   markGen2SupersetRunRecoveryRequired,
@@ -398,6 +399,63 @@ export async function reconcileGen2SupersetAgentSession(input: {
     }
   }
   return recovery;
+}
+
+/**
+ * Server-owned liveness reconciliation. Browser polls can display progress,
+ * but they must not be required to retain a credential seat or discover that
+ * a guest was lost.
+ */
+export async function monitorGen2SupersetAgentSessions() {
+  const runs = await listMonitorableGen2SupersetRuns();
+  let running = 0;
+  let recoveryRequired = 0;
+  await Promise.all(
+    runs.map(async (run) => {
+      const recover = async (lastError: string) => {
+        await markGen2SupersetRunRecoveryRequired({
+          runId: run.id,
+          workspaceId: run.workspaceId,
+          lastError,
+        });
+        if (run.leaseClaimed && run.connectionId) {
+          await releaseCredentialSeat({
+            credentialId: run.connectionId,
+            ref: run.id,
+          });
+        }
+        await releaseGen2SupersetRunLease({
+          runId: run.id,
+          workspaceId: run.workspaceId,
+        });
+        recoveryRequired += 1;
+      };
+      if (!run.hostAgentSessionId) {
+        await recover("Agent start was not confirmed by the guest.");
+        return;
+      }
+      try {
+        const recovery = await checkSupersetAgentRecovery(
+          run.workspaceId,
+          run.hostAgentSessionId,
+        );
+        if (!recovery.adoptable) {
+          await recover("Guest could not verify the agent process.");
+          return;
+        }
+        if (run.leaseClaimed && run.connectionId) {
+          await heartbeatCredentialSeat({
+            credentialId: run.connectionId,
+            ref: run.id,
+          });
+        }
+        running += 1;
+      } catch {
+        await recover("Guest liveness check failed.");
+      }
+    }),
+  );
+  return { checked: runs.length, running, recoveryRequired };
 }
 
 /**

@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   resolveCredential: vi.fn(),
   claim: vi.fn(),
   release: vi.fn(),
+  heartbeat: vi.fn(),
   register: vi.fn(),
   claimLease: vi.fn(),
   releaseLease: vi.fn(),
@@ -16,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   markStopping: vi.fn(),
   markRecoveryRequired: vi.fn(),
   getRunById: vi.fn(),
+  listMonitorable: vi.fn(),
   start: vi.fn(),
   poll: vi.fn(),
   stop: vi.fn(),
@@ -42,7 +44,7 @@ vi.mock("../providers/credential-seat", () => ({
   waitForCredentialSeat: (...args: unknown[]) => mocks.claim(...args),
   releaseCredentialSeat: (...args: unknown[]) => mocks.release(...args),
   retagCredentialSeat: vi.fn(async () => undefined),
-  heartbeatCredentialSeat: vi.fn(async () => undefined),
+  heartbeatCredentialSeat: (...args: unknown[]) => mocks.heartbeat(...args),
   describeSeatHolder: () => "a workspace turn is still using this connection.",
 }));
 vi.mock("./providers", () => ({
@@ -82,6 +84,8 @@ vi.mock("./superset-runs", () => ({
   markGen2SupersetRunRecoveryRequired: (...args: unknown[]) =>
     mocks.markRecoveryRequired(...args),
   getGen2SupersetRunById: (...args: unknown[]) => mocks.getRunById(...args),
+  listMonitorableGen2SupersetRuns: (...args: unknown[]) =>
+    mocks.listMonitorable(...args),
 }));
 
 vi.mock("./superset-agent-orchestrator-client", () => ({
@@ -100,6 +104,7 @@ import {
   pollGen2SupersetAgentSession,
   pollGen2SupersetAgentTurn,
   reconcileGen2SupersetAgentSession,
+  monitorGen2SupersetAgentSessions,
   sendGen2SupersetAgentInput,
   startGen2SupersetAgentSession,
   startGen2SupersetAgentTurn,
@@ -155,6 +160,43 @@ describe("gen2 Superset agent runtime adapter", () => {
       }),
     ).rejects.toThrow(Gen2LifecycleError);
     expect(mocks.register).not.toHaveBeenCalled();
+  });
+
+  it("monitors live runs and renews their seats without browser polling", async () => {
+    mocks.listMonitorable.mockResolvedValue([RUN]);
+    mocks.checkRecovery.mockResolvedValue({
+      adoptable: true,
+      status: "running",
+    });
+
+    await expect(monitorGen2SupersetAgentSessions()).resolves.toEqual({
+      checked: 1,
+      running: 1,
+      recoveryRequired: 0,
+    });
+    expect(mocks.heartbeat).toHaveBeenCalledWith(
+      expect.objectContaining({ credentialId, ref: runId }),
+    );
+  });
+
+  it("marks an unverifiable run recovery-required and releases its seat", async () => {
+    mocks.listMonitorable.mockResolvedValue([RUN]);
+    mocks.checkRecovery.mockResolvedValue({
+      adoptable: false,
+      status: "not_found",
+    });
+
+    await expect(monitorGen2SupersetAgentSessions()).resolves.toEqual({
+      checked: 1,
+      running: 0,
+      recoveryRequired: 1,
+    });
+    expect(mocks.markRecoveryRequired).toHaveBeenCalledWith(
+      expect.objectContaining({ runId, workspaceId }),
+    );
+    expect(mocks.release).toHaveBeenCalledWith(
+      expect.objectContaining({ credentialId, ref: runId }),
+    );
   });
 
   it("rejects a viewer before resolving credentials or creating a run", async () => {
