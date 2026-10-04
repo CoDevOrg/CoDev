@@ -9,7 +9,8 @@ use crate::model::{
     ClaudeSetupCodeRequest, ClaudeSetupPollRequest, ClaudeSetupPollResponse,
     ClaudeSetupStartRequest, CodexExecPollRequest, CodexExecPollResponse, CodexExecStartRequest,
     CreateRequest, ExecRequest, ExecResponse, FileResponse, Instance, Result, RuntimeError,
-    SupersetAgentCredentialResponse, SupersetAgentInputRequest, SupersetAgentPollRequest, SupersetAgentPollResponse,
+    SupersetAgentCredentialResponse, SupersetAgentInputRequest, SupersetAgentPollRequest,
+    SupersetAgentPollResponse,
     SupersetAgentRecoveryResponse, SupersetAgentStartRequest, SupersetAgentStartResponse,
     SupersetCreateEntryRequest, SupersetDeleteEntryRequest, SupersetMoveEntryRequest,
     TerminalInputRequest, TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest,
@@ -520,7 +521,9 @@ impl Backend {
         agent_id: &str,
     ) -> Result<SupersetAgentCredentialResponse> {
         match self {
-            Self::Fake(backend) => backend.capture_superset_agent_credential(workspace_id, agent_id),
+            Self::Fake(backend) => {
+                backend.capture_superset_agent_credential(workspace_id, agent_id)
+            }
             #[cfg(target_os = "linux")]
             Self::Firecracker(backend) => {
                 backend.capture_superset_agent_credential(workspace_id, agent_id).await

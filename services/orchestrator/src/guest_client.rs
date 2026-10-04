@@ -10,7 +10,8 @@ use tokio::{
 use crate::model::{
     ClaudeSetupCodeRequest, ClaudeSetupPollRequest, ClaudeSetupPollResponse,
     ClaudeSetupStartRequest, CodexExecPollRequest, CodexExecPollResponse, CodexExecStartRequest,
-    ExecRequest, ExecResponse, FileResponse, Result, RuntimeError, SupersetAgentCredentialResponse, SupersetAgentInputRequest,
+    ExecRequest, ExecResponse, FileResponse, Result, RuntimeError,
+    SupersetAgentCredentialResponse, SupersetAgentInputRequest,
     SupersetAgentPollRequest, SupersetAgentPollResponse, SupersetAgentRecoveryResponse,
     SupersetAgentStartRequest, SupersetAgentStartResponse, SupersetCreateEntryRequest,
     SupersetDeleteEntryRequest, SupersetMoveEntryRequest, TerminalInputRequest,
