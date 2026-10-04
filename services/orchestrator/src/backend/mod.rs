@@ -526,7 +526,9 @@ impl Backend {
             }
             #[cfg(target_os = "linux")]
             Self::Firecracker(backend) => {
-                backend.capture_superset_agent_credential(workspace_id, agent_id).await
+                backend
+                    .capture_superset_agent_credential(workspace_id, agent_id)
+                    .await
             }
         }
     }
@@ -946,7 +948,9 @@ impl FakeBackend {
         _agent_id: &str,
     ) -> Result<SupersetAgentCredentialResponse> {
         self.get(workspace_id)?;
-        Ok(SupersetAgentCredentialResponse { auth_cache_json: None })
+        Ok(SupersetAgentCredentialResponse {
+            auth_cache_json: None,
+        })
     }
 
     fn recover_superset_agent(
