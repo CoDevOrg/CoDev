@@ -261,6 +261,8 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
+ProtectProc=invisible
+ProcSubset=pid
 ReadWritePaths=/workspace /var/lib/codev/codev-superset /var/lib/codev/codev-agent-profiles
 TasksMax=256
 

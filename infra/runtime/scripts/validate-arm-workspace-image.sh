@@ -10,6 +10,8 @@ test -x /usr/local/bin/codev-guestd
 test "$(getent passwd codev-shell | cut -d: -f3)" = 2000
 test -L /etc/systemd/system/multi-user.target.wants/workspace.mount
 test -L /etc/systemd/system/multi-user.target.wants/codev-guestd.service
+systemctl cat codev-superset-host.service | grep -qx 'ProtectProc=invisible'
+systemctl cat codev-superset-host.service | grep -qx 'ProcSubset=pid'
 test ! -e /etc/codev/superset-bridge.env
 test ! -e /root/.azure/accessTokens.json
 test ! -e /root/.azure/msal_token_cache.json
