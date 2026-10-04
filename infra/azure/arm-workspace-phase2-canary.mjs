@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { ArmWorkspaceAzure } from "./arm-workspace-azure.mjs";
 import { ArmWorkspaceBlobState } from "./arm-workspace-blob-state.mjs";
+import { ArmWorkspaceControlPlane } from "./arm-workspace-control-plane.mjs";
 import { ArmWorkspaceGuest } from "./arm-workspace-guest.mjs";
 import { ArmWorkspaceLifecycle } from "./arm-workspace-lifecycle.mjs";
 import { ArmWorkspaceTunnel } from "./arm-workspace-tunnel.mjs";
@@ -15,11 +17,13 @@ const required = [
   "PHASE2_SIGNING_KEY",
   "PHASE2_VERIFY_KEY",
   "PHASE2_SSH_PUBLIC_KEY",
+  "CODEV_APP_URL",
+  "CRON_SECRET",
 ];
 for (const name of required) {
   if (!process.env[name]) throw new Error(`Missing ${name}`);
 }
-const workspaceId = `phase2-${process.env.GITHUB_RUN_ID}`;
+const workspaceId = randomUUID();
 const imageId =
   `/subscriptions/${process.env.AZURE_SUBSCRIPTION_ID}` +
   `/resourceGroups/${process.env.AZURE_RESOURCE_GROUP}` +
@@ -51,6 +55,10 @@ const azure = new ArmWorkspaceAzure({
 const guest = new ArmWorkspaceGuest({
   publicKeyPath: process.env.PHASE2_VERIFY_KEY,
 });
+const controlPlane = new ArmWorkspaceControlPlane({
+  url: process.env.CODEV_APP_URL,
+  secret: process.env.CRON_SECRET,
+});
 const tunnel = new ArmWorkspaceTunnel({
   accountId: "84a1d01866de04e04320feddfb199b83",
   zoneId: "c474dbc7af01ea073573a250fbd1d5ec",
@@ -66,7 +74,7 @@ const lifecycle = new ArmWorkspaceLifecycle(
   tunnel,
   guest,
   () => now,
-  async () => {},
+  controlPlane.checkpointCredentials.bind(controlPlane),
 );
 const startedAt = Date.now();
 let completed = false;
