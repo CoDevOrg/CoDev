@@ -94,20 +94,7 @@ runtime any more: the account holds nothing for CoDev beyond the `codev_user`
 IAM user, kept so the profile still resolves, and the Bedrock model-provider
 feature, which uses a member's own AWS account rather than ours.
 
-## Lifecycle recovery
-
-GitHub Actions invokes `/api/cron/lifecycle` every 45 minutes with
-`Authorization: Bearer $CRON_SECRET`. The repository secret must be named
-`CRON_SECRET`. A manual retry is safe:
-
-```sh
-curl -fsS \
-  -H "Authorization: Bearer $CRON_SECRET" \
-  https://codev-xi.vercel.app/api/cron/lifecycle
-```
-
-Run it twice when validating idempotency. The second response should report
-zero newly cleaned workspaces.
+## Runtime lifecycle validation
 
 For real Linux/KVM lifecycle validation, run the host-local smoke test after
 deploying a Rust or Firecracker change:
@@ -168,12 +155,17 @@ Database query failures return HTTP 503 with a safe message and `Retry-After`.
 Server logs record only the database error code, never the SQL or parameters.
 
 The compute allowance requires migration `0065_burly_star_brand` before the
-web release. Production schedules `/api/gen2/compute/reconcile` every minute
-with `CRON_SECRET`; confirm the Vercel project supports one-minute cron jobs
-and monitor its runs. The route measures running Gen 2 guest intervals and
-hibernates an owner's active workspaces once their combined UTC-month usage
-reaches 1,000 minutes. A missed scheduled run delays enforcement, so alert on
-repeated failures.
+web release. The Cloudflare Worker schedules
+`/api/gen2/compute/reconcile` every minute through the Cron Trigger configured
+in `apps/web/cloudflare.config.ts`. Configure `CRON_SECRET` as a Worker secret.
+The Cloudflare deployment workflow uploads the GitHub repository secret with
+that name to the Worker. For a manual run, call the route with
+`Authorization: Bearer $CRON_SECRET` at
+`https://trycodev.com/api/gen2/compute/reconcile`. Monitor Cloudflare scheduled
+invocations and Worker logs. The route measures running Gen 2 guest intervals
+and hibernates an owner's active workspaces once their combined UTC-month
+usage reaches 1,000 minutes. A missed scheduled run delays enforcement, so
+alert on repeated failures.
 A failed chat start restores the draft and attachments and removes the optimistic
 message so the user can retry. Transient outages are not automatically retried
 because a start request may already have reached the server.

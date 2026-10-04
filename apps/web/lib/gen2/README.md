@@ -67,5 +67,5 @@ uses its own `gen2_*` tables and does not access the original `workspaces` table
 owner. The 1,000-minute allowance is shared across that owner's workspaces and
 resets at the UTC month boundary. `compute-reconcile.ts` checks runtime state
 without waking guests, closes hibernated intervals, and stops active guests at
-the limit. The authenticated per-minute scheduler route invokes it; startup
-checks the same live interval total before provisioning.
+the limit. The Cloudflare per-minute scheduled handler invokes the authenticated
+route; startup checks the same live interval total before provisioning.
