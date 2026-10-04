@@ -83,6 +83,9 @@ try {
       "-c user.email=canary@example.invalid commit -q --allow-empty -m seed; " +
       "git -C /workspace worktree add -q -b canary /workspace/canary-tree; " +
       "printf worktree-saved >/workspace/canary-tree/proof.txt'; " +
+      "setpriv --reuid=2101 --regid=2000 --clear-groups -- sh -ec 'umask 0002; " +
+      "mkdir /workspace/ownership-proof; " +
+      "printf first-writer >/workspace/ownership-proof/proof.txt'; " +
       "printf phase2-canary-private >/workspace/.codev-runtime/superset/phase2-canary.txt; " +
       "printf 'SAVED'",
   );
@@ -105,6 +108,11 @@ try {
     "set -e; runuser -u codev-shell -- sh -ec 'cat /workspace/phase2-canary.txt; " +
       "cat /workspace/canary-tree/proof.txt; git -C /workspace worktree list; " +
       "test ! -r /workspace/.codev-runtime/superset/phase2-canary.txt'; " +
+      "setpriv --reuid=2102 --regid=2000 --clear-groups -- sh -ec 'umask 0002; " +
+      "printf -- -second-writer >>/workspace/ownership-proof/proof.txt'; " +
+      "cat /workspace/ownership-proof/proof.txt; " +
+      "stat -c '%u:%g:%a' /workspace/ownership-proof; " +
+      "stat -c '%u:%g:%a' /workspace/ownership-proof/proof.txt; " +
       "cat /workspace/.codev-runtime/superset/phase2-canary.txt; " +
       "stat -c '%u:%g:%a' /workspace/.codev-runtime; " +
       "blkid -s UUID -o value /dev/disk/azure/scsi1/lun0",
@@ -113,6 +121,9 @@ try {
   assert.match(evidence, /phase2-canary-private/);
   assert.match(evidence, /worktree-saved/);
   assert.match(evidence, /canary-tree/);
+  assert.match(evidence, /first-writer-second-writer/);
+  assert.match(evidence, /2101:2000:2775/);
+  assert.match(evidence, /2101:2000:664/);
   assert.match(evidence, /0:0:700/);
   assert.match(evidence, new RegExp(first.diskUuid));
   now += 15 * 60_000;
