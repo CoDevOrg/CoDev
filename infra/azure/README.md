@@ -186,6 +186,13 @@ blobs, contributor access to only its candidate gallery, and permission to
 attach that identity to the temporary build VM. Keyless Sigstore signatures
 are checked inside the image builder before artifacts are installed.
 
+The candidate builder is an unzoned native ARM64 VM with all inbound traffic denied.
+Azure Run Command installs and verifies signed artifacts, checks runtime health,
+generalizes the VM, and publishes an immutable gallery version excluded from
+`latest`. Temporary build compute and networking are deleted on exit. Azure Image
+Builder template creation failed before VM allocation in two recorded attempts;
+this direct native build avoids that service dependency.
+
 The current Phase 1 review records the pinned Ubuntu ARM64 source, local build
 evidence, required RBAC, and outstanding VM smoke gates in
 [`arm-workspace-free-tier-phase-1.md`](../../docs/arm-workspace-free-tier-phase-1.md).

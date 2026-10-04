@@ -1,5 +1,5 @@
-// Candidate images for the standalone ARM64 workspace VM. This template is
-// isolated from image-builder.bicep/codev-host and never promotes production.
+// Native candidate builder for the standalone ARM64 workspace VM. Isolated
+// from image-builder.bicep/codev-host; never promotes production.
 targetScope = 'resourceGroup'
 
 @description('Prefix for resources in the dedicated ARM workspace image resource group.')
@@ -9,9 +9,9 @@ param location string = resourceGroup().location
 param artifactStorageName string
 param releaseVersion string
 param imageVersion string
-param provisionScriptSha256 string
-@secure()
-param provisionScriptUri string
+@description('Ephemeral administrative public key; private key stays on the runner.')
+param builderSshPublicKey string
+param builderAdminUsername string = 'codevbuilder'
 
 @description('Ubuntu 24.04 ARM64 marketplace image SKU.')
 param sourceImageSku string = 'server-arm64'
@@ -19,12 +19,12 @@ param sourceImageSku string = 'server-arm64'
 @description('Pinned Canonical Ubuntu 24.04 ARM64 image version.')
 param sourceImageVersion string = '24.04.202609040'
 
-@description('ARM64 VM used only by Azure Image Builder.')
+@description('ARM64 VM used only by the isolated native image builder.')
 param imageBuilderVmSize string = 'Standard_D4ps_v6'
 
 var tags = {
   Project: 'CoDev'
-  ManagedBy: 'AzureImageBuilder'
+  ManagedBy: 'GitHubActions'
   Runtime: 'arm-workspace'
   ReleaseVersion: releaseVersion
   ImageVersion: imageVersion
@@ -119,97 +119,108 @@ resource imageBuilderOperatesBuildVmIdentity 'Microsoft.Authorization/roleAssign
   }
 }
 
-resource imageTemplate 'Microsoft.VirtualMachineImages/imageTemplates@2023-07-01' = {
-  name: '${namePrefix}-image-${imageVersion}'
+var builderName = '${namePrefix}-build-${replace(imageVersion, '.', '-')}'
+
+resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
+  name: '${builderName}-nsg'
+  location: location
+  tags: tags
+  properties: {
+    securityRules: [{
+      name: 'DenyAllInbound'
+      properties: {
+        priority: 100
+        direction: 'Inbound'
+        access: 'Deny'
+        protocol: '*'
+        sourcePortRange: '*'
+        destinationPortRange: '*'
+        sourceAddressPrefix: '*'
+        destinationAddressPrefix: '*'
+      }
+    }]
+  }
+}
+
+resource virtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' = {
+  name: '${builderName}-vnet'
+  location: location
+  tags: tags
+  properties: {
+    addressSpace: { addressPrefixes: ['10.241.0.0/16'] }
+    subnets: [{
+      name: 'builder'
+      properties: { addressPrefix: '10.241.0.0/24' }
+    }]
+  }
+}
+
+// Explicit outbound connectivity for apt/npm/GitHub; inbound is denied.
+resource publicIp 'Microsoft.Network/publicIPAddresses@2024-05-01' = {
+  name: '${builderName}-ip'
+  location: location
+  tags: tags
+  sku: { name: 'Standard' }
+  properties: { publicIPAllocationMethod: 'Static' }
+}
+
+resource networkInterface 'Microsoft.Network/networkInterfaces@2024-05-01' = {
+  name: '${builderName}-nic'
+  location: location
+  tags: tags
+  properties: {
+    networkSecurityGroup: { id: networkSecurityGroup.id }
+    ipConfigurations: [{
+      name: 'primary'
+      properties: {
+        privateIPAllocationMethod: 'Dynamic'
+        subnet: { id: '${virtualNetwork.id}/subnets/builder' }
+        publicIPAddress: { id: publicIp.id }
+      }
+    }]
+  }
+}
+
+resource builder 'Microsoft.Compute/virtualMachines@2024-07-01' = {
+  name: builderName
   location: location
   tags: tags
   identity: {
     type: 'UserAssigned'
-    userAssignedIdentities: {
-      '${imageBuilderIdentity.id}': {}
-    }
+    userAssignedIdentities: { '${imageBuilderIdentity.id}': {} }
   }
   properties: {
-    buildTimeoutInMinutes: 120
-    source: {
-      type: 'PlatformImage'
-      publisher: 'Canonical'
-      offer: 'ubuntu-24_04-lts'
-      sku: sourceImageSku
-      version: sourceImageVersion
-    }
-    vmProfile: {
-      vmSize: imageBuilderVmSize
-      userAssignedIdentities: [imageBuilderIdentity.id]
-    }
-    customize: [
-      {
-        type: 'Shell'
-        name: 'provision-arm-workspace-runtime'
-        scriptUri: provisionScriptUri
-        sha256Checksum: provisionScriptSha256
+    hardwareProfile: { vmSize: imageBuilderVmSize }
+    securityProfile: { securityType: 'Standard' }
+    storageProfile: {
+      imageReference: {
+        publisher: 'Canonical'
+        offer: 'ubuntu-24_04-lts'
+        sku: sourceImageSku
+        version: sourceImageVersion
       }
-    ]
-    validate: {
-      continueDistributeOnFailure: false
-      inVMValidations: [
-        {
-          type: 'Shell'
-          name: 'validate-arm-workspace-runtime'
-          inline: [
-            'set -eux'
-            'test "$(uname -m)" = aarch64'
-            'node --version | grep -Eq "^v24\\."'
-            'pnpm --version'
-            'codex --version'
-            'claude --version'
-            'test -x /usr/local/bin/codev-guestd'
-            'test "$(getent passwd codev-shell | cut -d: -f3)" = 2000'
-            'test -L /etc/systemd/system/multi-user.target.wants/workspace.mount'
-            'test -L /etc/systemd/system/multi-user.target.wants/codev-guestd.service'
-            'node /usr/local/lib/codev/verify-superset-host-artifact.mjs /opt/codev/superset-host'
-            'tmp=$(mktemp -d)'
-            'CODEV_WORKSPACE_ROOT="$tmp" CODEV_GUESTD_LISTEN_ADDR=127.0.0.1:5252 /usr/local/bin/codev-guestd >/tmp/codev-guestd-image-smoke.log 2>&1 &'
-            'pid=$!'
-            'trap "kill $pid 2>/dev/null || true; rm -rf $tmp" EXIT'
-            'for attempt in $(seq 1 20); do curl -fsS http://127.0.0.1:5252/healthz | jq -e ".status == \\"ok\\"" && break; sleep 1; done'
-            'ss -ltnH sport = :5252 | grep -q "127.0.0.1:5252"'
-            'kill "$pid"'
-            'wait "$pid" || true'
-            'trap - EXIT'
-            'rm -rf "$tmp"'
-          ]
-        }
-      ]
-    }
-    distribute: [
-      {
-        type: 'SharedImage'
-        galleryImageId: '${imageDefinition.id}/versions/${imageVersion}'
-        runOutputName: 'arm-workspace-gallery'
-        artifactTags: {
-          ReleaseVersion: releaseVersion
-          ImageVersion: imageVersion
-          Architecture: 'arm64'
-          Runtime: 'standalone-workspace-vm'
-        }
-        targetRegions: [
-          {
-            name: location
-            replicaCount: 1
-            storageAccountType: 'Standard_LRS'
-          }
-        ]
+      osDisk: {
+        createOption: 'FromImage'
+        deleteOption: 'Delete'
+        managedDisk: { storageAccountType: 'StandardSSD_LRS' }
       }
-    ]
+    }
+    osProfile: {
+      computerName: builderName
+      adminUsername: builderAdminUsername
+      linuxConfiguration: {
+        disablePasswordAuthentication: true
+        ssh: { publicKeys: [{ path: '/home/${builderAdminUsername}/.ssh/authorized_keys', keyData: builderSshPublicKey }] }
+      }
+    }
+    networkProfile: {
+      networkInterfaces: [{ id: networkInterface.id, properties: { deleteOption: 'Delete' } }]
+    }
   }
-  dependsOn: [
-    imageBuilderReadsArtifacts
-    imageBuilderWritesGallery
-    imageBuilderOperatesBuildVmIdentity
-  ]
+  dependsOn: [imageBuilderReadsArtifacts]
 }
 
-output imageTemplateId string = imageTemplate.id
+output builderId string = builder.id
+output builderName string = builderName
 output imageDefinitionId string = imageDefinition.id
 output imageVersionId string = '${imageDefinition.id}/versions/${imageVersion}'
