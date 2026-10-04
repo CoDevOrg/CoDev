@@ -50,6 +50,9 @@ describe("GitHub repository picker", () => {
       "team",
     ]);
     expect(accounts[0]?.id).toBe(20);
+    expect(mocks.request.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.installations.mock.invocationCallOrder[0]!,
+    );
   });
   it("keeps shared projects under the member with their real installation and collaborators", async () => {
     const repos = await listPickerRepositories("member", 20);
@@ -60,6 +63,10 @@ describe("GitHub repository picker", () => {
       sharedWith: ["friend", "grace"],
     });
     expect(mocks.repositories).not.toHaveBeenCalledWith("member", 30);
+    expect(mocks.request).not.toHaveBeenCalledWith(
+      "member",
+      "/repos/ada/project/collaborators?per_page=100",
+    );
   });
   it("keeps shared repositories available when member listing is forbidden", async () => {
     mocks.request.mockImplementation(async (_user, path) => {

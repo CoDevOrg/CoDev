@@ -27,6 +27,11 @@ const nextConfig: NextConfig = {
         cloudflareWorkersStub,
       ),
     );
+    config.module.rules.push({
+      test: /\.(?:mjs|sh)$/,
+      resourceQuery: /raw/,
+      type: "asset/source",
+    });
     return config;
   },
 };

@@ -29,6 +29,7 @@ import {
   transferActiveComputeSession,
 } from "./compute-quota";
 import { Gen2AccessError, Gen2LifecycleError } from "./errors";
+import { queueAzureWorkspaceDelete } from "./runtime-operations";
 
 const DEFAULT_WORKSPACE_NAME = "Workspace";
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
@@ -135,6 +136,9 @@ export async function listGen2WorkspacesForUser(userId: string) {
       status: schema.gen2Workspaces.status,
       sandboxId: schema.gen2Workspaces.sandboxId,
       lastError: schema.gen2Workspaces.lastError,
+      runtimeProvider: schema.gen2Workspaces.runtimeProvider,
+      runtimeStatus: schema.gen2Workspaces.runtimeStatus,
+      runtimeGeneration: schema.gen2Workspaces.runtimeGeneration,
       role: schema.gen2WorkspaceMembers.role,
       repository: schema.gen2Workspaces.repository,
       repositoryPrivate: schema.gen2Workspaces.repositoryPrivate,
@@ -163,6 +167,9 @@ export async function requireGen2Member(
       status: schema.gen2Workspaces.status,
       sandboxId: schema.gen2Workspaces.sandboxId,
       lastError: schema.gen2Workspaces.lastError,
+      runtimeProvider: schema.gen2Workspaces.runtimeProvider,
+      runtimeStatus: schema.gen2Workspaces.runtimeStatus,
+      runtimeGeneration: schema.gen2Workspaces.runtimeGeneration,
       role: schema.gen2WorkspaceMembers.role,
       repository: schema.gen2Workspaces.repository,
       repositoryPrivate: schema.gen2Workspaces.repositoryPrivate,
@@ -261,6 +268,13 @@ export async function deleteGen2Workspace(workspaceId: string, userId: string) {
       "Wait for the workspace to finish starting before deleting it.",
     );
   }
+  if (workspace.runtimeProvider === "azure_arm") {
+    const operation = await queueAzureWorkspaceDelete(
+      workspaceId,
+      crypto.randomUUID(),
+    );
+    return { accepted: true as const, operationId: operation?.operationId };
+  }
 
   const database = getDatabase();
   const currentStatus = await database.transaction(async (transaction) => {
@@ -310,6 +324,7 @@ export async function deleteGen2Workspace(workspaceId: string, userId: string) {
           eq(schema.gen2Workspaces.status, "deleting"),
         ),
       );
+    return { accepted: false as const };
   } catch (error) {
     logEvent("error", "gen2.workspace.delete_failed", {
       detail: error instanceof Error ? error.message : "unknown",
@@ -798,6 +813,9 @@ function toWorkspace(
     status: Gen2Workspace["status"];
     sandboxId: string | null;
     lastError: string | null;
+    runtimeProvider?: Gen2Workspace["runtimeProvider"];
+    runtimeStatus?: Gen2Workspace["runtimeStatus"];
+    runtimeGeneration?: number;
     repository?: string | null;
     repositoryPrivate?: boolean | null;
     defaultBranch?: string | null;
@@ -812,6 +830,18 @@ function toWorkspace(
     status: row.status,
     sandboxId: row.sandboxId,
     lastError: row.lastError,
+    runtimeProvider: row.runtimeProvider ?? "firecracker",
+    runtimeStatus:
+      row.runtimeProvider === "azure_arm"
+        ? (row.runtimeStatus ?? "stopped")
+        : row.status === "ready"
+          ? "ready"
+          : row.status === "provisioning"
+            ? "provisioning"
+            : row.status === "failed"
+              ? "failed"
+              : "stopped",
+    runtimeGeneration: row.runtimeGeneration ?? 0,
     repository: row.repository
       ? {
           fullName: row.repository,

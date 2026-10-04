@@ -189,7 +189,7 @@ not proof of connectivity.
 
 The initial check runs even when the workspace opens in a background tab. Later
 checks pause while hidden. Connection checks bound network and response-body
-waiting to 10 seconds; reconnect has a 90-second client budget and returns to the
+waiting to 10 seconds; reconnect has a 240-second client budget and returns to the
 retry action on expiry. These deadlines must also abort outstanding requests.
 Local development uses Webpack (matching the production build); `127.0.0.1`
 is explicitly allowed for Next.js development resources.

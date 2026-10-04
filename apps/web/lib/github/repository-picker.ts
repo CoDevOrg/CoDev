@@ -13,10 +13,13 @@ import {
 
 // The authenticated GitHub identity is authoritative, including after a rename.
 async function pickerContext(userId: string) {
-  const [identity, installations] = await Promise.all([
-    githubRequest<{ login: string; avatar_url: string }>(userId, "/user"),
-    listGitHubInstallations(userId),
-  ]);
+  // Both calls may refresh a rotating GitHub token. Run them in order so the
+  // second reads the newly persisted token instead of reusing the old one.
+  const identity = await githubRequest<{ login: string; avatar_url: string }>(
+    userId,
+    "/user",
+  );
+  const installations = await listGitHubInstallations(userId);
   return { identity, installations };
 }
 
@@ -87,11 +90,15 @@ export async function listPickerRepositories(
           installationId: installation.id,
           ...(accountId === personalId
             ? {
-                sharedWith: await collaborationNames(
-                  userId,
-                  repository.full_name,
-                  identity.login,
-                ),
+                sharedWith:
+                  repository.owner.login.toLowerCase() ===
+                  identity.login.toLowerCase()
+                    ? []
+                    : await collaborationNames(
+                        userId,
+                        repository.full_name,
+                        identity.login,
+                      ),
               }
             : {}),
         })),

@@ -470,6 +470,13 @@
       "when": 1790893920627,
       "tag": "0066_burly_star_brand",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1791146517373,
+      "tag": "0067_gen2_runtime_lifecycle",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,10 @@
-import { bindings, defineConfig, defineWorker, triggers } from "cf/config";
+import {
+  bindings,
+  defineConfig,
+  defineWorker,
+  exports as workerExports,
+  triggers,
+} from "cf/config";
 
 export default defineConfig({
   worker: defineWorker({
@@ -6,6 +12,11 @@ export default defineConfig({
     domains: ["trycodev.com", "www.trycodev.com"],
     workersDev: true,
     entrypoint: "./lib/platform/cloudflare-worker.ts",
+    exports: {
+      ArmWorkspaceLifecycleWorkflow: workerExports.workflow({
+        name: "codev-arm-workspace-lifecycle",
+      }),
+    },
     compatibilityDate: "2026-09-28",
     compatibilityFlags: ["nodejs_compat"],
     triggers: [
@@ -38,6 +49,10 @@ export default defineConfig({
       AWS_REGION: bindings.secret(),
       AZURE_CLIENT_ID: bindings.secret(),
       AZURE_CLIENT_SECRET: bindings.secret(),
+      ARM_WORKSPACE_IMAGE_VERSION_ID: bindings.secret(),
+      ARM_WORKSPACE_SSH_PUBLIC_KEY: bindings.secret(),
+      ARM_WORKSPACE_SIGNING_PRIVATE_KEY: bindings.secret(),
+      ARM_WORKSPACE_SIGNING_PUBLIC_KEY: bindings.secret(),
       AZURE_HOST_VM_NAME: bindings.secret(),
       AZURE_TENANT_ID: bindings.secret(),
       AZURE_RESOURCE_GROUP: bindings.secret(),
@@ -76,6 +91,12 @@ export default defineConfig({
       CODEV_SUPERSET_RUNTIME_ENABLED: bindings.secret(),
       CODEV_SUPERSET_AGENT_SESSIONS_ENABLED: bindings.secret(),
       CRON_SECRET: bindings.secret(),
+      CLOUDFLARE_API_TOKEN: bindings.secret(),
+      GEN2_ARM_WORKSPACE_LIFECYCLE: bindings.workflow({
+        name: "codev-arm-workspace-lifecycle",
+        worker: "codev-cloudflare-preview",
+        exportName: "ArmWorkspaceLifecycleWorkflow",
+      }),
       HYPERDRIVE: bindings.hyperdrive({
         id: "b8b29815a6154e37ab4ecdf4c81c08f4",
       }),

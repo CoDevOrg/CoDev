@@ -30,6 +30,7 @@ intent that may have drifted; confirm details against the code.
 | [arm-workspace-free-tier-phase-0.md](./arm-workspace-free-tier-phase-0.md) | Review  | ARM free-tier Phase 0 decisions, evidence, costs, and open gates              |
 | [arm-workspace-free-tier-phase-1.md](./arm-workspace-free-tier-phase-1.md) | Review  | ARM64 image build, smoke evidence, image publication, and VM acceptance gates |
 | [arm-workspace-free-tier-phase-2.md](./arm-workspace-free-tier-phase-2.md) | Review  | Phase 2 lifecycle evidence; integration and launch gates                      |
+| [arm-workspace-free-tier-phase-3.md](./arm-workspace-free-tier-phase-3.md) | Review  | ARM lifecycle API, Worker workflow, Azure provider, and release gates         |
 
 ## UI implementation
 

@@ -9,3 +9,4 @@ This module owns the communication and integration with external execution envir
 - `orchestrator.ts`, `orchestrator-*.ts`: Orchestrator API interactions (terminals, files, health).
 - `host.ts`, `azure-host.ts`: Logic for interacting with runtime host providers.
 - `ide.ts`: IDE state and connection definitions.
+- `arm-workspace-provider.ts`, `arm-workspace-workflow.ts`: Azure ARM workspace provisioning, health, and durable lifecycle execution.

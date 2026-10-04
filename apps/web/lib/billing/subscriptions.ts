@@ -123,13 +123,17 @@ export async function syncStripeSubscription(
     .where(eq(schema.organizationSubscriptions.organizationId, organizationId))
     .limit(1);
 
-  // A late "canceled" for an old subscription must not wipe out a newer live one.
+  // A canceled Stripe event must not wipe out a newer subscription or a manual
+  // plan grant that replaced the canceled subscription.
   if (
     status === "canceled" &&
-    existing?.provider === "stripe" &&
-    existing.providerSubscriptionId &&
-    existing.providerSubscriptionId !== subscription.id &&
-    (existing.status === "active" || existing.status === "trialing")
+    existing?.providerSubscriptionId &&
+    ((existing.provider === "stripe" &&
+      existing.providerSubscriptionId !== subscription.id &&
+      (existing.status === "active" || existing.status === "trialing")) ||
+      (existing.provider !== "stripe" &&
+        existing.planId !== "free" &&
+        existing.providerSubscriptionId === subscription.id))
   ) {
     return { synced: false, reason: "superseded_subscription" };
   }

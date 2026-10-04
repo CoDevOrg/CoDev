@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 
 import { reconcileComputeQuota } from "@/lib/gen2/compute-reconcile";
+import { reconcileArmWorkspaceOperations } from "@/lib/gen2/runtime-operations";
 
 export const maxDuration = 300;
 
@@ -18,5 +19,9 @@ export async function GET(request: Request) {
   ) {
     return new Response(null, { status: 401 });
   }
-  return Response.json(await reconcileComputeQuota());
+  const [compute] = await Promise.all([
+    reconcileComputeQuota(),
+    reconcileArmWorkspaceOperations(),
+  ]);
+  return Response.json(compute);
 }

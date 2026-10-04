@@ -14,6 +14,9 @@ function workspace(
     name: "Studio",
     status,
     sandboxId,
+    runtimeProvider: "firecracker",
+    runtimeStatus: status === "ready" ? "ready" : "stopped",
+    runtimeGeneration: 0,
     lastError: null,
     role: "owner",
     repository: null,
@@ -47,12 +50,36 @@ function fetchSequence(responses: Response[]) {
 }
 
 describe("Gen 2 workspace startup polling", () => {
+  it("waits for a cold host and guest restore beyond the old 90-second limit", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetcher = vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            setTimeout(
+              () =>
+                resolve(
+                  response(200, { workspace: workspace("ready", "sandbox-1") }),
+                ),
+              150_000,
+            );
+          }),
+      );
+      const pending = ensureGen2WorkspaceReady("workspace-1", { fetcher });
+      await vi.advanceTimersByTimeAsync(150_000);
+      expect((await pending).workspace?.sandboxId).toBe("sandbox-1");
+      expect(fetcher).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("returns retry when the startup request never responds", async () => {
     vi.useFakeTimers();
     try {
       const fetcher = vi.fn(() => new Promise<Response>(() => {}));
       const pending = ensureGen2WorkspaceReady("workspace-1", { fetcher });
-      await vi.advanceTimersByTimeAsync(90_000);
+      await vi.advanceTimersByTimeAsync(480_000);
       expect(await pending).toEqual({
         error:
           "The workspace is taking longer to reconnect. Please try again in a moment.",

@@ -143,11 +143,11 @@ export default async function AdminPage() {
         </section>
 
         <section className="admin-section">
-          <h2>Feature access</h2>
+          <h2>Plans and feature access</h2>
           <p className="admin-console-sub admin-section-intro">
-            Assign plan defaults, then add temporary or permanent organization
-            and user exceptions. User exceptions take precedence over
-            organization exceptions and plans.
+            Set an organization&apos;s baseline plan, then allow or block Hosted
+            Codex for an organization or an individual member. Member overrides
+            take precedence over organization rules and plans.
           </p>
           <AdminFeatureControls data={featureAccess} />
         </section>

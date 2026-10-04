@@ -3,6 +3,7 @@ import "server-only";
 import { and, eq, gt, isNull, lt, or } from "drizzle-orm";
 import { schema } from "@codev/db";
 
+import { isUserAdmin } from "../admin/admin";
 import { getDatabase } from "../platform/database";
 import { fakeGuestEnabled } from "../runtime/fake-guest";
 import { getHostState } from "../runtime/host";
@@ -11,6 +12,10 @@ import { getSandbox } from "../runtime/orchestrator-sandbox";
 import { Gen2LifecycleError } from "./errors";
 
 export const MONTHLY_COMPUTE_LIMIT_MS = 1_000 * 60_000;
+
+export async function ownerHasUnlimitedCompute(ownerId: string) {
+  return isUserAdmin(ownerId);
+}
 
 export function computeMonth(now: Date) {
   const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
@@ -59,6 +64,7 @@ export async function assertComputeAvailable(
   ownerId: string,
   now = new Date(),
 ) {
+  if (await ownerHasUnlimitedCompute(ownerId)) return;
   if ((await usedComputeMs(ownerId, now)) < MONTHLY_COMPUTE_LIMIT_MS) return;
   throw new Gen2LifecycleError(
     "You've used your 1,000 workspace minutes for this month. Your work is saved; you can reconnect next month.",

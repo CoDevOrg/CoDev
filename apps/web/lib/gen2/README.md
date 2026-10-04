@@ -2,9 +2,11 @@
 
 CoDev's active workspace implementation.
 
-A gen 2 workspace is a **shareable Firecracker cloud instance** that you and
-Codex work on together — one filesystem, addressed by the chat and by the
-workbench alike.
+A Gen 2 workspace is a shareable cloud instance that you and Codex work on
+together. Existing workspaces use Firecracker. The ARM provider lifecycle is
+being integrated behind the same workspace record, but editor, Git, terminal,
+agent, and collaboration traffic remains on the Firecracker adapters until
+Phase 4 is complete.
 
 ## Runtime boundary
 
@@ -67,7 +69,8 @@ uses its own `gen2_*` tables and does not access the original `workspaces` table
 
 `compute-quota.ts` bills each running Gen 2 VM interval to its current workspace
 owner. The 1,000-minute allowance is shared across that owner's workspaces and
-resets at the UTC month boundary. `compute-reconcile.ts` checks runtime state
+resets at the UTC month boundary; application-wide admins are exempt from the
+limit and its enforcement stops. `compute-reconcile.ts` checks runtime state
 without waking guests, closes hibernated intervals, and stops active guests at
 the limit. The Cloudflare per-minute scheduled handler invokes the authenticated
 route; startup checks the same live interval total before provisioning.

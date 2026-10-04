@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, or } from "drizzle-orm";
 
 import type { FeatureKey, PlanId } from "@codev/contracts";
 import { schema } from "@codev/db";
@@ -52,6 +52,7 @@ export type AdminFeatureAccessData = {
 
 export async function getAdminFeatureAccessData(): Promise<AdminFeatureAccessData> {
   const db = getDatabase();
+  const now = new Date();
   const [
     organizationRows,
     planRows,
@@ -96,8 +97,24 @@ export async function getAdminFeatureAccessData(): Promise<AdminFeatureAccessDat
         eq(schema.users.id, schema.organizationMembers.userId),
       )
       .orderBy(schema.users.login),
-    db.select().from(schema.organizationFeatureOverrides),
-    db.select().from(schema.userFeatureOverrides),
+    db
+      .select()
+      .from(schema.organizationFeatureOverrides)
+      .where(
+        or(
+          isNull(schema.organizationFeatureOverrides.expiresAt),
+          gt(schema.organizationFeatureOverrides.expiresAt, now),
+        ),
+      ),
+    db
+      .select()
+      .from(schema.userFeatureOverrides)
+      .where(
+        or(
+          isNull(schema.userFeatureOverrides.expiresAt),
+          gt(schema.userFeatureOverrides.expiresAt, now),
+        ),
+      ),
     db
       .select()
       .from(schema.featureOverrideAuditEvents)
@@ -182,6 +199,8 @@ export async function assignOrganizationPlan(input: {
     .select({
       provider: schema.organizationSubscriptions.provider,
       status: schema.organizationSubscriptions.status,
+      providerSubscriptionId:
+        schema.organizationSubscriptions.providerSubscriptionId,
     })
     .from(schema.organizationSubscriptions)
     .where(
@@ -203,12 +222,22 @@ export async function assignOrganizationPlan(input: {
       organizationId: input.organizationId,
       planId: input.planId,
       status: "active",
+      provider: null,
+      providerSubscriptionId: current?.providerSubscriptionId ?? null,
+      currentPeriodEnd: null,
+      canceledAt: null,
+      cancelAtPeriodEnd: false,
     })
     .onConflictDoUpdate({
       target: schema.organizationSubscriptions.organizationId,
       set: {
         planId: input.planId,
         status: "active",
+        provider: null,
+        providerSubscriptionId: current?.providerSubscriptionId ?? null,
+        currentPeriodEnd: null,
+        canceledAt: null,
+        cancelAtPeriodEnd: false,
         updatedAt: new Date(),
       },
     });

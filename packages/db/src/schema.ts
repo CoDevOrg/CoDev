@@ -2091,6 +2091,28 @@ export const gen2WorkspaceStatus = pgEnum("gen2_workspace_status", [
   "deleting",
 ]);
 
+export const gen2RuntimeProvider = pgEnum("gen2_runtime_provider", [
+  "firecracker",
+  "azure_arm",
+]);
+export const gen2RuntimeStatus = pgEnum("gen2_runtime_status", [
+  "stopped",
+  "queued",
+  "provisioning",
+  "booting",
+  "attaching_disk",
+  "starting_tunnel",
+  "checking_readiness",
+  "ready",
+  "stopping",
+  "failed",
+]);
+export const gen2RuntimeOperationKind = pgEnum("gen2_runtime_operation_kind", [
+  "start",
+  "stop",
+  "delete",
+]);
+
 export const gen2WorkspaceRole = pgEnum("gen2_workspace_role", [
   "owner",
   "editor",
@@ -2108,6 +2130,28 @@ export const gen2Workspaces = pgTable(
     status: gen2WorkspaceStatus("status").default("pending").notNull(),
     sandboxId: text("sandbox_id"),
     lastError: text("last_error"),
+    runtimeProvider: gen2RuntimeProvider("runtime_provider")
+      .default("firecracker")
+      .notNull(),
+    runtimeVmResourceId: text("runtime_vm_resource_id"),
+    runtimeDiskResourceId: text("runtime_disk_resource_id"),
+    runtimeDiskUuid: text("runtime_disk_uuid"),
+    runtimeTunnelId: text("runtime_tunnel_id"),
+    runtimeRouteHost: text("runtime_route_host"),
+    runtimeStatus: gen2RuntimeStatus("runtime_status")
+      .default("stopped")
+      .notNull(),
+    runtimeGeneration: integer("runtime_generation").default(0).notNull(),
+    runtimeCleanupGeneration: integer("runtime_cleanup_generation"),
+    runtimeOperationId: uuid("runtime_operation_id"),
+    runtimeOperationKey: text("runtime_operation_key"),
+    runtimeOperationKind: gen2RuntimeOperationKind("runtime_operation_kind"),
+    runtimeOperationStartedAt: timestamp("runtime_operation_started_at", {
+      withTimezone: true,
+    }),
+    runtimeLeaseExpiresAt: timestamp("runtime_lease_expires_at", {
+      withTimezone: true,
+    }),
     activeInviteTokenHash: text("active_invite_token_hash"),
     activeInviteCreatedByUserId: uuid(
       "active_invite_created_by_user_id",

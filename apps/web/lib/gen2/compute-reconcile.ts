@@ -9,9 +9,11 @@ import { fakeGuestEnabled } from "../runtime/fake-guest";
 import { getHostState } from "../runtime/host";
 import { getSandbox } from "../runtime/orchestrator-sandbox";
 import { OrchestratorError } from "../runtime/orchestrator-request";
+import { ArmWorkspaceProvider } from "../runtime/arm-workspace-provider";
 import {
   MONTHLY_COMPUTE_LIMIT_MS,
   endComputeSession,
+  ownerHasUnlimitedCompute,
   startComputeSession,
   usedComputeMs,
 } from "./compute-quota";
@@ -42,9 +44,45 @@ function hibernatedAt(
 }
 
 async function observeSession(
-  session: typeof schema.gen2ComputeSessions.$inferSelect,
+  session: typeof schema.gen2ComputeSessions.$inferSelect & {
+    runtimeProvider: string;
+    runtimeGeneration: number;
+    runtimeVmResourceId: string | null;
+    runtimeStatus: string;
+  },
   now: Date,
+  hostStopped: boolean,
 ) {
+  if (session.runtimeProvider === "azure_arm") {
+    try {
+      const running = await new ArmWorkspaceProvider().running(
+        session.workspaceId,
+        session.runtimeGeneration,
+        session.runtimeVmResourceId,
+      );
+      if (!running) {
+        await endComputeSession(session.workspaceId, now);
+        return;
+      }
+      const lastActivity = session.lastActivityAt ?? session.startedAt;
+      if (
+        session.runtimeStatus === "ready" &&
+        now.getTime() - lastActivity.getTime() >= IDLE_TIMEOUT_MS
+      ) {
+        await stopGen2Instance(session.workspaceId, session.ownerId);
+      }
+    } catch (error) {
+      logEvent("warn", "gen2.compute.observe_failed", {
+        workspaceId: session.workspaceId,
+        detail: error instanceof Error ? error.message : "unknown",
+      });
+    }
+    return;
+  }
+  if (hostStopped) {
+    await endComputeSession(session.workspaceId, hibernatedAt(session, now));
+    return;
+  }
   try {
     const runtime = await getSandbox(session.workspaceId, 10_000);
     await getDatabase()
@@ -63,11 +101,14 @@ async function observeSession(
   }
 }
 
-async function bootstrapActiveSessions(now: Date) {
+async function bootstrapActiveSessions(now: Date, hostStopped: boolean) {
   const missing = await getDatabase()
     .select({
       workspaceId: schema.gen2Workspaces.id,
       ownerId: schema.gen2Workspaces.ownerId,
+      runtimeProvider: schema.gen2Workspaces.runtimeProvider,
+      runtimeGeneration: schema.gen2Workspaces.runtimeGeneration,
+      runtimeVmResourceId: schema.gen2Workspaces.runtimeVmResourceId,
     })
     .from(schema.gen2Workspaces)
     .leftJoin(
@@ -87,7 +128,17 @@ async function bootstrapActiveSessions(now: Date) {
     .limit(100);
   await inBatches(missing, 8, async (workspace) => {
     try {
-      await getSandbox(workspace.workspaceId, 10_000);
+      if (workspace.runtimeProvider === "azure_arm") {
+        const running = await new ArmWorkspaceProvider().running(
+          workspace.workspaceId,
+          workspace.runtimeGeneration,
+          workspace.runtimeVmResourceId,
+        );
+        if (!running) return;
+      } else {
+        if (hostStopped) return;
+        await getSandbox(workspace.workspaceId, 10_000);
+      }
       await startComputeSession(workspace.workspaceId, workspace.ownerId, now);
     } catch {
       // A persisted ready row does not imply a running guest.
@@ -96,6 +147,7 @@ async function bootstrapActiveSessions(now: Date) {
 }
 
 async function stopExhaustedOwner(ownerId: string, now: Date) {
+  if (await ownerHasUnlimitedCompute(ownerId)) return 0;
   if ((await usedComputeMs(ownerId, now)) < MONTHLY_COMPUTE_LIMIT_MS) return 0;
   const active = await getDatabase()
     .select({ workspaceId: schema.gen2ComputeSessions.workspaceId })
@@ -129,19 +181,30 @@ export async function reconcileComputeQuota(now = new Date()) {
       (state) => state === "stopped",
       () => false,
     ));
-  if (!hostStopped) await bootstrapActiveSessions(now);
+  await bootstrapActiveSessions(now, hostStopped);
   const sessions = await getDatabase()
-    .select()
+    .select({
+      id: schema.gen2ComputeSessions.id,
+      workspaceId: schema.gen2ComputeSessions.workspaceId,
+      ownerId: schema.gen2ComputeSessions.ownerId,
+      startedAt: schema.gen2ComputeSessions.startedAt,
+      endedAt: schema.gen2ComputeSessions.endedAt,
+      lastActivityAt: schema.gen2ComputeSessions.lastActivityAt,
+      runtimeProvider: schema.gen2Workspaces.runtimeProvider,
+      runtimeGeneration: schema.gen2Workspaces.runtimeGeneration,
+      runtimeVmResourceId: schema.gen2Workspaces.runtimeVmResourceId,
+      runtimeStatus: schema.gen2Workspaces.runtimeStatus,
+    })
     .from(schema.gen2ComputeSessions)
+    .innerJoin(
+      schema.gen2Workspaces,
+      eq(schema.gen2Workspaces.id, schema.gen2ComputeSessions.workspaceId),
+    )
     .where(isNull(schema.gen2ComputeSessions.endedAt))
     .orderBy(asc(schema.gen2ComputeSessions.lastActivityAt))
     .limit(100);
   await inBatches(sessions, 8, async (session) => {
-    if (hostStopped) {
-      await endComputeSession(session.workspaceId, hibernatedAt(session, now));
-    } else {
-      await observeSession(session, now);
-    }
+    await observeSession(session, now, hostStopped);
   });
   const owners = [...new Set(sessions.map((session) => session.ownerId))];
   let stopped = 0;

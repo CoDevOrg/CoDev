@@ -46,7 +46,10 @@ async function refreshGitHubToken(
   connection: GitHubConnection,
 ) {
   if (!connection.encryptedRefreshToken) {
-    throw new Error("GitHub authorization expired. Sign in again.");
+    throw new GitHubApiError(
+      "GitHub authorization expired. Sign in again.",
+      401,
+    );
   }
 
   const clientId = process.env.AUTH_GITHUB_ID;
@@ -71,7 +74,12 @@ async function refreshGitHubToken(
   });
 
   if (!response.ok) {
-    throw new Error("GitHub authorization could not be refreshed.");
+    throw new GitHubApiError(
+      response.status >= 500
+        ? "GitHub is temporarily unavailable. Try again."
+        : "GitHub authorization could not be refreshed. Sign in again.",
+      response.status >= 500 ? 502 : 401,
+    );
   }
 
   const payload = (await response.json()) as {
@@ -81,7 +89,10 @@ async function refreshGitHubToken(
     refresh_token_expires_in?: number;
   };
   if (!payload.access_token) {
-    throw new Error("GitHub did not return a refreshed access token.");
+    throw new GitHubApiError(
+      "GitHub authorization could not be refreshed. Sign in again.",
+      401,
+    );
   }
 
   const now = Date.now();
