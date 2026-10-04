@@ -32,4 +32,9 @@ done
 test "${healthy}" = true
 ss -ltnH sport = :5252 | grep -q '127.0.0.1:5252'
 printf 'CODEV_BUILDER_HOST_KEY %s\n' "$(cat /etc/ssh/ssh_host_ed25519_key.pub)"
+if runuser -u codev-shell -- curl --max-time 2 -fsS http://127.0.0.1:5252/healthz >/dev/null 2>&1; then
+  echo 'Untrusted terminal account can reach the privileged loopback API.' >&2
+  exit 1
+fi
+echo 'CODEV_ARM_LOCAL_API_ISOLATION_VALIDATED'
 echo 'CODEV_ARM_IMAGE_VALIDATED'

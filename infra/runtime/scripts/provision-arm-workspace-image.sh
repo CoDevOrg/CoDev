@@ -80,6 +80,7 @@ test "$(jq -r .architecture "${artifact_dir}/runtime-manifest.json")" = arm64
 
 readonly host_packages=(
   build-essential
+  iptables
   pkg-config
   file
   python3-venv
@@ -177,11 +178,26 @@ chmod 0600 /etc/codev/superset-bridge.env
 SCRIPT
 chmod 0755 /usr/local/sbin/codev-create-local-secrets
 
+install -m 0755 /var/tmp/codev-local-api-guard /usr/local/sbin/codev-local-api-guard
+cat >/etc/systemd/system/codev-local-api-guard.service <<'UNIT'
+[Unit]
+Description=Restrict privileged loopback RPC to trusted VM callers
+Before=codev-guestd.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/codev-local-api-guard
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
 cat >/etc/systemd/system/codev-guestd.service <<'UNIT'
 [Unit]
 Description=CoDev local workspace bridge
-After=workspace.mount codev-local-secrets.service
-Requires=workspace.mount codev-local-secrets.service
+After=workspace.mount codev-local-secrets.service codev-local-api-guard.service
+Requires=workspace.mount codev-local-secrets.service codev-local-api-guard.service
 
 [Service]
 Type=simple
@@ -255,10 +271,12 @@ UNIT
 
 ln -s ../workspace.mount /etc/systemd/system/multi-user.target.wants/workspace.mount
 ln -s ../codev-local-secrets.service /etc/systemd/system/multi-user.target.wants/codev-local-secrets.service
+ln -s ../codev-local-api-guard.service /etc/systemd/system/multi-user.target.wants/codev-local-api-guard.service
 ln -s ../codev-guestd.service /etc/systemd/system/multi-user.target.wants/codev-guestd.service
 ln -s ../codev-superset-host.service /etc/systemd/system/multi-user.target.wants/codev-superset-host.service
 
 systemctl daemon-reload
+systemctl start codev-local-api-guard.service
 node --version
 pnpm --version
 codex --version

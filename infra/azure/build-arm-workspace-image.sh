@@ -74,6 +74,9 @@ readonly image_version_id="$(jq -er '.imageVersionId.value' <<<"${deployment_jso
 # credentials never enter builder metadata, logs, user data, or the image.
 {
   printf 'set -euo pipefail\n'
+  printf 'cat >/var/tmp/codev-local-api-guard <<\x27CODEV_LOCAL_GUARD\x27\n'
+  cat "${repo_root}/infra/runtime/scripts/restrict-arm-workspace-local-api.sh"
+  printf '\nCODEV_LOCAL_GUARD\n'
   printf 'cat >/var/tmp/codev-arm-provision.sh <<\x27CODEV_PROVISION\x27\n'
   head -n 1 "${repo_root}/infra/runtime/scripts/provision-arm-workspace-image.sh"
   printf 'export CODEV_RELEASE_VERSION=%q\n' "${release_version}"
@@ -82,7 +85,7 @@ readonly image_version_id="$(jq -er '.imageVersionId.value' <<<"${deployment_jso
   printf '\nCODEV_PROVISION\n'
   printf 'if ! bash /var/tmp/codev-arm-provision.sh >/var/tmp/codev-arm-provision.log 2>&1; then tail -n 50 /var/tmp/codev-arm-provision.log; exit 1; fi\n'
   cat "${repo_root}/infra/runtime/scripts/validate-arm-workspace-image.sh"
-  printf '\nrm -f /var/tmp/codev-arm-provision.sh\n'
+  printf '\nrm -f /var/tmp/codev-arm-provision.sh /var/tmp/codev-local-api-guard\n'
 } >"${build_dir}/provision.sh"
 # Run Command executes /bin/sh; explicitly launch the shell required by scripts.
 python3 - "${build_dir}/provision.sh" "${build_dir}/run-command.sh" <<'PY'
