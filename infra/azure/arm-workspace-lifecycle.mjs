@@ -203,9 +203,9 @@ export class ArmWorkspaceLifecycle {
     return this.stop(workspaceId, `idle-${state.generation}`);
   }
 
-  async memberInput(workspaceId, at = this.clock()) {
+  async memberInput(workspaceId) {
     return this.locked(workspaceId, async (state, write) =>
-      write(transition.recordMemberInput(state, at)),
+      write(transition.recordMemberInput(state, this.clock())),
     );
   }
 

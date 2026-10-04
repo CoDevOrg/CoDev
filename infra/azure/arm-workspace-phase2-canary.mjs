@@ -79,6 +79,10 @@ try {
     first.vmId,
     "set -e; printf 'phase2-canary-file' >/workspace/phase2-canary.txt; " +
       "printf 'phase2-canary-private' >/workspace/.codev-runtime/superset/phase2-canary.txt; " +
+      "git -C /workspace init -q; git -C /workspace -c user.name=Canary " +
+      "-c user.email=canary@example.invalid commit -q --allow-empty -m seed; " +
+      "git -C /workspace worktree add -q -b canary /workspace/canary-tree; " +
+      "printf 'worktree-saved' >/workspace/canary-tree/proof.txt; " +
       "printf 'SAVED'",
   );
   assert.equal(saved, "SAVED");
@@ -99,11 +103,15 @@ try {
     second.vmId,
     "cat /workspace/phase2-canary.txt; " +
       "cat /workspace/.codev-runtime/superset/phase2-canary.txt; " +
+      "cat /workspace/canary-tree/proof.txt; " +
+      "git -C /workspace worktree list; " +
       "stat -c '%u:%g:%a' /workspace/.codev-runtime; " +
       "blkid -s UUID -o value /dev/disk/azure/scsi1/lun0",
   );
   assert.match(evidence, /phase2-canary-file/);
   assert.match(evidence, /phase2-canary-private/);
+  assert.match(evidence, /worktree-saved/);
+  assert.match(evidence, /canary-tree/);
   assert.match(evidence, /0:0:700/);
   assert.match(evidence, new RegExp(first.diskUuid));
   now += 15 * 60_000;
