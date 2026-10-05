@@ -50,7 +50,10 @@ import { toAgentExecChunks } from "./agent-output";
 import { requireWorkspaceOwnerPlan } from "../billing/gate";
 import { requireGen2Member } from "./workspaces";
 import { requireGen2SupersetAgentAccess } from "./superset-agent-access";
-import { createGen2AgentSession } from "./agent-sessions";
+import {
+  createGen2AgentSession,
+  updateGen2AgentSessionStatus,
+} from "./agent-sessions";
 
 /**
  * The server-only CoDev runtime adapter docs/SUPERSET_AGENT_SESSION_PLAN.md
@@ -187,6 +190,12 @@ async function startSession(
       hostAgentSessionId: started.hostAgentSessionId,
       actorId: input.userId,
     });
+    if (input.sessionId) {
+      await updateGen2AgentSessionStatus({
+        sessionId: input.sessionId,
+        status: "running",
+      });
+    }
     return { ...registration, status: "running" as const };
   } catch (error) {
     if (claimed && credential.credentialId) {
@@ -206,6 +215,12 @@ async function startSession(
       lastError: error instanceof Error ? error.message : "unknown",
       actorId: input.userId,
     });
+    if (input.sessionId) {
+      await updateGen2AgentSessionStatus({
+        sessionId: input.sessionId,
+        status: "failed",
+      });
+    }
     throw error;
   }
 }
@@ -328,6 +343,12 @@ async function pollSession(
         result.exitCode === 0 ? "completed" : `exit_code:${result.exitCode}`,
       actorId: input.userId,
     });
+    if (run.sessionId) {
+      await updateGen2AgentSessionStatus({
+        sessionId: run.sessionId,
+        status: result.exitCode === 0 ? "completed" : "failed",
+      });
+    }
     if (run.leaseClaimed && run.connectionId) {
       await releaseCredentialSeat({
         credentialId: run.connectionId,
@@ -414,6 +435,12 @@ async function cancelSession(
     exitReason: "cancelled",
     actorId: input.userId,
   });
+  if (run.sessionId) {
+    await updateGen2AgentSessionStatus({
+      sessionId: run.sessionId,
+      status: "stopped",
+    });
+  }
 }
 
 /**
@@ -452,6 +479,13 @@ export async function reconcileGen2SupersetAgentSession(input: {
           : "Host could not verify the run after a restart.",
       actorId: input.userId,
     });
+    if (run.sessionId) {
+      await updateGen2AgentSessionStatus({
+        sessionId: run.sessionId,
+        status: "recovery_required",
+        recoveryState: "required",
+      });
+    }
   } else {
     // If adoptable and actively running, ensure the credential seat lease is renewed
     if (run.leaseClaimed && run.connectionId) {

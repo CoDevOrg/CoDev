@@ -7,6 +7,11 @@ import { schema } from "@codev/db";
 import { getDatabase } from "../platform/database";
 import { Gen2LifecycleError } from "./errors";
 
+export type Gen2AgentSessionStatus =
+  (typeof schema.gen2AgentSessionStatus.enumValues)[number];
+export type Gen2AgentSessionRecoveryState =
+  (typeof schema.gen2AgentSessionRecoveryState.enumValues)[number];
+
 type CreateGen2AgentSessionInput = {
   workspaceId: string;
   chatId: string;
@@ -64,4 +69,45 @@ export async function createGen2AgentSession(
     );
   }
   return session;
+}
+
+export async function listGen2AgentSessions(workspaceId: string) {
+  return getDatabase()
+    .select()
+    .from(schema.gen2AgentSessions)
+    .where(eq(schema.gen2AgentSessions.workspaceId, workspaceId))
+    .orderBy(schema.gen2AgentSessions.updatedAt);
+}
+
+export async function getGen2AgentSession(
+  workspaceId: string,
+  sessionId: string,
+) {
+  const [session] = await getDatabase()
+    .select()
+    .from(schema.gen2AgentSessions)
+    .where(
+      and(
+        eq(schema.gen2AgentSessions.id, sessionId),
+        eq(schema.gen2AgentSessions.workspaceId, workspaceId),
+      ),
+    )
+    .limit(1);
+  if (!session) throw new Gen2LifecycleError("Agent session not found.", 404);
+  return session;
+}
+
+export async function updateGen2AgentSessionStatus(input: {
+  sessionId: string;
+  status: Gen2AgentSessionStatus;
+  recoveryState?: Gen2AgentSessionRecoveryState;
+}) {
+  await getDatabase()
+    .update(schema.gen2AgentSessions)
+    .set({
+      status: input.status,
+      recoveryState: input.recoveryState,
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.gen2AgentSessions.id, input.sessionId));
 }

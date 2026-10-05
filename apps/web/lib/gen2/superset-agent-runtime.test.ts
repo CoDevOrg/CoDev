@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => ({
   recordOutput: vi.fn(),
   updateAuthCacheIfCurrent: vi.fn(),
   createAgentSession: vi.fn(),
+  updateAgentSession: vi.fn(),
 }));
 
 vi.mock("../billing/gate", () => ({
@@ -75,6 +76,8 @@ vi.mock("./turns", () => ({
 vi.mock("./agent-sessions", () => ({
   createGen2AgentSession: (...args: unknown[]) =>
     mocks.createAgentSession(...args),
+  updateGen2AgentSessionStatus: (...args: unknown[]) =>
+    mocks.updateAgentSession(...args),
 }));
 
 vi.mock("./superset-runs", () => ({
