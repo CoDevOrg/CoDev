@@ -120,3 +120,20 @@ esac
   assert.equal(calls.match(/resource delete/g)?.length, 1);
   assert.doesNotMatch(calls, /disk delete|vm deallocate/);
 });
+
+test("baked boot verifies the disk before mounting and turns subsequent boots into saved-disk opens", () => {
+  const image = read("./scripts/provision-arm-workspace-image.sh");
+  const boot = read("./scripts/boot-arm-workspace.sh");
+  const activation = read("./scripts/activate-arm-workspace-boot.sh");
+  const installer = read("./scripts/install-arm-workspace-boot.sh");
+  assert.doesNotMatch(
+    image,
+    /ln -s .*multi-user.target.wants\/(?:workspace.mount|codev-guestd.service)/,
+  );
+  assert.match(boot, /subprocess.run.*codev-prepare-arm-disk.*check=True/);
+  assert.match(boot, /config\["diskMode"\] = "existing"/);
+  assert.doesNotMatch(boot + activation, /curl|apt-get|dpkg|--token /);
+  assert.match(activation, /O_NOFOLLOW/);
+  assert.match(activation, /systemctl start codev-arm-boot/);
+  assert.match(installer, /--token-file \/etc\/codev\/tunnel-token/);
+});

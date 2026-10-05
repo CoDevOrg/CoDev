@@ -231,6 +231,7 @@ function deploymentTemplate(
   workspaceId: string,
   generation: number,
   diskId: string,
+  bootScript?: string,
 ) {
   const config = readArmWorkspaceConfig();
   const tags = {
@@ -250,6 +251,7 @@ function deploymentTemplate(
       imageVersionId: { type: "string" },
       dataDiskResourceId: { type: "string" },
       adminSshPublicKey: { type: "string" },
+      ...(bootScript ? { bootScript: { type: "secureString" } } : {}),
     },
     variables: {
       resourceTags: tags,
@@ -394,6 +396,26 @@ function deploymentTemplate(
           },
         },
       },
+      ...(bootScript
+        ? [
+            {
+              type: "Microsoft.Compute/virtualMachines/extensions",
+              apiVersion: COMPUTE_API,
+              name: "[format('{0}/CustomScript', parameters('instanceName'))]",
+              location: WORKSPACE_LOCATION,
+              dependsOn: [
+                "[resourceId('Microsoft.Compute/virtualMachines', parameters('instanceName'))]",
+              ],
+              properties: {
+                publisher: "Microsoft.Azure.Extensions",
+                type: "CustomScript",
+                typeHandlerVersion: "2.1",
+                autoUpgradeMinorVersion: false,
+                protectedSettings: { script: "[parameters('bootScript')]" },
+              },
+            },
+          ]
+        : []),
     ],
     outputs: {
       vmResourceId: {
@@ -523,7 +545,7 @@ export async function capabilityToken(
   return `${message}.${base64Url(new Uint8Array(signature))}`;
 }
 
-async function cloudflareRequest<T>(
+async function cloudflareRequestDirect<T>(
   path: string,
   method = "GET",
   body?: unknown,
@@ -550,6 +572,16 @@ async function cloudflareRequest<T>(
   } | null;
   if (!response.ok || !payload?.success) fail("CLOUDFLARE_TUNNEL_FAILED");
   return payload.result as T;
+}
+
+async function cloudflareRequest<T>(
+  path: string,
+  method = "GET",
+  body?: unknown,
+): Promise<T> {
+  return ArmWorkflowIO.checkpoint("azure", () =>
+    cloudflareRequestDirect<T>(path, method, body),
+  );
 }
 
 async function findTunnel(workspaceId: string, generation: number) {
@@ -712,6 +744,7 @@ async function deployVm(
   workspaceId: string,
   generation: number,
   diskId: string,
+  bootScript?: string,
 ) {
   const config = readArmWorkspaceConfig();
   const name = `${await resourceName(workspaceId)}-g${generation}`;
@@ -748,7 +781,7 @@ async function deployVm(
   const deployment = {
     properties: {
       mode: "Incremental",
-      template: deploymentTemplate(workspaceId, generation, diskId),
+      template: deploymentTemplate(workspaceId, generation, diskId, bootScript),
       parameters: {
         instanceName: { value: name },
         workspaceId: { value: workspaceId },
@@ -756,6 +789,7 @@ async function deployVm(
         imageVersionId: { value: config.imageVersionId },
         dataDiskResourceId: { value: diskId },
         adminSshPublicKey: { value: config.sshPublicKey },
+        ...(bootScript ? { bootScript: { value: bootScript } } : {}),
       },
     },
   };
@@ -946,7 +980,9 @@ async function waitForHealth(
   routeHost: string,
   heartbeat: () => Promise<void>,
 ) {
-  const deadline = await ArmWorkflowIO.deadline(3 * 60_000);
+  const deadline = await ArmWorkflowIO.deadline(
+    readArmWorkspaceConfig().bootEnabled ? 10 * 60_000 : 3 * 60_000,
+  );
   while (Date.now() < deadline) {
     try {
       const authorization = `Bearer ${await capabilityToken(routeHost, workspaceId, generation)}`;
@@ -1096,8 +1132,112 @@ async function connectRuntime(
   return ready;
 }
 
+async function bakedBootScript(
+  input: ArmWorkspaceOperation,
+  diskUuid: string,
+  routeHost: string,
+  token: string,
+) {
+  const { workspaceId, generation } = input;
+  const config = readArmWorkspaceConfig();
+  const identity = {
+    workspaceId,
+    generation,
+    audience: routeHost,
+    diskUuid,
+    verificationKey: config.signingPublicKey,
+    tunnelToken: token,
+    diskMode: input.diskId ? "existing" : "new",
+  };
+  const encoded = bytesToBase64(
+    new TextEncoder().encode(JSON.stringify(identity)),
+  );
+  return gzipBase64(
+    `#!/bin/bash\nset -euo pipefail\numask 077\nbase64 -d <<'CONFIG' | /usr/local/sbin/codev-activate-arm-boot\n${encoded}\nCONFIG\n`,
+  );
+}
+
+async function deployBakedVm(
+  input: ArmWorkspaceOperation,
+  progress: ArmWorkspaceProgress,
+  diskId: string,
+  diskUuid: string,
+  route: { tunnelId: string; routeHost: string; token?: string },
+) {
+  const { workspaceId, generation } = input;
+  let virtualMachineId = input.resume?.vmId;
+  if (!virtualMachineId) {
+    await progress("provisioning", {
+      diskId,
+      diskUuid,
+      tunnelId: route.tunnelId,
+      routeHost: route.routeHost,
+    });
+    const token = route.token
+      ? route.token
+      : (await ensureTunnel(workspaceId, generation)).token;
+    const script = await bakedBootScript(
+      input,
+      diskUuid,
+      route.routeHost,
+      token,
+    );
+    virtualMachineId = await deployVm(workspaceId, generation, diskId, script);
+  }
+  return virtualMachineId;
+}
+
+async function startBakedRuntime(
+  input: ArmWorkspaceOperation,
+  progress: ArmWorkspaceProgress,
+) {
+  const { workspaceId, generation } = input;
+  const diskId =
+    input.resume?.vmId && input.diskId
+      ? input.diskId
+      : input.diskId
+        ? await requireDisk(input.diskId, workspaceId, generation)
+        : await createDisk(workspaceId);
+  // An unidentified saved disk never becomes a fresh disk on retry.
+  if (input.diskId && !input.diskUuid) fail("DISK_IDENTITY_MISMATCH");
+  const diskUuid =
+    input.diskUuid ??
+    (await ArmWorkflowIO.checkpoint("disk-identity", async () =>
+      crypto.randomUUID(),
+    ));
+  const route =
+    input.resume?.tunnelId && input.resume.routeHost
+      ? { tunnelId: input.resume.tunnelId, routeHost: input.resume.routeHost }
+      : await ensureTunnel(workspaceId, generation).then((tunnel) => ({
+          tunnelId: tunnel.id,
+          routeHost: tunnel.host,
+          token: tunnel.token,
+        }));
+  const virtualMachineId = await deployBakedVm(
+    input,
+    progress,
+    diskId,
+    diskUuid,
+    route,
+  );
+  const resources = {
+    vmId: virtualMachineId,
+    diskId,
+    diskUuid,
+    tunnelId: route.tunnelId,
+    routeHost: route.routeHost,
+  };
+  await progress("checking_readiness", resources);
+  await waitForHealth(workspaceId, generation, diskUuid, route.routeHost, () =>
+    progress("checking_readiness", resources),
+  );
+  return resources;
+}
+
 export class ArmWorkspaceProvider {
   async start(input: ArmWorkspaceOperation, progress: ArmWorkspaceProgress) {
+    if (readArmWorkspaceConfig().bootEnabled)
+      return startBakedRuntime(input, progress);
     const resources = await prepareRuntime(input, progress);
     return connectRuntime(input, progress, resources);
   }

@@ -1,3 +1,5 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { createHash, createPrivateKey, randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -25,6 +27,7 @@ it.skipIf(!process.env.CODEV_ARM_CANARY_CREDENTIAL_DIR)(
       ARM_WORKSPACE_AZURE_CLIENT_SECRET: credential.password,
       ARM_WORKSPACE_RESOURCE_GROUP: "codev-arm-workspace-staging",
       ARM_WORKSPACE_IMAGE_VERSION_ID:
+        process.env.CODEV_ARM_CANARY_IMAGE_VERSION_ID ??
         "/subscriptions/8ad43e43-af64-4d36-afc5-5e01b23833e4/resourceGroups/codev-arm-workspace-phase1/providers/Microsoft.Compute/galleries/codevarmworkspacegallery/images/codev-workspace-arm64/versions/1.0.11",
       ARM_WORKSPACE_SSH_PUBLIC_KEY: await readFile(
         join(directory, "ssh-ed25519.pub"),
@@ -95,9 +98,15 @@ async function lifecycle(directory: string) {
     );
   };
   try {
+    const started = Date.now();
     const first = await provider.start(
       { workspaceId, generation, ...resources },
       progress,
+    );
+    console.log(
+      JSON.stringify({
+        freshStartupSeconds: Math.round((Date.now() - started) / 1000),
+      }),
     );
     resources = first;
     expect(
@@ -116,6 +125,37 @@ async function lifecycle(directory: string) {
       "printf staging-canary-persisted >/workspace/staging-canary.txt",
     );
     expect(saved.exitCode).toBe(0);
+    if (process.env.CODEV_ARM_CANARY_REBOOT === "true") {
+      await promisify(execFile)(
+        "az",
+        ["vm", "restart", "--ids", first.vmId, "--only-show-errors"],
+        { timeout: 180_000 },
+      );
+      const deadline = Date.now() + 120_000;
+      while (
+        !(await provider.healthy(
+          workspaceId,
+          generation,
+          first.diskUuid,
+          first.routeHost,
+        ))
+      ) {
+        if (Date.now() > deadline)
+          throw new Error("Baked guest did not recover after OS reboot");
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+      expect(
+        (
+          await command(
+            first.routeHost,
+            workspaceId,
+            generation,
+            "cat /workspace/staging-canary.txt",
+          )
+        ).output,
+      ).toContain("staging-canary-persisted");
+      console.log("ARM OS reboot and saved file verification passed");
+    }
     await provider.stop({ workspaceId, generation, ...resources });
     generation = 2;
     const second = await provider.start(

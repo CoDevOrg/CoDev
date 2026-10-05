@@ -77,6 +77,11 @@ readonly image_version_id="$(jq -er '.imageVersionId.value' <<<"${deployment_jso
   printf 'cat >/var/tmp/codev-local-api-guard <<\x27CODEV_LOCAL_GUARD\x27\n'
   cat "${repo_root}/infra/runtime/scripts/restrict-arm-workspace-local-api.sh"
   printf '\nCODEV_LOCAL_GUARD\n'
+  for script in arm-workspace-capability.mjs arm-workspace-gateway.mjs arm-workspace-bootstrap.mjs start-arm-workspace-gateway.mjs install-arm-workspace-boot.sh activate-arm-workspace-boot.sh boot-arm-workspace.sh prepare-arm-workspace-disk.sh; do
+    printf 'cat >/var/tmp/%s <<\x27CODEV_BOOT_ARTIFACT\x27\n' "${script}"
+    cat "${repo_root}/infra/runtime/scripts/${script}"
+    printf '\nCODEV_BOOT_ARTIFACT\n'
+  done
   printf 'cat >/var/tmp/codev-arm-provision.sh <<\x27CODEV_PROVISION\x27\n'
   head -n 1 "${repo_root}/infra/runtime/scripts/provision-arm-workspace-image.sh"
   printf 'export CODEV_RELEASE_VERSION=%q\n' "${release_version}"

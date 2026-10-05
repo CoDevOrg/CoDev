@@ -32,3 +32,9 @@ The opt-in `arm-workspace-staging-canary.test.ts` uses
 `CODEV_ARM_CANARY_CREDENTIAL_DIR` for operator credentials outside the repository.
 It creates only disposable workspaces in `codev-arm-workspace-staging`, records
 resource IDs for recovery, and removes its compute, routes, and test disk.
+
+`ARM_WORKSPACE_BOOT_ENABLED` selects the baked guest boot protocol only after
+its pinned image has passed a live canary. Identity and connector credentials
+are delivered through a secure deployment parameter and protected extension
+settings; local disk setup replaces sequential Run Commands. Disable this flag
+and restore the previous image pin together to roll back new VM starts.

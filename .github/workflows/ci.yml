@@ -117,6 +117,7 @@ jobs:
       ARM_WORKSPACE_RUNTIME_SECRETS: ${{ secrets.ARM_WORKSPACE_RUNTIME_SECRETS }}
       GEN2_FREE_ARM_ENABLED: ${{ vars.GEN2_FREE_ARM_ENABLED || 'false' }}
       GEN2_FREE_ARM_OWNER_IDS: ${{ vars.GEN2_FREE_ARM_OWNER_IDS }}
+      ARM_WORKSPACE_BOOT_ENABLED: ${{ vars.ARM_WORKSPACE_BOOT_ENABLED || 'false' }}
     steps:
       - name: Check Cloudflare credentials
         shell: bash
