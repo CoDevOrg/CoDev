@@ -165,8 +165,9 @@ publishes no new snapshots and the guard expires stale telemetry.
 ## ARM guest boot rollout
 
 `ARM_WORKSPACE_BOOT_ENABLED` defaults to false. Its Cloudflare text binding is
-built from the matching GitHub repository variable; Vercel uses the project
-environment variable. Enable it only with a baked image containing cloudflared,
+built from the matching GitHub repository variable. The production Vercel deploy
+synchronizes that flag and the image pin from the shared ARM runtime configuration
+into its project environment before pulling/building. Enable it only with a baked image containing cloudflared,
 the gateway, and `codev-arm-boot.service`. The controller supplies the saved UUID
 or a new UUID before VM deployment. One protected extension configuration starts
 local initialization; no guest disk inspection or preparation Run Commands run.
