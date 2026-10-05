@@ -1,5 +1,9 @@
 import { withUser } from "@/lib/http/api-route";
 import { requireGen2Member } from "@/lib/gen2/workspaces";
+import {
+  checkAzureWorkspaceConnection,
+  touchAzureWorkspaceActivity,
+} from "@/lib/gen2/runtime-operations";
 import { getSandbox, touchSandbox } from "@/lib/runtime/orchestrator-sandbox";
 import { OrchestratorError } from "@/lib/runtime/orchestrator-request";
 
@@ -8,7 +12,16 @@ type Params = { workspaceId: string };
 function connectionRoute(active: boolean) {
   return withUser<Params>(
     async ({ user, params: { workspaceId } }) => {
-      await requireGen2Member(workspaceId, user.id);
+      const workspace = await requireGen2Member(workspaceId, user.id);
+      if (workspace.runtimeProvider === "azure_arm") {
+        const connected = active
+          ? await touchAzureWorkspaceActivity(workspaceId)
+          : await checkAzureWorkspaceConnection(workspaceId);
+        return Response.json(
+          { connected },
+          { headers: { "Cache-Control": "no-store" } },
+        );
+      }
       try {
         // Never wake or provision here. Reconnection is an explicit instance POST.
         const sandbox = await (active

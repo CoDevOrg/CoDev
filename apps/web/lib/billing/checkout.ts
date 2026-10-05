@@ -22,7 +22,7 @@ type Member = { id: string; email?: string | null; name?: string | null };
  */
 async function ensureStripeCustomer(member: Member) {
   const existing = await getSubscriptionRow(member.id);
-  if (existing?.provider === "stripe" && existing.providerCustomerId) {
+  if (existing?.providerCustomerId) {
     // The stored customer can belong to the other Stripe mode (sandbox vs
     // live) or have been deleted; only reuse it when this account has it.
     const known = await getStripe()

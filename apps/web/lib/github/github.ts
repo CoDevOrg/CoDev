@@ -44,9 +44,13 @@ interface GitHubConnection {
 async function refreshGitHubToken(
   userId: string,
   connection: GitHubConnection,
+  database: ReturnType<typeof getDatabase>,
 ) {
   if (!connection.encryptedRefreshToken) {
-    throw new Error("GitHub authorization expired. Sign in again.");
+    throw new GitHubApiError(
+      "GitHub authorization expired. Sign in again.",
+      401,
+    );
   }
 
   const clientId = process.env.AUTH_GITHUB_ID;
@@ -71,7 +75,12 @@ async function refreshGitHubToken(
   });
 
   if (!response.ok) {
-    throw new Error("GitHub authorization could not be refreshed.");
+    throw new GitHubApiError(
+      response.status >= 500
+        ? "GitHub is temporarily unavailable. Try again."
+        : "GitHub authorization could not be refreshed. Sign in again.",
+      response.status >= 500 ? 502 : 401,
+    );
   }
 
   const payload = (await response.json()) as {
@@ -81,11 +90,14 @@ async function refreshGitHubToken(
     refresh_token_expires_in?: number;
   };
   if (!payload.access_token) {
-    throw new Error("GitHub did not return a refreshed access token.");
+    throw new GitHubApiError(
+      "GitHub authorization could not be refreshed. Sign in again.",
+      401,
+    );
   }
 
   const now = Date.now();
-  await getDatabase()
+  await database
     .update(schema.githubConnections)
     .set({
       encryptedAccessToken: await encryptSecret(payload.access_token),
@@ -138,8 +150,11 @@ export async function resolveGithubConnection(
   return { connected, login: connected ? (record?.login ?? null) : null };
 }
 
-export async function getGitHubUserToken(userId: string) {
-  const [connection] = await getDatabase()
+export async function getGitHubUserToken(
+  userId: string,
+  database = getDatabase(),
+) {
+  const [connection] = await database
     .select()
     .from(schema.githubConnections)
     .where(eq(schema.githubConnections.userId, userId))
@@ -153,7 +168,7 @@ export async function getGitHubUserToken(userId: string) {
     connection.accessTokenExpiresAt &&
     connection.accessTokenExpiresAt.getTime() <= Date.now() + 60_000
   ) {
-    return refreshGitHubToken(userId, connection);
+    return refreshGitHubToken(userId, connection, database);
   }
 
   return decryptSecret(connection.encryptedAccessToken);
@@ -184,9 +199,10 @@ export async function githubRequest<T>(
   options: {
     method?: "GET" | "POST";
     body?: unknown;
+    database?: ReturnType<typeof getDatabase> | undefined;
   } = {},
 ): Promise<T> {
-  const token = await getGitHubUserToken(userId);
+  const token = await getGitHubUserToken(userId, options.database);
   const response = await fetch(`https://api.github.com${path}`, {
     method: options.method ?? "GET",
     headers: {
@@ -282,6 +298,7 @@ export async function getRepositorySnapshot(
   userId: string,
   repository: string,
   commitSha: string,
+  database?: ReturnType<typeof getDatabase>,
 ): Promise<RepositorySnapshot> {
   const tree = await githubRequest<{
     truncated: boolean;
@@ -295,6 +312,7 @@ export async function getRepositorySnapshot(
   }>(
     userId,
     `/repos/${repository}/git/trees/${encodeURIComponent(commitSha)}?recursive=1`,
+    { database },
   );
   if (tree.truncated) {
     throw new Error("The repository tree is too large for a CoDev snapshot.");
@@ -324,6 +342,7 @@ export async function getRepositorySnapshot(
         githubRequest<{ content: string; encoding: string }>(
           userId,
           `/repos/${repository}/git/blobs/${entry.sha}`,
+          { database },
         ),
       ),
     );

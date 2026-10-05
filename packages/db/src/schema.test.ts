@@ -48,6 +48,9 @@ import {
   runtimeHosts,
   workspaces,
   gen2Workspaces,
+  gen2RuntimeProvider,
+  gen2RuntimeStatus,
+  gen2RuntimeOperationKind,
   gen2WorkspaceMembers,
   gen2Chats,
   gen2ChatMessages,
@@ -82,6 +85,20 @@ describe("database schema", () => {
     expect(getTableName(workspaces)).toBe("workspaces");
     expect(getTableName(gen2Workspaces)).toBe("gen2_workspaces");
     expect(getTableName(gen2WorkspaceMembers)).toBe("gen2_workspace_members");
+    expect(gen2RuntimeProvider.enumValues).toEqual([
+      "firecracker",
+      "azure_arm",
+    ]);
+    expect(gen2RuntimeStatus.enumValues).toContain("checking_readiness");
+    expect(gen2RuntimeOperationKind.enumValues).toEqual([
+      "start",
+      "stop",
+      "delete",
+    ]);
+    expect(gen2Workspaces.runtimeDiskUuid.name).toBe("runtime_disk_uuid");
+    expect(gen2Workspaces.runtimeCleanupGeneration.name).toBe(
+      "runtime_cleanup_generation",
+    );
     expect(getTableName(gen2Chats)).toBe("gen2_chats");
     expect(getTableName(gen2ChatMessages)).toBe("gen2_chat_messages");
     expect(getTableName(organizations)).toBe("organizations");

@@ -1,7 +1,10 @@
 import { boundedJsonRequest } from "./bounded-request";
 import type { Gen2WorkspaceDetail } from "@codev/contracts";
 
-const STARTUP_MAX_WAIT_MS = 90_000;
+// Phase 2 measured ARM reopen at 348 seconds; leave room for that cold path
+// while keeping each HTTP request bounded and polling persisted state.
+const STARTUP_MAX_WAIT_MS = 480_000;
+const STARTUP_REQUEST_TIMEOUT_MS = 210_000;
 const STARTUP_RECHECK_MS = 60_000;
 const MAX_BACKOFF_MS = 15_000;
 
@@ -10,10 +13,10 @@ type WorkspaceResponse = {
   error?: string;
 };
 
-type ReadyGen2WorkspaceDetail = Gen2WorkspaceDetail & {
-  status: "ready";
-  sandboxId: string;
-};
+type ReadyGen2WorkspaceDetail = Gen2WorkspaceDetail & { status: "ready" } & (
+    | { runtimeProvider: "azure_arm"; runtimeStatus: "ready" }
+    | { runtimeProvider: "firecracker"; sandboxId: string }
+  );
 
 type StartupResult =
   | { workspace: Gen2WorkspaceDetail; error?: never }
@@ -31,6 +34,9 @@ type StartupDependencies = {
   random?: () => number;
   maxWaitMs?: number;
   recheckMs?: number;
+  signal?: AbortSignal;
+  onProgress?: (workspace: Gen2WorkspaceDetail) => void;
+  isVisible?: () => boolean;
 };
 
 const pause = (milliseconds: number) =>
@@ -44,7 +50,32 @@ function retryDelay(attempt: number, random: () => number) {
 function readyWorkspace(
   workspace: Gen2WorkspaceDetail | undefined,
 ): workspace is ReadyGen2WorkspaceDetail {
-  return workspace?.status === "ready" && Boolean(workspace.sandboxId);
+  return Boolean(
+    workspace?.status === "ready" &&
+    (workspace.runtimeProvider === "azure_arm"
+      ? workspace.runtimeStatus === "ready"
+      : workspace.sandboxId),
+  );
+}
+
+async function liveReadyWorkspace(
+  workspace: Gen2WorkspaceDetail | undefined,
+  url: string,
+  dependencies: StartupDependencies,
+  timeoutMs: number,
+) {
+  if (!readyWorkspace(workspace)) return false;
+  if (workspace.runtimeProvider !== "azure_arm") return true;
+  if (dependencies.isVisible?.() === false) return false;
+  const { response, payload } = await boundedJsonRequest<{
+    connected?: boolean;
+  }>(
+    `${url}/activity`,
+    { method: "GET", cache: "no-store", signal: dependencies.signal ?? null },
+    Math.min(10_000, timeoutMs),
+    dependencies.fetcher,
+  );
+  return response.ok && payload.connected === true;
 }
 
 /**
@@ -64,23 +95,43 @@ export async function ensureGen2WorkspaceReady(
   const deadline = now() + (dependencies.maxWaitMs ?? STARTUP_MAX_WAIT_MS);
   const recheckMs = dependencies.recheckMs ?? STARTUP_RECHECK_MS;
   const url = `/api/gen2/workspaces/${workspaceId}`;
+  const idempotencyKey = crypto.randomUUID();
   let attempt = 0;
   let lastPostAt = Number.NEGATIVE_INFINITY;
   let postNext = true;
+  let posted = false;
 
-  while (now() < deadline) {
+  while (now() < deadline && !dependencies.signal?.aborted) {
+    if (posted && dependencies.isVisible?.() === false) {
+      await wait(Math.min(1_000, deadline - now()));
+      continue;
+    }
     if (postNext) {
+      posted = true;
       lastPostAt = now();
       postNext = false;
       try {
         const { response, payload } =
           await boundedJsonRequest<WorkspaceResponse>(
             `${url}/instance`,
-            { method: "POST" },
-            Math.min(65_000, deadline - now()),
+            {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ idempotencyKey }),
+              signal: dependencies.signal ?? null,
+            },
+            Math.min(STARTUP_REQUEST_TIMEOUT_MS, deadline - now()),
             fetcher,
           );
-        if (readyWorkspace(payload.workspace)) {
+        if (payload.workspace) dependencies.onProgress?.(payload.workspace);
+        if (
+          await liveReadyWorkspace(
+            payload.workspace,
+            url,
+            dependencies,
+            deadline - now(),
+          )
+        ) {
           return { workspace: payload.workspace! };
         }
         if (payload.workspace) {
@@ -88,7 +139,7 @@ export async function ensureGen2WorkspaceReady(
             return {
               error:
                 payload.workspace.lastError ??
-                "The Firecracker instance could not start.",
+                "The workspace instance could not start.",
             };
           }
           if (payload.workspace.status === "deleting") {
@@ -142,7 +193,7 @@ export async function ensureGen2WorkspaceReady(
         const { response, payload } =
           await boundedJsonRequest<WorkspaceResponse>(
             url,
-            { method: "GET" },
+            { method: "GET", signal: dependencies.signal ?? null },
             Math.min(10_000, deadline - now()),
             fetcher,
           );
@@ -156,15 +207,24 @@ export async function ensureGen2WorkspaceReady(
           continue;
         }
         const workspace = payload.workspace;
-        if (workspace && readyWorkspace(workspace)) return { workspace };
+        if (workspace) dependencies.onProgress?.(workspace);
+        if (
+          workspace &&
+          (await liveReadyWorkspace(
+            workspace,
+            url,
+            dependencies,
+            deadline - now(),
+          ))
+        )
+          return { workspace };
         if (!workspace) {
           return { error: "The workspace status could not be loaded." };
         }
         if (workspace.status === "failed") {
           return {
             error:
-              workspace.lastError ??
-              "The Firecracker instance could not start.",
+              workspace.lastError ?? "The workspace instance could not start.",
           };
         }
         if (workspace.status === "deleting") {

@@ -250,6 +250,7 @@ impl GuestService {
             ("GET", "/v1/agent-activity") => {
                 return self.superset_bridge_request("GET", "/codev/agents/activity", &[]);
             }
+            ("GET", "/v1/runtime-activity") => return self.runtime_activity(),
             ("POST", "/v1/workspace/flush") => self.flush_workspace(),
             ("POST", "/v1/files/read") => self.read_file(body),
             ("POST", "/v1/files/write") => self.write_file(body),
@@ -351,6 +352,14 @@ impl GuestService {
                 _ => GuestResponse::error(500, error),
             },
         }
+    }
+
+    fn runtime_activity(&self) -> GuestResponse {
+        if *self.codex_busy.lock().expect("codex busy lock") {
+            return GuestResponse::json(200, serde_json::json!({ "running": true }));
+        }
+        // Failure is uncertainty, never permission to stop a running guest.
+        self.superset_bridge_request("GET", "/codev/agents/activity", &[])
     }
 
     fn health(&self) -> crate::model::Result<serde_json::Value> {
@@ -2881,6 +2890,18 @@ mod tests {
 
         let close = service.handle("DELETE", &format!("/v1/terminals/{session_id}"), b"");
         assert_eq!(close.status, 200);
+    }
+
+    #[test]
+    fn runtime_activity_observes_codex_without_polling_or_browser_activity() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        *service.codex_busy.lock().expect("codex busy lock") = true;
+        let response = service.handle("GET", "/v1/runtime-activity", &[]);
+        assert_eq!(response.status, 200);
+        let value: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        assert_eq!(value["running"], true);
+        assert!(*service.codex_busy.lock().expect("codex busy lock"));
     }
 
     #[test]

@@ -29,6 +29,10 @@ import {
   startComputeSession,
   workspaceOwnerId,
 } from "./compute-quota";
+import {
+  queueAzureWorkspaceStart,
+  queueAzureWorkspaceStop,
+} from "./runtime-operations";
 
 /** Orchestrator create validation requires a 40-character hex SHA. */
 export const GEN2_BLANK_BASE_SHA = "0".repeat(40);
@@ -258,6 +262,7 @@ export async function ensureGen2Instance(
   workspaceId: string,
   userId: string,
   runtime?: Gen2SandboxRuntime,
+  idempotencyKey = crypto.randomUUID(),
 ) {
   const membership = await requireGen2Member(workspaceId, userId);
   // Starting or resuming a machine is the cost the plan pays for.
@@ -271,6 +276,13 @@ export async function ensureGen2Instance(
     await reconcileWorkspaceComputeSession(workspaceId);
   }
   await assertComputeAvailable(ownerId);
+  if (membership.runtimeProvider === "azure_arm" && !runtime) {
+    const result = await queueAzureWorkspaceStart(workspaceId, idempotencyKey);
+    if (!result.accepted) await startComputeSession(workspaceId, ownerId);
+    return Object.assign(await requireGen2Member(workspaceId, userId), {
+      operationId: result.operationId,
+    });
+  }
   const currentRuntime = runtime ?? createFirecrackerRuntime();
   let hostReady = false;
 
@@ -403,12 +415,26 @@ export async function ensureGen2Instance(
 export async function stopGen2Instance(
   workspaceId: string,
   userId: string,
-  runtime: Gen2SandboxRuntime = createFirecrackerRuntime(),
+  runtime?: Gen2SandboxRuntime,
+  idempotencyKey = crypto.randomUUID(),
 ) {
   const membership = await requireGen2Member(workspaceId, userId);
   if (membership.role !== "owner") {
     throw new Gen2AccessError("Only the owner can stop this instance.", 403);
   }
+  if (membership.runtimeProvider === "azure_arm" && !runtime) {
+    if (membership.status === "provisioning") {
+      throw new Gen2LifecycleError(
+        "Wait for the workspace operation to finish before stopping it.",
+      );
+    }
+    if (!["ready", "failed", "stopped"].includes(membership.status)) {
+      throw new Gen2LifecycleError("This instance is not running.");
+    }
+    await queueAzureWorkspaceStop(workspaceId, idempotencyKey);
+    return requireGen2Member(workspaceId, userId);
+  }
+  const currentRuntime = runtime ?? createFirecrackerRuntime();
   if (membership.status === "provisioning") {
     throw new Gen2LifecycleError(
       "Wait for the instance to finish starting before stopping it.",
@@ -439,7 +465,7 @@ export async function stopGen2Instance(
   }
 
   try {
-    await runtime.destroy(workspaceId);
+    await currentRuntime.destroy(workspaceId);
   } catch (error) {
     if (!isGen2HostUnreachable(error)) {
       const message = describeGen2RuntimeFailure(error);

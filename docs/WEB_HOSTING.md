@@ -45,3 +45,22 @@ Update this document in the same change whenever a hostname, deployment job,
 Worker binding, Cron Trigger, Cloudflare service, Vercel project, or runtime
 secret source moves, is added, or is removed. Confirm the new ownership against
 the deployment workflows and platform configs before marking it current.
+
+## ARM workspace bridge
+
+For a workspace whose provider is `azure_arm`, the web application sends file,
+Git, terminal, agent, Superset, upload, and collaborative file requests to that
+workspace's generation-specific `codev-<workspace-hash>-g<generation>.trycodev.com`
+tunnel hostname. Each request uses an Ed25519 capability bound to the workspace,
+generation, hostname, method, raw path including query, and SHA-256 body digest;
+redirects are refused. An unavailable ARM route never falls back to the shared
+Firecracker host. Browser sockets still terminate at the authorized web app.
+
+`ARM_WORKSPACE_SIGNING_PRIVATE_KEY` remains in each web deployment's runtime
+secret store. The guest receives only the public verification key and tunnel
+connector token through protected Azure settings. Private GitHub credentials
+stay in the control plane; new guest checkouts receive bounded file snapshots.
+The scheduled compute reconciliation route also drains abandoned ARM turns
+before idle VM release, using the durable cursor added by migration `0068`.
+A candidate image containing `/v1/runtime-activity` and a successful staging
+canary are required before ARM member enablement. See the [Phase 4 review](./arm-workspace-free-tier-phase-4.md).

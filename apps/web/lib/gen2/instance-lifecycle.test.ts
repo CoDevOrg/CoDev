@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => {
     sandboxId: null as string | null,
     lastError: null as string | null,
     role: "owner" as "owner" | "editor" | "viewer",
+    runtimeProvider: "firecracker" as string,
     createdAt: new Date("2026-09-20T20:00:00.000Z"),
     updatedAt: new Date("2026-09-20T20:00:00.000Z"),
   };
@@ -83,6 +84,7 @@ const mocks = vi.hoisted(() => {
     provision: vi.fn(),
     destroy: vi.fn(),
     ensureHostReady: vi.fn(),
+    queueAzureWorkspaceStop: vi.fn(),
   };
 });
 
@@ -111,6 +113,12 @@ vi.mock("../runtime/orchestrator-health", () => ({
   ensureHostReady: (...args: unknown[]) => mocks.ensureHostReady(...args),
 }));
 
+vi.mock("./runtime-operations", () => ({
+  queueAzureWorkspaceStart: vi.fn(),
+  queueAzureWorkspaceStop: (...args: unknown[]) =>
+    mocks.queueAzureWorkspaceStop(...args),
+}));
+
 import { Gen2LifecycleError } from "./errors";
 import { ensureGen2Instance, stopGen2Instance } from "./instance";
 
@@ -126,6 +134,7 @@ describe("gen2 instance lifecycle", () => {
     mocks.member.lastError = null;
     mocks.member.updatedAt = new Date("2026-09-20T20:00:00.000Z");
     mocks.member.role = "owner";
+    mocks.member.runtimeProvider = "firecracker";
     mocks.state.claimed = true;
     mocks.state.leaseCurrent = true;
     for (const method of ["from", "innerJoin", "where"] as const) {
@@ -479,5 +488,19 @@ describe("gen2 instance lifecycle", () => {
     ).rejects.toMatchObject({ status: 409 });
 
     expect(mocks.destroy).not.toHaveBeenCalled();
+  });
+
+  it("does not queue an ARM stop for a non-owner member", async () => {
+    mocks.member.status = "ready";
+    mocks.member.runtimeProvider = "azure_arm";
+    mocks.member.role = "editor";
+
+    await expect(
+      stopGen2Instance(mocks.member.id, "user-2"),
+    ).rejects.toMatchObject({ status: 403 });
+
+    expect(mocks.queueAzureWorkspaceStop).not.toHaveBeenCalled();
+    expect(mocks.destroy).not.toHaveBeenCalled();
+    expect(mocks.updates).toHaveLength(0);
   });
 });

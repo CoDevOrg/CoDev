@@ -86,6 +86,27 @@ async function orchestratorDirectRequest(
     : null;
   if (faked) return assertOrchestratorResponse(faked);
 
+  const workspaceRoute = path.match(
+    /^\/v1\/sandboxes\/([^/?]+)(\/(?:files|git|pty|terminals|codex-execs|superset|superset-agents)(?:\/|\?|$).*)$/,
+  );
+  if (workspaceRoute && !endpointOverride) {
+    const { workspaceRuntimeTarget } =
+      await import("./workspace-runtime-target");
+    const target = await workspaceRuntimeTarget(workspaceRoute[1]!);
+    if (target) {
+      const { armWorkspaceRequest } = await import("./arm-workspace-request");
+      return assertOrchestratorResponse(
+        await armWorkspaceRequest(
+          target,
+          method,
+          `/v1${workspaceRoute[2]}`,
+          body,
+          timeoutMs,
+        ),
+      );
+    }
+  }
+
   const environment = readServerEnvironment();
   const endpoint = environment.ORCHESTRATOR_DIRECT_URL;
   const secret = environment.ORCHESTRATOR_DIRECT_SECRET;

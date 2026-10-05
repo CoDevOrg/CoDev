@@ -11,6 +11,9 @@ vi.mock("@codev/config", () => ({
 vi.mock("./host", () => ({
   requestHostWake: vi.fn(),
 }));
+vi.mock("./workspace-runtime-target", () => ({
+  workspaceRuntimeTarget: vi.fn(async () => null),
+}));
 const fetchMock = vi.fn();
 vi.stubGlobal("fetch", fetchMock);
 

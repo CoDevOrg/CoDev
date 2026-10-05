@@ -11,6 +11,33 @@ export const gen2WorkspaceStatusSchema = z.enum([
   "deleting",
 ]);
 
+export const gen2RuntimeProviderSchema = z.enum(["firecracker", "azure_arm"]);
+export const gen2RuntimeStatusSchema = z.enum([
+  "stopped",
+  "queued",
+  "provisioning",
+  "booting",
+  "attaching_disk",
+  "starting_tunnel",
+  "checking_readiness",
+  "ready",
+  "stopping",
+  "failed",
+]);
+export const gen2RuntimeOperationKindSchema = z.enum([
+  "start",
+  "stop",
+  "delete",
+]);
+export const gen2RuntimeOperationRequestSchema = z.object({
+  idempotencyKey: z.string().trim().min(1).max(128),
+});
+export const gen2RuntimeOperationResponseSchema = z.object({
+  accepted: z.literal(true),
+  operationId: identifierSchema.nullable(),
+  workspace: z.lazy(() => gen2WorkspaceSchema),
+});
+
 export const gen2WorkspaceRoleSchema = z.enum(["owner", "editor", "viewer"]);
 
 export const gen2WorkspaceCreateRequestSchema = z
@@ -50,6 +77,9 @@ export const gen2WorkspaceSchema = z.object({
   repository: gen2RepositorySchema.nullable().default(null),
   status: gen2WorkspaceStatusSchema,
   sandboxId: z.string().min(1).nullable(),
+  runtimeProvider: gen2RuntimeProviderSchema.default("firecracker"),
+  runtimeStatus: gen2RuntimeStatusSchema.default("stopped"),
+  runtimeGeneration: z.number().int().nonnegative().default(0),
   lastError: z.string().nullable(),
   role: gen2WorkspaceRoleSchema,
   createdAt: timestampSchema,
@@ -605,6 +635,17 @@ export type Gen2SupersetRun = z.infer<typeof gen2SupersetRunSchema>;
 
 export type Gen2Repository = z.infer<typeof gen2RepositorySchema>;
 export type Gen2WorkspaceStatus = z.infer<typeof gen2WorkspaceStatusSchema>;
+export type Gen2RuntimeProvider = z.infer<typeof gen2RuntimeProviderSchema>;
+export type Gen2RuntimeStatus = z.infer<typeof gen2RuntimeStatusSchema>;
+export type Gen2RuntimeOperationKind = z.infer<
+  typeof gen2RuntimeOperationKindSchema
+>;
+export type Gen2RuntimeOperationRequest = z.infer<
+  typeof gen2RuntimeOperationRequestSchema
+>;
+export type Gen2RuntimeOperationResponse = z.infer<
+  typeof gen2RuntimeOperationResponseSchema
+>;
 export type Gen2WorkspaceRole = z.infer<typeof gen2WorkspaceRoleSchema>;
 export type Gen2Workspace = z.infer<typeof gen2WorkspaceSchema>;
 export type Gen2WorkspaceDetail = z.infer<typeof gen2WorkspaceDetailSchema>;

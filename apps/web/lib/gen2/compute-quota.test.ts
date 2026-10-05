@@ -3,12 +3,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => {
   const intervals: Array<{ startedAt: Date; endedAt: Date | null }> = [];
   const query = { from: vi.fn(), where: vi.fn() };
-  return { intervals, query, select: vi.fn(() => query) };
+  return {
+    intervals,
+    query,
+    isAdmin: vi.fn(async () => false),
+    select: vi.fn(() => query),
+  };
 });
 
 vi.mock("../platform/database", () => ({
   getDatabase: () => ({ select: mocks.select }),
 }));
+vi.mock("../admin/admin", () => ({ isUserAdmin: mocks.isAdmin }));
 
 import {
   MONTHLY_COMPUTE_LIMIT_MS,
@@ -20,6 +26,7 @@ import {
 describe("monthly VM minute allowance", () => {
   beforeEach(() => {
     mocks.intervals.length = 0;
+    mocks.isAdmin.mockResolvedValue(false);
     mocks.query.from.mockReturnValue(mocks.query);
     mocks.query.where.mockImplementation(async () => mocks.intervals);
   });
@@ -54,6 +61,17 @@ describe("monthly VM minute allowance", () => {
     mocks.intervals[0]!.startedAt = new Date(
       now.getTime() - MONTHLY_COMPUTE_LIMIT_MS + 1,
     );
+    await expect(assertComputeAvailable("owner", now)).resolves.toBeUndefined();
+  });
+
+  it("allows application admins past the monthly limit", async () => {
+    const now = new Date("2026-10-10T00:00:00Z");
+    mocks.isAdmin.mockResolvedValue(true);
+    mocks.intervals.push({
+      startedAt: new Date(now.getTime() - MONTHLY_COMPUTE_LIMIT_MS),
+      endedAt: null,
+    });
+
     await expect(assertComputeAvailable("owner", now)).resolves.toBeUndefined();
   });
 });
