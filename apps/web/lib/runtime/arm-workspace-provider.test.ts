@@ -24,10 +24,10 @@ describe("ARM workspace provider stop", () => {
 
   beforeEach(() => {
     vi.stubEnv("AZURE_TENANT_ID", "tenant");
-    vi.stubEnv("AZURE_CLIENT_ID", "client");
-    vi.stubEnv("AZURE_CLIENT_SECRET", "secret");
+    vi.stubEnv("ARM_WORKSPACE_AZURE_CLIENT_ID", "client");
+    vi.stubEnv("ARM_WORKSPACE_AZURE_CLIENT_SECRET", "secret");
     vi.stubEnv("AZURE_SUBSCRIPTION_ID", "subscription");
-    vi.stubEnv("AZURE_RESOURCE_GROUP", "codev-arm-workspace-phase1");
+    vi.stubEnv("ARM_WORKSPACE_RESOURCE_GROUP", "codev-arm-workspace-phase1");
     vi.stubEnv(
       "ARM_WORKSPACE_IMAGE_VERSION_ID",
       "/subscriptions/subscription/resourceGroups/codev-arm-workspace-phase1/providers/Microsoft.Compute/galleries/gallery/images/image/versions/1.0.10",
@@ -92,12 +92,14 @@ describe("ARM workspace provider stop", () => {
                 WorkspaceId: workspaceId,
                 Generation: String(generation),
               },
-              instanceView: {
-                statuses: [
-                  {
-                    code: `PowerState/${vmReads === 1 ? "running" : "deallocated"}`,
-                  },
-                ],
+              properties: {
+                instanceView: {
+                  statuses: [
+                    {
+                      code: `PowerState/${vmReads === 1 ? "running" : "deallocated"}`,
+                    },
+                  ],
+                },
               },
             });
           }
@@ -121,6 +123,62 @@ describe("ARM workspace provider stop", () => {
       }) as typeof fetch,
     );
   }
+
+  it("reads the created disk after Azure returns an asynchronous status response", async () => {
+    stubFetch();
+    const fallback = fetch;
+    let created = false;
+    vi.stubGlobal(
+      "fetch",
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === "https://management.azure.com/operation") {
+          return jsonResponse({ status: "Succeeded" });
+        }
+        if (url.includes("/providers/Microsoft.Compute/disks/")) {
+          if (init?.method === "PUT") {
+            created = true;
+            return new Response(JSON.stringify({ status: "Creating" }), {
+              status: 202,
+              headers: {
+                "azure-asyncoperation":
+                  "https://management.azure.com/operation",
+                "retry-after": "1",
+              },
+            });
+          }
+          if (!created) return jsonResponse({}, 404);
+        }
+        return fallback(input, init);
+      },
+    );
+    const progress = vi.fn(
+      async (_status: string, resources: { diskId?: string }) => {
+        expect(resources.diskId).toContain(
+          "/providers/Microsoft.Compute/disks/",
+        );
+        throw new Error("stop after disk provisioning");
+      },
+    );
+    await expect(
+      new ArmWorkspaceProvider().start(
+        { workspaceId, generation, diskId: null, diskUuid: null },
+        progress,
+      ),
+    ).rejects.toThrow("stop after disk provisioning");
+    expect(progress).toHaveBeenCalledOnce();
+  });
+
+  it("reads running state from the Azure REST properties envelope", async () => {
+    stubFetch();
+    await expect(
+      new ArmWorkspaceProvider().running(
+        workspaceId,
+        generation,
+        "/subscriptions/subscription/resourceGroups/codev-arm-workspace-phase1/providers/Microsoft.Compute/virtualMachines/fixture",
+      ),
+    ).resolves.toBe(true);
+  });
 
   it("deallocates the owned VM before deleting it and its network", async () => {
     stubFetch();

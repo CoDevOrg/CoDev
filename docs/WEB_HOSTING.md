@@ -30,7 +30,10 @@ hostnames; the Firecracker guests themselves run in Azure. See
 - **Cloudflare Worker:** application secrets are Worker bindings declared in
   `cloudflare.config.ts` and configured on Cloudflare. The `CRON_SECRET` GitHub
   secret is uploaded to the Worker by CI on deployment. The ARM canary uses
-  the GitHub `CLOUDFLARE_API_TOKEN` for Tunnel/DNS setup.
+  the GitHub `CLOUDFLARE_API_TOKEN` for Tunnel/DNS setup. The production Worker's
+  binding with that name uses the separate account-owned `codev-arm-runtime`
+  token: Cloudflare Tunnel Write on the runtime account and DNS Write restricted
+  to the `trycodev.com` zone. It has no Worker deployment permission.
 - **Vercel project:** application environment variables for the Vercel build
   and deployment are configured in Vercel. The deploy workflow pulls the
   selected production or preview environment before building.
@@ -64,3 +67,19 @@ The scheduled compute reconciliation route also drains abandoned ARM turns
 before idle VM release, using the durable cursor added by migration `0068`.
 A candidate image containing `/v1/runtime-activity` and a successful staging
 canary are required before ARM member enablement. See the [Phase 4 review](./arm-workspace-free-tier-phase-4.md).
+
+The Worker now has the ARM image, SSH public key, and Ed25519 signing key
+bindings. The image is pinned to gallery version `1.0.11` in
+`codev-arm-workspace-phase1`. Operator copies of the signing and SSH keys are
+stored outside the repository in a private configuration directory.
+
+ARM provisioning requires `ARM_WORKSPACE_AZURE_CLIENT_ID`,
+`ARM_WORKSPACE_AZURE_CLIENT_SECRET`, and `ARM_WORKSPACE_RESOURCE_GROUP`.
+Firecracker retains `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, and
+`AZURE_RESOURCE_GROUP`; both providers share the tenant and subscription.
+The staging identity `codev-arm-workspace-staging-worker` has the custom
+`CoDev ARM Workspace Operator` role only on `codev-arm-workspace-staging`,
+and Reader only on the ARM gallery image definition in the build group.
+It has no IAM permissions. Its appended client credential expires on
+2027-01-03 and must be rotated in the Worker secret store before that date.
+A successful staging lifecycle canary is still required before member enablement.

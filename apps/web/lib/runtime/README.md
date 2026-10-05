@@ -18,3 +18,12 @@ This module owns the communication and integration with external execution envir
 - `arm-workspace-activity.ts`, `arm-workspace-member-activity.ts`: Observe live
   guest agent work and record successful member mutations without counting
   reads, connection checks, or polls as input.
+
+- `arm-workspace-config.ts`: Requires dedicated ARM Azure credentials and resource
+  group; never reuses Firecracker credentials. The pinned gallery image may live
+  in another ARM resource group within the configured subscription.
+
+The opt-in `arm-workspace-staging-canary.test.ts` uses
+`CODEV_ARM_CANARY_CREDENTIAL_DIR` for operator credentials outside the repository.
+It creates only disposable workspaces in `codev-arm-workspace-staging`, records
+resource IDs for recovery, and removes its compute, routes, and test disk.
