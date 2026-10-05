@@ -96,3 +96,8 @@ to finish saving. See the Phase 4 review for image and staging requirements.
 The hourly `infra/azure/collect-arm-owner-costs.mjs` collector owns Azure billing
 query/attribution and calls the authenticated budget ingestion boundary. The web
 layer does not poll Azure Cost Management on member requests.
+
+`arm-workflow-binding.ts` uses the native lifecycle binding on Cloudflare and
+forwards Vercel dispatch/status calls to the canonical Worker using `CRON_SECRET`.
+`arm-workflow-bridge.ts` validates service authentication and shared operation
+parameters; its endpoint requires a native binding and cannot proxy recursively.

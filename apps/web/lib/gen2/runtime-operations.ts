@@ -3,7 +3,6 @@ import { enforceArmComputeEntitlement } from "./arm-compute-policy";
 import { releaseFreeWorkspaceCompute } from "./free-compute-release";
 import { lockComputeOwners } from "./compute-database";
 
-import { env as cloudflareEnv } from "cloudflare:workers";
 import type { WorkflowStep } from "cloudflare:workers";
 import { and, eq, inArray, isNull, lt, or } from "drizzle-orm";
 import { createDatabase, schema } from "@codev/db";
@@ -23,22 +22,12 @@ import {
   type ArmWorkspaceProgress,
 } from "../runtime/arm-workspace-provider";
 
-export type ArmWorkspaceWorkflowParams = {
-  workspaceId: string;
-  operationId: string;
-  generation: number;
-  resourceGeneration: number;
-  cleanupGeneration: number | null;
-  kind: Gen2RuntimeOperationKind;
-};
-
-type WorkflowBinding = {
-  create(options: {
-    id: string;
-    params: ArmWorkspaceWorkflowParams;
-  }): Promise<unknown>;
-  get(id: string): Promise<{ status(): Promise<{ status?: string }> }>;
-};
+export type { ArmWorkspaceWorkflowParams } from "@codev/contracts";
+import type { ArmWorkspaceWorkflowParams } from "@codev/contracts";
+import {
+  armWorkflowBinding,
+  type WorkflowBinding,
+} from "./arm-workflow-binding";
 
 type WorkflowEnvironment = {
   HYPERDRIVE?: { connectionString?: string };
@@ -76,10 +65,6 @@ const ACTIVE_STATES: Gen2RuntimeStatus[] = [
 ];
 const OPERATION_LEASE_MS = 20 * 60_000;
 const OPERATION_RETRY_DELAY_MS = 5 * 60_000;
-
-function environment() {
-  return cloudflareEnv as WorkflowEnvironment;
-}
 
 function errorMessage(code: string) {
   switch (code) {
@@ -127,14 +112,7 @@ function operationError(error: unknown) {
 }
 
 function workflowBinding() {
-  const binding = environment().GEN2_ARM_WORKSPACE_LIFECYCLE;
-  if (!binding) {
-    throw new Gen2LifecycleError(
-      "ARM workspace provisioning is not enabled on this deployment.",
-      503,
-    );
-  }
-  return binding;
+  return armWorkflowBinding();
 }
 
 async function createOrJoinWorkflow(params: ArmWorkspaceWorkflowParams) {

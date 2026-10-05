@@ -11,6 +11,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   collect:
+    environment: production
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
