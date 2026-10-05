@@ -28,18 +28,8 @@ import {
 } from "@/components/ui/field";
 import type { AdminFeatureAccessData } from "@/lib/admin/admin-feature-access";
 
-function Notice({ result }: { result: AdminFeatureActionResult | null }) {
-  if (!result) return null;
-  return (
-    <Alert
-      className="admin-action-notice"
-      variant={result.ok ? "default" : "destructive"}
-      role={result.ok ? "status" : "alert"}
-    >
-      <AlertDescription>{result.message}</AlertDescription>
-    </Alert>
-  );
-}
+import { AdminNotice } from "./admin-notice";
+
 
 export function AdminFeatureControls({
   data,
@@ -145,7 +135,7 @@ export function AdminFeatureControls({
                   scope="organization"
                 />
               </FieldGroup>
-              <Notice result={organizationResult} />
+              <AdminNotice result={organizationResult} />
             </CardContent>
             <CardFooter className="admin-control-form-footer">
               <Button type="submit" disabled={organizationPending}>
@@ -226,7 +216,7 @@ export function AdminFeatureControls({
                 </Field>
                 <AdminFeatureFields idPrefix="member-override" scope="member" />
               </FieldGroup>
-              <Notice result={userResult} />
+              <AdminNotice result={userResult} />
             </CardContent>
             <CardFooter className="admin-control-form-footer">
               <Button
