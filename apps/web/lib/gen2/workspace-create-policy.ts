@@ -11,7 +11,7 @@ export async function workspaceCreationPolicy(
   acknowledgeReducedQuota: boolean,
 ) {
   const policy = await getWorkspaceOwnerEntitlement(ownerId, db);
-  if (policy.tier === "paid") return "firecracker" as const;
+  if (policy.tier === "paid") return "azure_arm" as const;
   if (!policy.enabled) throw new BillingRequiredError();
   if (ownedCount >= 1 && !acknowledgeReducedQuota) {
     throw new Gen2LifecycleError(

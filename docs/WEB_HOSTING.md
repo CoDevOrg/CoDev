@@ -110,6 +110,9 @@ removed; ARM workspace disks and infrastructure remain separate. GitHub's
 `Deploy runtime (Azure)` workflow is disabled and has no push trigger, so ARM
 changes cannot recreate the legacy host. Restoring Firecracker requires an
 explicit operator decision before re-enabling that manual workflow.
+New paid/admin workspaces use ARM too; paid quota and unlimited admin
+entitlements remain unchanged. Free eligibility and second-workspace quota
+acknowledgment still apply only to free accounts.
 
 The production ARM resource group is `codev-arm-workspace-production`; staging
 canaries keep using `codev-arm-workspace-staging`. The dedicated ARM application
