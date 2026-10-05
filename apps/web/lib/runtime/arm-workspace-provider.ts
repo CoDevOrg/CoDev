@@ -1,5 +1,8 @@
 import "server-only";
 
+import type { Gen2RuntimeStatus } from "@codev/contracts";
+import { ArmWorkflowIO } from "./arm-workflow-io";
+
 import { createClientSecretCredential } from "./azure";
 import { readArmWorkspaceConfig } from "./arm-workspace-config";
 import { logEvent } from "../platform/observability";
@@ -32,6 +35,12 @@ export type ArmWorkspaceOperation = {
   generation: number;
   diskId: string | null;
   diskUuid: string | null;
+  resume?: {
+    status: Gen2RuntimeStatus;
+    vmId: string | null;
+    tunnelId: string | null;
+    routeHost: string | null;
+  };
 };
 
 export type ArmWorkspaceProgress = (
@@ -111,7 +120,7 @@ async function token() {
   }
 }
 
-async function armFetch(
+async function armFetchDirect(
   url: string,
   method = "GET",
   body?: unknown,
@@ -153,22 +162,25 @@ async function armFetch(
   return { response, payload };
 }
 
+async function armFetch(url: string, method = "GET", body?: unknown) {
+  return ArmWorkflowIO.request("azure", () =>
+    armFetchDirect(url, method, body),
+  );
+}
+
 async function pollArmOperation(response: Response, payload: unknown) {
   let operationUrl =
     response.headers.get("azure-asyncoperation") ??
     response.headers.get("location");
   if (!operationUrl) fail("AZURE_OPERATION_URL_MISSING");
-  const deadline = Date.now() + 10 * 60_000;
+  const deadline = await ArmWorkflowIO.deadline(10 * 60_000);
   let result = payload;
   while (Date.now() < deadline) {
     const retryAfterSeconds = Number(response.headers.get("retry-after") ?? 5);
-    await new Promise((resolve) =>
-      setTimeout(
-        resolve,
-        Math.max(
-          ARM_OPERATION_POLL_INTERVAL_MS,
-          (Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : 5) * 1000,
-        ),
+    await ArmWorkflowIO.sleep(
+      Math.max(
+        ARM_OPERATION_POLL_INTERVAL_MS,
+        (Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : 5) * 1000,
       ),
     );
     const poll = await armFetch(operationUrl);
@@ -667,7 +679,11 @@ async function createDisk(workspaceId: string) {
   return created.id;
 }
 
-async function requireDisk(diskId: string, workspaceId: string) {
+async function requireDisk(
+  diskId: string,
+  workspaceId: string,
+  generation: number,
+) {
   const disk = (await armRequest(diskId, DISK_API, "GET", undefined, true)) as {
     id?: string;
     tags?: Record<string, string>;
@@ -683,7 +699,12 @@ async function requireDisk(diskId: string, workspaceId: string) {
   ) {
     fail("DISK_SIZE_MISMATCH");
   }
-  if (disk.managedBy) fail("DISK_ATTACH_CONFLICT");
+  if (
+    disk.managedBy &&
+    disk.managedBy.toLowerCase() !==
+      (await vmId(workspaceId, generation)).toLowerCase()
+  )
+    fail("DISK_ATTACH_CONFLICT");
   return disk.id;
 }
 
@@ -753,7 +774,7 @@ async function waitForVmReady(
   generation: number,
   heartbeat: () => Promise<void>,
 ) {
-  const deadline = Date.now() + 10 * 60_000;
+  const deadline = await ArmWorkflowIO.deadline(10 * 60_000);
   const resource = await vmId(workspaceId, generation);
   while (Date.now() < deadline) {
     const vm = (await armRequest(
@@ -780,7 +801,7 @@ async function waitForVmReady(
       fail("VM_FAILED_TO_START");
     }
     await heartbeat();
-    await new Promise((resolve) => setTimeout(resolve, VM_POLL_INTERVAL_MS));
+    await ArmWorkflowIO.sleep(VM_POLL_INTERVAL_MS);
   }
   fail("VM_BOOT_TIMEOUT");
 }
@@ -806,7 +827,7 @@ async function runVmCommand(
       treatFailureAsDeploymentFailure: true,
     },
   });
-  const deadline = Date.now() + 10 * 60_000;
+  const deadline = await ArmWorkflowIO.deadline(10 * 60_000);
   while (Date.now() < deadline) {
     const result = (await armRequest(
       `${commandId}?%24expand=instanceView`,
@@ -838,7 +859,7 @@ async function runVmCommand(
       await deleteResource(commandId, COMPUTE_API).catch(() => undefined);
       return output;
     }
-    await new Promise((resolve) => setTimeout(resolve, VM_POLL_INTERVAL_MS));
+    await ArmWorkflowIO.sleep(VM_POLL_INTERVAL_MS);
   }
   fail("GUEST_COMMAND_TIMEOUT");
 }
@@ -925,23 +946,29 @@ async function waitForHealth(
   routeHost: string,
   heartbeat: () => Promise<void>,
 ) {
-  const deadline = Date.now() + 3 * 60_000;
+  const deadline = await ArmWorkflowIO.deadline(3 * 60_000);
   while (Date.now() < deadline) {
     try {
       const authorization = `Bearer ${await capabilityToken(routeHost, workspaceId, generation)}`;
-      const response = await fetch(`https://${routeHost}/v1/health`, {
-        headers: { authorization },
-        redirect: "manual",
-        signal: AbortSignal.timeout(10_000),
-      });
-      const value = (await response.json().catch(() => null)) as {
-        ready?: boolean;
-        workspaceId?: string;
-        generation?: number;
-        diskUuid?: string;
-      } | null;
+      const { ok, value } = await ArmWorkflowIO.checkpoint(
+        "health",
+        async () => {
+          const response = await fetch(`https://${routeHost}/v1/health`, {
+            headers: { authorization },
+            redirect: "manual",
+            signal: AbortSignal.timeout(10_000),
+          });
+          const value = (await response.json().catch(() => null)) as {
+            ready?: boolean;
+            workspaceId?: string;
+            generation?: number;
+            diskUuid?: string;
+          } | null;
+          return { ok: response.ok, value };
+        },
+      );
       if (
-        response.ok &&
+        ok &&
         value?.ready &&
         value.workspaceId === workspaceId &&
         value.generation === generation &&
@@ -952,7 +979,7 @@ async function waitForHealth(
       // The connector and guest bridge can take time to join after boot.
     }
     await heartbeat();
-    await new Promise((resolve) => setTimeout(resolve, 5_000));
+    await ArmWorkflowIO.sleep(5_000);
   }
   fail("GUEST_READINESS_TIMEOUT");
 }
@@ -987,66 +1014,92 @@ async function deallocateVm(
   if (powerState(vm) !== "PowerState/deallocated") {
     await armRequest(`${id}/deallocate`, COMPUTE_API, "POST");
   }
-  const deadline = Date.now() + 5 * 60_000;
+  const deadline = await ArmWorkflowIO.deadline(5 * 60_000);
   while (Date.now() < deadline) {
     vm = await readVm();
     if (!vm) return;
     checkTags(vm, workspaceId, generation);
     if (powerState(vm) === "PowerState/deallocated") return;
-    await new Promise((resolve) => setTimeout(resolve, 5_000));
+    await ArmWorkflowIO.sleep(5_000);
   }
   fail("VM_DEALLOCATION_TIMEOUT");
 }
 
+function resumePhase(input: ArmWorkspaceOperation) {
+  return Math.max(
+    0,
+    [
+      "provisioning",
+      "booting",
+      "attaching_disk",
+      "starting_tunnel",
+      "checking_readiness",
+    ].indexOf(input.resume?.status ?? "queued"),
+  );
+}
+
+async function prepareRuntime(
+  input: ArmWorkspaceOperation,
+  progress: ArmWorkspaceProgress,
+) {
+  const phase = resumePhase(input);
+  const diskId =
+    phase > 0 && input.diskId
+      ? input.diskId
+      : input.diskId
+        ? await requireDisk(input.diskId, input.workspaceId, input.generation)
+        : await createDisk(input.workspaceId);
+  let resourceVmId = input.resume?.vmId;
+  if (phase === 0 || !resourceVmId) {
+    await progress("provisioning", { diskId });
+    resourceVmId = await deployVm(input.workspaceId, input.generation, diskId);
+    await progress("booting", { vmId: resourceVmId, diskId });
+  }
+  const resources = { vmId: resourceVmId, diskId };
+  if (phase < 2) {
+    await waitForVmReady(input.workspaceId, input.generation, () =>
+      progress("booting", resources),
+    );
+    await progress("attaching_disk", resources);
+  }
+  const diskUuid =
+    phase >= 3 && input.diskUuid
+      ? input.diskUuid
+      : await prepareDisk(input.workspaceId, input.generation, input.diskUuid);
+  if (phase < 3) await progress("starting_tunnel", { ...resources, diskUuid });
+  return { ...resources, diskUuid };
+}
+
+async function connectRuntime(
+  input: ArmWorkspaceOperation,
+  progress: ArmWorkspaceProgress,
+  resources: Awaited<ReturnType<typeof prepareRuntime>>,
+) {
+  const resume = input.resume;
+  const route =
+    resumePhase(input) >= 4 && resume?.tunnelId && resume.routeHost
+      ? { tunnelId: resume.tunnelId, routeHost: resume.routeHost }
+      : await installConnection(
+          input.workspaceId,
+          input.generation,
+          resources.diskUuid,
+        );
+  const ready = { ...resources, ...route };
+  if (resumePhase(input) < 4) await progress("checking_readiness", ready);
+  await waitForHealth(
+    input.workspaceId,
+    input.generation,
+    resources.diskUuid,
+    route.routeHost,
+    () => progress("checking_readiness", ready),
+  );
+  return ready;
+}
+
 export class ArmWorkspaceProvider {
   async start(input: ArmWorkspaceOperation, progress: ArmWorkspaceProgress) {
-    const diskId = input.diskId
-      ? await requireDisk(input.diskId, input.workspaceId)
-      : await createDisk(input.workspaceId);
-    await progress("provisioning", { diskId });
-    const resourceVmId = await deployVm(
-      input.workspaceId,
-      input.generation,
-      diskId,
-    );
-    await progress("booting", { vmId: resourceVmId, diskId });
-    await waitForVmReady(input.workspaceId, input.generation, () =>
-      progress("booting", { vmId: resourceVmId, diskId }),
-    );
-    await progress("attaching_disk", { vmId: resourceVmId, diskId });
-    const diskUuid = await prepareDisk(
-      input.workspaceId,
-      input.generation,
-      input.diskUuid,
-    );
-    await progress("starting_tunnel", { vmId: resourceVmId, diskId, diskUuid });
-    const route = await installConnection(
-      input.workspaceId,
-      input.generation,
-      diskUuid,
-    );
-    await progress("checking_readiness", {
-      vmId: resourceVmId,
-      diskId,
-      diskUuid,
-      tunnelId: route.tunnelId,
-      routeHost: route.routeHost,
-    });
-    await waitForHealth(
-      input.workspaceId,
-      input.generation,
-      diskUuid,
-      route.routeHost,
-      () =>
-        progress("checking_readiness", {
-          vmId: resourceVmId,
-          diskId,
-          diskUuid,
-          tunnelId: route.tunnelId,
-          routeHost: route.routeHost,
-        }),
-    );
-    return { vmId: resourceVmId, diskId, diskUuid, ...route };
+    const resources = await prepareRuntime(input, progress);
+    return connectRuntime(input, progress, resources);
   }
 
   async stop(input: ArmWorkspaceOperation) {

@@ -9,7 +9,10 @@ export type WorkflowBinding = {
     id: string;
     params: ArmWorkspaceWorkflowParams;
   }): Promise<unknown>;
-  get(id: string): Promise<{ status(): Promise<{ status?: string }> }>;
+  get(id: string): Promise<{
+    status(): Promise<{ status?: string }>;
+    sendEvent?(event: { type: string; payload: unknown }): Promise<void>;
+  }>;
 };
 
 export function nativeArmWorkflowBinding() {

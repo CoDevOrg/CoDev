@@ -755,6 +755,9 @@ export const gen2ArmWorkflowParamsSchema = z.object({
   resourceGeneration: z.number().int().nonnegative(),
   cleanupGeneration: z.number().int().nonnegative().nullable(),
   kind: gen2RuntimeOperationKindSchema,
+  checkpoints: z.record(z.string(), z.unknown()).optional(),
+  activate: z.boolean().optional(),
+  failureCode: z.string().max(128).optional(),
 });
 export type ArmWorkspaceWorkflowParams = z.infer<
   typeof gen2ArmWorkflowParamsSchema

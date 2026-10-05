@@ -98,11 +98,17 @@ function rootDatabase() {
 function workflowDatabase() {
   return {
     delete: () => ({ where: async () => undefined }),
-    select: () => ({
+    select: (fields?: Record<string, unknown>) => ({
       from: () => ({
         where: () => ({
           limit: async () =>
-            mocks.workflowReads.shift() ??
+            (fields &&
+            Object.keys(fields).length === 2 &&
+            "runtimeOperationId" in fields
+              ? mocks.workflowRow
+                ? [mocks.workflowRow]
+                : []
+              : mocks.workflowReads.shift()) ??
             (mocks.workflowRow ? [mocks.workflowRow] : []),
         }),
       }),
@@ -312,6 +318,22 @@ describe("ARM workspace operation recovery", () => {
       diskId: null,
       diskUuid: null,
     });
+  });
+
+  it("does not clean up a VM owned by a newer continuation of the same generation", async () => {
+    const current = runtimeRow({ runtimeOperationKind: "start" });
+    mocks.workflowRow = {
+      ...current,
+      runtimeOperationId: "newer-continuation",
+    };
+    mocks.workflowReads = [[current], [current], []];
+    await runArmWorkspaceLifecycle(
+      workflowEnv as never,
+      params("start"),
+      workflowStep as never,
+    );
+    expect(mocks.stop).not.toHaveBeenCalled();
+    expect(mocks.workflowUpdates).toHaveLength(0);
   });
 
   it("keeps runtime resources recorded when a stop only partly cleans up", async () => {
