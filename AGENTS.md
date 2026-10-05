@@ -23,6 +23,7 @@
 
 - Worker fetches support `redirect: "manual"`, not `"error"`; reject redirect responses explicitly for authenticated runtime requests.
 - ARM lifecycle polling must honor Azure `Retry-After` while staying within Cloudflare Workflows' per-invocation subrequest budget.
+- ARM connection setup must retry package installation safely while cloud-init or apt holds the dpkg lock.
 
 - Before starting or deploying the web app, run `pnpm db:check`. A newer migration ledger entry does not prove older tables exist; repair skipped schema with a forward migration instead of editing applied history.
 - For Azure subscription inspection, use the signed-in Azure CLI. If it is not authenticated, sign in with `az login --tenant 0841fce6-e7c1-4ea4-b4f1-a238d465137b`.
