@@ -80,6 +80,36 @@ export class ArmWorkflowIO {
     }
   }
 
+  /** Independent branches share a budget and journal, but not step numbering. */
+  static async parallel<T extends readonly unknown[]>(actions: {
+    [K in keyof T]: () => Promise<T[K]>;
+  }): Promise<T> {
+    const current = context.getStore();
+    const prefix = current
+      ? `${current.prefix}-${++current.sequence.value}-parallel`
+      : "parallel";
+    const results = await Promise.allSettled(
+      actions.map((action, index) =>
+        current
+          ? context.run(
+              {
+                ...current,
+                prefix: `${prefix}-${index}`,
+                sequence: { value: 0 },
+              },
+              async () => action(),
+            )
+          : Promise.resolve().then(action),
+      ),
+    );
+    // Drain both branches before handing off so late checkpoints are retained.
+    const failed = results.find((result) => result.status === "rejected");
+    if (failed?.status === "rejected") throw failed.reason;
+    return results.map((result) =>
+      result.status === "fulfilled" ? result.value : undefined,
+    ) as unknown as T;
+  }
+
   static saved() {
     return context.getStore()?.checkpoints ?? {};
   }

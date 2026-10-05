@@ -130,57 +130,63 @@ describe("ARM workspace provider stop", () => {
     );
   }
 
-  it("reads the created disk after Azure returns an asynchronous status response", async () => {
-    const delays: number[] = [];
-    vi.stubGlobal("setTimeout", ((callback: () => void, delay = 0) => {
-      delays.push(delay);
-      queueMicrotask(callback);
-      return 0;
-    }) as typeof setTimeout);
-    stubFetch();
-    const fallback = fetch;
-    let created = false;
-    vi.stubGlobal(
-      "fetch",
-      async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = String(input);
-        if (url === "https://management.azure.com/operation") {
-          return jsonResponse({ status: "Succeeded" });
-        }
-        if (url.includes("/providers/Microsoft.Compute/disks/")) {
-          if (init?.method === "PUT") {
-            created = true;
-            return new Response(JSON.stringify({ status: "Creating" }), {
-              status: 202,
-              headers: {
-                "azure-asyncoperation":
-                  "https://management.azure.com/operation",
-                "retry-after": "1",
-              },
-            });
+  it.each([
+    [1, 5_000],
+    [22, 22_000],
+  ])(
+    "reads the created disk while honoring Azure Retry-After %s",
+    async (retryAfter, expectedDelay) => {
+      const delays: number[] = [];
+      vi.stubGlobal("setTimeout", ((callback: () => void, delay = 0) => {
+        delays.push(delay);
+        queueMicrotask(callback);
+        return 0;
+      }) as typeof setTimeout);
+      stubFetch();
+      const fallback = fetch;
+      let created = false;
+      vi.stubGlobal(
+        "fetch",
+        async (input: RequestInfo | URL, init?: RequestInit) => {
+          const url = String(input);
+          if (url === "https://management.azure.com/operation") {
+            return jsonResponse({ status: "Succeeded" });
           }
-          if (!created) return jsonResponse({}, 404);
-        }
-        return fallback(input, init);
-      },
-    );
-    const progress = vi.fn(
-      async (_status: string, resources: { diskId?: string }) => {
-        expect(resources.diskId).toContain(
-          "/providers/Microsoft.Compute/disks/",
-        );
-        throw new Error("stop after disk provisioning");
-      },
-    );
-    await expect(
-      new ArmWorkspaceProvider().start(
-        { workspaceId, generation, diskId: null, diskUuid: null },
-        progress,
-      ),
-    ).rejects.toThrow("stop after disk provisioning");
-    expect(progress).toHaveBeenCalledOnce();
-    expect(delays).toEqual([15_000]);
-  });
+          if (url.includes("/providers/Microsoft.Compute/disks/")) {
+            if (init?.method === "PUT") {
+              created = true;
+              return new Response(JSON.stringify({ status: "Creating" }), {
+                status: 202,
+                headers: {
+                  "azure-asyncoperation":
+                    "https://management.azure.com/operation",
+                  "retry-after": String(retryAfter),
+                },
+              });
+            }
+            if (!created) return jsonResponse({}, 404);
+          }
+          return fallback(input, init);
+        },
+      );
+      const progress = vi.fn(
+        async (_status: string, resources: { diskId?: string }) => {
+          expect(resources.diskId).toContain(
+            "/providers/Microsoft.Compute/disks/",
+          );
+          throw new Error("stop after disk provisioning");
+        },
+      );
+      await expect(
+        new ArmWorkspaceProvider().start(
+          { workspaceId, generation, diskId: null, diskUuid: null },
+          progress,
+        ),
+      ).rejects.toThrow("stop after disk provisioning");
+      expect(progress).toHaveBeenCalledOnce();
+      expect(delays).toEqual([expectedDelay]);
+    },
+  );
 
   it("reads running state from the Azure REST properties envelope", async () => {
     stubFetch();
@@ -375,6 +381,10 @@ describe("ARM workspace provider stop", () => {
     const requests: string[] = [];
     let identity: { diskUuid: string; diskMode: string } | undefined;
     let vmReads = 0;
+    let releaseDisk!: () => void;
+    const tunnelConfigured = new Promise<void>((resolve) => {
+      releaseDisk = resolve;
+    });
     vi.stubGlobal(
       "fetch",
       async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -386,6 +396,7 @@ describe("ARM workspace provider stop", () => {
             expires_in: 3600,
           });
         if (url.includes("api.cloudflare.com")) {
+          if (url.endsWith("/token")) releaseDisk();
           const result = url.includes("?name=")
             ? []
             : url.endsWith("/token")
@@ -393,13 +404,15 @@ describe("ARM workspace provider stop", () => {
               : { id: tunnel.id };
           return jsonResponse({ success: true, result });
         }
-        if (url.includes("/disks/"))
+        if (url.includes("/disks/")) {
+          if (init?.method === "PUT") await tunnelConfigured;
           return init?.method === "PUT"
             ? jsonResponse({
                 id: "disk-id",
                 tags: { Runtime: "arm-workspace", WorkspaceId: workspaceId },
               })
             : jsonResponse({}, 404);
+        }
         if (url.includes("/deployments/")) {
           const deployment = JSON.parse(String(init?.body));
           expect(
