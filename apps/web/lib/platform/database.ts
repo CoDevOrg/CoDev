@@ -5,7 +5,10 @@ import { after } from "next/server";
 import { readServerEnvironment } from "@codev/config";
 import { createDatabase } from "@codev/db";
 import { attachDatabasePool } from "@vercel/functions";
-import { env } from "cloudflare:workers";
+import {
+  databaseOperationContext,
+  hyperdriveConnectionString,
+} from "./database-operation";
 
 type DatabaseClient = ReturnType<typeof createDatabase>;
 
@@ -22,19 +25,6 @@ const HYPERDRIVE_POOL_MAX = 10;
 const databaseState = globalThis as typeof globalThis & {
   __codevDatabaseClient?: DatabaseClient;
 };
-
-function hyperdriveConnectionString() {
-  const binding = (env as { HYPERDRIVE?: { connectionString?: string } })
-    .HYPERDRIVE;
-  const connectionString = binding?.connectionString;
-  if (!connectionString) return undefined;
-  // Hyperdrive terminates TLS to Postgres. The string it gives the Worker is
-  // a local socket, and asking node-postgres to negotiate SSL against it
-  // drops the connection.
-  const url = new URL(connectionString);
-  url.searchParams.set("sslmode", "disable");
-  return url.toString();
-}
 
 // One pool per request. A Worker isolate stays warm, but a Hyperdrive socket
 // from the previous request is already dead: the next page waits on it and
@@ -53,6 +43,8 @@ const getHyperdriveDatabase = cache(() => {
 });
 
 function getDatabaseClient() {
+  const operation = databaseOperationContext.getStore();
+  if (operation) return operation;
   if (hyperdriveConnectionString()) return getHyperdriveDatabase();
 
   const existing = databaseState.__codevDatabaseClient;

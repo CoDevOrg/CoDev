@@ -5,6 +5,7 @@ import {
   type CollaborationServerMessage,
 } from "@codev/contracts";
 import type Redis from "ioredis";
+import { collaborationContext } from "./collaboration-context";
 
 import { send, type Connection } from "./collaboration-connection";
 import {
@@ -28,13 +29,16 @@ export interface LocalRoom {
 }
 
 const localRooms = new Map<string, LocalRoom>();
+function rooms() {
+  return collaborationContext.getStore()?.rooms ?? localRooms;
+}
 
 export function broadcastLocal(
   workspaceId: string,
   message: CollaborationServerMessage,
   except?: Connection,
 ) {
-  const room = localRooms.get(workspaceId);
+  const room = rooms().get(workspaceId);
   if (!room) return;
   for (const connection of room.connections) {
     if (connection !== except && shouldReceive(connection, message)) {
@@ -107,7 +111,7 @@ function parseStreamResult(result: unknown) {
 }
 
 export async function startRoom(workspaceId: string) {
-  const existing = localRooms.get(workspaceId);
+  const existing = rooms().get(workspaceId);
   if (existing) return existing;
 
   const client = redisClient();
@@ -125,7 +129,7 @@ export async function startRoom(workspaceId: string) {
     reader: client.duplicate(),
     polling: true,
   };
-  localRooms.set(workspaceId, room);
+  rooms().set(workspaceId, room);
   void pollRoom(workspaceId, room);
   return room;
 }
@@ -166,7 +170,7 @@ export function closeRoomIfEmpty(workspaceId: string, room: LocalRoom) {
   if (room.connections.size === 0) {
     room.polling = false;
     void room.reader.quit();
-    localRooms.delete(workspaceId);
+    rooms().delete(workspaceId);
   }
 }
 

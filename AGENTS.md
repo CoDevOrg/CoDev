@@ -23,6 +23,7 @@
 - ARM guest units must not recursively change permissions on saved workspace disks; they also carry protected Superset metadata.
 - Loopback alone does not isolate privileged workspace RPC from terminal processes. ARM VM images require the local caller firewall before guestd starts; generalized VM administrators use sudo for maintenance RPC.
 
+- Worker WebSocket messages need operation-scoped database pools; Redis clients and stream readers belong to the socket request, never the shared isolate.
 - Worker fetches support `redirect: "manual"`, not `"error"`; reject redirect responses explicitly for authenticated runtime requests.
 - ARM lifecycle polling must honor Azure `Retry-After` while staying within Cloudflare Workflows' per-invocation subrequest budget.
 - ARM connection setup must retry package installation safely while cloud-init or apt holds the dpkg lock.
