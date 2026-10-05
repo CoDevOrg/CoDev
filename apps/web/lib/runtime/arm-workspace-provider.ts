@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClientSecretCredential } from "./azure";
 import { readArmWorkspaceConfig } from "./arm-workspace-config";
+import { logEvent } from "../platform/observability";
 import { ArmWorkspaceRuntimeError } from "./arm-workspace-error";
 export { ArmWorkspaceRuntimeError } from "./arm-workspace-error";
 
@@ -126,6 +127,23 @@ async function armFetch(
     });
   } catch (error) {
     if (error instanceof ArmWorkspaceRuntimeError) throw error;
+    const cause =
+      error instanceof Error && error.cause instanceof Error
+        ? error.cause
+        : undefined;
+    logEvent("error", "gen2.arm.azure_transport_failed", {
+      method,
+      path: new URL(url).pathname,
+      errorName: error instanceof Error ? error.name : "UnknownError",
+      reason:
+        error instanceof Error ? error.message : "Unknown transport error",
+      causeName: cause?.name,
+      cause: cause?.message,
+      causeCode:
+        typeof cause === "object" && cause !== null && "code" in cause
+          ? String(cause.code)
+          : undefined,
+    });
     fail("AZURE_REQUEST_FAILED");
   }
   const payload = await response.json().catch(() => null);
