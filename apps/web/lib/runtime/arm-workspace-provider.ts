@@ -101,7 +101,8 @@ async function token() {
     const value = await getCredential().getToken(MANAGEMENT_SCOPE);
     if (!value?.token) fail("AZURE_AUTHENTICATION_FAILED");
     return value.token;
-  } catch {
+  } catch (error) {
+    if (error instanceof ArmWorkspaceRuntimeError) throw error;
     fail("AZURE_AUTHENTICATION_FAILED");
   }
 }
@@ -123,7 +124,8 @@ async function armFetch(
       redirect: "error",
       signal: AbortSignal.timeout(30_000),
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof ArmWorkspaceRuntimeError) throw error;
     fail("AZURE_REQUEST_FAILED");
   }
   const payload = await response.json().catch(() => null);

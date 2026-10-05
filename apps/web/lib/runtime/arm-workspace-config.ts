@@ -1,4 +1,5 @@
 import "server-only";
+import { runtimeEnvironment } from "../platform/runtime-environment";
 
 import { ArmWorkspaceRuntimeError } from "./arm-workspace-error";
 
@@ -7,7 +8,7 @@ function fail(code: string): never {
 }
 
 export function readArmWorkspaceConfig() {
-  const environment = process.env as Record<string, string | undefined>;
+  const environment = runtimeEnvironment();
   const required = (name: string) => {
     const value = environment[name]?.trim();
     if (!value) fail("RUNTIME_CONFIGURATION_MISSING");

@@ -1,3 +1,4 @@
+import { runtimeEnvironment } from "@/lib/platform/runtime-environment";
 import "server-only";
 import { env } from "cloudflare:workers";
 import type { ArmWorkspaceWorkflowParams } from "@codev/contracts";
@@ -24,7 +25,7 @@ async function bridgeRequest(
   operationId: string,
   params?: ArmWorkspaceWorkflowParams,
 ) {
-  const secret = process.env.CRON_SECRET;
+  const secret = runtimeEnvironment().CRON_SECRET;
   if (!secret)
     throw new Gen2LifecycleError(
       "ARM workflow authentication is unavailable.",
