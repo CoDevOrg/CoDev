@@ -128,3 +128,13 @@ hard billing cap. Invoice-based full-allowance cost acceptance remains separate.
 Cloudflare's build reads `GEN2_FREE_ARM_ENABLED` and `GEN2_FREE_ARM_OWNER_IDS`
 from GitHub variables. Vercel requires the equivalent production environment
 variables. Keep the internal allowlist until lifecycle acceptance is recorded.
+
+### ARM lifecycle dispatch from Vercel
+
+Vercel has no Cloudflare workflow binding. Its ARM lifecycle dispatch and status
+reads use `https://trycodev.com/api/gen2/compute/workflow`, authenticated with the
+shared `CRON_SECRET`. The Worker validates operation parameters and requires its
+native `GEN2_ARM_WORKSPACE_LIFECYCLE` binding. Member requests still pass the normal
+workspace authorization and entitlement checks before dispatch. Keep the secret
+identical in both deployments; the runtime Tunnel/DNS token needs no Workflow
+permissions.

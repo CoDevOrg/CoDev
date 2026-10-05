@@ -747,3 +747,15 @@ export type Gen2ComputeSwitchResponse = {
   stoppingWorkspaceId: string | null;
   operationId: string | null;
 };
+
+export const gen2ArmWorkflowParamsSchema = z.object({
+  workspaceId: z.string().uuid(),
+  operationId: z.string().uuid(),
+  generation: z.number().int().nonnegative(),
+  resourceGeneration: z.number().int().nonnegative(),
+  cleanupGeneration: z.number().int().nonnegative().nullable(),
+  kind: gen2RuntimeOperationKindSchema,
+});
+export type ArmWorkspaceWorkflowParams = z.infer<
+  typeof gen2ArmWorkflowParamsSchema
+>;
