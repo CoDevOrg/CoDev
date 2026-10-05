@@ -45,7 +45,7 @@ const FAQ = [
   {
     question: "Is there a free tier for workspaces?",
     answer:
-      "CoDev is testing a free tier powered by ARM64 cloud instances with up to 50 hours of monthly workspace time (35 shared hours if 2 workspaces are owned). Free availability is currently gated in early preview for select accounts. Invited collaborators can always join any workspace for free with no plan required.",
+      "CoDev offers a free ARM64 workspace preview with up to 50 hours of monthly workspace time (35 shared hours if 2 workspaces are owned), one active workspace, and 16 GiB of storage per workspace. Cold starts can take several minutes. Quota or cost limits can pause compute while preserving saved files. Invited collaborators can join any workspace for free with no plan required.",
   },
   {
     question: "What happens if a payment fails?",
@@ -204,8 +204,9 @@ export default async function PricingPage() {
         </section>
 
         <p className="mt-8 text-center text-xs text-muted-foreground">
-          Free ARM-powered workspaces are currently in gated preview for select
-          accounts. Public availability remains gated.
+          Free ARM-powered workspaces are available in public preview. Cold
+          starts can take several minutes, and quota or cost limits may pause
+          compute.
         </p>
 
         <section
