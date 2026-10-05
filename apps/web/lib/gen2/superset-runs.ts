@@ -75,6 +75,7 @@ async function recordGen2SupersetRunAuditEvent(
 }
 
 export type RegisterGen2SupersetRunInput = {
+  sessionId?: string | null;
   workspaceId: string;
   chatId?: string | null;
   createdBy: string;
@@ -102,6 +103,7 @@ export async function registerGen2SupersetRun(
     const [existing] = await transaction
       .select({
         id: schema.gen2SupersetRuns.id,
+        sessionId: schema.gen2SupersetRuns.sessionId,
         status: schema.gen2SupersetRuns.status,
         createdBy: schema.gen2SupersetRuns.createdBy,
         chatId: schema.gen2SupersetRuns.chatId,
@@ -124,6 +126,7 @@ export async function registerGen2SupersetRun(
       }
       if (
         existing.chatId !== (input.chatId ?? null) ||
+        existing.sessionId !== (input.sessionId ?? null) ||
         existing.worktreeId !== input.worktreeId ||
         existing.provider !== input.provider ||
         existing.connectionId !== (input.connectionId ?? null) ||
@@ -140,6 +143,7 @@ export async function registerGen2SupersetRun(
     const [run] = await transaction
       .insert(schema.gen2SupersetRuns)
       .values({
+        sessionId: input.sessionId ?? null,
         workspaceId: input.workspaceId,
         chatId: input.chatId ?? null,
         createdBy: input.createdBy,

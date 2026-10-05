@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => ({
   createTurn: vi.fn(),
   recordOutput: vi.fn(),
   updateAuthCacheIfCurrent: vi.fn(),
+  createAgentSession: vi.fn(),
 }));
 
 vi.mock("../billing/gate", () => ({
@@ -69,6 +70,11 @@ vi.mock("./turns", () => ({
   createGen2Turn: (...args: unknown[]) => mocks.createTurn(...args),
   recordGen2SupersetRunOutput: (...args: unknown[]) =>
     mocks.recordOutput(...args),
+}));
+
+vi.mock("./agent-sessions", () => ({
+  createGen2AgentSession: (...args: unknown[]) =>
+    mocks.createAgentSession(...args),
 }));
 
 vi.mock("./superset-runs", () => ({
@@ -157,6 +163,7 @@ describe("gen2 Superset agent runtime adapter", () => {
       worktreeId: "agent-chat",
       branch: "codev/agent-chat",
     });
+    mocks.createAgentSession.mockResolvedValue({ id: "session-1" });
     mocks.captureCredential.mockResolvedValue({ authCacheJson: null });
     mocks.updateAuthCacheIfCurrent.mockResolvedValue(true);
   });
@@ -578,6 +585,7 @@ describe("gen2 Superset agent turn (Phase 4 browser-facing delegate)", () => {
       worktreeId: "agent-chat",
       branch: "codev/agent-chat",
     });
+    mocks.createAgentSession.mockResolvedValue({ id: "session-1" });
     mocks.getRunById.mockResolvedValue({
       id: runId,
       workspaceId,
@@ -614,8 +622,19 @@ describe("gen2 Superset agent turn (Phase 4 browser-facing delegate)", () => {
       workspaceId,
       expect.objectContaining({ worktreeId: expect.any(String) }),
     );
+    expect(mocks.createAgentSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chatId,
+        createdBy: userId,
+        task: "hello",
+        workspaceId,
+      }),
+    );
     expect(mocks.register).toHaveBeenCalledWith(
-      expect.objectContaining({ worktreeId: expect.any(String) }),
+      expect.objectContaining({
+        sessionId: "session-1",
+        worktreeId: expect.any(String),
+      }),
     );
     expect(mocks.appendMessage).toHaveBeenCalledWith(
       expect.objectContaining({

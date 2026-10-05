@@ -1,0 +1,2 @@
+ALTER TABLE "gen2_agent_sessions" ADD COLUMN "idempotency_key" text NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "gen2_agent_sessions_workspace_idempotency_idx" ON "gen2_agent_sessions" USING btree ("workspace_id","idempotency_key");

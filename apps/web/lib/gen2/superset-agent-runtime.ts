@@ -50,6 +50,7 @@ import { toAgentExecChunks } from "./agent-output";
 import { requireWorkspaceOwnerPlan } from "../billing/gate";
 import { requireGen2Member } from "./workspaces";
 import { requireGen2SupersetAgentAccess } from "./superset-agent-access";
+import { createGen2AgentSession } from "./agent-sessions";
 
 /**
  * The server-only CoDev runtime adapter docs/SUPERSET_AGENT_SESSION_PLAN.md
@@ -89,6 +90,7 @@ async function requireTurnRun(
 }
 
 type StartSessionInput = {
+  sessionId?: string | null;
   workspaceId: string;
   userId: string;
   chatId?: string | null;
@@ -121,6 +123,7 @@ async function startSession(
   const credential = await resolveGen2Credential(input.userId, provider);
 
   const registration = await registerGen2SupersetRun({
+    sessionId: input.sessionId ?? null,
     workspaceId: input.workspaceId,
     chatId: input.chatId ?? null,
     createdBy: input.userId,
@@ -603,6 +606,17 @@ export async function startGen2SupersetAgentTurn(input: {
 
   const session = await startSession(
     {
+      sessionId: (
+        await createGen2AgentSession({
+          workspaceId: input.workspaceId,
+          chatId: input.chatId,
+          createdBy: input.userId,
+          task: input.prompt,
+          worktreeId,
+          provider: providerVendor(provider),
+          idempotencyKey: input.idempotencyKey,
+        })
+      ).id,
       workspaceId: input.workspaceId,
       userId: input.userId,
       chatId: input.chatId,

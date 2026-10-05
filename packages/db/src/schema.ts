@@ -2353,10 +2353,75 @@ export const gen2SupersetRunStatus = pgEnum("gen2_superset_run_status", [
   "recovery_required",
 ]);
 
+/** The durable, user-visible agent task; one or more processes can serve it. */
+export const gen2AgentSessionStatus = pgEnum("gen2_agent_session_status", [
+  "queued",
+  "running",
+  "stopped",
+  "completed",
+  "failed",
+  "recovery_required",
+]);
+export const gen2AgentSessionRecoveryState = pgEnum(
+  "gen2_agent_session_recovery_state",
+  ["not_required", "required", "restarting"],
+);
+
+export const gen2AgentSessions = pgTable(
+  "gen2_agent_sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .references(() => gen2Workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    chatId: uuid("chat_id").references(() => gen2Chats.id, {
+      onDelete: "set null",
+    }),
+    createdBy: uuid("created_by")
+      .references(() => users.id, { onDelete: "restrict" })
+      .notNull(),
+    task: text("task").notNull(),
+    worktreeId: text("worktree_id").notNull(),
+    provider: credentialProvider("provider").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    status: gen2AgentSessionStatus("status").default("queued").notNull(),
+    recoveryState: gen2AgentSessionRecoveryState("recovery_state")
+      .default("not_required")
+      .notNull(),
+    /** Projected activity only; never write terminal buffers or credentials here. */
+    safeOutput: jsonb("safe_output")
+      .$type<Record<string, unknown>[]>()
+      .default([])
+      .notNull(),
+    finalChanges: jsonb("final_changes")
+      .$type<Record<string, unknown>[]>()
+      .default([])
+      .notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    index("gen2_agent_sessions_workspace_updated_idx").on(
+      table.workspaceId,
+      table.updatedAt,
+    ),
+    index("gen2_agent_sessions_creator_updated_idx").on(
+      table.createdBy,
+      table.updatedAt,
+    ),
+    uniqueIndex("gen2_agent_sessions_workspace_idempotency_idx").on(
+      table.workspaceId,
+      table.idempotencyKey,
+    ),
+  ],
+);
+
 export const gen2SupersetRuns = pgTable(
   "gen2_superset_runs",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+    sessionId: uuid("session_id").references(() => gen2AgentSessions.id, {
+      onDelete: "set null",
+    }),
     workspaceId: uuid("workspace_id")
       .references(() => gen2Workspaces.id, { onDelete: "cascade" })
       .notNull(),
@@ -2396,6 +2461,10 @@ export const gen2SupersetRuns = pgTable(
       table.status,
     ),
     index("gen2_superset_runs_chat_idx").on(table.chatId, table.createdAt),
+    index("gen2_superset_runs_session_idx").on(
+      table.sessionId,
+      table.createdAt,
+    ),
   ],
 );
 
