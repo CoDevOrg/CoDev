@@ -16,7 +16,7 @@ export function hyperdriveConnectionString() {
   return url.toString();
 }
 
-/** WebSocket messages need a pool that outlives neither the message nor the socket. */
+/** Bound the pool to an async operation, including socket messages and guest polls. */
 export async function withDatabaseOperation<T>(action: () => Promise<T>) {
   const connectionString = hyperdriveConnectionString();
   if (!connectionString) return action();

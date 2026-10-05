@@ -119,3 +119,7 @@ pinned Linux ARM64 Cursor CLI before the workspace picker is deployed.
 Cursor currently uses native guest exec even when Superset agent sessions are
 enabled. Start, poll, cancel, and background draining must keep that routing
 consistent. Refreshed auth belongs to the turn’s initiating member.
+
+Guest turn polls use `withDatabaseOperation` for all routing, transaction, and
+auth-refresh queries across the long guest wait. They must not rely on an HTTP
+React cache that can be unavailable inside nested asynchronous work.

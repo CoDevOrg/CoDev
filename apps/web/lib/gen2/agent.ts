@@ -35,6 +35,7 @@ import {
   getGen2TurnProvider,
   recordGen2TurnChunks,
 } from "./turns";
+import { withDatabaseOperation } from "../platform/database-operation";
 import { refreshCursorTurnAuth } from "./cursor-auth-refresh";
 import { isGen2SupersetAgentSessionsEnabled } from "./superset-agent-sessions-feature";
 import {
@@ -225,7 +226,13 @@ async function startGen2AgentTurnViaSuperset(input: {
   }
 }
 
-export async function pollGen2AgentTurn(input: {
+export async function pollGen2AgentTurn(
+  input: Parameters<typeof pollGen2AgentTurnOperation>[0],
+) {
+  return withDatabaseOperation(() => pollGen2AgentTurnOperation(input));
+}
+
+async function pollGen2AgentTurnOperation(input: {
   workspaceId: string;
   userId: string;
   chatId?: string;
