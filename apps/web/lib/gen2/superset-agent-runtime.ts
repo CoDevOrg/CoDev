@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import {
   createSupersetWorktree,
@@ -53,6 +53,7 @@ import { requireGen2Member } from "./workspaces";
 import { requireGen2SupersetAgentAccess } from "./superset-agent-access";
 import {
   createGen2AgentSession,
+  getGen2AgentSession,
   updateGen2AgentSessionStatus,
 } from "./agent-sessions";
 
@@ -195,6 +196,7 @@ async function startSession(
       await updateGen2AgentSessionStatus({
         sessionId: input.sessionId,
         status: "running",
+        recoveryState: "not_required",
       });
     }
     return { ...registration, status: "running" as const };
@@ -410,6 +412,68 @@ export async function stopGen2AgentSession(input: {
     throw new Gen2LifecycleError("Agent session is not running.", 409);
   }
   await cancelGen2SupersetAgentSession({ ...input, runId: run.id });
+}
+
+/** Start a fresh process for a stopped or recovery-required logical session. */
+export async function restartGen2AgentSession(input: {
+  workspaceId: string;
+  userId: string;
+  sessionId: string;
+}) {
+  requireEnabled();
+  const [member, session] = await Promise.all([
+    requireGen2Member(input.workspaceId, input.userId),
+    getGen2AgentSession(input.workspaceId, input.sessionId),
+  ]);
+  if (
+    member.role === "viewer" ||
+    (member.role !== "owner" && session.createdBy !== input.userId)
+  ) {
+    throw new Gen2LifecycleError("Agent session not found.", 404);
+  }
+  if (!session.chatId) {
+    throw new Gen2LifecycleError(
+      "This agent session has no chat history.",
+      409,
+    );
+  }
+  const active = await getActiveGen2SupersetRunForSession(session.id);
+  if (active)
+    throw new Gen2LifecycleError("Agent session is already running.", 409);
+
+  const provider =
+    session.provider === "openai"
+      ? "codex"
+      : session.provider === "anthropic"
+        ? "claude"
+        : null;
+  if (!provider) {
+    throw new Gen2LifecycleError(
+      "This agent provider cannot be restarted.",
+      409,
+    );
+  }
+  await requireGen2Chat(input.workspaceId, session.chatId);
+  const history = await listGen2ChatMessages(session.chatId);
+  await updateGen2AgentSessionStatus({
+    sessionId: session.id,
+    status: "queued",
+    recoveryState: "restarting",
+  });
+  const restarted = await startSession(
+    {
+      sessionId: session.id,
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      chatId: session.chatId,
+      worktreeId: session.worktreeId,
+      command: buildGen2AgentCommand(provider, session.task, history),
+      provider,
+      idempotencyKey: `restart:${session.id}:${randomUUID()}`,
+    },
+    "persistent",
+  );
+  return { runId: restarted.runId };
 }
 
 async function cancelSession(

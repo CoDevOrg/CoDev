@@ -2,6 +2,7 @@ import { readJson, withUser } from "@/lib/http/api-route";
 import { getGen2AgentSessionMetadata } from "@/lib/gen2/agent-session-list";
 import {
   sendGen2AgentSessionFollowUp,
+  restartGen2AgentSession,
   stopGen2AgentSession,
 } from "@/lib/gen2/superset-agent-runtime";
 import { gen2AgentSessionFollowUpRequestSchema } from "@codev/contracts";
@@ -44,5 +45,17 @@ export const DELETE = withUser<Params>(
     await stopGen2AgentSession({ workspaceId, userId: user.id, sessionId });
     return new Response(null, { status: 204 });
   },
+  { errorStatus: 502 },
+);
+
+export const PATCH = withUser<Params>(
+  async ({ user, params: { workspaceId, sessionId } }) =>
+    Response.json(
+      await restartGen2AgentSession({
+        workspaceId,
+        userId: user.id,
+        sessionId,
+      }),
+    ),
   { errorStatus: 502 },
 );

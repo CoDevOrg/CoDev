@@ -35,6 +35,7 @@ const mocks = vi.hoisted(() => ({
   updateAuthCacheIfCurrent: vi.fn(),
   createAgentSession: vi.fn(),
   updateAgentSession: vi.fn(),
+  getAgentSession: vi.fn(),
 }));
 
 vi.mock("../billing/gate", () => ({
@@ -79,6 +80,7 @@ vi.mock("./agent-sessions", () => ({
     mocks.createAgentSession(...args),
   updateGen2AgentSessionStatus: (...args: unknown[]) =>
     mocks.updateAgentSession(...args),
+  getGen2AgentSession: (...args: unknown[]) => mocks.getAgentSession(...args),
 }));
 
 vi.mock("./superset-runs", () => ({
@@ -129,6 +131,7 @@ import {
   sendGen2SupersetAgentInput,
   sendGen2AgentSessionFollowUp,
   stopGen2AgentSession,
+  restartGen2AgentSession,
   startGen2SupersetAgentSession,
   startGen2SupersetAgentTurn,
 } from "./superset-agent-runtime";
@@ -209,6 +212,39 @@ describe("gen2 Superset agent runtime adapter", () => {
 
     await stopGen2AgentSession({ workspaceId, userId, sessionId: "session-1" });
     expect(mocks.stop).toHaveBeenCalledWith(workspaceId, "agent-1");
+  });
+
+  it("restarts a recovery-required session with a new process identity", async () => {
+    mocks.getAgentSession.mockResolvedValue({
+      id: "session-1",
+      workspaceId,
+      chatId,
+      createdBy: userId,
+      task: "Repair the test.",
+      worktreeId: "agent-1",
+      provider: "openai",
+    });
+    mocks.getActiveRunForSession.mockResolvedValue(null);
+    mocks.register.mockResolvedValue({
+      runId,
+      status: "creating",
+      created: true,
+    });
+    mocks.start.mockResolvedValue({
+      hostWorkspaceId: "host-ws-1",
+      hostTerminalId: "term-1",
+      hostAgentSessionId: "agent-1",
+    });
+
+    await expect(
+      restartGen2AgentSession({ workspaceId, userId, sessionId: "session-1" }),
+    ).resolves.toEqual({ runId });
+    expect(mocks.register).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "session-1",
+        worktreeId: "agent-1",
+      }),
+    );
   });
 
   it("monitors live runs and renews their seats without browser polling", async () => {
