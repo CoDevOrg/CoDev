@@ -9,7 +9,7 @@ const generation = 2;
 const tunnelName = `codev-${createHash("sha256").update(workspaceId).digest("hex").slice(0, 20)}-g${generation}.trycodev.com`;
 const tunnel = {
   id: "a".repeat(32),
-  name: tunnelName,
+  name: tunnelName.replace(".trycodev.com", ""),
   content: `${"a".repeat(32)}.cfargotunnel.com`,
 };
 
@@ -72,7 +72,7 @@ describe("ARM workspace provider stop", () => {
             return jsonResponse({
               success: true,
               result: [
-                { id: "dns-id", name: tunnel.name, content: tunnel.content },
+                { id: "dns-id", name: tunnelName, content: tunnel.content },
               ],
             });
           }
@@ -255,6 +255,30 @@ describe("ARM workspace provider stop", () => {
           call.url.includes("/providers/Microsoft.Network/"),
       ),
     ).toHaveLength(4);
+  });
+
+  it("revokes DNS before deallocation and deletes the tunnel after the VM is offline", async () => {
+    stubFetch();
+    await new ArmWorkspaceProvider().stop({
+      workspaceId,
+      generation,
+      diskId: null,
+      diskUuid: null,
+    });
+    const deallocate = calls.findIndex(
+      (call) => call.url.includes("/deallocate") && call.method === "POST",
+    );
+    const tunnelDelete = calls.findIndex(
+      (call) =>
+        call.url.endsWith(`/cfd_tunnel/${tunnel.id}`) &&
+        call.method === "DELETE",
+    );
+    const routeLookup = calls.findIndex((call) =>
+      call.url.includes("/dns_records?name="),
+    );
+    expect(routeLookup).toBeGreaterThanOrEqual(0);
+    expect(routeLookup).toBeLessThan(deallocate);
+    expect(tunnelDelete).toBeGreaterThan(deallocate);
   });
 
   it("can retry stop after tunnel cleanup failed following VM and network removal", async () => {

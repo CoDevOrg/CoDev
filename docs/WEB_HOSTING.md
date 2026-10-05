@@ -77,8 +77,9 @@ A candidate image containing `/v1/runtime-activity` and a successful staging
 canary are required before ARM member enablement. See the [Phase 4 review](./arm-workspace-free-tier-phase-4.md).
 
 The Worker now has the ARM image, SSH public key, and Ed25519 signing key
-bindings. The image is pinned to gallery version `1.0.11` in
-`codev-arm-workspace-phase1`. Operator copies of the signing and SSH keys are
+bindings. The immutable gallery image pin is managed in the shared ARM runtime
+configuration for `codev-arm-workspace-phase1`. Version `1.0.11` remains the
+rollback image for the baked-boot rollout. Operator copies of the signing and SSH keys are
 stored outside the repository in a private configuration directory.
 
 ARM provisioning requires `ARM_WORKSPACE_AZURE_CLIENT_ID`,

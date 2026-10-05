@@ -641,7 +641,7 @@ async function ensureTunnel(workspaceId: string, generation: number) {
   return { id: tunnel.id, host, token };
 }
 
-async function deleteTunnel(workspaceId: string, generation: number) {
+async function revokeTunnelRoute(workspaceId: string, generation: number) {
   const tunnel = await findTunnel(workspaceId, generation);
   if (!tunnel) return;
   const host = `${tunnel.name}.${CLOUDFLARE_ZONE_NAME}`;
@@ -659,6 +659,12 @@ async function deleteTunnel(workspaceId: string, generation: number) {
       "DELETE",
     );
   }
+  return tunnel;
+}
+
+async function deleteTunnel(workspaceId: string, generation: number) {
+  const tunnel = await revokeTunnelRoute(workspaceId, generation);
+  if (!tunnel) return;
   await cloudflareRequest(
     `/accounts/${CLOUDFLARE_ACCOUNT_ID}/cfd_tunnel/${tunnel.id}/connections`,
     "DELETE",
@@ -1245,7 +1251,7 @@ export class ArmWorkspaceProvider {
   async stop(input: ArmWorkspaceOperation) {
     let routeError: unknown;
     try {
-      await deleteTunnel(input.workspaceId, input.generation);
+      await revokeTunnelRoute(input.workspaceId, input.generation);
     } catch (error) {
       routeError = error;
     }
@@ -1254,6 +1260,14 @@ export class ArmWorkspaceProvider {
       input.generation,
     );
     await deallocateVm(vm, input.workspaceId, input.generation);
+    // A running connector can reconnect immediately after connections cleanup.
+    // Deallocate before deleting its tunnel, then finish ephemeral resources.
+    try {
+      await deleteTunnel(input.workspaceId, input.generation);
+      routeError = undefined;
+    } catch (error) {
+      routeError = error;
+    }
     await deleteResource(vm!, COMPUTE_API);
     await deleteResource(nic!, NETWORK_API);
     await deleteResource(publicIp!, NETWORK_API);
