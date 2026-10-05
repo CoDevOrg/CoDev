@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition, type FormEvent } from "react";
 import type { OrganizationRole } from "@codev/contracts";
 
 import { updateOrganizationMemberRole } from "@/app/admin/actions";
+import { UserCog } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -57,9 +58,10 @@ export function AdminOrganizationRoleForm({
 
   return (
     <Card className="border-border/80 bg-card/60 backdrop-blur-xs">
-      <CardHeader>
-        <CardTitle className="text-sm font-semibold">
-          Organization Permissions
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+          <UserCog className="size-4 text-primary" />
+          Organization Member Permissions
         </CardTitle>
         <CardDescription className="text-xs">
           Set a member&apos;s owner, admin, billing, or standard-member role
@@ -67,10 +69,13 @@ export function AdminOrganizationRoleForm({
         </CardDescription>
       </CardHeader>
       <form onSubmit={submit}>
-        <CardContent className="space-y-3">
-          <FieldGroup>
+        <CardContent className="space-y-3 pb-4">
+          <FieldGroup className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Field>
-              <FieldLabel htmlFor="role-organization" className="text-xs">
+              <FieldLabel
+                htmlFor="role-organization"
+                className="text-xs font-medium"
+              >
                 Organization
               </FieldLabel>
               <select
@@ -78,7 +83,7 @@ export function AdminOrganizationRoleForm({
                 name="organizationId"
                 value={organizationId}
                 onChange={(e) => setOrganizationId(e.target.value)}
-                className="w-full rounded-md border border-border/80 bg-card px-3 py-1.5 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary"
+                className="w-full rounded-md border border-input bg-card px-3 py-2 text-xs text-foreground shadow-xs outline-none transition-colors focus-visible:ring-1 focus-visible:ring-ring"
               >
                 {organizations.map((org) => (
                   <option key={org.id} value={org.id}>
@@ -89,33 +94,39 @@ export function AdminOrganizationRoleForm({
             </Field>
 
             <Field>
-              <FieldLabel htmlFor="role-member" className="text-xs">
+              <FieldLabel htmlFor="role-member" className="text-xs font-medium">
                 Member
               </FieldLabel>
               <select
                 id="role-member"
                 name="userId"
                 disabled={organizationMembers.length === 0}
-                className="w-full rounded-md border border-border/80 bg-card px-3 py-1.5 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+                className="w-full rounded-md border border-input bg-card px-3 py-2 text-xs text-foreground shadow-xs outline-none transition-colors focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
               >
-                {organizationMembers.map((member) => (
-                  <option key={member.userId} value={member.userId}>
-                    {member.name ? `${member.name} · ` : ""}@{member.login} (
-                    {member.role})
+                {organizationMembers.length === 0 ? (
+                  <option value="" disabled>
+                    No members in this org
                   </option>
-                ))}
+                ) : (
+                  organizationMembers.map((member) => (
+                    <option key={member.userId} value={member.userId}>
+                      {member.name ? `${member.name} · ` : ""}@{member.login} (
+                      {member.role})
+                    </option>
+                  ))
+                )}
               </select>
             </Field>
 
             <Field>
-              <FieldLabel htmlFor="role-select" className="text-xs">
+              <FieldLabel htmlFor="role-select" className="text-xs font-medium">
                 Role
               </FieldLabel>
               <select
                 id="role-select"
                 name="role"
                 defaultValue="member"
-                className="w-full rounded-md border border-border/80 bg-card px-3 py-1.5 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary"
+                className="w-full rounded-md border border-input bg-card px-3 py-2 text-xs text-foreground shadow-xs outline-none transition-colors focus-visible:ring-1 focus-visible:ring-ring"
               >
                 {(
                   [
