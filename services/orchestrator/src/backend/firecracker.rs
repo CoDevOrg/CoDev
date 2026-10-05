@@ -33,12 +33,11 @@ use crate::{
         ClaudeSetupStartRequest, CodexExecPollRequest, CodexExecPollResponse,
         CodexExecStartRequest, CreateRequest, ExecRequest, ExecResponse, FileResponse, Instance,
         RepositorySnapshot, Result, RuntimeError, SupersetAgentCredentialResponse,
-        SupersetAgentInputRequest,
-        SupersetAgentPollRequest, SupersetAgentPollResponse, SupersetAgentRecoveryResponse,
-        SupersetAgentStartRequest, SupersetAgentStartResponse, SupersetCreateEntryRequest,
-        SupersetDeleteEntryRequest, SupersetMoveEntryRequest, TerminalInputRequest,
-        TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest, TerminalStartRequest,
-        WriteFileRequest,
+        SupersetAgentInputRequest, SupersetAgentPollRequest, SupersetAgentPollResponse,
+        SupersetAgentRecoveryResponse, SupersetAgentStartRequest, SupersetAgentStartResponse,
+        SupersetCreateEntryRequest, SupersetDeleteEntryRequest, SupersetMoveEntryRequest,
+        TerminalInputRequest, TerminalPollRequest, TerminalPollResponse, TerminalResizeRequest,
+        TerminalStartRequest, WriteFileRequest,
     },
 };
 
@@ -1043,7 +1042,10 @@ impl FirecrackerBackend {
     ) -> Result<SupersetAgentCredentialResponse> {
         let machine = self.machine_without_activity(workspace_id).await?;
         let _reaper_exempt = ReaperExemptRequest::new(&machine.reaper_exempt_requests);
-        machine.guest.capture_superset_agent_credential(agent_id).await
+        machine
+            .guest
+            .capture_superset_agent_credential(agent_id)
+            .await
     }
 
     pub async fn recover_superset_agent(
