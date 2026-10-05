@@ -108,6 +108,7 @@ async function lifecycle(directory: string) {
         first.routeHost,
       ),
     ).toBe(true);
+    await initialize(first.routeHost, workspaceId, generation);
     const saved = await command(
       first.routeHost,
       workspaceId,
@@ -161,7 +162,7 @@ async function command(
 ) {
   const body = JSON.stringify({
     command: ["sh", "-ec", shell],
-    workingDir: "/workspace",
+    workingDir: "",
     timeoutSeconds: 30,
   });
   const request = {
@@ -180,6 +181,38 @@ async function command(
     },
     signal: AbortSignal.timeout(45_000),
   });
-  expect(response.status).toBe(200);
-  return response.json() as Promise<{ output: string; exitCode: number }>;
+  const payload = await response.json();
+  expect(response.status, JSON.stringify(payload)).toBe(200);
+  return payload as { output: string; exitCode: number };
+}
+
+async function initialize(
+  host: string,
+  workspaceId: string,
+  generation: number,
+) {
+  const body = JSON.stringify({
+    repositoryUrl: null,
+    baseSha: "0".repeat(40),
+    complete: true,
+  });
+  const request = {
+    method: "POST",
+    path: "/v1/workspace/initialize",
+    scope: "workspace",
+    body,
+  };
+  const token = await capabilityToken(host, workspaceId, generation, request);
+  const response = await fetch(`https://${host}${request.path}`, {
+    method: request.method,
+    body,
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    signal: AbortSignal.timeout(70_000),
+  });
+  const payload = await response.json();
+  expect(response.status, JSON.stringify(payload)).toBe(200);
+  expect(payload).toMatchObject({ initialized: true });
 }
