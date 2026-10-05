@@ -83,6 +83,8 @@ function queryCosts(subscriptionId, resourceGroup) {
           "rest",
           "--method",
           "post",
+          "--headers",
+          "ClientType=CoDevArmCostCollector",
           "--url",
           endpoint,
           "--body",
