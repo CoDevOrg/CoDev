@@ -33,6 +33,7 @@
 - In Gen 2, the agent, editor, terminal, and Git use the same guest filesystem.
 - Use Node.js 24+ and `pnpm` for this repository.
 - Use the web package’s `dev` script (Webpack, matching production); allow `127.0.0.1` development resources. Initial connection checks must run in background tabs and have a request/body timeout.
+- ARM baked boot must verify the saved disk UUID before mounting or starting guest services; deliver identity and tunnel tokens only through protected Azure settings.
 - Preserve durable guest disks across stops/restarts; never treat missing saved workspace data as permission to initialize a fresh checkout.
 - Superset worktree discovery uses Git’s registered worktrees. Guest agents may create direct-child worktrees under `/workspace`; the bridge must resolve them safely as well as CoDev-managed worktrees under `.git/codev-agent-worktrees/`.
 

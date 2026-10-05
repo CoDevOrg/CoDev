@@ -55,6 +55,9 @@ export default defineConfig({
       AWS_REGION: bindings.secret(),
       AZURE_CLIENT_ID: bindings.secret(),
       AZURE_CLIENT_SECRET: bindings.secret(),
+      ARM_WORKSPACE_BOOT_ENABLED: bindings.text(
+        process.env.ARM_WORKSPACE_BOOT_ENABLED ?? "false",
+      ),
       ARM_WORKSPACE_RESOURCE_GROUP: bindings.secret(),
       ARM_WORKSPACE_AZURE_CLIENT_ID: bindings.secret(),
       ARM_WORKSPACE_AZURE_CLIENT_SECRET: bindings.secret(),

@@ -15,6 +15,7 @@ export function readArmWorkspaceConfig() {
     return value;
   };
   const config = {
+    bootEnabled: environment.ARM_WORKSPACE_BOOT_ENABLED === "true",
     tenantId: required("AZURE_TENANT_ID"),
     clientId: required("ARM_WORKSPACE_AZURE_CLIENT_ID"),
     clientSecret: required("ARM_WORKSPACE_AZURE_CLIENT_SECRET"),

@@ -268,11 +268,16 @@ TasksMax=256
 WantedBy=multi-user.target
 UNIT
 
-ln -s ../workspace.mount /etc/systemd/system/multi-user.target.wants/workspace.mount
-ln -s ../codev-local-secrets.service /etc/systemd/system/multi-user.target.wants/codev-local-secrets.service
 ln -s ../codev-local-api-guard.service /etc/systemd/system/multi-user.target.wants/codev-local-api-guard.service
-ln -s ../codev-guestd.service /etc/systemd/system/multi-user.target.wants/codev-guestd.service
-ln -s ../codev-superset-host.service /etc/systemd/system/multi-user.target.wants/codev-superset-host.service
+
+for script in arm-workspace-capability.mjs arm-workspace-gateway.mjs arm-workspace-bootstrap.mjs start-arm-workspace-gateway.mjs; do
+  install -m 0644 "/var/tmp/${script}" "/usr/local/lib/codev/${script}"
+done
+install -m 0755 /var/tmp/boot-arm-workspace.sh /usr/local/sbin/codev-arm-boot
+install -m 0755 /var/tmp/activate-arm-workspace-boot.sh /usr/local/sbin/codev-activate-arm-boot
+install -m 0755 /var/tmp/prepare-arm-workspace-disk.sh /usr/local/sbin/codev-prepare-arm-disk
+bash /var/tmp/install-arm-workspace-boot.sh
+rm -f /var/tmp/arm-workspace-*.mjs /var/tmp/start-arm-workspace-gateway.mjs /var/tmp/*arm-workspace-boot.sh /var/tmp/boot-arm-workspace.sh /var/tmp/prepare-arm-workspace-disk.sh
 
 systemctl daemon-reload
 systemctl start codev-local-api-guard.service

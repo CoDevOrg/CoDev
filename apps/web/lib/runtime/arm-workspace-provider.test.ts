@@ -1,3 +1,4 @@
+import { gunzipSync } from "node:zlib";
 import { createHash, generateKeyPairSync } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -42,7 +43,10 @@ describe("ARM workspace provider stop", () => {
     deletedResources = new Set();
   });
 
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
 
   function stubFetch(routeFailure = false, diskMissing = false) {
     vi.stubGlobal(
@@ -333,6 +337,108 @@ describe("ARM workspace provider stop", () => {
     ).resolves.toEqual(resources);
     expect(requests).toHaveLength(1);
     expect(progress).not.toHaveBeenCalled();
+  });
+
+  it("delivers boot identity in protected deployment settings without sequential guest commands", async () => {
+    vi.stubEnv("ARM_WORKSPACE_BOOT_ENABLED", "true");
+    const keys = generateKeyPairSync("ed25519");
+    vi.stubEnv(
+      "ARM_WORKSPACE_SIGNING_PRIVATE_KEY",
+      keys.privateKey
+        .export({ type: "pkcs8", format: "der" })
+        .toString("base64"),
+    );
+    const requests: string[] = [];
+    let identity: { diskUuid: string; diskMode: string } | undefined;
+    let vmReads = 0;
+    vi.stubGlobal(
+      "fetch",
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        requests.push(url);
+        if (url.includes("login.microsoftonline.com"))
+          return jsonResponse({
+            access_token: "azure-token",
+            expires_in: 3600,
+          });
+        if (url.includes("api.cloudflare.com")) {
+          const result = url.includes("?name=")
+            ? []
+            : url.endsWith("/token")
+              ? "connector-token"
+              : { id: tunnel.id };
+          return jsonResponse({ success: true, result });
+        }
+        if (url.includes("/disks/"))
+          return init?.method === "PUT"
+            ? jsonResponse({
+                id: "disk-id",
+                tags: { Runtime: "arm-workspace", WorkspaceId: workspaceId },
+              })
+            : jsonResponse({}, 404);
+        if (url.includes("/deployments/")) {
+          const deployment = JSON.parse(String(init?.body));
+          expect(
+            deployment.properties.template.parameters.bootScript.type,
+          ).toBe("secureString");
+          const extension = deployment.properties.template.resources.find(
+            (r: { type: string }) => r.type.endsWith("/extensions"),
+          );
+          expect(extension.properties.protectedSettings.script).toBe(
+            "[parameters('bootScript')]",
+          );
+          const script = gunzipSync(
+            Buffer.from(
+              deployment.properties.parameters.bootScript.value,
+              "base64",
+            ),
+          ).toString();
+          expect(script).not.toMatch(/curl|apt|dpkg|mkfs/);
+          identity = JSON.parse(
+            Buffer.from(script.split("\n")[4] ?? "", "base64").toString(),
+          );
+          return jsonResponse({});
+        }
+        if (url.includes("/virtualMachines/"))
+          return ++vmReads === 1
+            ? jsonResponse({}, 404)
+            : jsonResponse({
+                id: "vm-id",
+                tags: {
+                  Runtime: "arm-workspace",
+                  WorkspaceId: workspaceId,
+                  Generation: String(generation),
+                },
+              });
+        if (url.endsWith("/v1/health"))
+          return jsonResponse({
+            ready: true,
+            workspaceId,
+            generation,
+            diskUuid: identity?.diskUuid,
+          });
+        throw new Error(`Unexpected ${url}`);
+      },
+    );
+    const resources = await new ArmWorkspaceProvider().start(
+      {
+        workspaceId,
+        generation,
+        diskId: null,
+        diskUuid: null,
+        resume: {
+          status: "queued",
+          vmId: "old-generation-vm",
+          tunnelId: "old-tunnel",
+          routeHost: "old.trycodev.com",
+        },
+      },
+      vi.fn(async () => undefined),
+    );
+    expect(identity?.diskMode).toBe("new");
+    expect(resources.diskUuid).toBe(identity?.diskUuid);
+    expect(requests.some((url) => url.includes("/runCommands/"))).toBe(false);
+    expect(requests.some((url) => url.includes("/extensions/"))).toBe(false);
   });
 
   it("does not replace a missing saved disk with a fresh disk", async () => {
