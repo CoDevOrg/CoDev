@@ -10,6 +10,9 @@ This module owns the communication and integration with external execution envir
 - `host.ts`, `azure-host.ts`: Logic for interacting with runtime host providers.
 - `ide.ts`: IDE state and connection definitions.
 - `arm-workspace-provider.ts`, `arm-workspace-workflow.ts`: Azure ARM workspace provisioning, health, and durable lifecycle execution.
+- `readiness.ts`: Web service database and realtime readiness. Guest readiness
+  belongs to each workspace lifecycle; the retired Firecracker host is not a
+  dependency of web service readiness.
 
 - `workspace-runtime-target.ts`, `arm-workspace-request.ts`: Resolve workspace
   provider/generation for each guest call, sign its exact method/path/body, and

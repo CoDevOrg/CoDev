@@ -232,7 +232,7 @@ describe("gen2 workspaces", () => {
         values: {
           ownerId: "user-1",
           name: "Studio",
-          runtimeProvider: "firecracker",
+          runtimeProvider: "azure_arm",
         },
       },
       {

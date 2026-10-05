@@ -1,4 +1,5 @@
-# Rolls out CoDev's Azure-hosted Firecracker runtime.
+# Legacy Firecracker deployment. The production host was retired on 2026-10-05;
+# keep this workflow disabled unless explicitly restoring that runtime.
 #
 # Authentication is OIDC end to end. There is no Azure client secret in this
 # repository's secrets, only the three non-sensitive ids below, because the
@@ -7,20 +8,6 @@
 name: Deploy runtime (Azure)
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "services/**"
-      - "infra/azure/**"
-      # Everything the release artifact is built from or that deploy.sh
-      # uploads. Listing the two build scripts by name used to leave
-      # verify-lifecycle.sh out, even though deploy.sh ships it to the host.
-      # The runtime-config test is excluded on purpose: it changes far more
-      # often than the runtime and a host roll takes tens of minutes.
-      - "infra/runtime/scripts/**"
-      - "vendor/superset/**"
-      - ".github/workflows/deploy-runtime-azure.yml"
   workflow_dispatch:
 
 permissions:

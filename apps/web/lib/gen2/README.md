@@ -3,10 +3,10 @@
 CoDev's active workspace implementation.
 
 A Gen 2 workspace is a shareable cloud instance that you and Codex work on
-together. Existing workspaces use Firecracker. ARM workspaces use the same domain clients
-through a provider-aware, generation-bound signed tunnel adapter. Phase 4
-implementation is available; image publication and staging acceptance remain
-release gates.
+together. New workspaces use Azure ARM for both paid/admin and eligible free
+owners, with their existing entitlement limits. The shared Firecracker host is
+retired. ARM workspaces use the domain clients through a provider-aware,
+generation-bound signed tunnel adapter.
 
 ## Runtime boundary
 
