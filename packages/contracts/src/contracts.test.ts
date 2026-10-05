@@ -567,7 +567,7 @@ describe("gen2 workspace contracts", () => {
   });
 
   it("accepts a turn start for each agent and a poll without auth material", () => {
-    for (const provider of ["codex", "claude"] as const) {
+    for (const provider of ["codex", "claude", "cursor"] as const) {
       expect(
         gen2AgentStartRequestSchema.parse({
           chatId: id,
@@ -584,7 +584,7 @@ describe("gen2 workspace contracts", () => {
     }
     // No provider is assumed: a start that names none, or an unknown one, is
     // refused.
-    for (const provider of [undefined, "cursor"]) {
+    for (const provider of [undefined, "unknown"]) {
       expect(
         gen2AgentStartRequestSchema.safeParse({
           chatId: id,

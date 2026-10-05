@@ -4,6 +4,7 @@ import {
   type Gen2TurnState,
 } from "@codev/contracts";
 
+import { reduceCursorTurn } from "./cursor-turn-events";
 import { reduceClaudeTurn } from "./claude-turn-events";
 import { reduceCodexTurn } from "./turn-events";
 
@@ -19,6 +20,7 @@ const REDUCERS: Record<
 > = {
   codex: reduceCodexTurn,
   claude: reduceClaudeTurn,
+  cursor: reduceCursorTurn,
 };
 
 export function reduceGen2Turn(

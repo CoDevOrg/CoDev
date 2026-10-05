@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Gen2AgentProviderName } from "@codev/contracts";
 
+import { buildGen2CursorCommand } from "./cursor-command";
 import { buildGen2ClaudeCommand } from "./claude-command";
 import { buildGen2CodexCommand } from "./codex-command";
 
@@ -18,6 +19,7 @@ const COMMAND_BUILDERS: Record<
 > = {
   codex: buildGen2CodexCommand,
   claude: buildGen2ClaudeCommand,
+  cursor: buildGen2CursorCommand,
 };
 
 export function buildGen2AgentCommand(

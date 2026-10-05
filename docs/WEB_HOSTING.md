@@ -185,3 +185,12 @@ Each socket has its own Redis connection and room reader; each document message
 opens and closes its own Hyperdrive pool after the operation completes. These
 resources must not be reused across Worker requests or closed with the upgrade
 HTTP response. Vercel keeps its process-scoped Redis and Postgres clients.
+
+Workspace Cursor turns use the initiating member’s existing encrypted CLI
+subscription or API key. No additional Worker or Vercel secret is required.
+The ARM image includes pinned `cursor-agent` for Linux ARM64; auth and config
+directories are isolated per turn under private agent profiles.
+
+ARM image `1.0.13` adds Cursor CLI `2026.10.01-e373342`. The production image
+pin is carried in `ARM_WORKSPACE_RUNTIME_SECRETS` and synchronized to Vercel
+by the web deployment workflow. Saved workspace disks survive image upgrades.

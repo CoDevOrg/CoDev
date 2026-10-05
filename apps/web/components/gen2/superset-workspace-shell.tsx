@@ -341,7 +341,7 @@ export function SupersetWorkspaceShell({
       provider,
     ): provider is (typeof SUPPORTED_AI_PROVIDERS)[number] & {
       id: Gen2AgentProviderName;
-    } => provider.id !== "cursor" && providerStatuses[provider.id]?.connected,
+    } => providerStatuses[provider.id]?.connected,
   );
 
   const handleNewChat = useCallback(() => {
@@ -732,7 +732,7 @@ export function SupersetWorkspaceShell({
     chats.find((chat) => chat.id === selectedChatId) ?? chats[0] ?? null;
 
   const connectedProviders = SUPPORTED_AI_PROVIDERS.filter(
-    (p) => p.id !== "cursor" && providerStatuses[p.id]?.connected,
+    (p) => providerStatuses[p.id]?.connected,
   );
 
   if (!runtimeEnabled) {

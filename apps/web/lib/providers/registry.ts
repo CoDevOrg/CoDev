@@ -18,7 +18,7 @@ import type { AuthProvider } from "@codev/shared-types";
 
 /** A coding agent a member connects. Not the same as the credential's
  *  `provider` column, which is the vendor (`openai` or `anthropic`). */
-export type ProviderId = "codex" | "claude";
+export type ProviderId = "codex" | "claude" | "cursor";
 
 /** The runtime surfaces that can execute a member's provider credential. */
 export type ExecutorSurface = "rooms" | "gen2";
@@ -36,6 +36,7 @@ export type ConnectMethod = "browser" | "cli" | "paste";
  */
 export type CredentialKind =
   | "codex_auth_cache"
+  | "cursor_auth_cache"
   | "claude_setup_token"
   | "api_key";
 
@@ -59,6 +60,7 @@ export const PROFILE_DIR_TOKEN = "{{profileDir}}";
 /** A resolved credential's secret material, discriminated by kind. */
 export type ResolvedSecret =
   | { kind: "codex_auth_cache"; authCacheJson: string }
+  | { kind: "cursor_auth_cache"; authCacheJson: string }
   | { kind: "claude_setup_token"; token: string }
   | { kind: "api_key"; apiKey: string };
 
@@ -132,12 +134,37 @@ const CLAUDE: ProviderDefinition = {
   ],
 };
 
+const CURSOR: ProviderDefinition = {
+  id: "cursor",
+  label: "Cursor",
+  vendor: "cursor",
+  kinds: [
+    {
+      kind: "cursor_auth_cache",
+      label: "Cursor subscription",
+      connect: ["cli"],
+      runs: { rooms: false, gen2: true },
+    },
+    {
+      kind: "api_key",
+      label: "Cursor API key",
+      connect: ["paste"],
+      runs: { rooms: false, gen2: true },
+    },
+  ],
+};
+
 export const PROVIDERS: Readonly<Record<ProviderId, ProviderDefinition>> = {
   codex: CODEX,
   claude: CLAUDE,
+  cursor: CURSOR,
 };
 
-export const PROVIDER_IDS: readonly ProviderId[] = ["codex", "claude"];
+export const PROVIDER_IDS: readonly ProviderId[] = [
+  "codex",
+  "claude",
+  "cursor",
+];
 
 export function providerDefinition(id: ProviderId): ProviderDefinition {
   return PROVIDERS[id];
@@ -188,6 +215,7 @@ export function codexApiKeyAuthCache(apiKey: string): string {
 const API_KEY_ENV: Readonly<Record<ProviderId, string>> = {
   codex: "OPENAI_API_KEY",
   claude: "ANTHROPIC_API_KEY",
+  cursor: "CURSOR_API_KEY",
 };
 
 /**
@@ -198,6 +226,16 @@ const API_KEY_ENV: Readonly<Record<ProviderId, string>> = {
  * same kind lands differently per vendor: Codex wants an `auth.json` even for
  * a bare key, while Claude wants an environment variable.
  */
+function cursorEnvironment(): Record<string, string> {
+  return {
+    HOME: PROFILE_DIR_TOKEN,
+    XDG_CONFIG_HOME: `${PROFILE_DIR_TOKEN}/.config`,
+    CURSOR_CONFIG_DIR: `${PROFILE_DIR_TOKEN}/.config/cursor`,
+    CURSOR_DATA_DIR: `${PROFILE_DIR_TOKEN}/.cursor`,
+    AGENT_CLI_CREDENTIAL_STORE: "file",
+  };
+}
+
 export function launchProfileFor(
   id: ProviderId,
   secret: ResolvedSecret,
@@ -207,6 +245,13 @@ export function launchProfileFor(
       return {
         files: [{ path: ".codex/auth.json", contents: secret.authCacheJson }],
         env: { CODEX_HOME: `${PROFILE_DIR_TOKEN}/.codex` },
+      };
+    case "cursor_auth_cache":
+      return {
+        files: [
+          { path: ".config/cursor/auth.json", contents: secret.authCacheJson },
+        ],
+        env: { ...cursorEnvironment(), CURSOR_API_KEY: "" },
       };
     case "claude_setup_token":
       return { env: { CLAUDE_CODE_OAUTH_TOKEN: secret.token } };
@@ -221,6 +266,11 @@ export function launchProfileFor(
             ],
             env: { CODEX_HOME: `${PROFILE_DIR_TOKEN}/.codex` },
           }
-        : { env: { [API_KEY_ENV[id]]: secret.apiKey } };
+        : {
+            env: {
+              ...(id === "cursor" ? cursorEnvironment() : {}),
+              [API_KEY_ENV[id]]: secret.apiKey,
+            },
+          };
   }
 }
