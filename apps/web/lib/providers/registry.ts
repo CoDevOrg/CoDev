@@ -60,7 +60,7 @@ export const PROFILE_DIR_TOKEN = "{{profileDir}}";
 /** A resolved credential's secret material, discriminated by kind. */
 export type ResolvedSecret =
   | { kind: "codex_auth_cache"; authCacheJson: string }
-  | { kind: "cursor_auth_cache"; authCacheJson: string }
+  | { kind: "cursor_auth_cache"; authCacheJson: string; authToken?: string }
   | { kind: "claude_setup_token"; token: string }
   | { kind: "api_key"; apiKey: string };
 
@@ -233,6 +233,7 @@ function cursorEnvironment(): Record<string, string> {
     CURSOR_CONFIG_DIR: `${PROFILE_DIR_TOKEN}/.config/cursor`,
     CURSOR_DATA_DIR: `${PROFILE_DIR_TOKEN}/.cursor`,
     AGENT_CLI_CREDENTIAL_STORE: "file",
+    CURSOR_AUTH_TOKEN: "",
   };
 }
 
@@ -251,7 +252,11 @@ export function launchProfileFor(
         files: [
           { path: ".config/cursor/auth.json", contents: secret.authCacheJson },
         ],
-        env: { ...cursorEnvironment(), CURSOR_API_KEY: "" },
+        env: {
+          ...cursorEnvironment(),
+          CURSOR_API_KEY: "",
+          CURSOR_AUTH_TOKEN: secret.authToken ?? "",
+        },
       };
     case "claude_setup_token":
       return { env: { CLAUDE_CODE_OAUTH_TOKEN: secret.token } };

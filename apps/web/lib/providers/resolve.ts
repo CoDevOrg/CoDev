@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 
+import { cursorLaunchSecret } from "./cursor-launch-secret";
 import { getDatabase } from "../platform/database";
 import { decryptSecret } from "../platform/kms";
 import {
@@ -192,7 +193,7 @@ async function loadCursorAuthCache(
   if (!row?.encryptedAccessToken) return null;
   return loadedFromRow(row, async (row) => {
     const authCacheJson = await decryptCredential(row.encryptedAccessToken);
-    return authCacheJson ? { kind: "cursor_auth_cache", authCacheJson } : null;
+    return authCacheJson ? cursorLaunchSecret(authCacheJson) : null;
   });
 }
 

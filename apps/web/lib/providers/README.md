@@ -13,3 +13,7 @@ This module owns the registry, configuration, and integration of external servic
 Cursor CLI subscriptions and API keys run in Gen 2 workspaces. Subscription
 authentication is written only to the guest turn’s private profile, never the
 shared checkout; Cursor does not run in Rooms.
+
+`cursor-launch-secret.ts` accepts the CLI JSON cache and older stored session
+tokens. Legacy tokens use the CLI’s explicit auth-token environment path,
+inside the same private profile.
