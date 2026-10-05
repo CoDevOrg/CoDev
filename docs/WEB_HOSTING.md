@@ -173,6 +173,9 @@ the gateway, and `codev-arm-boot.service`. The controller supplies the saved UUI
 or a new UUID before VM deployment. One protected extension configuration starts
 local initialization; no guest disk inspection or preparation Run Commands run.
 The guest reports signed readiness after the exact disk and bridge are ready.
+Disk and tunnel preparation run concurrently with independent replay checkpoints
+and a shared Free-plan request budget. Azure operation polling has a five-second
+minimum and honors `Retry-After`; provisioning status includes this setup time.
 
 Roll back new starts by disabling the flag and restoring the previous immutable
 image pin in both secret stores. Existing VMs keep their current image and disk.

@@ -24,7 +24,7 @@ const DEPLOYMENT_API = "2025-04-01";
 const WORKSPACE_LOCATION = "westus2";
 // Keep Azure polling under Cloudflare Workflows' subrequest budget.
 const VM_POLL_INTERVAL_MS = 10_000;
-const ARM_OPERATION_POLL_INTERVAL_MS = 15_000;
+const ARM_OPERATION_POLL_INTERVAL_MS = 5_000;
 const CLOUDFLARE_ACCOUNT_ID = "84a1d01866de04e04320feddfb199b83";
 const CLOUDFLARE_ZONE_ID = "c474dbc7af01ea073573a250fbd1d5ec";
 const CLOUDFLARE_ZONE_NAME = "trycodev.com";
@@ -175,8 +175,9 @@ async function pollArmOperation(response: Response, payload: unknown) {
   if (!operationUrl) fail("AZURE_OPERATION_URL_MISSING");
   const deadline = await ArmWorkflowIO.deadline(10 * 60_000);
   let result = payload;
+  let retryAfter = response.headers.get("retry-after") ?? "5";
   while (Date.now() < deadline) {
-    const retryAfterSeconds = Number(response.headers.get("retry-after") ?? 5);
+    const retryAfterSeconds = Number(retryAfter);
     await ArmWorkflowIO.sleep(
       Math.max(
         ARM_OPERATION_POLL_INTERVAL_MS,
@@ -200,6 +201,7 @@ async function pollArmOperation(response: Response, payload: unknown) {
     }
     operationUrl =
       poll.response.headers.get("azure-asyncoperation") ?? operationUrl;
+    retryAfter = poll.response.headers.get("retry-after") ?? retryAfter;
   }
   fail("AZURE_OPERATION_TIMEOUT");
 }
@@ -1193,32 +1195,47 @@ async function deployBakedVm(
   return virtualMachineId;
 }
 
-async function startBakedRuntime(
+async function prepareBakedResources(
   input: ArmWorkspaceOperation,
   progress: ArmWorkspaceProgress,
 ) {
   const { workspaceId, generation } = input;
-  const diskId =
-    resumePhase(input) > 0 && input.resume?.vmId && input.diskId
-      ? input.diskId
-      : input.diskId
-        ? await requireDisk(input.diskId, workspaceId, generation)
-        : await createDisk(workspaceId);
   // An unidentified saved disk never becomes a fresh disk on retry.
   if (input.diskId && !input.diskUuid) fail("DISK_IDENTITY_MISMATCH");
+  if (resumePhase(input) === 0) await progress("provisioning", {});
   const diskUuid =
     input.diskUuid ??
     (await ArmWorkflowIO.checkpoint("disk-identity", async () =>
       crypto.randomUUID(),
     ));
-  const route =
-    resumePhase(input) > 0 && input.resume?.tunnelId && input.resume.routeHost
-      ? { tunnelId: input.resume.tunnelId, routeHost: input.resume.routeHost }
-      : await ensureTunnel(workspaceId, generation).then((tunnel) => ({
-          tunnelId: tunnel.id,
-          routeHost: tunnel.host,
-          token: tunnel.token,
-        }));
+  const [diskId, route] = await ArmWorkflowIO.parallel([
+    async () =>
+      resumePhase(input) > 0 && input.resume?.vmId && input.diskId
+        ? input.diskId
+        : input.diskId
+          ? requireDisk(input.diskId, workspaceId, generation)
+          : createDisk(workspaceId),
+    async () =>
+      resumePhase(input) > 0 && input.resume?.tunnelId && input.resume.routeHost
+        ? { tunnelId: input.resume.tunnelId, routeHost: input.resume.routeHost }
+        : ensureTunnel(workspaceId, generation).then((tunnel) => ({
+            tunnelId: tunnel.id,
+            routeHost: tunnel.host,
+            token: tunnel.token,
+          })),
+  ]);
+  return { diskId, diskUuid, route };
+}
+
+async function startBakedRuntime(
+  input: ArmWorkspaceOperation,
+  progress: ArmWorkspaceProgress,
+) {
+  const { workspaceId, generation } = input;
+  const { diskId, diskUuid, route } = await prepareBakedResources(
+    input,
+    progress,
+  );
   const virtualMachineId = await deployBakedVm(
     input,
     progress,

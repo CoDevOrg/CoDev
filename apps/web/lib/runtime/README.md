@@ -11,7 +11,9 @@ This module owns the communication and integration with external execution envir
 - `ide.ts`: IDE state and connection definitions.
 - `arm-workspace-provider.ts`, `arm-workspace-workflow.ts`: Azure ARM workspace provisioning, health, and durable lifecycle execution.
 - `arm-workflow-io.ts`: Bounded workflow I/O checkpoints and continuation replay;
-  normal web requests and staging canaries execute directly without a workflow.
+  parallel branches use independent step numbering with a shared request budget
+  and journal. Both settle before handoff so replay never loses a mutation.
+  Normal web requests and staging canaries execute directly without a workflow.
 - `readiness.ts`: Web service database and realtime readiness. Guest readiness
   belongs to each workspace lifecycle; the retired Firecracker host is not a
   dependency of web service readiness.

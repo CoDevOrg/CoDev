@@ -10,6 +10,62 @@ function steps() {
 }
 
 describe("free-plan ARM workflow I/O", () => {
+  it("drains parallel branches before handoff and replays them within a shared budget", async () => {
+    let release!: () => void;
+    const pendingDisk = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const mutations: Array<string | number> = [];
+    let checkpoints: Record<string, unknown> = {};
+    const execute = () =>
+      ArmWorkflowIO.parallel([
+        () =>
+          ArmWorkflowIO.checkpoint("azure", async () => {
+            await pendingDisk;
+            mutations.push("disk");
+            return "disk";
+          }),
+        async () => {
+          try {
+            for (let index = 0; index < 12; index++) {
+              await ArmWorkflowIO.checkpoint("azure", async () => {
+                mutations.push(index);
+                return index;
+              });
+            }
+            return "tunnel";
+          } finally {
+            release();
+          }
+        },
+      ]);
+    await ArmWorkflowIO.run(
+      steps() as unknown as WorkflowStep,
+      "start",
+      {},
+      async () => {
+        await expect(execute()).rejects.toMatchObject({
+          code: "WORKFLOW_CONTINUE",
+        });
+        checkpoints = JSON.parse(JSON.stringify(ArmWorkflowIO.saved()));
+      },
+    );
+    expect(mutations).toHaveLength(10);
+    expect(Object.values(checkpoints)).toContain("disk");
+    await ArmWorkflowIO.run(
+      steps() as unknown as WorkflowStep,
+      "start",
+      checkpoints,
+      async () => {
+        await expect(execute()).resolves.toEqual(["disk", "tunnel"]);
+      },
+    );
+    expect(mutations.filter((value) => value === "disk")).toHaveLength(1);
+    expect(mutations.filter((value) => typeof value === "number")).toEqual(
+      Array.from({ length: 12 }, (_, index) => index),
+    );
+  });
+
   it("hands off and replays completed requests without repeating mutations", async () => {
     let checkpoints: Record<string, unknown> = {};
     const mutations: number[] = [];
