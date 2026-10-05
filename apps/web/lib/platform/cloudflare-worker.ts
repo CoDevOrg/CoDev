@@ -34,10 +34,15 @@ const worker = {
     try {
       const response = await application.fetch(routedRequest, env, ctx);
       const socket = takeCloudflareWebSocket(id);
-      return socket ? upgradedResponse(response, socket) : response;
+      if (!socket) return response;
+      ctx.waitUntil(socket.initialized);
+      return upgradedResponse(response, socket.socket);
     } catch (error) {
       const socket = takeCloudflareWebSocket(id);
-      if (socket) return upgradedResponse(new Response(null), socket);
+      if (socket) {
+        ctx.waitUntil(socket.initialized);
+        return upgradedResponse(new Response(null), socket.socket);
+      }
       throw error;
     }
   },

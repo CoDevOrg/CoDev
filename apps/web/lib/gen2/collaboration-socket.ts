@@ -1,6 +1,12 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { withDatabaseOperation } from "../platform/database-operation";
+import {
+  collaborationContext,
+  withGen2CollaborationContext,
+} from "./collaboration-context";
 
 import {
   collaborationClientMessageSchema,
@@ -449,12 +455,24 @@ async function handleMessage(
   }
 }
 
-export async function handleGen2CollaborationSocket(
+export function handleGen2CollaborationSocket(
   workspaceId: string,
   socket: ServerWebSocket,
   user: CollaborationUser,
   options: { canEdit: boolean },
 ) {
+  return withGen2CollaborationContext(() =>
+    connectCollaborationSocket(workspaceId, socket, user, options),
+  );
+}
+
+async function connectCollaborationSocket(
+  workspaceId: string,
+  socket: ServerWebSocket,
+  user: CollaborationUser,
+  options: { canEdit: boolean },
+) {
+  const inContext = AsyncLocalStorage.snapshot();
   const roomKey = gen2CollaborationRoom(workspaceId);
   const connection = roomConnection(socket, user, options.canEdit);
   let room: Awaited<ReturnType<typeof startRoom>> | null = null;
@@ -467,27 +485,35 @@ export async function handleGen2CollaborationSocket(
     }
     if (room) void refreshPresence(roomKey, connection);
   }, HEARTBEAT_INTERVAL_MS);
-  socket.onMessage((message) => {
-    connection.lastSeenAt = Date.now();
-    if (!room) {
-      if (pendingMessages.length >= 16) {
-        socket.close(1013, "Collaboration is still starting.");
+  socket.onMessage((message) =>
+    inContext(() => {
+      connection.lastSeenAt = Date.now();
+      if (!room) {
+        if (pendingMessages.length >= 16) {
+          socket.close(1013, "Collaboration is still starting.");
+          return;
+        }
+        pendingMessages.push(message);
         return;
       }
-      pendingMessages.push(message);
-      return;
-    }
-    void handleMessage(workspaceId, connection, message);
-  });
-  socket.onceClose(() => {
-    closed = true;
-    clearInterval(heartbeat);
-    if (room) {
-      room.connections.delete(connection);
-      void removePresence(roomKey, connection);
-      closeRoomIfEmpty(roomKey, room);
-    }
-  });
+      return withDatabaseOperation(() =>
+        handleMessage(workspaceId, connection, message),
+      );
+    }),
+  );
+  socket.onceClose(() =>
+    inContext(() => {
+      closed = true;
+      clearInterval(heartbeat);
+      if (room) {
+        room.connections.delete(connection);
+        void removePresence(roomKey, connection).finally(() =>
+          collaborationContext.getStore()?.redis?.disconnect(),
+        );
+        closeRoomIfEmpty(roomKey, room);
+      }
+    }),
+  );
   socket.onceError(() => {
     connection.lastSeenAt = 0;
   });
@@ -499,6 +525,8 @@ export async function handleGen2CollaborationSocket(
   }
   room.connections.add(connection);
   for (const message of pendingMessages) {
-    void handleMessage(workspaceId, connection, message);
+    await withDatabaseOperation(() =>
+      handleMessage(workspaceId, connection, message),
+    );
   }
 }

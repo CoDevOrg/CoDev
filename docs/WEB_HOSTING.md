@@ -179,3 +179,9 @@ minimum and honors `Retry-After`; provisioning status includes this setup time.
 
 Roll back new starts by disabling the flag and restoring the previous immutable
 image pin in both secret stores. Existing VMs keep their current image and disk.
+
+Cloudflare collaboration WebSockets retain initialization through `waitUntil`.
+Each socket has its own Redis connection and room reader; each document message
+opens and closes its own Hyperdrive pool after the operation completes. These
+resources must not be reused across Worker requests or closed with the upgrade
+HTTP response. Vercel keeps its process-scoped Redis and Postgres clients.

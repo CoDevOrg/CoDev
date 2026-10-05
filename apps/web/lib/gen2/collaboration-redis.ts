@@ -4,6 +4,9 @@ import { randomUUID } from "node:crypto";
 
 import { readServerEnvironment } from "@codev/config";
 import Redis from "ioredis";
+import { cache } from "react";
+import { after } from "next/server";
+import { collaborationContext } from "./collaboration-context";
 
 export const MAX_SOCKET_PAYLOAD_BYTES = 128 * 1_024;
 export const HEARTBEAT_INTERVAL_MS = 20_000;
@@ -16,27 +19,37 @@ const LOCK_TTL_MS = 75_000;
 let instanceId: string | undefined;
 
 export function getInstanceId() {
+  const current = collaborationContext.getStore();
+  if (current) return (current.instanceId ??= randomUUID());
   return (instanceId ??= randomUUID());
 }
 
 let redis: Redis | undefined;
 
+function createRedisClient() {
+  const url = readServerEnvironment().REDIS_URL;
+  if (!url)
+    throw new Error("REDIS_URL is required for realtime collaboration.");
+  const client = new Redis(url, {
+    lazyConnect: true,
+    maxRetriesPerRequest: 2,
+    enableReadyCheck: true,
+  });
+  client.on("error", () => undefined);
+  return client;
+}
+
+const requestRedis = cache(() => {
+  const client = createRedisClient();
+  after(() => client.disconnect());
+  return client;
+});
+
 export function redisClient() {
-  if (!redis) {
-    const url = readServerEnvironment().REDIS_URL;
-    if (!url) {
-      throw new Error("REDIS_URL is required for realtime collaboration.");
-    }
-    redis = new Redis(url, {
-      lazyConnect: true,
-      maxRetriesPerRequest: 2,
-      enableReadyCheck: true,
-    });
-    // ioredis emits connection failures as events. Without a listener those
-    // become uncaught exceptions and take down the Worker.
-    redis.on("error", () => undefined);
-  }
-  return redis;
+  const current = collaborationContext.getStore();
+  if (current) return (current.redis ??= createRedisClient());
+  if (typeof WebSocketPair === "function") return requestRedis();
+  return (redis ??= createRedisClient());
 }
 
 export function streamKey(workspaceId: string) {

@@ -8,6 +8,11 @@ owners, with their existing entitlement limits. The shared Firecracker host is
 retired. ARM workspaces use the domain clients through a provider-aware,
 generation-bound signed tunnel adapter.
 
+Cloudflare collaboration sockets own their Redis clients, stream-reader rooms,
+and fan-out identities through `collaboration-context.ts`. Socket callbacks
+restore that context and use message-scoped database pools; HTTP response cleanup
+must not close resources needed by later socket messages.
+
 ## Runtime boundary
 
 `arm-workflow-continuation.ts` claims and activates bounded lifecycle instances
