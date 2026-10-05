@@ -3,7 +3,6 @@
 import { useState, useTransition, type FormEvent } from "react";
 
 import { updateOrganizationPlan } from "@/app/admin/actions";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -21,19 +20,8 @@ import {
 } from "@/components/ui/field";
 import type { AdminFeatureAccessData } from "@/lib/admin/admin-feature-access";
 import type { AdminFeatureActionResult } from "@/app/admin/actions";
+import { AdminNotice } from "./admin-notice";
 
-function Notice({ result }: { result: AdminFeatureActionResult | null }) {
-  if (!result) return null;
-  return (
-    <Alert
-      className="admin-action-notice"
-      variant={result.ok ? "default" : "destructive"}
-      role={result.ok ? "status" : "alert"}
-    >
-      <AlertDescription>{result.message}</AlertDescription>
-    </Alert>
-  );
-}
 
 export function AdminOrganizationPlanForm({
   data,
@@ -120,7 +108,7 @@ export function AdminOrganizationPlanForm({
               </FieldDescription>
             </Field>
           </FieldGroup>
-          <Notice result={result} />
+          <AdminNotice result={result} />
         </CardContent>
         <CardFooter className="admin-control-form-footer">
           <Button type="submit" disabled={pending || !canAssignPlan}>

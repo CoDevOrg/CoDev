@@ -9,7 +9,6 @@ import {
   updateUserFeatureOverride,
   type AdminFeatureActionResult,
 } from "@/app/admin/actions";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import type { AdminFeatureAccessData } from "@/lib/admin/admin-feature-access";
 
@@ -33,16 +32,8 @@ function formatFeature(feature: FeatureKey): string {
   return FEATURES.find((item) => item.id === feature)?.label ?? feature;
 }
 
-function formatDate(value: string | null): string {
-  if (!value) return "No expiry";
-  return new Date(value).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
+import { AdminNotice } from "./admin-notice";
+import { formatDateTime as formatDate } from "./admin-formatters";
 
 function describeChange(event: AdminFeatureAccessData["auditEvents"][number]) {
   if (event.action === "deleted") {
@@ -53,18 +44,6 @@ function describeChange(event: AdminFeatureAccessData["auditEvents"][number]) {
   }`;
 }
 
-function Notice({ result }: { result: AdminFeatureActionResult | null }) {
-  if (!result) return null;
-  return (
-    <Alert
-      className="admin-action-notice"
-      variant={result.ok ? "default" : "destructive"}
-      role={result.ok ? "status" : "alert"}
-    >
-      <AlertDescription>{result.message}</AlertDescription>
-    </Alert>
-  );
-}
 
 export function AdminFeatureOverrideLists({
   data,
@@ -163,7 +142,7 @@ function CurrentOverrides({
           rules. Expired overrides are omitted; they remain in the history.
         </p>
       </div>
-      <Notice result={result} />
+      <AdminNotice result={result} />
       <div className="admin-table-wrap">
         <div className="admin-table-scroll">
           <table className="admin-table">
