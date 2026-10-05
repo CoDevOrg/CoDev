@@ -19,8 +19,9 @@ const NETWORK_API = "2024-05-01";
 const DISK_API = "2024-03-02";
 const DEPLOYMENT_API = "2025-04-01";
 const WORKSPACE_LOCATION = "westus2";
-// Keep VM and guest-command polling under Cloudflare Workflows' subrequest budget.
+// Keep Azure polling under Cloudflare Workflows' subrequest budget.
 const VM_POLL_INTERVAL_MS = 10_000;
+const ARM_OPERATION_POLL_INTERVAL_MS = 15_000;
 const CLOUDFLARE_ACCOUNT_ID = "84a1d01866de04e04320feddfb199b83";
 const CLOUDFLARE_ZONE_ID = "c474dbc7af01ea073573a250fbd1d5ec";
 const CLOUDFLARE_ZONE_NAME = "trycodev.com";
@@ -160,10 +161,14 @@ async function pollArmOperation(response: Response, payload: unknown) {
   const deadline = Date.now() + 10 * 60_000;
   let result = payload;
   while (Date.now() < deadline) {
+    const retryAfterSeconds = Number(response.headers.get("retry-after") ?? 5);
     await new Promise((resolve) =>
       setTimeout(
         resolve,
-        Math.max(1, Number(response.headers.get("retry-after") ?? 5)) * 1000,
+        Math.max(
+          ARM_OPERATION_POLL_INTERVAL_MS,
+          (Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : 5) * 1000,
+        ),
       ),
     );
     const poll = await armFetch(operationUrl);
