@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Gen2WorkspaceDetail } from "@codev/contracts";
 import { ensureGen2WorkspaceReady } from "@/lib/gen2/startup-client";
+import { switchActiveWorkspace } from "@/lib/gen2/compute-switch-client";
 
 import { boundedJsonRequest } from "@/lib/gen2/bounded-request";
 
@@ -23,6 +24,11 @@ export function useWorkspaceConnection(
   const [progress, setProgress] = useState<
     Gen2WorkspaceDetail["runtimeStatus"] | null
   >(null);
+  const [conflict, setConflict] = useState<{
+    activeWorkspace: { id: string; name: string };
+  } | null>(null);
+  const [switching, setSwitching] = useState(false);
+  const [switchStatus, setSwitchStatus] = useState<string | null>(null);
   const startupAbort = useRef<AbortController | null>(null);
   const connectRef = useRef<Promise<boolean> | null>(null);
   const onConnectedRef = useRef(onConnected);
@@ -44,6 +50,9 @@ export function useWorkspaceConnection(
     setError("");
     setSubscriptionRequired(false);
     setProgress(null);
+    setConflict(null);
+    setSwitching(false);
+    setSwitchStatus(null);
     startupAbort.current = new AbortController();
     const promise = (async () => {
       try {
@@ -62,6 +71,9 @@ export function useWorkspaceConnection(
           setState("connected");
           return true;
         }
+        if (result.conflict) {
+          setConflict(result.conflict);
+        }
         setSubscriptionRequired(result.subscriptionRequired === true);
         setError(result.error ?? "Couldn't reconnect. Please try again.");
       } catch {
@@ -77,6 +89,43 @@ export function useWorkspaceConnection(
     connectRef.current = promise;
     return promise;
   }, [workspaceId]);
+
+  const switchWorkspace = useCallback(
+    async (activeWorkspaceId: string) => {
+      setSwitching(true);
+      setError("");
+      setSwitchStatus("Stopping active workspace...");
+      try {
+        const result = await switchActiveWorkspace({
+          targetWorkspaceId: workspaceId,
+          activeWorkspaceId,
+          onProgress: (step) => {
+            if (step === "stopping") {
+              setSwitchStatus("Stopping active workspace...");
+            } else if (step === "stopped" || step === "starting") {
+              setSwitchStatus("Starting this workspace...");
+            }
+          },
+        });
+        if (!result.success) {
+          setError(result.error);
+          setSwitching(false);
+          setSwitchStatus(null);
+          return false;
+        }
+        setConflict(null);
+        setSwitching(false);
+        setSwitchStatus(null);
+        return await reconnect();
+      } catch {
+        setError("Failed to switch workspaces. Try again.");
+        setSwitching(false);
+        setSwitchStatus(null);
+        return false;
+      }
+    },
+    [reconnect, workspaceId],
+  );
 
   useEffect(() => {
     mounted.current = true;
@@ -172,5 +221,15 @@ export function useWorkspaceConnection(
     };
   }, [enabled, reconnect, workspaceId]);
 
-  return { state, error, subscriptionRequired, progress, reconnect };
+  return {
+    state,
+    error,
+    subscriptionRequired,
+    progress,
+    conflict,
+    switching,
+    switchStatus,
+    reconnect,
+    switchWorkspace,
+  };
 }

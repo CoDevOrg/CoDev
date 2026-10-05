@@ -1,3 +1,6 @@
+vi.mock("./arm-compute-policy", () => ({
+  enforceArmComputeEntitlement: vi.fn(async () => undefined),
+}));
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -94,6 +97,7 @@ function rootDatabase() {
 
 function workflowDatabase() {
   return {
+    delete: () => ({ where: async () => undefined }),
     select: () => ({
       from: () => ({
         where: () => ({
@@ -288,7 +292,7 @@ describe("ARM workspace operation recovery", () => {
       runtimeOperationId: "newer-operation",
       runtimeGeneration: 3,
     };
-    mocks.workflowReads = [[current], [], []];
+    mocks.workflowReads = [[current], [current], [], []];
 
     await runArmWorkspaceLifecycle(
       workflowEnv as never,

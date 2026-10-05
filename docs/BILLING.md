@@ -28,8 +28,8 @@ workspaces and share 50 hours with one owned workspace or 35 hours with two,
 with one active workspace. Second creation requires explicit quota acknowledgment.
 Paid owners keep the existing 1,000-minute allowance and admins remain exempt.
 Missing/stale complete cost telemetry or the US$6.50 budget breaker pauses free
-compute while retaining saved work. Public copy and controls remain Phase 6;
-see the [Phase 5 review](./arm-workspace-free-tier-phase-5.md).
+compute while retaining saved work. For UI controls and copy, see the
+[Phase 6 review](./arm-workspace-free-tier-phase-6.md).
 
 ## Pages
 

@@ -1,3 +1,12 @@
+vi.mock("../billing/workspace-entitlement", () => ({
+  getWorkspaceOwnerEntitlement: vi.fn(async () => ({
+    tier: "paid",
+    enabled: true,
+    unlimited: false,
+    ownedWorkspaceCount: 1,
+    monthlyLimitMs: 60_000_000,
+  })),
+}));
 import { getTableName } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -97,6 +106,12 @@ vi.mock("../platform/database", () => {
                 const rows = selectedRows(table, selection);
                 if ("count" in selection) mocks.events.push("count-owned");
                 return Object.assign(Promise.resolve(rows), {
+                  orderBy: () => ({
+                    for: async () => {
+                      mocks.events.push("lock-owner");
+                      return rows;
+                    },
+                  }),
                   for: async () => {
                     mocks.events.push(
                       getTableName(table) === "users"
@@ -214,7 +229,11 @@ describe("gen2 workspaces", () => {
     expect(mocks.inserted).toEqual([
       {
         table: "gen2_workspaces",
-        values: { ownerId: "user-1", name: "Studio" },
+        values: {
+          ownerId: "user-1",
+          name: "Studio",
+          runtimeProvider: "firecracker",
+        },
       },
       {
         table: "gen2_workspace_members",
@@ -251,6 +270,7 @@ describe("gen2 workspaces", () => {
     mocks.memberStatus = "ready";
     await deleteGen2Workspace("11111111-1111-4111-8111-111111111111", "user-1");
     expect(mocks.events).toEqual([
+      "lock-owner",
       "lock-delete-row",
       "update:gen2_workspaces",
       "wake-host",
@@ -264,6 +284,7 @@ describe("gen2 workspaces", () => {
   it("does not wake the host for a workspace that never started", async () => {
     await deleteGen2Workspace("11111111-1111-4111-8111-111111111111", "user-1");
     expect(mocks.events).toEqual([
+      "lock-owner",
       "lock-delete-row",
       "update:gen2_workspaces",
       "delete-row",
@@ -278,6 +299,7 @@ describe("gen2 workspaces", () => {
     await deleteGen2Workspace("11111111-1111-4111-8111-111111111111", "user-1");
 
     expect(mocks.events).toEqual([
+      "lock-owner",
       "lock-delete-row",
       "update:gen2_workspaces",
       "wake-host",

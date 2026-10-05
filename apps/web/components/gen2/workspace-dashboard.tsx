@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useMemo, useState, useEffect, useSyncExternalStore } from "react";
 import { LayoutGrid, List, Search } from "lucide-react";
-import type { Gen2Workspace } from "@codev/contracts";
+import type { Gen2OwnerComputeSummary, Gen2Workspace } from "@codev/contracts";
+import { GEN2_MAX_OWNED_WORKSPACES } from "@/lib/gen2/constants";
 
 import {
   Dialog,
@@ -14,12 +15,17 @@ import {
 import { SubscribeCallout } from "@/components/billing/subscribe-callout";
 import { CreateGen2WorkspaceForm } from "@/components/gen2/create-workspace-form";
 import { Gen2WorkspaceList } from "@/components/gen2/workspace-list";
+import {
+  WorkspaceComputeStatsCards,
+  WorkspaceComputeAlerts,
+} from "@/components/gen2/workspace-compute-stats";
 import type { AppUser } from "@/lib/auth/identity";
 
 type DashboardProps = {
   user: AppUser;
   github: { connected: boolean; login: string | null };
   initialWorkspaces: Gen2Workspace[];
+  initialComputeSummary?: Gen2OwnerComputeSummary | null;
   appSlug?: string | undefined;
   connectGitHub?: (() => void) | undefined;
   billing?: {
@@ -40,11 +46,15 @@ export function Gen2WorkspaceDashboard({
   user,
   github,
   initialWorkspaces,
+  initialComputeSummary,
   appSlug,
   connectGitHub,
   billing,
 }: DashboardProps) {
-  const canCreate = billing?.hasAccess !== false;
+  const [computeSummary, setComputeSummary] =
+    useState<Gen2OwnerComputeSummary | null>(initialComputeSummary ?? null);
+  const isFreeEligible =
+    computeSummary?.tier === "free" && computeSummary.freeEnabled;
   const [workspaces, setWorkspaces] =
     useState<Gen2Workspace[]>(initialWorkspaces);
   const [workspaceSource, setWorkspaceSource] =
@@ -58,6 +68,24 @@ export function Gen2WorkspaceDashboard({
   const [filter, setFilter] = useState<"all" | "owned" | "shared">("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/gen2/compute");
+        if (res.ok) {
+          const data = (await res.json()) as Gen2OwnerComputeSummary;
+          if (!cancelled) setComputeSummary(data);
+        }
+      } catch {
+        // Keep existing
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaces.length]);
   if (workspaceSource !== initialWorkspaces) {
     setWorkspaceSource(initialWorkspaces);
     setWorkspaces(initialWorkspaces);
@@ -72,6 +100,10 @@ export function Gen2WorkspaceDashboard({
   const ownedCount = useMemo(() => {
     return workspaces.filter((w) => w.role === "owner").length;
   }, [workspaces]);
+
+  const canCreate =
+    (billing?.hasAccess !== false || isFreeEligible) &&
+    ownedCount < GEN2_MAX_OWNED_WORKSPACES;
 
   const displayName = useMemo(() => {
     const raw =
@@ -108,6 +140,11 @@ export function Gen2WorkspaceDashboard({
             <span className="gen2-stat-label">Active</span>
           </div>
 
+          <WorkspaceComputeStatsCards
+            computeSummary={computeSummary}
+            ownedCount={ownedCount}
+          />
+
           <div className="gen2-stat-card">
             {githubHandle ? (
               <span className="gen2-stat-value is-handle">@{githubHandle}</span>
@@ -127,12 +164,14 @@ export function Gen2WorkspaceDashboard({
         </div>
       </header>
 
-      {billing && !billing.hasAccess ? (
+      {billing && !billing.hasAccess && !isFreeEligible ? (
         <SubscribeCallout
           pastDue={billing.pastDue ?? false}
           priceUsdPerMonth={billing.priceUsdPerMonth}
         />
       ) : null}
+
+      <WorkspaceComputeAlerts computeSummary={computeSummary} />
 
       <div className="gen2-toolbar">
         <div className="gen2-toolbar-left">
@@ -220,6 +259,7 @@ export function Gen2WorkspaceDashboard({
           <CreateGen2WorkspaceForm
             githubConnected={github.connected}
             ownedWorkspaceCount={ownedCount}
+            computeSummary={computeSummary}
             appSlug={appSlug}
             connectGitHub={connectGitHub}
           />

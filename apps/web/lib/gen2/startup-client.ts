@@ -11,6 +11,8 @@ const MAX_BACKOFF_MS = 15_000;
 type WorkspaceResponse = {
   workspace?: Gen2WorkspaceDetail;
   error?: string;
+  code?: string;
+  activeWorkspace?: { id: string; name: string };
 };
 
 type ReadyGen2WorkspaceDetail = Gen2WorkspaceDetail & { status: "ready" } & (
@@ -19,12 +21,15 @@ type ReadyGen2WorkspaceDetail = Gen2WorkspaceDetail & { status: "ready" } & (
   );
 
 type StartupResult =
-  | { workspace: Gen2WorkspaceDetail; error?: never }
+  | { workspace: Gen2WorkspaceDetail; error?: never; conflict?: never }
   | {
       workspace?: never;
       error: string;
       /** The workspace owner has no active plan (HTTP 402); retrying won't help. */
       subscriptionRequired?: true;
+      conflict?: {
+        activeWorkspace: { id: string; name: string };
+      };
     };
 
 type StartupDependencies = {
@@ -146,6 +151,18 @@ export async function ensureGen2WorkspaceReady(
             return { error: "This workspace is being deleted." };
           }
         }
+        if (
+          response.status === 409 &&
+          payload.code === "free_workspace_active" &&
+          payload.activeWorkspace
+        ) {
+          return {
+            error:
+              payload.error ??
+              `“${payload.activeWorkspace.name}” is already active.`,
+            conflict: { activeWorkspace: payload.activeWorkspace },
+          };
+        }
         if (response.status === 402) {
           return {
             error:
@@ -198,6 +215,18 @@ export async function ensureGen2WorkspaceReady(
             fetcher,
           );
         if (!response.ok) {
+          if (
+            response.status === 409 &&
+            payload.code === "free_workspace_active" &&
+            payload.activeWorkspace
+          ) {
+            return {
+              error:
+                payload.error ??
+                `“${payload.activeWorkspace.name}” is already active.`,
+              conflict: { activeWorkspace: payload.activeWorkspace },
+            };
+          }
           if (response.status === 404 || response.status === 409) {
             return {
               error: payload.error ?? "This workspace is no longer available.",
