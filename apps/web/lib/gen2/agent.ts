@@ -20,6 +20,7 @@ import {
   pollCodexExecInSandbox,
   startCodexExecInSandbox,
 } from "../runtime/orchestrator-codex-exec";
+import { pollPersistedArmTurn } from "./arm-workspace-turn-poll";
 import { Gen2AccessError, Gen2LifecycleError } from "./errors";
 import { describeGen2RuntimeFailure } from "./instance";
 import { canRunGen2Agent } from "./agent-policy";
@@ -229,19 +230,24 @@ export async function pollGen2AgentTurn(input: {
   sessionId: string;
   after: number;
 }) {
-  await requireGen2Member(input.workspaceId, input.userId);
+  const membership = await requireGen2Member(input.workspaceId, input.userId);
 
   if (isGen2SupersetAgentSessionsEnabled()) {
     return pollGen2AgentTurnViaSuperset(input);
   }
 
   let result;
+  let armPoll: Awaited<ReturnType<typeof pollPersistedArmTurn>> | null = null;
   try {
-    result = await pollCodexExecInSandbox(
-      input.workspaceId,
-      input.sessionId,
-      input.after,
-    );
+    if (membership.runtimeProvider === "azure_arm")
+      armPoll = await pollPersistedArmTurn(input);
+    result =
+      armPoll ??
+      (await pollCodexExecInSandbox(
+        input.workspaceId,
+        input.sessionId,
+        input.after,
+      ));
   } catch (error) {
     logEvent("error", "gen2.agent.poll_failed", {
       detail: error instanceof Error ? error.message : "unknown",
@@ -255,12 +261,14 @@ export async function pollGen2AgentTurn(input: {
     throw new Gen2LifecycleError(describeGen2RuntimeFailure(error), 502);
   }
 
-  const persisted = await recordGen2TurnChunks({
-    sessionId: input.sessionId,
-    chunks: result.chunks,
-    exited: result.exited,
-    exitCode: result.exitCode,
-  });
+  const persisted = armPoll
+    ? armPoll.persisted
+    : await recordGen2TurnChunks({
+        sessionId: input.sessionId,
+        chunks: result.chunks,
+        exited: result.exited,
+        exitCode: result.exitCode,
+      });
 
   // The hosted ChatGPT seat and its refreshed auth cache belong to Codex
   // turns only; another provider's turn has neither to hand back.

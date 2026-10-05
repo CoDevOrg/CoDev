@@ -99,7 +99,7 @@ describe("Gen 2 workspace deletion", () => {
   it("readies the host before purging workspace data", async () => {
     await expect(
       deleteGen2Workspace("11111111-1111-4111-8111-111111111111", "user-1"),
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ accepted: false });
 
     expect(mocks.ensureHostReady).toHaveBeenCalledOnce();
     expect(mocks.ensureHostReady).toHaveBeenCalledWith(8_000);
@@ -135,7 +135,7 @@ describe("Gen 2 workspace deletion", () => {
 
     await expect(
       deleteGen2Workspace("11111111-1111-4111-8111-111111111111", "user-1"),
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ accepted: false });
 
     expect(mocks.ensureHostReady).toHaveBeenCalledWith(8_000);
     expect(mocks.destroySandbox).toHaveBeenCalledOnce();

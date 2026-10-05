@@ -95,7 +95,7 @@ describe("workspace connection", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(CONNECTION_CHECK_MS);
     });
-    expect(vi.mocked(fetch).mock.lastCall?.[1]?.method).toBe("POST");
+    expect(vi.mocked(fetch).mock.lastCall?.[1]?.method).toBe("GET");
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2 * CONNECTION_CHECK_MS);
     });

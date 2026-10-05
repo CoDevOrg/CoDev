@@ -20,6 +20,10 @@ export function useWorkspaceConnection(
   >("checking");
   const [error, setError] = useState("");
   const [subscriptionRequired, setSubscriptionRequired] = useState(false);
+  const [progress, setProgress] = useState<
+    Gen2WorkspaceDetail["runtimeStatus"] | null
+  >(null);
+  const startupAbort = useRef<AbortController | null>(null);
   const connectRef = useRef<Promise<boolean> | null>(null);
   const onConnectedRef = useRef(onConnected);
   const stateRef = useRef(state);
@@ -39,27 +43,36 @@ export function useWorkspaceConnection(
     setState("connecting");
     setError("");
     setSubscriptionRequired(false);
+    setProgress(null);
+    startupAbort.current = new AbortController();
     const promise = (async () => {
       try {
-        const result = await ensureGen2WorkspaceReady(workspaceId);
+        const result = await ensureGen2WorkspaceReady(workspaceId, {
+          signal: startupAbort.current!.signal,
+          isVisible: () => document.visibilityState === "visible",
+          onProgress: (workspace) => {
+            if (mounted.current && revision.current === attemptRevision)
+              setProgress(workspace.runtimeStatus);
+          },
+        });
         if (!mounted.current || revision.current !== attemptRevision)
           return false;
         if (result.workspace) {
           onConnectedRef.current(result.workspace);
-          activityAt.current = Date.now();
           setState("connected");
           return true;
         }
         setSubscriptionRequired(result.subscriptionRequired === true);
         setError(result.error ?? "Couldn't reconnect. Please try again.");
       } catch {
-        if (mounted.current)
+        if (mounted.current && revision.current === attemptRevision)
           setError("Couldn't reconnect. Check your connection and try again.");
       }
-      if (mounted.current) setState("disconnected");
+      if (mounted.current && revision.current === attemptRevision)
+        setState("disconnected");
       return false;
     })().finally(() => {
-      connectRef.current = null;
+      if (connectRef.current === promise) connectRef.current = null;
     });
     connectRef.current = promise;
     return promise;
@@ -67,7 +80,7 @@ export function useWorkspaceConnection(
 
   useEffect(() => {
     mounted.current = true;
-    activityAt.current = Date.now();
+    activityAt.current = 0;
     wakeOnOpen.current = true;
     if (!enabled) return;
     const abort = new AbortController();
@@ -148,6 +161,8 @@ export function useWorkspaceConnection(
       mounted.current = false;
       revision.current += 1;
       abort.abort();
+      startupAbort.current?.abort();
+      connectRef.current = null;
       clearInterval(timer);
       for (const event of ["keydown", "pointerdown", "wheel", "input"])
         window.removeEventListener(event, activity);
@@ -157,5 +172,5 @@ export function useWorkspaceConnection(
     };
   }, [enabled, reconnect, workspaceId]);
 
-  return { state, error, subscriptionRequired, reconnect };
+  return { state, error, subscriptionRequired, progress, reconnect };
 }

@@ -161,6 +161,29 @@ describe("syncStripeSubscription", () => {
     expect(mocks.written).toHaveLength(0);
   });
 
+  it("does not let a canceled Stripe event revoke a replacement manual plan", async () => {
+    mocks.selects.push(
+      [{ organizationId: "user-1" }],
+      [{ id: "user-1" }],
+      [
+        {
+          providerSubscriptionId: "sub_canceled",
+          provider: null,
+          status: "active",
+          planId: "pro",
+        },
+      ],
+    );
+    const result = await syncStripeSubscription(
+      subscription({ id: "sub_canceled", status: "canceled" }),
+    );
+    expect(result).toEqual({
+      synced: false,
+      reason: "superseded_subscription",
+    });
+    expect(mocks.written).toHaveLength(0);
+  });
+
   it("does nothing for an incomplete subscription or an unknown member", async () => {
     expect(
       await syncStripeSubscription(subscription({ status: "incomplete" })),

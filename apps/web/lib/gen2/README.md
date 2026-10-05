@@ -2,14 +2,16 @@
 
 CoDev's active workspace implementation.
 
-A gen 2 workspace is a **shareable Firecracker cloud instance** that you and
-Codex work on together — one filesystem, addressed by the chat and by the
-workbench alike.
+A Gen 2 workspace is a shareable cloud instance that you and Codex work on
+together. Existing workspaces use Firecracker. ARM workspaces use the same domain clients
+through a provider-aware, generation-bound signed tunnel adapter. Phase 4
+implementation is available; image publication and staging acceptance remain
+release gates.
 
 ## Runtime boundary
 
 The web workbench, terminal, Git operations, and agents all target the
-workspace's Firecracker guest. Gen 2 workspace membership is checked before
+workspace's selected guest. Gen 2 workspace membership is checked before
 the control plane calls the orchestrator. Historical Gen 1 data and database
 migrations are preserved; its application code has been removed.
 
@@ -18,7 +20,7 @@ migrations are preserved; its application code has been removed.
 Each workspace has many chats. Transcripts live in `gen2_chats` /
 `gen2_chat_messages`. Each turn is a fresh `codex exec --ephemeral --sandbox
 danger-full-access` with prior messages in the prompt, so a shareable machine
-never keeps a personal Codex thread or auth home. Firecracker is the isolation
+never keeps a personal Codex thread or auth home. The workspace VM is the isolation
 boundary.
 
 A turn runs on the provider the member picks (`provider` on the start request, Codex by default). `agent-command.ts` chooses `codex exec --json` or `claude -p --output-format stream-json`, and `turn-reducer.ts` reads the provider back from the stream itself, so neither the browser nor the `gen2_agent_turns` row needs to remember it.
@@ -29,7 +31,7 @@ items. Codex gives every item a stable `id` across
 stream on each poll is idempotent: cards update in place instead of
 duplicating, and React keys never churn.
 
-`turns.ts` accumulates that stream **server-side**. This is not an
+`turns.ts` and `turn-chunks.ts` accumulate that stream **server-side**. This is not an
 optimisation — `poll_codex_exec` in the guest discards every chunk at or below
 the acknowledged sequence, so a turn cannot be re-read after the fact. Whoever
 polls has to keep it. The poll route appends to `gen2_agent_turns` and writes
@@ -67,7 +69,19 @@ uses its own `gen2_*` tables and does not access the original `workspaces` table
 
 `compute-quota.ts` bills each running Gen 2 VM interval to its current workspace
 owner. The 1,000-minute allowance is shared across that owner's workspaces and
-resets at the UTC month boundary. `compute-reconcile.ts` checks runtime state
+resets at the UTC month boundary; application-wide admins are exempt from the
+limit and its enforcement stops. `compute-reconcile.ts` checks runtime state
 without waking guests, closes hibernated intervals, and stops active guests at
 the limit. The Cloudflare per-minute scheduled handler invokes the authenticated
 route; startup checks the same live interval total before provisioning.
+
+## ARM bridge and background turns
+
+`arm-workspace-initialize.ts` sends public repository sources or credential-free
+private snapshots to a protected new-disk initializer before startup publishes
+ready. Reopens never download or replace an initialized checkout.
+`arm-workspace-turn-poll.ts` serializes browser and cron polls with a persisted
+cursor from migration `0068`; only saved chunks are acknowledged to the guest.
+`arm-workspace-turns-reconcile.ts` drains turns without recent browser polling.
+Idle shutdown waits for both live agent activity to stop and pending transcripts
+to finish saving. See the Phase 4 review for image and staging requirements.

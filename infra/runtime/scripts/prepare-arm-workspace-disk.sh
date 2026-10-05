@@ -46,6 +46,11 @@ else
   [[ ${mode} == new ]] || { echo 'SAVED_METADATA_MISSING' >&2; exit 1; }
   install -d -o root -g root -m 0700 "${metadata}"
 fi
+if [[ ${mode} == new ]]; then
+  install -d -o root -g root -m 0700 "${metadata}/bootstrap"
+  touch "${metadata}/bootstrap/new-disk"
+  chmod 0600 "${metadata}/bootstrap/new-disk"
+fi
 chmod 00700 "${metadata}"
 install -d -o root -g root -m 0700 "${metadata}/superset"
 chmod 00700 "${metadata}/superset"

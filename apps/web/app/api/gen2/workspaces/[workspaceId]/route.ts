@@ -14,8 +14,11 @@ export const GET = withUser<Params>(async ({ user, params: { workspaceId } }) =>
 
 export const DELETE = withUser<Params>(
   async ({ user, params: { workspaceId } }) => {
-    await deleteGen2Workspace(workspaceId, user.id);
-    return Response.json({ success: true, workspaceId });
+    const result = await deleteGen2Workspace(workspaceId, user.id);
+    return Response.json(
+      { success: true, workspaceId, ...result },
+      { status: result.accepted ? 202 : 200 },
+    );
   },
   { errorStatus: 502 },
 );

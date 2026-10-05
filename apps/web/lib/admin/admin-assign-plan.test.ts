@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   selects: [] as unknown[][],
-  upserts: [] as unknown[],
+  upserts: [] as Array<{ values: unknown; update: unknown }>,
 }));
 
 vi.mock("../platform/database", () => ({
@@ -14,8 +14,8 @@ vi.mock("../platform/database", () => ({
     }),
     insert: () => ({
       values: (values: unknown) => ({
-        onConflictDoUpdate: async () => {
-          mocks.upserts.push(values);
+        onConflictDoUpdate: async ({ set }: { set: unknown }) => {
+          mocks.upserts.push({ values, update: set });
         },
       }),
     }),
@@ -40,6 +40,36 @@ describe("assignOrganizationPlan", () => {
     );
     await assignOrganizationPlan(input);
     expect(mocks.upserts).toHaveLength(1);
+    expect(mocks.upserts[0]?.update).toMatchObject({
+      planId: "pro",
+      status: "active",
+      provider: null,
+      currentPeriodEnd: null,
+      canceledAt: null,
+      cancelAtPeriodEnd: false,
+    });
+  });
+
+  it("detaches a canceled Stripe subscription when replacing it with a manual plan", async () => {
+    mocks.selects.push(
+      [{ id: "org-1" }],
+      [{ id: "pro" }],
+      [
+        {
+          provider: "stripe",
+          status: "canceled",
+          providerSubscriptionId: "sub_old",
+        },
+      ],
+    );
+    await assignOrganizationPlan(input);
+    expect(mocks.upserts[0]?.update).toMatchObject({
+      provider: null,
+      providerSubscriptionId: "sub_old",
+      currentPeriodEnd: null,
+      canceledAt: null,
+      cancelAtPeriodEnd: false,
+    });
   });
 
   it("refuses to overwrite a live Stripe subscription", async () => {

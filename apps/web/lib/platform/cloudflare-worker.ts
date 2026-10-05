@@ -4,6 +4,8 @@ import {
   takeCloudflareWebSocket,
 } from "./websocket";
 
+export { ArmWorkspaceLifecycleWorkflow } from "../runtime/arm-workspace-workflow";
+
 function isGen2WebSocketRequest(request: Request) {
   return (
     request.method === "GET" &&

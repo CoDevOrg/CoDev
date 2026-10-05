@@ -1,5 +1,7 @@
 "use client";
 
+import { workspaceStartupProgress } from "@/lib/gen2/startup-progress";
+
 import {
   type FormEvent,
   useCallback,
@@ -481,6 +483,9 @@ export function SupersetWorkspaceShell({
     status: "ready",
     repository: null,
     sandboxId: null,
+    runtimeProvider: "firecracker",
+    runtimeStatus: "stopped",
+    runtimeGeneration: 0,
     lastError: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -1841,7 +1846,7 @@ export function SupersetWorkspaceShell({
                             : connection.state === "disconnected"
                               ? connection.error ||
                                 "Your files are still saved."
-                              : "This usually takes a moment. Your files stay where you left them."
+                              : workspaceStartupProgress(connection.progress)
                         }
                         action={
                           connection.subscriptionRequired ? (

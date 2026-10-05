@@ -25,6 +25,8 @@ import {
   workspaceSchema,
   gen2WorkspaceCreateRequestSchema,
   gen2WorkspaceSchema,
+  gen2RuntimeOperationRequestSchema,
+  gen2RuntimeOperationResponseSchema,
   gen2AgentStartRequestSchema,
   gen2AgentPollResponseSchema,
   gen2ChatAppendRequestSchema,
@@ -529,7 +531,39 @@ describe("gen2 workspace contracts", () => {
         createdAt: "2026-09-20T20:00:00.000Z",
         updatedAt: "2026-09-20T20:00:00.000Z",
       }),
-    ).toMatchObject({ status: "ready", role: "owner" });
+    ).toMatchObject({
+      status: "ready",
+      role: "owner",
+      runtimeProvider: "firecracker",
+      runtimeStatus: "stopped",
+      runtimeGeneration: 0,
+    });
+  });
+
+  it("shares idempotent runtime operation shapes without Azure resource IDs", () => {
+    expect(
+      gen2RuntimeOperationRequestSchema.parse({ idempotencyKey: "start-1" }),
+    ).toEqual({ idempotencyKey: "start-1" });
+    const workspace = gen2WorkspaceSchema.parse({
+      id,
+      name: "Studio",
+      status: "provisioning",
+      sandboxId: null,
+      lastError: null,
+      role: "owner",
+      runtimeProvider: "azure_arm",
+      runtimeStatus: "booting",
+      runtimeGeneration: 3,
+      createdAt: "2026-09-20T20:00:00.000Z",
+      updatedAt: "2026-09-20T20:00:00.000Z",
+    });
+    const response = gen2RuntimeOperationResponseSchema.parse({
+      accepted: true,
+      operationId: id,
+      workspace,
+      vmResourceId: "/subscriptions/private",
+    });
+    expect(response).not.toHaveProperty("vmResourceId");
   });
 
   it("accepts a turn start for each agent and a poll without auth material", () => {

@@ -8,15 +8,17 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/http/api-route", () => ({
   withUser: (
     handler: (input: {
+      request: Request;
       user: { id: string };
       params: { workspaceId: string };
     }) => Promise<Response>,
   ) => {
     return async (
-      _request: Request,
+      request: Request,
       context: { params: Promise<{ workspaceId: string }> },
     ) =>
       handler({
+        request,
         user: { id: "user-1" },
         params: await context.params,
       });
@@ -63,8 +65,17 @@ describe("gen2 instance route", () => {
     );
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ workspace });
-    expect(mocks.ensure).toHaveBeenCalledWith(workspaceId, "user-1");
+    await expect(response.json()).resolves.toEqual({
+      accepted: true,
+      operationId: null,
+      workspace,
+    });
+    expect(mocks.ensure).toHaveBeenCalledWith(
+      workspaceId,
+      "user-1",
+      undefined,
+      expect.any(String),
+    );
     expect(mocks.detail).toHaveBeenCalledWith(workspaceId, "user-1");
   });
 
@@ -91,6 +102,8 @@ describe("gen2 instance route", () => {
 
     expect(response.status).toBe(202);
     await expect(response.json()).resolves.toEqual({
+      accepted: true,
+      operationId: null,
       workspace: { ...workspace, status: "provisioning", sandboxId: null },
     });
   });
@@ -114,7 +127,31 @@ describe("gen2 instance route", () => {
 
     expect(response.status).toBe(202);
     await expect(response.json()).resolves.toEqual({
+      accepted: true,
+      operationId: null,
       workspace: { ...workspace, status: "stopped", sandboxId: null },
     });
+  });
+
+  it("accepts an Azure workspace as ready without a Firecracker sandbox id", async () => {
+    mocks.ensure.mockResolvedValueOnce({ operationId: null });
+    mocks.detail.mockResolvedValueOnce({
+      ...workspace,
+      status: "ready",
+      sandboxId: null,
+      runtimeProvider: "azure_arm",
+      runtimeStatus: "ready",
+      runtimeGeneration: 2,
+    });
+
+    const response = await POST(
+      new Request(
+        `https://codev.test/api/gen2/workspaces/${workspaceId}/instance`,
+        { method: "POST" },
+      ),
+      { params: Promise.resolve({ workspaceId }) },
+    );
+
+    expect(response.status).toBe(200);
   });
 });

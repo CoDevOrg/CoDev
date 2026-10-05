@@ -15,7 +15,12 @@ const mocks = vi.hoisted(() => ({
   currentStatus: "pending",
   memberStatus: "pending",
   memberRole: "owner",
+  memberRuntimeProvider: "firecracker",
   memberLastError: null as string | null,
+  queueAzureWorkspaceDelete: vi.fn(async (...args: unknown[]) => {
+    void args;
+    return { operationId: "operation-1", generation: 1 };
+  }),
   createInviteToken: vi.fn(() => "share-token"),
   hashInviteToken: vi.fn((token: string) => `hash:${token}`),
   ensureHostReady: vi.fn(async () => {
@@ -46,6 +51,11 @@ vi.mock("../runtime/orchestrator-health", () => ({
 vi.mock("../runtime/orchestrator-sandbox", () => ({
   destroySandbox: mocks.destroySandbox,
   discardSandboxSnapshot: mocks.discardSandboxSnapshot,
+}));
+
+vi.mock("./runtime-operations", () => ({
+  queueAzureWorkspaceDelete: (...args: unknown[]) =>
+    mocks.queueAzureWorkspaceDelete(...args),
 }));
 
 vi.mock("../platform/database", () => {
@@ -138,6 +148,7 @@ vi.mock("../platform/database", () => {
                   sandboxId: null,
                   lastError: mocks.memberLastError,
                   role: mocks.memberRole,
+                  runtimeProvider: mocks.memberRuntimeProvider,
                   repository: null,
                   repositoryPrivate: false,
                   defaultBranch: null,
@@ -175,7 +186,9 @@ describe("gen2 workspaces", () => {
     mocks.currentStatus = "pending";
     mocks.memberStatus = "pending";
     mocks.memberRole = "owner";
+    mocks.memberRuntimeProvider = "firecracker";
     mocks.memberLastError = null;
+    mocks.queueAzureWorkspaceDelete.mockClear();
     vi.clearAllMocks();
   });
 
@@ -299,6 +312,18 @@ describe("gen2 workspaces", () => {
       deleteGen2Workspace("11111111-1111-4111-8111-111111111111", "user-1"),
     ).rejects.toMatchObject({ status: 409 });
     expect(mocks.destroySandbox).not.toHaveBeenCalled();
+  });
+
+  it("does not queue ARM workspace deletion for a non-owner member", async () => {
+    mocks.memberRuntimeProvider = "azure_arm";
+    mocks.memberRole = "editor";
+
+    await expect(
+      deleteGen2Workspace("11111111-1111-4111-8111-111111111111", "user-2"),
+    ).rejects.toMatchObject({ status: 403 });
+
+    expect(mocks.queueAzureWorkspaceDelete).not.toHaveBeenCalled();
+    expect(mocks.events).toHaveLength(0);
   });
 
   it("does not surface the database query when creation fails", async () => {
