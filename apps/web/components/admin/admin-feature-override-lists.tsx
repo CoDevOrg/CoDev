@@ -44,7 +44,6 @@ function describeChange(event: AdminFeatureAccessData["auditEvents"][number]) {
   }`;
 }
 
-
 export function AdminFeatureOverrideLists({
   data,
 }: {

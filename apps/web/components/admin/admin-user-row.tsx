@@ -1,7 +1,12 @@
 "use client";
 
 import Image from "next/image";
-import { MoreHorizontal, ShieldAlert, ShieldCheck, Sparkles } from "lucide-react";
+import {
+  MoreHorizontal,
+  ShieldAlert,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -76,7 +81,9 @@ export function AdminUserRow({
         <Badge
           variant={isPro ? "default" : "outline"}
           className={`text-[10px] font-medium ${
-            isPro ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+            isPro
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground"
           }`}
         >
           {isPro ? "Individual Pro" : "Free"}

@@ -18,7 +18,8 @@ export function AdminOrganizationControls({
           Organizations & Entitlements
         </h2>
         <p className="text-xs text-muted-foreground">
-          Set baseline organization plans, configure member roles, and manage Hosted Codex overrides.
+          Set baseline organization plans, configure member roles, and manage
+          Hosted Codex overrides.
         </p>
       </div>
 

@@ -30,7 +30,6 @@ import type { AdminFeatureAccessData } from "@/lib/admin/admin-feature-access";
 
 import { AdminNotice } from "./admin-notice";
 
-
 export function AdminFeatureControls({
   data,
 }: {

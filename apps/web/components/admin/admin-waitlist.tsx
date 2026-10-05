@@ -3,14 +3,23 @@
 import { useMemo, useState, useTransition } from "react";
 import { Clock, Search, CheckCircle2, XCircle } from "lucide-react";
 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { declineWaitlistEntry, inviteWaitlistEntry } from "@/app/admin/actions";
 import { AdminNotice, type AdminNoticeResult } from "./admin-notice";
 import { formatDate, formatNumber } from "./admin-formatters";
-import type { AccessRequestRow, WaitlistActionResult } from "@/lib/admin/access-requests";
+import type {
+  AccessRequestRow,
+  WaitlistActionResult,
+} from "@/lib/admin/access-requests";
 
 type Filter = "all" | "pending" | "invited" | "accepted" | "declined";
 
@@ -44,7 +53,10 @@ export function AdminWaitlist({ rows }: { rows: AccessRequestRow[] }) {
     });
   }, [rows, filter, search]);
 
-  function run(id: string, action: (id: string) => Promise<WaitlistActionResult>) {
+  function run(
+    id: string,
+    action: (id: string) => Promise<WaitlistActionResult>,
+  ) {
     setPendingId(id);
     setNotice(null);
     startTransition(async () => {
@@ -54,7 +66,13 @@ export function AdminWaitlist({ rows }: { rows: AccessRequestRow[] }) {
     });
   }
 
-  const filters: Filter[] = ["all", "pending", "invited", "accepted", "declined"];
+  const filters: Filter[] = [
+    "all",
+    "pending",
+    "invited",
+    "accepted",
+    "declined",
+  ];
 
   return (
     <Card className="border-border/80 bg-card/60 backdrop-blur-xs">
@@ -65,10 +83,14 @@ export function AdminWaitlist({ rows }: { rows: AccessRequestRow[] }) {
               <Clock className="size-4 text-primary" /> Waitlist Applications
             </CardTitle>
             <CardDescription>
-              Registration is currently gated. Review access requests and launch planning.
+              Registration is currently gated. Review access requests and launch
+              planning.
             </CardDescription>
           </div>
-          <Badge variant="outline" className="w-fit text-xs text-muted-foreground">
+          <Badge
+            variant="outline"
+            className="w-fit text-xs text-muted-foreground"
+          >
             {filtered.length} of {rows.length} applications
           </Badge>
         </div>
@@ -124,7 +146,10 @@ export function AdminWaitlist({ rows }: { rows: AccessRequestRow[] }) {
             <tbody className="divide-y divide-border/40">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-muted-foreground">
+                  <td
+                    colSpan={6}
+                    className="py-8 text-center text-muted-foreground"
+                  >
                     No waitlist requests found for this filter.
                   </td>
                 </tr>
@@ -145,7 +170,10 @@ export function AdminWaitlist({ rows }: { rows: AccessRequestRow[] }) {
                         </span>
                       </div>
                     </td>
-                    <td className="px-3 py-2.5 text-muted-foreground max-w-xs truncate" title={row.building ?? undefined}>
+                    <td
+                      className="px-3 py-2.5 text-muted-foreground max-w-xs truncate"
+                      title={row.building ?? undefined}
+                    >
                       {row.building || "—"}
                     </td>
                     <td className="px-3 py-2.5">
@@ -192,7 +220,9 @@ export function AdminWaitlist({ rows }: { rows: AccessRequestRow[] }) {
                           </Button>
                         </div>
                       ) : (
-                        <span className="text-muted-foreground text-[11px]">—</span>
+                        <span className="text-muted-foreground text-[11px]">
+                          —
+                        </span>
                       )}
                     </td>
                   </tr>
