@@ -46,12 +46,14 @@ test("disk initialization refuses unidentified or already initialized saved data
   );
 });
 
-test("connection service keeps the connector credential out of process arguments", () => {
+test("connection setup waits for dpkg and keeps connector credentials out of process arguments", () => {
   const script = read("./scripts/install-arm-workspace-connection.sh");
   assert.match(script, /O_NOFOLLOW/);
   assert.match(script, /--token-file \/etc\/codev\/tunnel-token/);
   assert.match(script, /codev-local-api-guard.service/);
   assert.match(script, /sha256sum --check --status/);
+  assert.match(script, /lock was locked by another process/);
+  assert.match(script, /SECONDS >= install_deadline/);
   assert.doesNotMatch(script, /--token \$|set -x/);
 });
 

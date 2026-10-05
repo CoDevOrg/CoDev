@@ -19,12 +19,21 @@ for path, value in [("arm-runtime.json", json.dumps(data)), ("tunnel-token", tok
 '
 
 readonly package=/var/tmp/codev-cloudflared-arm64.deb
+readonly install_log=/var/tmp/codev-cloudflared-dpkg.log
 curl --fail --silent --show-error --location --max-time 120 \
   https://github.com/cloudflare/cloudflared/releases/download/2026.9.3/cloudflared-linux-arm64.deb \
   --output "${package}"
 echo "bcce0111878f13d26e66b1d2ea7f270c8bde4bd549e32ce74d32474521583ca3  ${package}" | sha256sum --check --status
-dpkg -i "${package}" >/dev/null
-rm -f "${package}"
+install_deadline=$((SECONDS + 300))
+until dpkg -i "${package}" >"${install_log}" 2>&1; do
+  if ! grep -q "lock was locked by another process" "${install_log}" ||
+    ((SECONDS >= install_deadline)); then
+    cat "${install_log}" >&2
+    exit 1
+  fi
+  sleep 5
+done
+rm -f "${install_log}" "${package}"
 
 cat >/etc/systemd/system/codev-arm-gateway.service <<'UNIT'
 [Unit]
