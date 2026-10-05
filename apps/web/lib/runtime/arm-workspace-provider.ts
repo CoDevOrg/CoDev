@@ -1,6 +1,9 @@
 import "server-only";
 
 import { createClientSecretCredential } from "./azure";
+import { readArmWorkspaceConfig } from "./arm-workspace-config";
+import { ArmWorkspaceRuntimeError } from "./arm-workspace-error";
+export { ArmWorkspaceRuntimeError } from "./arm-workspace-error";
 
 import armDiskPreparation from "../../../../infra/runtime/scripts/prepare-arm-workspace-disk.sh?raw";
 import armConnectionInstaller from "../../../../infra/runtime/scripts/install-arm-workspace-connection.sh?raw";
@@ -43,13 +46,6 @@ export type ArmWorkspaceProgress = (
   }>,
 ) => Promise<void>;
 
-export class ArmWorkspaceRuntimeError extends Error {
-  constructor(readonly code: string) {
-    super(code);
-    this.name = "ArmWorkspaceRuntimeError";
-  }
-}
-
 function fail(code: string): never {
   throw new ArmWorkspaceRuntimeError(code);
 }
@@ -72,38 +68,6 @@ function checkTags(
 let cachedCredential:
   | ReturnType<typeof createClientSecretCredential>
   | undefined;
-
-function readArmWorkspaceConfig() {
-  const environment = process.env as Record<string, string | undefined>;
-  const required = (name: string) => {
-    const value = environment[name]?.trim();
-    if (!value) fail("RUNTIME_CONFIGURATION_MISSING");
-    return value;
-  };
-  const config = {
-    tenantId: required("AZURE_TENANT_ID"),
-    clientId: required("AZURE_CLIENT_ID"),
-    clientSecret: required("AZURE_CLIENT_SECRET"),
-    subscriptionId: required("AZURE_SUBSCRIPTION_ID"),
-    resourceGroup: required("AZURE_RESOURCE_GROUP"),
-    imageVersionId: required("ARM_WORKSPACE_IMAGE_VERSION_ID"),
-    sshPublicKey: required("ARM_WORKSPACE_SSH_PUBLIC_KEY"),
-    signingPrivateKey: required("ARM_WORKSPACE_SIGNING_PRIVATE_KEY"),
-    signingPublicKey: required("ARM_WORKSPACE_SIGNING_PUBLIC_KEY"),
-    cloudflareToken: required("CLOUDFLARE_API_TOKEN"),
-  };
-  if (
-    !config.resourceGroup.startsWith("codev-arm-workspace-") ||
-    !config.imageVersionId.startsWith(
-      `/subscriptions/${config.subscriptionId}/resourceGroups/${config.resourceGroup}/providers/Microsoft.Compute/galleries/`,
-    ) ||
-    !config.signingPublicKey.includes("BEGIN PUBLIC KEY") ||
-    !config.sshPublicKey.startsWith("ssh-")
-  ) {
-    fail("RUNTIME_CONFIGURATION_INVALID");
-  }
-  return config;
-}
 
 function getCredential() {
   if (cachedCredential) return cachedCredential;
@@ -207,7 +171,7 @@ async function armRequest(
   method = "GET",
   body?: unknown,
   allowNotFound = false,
-) {
+): Promise<unknown> {
   const result = await armFetch(apiUrl(path, version), method, body);
   if (allowNotFound && result.response.status === 404) return null;
   if (
@@ -215,7 +179,9 @@ async function armRequest(
     result.response.headers.has("azure-asyncoperation") ||
     (result.response.status === 201 && result.response.headers.has("location"))
   ) {
-    return pollArmOperation(result.response, result.payload);
+    const completed = await pollArmOperation(result.response, result.payload);
+    // Azure operation endpoints return status, not the created resource.
+    return method === "PUT" ? armRequest(path, version) : completed;
   }
   if (!result.response.ok)
     fail(errorCode(result.payload, result.response.status));
@@ -768,16 +734,18 @@ async function waitForVmReady(
       COMPUTE_API,
     )) as {
       tags?: Record<string, string>;
-      instanceView?: {
-        statuses?: Array<{ code?: string }>;
-        vmAgent?: { statuses?: Array<{ code?: string }> };
+      properties?: {
+        instanceView?: {
+          statuses?: Array<{ code?: string }>;
+          vmAgent?: { statuses?: Array<{ code?: string }> };
+        };
       };
     };
     checkTags(vm, workspaceId, generation);
-    const power = vm.instanceView?.statuses?.find((status) =>
+    const power = vm.properties?.instanceView?.statuses?.find((status) =>
       status.code?.startsWith("PowerState/"),
     )?.code;
-    const agent = vm.instanceView?.vmAgent?.statuses?.some(
+    const agent = vm.properties?.instanceView?.vmAgent?.statuses?.some(
       (status) => status.code === "ProvisioningState/succeeded",
     );
     if (power === "PowerState/running" && agent) return;
@@ -870,8 +838,8 @@ async function prepareDisk(
     generation,
     armDiskPreparation,
     [
-      { name: "mode", value: mode },
-      { name: "expected_uuid", value: foundUuid ?? "" },
+      { name: "", value: mode },
+      { name: "", value: foundUuid ?? "" },
     ],
   );
   const uuid = output.match(/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}/)?.[0];
@@ -931,9 +899,9 @@ async function waitForHealth(
   heartbeat: () => Promise<void>,
 ) {
   const deadline = Date.now() + 3 * 60_000;
-  const authorization = `Bearer ${await capabilityToken(routeHost, workspaceId, generation)}`;
   while (Date.now() < deadline) {
     try {
+      const authorization = `Bearer ${await capabilityToken(routeHost, workspaceId, generation)}`;
       const response = await fetch(`https://${routeHost}/v1/health`, {
         headers: { authorization },
         redirect: "error",
@@ -980,10 +948,10 @@ async function deallocateVm(
       true,
     ) as Promise<{
       tags?: Record<string, string>;
-      instanceView?: { statuses?: Array<{ code?: string }> };
+      properties?: { instanceView?: { statuses?: Array<{ code?: string }> } };
     } | null>;
   const powerState = (vm: Awaited<ReturnType<typeof readVm>>) =>
-    vm?.instanceView?.statuses?.find((status) =>
+    vm?.properties?.instanceView?.statuses?.find((status) =>
       status.code?.startsWith("PowerState/"),
     )?.code;
   let vm = await readVm();
@@ -1140,11 +1108,11 @@ export class ArmWorkspaceProvider {
         COMPUTE_API,
       )) as {
         tags?: Record<string, string>;
-        instanceView?: { statuses?: Array<{ code?: string }> };
+        properties?: { instanceView?: { statuses?: Array<{ code?: string }> } };
       };
       checkTags(vm, workspaceId, generation);
       return (
-        vm.instanceView?.statuses?.some(
+        vm.properties?.instanceView?.statuses?.some(
           (status) => status.code === "PowerState/running",
         ) ?? false
       );

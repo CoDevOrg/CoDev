@@ -7,10 +7,10 @@ it("signs workspace commands with exact method, raw path, bytes, identity and ex
   const { privateKey, publicKey } = generateKeyPairSync("ed25519");
   const values = {
     AZURE_TENANT_ID: "tenant",
-    AZURE_CLIENT_ID: "client",
-    AZURE_CLIENT_SECRET: "fixture",
+    ARM_WORKSPACE_AZURE_CLIENT_ID: "client",
+    ARM_WORKSPACE_AZURE_CLIENT_SECRET: "fixture",
     AZURE_SUBSCRIPTION_ID: "subscription",
-    AZURE_RESOURCE_GROUP: "codev-arm-workspace-test",
+    ARM_WORKSPACE_RESOURCE_GROUP: "codev-arm-workspace-test",
     ARM_WORKSPACE_IMAGE_VERSION_ID:
       "/subscriptions/subscription/resourceGroups/codev-arm-workspace-test/providers/Microsoft.Compute/galleries/gallery/images/image/versions/1.0.10",
     ARM_WORKSPACE_SSH_PUBLIC_KEY: "ssh-ed25519 fixture",
