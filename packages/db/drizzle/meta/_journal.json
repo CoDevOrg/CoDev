@@ -484,6 +484,13 @@
       "when": 1791156014813,
       "tag": "0068_gen2_arm_turn_cursor",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1791173574899,
+      "tag": "0069_gen2_free_owner_accounting",
+      "breakpoints": true
     }
   ]
 }

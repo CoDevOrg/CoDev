@@ -83,3 +83,21 @@ and Reader only on the ARM gallery image definition in the build group.
 It has no IAM permissions. Its appended client credential expires on
 2027-01-03 and must be rotated in the Worker secret store before that date.
 A successful staging lifecycle canary is still required before member enablement.
+
+## Free ARM entitlement rollout
+
+`GEN2_FREE_ARM_ENABLED` and `GEN2_FREE_ARM_OWNER_IDS` are non-secret rollout
+configuration. Cloudflare declares text bindings from its build environment in
+`cloudflare.config.ts`; rebuilding is required to change them. Vercel reads its
+project environment. Both default to disabled/empty. No production flag was
+changed by Phase 5. Enable an owner allowlist only after migration `0069`, Phase 6
+controls, and release gates are ready.
+
+A trusted cost collector can POST complete cumulative USD owner/month snapshots
+to `/api/gen2/compute/reconcile` using the platform's existing `CRON_SECRET` bearer
+credential. The schema requires compute, storage, networking, operations, and
+other costs plus an observation timestamp. Do not expose this credential to
+members. This ingestion route does not provision a collector: configure one
+before enablement. Missing snapshots or snapshots older than 24 hours block free
+compute; the existing every-minute cron also shuts down blocked owners' active
+workspaces. See the [Phase 5 review](./arm-workspace-free-tier-phase-5.md).

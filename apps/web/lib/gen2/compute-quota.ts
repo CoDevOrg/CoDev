@@ -4,14 +4,17 @@ import { and, eq, gt, isNull, lt, or } from "drizzle-orm";
 import { schema } from "@codev/db";
 
 import { isUserAdmin } from "../admin/admin";
+import { getWorkspaceOwnerEntitlement } from "../billing/workspace-entitlement";
+import type { ComputeDatabase } from "./compute-database";
 import { getDatabase } from "../platform/database";
 import { fakeGuestEnabled } from "../runtime/fake-guest";
 import { getHostState } from "../runtime/host";
 import { OrchestratorError } from "../runtime/orchestrator-request";
 import { getSandbox } from "../runtime/orchestrator-sandbox";
+import { ArmWorkspaceProvider } from "../runtime/arm-workspace-provider";
 import { Gen2LifecycleError } from "./errors";
 
-export const MONTHLY_COMPUTE_LIMIT_MS = 1_000 * 60_000;
+export { GEN2_PAID_MONTHLY_COMPUTE_LIMIT_MS as MONTHLY_COMPUTE_LIMIT_MS } from "../billing/config";
 
 export async function ownerHasUnlimitedCompute(ownerId: string) {
   return isUserAdmin(ownerId);
@@ -34,9 +37,13 @@ export function intervalWithinMonth(startedAt: Date, endedAt: Date, now: Date) {
   );
 }
 
-export async function usedComputeMs(ownerId: string, now = new Date()) {
+export async function usedComputeMs(
+  ownerId: string,
+  now = new Date(),
+  db: ComputeDatabase = getDatabase(),
+) {
   const month = computeMonth(now);
-  const intervals = await getDatabase()
+  const intervals = await db
     .select({
       startedAt: schema.gen2ComputeSessions.startedAt,
       endedAt: schema.gen2ComputeSessions.endedAt,
@@ -63,11 +70,13 @@ export async function usedComputeMs(ownerId: string, now = new Date()) {
 export async function assertComputeAvailable(
   ownerId: string,
   now = new Date(),
+  db: ComputeDatabase = getDatabase(),
 ) {
-  if (await ownerHasUnlimitedCompute(ownerId)) return;
-  if ((await usedComputeMs(ownerId, now)) < MONTHLY_COMPUTE_LIMIT_MS) return;
+  const policy = await getWorkspaceOwnerEntitlement(ownerId, db);
+  if (policy.monthlyLimitMs === null) return;
+  if ((await usedComputeMs(ownerId, now, db)) < policy.monthlyLimitMs) return;
   throw new Gen2LifecycleError(
-    "You've used your 1,000 workspace minutes for this month. Your work is saved; you can reconnect next month.",
+    `You've used your ${policy.monthlyLimitMs / 60_000} workspace minutes for this month. Your work is saved; you can reconnect next month.`,
     429,
   );
 }
@@ -89,7 +98,12 @@ export async function startComputeSession(
 ) {
   await getDatabase()
     .insert(schema.gen2ComputeSessions)
-    .values({ workspaceId, ownerId, startedAt })
+    .values({
+      workspaceId,
+      ownerId,
+      startedAt,
+      lastObservedAllocatedAt: startedAt,
+    })
     .onConflictDoNothing();
 }
 
@@ -124,6 +138,24 @@ export async function reconcileWorkspaceComputeSession(
     )
     .limit(1);
   if (!session) return;
+  const [workspace] = await getDatabase()
+    .select()
+    .from(schema.gen2Workspaces)
+    .where(eq(schema.gen2Workspaces.id, workspaceId))
+    .limit(1);
+  if (workspace?.runtimeProvider === "azure_arm") {
+    const state = await new ArmWorkspaceProvider().powerState(
+      workspaceId,
+      workspace.runtimeGeneration,
+      workspace.runtimeVmResourceId,
+    );
+    if (!state || state === "PowerState/deallocated")
+      await endComputeSession(
+        workspaceId,
+        session.lastObservedAllocatedAt ?? session.startedAt,
+      );
+    return;
+  }
   const hostStopped =
     !fakeGuestEnabled() &&
     (await getHostState().then(
@@ -149,9 +181,7 @@ export async function reconcileWorkspaceComputeSession(
   );
 }
 
-type ComputeTransaction = Parameters<
-  Parameters<ReturnType<typeof getDatabase>["transaction"]>[0]
->[0];
+type ComputeTransaction = import("./compute-database").ComputeTransaction;
 
 export async function transferActiveComputeSession(
   transaction: ComputeTransaction,
@@ -170,7 +200,10 @@ export async function transferActiveComputeSession(
     )
     .returning({ id: schema.gen2ComputeSessions.id });
   if (!ended.length) return;
-  await transaction
-    .insert(schema.gen2ComputeSessions)
-    .values({ workspaceId, ownerId: newOwnerId, startedAt: now });
+  await transaction.insert(schema.gen2ComputeSessions).values({
+    workspaceId,
+    ownerId: newOwnerId,
+    startedAt: now,
+    lastObservedAllocatedAt: now,
+  });
 }

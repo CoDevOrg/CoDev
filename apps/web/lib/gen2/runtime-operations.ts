@@ -1,4 +1,7 @@
 import "server-only";
+import { enforceArmComputeEntitlement } from "./arm-compute-policy";
+import { releaseFreeWorkspaceCompute } from "./free-compute-release";
+import { lockComputeOwners } from "./compute-database";
 
 import { env as cloudflareEnv } from "cloudflare:workers";
 import type { WorkflowStep } from "cloudflare:workers";
@@ -281,6 +284,7 @@ async function claimOperation(
     .where(
       and(
         eq(schema.gen2Workspaces.id, row.id),
+        eq(schema.gen2Workspaces.ownerId, row.ownerId),
         eq(schema.gen2Workspaces.runtimeGeneration, row.runtimeGeneration),
         eq(schema.gen2Workspaces.runtimeStatus, row.runtimeStatus),
         eq(schema.gen2Workspaces.status, row.status as Gen2WorkspaceStatus),
@@ -353,9 +357,15 @@ export async function queueAzureWorkspaceStart(
 export async function queueAzureWorkspaceStop(
   workspaceId: string,
   idempotencyKey: string,
+  expectedOwnerId?: string,
 ) {
   for (let attempt = 0; attempt < 3; attempt++) {
     const row = await loadRuntimeRow(workspaceId);
+    if (expectedOwnerId && row.ownerId !== expectedOwnerId)
+      throw new Gen2LifecycleError(
+        "Only the current owner can stop this workspace.",
+        403,
+      );
     const joined = await joinExistingOperation(row, "stop");
     if (joined) return joined;
     if (row.status === "stopped") return null;
@@ -376,9 +386,15 @@ export async function queueAzureWorkspaceStop(
 export async function queueAzureWorkspaceDelete(
   workspaceId: string,
   idempotencyKey: string,
+  expectedOwnerId?: string,
 ) {
   for (let attempt = 0; attempt < 3; attempt++) {
     const row = await loadRuntimeRow(workspaceId);
+    if (expectedOwnerId && row.ownerId !== expectedOwnerId)
+      throw new Gen2LifecycleError(
+        "Only the current owner can delete this workspace.",
+        403,
+      );
     const joined = await joinExistingOperation(row, "delete");
     if (joined) return joined;
     const claimed = await claimOperation(row, "delete", idempotencyKey);
@@ -445,7 +461,7 @@ async function withWorkflowDatabase<T>(
 }
 
 async function currentOperation(
-  db: ReturnType<typeof createDatabase>["db"],
+  db: WorkflowDatabase | WorkflowTransaction,
   params: ArmWorkspaceWorkflowParams,
 ) {
   const [row] = await db
@@ -516,11 +532,20 @@ async function updateProgress(
     .where(operationWhere(params))
     .returning({ id: schema.gen2Workspaces.id });
   if (!updated.length) throw new ArmWorkspaceRuntimeError("STALE_OPERATION");
+  if (resources.vmId) {
+    const state = await new ArmWorkspaceProvider().powerState(
+      row.id,
+      params.resourceGeneration,
+      resources.vmId,
+    );
+    if (state && state !== "PowerState/deallocated")
+      await startComputeSession(db, row);
+  }
   return row;
 }
 
 async function startComputeSession(
-  db: WorkflowTransaction,
+  db: WorkflowTransaction | WorkflowDatabase,
   row: Awaited<ReturnType<typeof currentOperation>>,
 ) {
   await db
@@ -529,11 +554,15 @@ async function startComputeSession(
       workspaceId: row.id,
       ownerId: row.ownerId,
       startedAt: new Date(),
+      lastObservedAllocatedAt: new Date(),
     })
     .onConflictDoNothing();
 }
 
-async function endComputeSession(db: WorkflowTransaction, workspaceId: string) {
+async function endComputeSession(
+  db: WorkflowTransaction | WorkflowDatabase,
+  workspaceId: string,
+) {
   await db
     .update(schema.gen2ComputeSessions)
     .set({ endedAt: new Date() })
@@ -578,6 +607,7 @@ async function executeOperation(
     const provider = new ArmWorkspaceProvider();
     const row = await currentOperation(db, params);
     if (params.kind === "start") {
+      await enforceArmComputeEntitlement(db, row.id, row.ownerId);
       if (params.cleanupGeneration !== null) {
         await provider.stop({
           workspaceId: row.id,
@@ -591,6 +621,7 @@ async function executeOperation(
           .where(operationWhere(params))
           .returning({ id: schema.gen2Workspaces.id });
         if (!cleaned) throw new ArmWorkspaceRuntimeError("STALE_OPERATION");
+        await endComputeSession(db, row.id);
       }
       const progress: ArmWorkspaceProgress = (status, resources) =>
         updateProgress(db, params, status, resources).then(() => undefined);
@@ -603,6 +634,8 @@ async function executeOperation(
         },
         progress,
       );
+      const currentOwner = await currentOperation(db, params);
+      await enforceArmComputeEntitlement(db, row.id, currentOwner.ownerId);
       await initializeGen2ArmWorkspace(db, {
         workspaceId: row.id,
         generation: params.resourceGeneration,
@@ -610,6 +643,16 @@ async function executeOperation(
       });
       await currentOperation(db, params);
       const result = await db.transaction(async (transaction) => {
+        const current = await currentOperation(transaction, params);
+        await lockComputeOwners(transaction, [current.ownerId]);
+        const checked = await currentOperation(transaction, params);
+        if (checked.ownerId !== current.ownerId)
+          throw new ArmWorkspaceRuntimeError("STALE_OPERATION");
+        await enforceArmComputeEntitlement(
+          transaction,
+          checked.id,
+          checked.ownerId,
+        );
         const [completed] = await transaction
           .update(schema.gen2Workspaces)
           .set({
@@ -632,7 +675,7 @@ async function executeOperation(
           .where(operationWhere(params))
           .returning({ id: schema.gen2Workspaces.id });
         if (!completed) throw new ArmWorkspaceRuntimeError("STALE_OPERATION");
-        await startComputeSession(transaction, row);
+        await startComputeSession(transaction, checked);
         return completed;
       });
       logEvent("info", "gen2.azure_runtime.ready", {
@@ -673,6 +716,7 @@ async function executeOperation(
           .returning({ id: schema.gen2Workspaces.id });
         if (!completed) throw new ArmWorkspaceRuntimeError("STALE_OPERATION");
         await endComputeSession(transaction, row.id);
+        await releaseFreeWorkspaceCompute(transaction, row.id);
       });
       return { status: "stopped" as const };
     }
@@ -686,6 +730,7 @@ async function executeOperation(
     );
     await provider.deleteDisk(row.runtimeDiskResourceId, row.id);
     await db.transaction(async (transaction) => {
+      await lockComputeOwners(transaction, [row.ownerId]);
       await endComputeSession(transaction, row.id);
       const deleted = await transaction
         .delete(schema.gen2Workspaces)
@@ -742,6 +787,10 @@ async function markOperationFailed(
         updatedAt: new Date(),
       })
       .where(operationWhere(params));
+    if (cleanupSucceeded) {
+      await endComputeSession(db, params.workspaceId);
+      await releaseFreeWorkspaceCompute(db, params.workspaceId);
+    }
   });
   logEvent("error", "gen2.azure_runtime.operation_failed", {
     workspaceId: params.workspaceId,

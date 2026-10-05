@@ -1101,28 +1101,46 @@ export class ArmWorkspaceProvider {
     generation: number,
     virtualMachineId: string | null,
   ) {
-    if (!virtualMachineId) return false;
-    try {
-      const vm = (await armRequest(
-        `${virtualMachineId}?%24expand=instanceView`,
-        COMPUTE_API,
-      )) as {
-        tags?: Record<string, string>;
-        properties?: { instanceView?: { statuses?: Array<{ code?: string }> } };
-      };
-      checkTags(vm, workspaceId, generation);
-      return (
-        vm.properties?.instanceView?.statuses?.some(
-          (status) => status.code === "PowerState/running",
-        ) ?? false
-      );
-    } catch (error) {
-      if (
-        error instanceof ArmWorkspaceRuntimeError &&
-        error.code === "ResourceNotFound"
-      )
-        return false;
-      throw error;
-    }
+    return (
+      (await this.powerState(workspaceId, generation, virtualMachineId)) ===
+      "PowerState/running"
+    );
+  }
+
+  /** Allocated stopped VMs still incur compute charges until deallocated. */
+  async powerState(
+    workspaceId: string,
+    generation: number,
+    virtualMachineId: string | null,
+  ) {
+    if (!virtualMachineId) return null;
+    const vm = (await armRequest(
+      `${virtualMachineId}?%24expand=instanceView`,
+      COMPUTE_API,
+      "GET",
+      undefined,
+      true,
+    )) as {
+      tags?: Record<string, string>;
+      properties?: { instanceView?: { statuses?: Array<{ code?: string }> } };
+    } | null;
+    if (!vm) return null;
+    checkTags(vm, workspaceId, generation);
+    const state = vm.properties?.instanceView?.statuses?.find((status) =>
+      status.code?.startsWith("PowerState/"),
+    )?.code;
+    if (
+      !state ||
+      ![
+        "running",
+        "starting",
+        "stopping",
+        "stopped",
+        "deallocating",
+        "deallocated",
+      ].some((value) => state === `PowerState/${value}`)
+    )
+      fail("VM_POWER_STATE_UNKNOWN");
+    return state;
   }
 }

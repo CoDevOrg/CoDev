@@ -65,3 +65,22 @@ export class Gen2FileConflictError extends Error {
     );
   }
 }
+
+export class FreeComputeConflictError extends Gen2LifecycleError {
+  constructor(readonly activeWorkspace: { id: string; name: string }) {
+    super(
+      `“${activeWorkspace.name}” is already active. Stop it explicitly before opening this workspace.`,
+      409,
+    );
+  }
+  toResponse() {
+    return Response.json(
+      {
+        error: this.message,
+        code: "free_workspace_active",
+        activeWorkspace: this.activeWorkspace,
+      },
+      { status: this.status },
+    );
+  }
+}

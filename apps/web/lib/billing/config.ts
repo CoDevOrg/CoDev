@@ -39,3 +39,8 @@ export function requireBillingEnv(
   if (!value) throw new BillingConfigError(name);
   return value;
 }
+
+export const GEN2_PAID_MONTHLY_COMPUTE_LIMIT_MS = 1_000 * 60_000;
+export const GEN2_FREE_ONE_WORKSPACE_LIMIT_MS = 50 * 3_600_000;
+export const GEN2_FREE_TWO_WORKSPACE_LIMIT_MS = 35 * 3_600_000;
+export const GEN2_FREE_OWNER_MONTHLY_BUDGET_CENTS = 650;
