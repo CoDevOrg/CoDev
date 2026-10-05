@@ -22,13 +22,6 @@ import { Gen2LifecycleError } from "./errors";
 
 const SUPERSET_RUN_LOCK_PREFIX = "codev-gen2-superset-run:";
 
-/** Every state but the two terminal ones. */
-const NONTERMINAL_STATUSES: Gen2SupersetRunStatus[] = [
-  "creating",
-  "running",
-  "stopping",
-  "recovery_required",
-];
 const MONITORABLE_STATUSES: Gen2SupersetRunStatus[] = [
   "creating",
   "running",
@@ -181,17 +174,13 @@ export async function getGen2SupersetRunById(runId: string) {
   return run ?? null;
 }
 
-/** Nonterminal runs for a workspace, for host-restart reconciliation (Phase 5). */
-export async function listActiveGen2SupersetRuns(workspaceId: string) {
+/** All persisted sessions for the workspace, including completed runs. */
+export async function listGen2SupersetRuns(workspaceId: string) {
   return getDatabase()
     .select()
     .from(schema.gen2SupersetRuns)
-    .where(
-      and(
-        eq(schema.gen2SupersetRuns.workspaceId, workspaceId),
-        inArray(schema.gen2SupersetRuns.status, NONTERMINAL_STATUSES),
-      ),
-    );
+    .where(eq(schema.gen2SupersetRuns.workspaceId, workspaceId))
+    .orderBy(sql`${schema.gen2SupersetRuns.createdAt} desc`);
 }
 
 /** Runs that need a liveness decision from the server-owned monitor. */

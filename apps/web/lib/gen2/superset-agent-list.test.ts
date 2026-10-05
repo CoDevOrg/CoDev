@@ -5,7 +5,7 @@ vi.mock("./workspaces", () => ({
   requireGen2Member: (...args: unknown[]) => mocks.member(...args),
 }));
 vi.mock("./superset-runs", () => ({
-  listActiveGen2SupersetRuns: (...args: unknown[]) => mocks.list(...args),
+  listGen2SupersetRuns: (...args: unknown[]) => mocks.list(...args),
 }));
 
 import { listGen2SupersetAgentRuns } from "./superset-agent-list";
@@ -13,7 +13,7 @@ import { listGen2SupersetAgentRuns } from "./superset-agent-list";
 describe("Superset agent metadata list", () => {
   beforeEach(() => vi.resetAllMocks());
 
-  it("rechecks membership and excludes private run fields", async () => {
+  it("lists recovered sessions and excludes private run fields", async () => {
     mocks.member.mockResolvedValue({ role: "viewer" });
     mocks.list.mockResolvedValue([
       {
@@ -22,7 +22,8 @@ describe("Superset agent metadata list", () => {
         createdBy: "member-1",
         worktreeId: "agent-1",
         provider: "codex",
-        status: "running",
+        status: "recovery_required",
+        recoveryCount: 2,
         createdAt: new Date(0),
         updatedAt: new Date(0),
         connectionId: "private-credential",
@@ -39,7 +40,8 @@ describe("Superset agent metadata list", () => {
         createdBy: "member-1",
         worktreeId: "agent-1",
         provider: "codex",
-        status: "running",
+        status: "recovery_required",
+        recoveryCount: 2,
         createdAt: new Date(0),
         updatedAt: new Date(0),
       },

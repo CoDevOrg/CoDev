@@ -2,8 +2,15 @@ import { Gen2AccessError, Gen2LifecycleError } from "./errors";
 import { getGen2SupersetRunById } from "./superset-runs";
 import { requireGen2Member } from "./workspaces";
 
-type Action = "list" | "start" | "input" | "poll" | "cancel" | "recover";
-type RunAction = Exclude<Action, "list" | "start">;
+type Action =
+  | "list"
+  | "inspect"
+  | "start"
+  | "input"
+  | "poll"
+  | "cancel"
+  | "recover";
+type RunAction = Exclude<Action, "list" | "inspect" | "start">;
 type AccessInput = {
   action: Action;
   workspaceId: string;
@@ -30,7 +37,14 @@ export async function requireGen2SupersetAgentAccess(input: AccessInput) {
     }
     return null;
   }
-  if (input.action === "list") return null;
+  if (input.action === "list" || input.action === "inspect") {
+    if (!input.runId) return null;
+    const run = await getGen2SupersetRunById(input.runId);
+    if (!run || run.workspaceId !== input.workspaceId) {
+      throw new Gen2LifecycleError("Superset run not found.", 404);
+    }
+    return run;
+  }
 
   const run = input.runId ? await getGen2SupersetRunById(input.runId) : null;
   if (!run || run.workspaceId !== input.workspaceId) {
