@@ -3,10 +3,19 @@
 import { useMemo, useState, useTransition } from "react";
 import { Search, ArrowUpDown } from "lucide-react";
 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { updateAccountSubscription, updateApplicationAdmin } from "@/app/admin/actions";
+import {
+  updateAccountSubscription,
+  updateApplicationAdmin,
+} from "@/app/admin/actions";
 import { AdminNotice, type AdminNoticeResult } from "./admin-notice";
 import { AdminUserRow } from "./admin-user-row";
 
@@ -61,7 +70,10 @@ export function AdminUserDirectory({
       })
       .sort((a, b) => {
         if (sortBy === "visits") return b.visits - a.visits;
-        if (sortBy === "joined") return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        if (sortBy === "joined")
+          return (
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
         if (sortBy === "lastSeen") {
           const aTime = a.lastSeenAt ? new Date(a.lastSeenAt).getTime() : 0;
           const bTime = b.lastSeenAt ? new Date(b.lastSeenAt).getTime() : 0;
@@ -101,12 +113,17 @@ export function AdminUserDirectory({
       <CardHeader className="flex flex-col gap-4 pb-4">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <CardTitle className="text-base font-semibold">User Directory</CardTitle>
+            <CardTitle className="text-base font-semibold">
+              User Directory
+            </CardTitle>
             <CardDescription>
               Manage accounts, console permissions, and complimentary access
             </CardDescription>
           </div>
-          <Badge variant="outline" className="w-fit text-xs text-muted-foreground">
+          <Badge
+            variant="outline"
+            className="w-fit text-xs text-muted-foreground"
+          >
             {filteredUsers.length} of {users.length} accounts
           </Badge>
         </div>
@@ -126,20 +143,22 @@ export function AdminUserDirectory({
 
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center rounded-lg border border-border/60 bg-muted/20 p-0.5 text-xs">
-              {(["all", "admins", "pro", "standard"] as RoleFilter[]).map((f) => (
-                <button
-                  key={f}
-                  type="button"
-                  onClick={() => setRoleFilter(f)}
-                  className={`rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors ${
-                    roleFilter === f
-                      ? "bg-card text-foreground shadow-xs"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
+              {(["all", "admins", "pro", "standard"] as RoleFilter[]).map(
+                (f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setRoleFilter(f)}
+                    className={`rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors ${
+                      roleFilter === f
+                        ? "bg-card text-foreground shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {f}
+                  </button>
+                ),
+              )}
             </div>
 
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -178,7 +197,10 @@ export function AdminUserDirectory({
             <tbody className="divide-y divide-border/40">
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-muted-foreground">
+                  <td
+                    colSpan={8}
+                    className="py-8 text-center text-muted-foreground"
+                  >
                     No users matching your search or filters.
                   </td>
                 </tr>

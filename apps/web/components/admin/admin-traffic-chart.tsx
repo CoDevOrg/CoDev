@@ -3,7 +3,13 @@
 import { useMemo, useState } from "react";
 import { TrendingUp, Users, Eye } from "lucide-react";
 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatNumber } from "./admin-formatters";
 
@@ -22,7 +28,10 @@ export function AdminTrafficChart({ daily }: { daily: TrafficPoint[] }) {
     }
     const totalViews = daily.reduce((sum, d) => sum + d.views, 0);
     const totalVisitors = daily.reduce((sum, d) => sum + d.visitors, 0);
-    const peak = daily.reduce((max, d) => (d.views > max.views ? d : max), daily[0]!);
+    const peak = daily.reduce(
+      (max, d) => (d.views > max.views ? d : max),
+      daily[0]!,
+    );
     const maxViews = Math.max(1, ...daily.map((d) => d.views));
     return { totalViews, totalVisitors, peak, maxViews };
   }, [daily]);
@@ -43,7 +52,10 @@ export function AdminTrafficChart({ daily }: { daily: TrafficPoint[] }) {
         </div>
         {activePoint ? (
           <div className="flex items-center gap-2 text-xs">
-            <Badge variant="outline" className="gap-1 border-primary/30 bg-primary/10 text-primary">
+            <Badge
+              variant="outline"
+              className="gap-1 border-primary/30 bg-primary/10 text-primary"
+            >
               <span className="font-semibold">{activePoint.day}:</span>
               <span>{formatNumber(activePoint.views)} views</span>
               <span className="text-muted-foreground">·</span>
@@ -65,7 +77,10 @@ export function AdminTrafficChart({ daily }: { daily: TrafficPoint[] }) {
               aria-label="Daily page views bar chart"
             >
               {daily.map((point, index) => {
-                const heightPercent = Math.max(6, Math.round((point.views / stats.maxViews) * 100));
+                const heightPercent = Math.max(
+                  6,
+                  Math.round((point.views / stats.maxViews) * 100),
+                );
                 const isHovered = hoveredIndex === index;
                 const isPeak = stats.peak?.day === point.day;
 
@@ -101,10 +116,12 @@ export function AdminTrafficChart({ daily }: { daily: TrafficPoint[] }) {
               <span>{daily[0]?.day}</span>
               <div className="flex items-center gap-4">
                 <span className="flex items-center gap-1">
-                  <Eye className="size-3 text-primary" /> {formatNumber(stats.totalViews)} total views
+                  <Eye className="size-3 text-primary" />{" "}
+                  {formatNumber(stats.totalViews)} total views
                 </span>
                 <span className="flex items-center gap-1">
-                  <Users className="size-3 text-muted-foreground" /> {formatNumber(stats.totalVisitors)} total visits
+                  <Users className="size-3 text-muted-foreground" />{" "}
+                  {formatNumber(stats.totalVisitors)} total visits
                 </span>
               </div>
               <span>{daily[daily.length - 1]?.day}</span>

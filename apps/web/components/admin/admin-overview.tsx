@@ -11,7 +11,13 @@ import {
   Clock,
 } from "lucide-react";
 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { AdminTrafficChart } from "./admin-traffic-chart";
 import { formatNumber, formatRelative } from "./admin-formatters";
 import type { AdminSummary } from "@/lib/admin/admin-stats";
@@ -145,7 +151,10 @@ export function AdminOverview({
                 <tbody className="divide-y divide-border/40">
                   {topPaths.length === 0 ? (
                     <tr>
-                      <td colSpan={2} className="py-6 text-center text-muted-foreground">
+                      <td
+                        colSpan={2}
+                        className="py-6 text-center text-muted-foreground"
+                      >
                         No traffic data yet.
                       </td>
                     </tr>
@@ -191,7 +200,10 @@ export function AdminOverview({
                 <tbody className="divide-y divide-border/40">
                   {recentVisits.length === 0 ? (
                     <tr>
-                      <td colSpan={3} className="py-6 text-center text-muted-foreground">
+                      <td
+                        colSpan={3}
+                        className="py-6 text-center text-muted-foreground"
+                      >
                         No recent visits recorded.
                       </td>
                     </tr>
@@ -203,7 +215,9 @@ export function AdminOverview({
                         </td>
                         <td className="px-3 py-2">
                           {visit.anon ? (
-                            <span className="text-muted-foreground italic">anonymous</span>
+                            <span className="text-muted-foreground italic">
+                              anonymous
+                            </span>
                           ) : (
                             <span className="font-medium text-foreground">
                               {visit.userName ?? visit.userEmail ?? "account"}

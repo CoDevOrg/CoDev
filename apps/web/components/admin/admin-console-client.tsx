@@ -1,18 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import {
-  BarChart3,
-  Users,
-  Building2,
-  Clock,
-  ShieldCheck,
-} from "lucide-react";
+import { BarChart3, Users, Building2, Clock, ShieldCheck } from "lucide-react";
 
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Badge } from "@/components/ui/badge";
 import { AdminOverview } from "./admin-overview";
-import { AdminUserDirectory, type AdminUserDirectoryItem } from "./admin-user-directory";
+import {
+  AdminUserDirectory,
+  type AdminUserDirectoryItem,
+} from "./admin-user-directory";
 import { AdminOrganizationControls } from "./admin-organization-controls";
 import { AdminWaitlist } from "./admin-waitlist";
 import type { AdminSummary } from "@/lib/admin/admin-stats";
@@ -49,7 +46,9 @@ export function AdminConsoleClient({
 }) {
   const [activeTab, setActiveTab] = useState<TabValue>("overview");
 
-  const pendingWaitlistCount = waitlist.filter((r) => r.status === "pending").length;
+  const pendingWaitlistCount = waitlist.filter(
+    (r) => r.status === "pending",
+  ).length;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
@@ -60,7 +59,10 @@ export function AdminConsoleClient({
             <h1 className="text-2xl font-bold tracking-tight text-foreground">
               Admin Console
             </h1>
-            <Badge variant="outline" className="gap-1 border-primary/30 bg-primary/10 text-primary text-xs">
+            <Badge
+              variant="outline"
+              className="gap-1 border-primary/30 bg-primary/10 text-primary text-xs"
+            >
               <ShieldCheck className="size-3.5" /> Administrator
             </Badge>
           </div>
@@ -89,7 +91,10 @@ export function AdminConsoleClient({
           }}
           className="flex-wrap"
         >
-          <ToggleGroupItem value="overview" className="gap-1.5 px-3 py-1 text-xs">
+          <ToggleGroupItem
+            value="overview"
+            className="gap-1.5 px-3 py-1 text-xs"
+          >
             <BarChart3 className="size-3.5" />
             <span>Overview</span>
           </ToggleGroupItem>
@@ -102,7 +107,10 @@ export function AdminConsoleClient({
             </span>
           </ToggleGroupItem>
 
-          <ToggleGroupItem value="organizations" className="gap-1.5 px-3 py-1 text-xs">
+          <ToggleGroupItem
+            value="organizations"
+            className="gap-1.5 px-3 py-1 text-xs"
+          >
             <Building2 className="size-3.5" />
             <span>Organizations</span>
             <span className="ml-1 rounded-full bg-muted/80 px-1.5 py-0.2 text-[10px] text-muted-foreground">
@@ -110,7 +118,10 @@ export function AdminConsoleClient({
             </span>
           </ToggleGroupItem>
 
-          <ToggleGroupItem value="waitlist" className="gap-1.5 px-3 py-1 text-xs">
+          <ToggleGroupItem
+            value="waitlist"
+            className="gap-1.5 px-3 py-1 text-xs"
+          >
             <Clock className="size-3.5" />
             <span>Waitlist</span>
             {pendingWaitlistCount > 0 ? (

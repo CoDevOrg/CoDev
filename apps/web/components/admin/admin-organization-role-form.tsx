@@ -4,7 +4,14 @@ import { useMemo, useState, useTransition, type FormEvent } from "react";
 import type { OrganizationRole } from "@codev/contracts";
 
 import { updateOrganizationMemberRole } from "@/app/admin/actions";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { AdminNotice, type AdminNoticeResult } from "./admin-notice";
@@ -26,7 +33,9 @@ export function AdminOrganizationRoleForm({
   organizations: Organization[];
   members: Member[];
 }) {
-  const [organizationId, setOrganizationId] = useState(organizations[0]?.id ?? "");
+  const [organizationId, setOrganizationId] = useState(
+    organizations[0]?.id ?? "",
+  );
   const [result, setResult] = useState<AdminNoticeResult>(null);
   const [pending, startTransition] = useTransition();
 
@@ -39,7 +48,9 @@ export function AdminOrganizationRoleForm({
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     setResult(null);
-    startTransition(async () => setResult(await updateOrganizationMemberRole(formData)));
+    startTransition(async () =>
+      setResult(await updateOrganizationMemberRole(formData)),
+    );
   }
 
   if (organizations.length === 0) return null;
@@ -47,9 +58,12 @@ export function AdminOrganizationRoleForm({
   return (
     <Card className="border-border/80 bg-card/60 backdrop-blur-xs">
       <CardHeader>
-        <CardTitle className="text-sm font-semibold">Organization Permissions</CardTitle>
+        <CardTitle className="text-sm font-semibold">
+          Organization Permissions
+        </CardTitle>
         <CardDescription className="text-xs">
-          Set a member&apos;s owner, admin, billing, or standard-member role within an organization.
+          Set a member&apos;s owner, admin, billing, or standard-member role
+          within an organization.
         </CardDescription>
       </CardHeader>
       <form onSubmit={submit}>
@@ -86,7 +100,8 @@ export function AdminOrganizationRoleForm({
               >
                 {organizationMembers.map((member) => (
                   <option key={member.userId} value={member.userId}>
-                    {member.name ? `${member.name} · ` : ""}@{member.login} ({member.role})
+                    {member.name ? `${member.name} · ` : ""}@{member.login} (
+                    {member.role})
                   </option>
                 ))}
               </select>
@@ -102,7 +117,14 @@ export function AdminOrganizationRoleForm({
                 defaultValue="member"
                 className="w-full rounded-md border border-border/80 bg-card px-3 py-1.5 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary"
               >
-                {(["owner", "admin", "billing_admin", "member"] as OrganizationRole[]).map((role) => (
+                {(
+                  [
+                    "owner",
+                    "admin",
+                    "billing_admin",
+                    "member",
+                  ] as OrganizationRole[]
+                ).map((role) => (
                   <option key={role} value={role}>
                     {role.replaceAll("_", " ")}
                   </option>
