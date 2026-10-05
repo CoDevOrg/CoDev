@@ -121,7 +121,7 @@ async function armFetch(
         ...(body === undefined ? {} : { "content-type": "application/json" }),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      redirect: "error",
+      redirect: "manual",
       signal: AbortSignal.timeout(30_000),
     });
   } catch (error) {
@@ -501,7 +501,7 @@ async function cloudflareRequest<T>(
         "content-type": "application/json",
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      redirect: "error",
+      redirect: "manual",
       signal: AbortSignal.timeout(15_000),
     });
   } catch {
@@ -906,7 +906,7 @@ async function waitForHealth(
       const authorization = `Bearer ${await capabilityToken(routeHost, workspaceId, generation)}`;
       const response = await fetch(`https://${routeHost}/v1/health`, {
         headers: { authorization },
-        redirect: "error",
+        redirect: "manual",
         signal: AbortSignal.timeout(10_000),
       });
       const value = (await response.json().catch(() => null)) as {
@@ -1077,7 +1077,7 @@ export class ArmWorkspaceProvider {
         headers: {
           authorization: `Bearer ${await capabilityToken(routeHost, workspaceId, generation)}`,
         },
-        redirect: "error",
+        redirect: "manual",
         signal: AbortSignal.timeout(5_000),
       });
       const value = (await response.json().catch(() => null)) as {

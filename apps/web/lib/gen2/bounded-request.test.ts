@@ -13,3 +13,24 @@ it("bounds a response whose body never finishes and aborts its request", async (
   expect(fetcher.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
   expect(vi.getTimerCount()).toBe(0);
 });
+
+it("rejects redirects without forwarding workspace credentials", async () => {
+  const fetcher = vi.fn().mockResolvedValue(
+    new Response(null, {
+      status: 302,
+      headers: { location: "https://untrusted.example/" },
+    }),
+  );
+  await expect(
+    boundedJsonRequest(
+      "https://workspace.example/",
+      {
+        redirect: "manual",
+        headers: { authorization: "Bearer fixture" },
+      },
+      1000,
+      fetcher,
+    ),
+  ).rejects.toThrow("redirected");
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});

@@ -41,7 +41,7 @@ async function bridgeRequest(
     },
     ...(params ? { body: JSON.stringify(params) } : {}),
     signal: AbortSignal.timeout(30_000),
-    redirect: "error",
+    redirect: "manual",
     cache: "no-store",
   });
   if (!response.ok)

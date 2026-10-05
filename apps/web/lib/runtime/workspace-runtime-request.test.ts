@@ -72,7 +72,7 @@ describe("provider-aware workspace transport", () => {
         body: init.body,
       },
     );
-    expect(init.redirect).toBe("error");
+    expect(init.redirect).toBe("manual");
     expect(init.headers).toMatchObject({
       authorization: "Bearer signed-capability",
     });

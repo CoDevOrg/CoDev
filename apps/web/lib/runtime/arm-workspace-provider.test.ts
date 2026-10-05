@@ -48,6 +48,8 @@ describe("ARM workspace provider stop", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.redirect === "error")
+          throw new TypeError("Unsupported Worker redirect mode");
         const url = String(input);
         const method = init?.method ?? "GET";
         calls.push({ url, method });

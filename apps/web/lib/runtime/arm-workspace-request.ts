@@ -47,7 +47,7 @@ export async function armWorkspaceRequest(
       },
       ...(body === undefined ? {} : { body: encodedBody }),
       cache: "no-store",
-      redirect: "error",
+      redirect: "manual",
     },
     timeoutMs,
   );
