@@ -46,6 +46,7 @@ export const gen2WorkspaceCreateRequestSchema = z
     /** Both or neither: a repository is identified by its installation. */
     installationId: z.number().int().positive().optional(),
     repositoryId: z.number().int().positive().optional(),
+    acknowledgeReducedQuota: z.boolean().optional(),
   })
   .refine(
     (input) =>
@@ -693,3 +694,56 @@ export type Gen2TerminalAction = z.infer<typeof gen2TerminalActionSchema>;
 export type Gen2TerminalPollResponse = z.infer<
   typeof gen2TerminalPollResponseSchema
 >;
+
+export const gen2OwnerBudgetReportSchema = z.object({
+  currency: z.literal("USD"),
+  complete: z.literal(true),
+  ownerId: identifierSchema,
+  month: z.string().datetime(),
+  observedAt: z.string().datetime(),
+  computeCents: z.number().int().nonnegative().max(2_147_483_647),
+  storageCents: z.number().int().nonnegative().max(2_147_483_647),
+  networkCents: z.number().int().nonnegative().max(2_147_483_647),
+  operationsCents: z.number().int().nonnegative().max(2_147_483_647),
+  otherCents: z.number().int().nonnegative().max(2_147_483_647),
+  blocked: z.boolean().default(false),
+});
+export type Gen2OwnerBudgetReport = z.infer<typeof gen2OwnerBudgetReportSchema>;
+export type Gen2OwnerComputeEntitlement = {
+  tier: "free" | "paid";
+  enabled: boolean;
+  unlimited: boolean;
+  ownedWorkspaceCount: number;
+  monthlyLimitMs: number | null;
+};
+
+export const gen2ComputeSwitchRequestSchema = z.object({
+  workspaceId: identifierSchema,
+  activeWorkspaceId: identifierSchema,
+  idempotencyKey: z.string().trim().min(1).max(128),
+});
+
+export type Gen2OwnerBudgetSummary = {
+  spentCents: number | null;
+  limitCents: number;
+  observedAt: string | null;
+  blocked: boolean;
+};
+export type Gen2OwnerComputeSummary = {
+  minutesUsed: number;
+  minutesLimit: number | null;
+  unlimited: boolean;
+  resetsAt: string;
+  tier: "free" | "paid";
+  freeEnabled: boolean;
+  ownedWorkspaceCount: number;
+  activeWorkspaceLimit: number | null;
+  armBootMinutesCount: boolean;
+  budget: Gen2OwnerBudgetSummary | null;
+};
+export type Gen2ComputeSwitchResponse = {
+  accepted: boolean;
+  workspaceId: string;
+  stoppingWorkspaceId: string | null;
+  operationId: string | null;
+};

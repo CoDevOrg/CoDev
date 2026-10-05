@@ -39,6 +39,12 @@ export default defineConfig({
     },
 
     env: {
+      GEN2_FREE_ARM_ENABLED: bindings.text(
+        process.env.GEN2_FREE_ARM_ENABLED ?? "false",
+      ),
+      GEN2_FREE_ARM_OWNER_IDS: bindings.text(
+        process.env.GEN2_FREE_ARM_OWNER_IDS ?? "",
+      ),
       VERCEL_ENV: bindings.secret(),
       ACCESS_REQUEST_NOTIFY_EMAIL: bindings.secret(),
       AUTH_GITHUB_ID: bindings.secret(),

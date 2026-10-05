@@ -89,6 +89,8 @@ export const serverEnvironmentSchema = z.object({
   AZURE_CLIENT_SECRET: z.string().min(1).optional(),
   AZURE_SUBSCRIPTION_ID: z.string().uuid().optional(),
   AZURE_RESOURCE_GROUP: z.string().min(1).optional(),
+  GEN2_FREE_ARM_ENABLED: z.enum(["true", "false"]).optional(),
+  GEN2_FREE_ARM_OWNER_IDS: z.string().optional(),
   /** Pins host resolution to one VM; unset resolves through the stack tags. */
   AZURE_HOST_VM_NAME: z.string().min(1).optional(),
   /** Enables durable multi-host placement; unset keeps the single-host path. */

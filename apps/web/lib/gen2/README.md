@@ -67,13 +67,20 @@ The terminal stream and shared-document sockets use the platform WebSocket adapt
 The Azure orchestrator is reused (`provisionSandbox` / `destroySandbox`). Gen 2
 uses its own `gen2_*` tables and does not access the original `workspaces` table.
 
-`compute-quota.ts` bills each running Gen 2 VM interval to its current workspace
-owner. The 1,000-minute allowance is shared across that owner's workspaces and
-resets at the UTC month boundary; application-wide admins are exempt from the
-limit and its enforcement stops. `compute-reconcile.ts` checks runtime state
-without waking guests, closes hibernated intervals, and stops active guests at
-the limit. The Cloudflare per-minute scheduled handler invokes the authenticated
-route; startup checks the same live interval total before provisioning.
+`compute-quota.ts` retains owner-funded intervals across deletion and ownership
+transfer, clipped to UTC months. Billing resolves current entitlements: paid
+owners keep 1,000 minutes, admins remain unlimited, and eligible free ARM owners
+receive 50 hours with one workspace or 35 shared hours with two. Used time never
+resets when slots change. ARM allocated boot time counts; stopped-but-allocated
+VMs remain billable until release. Power-state reads never wake guests.
+
+Free rollout defaults off. `free-compute-claim.ts` serializes one-active reservations
+with create/delete/transfer using owner locks. `compute-switch.ts` requires the
+owner to name the workspace being stopped; callers poll stop completion before
+retrying the target start. `owner-budget-report.ts` accepts authenticated complete
+cost snapshots; the guard blocks free compute on missing/stale telemetry, an
+operator hold, or a US$6.50 monthly total. The per-minute reconciler enforces quota,
+budget, and idle release. See the [Phase 5 review](../../../../docs/arm-workspace-free-tier-phase-5.md).
 
 ## ARM bridge and background turns
 

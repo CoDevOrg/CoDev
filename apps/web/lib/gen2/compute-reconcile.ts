@@ -12,7 +12,6 @@ import { OrchestratorError } from "../runtime/orchestrator-request";
 import { ArmWorkspaceProvider } from "../runtime/arm-workspace-provider";
 import { armWorkspaceAgentRunning } from "../runtime/arm-workspace-activity";
 import {
-  MONTHLY_COMPUTE_LIMIT_MS,
   endComputeSession,
   ownerHasUnlimitedCompute,
   startComputeSession,
@@ -21,6 +20,9 @@ import {
 import { reconcileArmWorkspaceTurns } from "./arm-workspace-turns-reconcile";
 import { hasPendingArmWorkspaceTurns } from "./arm-workspace-pending-turns";
 import { stopGen2Instance } from "./instance";
+import { getWorkspaceOwnerEntitlement } from "../billing/workspace-entitlement";
+import { getOwnerBudget } from "./owner-budget";
+import { releaseFreeWorkspaceCompute } from "./free-compute-release";
 
 const IDLE_TIMEOUT_MS = 15 * 60_000;
 
@@ -58,13 +60,26 @@ async function observeSession(
 ) {
   if (session.runtimeProvider === "azure_arm") {
     try {
-      const running = await new ArmWorkspaceProvider().running(
+      const state = await new ArmWorkspaceProvider().powerState(
         session.workspaceId,
         session.runtimeGeneration,
         session.runtimeVmResourceId,
       );
-      if (!running) {
-        await endComputeSession(session.workspaceId, now);
+      if (!state || state === "PowerState/deallocated") {
+        await endComputeSession(
+          session.workspaceId,
+          session.lastObservedAllocatedAt ?? session.startedAt,
+        );
+        if (session.runtimeStatus === "stopped")
+          await releaseFreeWorkspaceCompute(getDatabase(), session.workspaceId);
+        return;
+      }
+      await getDatabase()
+        .update(schema.gen2ComputeSessions)
+        .set({ lastObservedAllocatedAt: now })
+        .where(eq(schema.gen2ComputeSessions.id, session.id));
+      if (state === "PowerState/stopped") {
+        await stopGen2Instance(session.workspaceId, session.ownerId);
         return;
       }
       const lastActivity = session.lastActivityAt ?? session.startedAt;
@@ -131,7 +146,7 @@ async function bootstrapActiveSessions(now: Date, hostStopped: boolean) {
     )
     .where(
       and(
-        eq(schema.gen2Workspaces.status, "ready"),
+        sql`(${schema.gen2Workspaces.status} = 'ready' OR (${schema.gen2Workspaces.runtimeProvider} = 'azure_arm' AND ${schema.gen2Workspaces.status} = 'provisioning'))`,
         isNull(schema.gen2ComputeSessions.id),
       ),
     )
@@ -140,12 +155,12 @@ async function bootstrapActiveSessions(now: Date, hostStopped: boolean) {
   await inBatches(missing, 8, async (workspace) => {
     try {
       if (workspace.runtimeProvider === "azure_arm") {
-        const running = await new ArmWorkspaceProvider().running(
+        const state = await new ArmWorkspaceProvider().powerState(
           workspace.workspaceId,
           workspace.runtimeGeneration,
           workspace.runtimeVmResourceId,
         );
-        if (!running) return;
+        if (!state || state === "PowerState/deallocated") return;
       } else {
         if (hostStopped) return;
         await getSandbox(workspace.workspaceId, 10_000);
@@ -159,7 +174,14 @@ async function bootstrapActiveSessions(now: Date, hostStopped: boolean) {
 
 async function stopExhaustedOwner(ownerId: string, now: Date) {
   if (await ownerHasUnlimitedCompute(ownerId)) return 0;
-  if ((await usedComputeMs(ownerId, now)) < MONTHLY_COMPUTE_LIMIT_MS) return 0;
+  const policy = await getWorkspaceOwnerEntitlement(ownerId);
+  const exhausted =
+    policy.monthlyLimitMs !== null &&
+    (await usedComputeMs(ownerId, now)) >= policy.monthlyLimitMs;
+  const budgetBlocked =
+    policy.tier === "free" &&
+    (!policy.enabled || (await getOwnerBudget(ownerId, now)).blocked);
+  if (!exhausted && !budgetBlocked) return 0;
   const active = await getDatabase()
     .select({ workspaceId: schema.gen2ComputeSessions.workspaceId })
     .from(schema.gen2ComputeSessions)
@@ -202,6 +224,8 @@ export async function reconcileComputeQuota(now = new Date()) {
       startedAt: schema.gen2ComputeSessions.startedAt,
       endedAt: schema.gen2ComputeSessions.endedAt,
       lastActivityAt: schema.gen2ComputeSessions.lastActivityAt,
+      lastObservedAllocatedAt:
+        schema.gen2ComputeSessions.lastObservedAllocatedAt,
       runtimeProvider: schema.gen2Workspaces.runtimeProvider,
       runtimeGeneration: schema.gen2Workspaces.runtimeGeneration,
       runtimeVmResourceId: schema.gen2Workspaces.runtimeVmResourceId,
