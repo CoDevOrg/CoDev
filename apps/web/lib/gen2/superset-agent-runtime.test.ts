@@ -132,6 +132,7 @@ import {
   sendGen2AgentSessionFollowUp,
   stopGen2AgentSession,
   restartGen2AgentSession,
+  createGen2AgentSessionTask,
   startGen2SupersetAgentSession,
   startGen2SupersetAgentTurn,
 } from "./superset-agent-runtime";
@@ -681,7 +682,7 @@ describe("gen2 Superset agent turn (Phase 4 browser-facing delegate)", () => {
       idempotencyKey: "key-1",
     });
 
-    expect(result).toEqual({ sessionId: runId });
+    expect(result).toEqual({ sessionId: runId, agentSessionId: "session-1" });
     expect(mocks.createWorktree).toHaveBeenCalledWith(
       workspaceId,
       expect.objectContaining({ worktreeId: expect.any(String) }),
@@ -776,6 +777,30 @@ describe("gen2 Superset agent turn (Phase 4 browser-facing delegate)", () => {
     );
     expect(worktrees).toHaveLength(2);
     expect(worktrees[0]).not.toBe(worktrees[1]);
+  });
+
+  it("returns logical and process ids when creating an agent task", async () => {
+    mocks.register.mockResolvedValue({
+      runId,
+      status: "creating",
+      created: true,
+    });
+    mocks.start.mockResolvedValue({
+      hostWorkspaceId: "host-ws-1",
+      hostTerminalId: "term-1",
+      hostAgentSessionId: "agent-1",
+    });
+
+    await expect(
+      createGen2AgentSessionTask({
+        workspaceId,
+        userId,
+        chatId,
+        task: "Update the tests.",
+        provider: "codex",
+        idempotencyKey: "key-1",
+      }),
+    ).resolves.toEqual({ sessionId: "session-1", runId });
   });
 
   it("polls the run, records output, and reports the persisted reply", async () => {

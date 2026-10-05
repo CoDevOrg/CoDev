@@ -730,19 +730,18 @@ export async function startGen2SupersetAgentTurn(input: {
     input.model,
   );
 
+  const logicalSession = await createGen2AgentSession({
+    workspaceId: input.workspaceId,
+    chatId: input.chatId,
+    createdBy: input.userId,
+    task: input.prompt,
+    worktreeId,
+    provider: providerVendor(provider),
+    idempotencyKey: input.idempotencyKey,
+  });
   const session = await startSession(
     {
-      sessionId: (
-        await createGen2AgentSession({
-          workspaceId: input.workspaceId,
-          chatId: input.chatId,
-          createdBy: input.userId,
-          task: input.prompt,
-          worktreeId,
-          provider: providerVendor(provider),
-          idempotencyKey: input.idempotencyKey,
-        })
-      ).id,
+      sessionId: logicalSession.id,
       workspaceId: input.workspaceId,
       userId: input.userId,
       chatId: input.chatId,
@@ -776,7 +775,25 @@ export async function startGen2SupersetAgentTurn(input: {
     chatId: input.chatId,
     userId: input.userId,
   });
-  return { sessionId: session.runId };
+  return { sessionId: session.runId, agentSessionId: logicalSession.id };
+}
+
+/** Creates a logical session and its first Superset process in one request. */
+export async function createGen2AgentSessionTask(input: {
+  workspaceId: string;
+  userId: string;
+  chatId: string;
+  task: string;
+  idempotencyKey: string;
+  provider: Gen2AgentProvider;
+  worktreeId?: string | undefined;
+  model?: string | undefined;
+}) {
+  const started = await startGen2SupersetAgentTurn({
+    ...input,
+    prompt: input.task,
+  });
+  return { sessionId: started.agentSessionId, runId: started.sessionId };
 }
 
 /**
