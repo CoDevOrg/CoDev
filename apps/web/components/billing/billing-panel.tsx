@@ -17,7 +17,7 @@ function formatDate(iso: string) {
 const FREE_ARM_FEATURES = [
   "Up to 2 persistent ARM64 cloud workspaces (1 active at a time)",
   "50 hours/month compute with 1 workspace, or 35 hours/month shared with 2 workspaces",
-  "ARM64 Linux virtual machines with 50 GB persistent storage",
+  "ARM64 Linux virtual machines with 16 GiB persistent storage",
   "Invite collaborators. They join your workspace at no cost",
 ] as const;
 
@@ -60,7 +60,8 @@ function statusBadge(
   status: BillingStatus,
   computeSummary?: Gen2OwnerComputeSummary | null,
 ) {
-  if (status.accessSource === "admin" || computeSummary?.unlimited) return "Admin";
+  if (status.accessSource === "admin" || computeSummary?.unlimited)
+    return "Admin";
   if (status.accessSource === "admin_grant") return "Included";
   if (status.hasAccess) {
     return status.cancelAtPeriodEnd ? "Ending" : "Active";

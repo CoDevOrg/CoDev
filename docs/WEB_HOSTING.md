@@ -101,3 +101,30 @@ members. This ingestion route does not provision a collector: configure one
 before enablement. Missing snapshots or snapshots older than 24 hours block free
 compute; the existing every-minute cron also shuts down blocked owners' active
 workspaces. See the [Phase 5 review](./arm-workspace-free-tier-phase-5.md).
+
+## ARM production finalization
+
+The production ARM resource group is `codev-arm-workspace-production`; staging
+canaries keep using `codev-arm-workspace-staging`. The dedicated ARM application
+has the existing custom workspace-operator role on the production group, and
+GitHub's OIDC deployment identity has Cost Management Reader there.
+
+GitHub secret `ARM_WORKSPACE_RUNTIME_SECRETS` contains the ARM credential/image/
+signing/tunnel configuration. The Cloudflare deployment combines it with
+`CRON_SECRET` in a private secrets file, so future deploys preserve runtime
+settings and keep the Tunnel/DNS token distinct from the CI deployment token.
+Cloudflare now verifies production database schema before building/deploying.
+
+`Collect ARM owner costs` runs hourly and by manual dispatch. It pulls the
+production DB configuration using the existing Vercel deployment credential,
+queries actual Azure resource costs using GitHub OIDC, and POSTs owner snapshots
+to the Worker. `ARM_WORKSPACE_COST_TAX_RATE=0` is the operator-confirmed rate.
+Unknown charged resource attribution blocks owners; unsupported currencies or
+collector failures leave snapshots to expire. Storage includes Azure transaction
+meters; historical transferred resources are conservatively charged to each
+recorded owner. Azure billing is delayed, so this is a reactive guard, not a
+hard billing cap. Invoice-based full-allowance cost acceptance remains separate.
+
+Cloudflare's build reads `GEN2_FREE_ARM_ENABLED` and `GEN2_FREE_ARM_OWNER_IDS`
+from GitHub variables. Vercel requires the equivalent production environment
+variables. Keep the internal allowlist until lifecycle acceptance is recorded.

@@ -496,7 +496,7 @@ export function CreateGen2WorkspaceForm({
 
           {isFreeTier ? (
             <p className="text-xs text-muted-foreground">
-              Free workspaces run on ARM64 Linux virtual machines with 50 GB
+              Free workspaces run on ARM64 Linux virtual machines with 16 GiB
               persistent storage. Ensure your build tools and dependencies
               support Linux ARM64.
             </p>
@@ -534,8 +534,8 @@ export function CreateGen2WorkspaceForm({
                   className="mt-0.5 size-4 rounded border-border"
                 />
                 <span>
-                  I acknowledge that monthly workspace time changes to 35
-                  shared hours.
+                  I acknowledge that monthly workspace time changes to 35 shared
+                  hours.
                 </span>
               </label>
             </div>

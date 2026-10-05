@@ -152,22 +152,28 @@ export function Gen2WorkspaceRoom({
             current.runtimeProvider === "azure_arm" ? (
               <>
                 Free ARM workspace compute is unavailable or paused.{" "}
-                <Link className="gen2-ws-retry" href="/settings/personal/billing">
+                <Link
+                  className="gen2-ws-retry"
+                  href="/settings/personal/billing"
+                >
                   View billing
                 </Link>
               </>
             ) : (
               <>
                 Running this workspace needs an active Individual plan.{" "}
-                <Link className="gen2-ws-retry" href="/settings/personal/billing">
+                <Link
+                  className="gen2-ws-retry"
+                  href="/settings/personal/billing"
+                >
                   Subscribe
                 </Link>
               </>
             )
           ) : (
             <>
-              This workspace is paused: its owner needs available compute to
-              run it.
+              This workspace is paused: its owner needs available compute to run
+              it.
             </>
           )}
         </div>

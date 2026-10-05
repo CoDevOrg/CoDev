@@ -136,14 +136,14 @@ describe("Gen2WorkspaceRoom", () => {
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
   });
 
-  it("tells a collaborator the owner has to subscribe", async () => {
+  it("tells a collaborator the owner needs available compute", async () => {
     stubFetch(
       () => new Response(JSON.stringify({ error: "x" }), { status: 402 }),
     );
     render(<Gen2WorkspaceRoom workspace={{ ...workspace, role: "editor" }} />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      /Ask them to subscribe/,
+      /owner needs available compute/,
     );
     expect(screen.queryByRole("link", { name: "Subscribe" })).toBeNull();
   });

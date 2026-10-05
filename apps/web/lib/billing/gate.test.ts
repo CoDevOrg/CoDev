@@ -1,3 +1,12 @@
+vi.mock("./workspace-entitlement", () => ({
+  getWorkspaceOwnerEntitlement: vi.fn(async () => ({
+    tier: "paid",
+    enabled: true,
+    unlimited: false,
+    ownedWorkspaceCount: 1,
+    monthlyLimitMs: 60_000_000,
+  })),
+}));
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({

@@ -92,3 +92,7 @@ cursor from migration `0068`; only saved chunks are acknowledged to the guest.
 `arm-workspace-turns-reconcile.ts` drains turns without recent browser polling.
 Idle shutdown waits for both live agent activity to stop and pending transcripts
 to finish saving. See the Phase 4 review for image and staging requirements.
+
+The hourly `infra/azure/collect-arm-owner-costs.mjs` collector owns Azure billing
+query/attribution and calls the authenticated budget ingestion boundary. The web
+layer does not poll Azure Cost Management on member requests.

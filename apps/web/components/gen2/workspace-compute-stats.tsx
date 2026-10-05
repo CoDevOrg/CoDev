@@ -91,7 +91,8 @@ export function WorkspaceComputeAlerts({
 
   const limit = computeSummary.minutesLimit;
   const used = computeSummary.minutesUsed;
-  const isExhausted = !computeSummary.unlimited && limit !== null && used >= limit;
+  const isExhausted =
+    !computeSummary.unlimited && limit !== null && used >= limit;
   const isBudgetBlocked = computeSummary.budget?.blocked === true;
 
   if (isExhausted) {
@@ -123,8 +124,8 @@ export function WorkspaceComputeAlerts({
           Free compute paused by budget guard
         </p>
         <p className="mt-1 text-muted-foreground">
-          Free workspace compute is paused by the monthly resource budget
-          guard. All saved files and workspace data remain safe.
+          Free workspace compute is paused by the monthly resource budget guard.
+          All saved files and workspace data remain safe.
         </p>
       </div>
     );

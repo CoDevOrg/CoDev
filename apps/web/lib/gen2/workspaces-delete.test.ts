@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => {
 
   const lockedRows = [{ ownerId: "user-1", status: "failed" }];
   const lockQuery = { for: vi.fn().mockResolvedValue(lockedRows) };
+  Object.assign(lockQuery, { orderBy: () => lockQuery });
   const lockWhere = { where: vi.fn(() => lockQuery) };
   const lockSelect = { from: vi.fn(() => lockWhere) };
   const updateQuery = { where: vi.fn().mockResolvedValue(undefined) };

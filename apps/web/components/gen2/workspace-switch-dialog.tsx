@@ -50,10 +50,10 @@ export function WorkspaceSwitchDialog({
             <strong>“{activeWorkspace.name}”</strong> is currently running.
           </p>
           <p className="text-muted-foreground">
-            Switching will stop <strong>“{activeWorkspace.name}”</strong> and start{" "}
-            <strong>“{targetWorkspaceName}”</strong>. All files, Git commits,
-            and configurations on both workspaces remain safely saved on
-            persistent disks.
+            Switching will stop <strong>“{activeWorkspace.name}”</strong> and
+            start <strong>“{targetWorkspaceName}”</strong>. All files, Git
+            commits, and configurations on both workspaces remain safely saved
+            on persistent disks.
           </p>
           {switching ? (
             <div

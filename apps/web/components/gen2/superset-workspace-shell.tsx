@@ -1828,8 +1828,8 @@ export function SupersetWorkspaceShell({
                           description={
                             connection.conflict
                               ? connection.switching
-                                ? connection.switchStatus ??
-                                  "Switching workspaces…"
+                                ? (connection.switchStatus ??
+                                  "Switching workspaces…")
                                 : workspace?.role === "owner"
                                   ? `“${connection.conflict.activeWorkspace.name}” is currently running. Free accounts can run one workspace at a time. Switch to stop it and start this workspace.`
                                   : `“${connection.conflict.activeWorkspace.name}” is currently running. Only the workspace owner can switch active workspaces.`
