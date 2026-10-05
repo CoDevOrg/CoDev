@@ -149,16 +149,25 @@ export function Gen2WorkspaceRoom({
       {subscriptionRequired ? (
         <div className="gen2-wb-banner gen2-wb-banner-error" role="alert">
           {current.role === "owner" ? (
-            <>
-              Running this workspace needs an active Individual plan.{" "}
-              <Link className="gen2-ws-retry" href="/settings/personal/billing">
-                Subscribe
-              </Link>
-            </>
+            current.runtimeProvider === "azure_arm" ? (
+              <>
+                Free ARM workspace compute is unavailable or paused.{" "}
+                <Link className="gen2-ws-retry" href="/settings/personal/billing">
+                  View billing
+                </Link>
+              </>
+            ) : (
+              <>
+                Running this workspace needs an active Individual plan.{" "}
+                <Link className="gen2-ws-retry" href="/settings/personal/billing">
+                  Subscribe
+                </Link>
+              </>
+            )
           ) : (
             <>
-              This workspace is paused: its owner needs an active Individual
-              plan to run it. Ask them to subscribe.
+              This workspace is paused: its owner needs available compute to
+              run it.
             </>
           )}
         </div>
