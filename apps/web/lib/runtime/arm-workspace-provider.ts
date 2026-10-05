@@ -19,6 +19,8 @@ const NETWORK_API = "2024-05-01";
 const DISK_API = "2024-03-02";
 const DEPLOYMENT_API = "2025-04-01";
 const WORKSPACE_LOCATION = "westus2";
+// Keep VM and guest-command polling under Cloudflare Workflows' subrequest budget.
+const VM_POLL_INTERVAL_MS = 10_000;
 const CLOUDFLARE_ACCOUNT_ID = "84a1d01866de04e04320feddfb199b83";
 const CLOUDFLARE_ZONE_ID = "c474dbc7af01ea073573a250fbd1d5ec";
 const CLOUDFLARE_ZONE_NAME = "trycodev.com";
@@ -773,7 +775,7 @@ async function waitForVmReady(
       fail("VM_FAILED_TO_START");
     }
     await heartbeat();
-    await new Promise((resolve) => setTimeout(resolve, 5_000));
+    await new Promise((resolve) => setTimeout(resolve, VM_POLL_INTERVAL_MS));
   }
   fail("VM_BOOT_TIMEOUT");
 }
@@ -831,7 +833,7 @@ async function runVmCommand(
       await deleteResource(commandId, COMPUTE_API).catch(() => undefined);
       return output;
     }
-    await new Promise((resolve) => setTimeout(resolve, 2_000));
+    await new Promise((resolve) => setTimeout(resolve, VM_POLL_INTERVAL_MS));
   }
   fail("GUEST_COMMAND_TIMEOUT");
 }
