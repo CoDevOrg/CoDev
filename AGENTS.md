@@ -15,6 +15,7 @@
 ## Key conventions and gotchas
 
 - Workspace RPC must resolve the provider and current generation on each call; an unavailable ARM route must never fall back to the Firecracker host.
+- Workers Free limits external requests per workflow instance, not per step. Use bounded lifecycle continuations; fence child activation and preserve saved-disk identity across handoffs.
 - Workspace connection checks must not wake guests or count as activity. Keepalives come from recent member input or running agent work; persisted `ready` state alone does not establish connectivity.
 
 - In guest systemd units, set agent-profile parent permissions inside the final `ExecStart` wrapper; systemd reapplies `StateDirectoryMode` after `ExecStartPre`. Individual profiles and credential files must remain private.

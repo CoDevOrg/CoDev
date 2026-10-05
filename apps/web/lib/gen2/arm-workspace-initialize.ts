@@ -4,17 +4,14 @@ import { schema } from "@codev/db";
 import { eq } from "drizzle-orm";
 
 import { getDatabase } from "../platform/database";
-import { getRepositorySnapshot } from "../github/github";
+import { initializeArmPrivateSource } from "./arm-workspace-private-source";
 import { armWorkspaceRequest } from "../runtime/arm-workspace-request";
 import { ArmWorkspaceRuntimeError } from "../runtime/arm-workspace-provider";
 
 type Workspace = typeof schema.gen2Workspaces.$inferSelect;
 type Target = Parameters<typeof armWorkspaceRequest>[0];
 
-async function sourceFor(
-  workspace: Workspace,
-  db: ReturnType<typeof getDatabase>,
-) {
+async function sourceFor(workspace: Workspace) {
   if (!workspace.repository || !workspace.baseSha) {
     const { buildBlankSandboxSource } = await import("./instance");
     return buildBlankSandboxSource();
@@ -25,16 +22,9 @@ async function sourceFor(
       baseSha: workspace.baseSha,
     };
   }
-  return {
-    repositoryUrl: null,
-    baseSha: workspace.baseSha,
-    repositorySnapshot: await getRepositorySnapshot(
-      workspace.ownerId,
-      workspace.repository,
-      workspace.baseSha,
-      db,
-    ),
-  };
+  throw new Error(
+    "Private repository initialization requires bounded file transfer.",
+  );
 }
 
 async function initialize(target: Target, body: unknown) {
@@ -76,7 +66,7 @@ export async function initializeGen2ArmWorkspace(
     .where(eq(schema.gen2Workspaces.id, target.workspaceId))
     .limit(1);
   if (!workspace) throw new ArmWorkspaceRuntimeError("STALE_OPERATION");
-  const blank = !workspace.repository ? await sourceFor(workspace, db) : null;
+  const blank = !workspace.repository ? await sourceFor(workspace) : null;
   const identity = {
     repositoryUrl:
       workspace.repository && !workspace.repositoryPrivate
@@ -85,10 +75,19 @@ export async function initializeGen2ArmWorkspace(
     baseSha: workspace.baseSha ?? blank?.baseSha,
   };
   if ((await initialize(target, identity)).initialized) return;
-  const source = blank ?? (await sourceFor(workspace, db));
-  if ("repositorySnapshot" in source && source.repositorySnapshot) {
-    for (const file of source.repositorySnapshot.files) {
-      await initialize(target, { ...identity, file });
+  if (
+    workspace.repositoryPrivate &&
+    workspace.repository &&
+    workspace.baseSha
+  ) {
+    await initializeArmPrivateSource(workspace, db, (file) =>
+      initialize(target, { ...identity, file }),
+    );
+  } else {
+    const source = blank ?? (await sourceFor(workspace));
+    if ("repositorySnapshot" in source && source.repositorySnapshot) {
+      for (const file of source.repositorySnapshot.files)
+        await initialize(target, { ...identity, file });
     }
   }
   await initialize(target, { ...identity, complete: true });

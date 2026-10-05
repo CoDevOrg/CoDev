@@ -1,5 +1,6 @@
 import "server-only";
 
+import { ArmWorkflowIO } from "./arm-workflow-io";
 import { capabilityToken } from "./arm-workspace-provider";
 import { boundedJsonRequest } from "../gen2/bounded-request";
 import { recordArmWorkspaceMemberActivity } from "./arm-workspace-member-activity";
@@ -37,19 +38,21 @@ export async function armWorkspaceRequest(
       body: encodedBody,
     },
   );
-  const { response, payload } = await boundedJsonRequest<unknown>(
-    `https://${target.host}${path}`,
-    {
-      method,
-      headers: {
-        authorization: `Bearer ${token}`,
-        "content-type": "application/json",
+  const { response, payload } = await ArmWorkflowIO.request("guest", () =>
+    boundedJsonRequest<unknown>(
+      `https://${target.host}${path}`,
+      {
+        method,
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+        },
+        ...(body === undefined ? {} : { body: encodedBody }),
+        cache: "no-store",
+        redirect: "manual",
       },
-      ...(body === undefined ? {} : { body: encodedBody }),
-      cache: "no-store",
-      redirect: "manual",
-    },
-    timeoutMs,
+      timeoutMs,
+    ),
   );
   if (response.ok)
     await recordArmWorkspaceMemberActivity(

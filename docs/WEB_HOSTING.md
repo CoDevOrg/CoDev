@@ -6,6 +6,14 @@ Vercel retains its own production and preview deployments. Check the hostname
 and deployment job before changing a setting; the deployments have separate
 runtime secrets.
 
+ARM lifecycle coordination stays on Cloudflare Workers Free. The external
+request limit applies to the whole workflow instance, so splitting `step.do`
+calls or using a service binding does not reset it. Lifecycle instances hand
+off after ten request/progress checkpoints, retain unfinished polling results,
+and compact completed phases into the workspace's stored runtime state. The
+continuation must claim the current operation before its activation event;
+saved disks and VM generations remain unchanged across handoffs.
+
 |                       | Cloudflare                                                                                             | Vercel                                                                                                                       |
 | --------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
 | Serves                | The production Worker on `trycodev.com` and `www.trycodev.com`, plus the `admins.trycodev.com/*` route | The `codev` web project on Vercel deployment URLs; `main` gets a production deployment and other branches get previews       |

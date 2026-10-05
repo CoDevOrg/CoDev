@@ -10,6 +10,11 @@ generation-bound signed tunnel adapter.
 
 ## Runtime boundary
 
+`arm-workflow-continuation.ts` claims and activates bounded lifecycle instances
+on Workers Free; `arm-workflow-database.ts` owns their short-lived Hyperdrive
+connections. Completed phases resume from stored runtime resources, while
+unfinished phases carry request checkpoints so retries do not repeat mutations.
+
 The web workbench, terminal, Git operations, and agents all target the
 workspace's selected guest. Gen 2 workspace membership is checked before
 the control plane calls the orchestrator. Historical Gen 1 data and database

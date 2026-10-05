@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, generateKeyPairSync } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ArmWorkspaceProvider } from "./arm-workspace-provider";
@@ -275,6 +275,64 @@ describe("ARM workspace provider stop", () => {
             call.url.includes("/providers/Microsoft.Network/")),
       ),
     ).toHaveLength(10);
+  });
+
+  it("resumes connection checks without redeploying or preparing a saved disk", async () => {
+    const keys = generateKeyPairSync("ed25519");
+    vi.stubEnv(
+      "ARM_WORKSPACE_SIGNING_PRIVATE_KEY",
+      keys.privateKey
+        .export({ type: "pkcs8", format: "der" })
+        .toString("base64"),
+    );
+    vi.stubEnv(
+      "ARM_WORKSPACE_SIGNING_PUBLIC_KEY",
+      keys.publicKey.export({ type: "spki", format: "pem" }).toString(),
+    );
+    const progress = vi.fn(async () => undefined);
+    const requests: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        requests.push(String(input));
+        expect(String(input)).toBe(`https://${tunnelName}/v1/health`);
+        expect(new Headers(init?.headers).get("authorization")).toMatch(
+          /^Bearer /,
+        );
+        return jsonResponse({
+          ready: true,
+          workspaceId,
+          generation,
+          diskUuid: "saved-disk-uuid",
+        });
+      },
+    );
+    const resources = {
+      vmId: "saved-vm",
+      diskId: "saved-disk",
+      diskUuid: "saved-disk-uuid",
+      tunnelId: tunnel.id,
+      routeHost: tunnelName,
+    };
+    await expect(
+      new ArmWorkspaceProvider().start(
+        {
+          workspaceId,
+          generation,
+          diskId: resources.diskId,
+          diskUuid: resources.diskUuid,
+          resume: {
+            status: "checking_readiness",
+            vmId: resources.vmId,
+            tunnelId: resources.tunnelId,
+            routeHost: resources.routeHost,
+          },
+        },
+        progress,
+      ),
+    ).resolves.toEqual(resources);
+    expect(requests).toHaveLength(1);
+    expect(progress).not.toHaveBeenCalled();
   });
 
   it("does not replace a missing saved disk with a fresh disk", async () => {
