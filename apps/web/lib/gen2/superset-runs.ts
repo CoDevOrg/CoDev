@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 import type { Gen2SupersetRunStatus } from "@codev/contracts";
@@ -174,6 +174,22 @@ export async function getGen2SupersetRunById(runId: string) {
     .select()
     .from(schema.gen2SupersetRuns)
     .where(eq(schema.gen2SupersetRuns.id, runId))
+    .limit(1);
+  return run ?? null;
+}
+
+/** The newest process that can still accept input for a logical session. */
+export async function getActiveGen2SupersetRunForSession(sessionId: string) {
+  const [run] = await getDatabase()
+    .select()
+    .from(schema.gen2SupersetRuns)
+    .where(
+      and(
+        eq(schema.gen2SupersetRuns.sessionId, sessionId),
+        inArray(schema.gen2SupersetRuns.status, MONITORABLE_STATUSES),
+      ),
+    )
+    .orderBy(desc(schema.gen2SupersetRuns.createdAt))
     .limit(1);
   return run ?? null;
 }

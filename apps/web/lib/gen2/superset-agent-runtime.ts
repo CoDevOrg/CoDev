@@ -35,6 +35,7 @@ import { isGen2SupersetAgentSessionsEnabled } from "./superset-agent-sessions-fe
 import {
   claimGen2SupersetRunLease,
   getGen2SupersetRunById,
+  getActiveGen2SupersetRunForSession,
   listMonitorableGen2SupersetRuns,
   listCheckpointableGen2SupersetRuns,
   markGen2SupersetRunFailed,
@@ -249,6 +250,20 @@ export async function sendGen2SupersetAgentInput(input: {
   );
 }
 
+/** Send a follow-up to the current process for one durable logical session. */
+export async function sendGen2AgentSessionFollowUp(input: {
+  workspaceId: string;
+  userId: string;
+  sessionId: string;
+  data: string;
+}) {
+  const run = await getActiveGen2SupersetRunForSession(input.sessionId);
+  if (!run || run.workspaceId !== input.workspaceId) {
+    throw new Gen2LifecycleError("Agent session is not running.", 409);
+  }
+  await sendGen2SupersetAgentInput({ ...input, runId: run.id });
+}
+
 type PollSessionInput = {
   workspaceId: string;
   userId: string;
@@ -382,6 +397,19 @@ export async function cancelGen2SupersetAgentSession(
   input: CancelSessionInput,
 ) {
   return cancelSession(input, "persistent");
+}
+
+/** Stop the current process for one durable logical session. */
+export async function stopGen2AgentSession(input: {
+  workspaceId: string;
+  userId: string;
+  sessionId: string;
+}) {
+  const run = await getActiveGen2SupersetRunForSession(input.sessionId);
+  if (!run || run.workspaceId !== input.workspaceId) {
+    throw new Gen2LifecycleError("Agent session is not running.", 409);
+  }
+  await cancelGen2SupersetAgentSession({ ...input, runId: run.id });
 }
 
 async function cancelSession(

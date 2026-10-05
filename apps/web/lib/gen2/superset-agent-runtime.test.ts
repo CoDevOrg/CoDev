@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   markStopping: vi.fn(),
   markRecoveryRequired: vi.fn(),
   getRunById: vi.fn(),
+  getActiveRunForSession: vi.fn(),
   listMonitorable: vi.fn(),
   start: vi.fn(),
   poll: vi.fn(),
@@ -95,6 +96,8 @@ vi.mock("./superset-runs", () => ({
   markGen2SupersetRunRecoveryRequired: (...args: unknown[]) =>
     mocks.markRecoveryRequired(...args),
   getGen2SupersetRunById: (...args: unknown[]) => mocks.getRunById(...args),
+  getActiveGen2SupersetRunForSession: (...args: unknown[]) =>
+    mocks.getActiveRunForSession(...args),
   listMonitorableGen2SupersetRuns: (...args: unknown[]) =>
     mocks.listMonitorable(...args),
 }));
@@ -124,6 +127,8 @@ import {
   reconcileGen2SupersetAgentSession,
   monitorGen2SupersetAgentSessions,
   sendGen2SupersetAgentInput,
+  sendGen2AgentSessionFollowUp,
+  stopGen2AgentSession,
   startGen2SupersetAgentSession,
   startGen2SupersetAgentTurn,
 } from "./superset-agent-runtime";
@@ -184,6 +189,26 @@ describe("gen2 Superset agent runtime adapter", () => {
       }),
     ).rejects.toThrow(Gen2LifecycleError);
     expect(mocks.register).not.toHaveBeenCalled();
+  });
+
+  it("sends follow-up input and stops through the active logical-session run", async () => {
+    mocks.getActiveRunForSession.mockResolvedValue(RUN);
+    mocks.getRunById.mockResolvedValue(RUN);
+
+    await sendGen2AgentSessionFollowUp({
+      workspaceId,
+      userId,
+      sessionId: "session-1",
+      data: "Continue with the tests.",
+    });
+    expect(mocks.sendInput).toHaveBeenCalledWith(
+      workspaceId,
+      "agent-1",
+      "Continue with the tests.",
+    );
+
+    await stopGen2AgentSession({ workspaceId, userId, sessionId: "session-1" });
+    expect(mocks.stop).toHaveBeenCalledWith(workspaceId, "agent-1");
   });
 
   it("monitors live runs and renews their seats without browser polling", async () => {
