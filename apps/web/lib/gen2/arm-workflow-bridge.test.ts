@@ -89,7 +89,7 @@ describe("ARM workflow bridge", () => {
           Authorization: "Bearer test-secret",
         }),
         body: JSON.stringify(params),
-        redirect: "error",
+        redirect: "manual",
       }),
     );
     expect(fetchMock).toHaveBeenLastCalledWith(

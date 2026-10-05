@@ -1,3 +1,4 @@
+import { runtimeEnvironment } from "@/lib/platform/runtime-environment";
 import "server-only";
 import { timingSafeEqual } from "node:crypto";
 import { gen2ArmWorkflowParamsSchema } from "@codev/contracts";
@@ -6,7 +7,7 @@ import { Gen2LifecycleError } from "./errors";
 import { nativeArmWorkflowBinding } from "./arm-workflow-binding";
 
 export async function dispatchArmWorkflow(request: Request) {
-  const secret = process.env.CRON_SECRET;
+  const secret = runtimeEnvironment().CRON_SECRET;
   const received = Buffer.from(request.headers.get("authorization") ?? "");
   const expected = Buffer.from(secret ? `Bearer ${secret}` : "");
   if (

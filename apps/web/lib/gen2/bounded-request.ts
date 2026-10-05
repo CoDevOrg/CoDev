@@ -14,6 +14,12 @@ export async function boundedJsonRequest<T>(
     return await Promise.race([
       (async () => {
         const response = await fetcher(url, { ...options, signal });
+        if (
+          options.redirect === "manual" &&
+          response.status >= 300 &&
+          response.status < 400
+        )
+          throw new Error("Workspace request was redirected.");
         const payload = (await response.json()) as T;
         return { response, payload };
       })(),

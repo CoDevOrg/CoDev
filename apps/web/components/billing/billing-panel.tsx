@@ -42,7 +42,7 @@ function planSummary(
       const hours = computeSummary.ownedWorkspaceCount >= 2 ? 35 : 50;
       return `Free ARM plan active. Includes ${hours} hours/month (${computeSummary.ownedWorkspaceCount >= 2 ? "shared across 2 workspaces" : "for 1 workspace"}). Resets on ${formatDate(computeSummary.resetsAt)}.`;
     }
-    return "Subscribe to create workspaces and run agents. Free ARM workspaces are currently in gated preview for select accounts. You can still sign in and join shared workspaces.";
+    return "Subscribe to create workspaces and run agents. Free ARM preview is unavailable for this account. You can still sign in and join shared workspaces.";
   }
   if (status.cancelAtPeriodEnd && status.currentPeriodEnd) {
     return `Your plan ends on ${formatDate(status.currentPeriodEnd)}. You keep full access until then.`;

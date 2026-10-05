@@ -138,3 +138,8 @@ native `GEN2_ARM_WORKSPACE_LIFECYCLE` binding. Member requests still pass the no
 workspace authorization and entitlement checks before dispatch. Keep the secret
 identical in both deployments; the runtime Tunnel/DNS token needs no Workflow
 permissions.
+
+ARM runtime configuration and compute service authentication read live Worker
+bindings before Node environment values, so secret updates also reach lifecycle
+workflow entrypoints. Azure Cost Management may throttle queries; a failed run
+publishes no new snapshots and the guard expires stale telemetry.

@@ -22,8 +22,9 @@ member's personal organization (`organizations.id == users.id`), whose
   `sendGen2TerminalInput`, `startGen2AgentTurn`, and the Superset agent
   session/input/turn starts. Add the guard to any new entry that starts compute.
 
-Free ARM entitlements are implemented behind `GEN2_FREE_ARM_ENABLED=false` and
-an optional `GEN2_FREE_ARM_OWNER_IDS` allowlist. Eligible free owners create ARM
+Free ARM preview is enabled in production with `GEN2_FREE_ARM_ENABLED=true`
+and no owner allowlist. The optional `GEN2_FREE_ARM_OWNER_IDS` binding can restrict
+a future rollout. Eligible free owners create ARM
 workspaces and share 50 hours with one owned workspace or 35 hours with two,
 with one active workspace. Second creation requires explicit quota acknowledgment.
 Paid owners keep the existing 1,000-minute allowance and admins remain exempt.

@@ -1,5 +1,9 @@
 # ARM free-tier Phase 6: UI, compute controls, and gated copy
 
+Historical implementation review, before production finalization.
+The rollout subsequently enabled public ARM preview; see `BILLING.md` and
+`WEB_HOSTING.md` for current configuration.
+
 Date: 2026-10-05. Implementation review; automated tests and live canaries
 deliberately skipped at user request. Free rollout remains disabled
 (`GEN2_FREE_ARM_ENABLED=false`). This change does not apply a production

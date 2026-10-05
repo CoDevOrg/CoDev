@@ -14,3 +14,4 @@ This module owns foundational infrastructure integrations and platform-level cro
 - `kms.ts`, `crypto.ts`: Key management and encryption utilities.
 
 - `privacy-preferences.ts`: analytics consent interpretation and URL minimization shared by browser and server ingestion.
+- `runtime-environment.ts`: Live Worker bindings take precedence over Node environment values for runtime secrets; Vercel uses its Node environment.

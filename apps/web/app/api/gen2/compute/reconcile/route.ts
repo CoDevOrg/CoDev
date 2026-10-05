@@ -1,3 +1,4 @@
+import { runtimeEnvironment } from "@/lib/platform/runtime-environment";
 import { timingSafeEqual } from "node:crypto";
 import { gen2OwnerBudgetReportSchema } from "@codev/contracts";
 import { recordOwnerBudget } from "@/lib/gen2/owner-budget-report";
@@ -9,7 +10,7 @@ import { reconcileArmWorkspaceOperations } from "@/lib/gen2/runtime-operations";
 export const maxDuration = 300;
 
 function authorized(request: Request) {
-  const secret = process.env.CRON_SECRET;
+  const secret = runtimeEnvironment().CRON_SECRET;
   const supplied = request.headers
     .get("authorization")
     ?.replace(/^Bearer /, "");
