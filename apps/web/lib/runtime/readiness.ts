@@ -2,8 +2,6 @@ import "server-only";
 
 import { checkRealtimeConnection } from "../gen2/collaboration-redis";
 import { checkDatabaseConnection } from "../platform/database";
-import { getHostState } from "./host";
-import { checkOrchestratorConnection } from "./orchestrator-health";
 
 async function measured(check: () => Promise<unknown>) {
   const startedAt = Date.now();
@@ -20,46 +18,13 @@ export async function getReadiness() {
     measured(checkDatabaseConnection),
     measured(checkRealtimeConnection),
   ]);
-  let orchestrator: {
-    status: "ready" | "sleeping" | "starting" | "degraded";
-    latencyMs: number;
-  };
-  const hostStartedAt = Date.now();
-  try {
-    const state = await getHostState();
-    if (state === "stopped" || state === "stopping") {
-      orchestrator = {
-        status: "sleeping",
-        latencyMs: Date.now() - hostStartedAt,
-      };
-    } else if (state === "pending") {
-      orchestrator = {
-        status: "starting",
-        latencyMs: Date.now() - hostStartedAt,
-      };
-    } else if (state === "running") {
-      const result = await measured(checkOrchestratorConnection);
-      orchestrator = result;
-    } else {
-      orchestrator = {
-        status: "degraded",
-        latencyMs: Date.now() - hostStartedAt,
-      };
-    }
-  } catch {
-    orchestrator = {
-      status: "degraded",
-      latencyMs: Date.now() - hostStartedAt,
-    };
-  }
-  const ready =
-    database.status === "ready" &&
-    realtime.status === "ready" &&
-    orchestrator.status !== "degraded";
+  // Guest readiness is checked per workspace; the web service does not depend
+  // on an allocated guest or the retired shared Firecracker host.
+  const ready = database.status === "ready" && realtime.status === "ready";
   return {
     status: ready ? ("ready" as const) : ("degraded" as const),
     service: "codev-web",
     release: process.env.VERCEL_GIT_COMMIT_SHA ?? "development",
-    components: { database, realtime, orchestrator },
+    components: { database, realtime },
   };
 }

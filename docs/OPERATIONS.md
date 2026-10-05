@@ -3,8 +3,8 @@
 ## Normal signals
 
 - `GET /api/health` is cheap process liveness.
-- `GET /api/ready` checks PostgreSQL, Redis, and the runtime. A deallocated
-  Firecracker host is reported as `sleeping` and is healthy.
+- `GET /api/ready` checks PostgreSQL and Redis. Runtime readiness is checked per
+  workspace; the retired Firecracker host is not a web service dependency.
 - Vercel logs are structured JSON with a release and request ID.
 - Azure Monitor collects the host's orchestrator log and VM availability; see
   the Log Analytics workspace in `infra/azure/main.bicep`.
@@ -24,12 +24,10 @@ are in [EMAIL.md](./EMAIL.md).
 1. Run `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`,
    `pnpm build`, `pnpm rust:check`, and `pnpm test:e2e`.
 2. Apply the Drizzle migration with `pnpm db:migrate`.
-3. A push to `main` that touches `services/`, `infra/azure/`, or
-   `infra/runtime/scripts/` runs `infra/runtime/deploy.sh` through the **Deploy runtime**
-   workflow — anyone's push ships the runtime, not just a maintainer's laptop.
-   Watch that run rather than deploying by hand, and let the host return to
-   `stopped` afterwards. `infra/runtime/deploy.sh` stays runnable locally, and the
-   workflow can be started by hand from the Actions tab.
+3. The production Firecracker host was retired on 2026-10-05. **Deploy runtime
+   (Azure)** is disabled and has no push trigger; re-enable its manual dispatch
+   only when explicitly restoring that host. ARM images use **Build ARM workspace
+   image (Azure)** and the dedicated ARM resource groups instead.
 4. Push. On `main`, the **CI** workflow runs its checks, builds the
    Cloudflare Worker on a GitHub-hosted runner, and deploys it with `cf deploy`.
    The Worker serves `trycodev.com`; use the Cloudflare Dashboard or CLI to

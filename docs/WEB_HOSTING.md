@@ -17,7 +17,7 @@ The Cloudflare Worker runs the Next.js app through vinext. It handles Gen 2
 collaboration and terminal WebSocket upgrades, runs the every-minute compute
 reconciliation Cron Trigger, and uses Hyperdrive for PostgreSQL. The ARM
 workspace canary also creates Cloudflare Tunnels and DNS records for runtime
-hostnames; the Firecracker guests themselves run in Azure. See
+hostnames; the ARM workspace guests run in Azure. See
 [`cloudflare-worker.ts`](../apps/web/lib/platform/cloudflare-worker.ts) and
 [`arm-workspace-tunnel.mjs`](../infra/azure/arm-workspace-tunnel.mjs).
 
@@ -103,6 +103,13 @@ compute; the existing every-minute cron also shuts down blocked owners' active
 workspaces. See the [Phase 5 review](./arm-workspace-free-tier-phase-5.md).
 
 ## ARM production finalization
+
+The legacy `codev-runtime-host` Firecracker VM in `CODEV-RUNTIME-MIGRATION`
+was retired on 2026-10-05. Its dedicated OS/jailer disks and networking are
+removed; ARM workspace disks and infrastructure remain separate. GitHub's
+`Deploy runtime (Azure)` workflow is disabled and has no push trigger, so ARM
+changes cannot recreate the legacy host. Restoring Firecracker requires an
+explicit operator decision before re-enabling that manual workflow.
 
 The production ARM resource group is `codev-arm-workspace-production`; staging
 canaries keep using `codev-arm-workspace-staging`. The dedicated ARM application
