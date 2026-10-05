@@ -22,6 +22,7 @@
 - Loopback alone does not isolate privileged workspace RPC from terminal processes. ARM VM images require the local caller firewall before guestd starts; generalized VM administrators use sudo for maintenance RPC.
 
 - Worker fetches support `redirect: "manual"`, not `"error"`; reject redirect responses explicitly for authenticated runtime requests.
+- ARM lifecycle polling must honor Azure `Retry-After` while staying within Cloudflare Workflows' per-invocation subrequest budget.
 
 - Before starting or deploying the web app, run `pnpm db:check`. A newer migration ledger entry does not prove older tables exist; repair skipped schema with a forward migration instead of editing applied history.
 - For Azure subscription inspection, use the signed-in Azure CLI. If it is not authenticated, sign in with `az login --tenant 0841fce6-e7c1-4ea4-b4f1-a238d465137b`.

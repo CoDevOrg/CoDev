@@ -127,6 +127,12 @@ describe("ARM workspace provider stop", () => {
   }
 
   it("reads the created disk after Azure returns an asynchronous status response", async () => {
+    const delays: number[] = [];
+    vi.stubGlobal("setTimeout", ((callback: () => void, delay = 0) => {
+      delays.push(delay);
+      queueMicrotask(callback);
+      return 0;
+    }) as typeof setTimeout);
     stubFetch();
     const fallback = fetch;
     let created = false;
@@ -169,6 +175,7 @@ describe("ARM workspace provider stop", () => {
       ),
     ).rejects.toThrow("stop after disk provisioning");
     expect(progress).toHaveBeenCalledOnce();
+    expect(delays).toEqual([15_000]);
   });
 
   it("reads running state from the Azure REST properties envelope", async () => {
