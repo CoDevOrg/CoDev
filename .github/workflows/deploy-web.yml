@@ -108,7 +108,7 @@ jobs:
           const values = { ARM_WORKSPACE_IMAGE_VERSION_ID: arm.ARM_WORKSPACE_IMAGE_VERSION_ID, ARM_WORKSPACE_BOOT_ENABLED: process.env.ARM_WORKSPACE_BOOT_ENABLED };
           for (const [key, value] of Object.entries(values)) {
             const current = envs.find(env => env.key === key && env.target?.includes("production"));
-            const response = await fetch(current ? `${root}/${current.id}${team}` : root + team, {
+            const response = await fetch(current ? `${root.replace("/v10/", "/v9/")}/${current.id}${team}` : root + team, {
               method: current ? "PATCH" : "POST", headers,
               body: JSON.stringify(current ? { value } : { key, value, type: "plain", target: ["production"] }),
             });
