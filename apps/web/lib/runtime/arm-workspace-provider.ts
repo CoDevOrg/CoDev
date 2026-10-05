@@ -1165,7 +1165,7 @@ async function deployBakedVm(
   route: { tunnelId: string; routeHost: string; token?: string },
 ) {
   const { workspaceId, generation } = input;
-  let virtualMachineId = input.resume?.vmId;
+  let virtualMachineId = resumePhase(input) > 0 ? input.resume?.vmId : null;
   if (!virtualMachineId) {
     await progress("provisioning", {
       diskId,
@@ -1193,7 +1193,7 @@ async function startBakedRuntime(
 ) {
   const { workspaceId, generation } = input;
   const diskId =
-    input.resume?.vmId && input.diskId
+    resumePhase(input) > 0 && input.resume?.vmId && input.diskId
       ? input.diskId
       : input.diskId
         ? await requireDisk(input.diskId, workspaceId, generation)
@@ -1206,7 +1206,7 @@ async function startBakedRuntime(
       crypto.randomUUID(),
     ));
   const route =
-    input.resume?.tunnelId && input.resume.routeHost
+    resumePhase(input) > 0 && input.resume?.tunnelId && input.resume.routeHost
       ? { tunnelId: input.resume.tunnelId, routeHost: input.resume.routeHost }
       : await ensureTunnel(workspaceId, generation).then((tunnel) => ({
           tunnelId: tunnel.id,

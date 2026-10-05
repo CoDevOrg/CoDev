@@ -421,7 +421,18 @@ describe("ARM workspace provider stop", () => {
       },
     );
     const resources = await new ArmWorkspaceProvider().start(
-      { workspaceId, generation, diskId: null, diskUuid: null },
+      {
+        workspaceId,
+        generation,
+        diskId: null,
+        diskUuid: null,
+        resume: {
+          status: "queued",
+          vmId: "old-generation-vm",
+          tunnelId: "old-tunnel",
+          routeHost: "old.trycodev.com",
+        },
+      },
       vi.fn(async () => undefined),
     );
     expect(identity?.diskMode).toBe("new");
