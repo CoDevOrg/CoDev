@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   useWorkspaceConnection,
   CONNECTION_CHECK_MS,
+  CONNECTION_RETRY_MS,
   CONNECTION_TIMEOUT_MS,
 } from "./use-workspace-connection";
 
@@ -106,6 +107,63 @@ describe("workspace connection", () => {
     });
     expect(vi.mocked(fetch).mock.lastCall?.[1]?.method).toBe("POST");
     expect(mocks.connect).not.toHaveBeenCalled();
+  });
+
+  it("counts editor input even when its event does not bubble", async () => {
+    renderHook(() => useWorkspaceConnection("w", true, vi.fn()));
+    await flush();
+    const editor = document.createElement("input");
+    document.body.appendChild(editor);
+    editor.addEventListener("keydown", (event) => event.stopPropagation());
+    act(() =>
+      editor.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true })),
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(CONNECTION_CHECK_MS);
+    });
+    expect(vi.mocked(fetch).mock.lastCall?.[1]?.method).toBe("POST");
+    editor.remove();
+  });
+
+  it("keeps an active workspace open through one failed health check", async () => {
+    const { result } = renderHook(() =>
+      useWorkspaceConnection("w", true, vi.fn()),
+    );
+    await flush();
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(Response.json({ connected: false }))
+      .mockImplementation(connected);
+    act(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "a" })));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(CONNECTION_CHECK_MS);
+    });
+    expect(result.current.state).toBe("connected");
+    expect(vi.mocked(fetch).mock.lastCall?.[1]?.method).toBe("POST");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(CONNECTION_RETRY_MS);
+    });
+    expect(result.current.state).toBe("connected");
+    expect(vi.mocked(fetch).mock.lastCall?.[1]?.method).toBe("POST");
+    expect(mocks.connect).not.toHaveBeenCalled();
+  });
+
+  it("offers reconnect after consecutive failed health checks", async () => {
+    const { result } = renderHook(() =>
+      useWorkspaceConnection("w", true, vi.fn()),
+    );
+    await flush();
+    vi.mocked(fetch).mockResolvedValue(Response.json({ connected: false }));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(CONNECTION_CHECK_MS);
+    });
+    expect(result.current.state).toBe("connected");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(CONNECTION_RETRY_MS);
+    });
+    expect(result.current.state).toBe("disconnected");
   });
 
   it("starts waking a sleeping workspace as soon as it is opened", async () => {
