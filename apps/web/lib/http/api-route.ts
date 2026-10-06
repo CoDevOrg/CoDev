@@ -3,6 +3,7 @@ import "server-only";
 import { apiError, getApiUser, getApiUserAnyAuth } from "@/lib/http/api";
 import type { AppUser } from "@/lib/auth/identity";
 import { databaseErrorResponse } from "./database-error";
+import { forwardedRequest } from "./forwarded-request";
 
 /**
  * The one way an `app/api` route authenticates, reads its body, and turns a
@@ -108,7 +109,11 @@ export function withUser<P extends RouteParams = Record<string, never>>(
         : await getApiUser();
       if (!user) return apiError(new Error("Authentication required."), 401);
       const params = ((await context?.params) ?? {}) as P;
-      return await handler({ request, user, params });
+      return await handler({
+        request: forwardedRequest(request),
+        user,
+        params,
+      });
     } catch (error) {
       return errorResponse(error, options.errorStatus);
     }

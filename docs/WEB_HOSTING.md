@@ -3,6 +3,8 @@
 Public requests follow **Cloudflare → Azure Container Apps → Supabase/Redis**.
 Cloudflare Workers Free runs a small streaming proxy, including WebSocket upgrades;
 Next.js rendering, authorization, database work, and socket messages run on Azure.
+API requests preserve the authenticated edge origin for terminal same-origin checks,
+billing return URLs, workspace shares, and CLI sign-in links.
 This removes the 10 ms Worker CPU limit from app execution. It does not guarantee
 zero outages: database, Redis, runtime tunnels, and Azure can still fail.
 

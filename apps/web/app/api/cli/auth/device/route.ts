@@ -1,9 +1,11 @@
 import { createCliDeviceAuthorization } from "@/lib/auth/cli-auth";
+import { forwardedRequest } from "@/lib/http/forwarded-request";
 import { consumeRateLimit } from "@/lib/platform/rate-limit";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  request = forwardedRequest(request);
   const clientAddress =
     request.headers.get("x-vercel-forwarded-for") ??
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
