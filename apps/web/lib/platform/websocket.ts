@@ -1,4 +1,5 @@
 import type { WebSocket as VercelWebSocket } from "ws";
+import { upgradeNodeWebSocket } from "./node-websocket";
 
 export type WebSocketMessage = {
   data: string | null;
@@ -131,6 +132,8 @@ export async function upgradeWebSocket(
   onConnect: (socket: ServerWebSocket) => void | Promise<void>,
   options: { maxPayload: number },
 ) {
+  const nodeResponse = upgradeNodeWebSocket(request, onConnect, options);
+  if (nodeResponse) return nodeResponse;
   if (typeof WebSocketPair === "function") {
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
       return new Response("Expected Upgrade: websocket", { status: 426 });

@@ -1,4 +1,5 @@
 import application from "vinext/server/fetch-handler";
+import { dispatchArmWorkflow } from "../gen2/arm-workflow-bridge";
 import {
   cloudflareWebSocketUpgradeIdHeader,
   takeCloudflareWebSocket,
@@ -24,6 +25,22 @@ function upgradedResponse(response: Response, webSocket: WebSocket) {
 
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    // Azure calls the retained lifecycle service directly, bypassing SSR and
+    // session middleware. Dispatch still validates its service credential.
+    if (new URL(request.url).pathname === "/api/gen2/compute/workflow") {
+      try {
+        return Response.json(await dispatchArmWorkflow(request));
+      } catch (error) {
+        const status =
+          error instanceof Error && "status" in error
+            ? Number(error.status)
+            : 503;
+        return Response.json(
+          { error: "Workflow service unavailable." },
+          { status },
+        );
+      }
+    }
     if (!isGen2WebSocketRequest(request)) {
       return application.fetch(request, env, ctx);
     }

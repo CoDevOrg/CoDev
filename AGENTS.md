@@ -24,6 +24,7 @@
 - ARM guest units must not recursively change permissions on saved workspace disks; they also carry protected Superset metadata.
 - Loopback alone does not isolate privileged workspace RPC from terminal processes. ARM VM images require the local caller firewall before guestd starts; generalized VM administrators use sudo for maintenance RPC.
 
+- Azure web releases must pass origin readiness before Cloudflare traffic switches; keep the ARM workflow bridge on its separate workers.dev URL to avoid proxy loops.
 - Worker WebSocket messages need operation-scoped database pools; Redis clients and stream readers belong to the socket request, never the shared isolate.
 - Worker fetches support `redirect: "manual"`, not `"error"`; reject redirect responses explicitly for authenticated runtime requests.
 - ARM lifecycle polling must honor Azure `Retry-After` while staying within Cloudflare Workflows' per-invocation subrequest budget.
@@ -32,7 +33,7 @@
 - Before starting or deploying the web app, run `pnpm db:check`. A newer migration ledger entry does not prove older tables exist; repair skipped schema with a forward migration instead of editing applied history.
 - For Azure subscription inspection, use the signed-in Azure CLI. If it is not authenticated, sign in with `az login --tenant 0841fce6-e7c1-4ea4-b4f1-a238d465137b`.
 
-- CoDev is a hosted web app. `apps/web` deploys to Cloudflare Workers for `trycodev.com` and to Vercel for Vercel-hosted endpoints; active Gen 2 workspaces run in Azure ARM guests. The legacy Firecracker host is retired; keep its deployment workflow disabled unless explicitly restoring it.
+- CoDev is a hosted web app. `apps/web` runs on Azure Container Apps behind the Cloudflare proxy for `trycodev.com`, and on Vercel for Vercel-hosted endpoints; active Gen 2 workspaces run in Azure ARM guests. The legacy Firecracker host is retired; keep its deployment workflow disabled unless explicitly restoring it.
 - In Gen 2, the agent, editor, terminal, and Git use the same guest filesystem.
 - Use Node.js 24+ and `pnpm` for this repository.
 - Use the web package’s `dev` script (Webpack, matching production); allow `127.0.0.1` development resources. Initial connection checks must run in background tabs and have a request/body timeout.
