@@ -22,6 +22,9 @@ This module owns the communication and integration with external execution envir
   provider/generation for each guest call, sign its exact method/path/body, and
   preserve the host API response envelopes. Domain callers must authorize
   membership before using these clients; the adapter does not authorize users.
+  Runtime routing is imported statically so its database lookup shares the
+  caller’s request or operation context. `orchestrator-error.ts` owns the shared
+  transport error without a routing import cycle.
 - `arm-workspace-activity.ts`, `arm-workspace-member-activity.ts`: Observe live
   guest agent work and record successful member mutations without counting
   reads, connection checks, or polls as input.

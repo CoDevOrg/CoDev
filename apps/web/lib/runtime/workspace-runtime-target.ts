@@ -4,7 +4,7 @@ import { schema } from "@codev/db";
 import { eq } from "drizzle-orm";
 
 import { getDatabase } from "../platform/database";
-import { OrchestratorError } from "./orchestrator-request";
+import { OrchestratorError } from "./orchestrator-error";
 
 /** Resolve on every call: a socket must not retain a stopped guest's generation. */
 export async function workspaceRuntimeTarget(workspaceId: string) {
