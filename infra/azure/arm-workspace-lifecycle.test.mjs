@@ -13,6 +13,7 @@ function fixture() {
   let failTunnel = false;
   let pauseVm;
   let runningAgent = false;
+  let failCheckpoint = false;
   const state = {
     async initialize(id) {
       saved ??= {
@@ -21,6 +22,7 @@ function fixture() {
         generation: 0,
         dataDiskId: null,
         diskUuid: null,
+        lastVmGeneration: null,
         operation: null,
       };
     },
@@ -52,6 +54,12 @@ function fixture() {
     async requireDisk(id) {
       calls.push("require-disk");
       return { id };
+    },
+    async requireUnattachedDisk() {
+      calls.push("unattached-disk");
+    },
+    async requireGenerationDeleted(_workspace, generation) {
+      calls.push(`absent-${generation}`);
     },
     async createVm(_workspace, generation) {
       calls.push(`vm-${generation}`);
@@ -100,8 +108,19 @@ function fixture() {
       return runningAgent;
     },
   };
+  const checkpointCredentials = async () => {
+    calls.push("checkpoint");
+    if (failCheckpoint) throw new Error("CREDENTIAL_CHECKPOINT_FAILED");
+  };
   return {
-    service: new ArmWorkspaceLifecycle(state, azure, tunnel, guest, () => now),
+    service: new ArmWorkspaceLifecycle(
+      state,
+      azure,
+      tunnel,
+      guest,
+      () => now,
+      checkpointCredentials,
+    ),
     calls,
     state,
     advance: (ms) => {
@@ -115,6 +134,9 @@ function fixture() {
     },
     failTunnel: (value) => {
       failTunnel = value;
+    },
+    failCheckpoint: (value) => {
+      failCheckpoint = value;
     },
     pauseVm: (value) => {
       pauseVm = value;
@@ -142,6 +164,8 @@ test("start is idempotent and saved disk identity survives stop and reopen", asy
   assert.equal(reopened.dataDiskId, "disk-1");
   assert.equal(f.calls.filter((call) => call === "disk").length, 1);
   assert.ok(f.calls.indexOf("revoke-1") < f.calls.indexOf("cleanup-1"));
+  assert.ok(f.calls.indexOf("unattached-disk") < f.calls.indexOf("vm-1"));
+  assert.ok(f.calls.indexOf("absent-1") < f.calls.indexOf("vm-3"));
 });
 
 test("transient Azure conflict persists failure, backoff, then reconciles old generation", async () => {
@@ -275,6 +299,19 @@ test("partial stop resumes cleanup without flushing a deleted VM twice", async (
   assert.equal(f.calls.filter((call) => call === "flush").length, 1);
   assert.equal(f.calls.filter((call) => call === "cleanup-1").length, 2);
   assert.equal(f.calls.includes("delete-disk"), false);
+});
+
+test("credential checkpoint failure aborts normal VM deletion", async () => {
+  const f = fixture();
+  await f.service.start("workspace", "start");
+  f.failCheckpoint(true);
+  await assert.rejects(
+    f.service.stop("workspace", "stop"),
+    /CREDENTIAL_CHECKPOINT_FAILED/,
+  );
+  assert.ok(f.calls.includes("checkpoint"));
+  assert.equal(f.calls.includes("flush"), false);
+  assert.equal(f.calls.includes("cleanup-1"), false);
 });
 
 test("a tunnel revoke error still releases billable compute", async () => {

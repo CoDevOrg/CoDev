@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   resolveCredential: vi.fn(),
   claim: vi.fn(),
   release: vi.fn(),
+  heartbeat: vi.fn(),
   register: vi.fn(),
   claimLease: vi.fn(),
   releaseLease: vi.fn(),
@@ -16,8 +17,11 @@ const mocks = vi.hoisted(() => ({
   markStopping: vi.fn(),
   markRecoveryRequired: vi.fn(),
   getRunById: vi.fn(),
+  getActiveRunForSession: vi.fn(),
+  listMonitorable: vi.fn(),
   start: vi.fn(),
   poll: vi.fn(),
+  captureCredential: vi.fn(),
   stop: vi.fn(),
   sendInput: vi.fn(),
   checkRecovery: vi.fn(),
@@ -28,6 +32,10 @@ const mocks = vi.hoisted(() => ({
   createWorktree: vi.fn(),
   createTurn: vi.fn(),
   recordOutput: vi.fn(),
+  updateAuthCacheIfCurrent: vi.fn(),
+  createAgentSession: vi.fn(),
+  updateAgentSession: vi.fn(),
+  getAgentSession: vi.fn(),
 }));
 
 vi.mock("../billing/gate", () => ({
@@ -42,7 +50,7 @@ vi.mock("../providers/credential-seat", () => ({
   waitForCredentialSeat: (...args: unknown[]) => mocks.claim(...args),
   releaseCredentialSeat: (...args: unknown[]) => mocks.release(...args),
   retagCredentialSeat: vi.fn(async () => undefined),
-  heartbeatCredentialSeat: vi.fn(async () => undefined),
+  heartbeatCredentialSeat: (...args: unknown[]) => mocks.heartbeat(...args),
   describeSeatHolder: () => "a workspace turn is still using this connection.",
 }));
 vi.mock("./providers", () => ({
@@ -67,6 +75,14 @@ vi.mock("./turns", () => ({
     mocks.recordOutput(...args),
 }));
 
+vi.mock("./agent-sessions", () => ({
+  createGen2AgentSession: (...args: unknown[]) =>
+    mocks.createAgentSession(...args),
+  updateGen2AgentSessionStatus: (...args: unknown[]) =>
+    mocks.updateAgentSession(...args),
+  getGen2AgentSession: (...args: unknown[]) => mocks.getAgentSession(...args),
+}));
+
 vi.mock("./superset-runs", () => ({
   registerGen2SupersetRun: (...args: unknown[]) => mocks.register(...args),
   claimGen2SupersetRunLease: (...args: unknown[]) => mocks.claimLease(...args),
@@ -82,15 +98,26 @@ vi.mock("./superset-runs", () => ({
   markGen2SupersetRunRecoveryRequired: (...args: unknown[]) =>
     mocks.markRecoveryRequired(...args),
   getGen2SupersetRunById: (...args: unknown[]) => mocks.getRunById(...args),
+  getActiveGen2SupersetRunForSession: (...args: unknown[]) =>
+    mocks.getActiveRunForSession(...args),
+  listMonitorableGen2SupersetRuns: (...args: unknown[]) =>
+    mocks.listMonitorable(...args),
 }));
 
 vi.mock("./superset-agent-orchestrator-client", () => ({
   startSupersetAgent: (...args: unknown[]) => mocks.start(...args),
   pollSupersetAgent: (...args: unknown[]) => mocks.poll(...args),
+  captureSupersetAgentCredential: (...args: unknown[]) =>
+    mocks.captureCredential(...args),
   stopSupersetAgent: (...args: unknown[]) => mocks.stop(...args),
   sendSupersetAgentInput: (...args: unknown[]) => mocks.sendInput(...args),
   checkSupersetAgentRecovery: (...args: unknown[]) =>
     mocks.checkRecovery(...args),
+}));
+
+vi.mock("../providers/hosted-codex-subscription-credentials", () => ({
+  updateHostedCodexAuthCacheIfCurrent: (...args: unknown[]) =>
+    mocks.updateAuthCacheIfCurrent(...args),
 }));
 
 import { Gen2LifecycleError } from "./errors";
@@ -100,7 +127,12 @@ import {
   pollGen2SupersetAgentSession,
   pollGen2SupersetAgentTurn,
   reconcileGen2SupersetAgentSession,
+  monitorGen2SupersetAgentSessions,
   sendGen2SupersetAgentInput,
+  sendGen2AgentSessionFollowUp,
+  stopGen2AgentSession,
+  restartGen2AgentSession,
+  createGen2AgentSessionTask,
   startGen2SupersetAgentSession,
   startGen2SupersetAgentTurn,
 } from "./superset-agent-runtime";
@@ -118,17 +150,21 @@ const RUN = {
   hostAgentSessionId: "agent-1",
   connectionId: credentialId,
   leaseClaimed: true,
+  provider: "openai",
+  credentialRevision: "2026-10-04T00:00:00.000Z",
 };
 
 describe("gen2 Superset agent runtime adapter", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mocks.stop.mockResolvedValue(undefined);
     process.env.CODEV_SUPERSET_AGENT_SESSIONS_ENABLED = "true";
     mocks.requireMember.mockResolvedValue({ status: "ready", role: "editor" });
     mocks.bill.mockResolvedValue(undefined);
     mocks.claim.mockResolvedValue({ held: true });
     mocks.resolveCredential.mockResolvedValue({
       credentialId,
+      credentialRevision: "2026-10-04T00:00:00.000Z",
       launchProfile: { files: [], env: {} },
       via: "subscription",
     });
@@ -139,6 +175,9 @@ describe("gen2 Superset agent runtime adapter", () => {
       worktreeId: "agent-chat",
       branch: "codev/agent-chat",
     });
+    mocks.createAgentSession.mockResolvedValue({ id: "session-1" });
+    mocks.captureCredential.mockResolvedValue({ authCacheJson: null });
+    mocks.updateAuthCacheIfCurrent.mockResolvedValue(true);
   });
 
   it("refuses every call while the flag is off", async () => {
@@ -154,6 +193,96 @@ describe("gen2 Superset agent runtime adapter", () => {
       }),
     ).rejects.toThrow(Gen2LifecycleError);
     expect(mocks.register).not.toHaveBeenCalled();
+  });
+
+  it("sends follow-up input and stops through the active logical-session run", async () => {
+    mocks.getActiveRunForSession.mockResolvedValue(RUN);
+    mocks.getRunById.mockResolvedValue(RUN);
+
+    await sendGen2AgentSessionFollowUp({
+      workspaceId,
+      userId,
+      sessionId: "session-1",
+      data: "Continue with the tests.",
+    });
+    expect(mocks.sendInput).toHaveBeenCalledWith(
+      workspaceId,
+      "agent-1",
+      "Continue with the tests.",
+    );
+
+    await stopGen2AgentSession({ workspaceId, userId, sessionId: "session-1" });
+    expect(mocks.stop).toHaveBeenCalledWith(workspaceId, "agent-1");
+  });
+
+  it("restarts a recovery-required session with a new process identity", async () => {
+    mocks.getAgentSession.mockResolvedValue({
+      id: "session-1",
+      workspaceId,
+      chatId,
+      createdBy: userId,
+      task: "Repair the test.",
+      worktreeId: "agent-1",
+      provider: "openai",
+    });
+    mocks.getActiveRunForSession.mockResolvedValue(null);
+    mocks.register.mockResolvedValue({
+      runId,
+      status: "creating",
+      created: true,
+    });
+    mocks.start.mockResolvedValue({
+      hostWorkspaceId: "host-ws-1",
+      hostTerminalId: "term-1",
+      hostAgentSessionId: "agent-1",
+    });
+
+    await expect(
+      restartGen2AgentSession({ workspaceId, userId, sessionId: "session-1" }),
+    ).resolves.toEqual({ runId });
+    expect(mocks.register).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "session-1",
+        worktreeId: "agent-1",
+      }),
+    );
+  });
+
+  it("monitors live runs and renews their seats without browser polling", async () => {
+    mocks.listMonitorable.mockResolvedValue([RUN]);
+    mocks.checkRecovery.mockResolvedValue({
+      adoptable: true,
+      status: "running",
+    });
+
+    await expect(monitorGen2SupersetAgentSessions()).resolves.toEqual({
+      checked: 1,
+      running: 1,
+      recoveryRequired: 0,
+    });
+    expect(mocks.heartbeat).toHaveBeenCalledWith(
+      expect.objectContaining({ credentialId, ref: runId }),
+    );
+  });
+
+  it("marks an unverifiable run recovery-required and releases its seat", async () => {
+    mocks.listMonitorable.mockResolvedValue([RUN]);
+    mocks.checkRecovery.mockResolvedValue({
+      adoptable: false,
+      status: "not_found",
+    });
+
+    await expect(monitorGen2SupersetAgentSessions()).resolves.toEqual({
+      checked: 1,
+      running: 0,
+      recoveryRequired: 1,
+    });
+    expect(mocks.markRecoveryRequired).toHaveBeenCalledWith(
+      expect.objectContaining({ runId, workspaceId }),
+    );
+    expect(mocks.release).toHaveBeenCalledWith(
+      expect.objectContaining({ credentialId, ref: runId }),
+    );
   });
 
   it("rejects a viewer before resolving credentials or creating a run", async () => {
@@ -299,6 +428,11 @@ describe("gen2 Superset agent runtime adapter", () => {
       expect.objectContaining({ credentialId, surface: "gen2" }),
     );
     expect(mocks.resolveCredential).toHaveBeenCalledWith(userId, "codex");
+    expect(mocks.register).toHaveBeenCalledWith(
+      expect.objectContaining({
+        credentialRevision: "2026-10-04T00:00:00.000Z",
+      }),
+    );
     expect(mocks.claimLease).toHaveBeenCalledWith(
       expect.objectContaining({ runId }),
     );
@@ -415,6 +549,10 @@ describe("gen2 Superset agent runtime adapter", () => {
       expect.objectContaining({ credentialId }),
     );
     expect(mocks.releaseLease).toHaveBeenCalled();
+    expect(mocks.captureCredential).toHaveBeenCalledWith(
+      workspaceId,
+      "agent-1",
+    );
   });
 
   it("does not finish the run while it is still running", async () => {
@@ -449,7 +587,7 @@ describe("gen2 Superset agent runtime adapter", () => {
     ).rejects.toThrow("Superset run not found.");
   });
 
-  it("stops the host process and releases the lease on cancel, even if stop fails", async () => {
+  it("keeps the lease when cancellation cannot safely finish", async () => {
     mocks.getRunById.mockResolvedValue(RUN);
     mocks.stop.mockRejectedValue(new Error("host unreachable"));
 
@@ -458,13 +596,12 @@ describe("gen2 Superset agent runtime adapter", () => {
     ).rejects.toThrow("host unreachable");
 
     expect(mocks.markStopping).toHaveBeenCalled();
-    expect(mocks.release).toHaveBeenCalledWith(
-      expect.objectContaining({ credentialId }),
+    expect(mocks.markRecoveryRequired).toHaveBeenCalledWith(
+      expect.objectContaining({ runId }),
     );
-    expect(mocks.releaseLease).toHaveBeenCalled();
-    expect(mocks.markFinished).toHaveBeenCalledWith(
-      expect.objectContaining({ runId, exitReason: "cancelled" }),
-    );
+    expect(mocks.release).not.toHaveBeenCalled();
+    expect(mocks.releaseLease).not.toHaveBeenCalled();
+    expect(mocks.markFinished).not.toHaveBeenCalled();
   });
 
   it("marks recovery_required when the host cannot verify the run", async () => {
@@ -496,6 +633,7 @@ describe("gen2 Superset agent runtime adapter", () => {
 describe("gen2 Superset agent turn (Phase 4 browser-facing delegate)", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mocks.stop.mockResolvedValue(undefined);
     process.env.CODEV_SUPERSET_AGENT_SESSIONS_ENABLED = "true";
     mocks.requireMember.mockResolvedValue({ status: "ready", role: "editor" });
     mocks.bill.mockResolvedValue(undefined);
@@ -512,6 +650,7 @@ describe("gen2 Superset agent turn (Phase 4 browser-facing delegate)", () => {
       worktreeId: "agent-chat",
       branch: "codev/agent-chat",
     });
+    mocks.createAgentSession.mockResolvedValue({ id: "session-1" });
     mocks.getRunById.mockResolvedValue({
       id: runId,
       workspaceId,
@@ -543,13 +682,24 @@ describe("gen2 Superset agent turn (Phase 4 browser-facing delegate)", () => {
       idempotencyKey: "key-1",
     });
 
-    expect(result).toEqual({ sessionId: runId });
+    expect(result).toEqual({ sessionId: runId, agentSessionId: "session-1" });
     expect(mocks.createWorktree).toHaveBeenCalledWith(
       workspaceId,
       expect.objectContaining({ worktreeId: expect.any(String) }),
     );
+    expect(mocks.createAgentSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chatId,
+        createdBy: userId,
+        task: "hello",
+        workspaceId,
+      }),
+    );
     expect(mocks.register).toHaveBeenCalledWith(
-      expect.objectContaining({ worktreeId: expect.any(String) }),
+      expect.objectContaining({
+        sessionId: "session-1",
+        worktreeId: expect.any(String),
+      }),
     );
     expect(mocks.appendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -627,6 +777,30 @@ describe("gen2 Superset agent turn (Phase 4 browser-facing delegate)", () => {
     );
     expect(worktrees).toHaveLength(2);
     expect(worktrees[0]).not.toBe(worktrees[1]);
+  });
+
+  it("returns logical and process ids when creating an agent task", async () => {
+    mocks.register.mockResolvedValue({
+      runId,
+      status: "creating",
+      created: true,
+    });
+    mocks.start.mockResolvedValue({
+      hostWorkspaceId: "host-ws-1",
+      hostTerminalId: "term-1",
+      hostAgentSessionId: "agent-1",
+    });
+
+    await expect(
+      createGen2AgentSessionTask({
+        workspaceId,
+        userId,
+        chatId,
+        task: "Update the tests.",
+        provider: "codex",
+        idempotencyKey: "key-1",
+      }),
+    ).resolves.toEqual({ sessionId: "session-1", runId });
   });
 
   it("polls the run, records output, and reports the persisted reply", async () => {

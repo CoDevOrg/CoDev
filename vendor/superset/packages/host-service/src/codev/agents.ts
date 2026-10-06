@@ -1,4 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { readFile, stat } from "node:fs/promises";
+import { join } from "node:path";
 import { eq, isNull } from "drizzle-orm";
 import type { Hono } from "hono";
 import { z } from "zod";
@@ -326,13 +328,8 @@ export function registerCoDevAgentBridge({
 			agentSessions.set(createdAgentId, { workspaceId: workspace.id, launch });
 			created.pty.onExit(({ exitCode }) => {
 				agentExitCodes.set(createdAgentId, exitCode);
-				// A natural exit does not pass through DELETE. Remove the private
-				// credential profile as soon as its terminal has ended.
-				void releaseAgentLaunch(createdAgentId).catch(() => {
-					console.error("[codev-agent-bridge] could not remove an isolated launch profile", {
-						agentId: createdAgentId,
-					});
-				});
+				// Keep the profile until the control plane captures any refreshed
+				// credential. DELETE performs the final profile cleanup.
 			});
 			agentPollStates.set(createdAgentId, { sequence: 0, text: "" });
 			return context.json(
@@ -427,6 +424,28 @@ export function registerCoDevAgentBridge({
 				400,
 			);
 		}
+	});
+
+	app.post("/codev/agents/:agentId/credential", async (context) => {
+		if (!requireBridge(context.req.raw)) return context.json({ error: "Unauthorized" }, 401);
+		const agentId = context.req.param("agentId");
+		const agent = persistedAgentFor(db, agentId);
+		const launch = agentSessions.get(agentId)?.launch;
+		if (!agent || !launch || agent.provider !== "openai") {
+			return context.json({ authCacheJson: null });
+		}
+		for (const relativePath of [".codex/auth.json", "auth.json"]) {
+			try {
+				const path = join(launch.directory, relativePath);
+				if ((await stat(path)).size > 128 * 1024) continue;
+				const authCacheJson = await readFile(path, "utf8");
+				JSON.parse(authCacheJson);
+				return context.json({ authCacheJson });
+			} catch {
+				continue;
+			}
+		}
+		return context.json({ authCacheJson: null });
 	});
 
 	app.delete("/codev/agents/:agentId", async (context) => {

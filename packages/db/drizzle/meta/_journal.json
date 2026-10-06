@@ -491,6 +491,20 @@
       "when": 1791173574899,
       "tag": "0069_gen2_free_owner_accounting",
       "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1791175504874,
+      "tag": "0070_overjoyed_mephistopheles",
+      "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1791258853501,
+      "tag": "0071_lazy_nekra",
+      "breakpoints": true
     }
   ]
 }

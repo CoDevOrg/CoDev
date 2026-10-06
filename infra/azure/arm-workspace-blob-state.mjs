@@ -42,6 +42,7 @@ export class ArmWorkspaceBlobState {
       generation: 0,
       dataDiskId: null,
       diskUuid: null,
+      lastVmGeneration: null,
       operation: null,
     });
     const response = await this.request(

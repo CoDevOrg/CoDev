@@ -67,6 +67,13 @@ const supersetAgentRecoveryResponseSchema = z.object({
   worktreeId: z.string().optional(),
 });
 
+const supersetAgentCredentialResponseSchema = z.object({
+  authCacheJson: z
+    .string()
+    .max(128 * 1024)
+    .nullable(),
+});
+
 export type SupersetAgentPollChunk = z.infer<
   typeof supersetAgentPollResponseSchema
 >["chunks"][number];
@@ -166,6 +173,29 @@ export async function stopSupersetAgent(workspaceId: string, agentId: string) {
     undefined,
     20_000,
   );
+}
+
+export async function captureSupersetAgentCredential(
+  workspaceId: string,
+  agentId: string,
+) {
+  const response = await codexExecRequest(
+    "POST",
+    `/v1/sandboxes/${workspaceId}/superset-agents/${agentId}/credential`,
+    undefined,
+    20_000,
+  );
+  const payload = (await response.json()) as { result?: unknown } | null;
+  const parsed = supersetAgentCredentialResponseSchema.safeParse(
+    payload?.result ?? payload,
+  );
+  if (!parsed.success) {
+    throw new OrchestratorError(
+      "The workspace runtime returned an unsupported credential response. Please contact support.",
+      503,
+    );
+  }
+  return parsed.data;
 }
 
 export async function checkSupersetAgentRecovery(

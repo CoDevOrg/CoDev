@@ -23,7 +23,7 @@ fi
 export DEBIAN_FRONTEND=noninteractive
 apt-get -o DPkg::Lock::Timeout=300 update
 apt-get -o DPkg::Lock::Timeout=300 install -y \
-  ca-certificates curl git gh jq ripgrep sudo xz-utils python3 \
+  ca-certificates curl git gh jq ripgrep sudo psmisc xz-utils python3 \
   python3-gi gir1.2-atspi-2.0 at-spi2-core xdotool xclip
 
 if ! command -v az >/dev/null 2>&1; then
@@ -91,6 +91,7 @@ readonly host_packages=(
   jq
   ripgrep
   sudo
+  psmisc
   xz-utils
   python3
   python3-gi
@@ -272,6 +273,8 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
+ProtectProc=invisible
+ProcSubset=pid
 ReadWritePaths=/workspace /var/lib/codev/codev-superset /var/lib/codev/codev-agent-profiles
 TasksMax=256
 

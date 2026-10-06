@@ -19,6 +19,8 @@ jobs:
       AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
       CODEV_ARTIFACT_ACCOUNT: ${{ vars.CODEV_ARTIFACT_ACCOUNT }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CODEV_APP_URL: ${{ vars.CODEV_APP_URL }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
       PHASE2_SIGNING_KEY: /tmp/phase2-signing.pem
       PHASE2_VERIFY_KEY: /tmp/phase2-verify.pem
       PHASE2_SSH_PUBLIC_KEY: /tmp/phase2-ssh.pub
@@ -28,6 +30,8 @@ jobs:
           test "$GITHUB_REF" = refs/heads/main
           test "$AZURE_RESOURCE_GROUP" = codev-arm-workspace-phase1
           test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CODEV_APP_URL"
+          test -n "$CRON_SECRET"
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:

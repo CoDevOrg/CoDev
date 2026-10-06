@@ -54,6 +54,7 @@ import {
   gen2WorkspaceMembers,
   gen2Chats,
   gen2ChatMessages,
+  gen2AgentSessions,
   worktrees,
   yjsSnapshots,
 } from "./schema";
@@ -183,6 +184,9 @@ describe("database schema", () => {
       "encrypted_payload",
     );
     expect(getTableName(agentEvents)).toBe("agent_events");
+    expect(getTableName(gen2AgentSessions)).toBe("gen2_agent_sessions");
+    expect(gen2AgentSessions.safeOutput.name).toBe("safe_output");
+    expect(gen2AgentSessions.finalChanges.name).toBe("final_changes");
     expect(agentSessions.workflowRunId.name).toBe("workflow_run_id");
     expect(agentSessions.provider.name).toBe("provider");
     expect(agentEvents.idempotencyKey.name).toBe("idempotency_key");

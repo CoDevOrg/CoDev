@@ -607,6 +607,10 @@ export const gen2SupersetRunStatusSchema = z.enum([
   "recovery_required",
 ]);
 
+export const gen2AgentSessionFollowUpRequestSchema = z.object({
+  data: z.string().trim().min(1).max(20_000),
+});
+
 export const gen2SupersetRunSchema = z.object({
   id: identifierSchema,
   workspaceId: identifierSchema,
@@ -631,6 +635,9 @@ export const gen2SupersetRunSchema = z.object({
 
 export type Gen2SupersetRunStatus = z.infer<typeof gen2SupersetRunStatusSchema>;
 export type Gen2SupersetRun = z.infer<typeof gen2SupersetRunSchema>;
+export type Gen2AgentSessionFollowUpRequest = z.infer<
+  typeof gen2AgentSessionFollowUpRequestSchema
+>;
 
 export type Gen2Repository = z.infer<typeof gen2RepositorySchema>;
 export type Gen2WorkspaceStatus = z.infer<typeof gen2WorkspaceStatusSchema>;

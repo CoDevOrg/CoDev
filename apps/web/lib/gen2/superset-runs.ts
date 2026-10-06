@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 import type { Gen2SupersetRunStatus } from "@codev/contracts";
@@ -22,12 +22,10 @@ import { Gen2LifecycleError } from "./errors";
 
 const SUPERSET_RUN_LOCK_PREFIX = "codev-gen2-superset-run:";
 
-/** Every state but the two terminal ones. */
-const NONTERMINAL_STATUSES: Gen2SupersetRunStatus[] = [
+const MONITORABLE_STATUSES: Gen2SupersetRunStatus[] = [
   "creating",
   "running",
   "stopping",
-  "recovery_required",
 ];
 
 type Database = ReturnType<typeof getDatabase>;
@@ -77,6 +75,7 @@ async function recordGen2SupersetRunAuditEvent(
 }
 
 export type RegisterGen2SupersetRunInput = {
+  sessionId?: string | null;
   workspaceId: string;
   chatId?: string | null;
   createdBy: string;
@@ -104,12 +103,14 @@ export async function registerGen2SupersetRun(
     const [existing] = await transaction
       .select({
         id: schema.gen2SupersetRuns.id,
+        sessionId: schema.gen2SupersetRuns.sessionId,
         status: schema.gen2SupersetRuns.status,
         createdBy: schema.gen2SupersetRuns.createdBy,
         chatId: schema.gen2SupersetRuns.chatId,
         worktreeId: schema.gen2SupersetRuns.worktreeId,
         provider: schema.gen2SupersetRuns.provider,
         connectionId: schema.gen2SupersetRuns.connectionId,
+        credentialRevision: schema.gen2SupersetRuns.credentialRevision,
       })
       .from(schema.gen2SupersetRuns)
       .where(
@@ -125,9 +126,11 @@ export async function registerGen2SupersetRun(
       }
       if (
         existing.chatId !== (input.chatId ?? null) ||
+        existing.sessionId !== (input.sessionId ?? null) ||
         existing.worktreeId !== input.worktreeId ||
         existing.provider !== input.provider ||
-        existing.connectionId !== (input.connectionId ?? null)
+        existing.connectionId !== (input.connectionId ?? null) ||
+        existing.credentialRevision !== (input.credentialRevision ?? null)
       ) {
         throw new Gen2LifecycleError(
           "This agent request conflicts with an existing run.",
@@ -140,6 +143,7 @@ export async function registerGen2SupersetRun(
     const [run] = await transaction
       .insert(schema.gen2SupersetRuns)
       .values({
+        sessionId: input.sessionId ?? null,
         workspaceId: input.workspaceId,
         chatId: input.chatId ?? null,
         createdBy: input.createdBy,
@@ -174,15 +178,47 @@ export async function getGen2SupersetRunById(runId: string) {
   return run ?? null;
 }
 
-/** Nonterminal runs for a workspace, for host-restart reconciliation (Phase 5). */
-export async function listActiveGen2SupersetRuns(workspaceId: string) {
+/** The newest process that can still accept input for a logical session. */
+export async function getActiveGen2SupersetRunForSession(sessionId: string) {
+  const [run] = await getDatabase()
+    .select()
+    .from(schema.gen2SupersetRuns)
+    .where(
+      and(
+        eq(schema.gen2SupersetRuns.sessionId, sessionId),
+        inArray(schema.gen2SupersetRuns.status, MONITORABLE_STATUSES),
+      ),
+    )
+    .orderBy(desc(schema.gen2SupersetRuns.createdAt))
+    .limit(1);
+  return run ?? null;
+}
+
+/** All persisted sessions for the workspace, including completed runs. */
+export async function listGen2SupersetRuns(workspaceId: string) {
+  return getDatabase()
+    .select()
+    .from(schema.gen2SupersetRuns)
+    .where(eq(schema.gen2SupersetRuns.workspaceId, workspaceId))
+    .orderBy(sql`${schema.gen2SupersetRuns.createdAt} desc`);
+}
+
+/** Runs that need a liveness decision from the server-owned monitor. */
+export async function listMonitorableGen2SupersetRuns() {
+  return getDatabase()
+    .select()
+    .from(schema.gen2SupersetRuns)
+    .where(inArray(schema.gen2SupersetRuns.status, MONITORABLE_STATUSES));
+}
+
+export async function listCheckpointableGen2SupersetRuns(workspaceId: string) {
   return getDatabase()
     .select()
     .from(schema.gen2SupersetRuns)
     .where(
       and(
         eq(schema.gen2SupersetRuns.workspaceId, workspaceId),
-        inArray(schema.gen2SupersetRuns.status, NONTERMINAL_STATUSES),
+        inArray(schema.gen2SupersetRuns.status, MONITORABLE_STATUSES),
       ),
     );
 }

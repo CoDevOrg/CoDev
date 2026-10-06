@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { ArmWorkspaceAzure } from "./arm-workspace-azure.mjs";
 import { ArmWorkspaceBlobState } from "./arm-workspace-blob-state.mjs";
+import { ArmWorkspaceControlPlane } from "./arm-workspace-control-plane.mjs";
 import { ArmWorkspaceGuest } from "./arm-workspace-guest.mjs";
 import { ArmWorkspaceLifecycle } from "./arm-workspace-lifecycle.mjs";
 import { ArmWorkspaceTunnel } from "./arm-workspace-tunnel.mjs";
@@ -15,11 +17,13 @@ const required = [
   "PHASE2_SIGNING_KEY",
   "PHASE2_VERIFY_KEY",
   "PHASE2_SSH_PUBLIC_KEY",
+  "CODEV_APP_URL",
+  "CRON_SECRET",
 ];
 for (const name of required) {
   if (!process.env[name]) throw new Error(`Missing ${name}`);
 }
-const workspaceId = `phase2-${process.env.GITHUB_RUN_ID}`;
+const workspaceId = randomUUID();
 const imageId =
   `/subscriptions/${process.env.AZURE_SUBSCRIPTION_ID}` +
   `/resourceGroups/${process.env.AZURE_RESOURCE_GROUP}` +
@@ -51,6 +55,10 @@ const azure = new ArmWorkspaceAzure({
 const guest = new ArmWorkspaceGuest({
   publicKeyPath: process.env.PHASE2_VERIFY_KEY,
 });
+const controlPlane = new ArmWorkspaceControlPlane({
+  url: process.env.CODEV_APP_URL,
+  secret: process.env.CRON_SECRET,
+});
 const tunnel = new ArmWorkspaceTunnel({
   accountId: "84a1d01866de04e04320feddfb199b83",
   zoneId: "c474dbc7af01ea073573a250fbd1d5ec",
@@ -66,6 +74,7 @@ const lifecycle = new ArmWorkspaceLifecycle(
   tunnel,
   guest,
   () => now,
+  controlPlane.checkpointCredentials.bind(controlPlane),
 );
 const startedAt = Date.now();
 let completed = false;
@@ -82,7 +91,11 @@ try {
       "git -C /workspace init -q; git -C /workspace -c user.name=Canary " +
       "-c user.email=canary@example.invalid commit -q --allow-empty -m seed; " +
       "git -C /workspace worktree add -q -b canary /workspace/canary-tree; " +
+      "printf stale >/workspace/.git/index.lock; " +
       "printf worktree-saved >/workspace/canary-tree/proof.txt'; " +
+      "setpriv --reuid=2101 --regid=2000 --clear-groups -- sh -ec 'umask 0002; " +
+      "mkdir /workspace/ownership-proof; " +
+      "printf first-writer >/workspace/ownership-proof/proof.txt'; " +
       "printf phase2-canary-private >/workspace/.codev-runtime/superset/phase2-canary.txt; " +
       "printf 'SAVED'",
   );
@@ -104,7 +117,13 @@ try {
     second.vmId,
     "set -e; runuser -u codev-shell -- sh -ec 'cat /workspace/phase2-canary.txt; " +
       "cat /workspace/canary-tree/proof.txt; git -C /workspace worktree list; " +
+      "test ! -e /workspace/.git/index.lock; " +
       "test ! -r /workspace/.codev-runtime/superset/phase2-canary.txt'; " +
+      "setpriv --reuid=2102 --regid=2000 --clear-groups -- sh -ec 'umask 0002; " +
+      "printf -- -second-writer >>/workspace/ownership-proof/proof.txt'; " +
+      "cat /workspace/ownership-proof/proof.txt; " +
+      "stat -c '%u:%g:%a' /workspace/ownership-proof; " +
+      "stat -c '%u:%g:%a' /workspace/ownership-proof/proof.txt; " +
       "cat /workspace/.codev-runtime/superset/phase2-canary.txt; " +
       "stat -c '%u:%g:%a' /workspace/.codev-runtime; " +
       "blkid -s UUID -o value /dev/disk/azure/scsi1/lun0",
@@ -113,6 +132,9 @@ try {
   assert.match(evidence, /phase2-canary-private/);
   assert.match(evidence, /worktree-saved/);
   assert.match(evidence, /canary-tree/);
+  assert.match(evidence, /first-writer-second-writer/);
+  assert.match(evidence, /2101:2000:2775/);
+  assert.match(evidence, /2101:2000:664/);
   assert.match(evidence, /0:0:700/);
   assert.match(evidence, new RegExp(first.diskUuid));
   now += 15 * 60_000;

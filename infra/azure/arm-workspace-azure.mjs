@@ -99,6 +99,7 @@ export class ArmWorkspaceAzure {
   }
 
   async createVm(workspaceId, generation, diskId) {
+    await this.requireUnattachedDisk(diskId, workspaceId);
     const name = `${baseName(workspaceId)}-g${generation}`;
     await azureCli([
       "deployment",
@@ -143,6 +144,38 @@ export class ArmWorkspaceAzure {
     )
       throw new Error("DISK_ATTACH_CONFLICT");
     return { id: vm.id };
+  }
+
+  async requireUnattachedDisk(diskId, workspaceId) {
+    const disk = JSON.parse(
+      await azureCli(["disk", "show", "--ids", diskId, "-o", "json"]),
+    );
+    checkOwned(disk, workspaceId);
+    if (disk.diskState !== "Unattached" || disk.managedBy)
+      throw new Error("DISK_ATTACH_CONFLICT");
+  }
+
+  async requireGenerationDeleted(workspaceId, generation) {
+    const name = `${baseName(workspaceId)}-g${generation}`;
+    try {
+      const vm = JSON.parse(
+        await azureCli([
+          "vm",
+          "show",
+          "-g",
+          this.group,
+          "-n",
+          name,
+          "-o",
+          "json",
+        ]),
+      );
+      checkOwned(vm, workspaceId);
+    } catch (error) {
+      if (error.code === "ResourceNotFound") return;
+      throw error;
+    }
+    throw new Error("PREVIOUS_GENERATION_EXISTS");
   }
 
   async waitRunning(vmId) {

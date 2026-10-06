@@ -290,6 +290,7 @@ impl GuestService {
                     return match (method, action) {
                         ("POST", "input") => self.input_superset_agent(agent_id, body),
                         ("POST", "poll") => self.poll_superset_agent(agent_id, body),
+                        ("POST", "credential") => self.capture_superset_agent_credential(agent_id),
                         ("DELETE", "") => self.close_superset_agent(agent_id),
                         ("GET", "recovery") => self.recover_superset_agent(agent_id),
                         _ => GuestResponse::error(400, "invalid Superset agent action"),
@@ -745,6 +746,14 @@ impl GuestService {
         self.superset_bridge_request(
             "DELETE",
             &format!("/codev/agents/{}", percent_encode(agent_id)),
+            &[],
+        )
+    }
+
+    fn capture_superset_agent_credential(&self, agent_id: &str) -> GuestResponse {
+        self.superset_bridge_request(
+            "POST",
+            &format!("/codev/agents/{}/credential", percent_encode(agent_id)),
             &[],
         )
     }

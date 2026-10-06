@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import {
   createSupersetWorktree,
@@ -22,7 +22,9 @@ import { Gen2LifecycleError } from "./errors";
 import { logEvent } from "../platform/observability";
 import { resolveGen2Credential, type Gen2AgentProvider } from "./providers";
 import { providerVendor } from "../providers/registry";
+import { updateHostedCodexAuthCacheIfCurrent } from "../providers/hosted-codex-subscription-credentials";
 import {
+  captureSupersetAgentCredential,
   checkSupersetAgentRecovery,
   pollSupersetAgent,
   sendSupersetAgentInput,
@@ -33,6 +35,9 @@ import { isGen2SupersetAgentSessionsEnabled } from "./superset-agent-sessions-fe
 import {
   claimGen2SupersetRunLease,
   getGen2SupersetRunById,
+  getActiveGen2SupersetRunForSession,
+  listMonitorableGen2SupersetRuns,
+  listCheckpointableGen2SupersetRuns,
   markGen2SupersetRunFailed,
   markGen2SupersetRunFinished,
   markGen2SupersetRunRecoveryRequired,
@@ -46,6 +51,11 @@ import { toAgentExecChunks } from "./agent-output";
 import { requireWorkspaceOwnerPlan } from "../billing/gate";
 import { requireGen2Member } from "./workspaces";
 import { requireGen2SupersetAgentAccess } from "./superset-agent-access";
+import {
+  createGen2AgentSession,
+  getGen2AgentSession,
+  updateGen2AgentSessionStatus,
+} from "./agent-sessions";
 
 /**
  * The server-only CoDev runtime adapter docs/SUPERSET_AGENT_SESSION_PLAN.md
@@ -85,6 +95,7 @@ async function requireTurnRun(
 }
 
 type StartSessionInput = {
+  sessionId?: string | null;
   workspaceId: string;
   userId: string;
   chatId?: string | null;
@@ -117,12 +128,14 @@ async function startSession(
   const credential = await resolveGen2Credential(input.userId, provider);
 
   const registration = await registerGen2SupersetRun({
+    sessionId: input.sessionId ?? null,
     workspaceId: input.workspaceId,
     chatId: input.chatId ?? null,
     createdBy: input.userId,
     worktreeId: input.worktreeId,
     provider: providerVendor(provider),
     connectionId: credential.credentialId,
+    credentialRevision: credential.credentialRevision,
     idempotencyKey: input.idempotencyKey,
   });
   if (!registration.created) {
@@ -179,6 +192,13 @@ async function startSession(
       hostAgentSessionId: started.hostAgentSessionId,
       actorId: input.userId,
     });
+    if (input.sessionId) {
+      await updateGen2AgentSessionStatus({
+        sessionId: input.sessionId,
+        status: "running",
+        recoveryState: "not_required",
+      });
+    }
     return { ...registration, status: "running" as const };
   } catch (error) {
     if (claimed && credential.credentialId) {
@@ -198,6 +218,12 @@ async function startSession(
       lastError: error instanceof Error ? error.message : "unknown",
       actorId: input.userId,
     });
+    if (input.sessionId) {
+      await updateGen2AgentSessionStatus({
+        sessionId: input.sessionId,
+        status: "failed",
+      });
+    }
     throw error;
   }
 }
@@ -226,12 +252,55 @@ export async function sendGen2SupersetAgentInput(input: {
   );
 }
 
+/** Send a follow-up to the current process for one durable logical session. */
+export async function sendGen2AgentSessionFollowUp(input: {
+  workspaceId: string;
+  userId: string;
+  sessionId: string;
+  data: string;
+}) {
+  const run = await getActiveGen2SupersetRunForSession(input.sessionId);
+  if (!run || run.workspaceId !== input.workspaceId) {
+    throw new Gen2LifecycleError("Agent session is not running.", 409);
+  }
+  await sendGen2SupersetAgentInput({ ...input, runId: run.id });
+}
+
 type PollSessionInput = {
   workspaceId: string;
   userId: string;
   runId: string;
   after: number;
 };
+
+type SupersetRun = NonNullable<
+  Awaited<ReturnType<typeof getGen2SupersetRunById>>
+>;
+
+async function persistSupersetAgentCredential(
+  run: SupersetRun,
+  workspaceId: string,
+) {
+  if (
+    run.provider !== "openai" ||
+    !run.connectionId ||
+    !run.credentialRevision ||
+    !run.hostAgentSessionId
+  ) {
+    return;
+  }
+  const { authCacheJson } = await captureSupersetAgentCredential(
+    workspaceId,
+    run.hostAgentSessionId,
+  );
+  if (authCacheJson) {
+    await updateHostedCodexAuthCacheIfCurrent(
+      run.connectionId,
+      run.credentialRevision,
+      authCacheJson,
+    );
+  }
+}
 
 export async function pollGen2SupersetAgentSession(input: PollSessionInput) {
   return pollSession(input, "persistent");
@@ -271,6 +340,19 @@ async function pollSession(
   }
 
   if (result.exited) {
+    try {
+      if (result.refreshReady) {
+        await persistSupersetAgentCredential(run, input.workspaceId);
+      }
+    } catch (error) {
+      await markGen2SupersetRunRecoveryRequired({
+        runId: run.id,
+        workspaceId: input.workspaceId,
+        lastError: "Could not save refreshed provider credentials.",
+        actorId: input.userId,
+      });
+      throw error;
+    }
     await markGen2SupersetRunFinished({
       runId: run.id,
       workspaceId: input.workspaceId,
@@ -278,6 +360,12 @@ async function pollSession(
         result.exitCode === 0 ? "completed" : `exit_code:${result.exitCode}`,
       actorId: input.userId,
     });
+    if (run.sessionId) {
+      await updateGen2AgentSessionStatus({
+        sessionId: run.sessionId,
+        status: result.exitCode === 0 ? "completed" : "failed",
+      });
+    }
     if (run.leaseClaimed && run.connectionId) {
       await releaseCredentialSeat({
         credentialId: run.connectionId,
@@ -289,6 +377,13 @@ async function pollSession(
       workspaceId: input.workspaceId,
       actorId: input.userId,
     });
+    await stopSupersetAgent(input.workspaceId, run.hostAgentSessionId).catch(
+      (error) =>
+        logEvent("warn", "gen2.superset_agent.profile_cleanup_failed", {
+          detail: error instanceof Error ? error.message : "unknown",
+          runId: run.id,
+        }),
+    );
   }
 
   return result;
@@ -304,6 +399,81 @@ export async function cancelGen2SupersetAgentSession(
   input: CancelSessionInput,
 ) {
   return cancelSession(input, "persistent");
+}
+
+/** Stop the current process for one durable logical session. */
+export async function stopGen2AgentSession(input: {
+  workspaceId: string;
+  userId: string;
+  sessionId: string;
+}) {
+  const run = await getActiveGen2SupersetRunForSession(input.sessionId);
+  if (!run || run.workspaceId !== input.workspaceId) {
+    throw new Gen2LifecycleError("Agent session is not running.", 409);
+  }
+  await cancelGen2SupersetAgentSession({ ...input, runId: run.id });
+}
+
+/** Start a fresh process for a stopped or recovery-required logical session. */
+export async function restartGen2AgentSession(input: {
+  workspaceId: string;
+  userId: string;
+  sessionId: string;
+}) {
+  requireEnabled();
+  const [member, session] = await Promise.all([
+    requireGen2Member(input.workspaceId, input.userId),
+    getGen2AgentSession(input.workspaceId, input.sessionId),
+  ]);
+  if (
+    member.role === "viewer" ||
+    (member.role !== "owner" && session.createdBy !== input.userId)
+  ) {
+    throw new Gen2LifecycleError("Agent session not found.", 404);
+  }
+  if (!session.chatId) {
+    throw new Gen2LifecycleError(
+      "This agent session has no chat history.",
+      409,
+    );
+  }
+  const active = await getActiveGen2SupersetRunForSession(session.id);
+  if (active)
+    throw new Gen2LifecycleError("Agent session is already running.", 409);
+
+  const provider =
+    session.provider === "openai"
+      ? "codex"
+      : session.provider === "anthropic"
+        ? "claude"
+        : null;
+  if (!provider) {
+    throw new Gen2LifecycleError(
+      "This agent provider cannot be restarted.",
+      409,
+    );
+  }
+  await requireGen2Chat(input.workspaceId, session.chatId);
+  const history = await listGen2ChatMessages(session.chatId);
+  await updateGen2AgentSessionStatus({
+    sessionId: session.id,
+    status: "queued",
+    recoveryState: "restarting",
+  });
+  const restarted = await startSession(
+    {
+      sessionId: session.id,
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      chatId: session.chatId,
+      worktreeId: session.worktreeId,
+      command: buildGen2AgentCommand(provider, session.task, history),
+      provider,
+      idempotencyKey: `restart:${session.id}:${randomUUID()}`,
+    },
+    "persistent",
+  );
+  return { runId: restarted.runId };
 }
 
 async function cancelSession(
@@ -328,25 +498,39 @@ async function cancelSession(
   });
   try {
     if (run.hostAgentSessionId) {
+      await persistSupersetAgentCredential(run, input.workspaceId);
       await stopSupersetAgent(input.workspaceId, run.hostAgentSessionId);
     }
-  } finally {
-    if (run.leaseClaimed && run.connectionId) {
-      await releaseCredentialSeat({
-        credentialId: run.connectionId,
-        ref: run.id,
-      });
-    }
-    await releaseGen2SupersetRunLease({
+  } catch (error) {
+    await markGen2SupersetRunRecoveryRequired({
       runId: run.id,
       workspaceId: input.workspaceId,
+      lastError: "Could not save refreshed provider credentials.",
       actorId: input.userId,
     });
-    await markGen2SupersetRunFinished({
-      runId: run.id,
-      workspaceId: input.workspaceId,
-      exitReason: "cancelled",
-      actorId: input.userId,
+    throw error;
+  }
+  if (run.leaseClaimed && run.connectionId) {
+    await releaseCredentialSeat({
+      credentialId: run.connectionId,
+      ref: run.id,
+    });
+  }
+  await releaseGen2SupersetRunLease({
+    runId: run.id,
+    workspaceId: input.workspaceId,
+    actorId: input.userId,
+  });
+  await markGen2SupersetRunFinished({
+    runId: run.id,
+    workspaceId: input.workspaceId,
+    exitReason: "cancelled",
+    actorId: input.userId,
+  });
+  if (run.sessionId) {
+    await updateGen2AgentSessionStatus({
+      sessionId: run.sessionId,
+      status: "stopped",
     });
   }
 }
@@ -387,6 +571,13 @@ export async function reconcileGen2SupersetAgentSession(input: {
           : "Host could not verify the run after a restart.",
       actorId: input.userId,
     });
+    if (run.sessionId) {
+      await updateGen2AgentSessionStatus({
+        sessionId: run.sessionId,
+        status: "recovery_required",
+        recoveryState: "required",
+      });
+    }
   } else {
     // If adoptable and actively running, ensure the credential seat lease is renewed
     if (run.leaseClaimed && run.connectionId) {
@@ -397,6 +588,75 @@ export async function reconcileGen2SupersetAgentSession(input: {
     }
   }
   return recovery;
+}
+
+/**
+ * Server-owned liveness reconciliation. Browser polls can display progress,
+ * but they must not be required to retain a credential seat or discover that
+ * a guest was lost.
+ */
+export async function monitorGen2SupersetAgentSessions() {
+  const runs = await listMonitorableGen2SupersetRuns();
+  let running = 0;
+  let recoveryRequired = 0;
+  await Promise.all(
+    runs.map(async (run) => {
+      const recover = async (lastError: string) => {
+        await markGen2SupersetRunRecoveryRequired({
+          runId: run.id,
+          workspaceId: run.workspaceId,
+          lastError,
+        });
+        if (run.leaseClaimed && run.connectionId) {
+          await releaseCredentialSeat({
+            credentialId: run.connectionId,
+            ref: run.id,
+          });
+        }
+        await releaseGen2SupersetRunLease({
+          runId: run.id,
+          workspaceId: run.workspaceId,
+        });
+        recoveryRequired += 1;
+      };
+      if (!run.hostAgentSessionId) {
+        await recover("Agent start was not confirmed by the guest.");
+        return;
+      }
+      try {
+        const recovery = await checkSupersetAgentRecovery(
+          run.workspaceId,
+          run.hostAgentSessionId,
+        );
+        if (!recovery.adoptable) {
+          await recover("Guest could not verify the agent process.");
+          return;
+        }
+        if (run.leaseClaimed && run.connectionId) {
+          await heartbeatCredentialSeat({
+            credentialId: run.connectionId,
+            ref: run.id,
+          });
+        }
+        running += 1;
+      } catch {
+        await recover("Guest liveness check failed.");
+      }
+    }),
+  );
+  return { checked: runs.length, running, recoveryRequired };
+}
+
+/** Called by the ARM lifecycle before it flushes and destroys a guest VM. */
+export async function checkpointGen2SupersetAgentCredentials(
+  workspaceId: string,
+) {
+  const runs = await listCheckpointableGen2SupersetRuns(workspaceId);
+  for (const run of runs) {
+    if (!run.hostAgentSessionId) continue;
+    await persistSupersetAgentCredential(run, workspaceId);
+  }
+  return { checkpointed: runs.length };
 }
 
 /**
@@ -470,8 +730,18 @@ export async function startGen2SupersetAgentTurn(input: {
     input.model,
   );
 
+  const logicalSession = await createGen2AgentSession({
+    workspaceId: input.workspaceId,
+    chatId: input.chatId,
+    createdBy: input.userId,
+    task: input.prompt,
+    worktreeId,
+    provider: providerVendor(provider),
+    idempotencyKey: input.idempotencyKey,
+  });
   const session = await startSession(
     {
+      sessionId: logicalSession.id,
       workspaceId: input.workspaceId,
       userId: input.userId,
       chatId: input.chatId,
@@ -505,7 +775,25 @@ export async function startGen2SupersetAgentTurn(input: {
     chatId: input.chatId,
     userId: input.userId,
   });
-  return { sessionId: session.runId };
+  return { sessionId: session.runId, agentSessionId: logicalSession.id };
+}
+
+/** Creates a logical session and its first Superset process in one request. */
+export async function createGen2AgentSessionTask(input: {
+  workspaceId: string;
+  userId: string;
+  chatId: string;
+  task: string;
+  idempotencyKey: string;
+  provider: Gen2AgentProvider;
+  worktreeId?: string | undefined;
+  model?: string | undefined;
+}) {
+  const started = await startGen2SupersetAgentTurn({
+    ...input,
+    prompt: input.task,
+  });
+  return { sessionId: started.agentSessionId, runId: started.sessionId };
 }
 
 /**
