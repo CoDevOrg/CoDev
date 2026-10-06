@@ -16,6 +16,16 @@ const worker = {
     const incoming = new URL(request.url);
     if (!hosts.has(incoming.hostname))
       return new Response("Not Found", { status: 404 });
+    try {
+      if (
+        decodeURIComponent(incoming.pathname).startsWith(
+          "/.well-known/workflow/",
+        )
+      )
+        return new Response("Not Found", { status: 404 });
+    } catch {
+      return new Response("Bad Request", { status: 400 });
+    }
     const target = new URL(env.AZURE_WEB_ORIGIN);
     target.pathname = incoming.pathname;
     target.search = incoming.search;

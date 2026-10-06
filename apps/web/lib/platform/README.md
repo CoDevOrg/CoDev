@@ -20,3 +20,5 @@ This module owns foundational infrastructure integrations and platform-level cro
 - `azure-edge-worker.ts`: minimal streaming Cloudflare proxy and scheduled Azure calls; no app execution.
 - `node-server.mjs`: protected Azure Next.js origin, health probes, and authenticated socket handoff through existing Next routes.
 - `node-websocket.ts`, `node-websocket-server.mjs`: single-use process-local upgrade capabilities; membership and session checks remain in route handlers.
+
+- `node-origin.mjs`: authenticates proxy requests and keeps workflow queue handlers private to real loopback callers.

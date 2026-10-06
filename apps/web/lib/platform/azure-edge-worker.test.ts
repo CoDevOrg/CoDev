@@ -60,6 +60,24 @@ describe("Azure edge proxy", () => {
     expect(result.headers.get("cache-control")).toBe("no-store");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+  it("does not forward public requests to internal workflow handlers", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    for (const path of [
+      "/.well-known/workflow/v1/step",
+      "/%2ewell-known/workflow/v1/flow",
+    ]) {
+      expect(
+        (
+          await worker.fetch(
+            new Request(`https://www.trycodev.com${path}`),
+            env,
+          )
+        ).status,
+      ).toBe(404);
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
   it("refuses unrecognized public hosts", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { timingSafeEqual } from "node:crypto";
+import { prepareNodeRequest } from "./node-origin.mjs";
 import next from "next";
 import { handleNodeUpgrade } from "./node-websocket-server.mjs";
 
@@ -7,42 +7,9 @@ const port = Number(process.env.PORT || 3000);
 const secret = process.env.AZURE_WEB_ORIGIN_SECRET;
 if (!secret || secret.length < 32)
   throw new Error("Azure origin authentication is missing.");
-const hosts = new Set([
-  "trycodev.com",
-  "www.trycodev.com",
-  "admins.trycodev.com",
-]);
 const application = next({ dev: false, hostname: "0.0.0.0", port });
 await application.prepare();
 const handle = application.getRequestHandler();
-
-function authorized(request) {
-  const received = Buffer.from(request.headers["x-codev-origin-secret"] || "");
-  const expected = Buffer.from(secret);
-  return (
-    received.length === expected.length && timingSafeEqual(received, expected)
-  );
-}
-
-function prepare(request) {
-  const internalWorkflow =
-    request.url?.startsWith("/.well-known/workflow/") &&
-    ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(
-      request.socket.remoteAddress,
-    );
-  if (!internalWorkflow && !authorized(request)) return false;
-  const host = internalWorkflow
-    ? "www.trycodev.com"
-    : request.headers["x-codev-public-host"];
-  if (!hosts.has(host)) return false;
-  request.headers.host = host;
-  request.headers["x-forwarded-host"] = host;
-  request.headers["x-forwarded-proto"] = "https";
-  const id = request.headers["x-codev-node-websocket-id"];
-  if (!globalThis.__codevNodeWebSocketUpgrades?.has(id))
-    delete request.headers["x-codev-node-websocket-id"];
-  return true;
-}
 
 const server = createServer(async (request, response) => {
   if (request.url === "/__codev/live") {
@@ -65,7 +32,7 @@ const server = createServer(async (request, response) => {
     }
     return;
   }
-  if (!prepare(request)) {
+  if (!prepareNodeRequest(request, secret)) {
     response.writeHead(403).end();
     return;
   }
@@ -78,7 +45,7 @@ const server = createServer(async (request, response) => {
 });
 server.on("upgrade", (request, socket, head) => {
   if (
-    !prepare(request) ||
+    !prepareNodeRequest(request, secret) ||
     !/^\/api\/gen2\/workspaces\/[^/]+\/(collaboration|terminal\/stream)(\?|$)/.test(
       request.url || "",
     )

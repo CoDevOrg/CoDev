@@ -20,7 +20,7 @@ The public app uses Supabase PostgreSQL and Upstash Redis on all replicas.
 Workspace VMs and saved disks remain in their separate ARM infrastructure.
 
 The CI production deployment job verifies the DB schema, builds and deploys an
-immutable Azure image through ACR Tasks, verifies the new origin's release and
+immutable Azure image through ACR Tasks, waits up to five minutes for the new origin's release and
 secret gate, switches the proxy, then deploys the retained ARM Worker without public routes. Azure
 single-revision deployments retain the previous healthy revision until the new
 one is ready. Startup/liveness probes check the process; readiness checks DB and
@@ -63,7 +63,9 @@ per-member workspace compute allowances. Replica capacity is bounded at six.
   bootstrap before deployment. `WORKFLOW_POSTGRES_URL` must use the Supabase
   session pooler (5432), not the transaction pooler (6543); workers need LISTEN.
   `WORKFLOW_LOCAL_BASE_URL=http://127.0.0.1:3000` dispatches local queue handlers.
-  Those handlers accept unproxied requests only from the process loopback address.
+  Cloudflare refuses public workflow handler paths, and the Azure server accepts
+  them only from the real process loopback address, even if an external request
+  carries the edge credential.
   These schemas are separate from the application migration ledger.
 
 Update a runtime variable on the platform serving the affected URL. A change
