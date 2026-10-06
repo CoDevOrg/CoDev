@@ -179,6 +179,7 @@ jobs:
         run: node infra/azure/deploy-web.mjs
 
       - name: Build Cloudflare Worker
+        if: vars.AZURE_WEB_ORIGIN == ''
         run: pnpm --filter @codev/web exec vite build
 
       - name: Deploy Cloudflare Azure proxy
@@ -215,4 +216,8 @@ jobs:
           const values = { ...arm, ...billing, CRON_SECRET: process.env.CRON_SECRET };
           writeFileSync(process.env.SECRETS_FILE, Object.entries(values).map(([key, value]) => `${key}=${JSON.stringify(value)}`).join("\n"), { mode: 0o600 });
           JS
-          pnpm --filter @codev/web exec cf deploy --prebuilt --secrets-file "$secrets_file" --message "GitHub Actions ${GITHUB_SHA}"
+          if [[ -n "$AZURE_WEB_ORIGIN" ]]; then
+            pnpm --filter @codev/web exec wrangler deploy --config wrangler.arm-lifecycle.jsonc --keep-vars --secrets-file "$secrets_file" --var "GEN2_FREE_ARM_ENABLED:$GEN2_FREE_ARM_ENABLED" --var "GEN2_FREE_ARM_OWNER_IDS:$GEN2_FREE_ARM_OWNER_IDS" --var "ARM_WORKSPACE_BOOT_ENABLED:$ARM_WORKSPACE_BOOT_ENABLED"
+          else
+            pnpm --filter @codev/web exec cf deploy --prebuilt --secrets-file "$secrets_file" --message "GitHub Actions ${GITHUB_SHA}"
+          fi

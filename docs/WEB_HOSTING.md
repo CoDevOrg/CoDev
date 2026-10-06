@@ -10,7 +10,7 @@ zero outages: database, Redis, runtime tunnels, and Azure can still fail.
 | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
 | `codev-azure-edge` Worker         | `trycodev.com`, `www.trycodev.com`, `admins.trycodev.com/*`; streams requests and dispatches the two every-minute maintenance routes to Azure                    | `apps/web/wrangler.azure-edge.jsonc`                               |
 | `codev-web-origin` Container App  | Next.js HTTP server and authorized Gen 2 WebSockets; two warm 1 CPU/2 GiB replicas, autoscaling to six at 20 concurrent HTTP requests or 70% CPU                 | `infra/azure/web-app.bicep`, `web.Containerfile`, `deploy-web.mjs` |
-| `codev-cloudflare-preview` Worker | Retained ARM lifecycle Workflows and authenticated workflow bridge on its `admins-84a.workers.dev` URL; no public domains or cron when `AZURE_WEB_ORIGIN` is set | `apps/web/cloudflare.config.ts`                                    |
+| `codev-cloudflare-preview` Worker | Retained ARM lifecycle Workflows and authenticated workflow bridge on its `admins-84a.workers.dev` URL; no public domains or cron when `AZURE_WEB_ORIGIN` is set | `apps/web/wrangler.arm-lifecycle.jsonc`                            |
 | Vercel `codev` project            | Existing Vercel deployment URLs and previews; no public production traffic depends on its hosting allocation                                                     | `.github/workflows/deploy-web.yml`                                 |
 
 Azure hosting uses `codev-web-production` in West US 2, the
@@ -20,8 +20,9 @@ The public app uses Supabase PostgreSQL and Upstash Redis on all replicas.
 Workspace VMs and saved disks remain in their separate ARM infrastructure.
 
 The CI production deployment job verifies the DB schema, builds and deploys an
-immutable Azure image through ACR Tasks, verifies the new origin's release and
-secret gate, switches the proxy, then deploys the retained ARM Worker without public routes. Azure
+immutable Azure image through ACR Tasks, waits up to five minutes for the new origin's release and
+secret gate, switches the proxy, then deploys the retained ARM Worker without public routes.
+The native lifecycle bundle omits the web app and uses vinext API shims instead of bundling the Next.js server, so it fits Workers Free. Azure
 single-revision deployments retain the previous healthy revision until the new
 one is ready. Startup/liveness probes check the process; readiness checks DB and
 Redis. Long lived sockets can reconnect during release replacement.
@@ -62,9 +63,19 @@ per-member workspace compute allowances. Replica capacity is bounded at six.
   Graphile Worker jobs in dedicated PostgreSQL schemas. CI runs its idempotent
   bootstrap before deployment. `WORKFLOW_POSTGRES_URL` must use the Supabase
   session pooler (5432), not the transaction pooler (6543); workers need LISTEN.
+  The dedicated `codev_workflow` login can access only `workflow`,
+  `workflow_drizzle`, and `graphile_worker`. Its separate pool avoids exhausting
+  the app login during rolling deployments. Two connections and one runner per
+  replica keep six replicas within its session limit. Schema bootstrap uses
+  `WORKFLOW_POSTGRES_ADMIN_URL` from the CI JSON bundle; that value is excluded
+  from the Azure runtime environment. Grant future postgres-owned objects to
+  the workflow role through schema-scoped default privileges.
   `WORKFLOW_LOCAL_BASE_URL=http://127.0.0.1:3000` dispatches local queue handlers.
-  Those handlers accept unproxied requests only from the process loopback address.
-  These schemas are separate from the application migration ledger.
+  Cloudflare refuses public workflow handler paths, and the Azure server accepts
+  them only from the real process loopback address, even if an external request
+  carries the edge credential.
+  These schemas are separate from the application migration ledger. Queue startup
+  failures retry in the background instead of making the HTTP app fail to load.
 
 Update a runtime variable on the platform serving the affected URL. A change
 to one platform's secrets does not update the other. For deployment steps and

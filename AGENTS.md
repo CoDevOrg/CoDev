@@ -33,6 +33,7 @@
 - Before starting or deploying the web app, run `pnpm db:check`. A newer migration ledger entry does not prove older tables exist; repair skipped schema with a forward migration instead of editing applied history.
 - For Azure subscription inspection, use the signed-in Azure CLI. If it is not authenticated, sign in with `az login --tenant 0841fce6-e7c1-4ea4-b4f1-a238d465137b`.
 
+- The Azure Node adapter must own workspace WebSocket upgrades; isolate Next.js's automatic upgrade listener on a non-listening `httpServer`.
 - CoDev is a hosted web app. `apps/web` runs on Azure Container Apps behind the Cloudflare proxy for `trycodev.com`, and on Vercel for Vercel-hosted endpoints; active Gen 2 workspaces run in Azure ARM guests. The legacy Firecracker host is retired; keep its deployment workflow disabled unless explicitly restoring it.
 - In Gen 2, the agent, editor, terminal, and Git use the same guest filesystem.
 - Use Node.js 24+ and `pnpm` for this repository.

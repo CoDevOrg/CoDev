@@ -1,0 +1,41 @@
+{
+  "name": "codev-cloudflare-preview",
+  "main": "lib/platform/arm-lifecycle-worker.ts",
+  "compatibility_date": "2026-09-28",
+  "compatibility_flags": ["nodejs_compat"],
+  "alias": {
+    "server-only": "./lib/platform/server-only-stub.ts",
+    "next/server": "./node_modules/vinext/dist/shims/server.js",
+    "next/headers": "./node_modules/vinext/dist/shims/headers.js",
+    "next/navigation": "./node_modules/vinext/dist/shims/navigation.js",
+    "next/cache": "./node_modules/vinext/dist/shims/cache.js",
+  },
+  "workers_dev": true,
+  "routes": [],
+  "triggers": {
+    "crons": [],
+  },
+  "workflows": [
+    {
+      "binding": "GEN2_ARM_WORKSPACE_LIFECYCLE",
+      "name": "codev-arm-workspace-lifecycle",
+      "class_name": "ArmWorkspaceLifecycleWorkflow",
+    },
+  ],
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "b8b29815a6154e37ab4ecdf4c81c08f4",
+    },
+  ],
+  "observability": {
+    "enabled": true,
+  },
+  "rules": [
+    {
+      "type": "Text",
+      "globs": ["**/*.sh?raw", "**/*.mjs?raw"],
+      "fallthrough": true,
+    },
+  ],
+}

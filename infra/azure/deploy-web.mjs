@@ -7,6 +7,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { setTimeout as delay } from "node:timers/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -16,7 +17,7 @@ const registry = "codevwebprod8ad43";
 const release =
   process.env.GITHUB_SHA ||
   execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
-const base = JSON.parse(
+const { WORKFLOW_POSTGRES_ADMIN_URL, ...base } = JSON.parse(
   process.env.AZURE_WEB_RUNTIME_SECRETS ||
     readFileSync(".codev-local/azure-web-secrets.json", "utf8"),
 );
@@ -72,19 +73,37 @@ function parameters(image) {
   return path;
 }
 
+async function waitForRelease(hostname) {
+  const deadline = Date.now() + 300_000;
+  console.log("Waiting for the new Azure revision to become ready...");
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(`https://${hostname}/api/ready`, {
+        headers: {
+          "x-codev-origin-secret": values.AZURE_WEB_ORIGIN_SECRET,
+          "x-codev-public-host": "www.trycodev.com",
+        },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (response.ok) {
+        const readiness = await response.json();
+        if (readiness.status === "ready" && readiness.release === release)
+          return;
+      } else {
+        await response.body?.cancel();
+      }
+    } catch {
+      // Image pull, startup, and ingress replacement can outlive ARM deployment.
+    }
+    await delay(5_000);
+  }
+  throw new Error(
+    "Azure did not serve the expected ready release within five minutes.",
+  );
+}
+
 async function verify(hostname) {
-  const response = await fetch(`https://${hostname}/api/ready`, {
-    headers: {
-      "x-codev-origin-secret": values.AZURE_WEB_ORIGIN_SECRET,
-      "x-codev-public-host": "www.trycodev.com",
-    },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!response.ok)
-    throw new Error(`Azure readiness failed: ${response.status}`);
-  const readiness = await response.json();
-  if (readiness.release !== release)
-    throw new Error("Azure readiness returned a different release.");
+  await waitForRelease(hostname);
   const direct = await fetch(`https://${hostname}/gen2`, {
     redirect: "manual",
     signal: AbortSignal.timeout(15_000),
@@ -101,7 +120,11 @@ try {
   const runtime = { ...process.env, ...values };
   run("pnpm", ["db:check"], { env: runtime });
   run("pnpm", ["--filter", "@codev/web", "exec", "bootstrap"], {
-    env: runtime,
+    env: {
+      ...runtime,
+      WORKFLOW_POSTGRES_URL:
+        WORKFLOW_POSTGRES_ADMIN_URL || values.WORKFLOW_POSTGRES_URL,
+    },
   });
   const tag = `codev-web:${release}`;
   run("az", [
