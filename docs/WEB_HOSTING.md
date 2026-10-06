@@ -1,36 +1,48 @@
-# Web hosting: Cloudflare and Vercel
+# Web hosting: Cloudflare, Azure, and Vercel
 
-The public web app has moved from Vercel to Cloudflare Workers. `apps/web` still
-deploys to both platforms: Cloudflare serves the `trycodev.com` hostnames, while
-Vercel retains its own production and preview deployments. Check the hostname
-and deployment job before changing a setting; the deployments have separate
-runtime secrets.
+Public requests follow **Cloudflare → Azure Container Apps → Supabase/Redis**.
+Cloudflare Workers Free runs a small streaming proxy, including WebSocket upgrades;
+Next.js rendering, authorization, database work, and socket messages run on Azure.
+This removes the 10 ms Worker CPU limit from app execution. It does not guarantee
+zero outages: database, Redis, runtime tunnels, and Azure can still fail.
 
-ARM lifecycle coordination stays on Cloudflare Workers Free. The external
-request limit applies to the whole workflow instance, so splitting `step.do`
-calls or using a service binding does not reset it. Lifecycle instances hand
-off after ten request/progress checkpoints, retain unfinished polling results,
-and compact completed phases into the workspace's stored runtime state. The
-continuation must claim the current operation before its activation event;
-saved disks and VM generations remain unchanged across handoffs.
+| Service                           | Ownership                                                                                                                                                        | Release configuration                                              |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `codev-azure-edge` Worker         | `trycodev.com`, `www.trycodev.com`, `admins.trycodev.com/*`; streams requests and dispatches the two every-minute maintenance routes to Azure                    | `apps/web/wrangler.azure-edge.jsonc`                               |
+| `codev-web-origin` Container App  | Next.js HTTP server and authorized Gen 2 WebSockets; two warm 1 CPU/2 GiB replicas, autoscaling to six at 20 concurrent HTTP requests or 70% CPU                 | `infra/azure/web-app.bicep`, `web.Containerfile`, `deploy-web.mjs` |
+| `codev-cloudflare-preview` Worker | Retained ARM lifecycle Workflows and authenticated workflow bridge on its `admins-84a.workers.dev` URL; no public domains or cron when `AZURE_WEB_ORIGIN` is set | `apps/web/cloudflare.config.ts`                                    |
+| Vercel `codev` project            | Existing Vercel deployment URLs and previews; no public production traffic depends on its hosting allocation                                                     | `.github/workflows/deploy-web.yml`                                 |
 
-|                       | Cloudflare                                                                                             | Vercel                                                                                                                       |
-| --------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| Serves                | The production Worker on `trycodev.com` and `www.trycodev.com`, plus the `admins.trycodev.com/*` route | The `codev` web project on Vercel deployment URLs; `main` gets a production deployment and other branches get previews       |
-| Built and deployed by | The **CI** workflow on `main`: `vite build`, then `cf deploy --prebuilt`                               | The **Deploy web** workflow on web-related pushes: `vercel pull`, `vercel build`, then `vercel deploy --prebuilt`            |
-| App configuration     | [`apps/web/cloudflare.config.ts`](../apps/web/cloudflare.config.ts) and Worker bindings/secrets        | [`vercel.json`](../vercel.json), [`apps/web/vercel.json`](../apps/web/vercel.json), and Vercel project environment variables |
-| Database access       | `HYPERDRIVE` binding to PostgreSQL                                                                     | `POSTGRES_URL` from the Vercel environment                                                                                   |
+Azure hosting uses `codev-web-production` in West US 2, the
+`codev-web-environment` Consumption environment, Basic registry
+`codevwebprod8ad43`, and `codev-web-logs` (30 day Log Analytics retention).
+The public app uses Supabase PostgreSQL and Upstash Redis on all replicas.
+Workspace VMs and saved disks remain in their separate ARM infrastructure.
 
-The Cloudflare Worker runs the Next.js app through vinext. It handles Gen 2
-collaboration and terminal WebSocket upgrades, runs the every-minute compute
-reconciliation Cron Trigger, and uses Hyperdrive for PostgreSQL. The ARM
-workspace canary also creates Cloudflare Tunnels and DNS records for runtime
-hostnames; the ARM workspace guests run in Azure. See
-[`cloudflare-worker.ts`](../apps/web/lib/platform/cloudflare-worker.ts) and
-[`arm-workspace-tunnel.mjs`](../infra/azure/arm-workspace-tunnel.mjs).
+The CI production deployment job verifies the DB schema, builds and deploys an
+immutable Azure image through ACR Tasks, verifies the new origin's release and
+secret gate, switches the proxy, then deploys the retained ARM Worker without public routes. Azure
+single-revision deployments retain the previous healthy revision until the new
+one is ready. Startup/liveness probes check the process; readiness checks DB and
+Redis. Long lived sockets can reconnect during release replacement.
+
+Azure is billed to the existing subscription and consumes eligible credits.
+Two warm replicas, registry storage/builds, log ingestion, and bandwidth have
+costs even when no workspace VM is running; shared web hosting is separate from
+per-member workspace compute allowances. Replica capacity is bounded at six.
 
 ## Where credentials go
 
+- **Azure:** `AZURE_WEB_RUNTIME_SECRETS` is the private JSON base used by CI.
+  CI overlays the shared ARM and billing bundles, cron credential, live ARM flags,
+  and release SHA. `AZURE_WEB_ORIGIN` is a GitHub variable containing the HTTPS
+  Container App origin. `AZURE_WEB_ORIGIN_SECRET` is a separate GitHub secret
+  shared by Azure and the proxy. The origin rejects app traffic missing that
+  credential; only health probes are public. Proxy routing headers are overwritten
+  before forwarding. Keep the origin secret identical in both deployments.
+  Azure's user-assigned `codev-web-origin` identity has AcrPull on the registry
+  and Key Vault Crypto User on the existing credential vault. The GitHub OIDC
+  production identity has Contributor only on the web resource group.
 - **GitHub Actions:** `CLOUDFLARE_API_TOKEN` lets CI deploy the Worker;
   `CLOUDFLARE_ACCOUNT_ID` selects the account. `VERCEL_TOKEN` lets the other
   workflow deploy to Vercel. These are deployment credentials, not a shared
@@ -46,6 +58,13 @@ hostnames; the ARM workspace guests run in Azure. See
 - **Vercel project:** application environment variables for the Vercel build
   and deployment are configured in Vercel. The deploy workflow pulls the
   selected production or preview environment before building.
+- **Durable app workflows on Azure:** `@workflow/world-postgres` stores runs and
+  Graphile Worker jobs in dedicated PostgreSQL schemas. CI runs its idempotent
+  bootstrap before deployment. `WORKFLOW_POSTGRES_URL` must use the Supabase
+  session pooler (5432), not the transaction pooler (6543); workers need LISTEN.
+  `WORKFLOW_LOCAL_BASE_URL=http://127.0.0.1:3000` dispatches local queue handlers.
+  Those handlers accept unproxied requests only from the process loopback address.
+  These schemas are separate from the application migration ledger.
 
 Update a runtime variable on the platform serving the affected URL. A change
 to one platform's secrets does not update the other. For deployment steps and
@@ -157,9 +176,10 @@ variables. Keep the internal allowlist until lifecycle acceptance is recorded.
 
 ### ARM lifecycle dispatch from Vercel
 
-Vercel has no Cloudflare workflow binding. Its ARM lifecycle dispatch and status
-reads use `https://trycodev.com/api/gen2/compute/workflow`, authenticated with the
-shared `CRON_SECRET`. The Worker validates operation parameters and requires its
+Azure and Vercel have no Cloudflare workflow binding. Azure sets
+`ARM_WORKSPACE_WORKFLOW_URL=https://codev-cloudflare-preview.admins-84a.workers.dev/api/gen2/compute/workflow`;
+Vercel may use the public route, which Azure forwards to that same bridge. Both
+use the shared `CRON_SECRET`. The separate origin prevents a proxy loop. The Worker validates operation parameters and requires its
 native `GEN2_ARM_WORKSPACE_LIFECYCLE` binding. Member requests still pass the normal
 workspace authorization and entitlement checks before dispatch. Keep the secret
 identical in both deployments; the runtime Tunnel/DNS token needs no Workflow

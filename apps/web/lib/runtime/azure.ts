@@ -3,6 +3,7 @@ import "server-only";
 import {
   ClientAssertionCredential,
   DefaultAzureCredential,
+  ManagedIdentityCredential,
   type TokenCredential,
 } from "@azure/identity";
 import { readServerEnvironment } from "@codev/config";
@@ -80,6 +81,13 @@ export function getAzureCredential(): TokenCredential {
   const environment = readServerEnvironment();
   const tenantId = environment.AZURE_TENANT_ID;
   const clientId = environment.AZURE_CLIENT_ID;
+
+  // Container Apps supplies this endpoint for its managed identity; it has no
+  // Vercel assertion token and must not select the federation path below.
+  if (process.env.IDENTITY_ENDPOINT) {
+    credential = new ManagedIdentityCredential(clientId ? { clientId } : {});
+    return credential;
+  }
 
   if (onCloudflareWorker()) {
     const clientSecret = environment.AZURE_CLIENT_SECRET;

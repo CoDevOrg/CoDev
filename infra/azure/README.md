@@ -1,7 +1,8 @@
 # CoDev runtime on Azure
 
-The CoDev runtime: one Firecracker host VM, its network, key vault, artifact
-storage and monitoring. [`infra/runtime`](../runtime) holds the cloud-neutral
+Active workspaces use standalone ARM VMs. The Firecracker host described below
+was retired on 2026-10-05; its deployment workflow stays disabled. Azure also
+hosts the public web app in separate Container Apps resources. [`infra/runtime`](../runtime) holds the cloud-neutral
 host bootstrap, guest image provisioning, and Superset build scripts.
 
 ## This used to be one of two stacks
@@ -357,3 +358,16 @@ starts the boot unit, without package downloads or sequential Run Commands.
 Enable `ARM_WORKSPACE_BOOT_ENABLED` only after promoting a compatible immutable
 image and verifying startup, saved-disk reopen, and OS reboot. The legacy path
 remains available for rollback with the previous image pin.
+
+## Public web origin
+
+`web.Containerfile` builds the Node 24 Next.js server. `web-app.bicep` configures
+`codev-web-origin` in `codev-web-production`, with a user-assigned identity,
+protected origin ingress, two warm replicas, health probes, and autoscaling.
+Run `node infra/azure/deploy-web.mjs` from a clean tracked release checkout after
+Azure CLI login and `pnpm install`. Supply `AZURE_WEB_RUNTIME_SECRETS` as private
+JSON, or the ignored `.codev-local/azure-web-secrets.json` operator file. The script
+checks DB schema, bootstraps durable workflow queues, uploads tracked files only,
+builds with ACR Tasks, deploys secure Bicep parameters, and verifies readiness.
+Production CI runs the same script with GitHub OIDC before deploying Cloudflare.
+See [WEB_HOSTING.md](../../docs/WEB_HOSTING.md) for secrets and routing ownership.

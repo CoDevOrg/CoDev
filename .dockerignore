@@ -1,0 +1,15 @@
+.git
+**/node_modules
+**/.next
+**/dist
+.env*
+**/.env*
+.vercel
+**/.vercel
+**/coverage
+**/target
+**/*.tsbuildinfo
+.codev-local
+**/.DS_Store
+vendor/superset/.git
+docs/arm-workspace-free-tier-plan.md

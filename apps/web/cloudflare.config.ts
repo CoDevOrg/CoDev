@@ -6,10 +6,12 @@ import {
   triggers,
 } from "cf/config";
 
+const azureOrigin = process.env.AZURE_WEB_ORIGIN;
+
 export default defineConfig({
   worker: defineWorker({
     name: "codev-cloudflare-preview",
-    domains: ["trycodev.com", "www.trycodev.com"],
+    domains: azureOrigin ? [] : ["trycodev.com", "www.trycodev.com"],
     workersDev: true,
     entrypoint: "./lib/platform/cloudflare-worker.ts",
     exports: {
@@ -19,13 +21,15 @@ export default defineConfig({
     },
     compatibilityDate: "2026-09-28",
     compatibilityFlags: ["nodejs_compat"],
-    triggers: [
-      triggers.fetch({
-        pattern: "admins.trycodev.com/*",
-        zone: "trycodev.com",
-      }),
-      triggers.scheduled({ schedule: "* * * * *" }),
-    ],
+    triggers: azureOrigin
+      ? []
+      : [
+          triggers.fetch({
+            pattern: "admins.trycodev.com/*",
+            zone: "trycodev.com",
+          }),
+          triggers.scheduled({ schedule: "* * * * *" }),
+        ],
     assets: { notFoundHandling: "none" },
 
     observability: {
@@ -39,6 +43,7 @@ export default defineConfig({
     },
 
     env: {
+      ...(azureOrigin ? { AZURE_WEB_ORIGIN: bindings.text(azureOrigin) } : {}),
       GEN2_FREE_ARM_ENABLED: bindings.text(
         process.env.GEN2_FREE_ARM_ENABLED ?? "false",
       ),

@@ -44,3 +44,6 @@ its pinned image has passed a live canary. Identity and connector credentials
 are delivered through a secure deployment parameter and protected extension
 settings; local disk setup replaces sequential Run Commands. Disable this flag
 and restore the previous image pin together to roll back new VM starts.
+
+Azure Container Apps uses `azure.ts` with its user-assigned managed identity for
+Key Vault credential unwrapping. ARM VM lifecycle credentials remain separate.

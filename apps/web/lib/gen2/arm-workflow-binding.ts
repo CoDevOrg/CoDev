@@ -34,7 +34,10 @@ async function bridgeRequest(
       "ARM workflow authentication is unavailable.",
       503,
     );
-  const url = new URL("https://trycodev.com/api/gen2/compute/workflow");
+  const url = new URL(
+    runtimeEnvironment().ARM_WORKSPACE_WORKFLOW_URL ??
+      "https://trycodev.com/api/gen2/compute/workflow",
+  );
   url.searchParams.set("id", operationId);
   const response = await fetch(url, {
     method,

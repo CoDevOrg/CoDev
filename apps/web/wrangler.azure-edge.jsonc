@@ -1,0 +1,13 @@
+{
+  "name": "codev-azure-edge",
+  "main": "lib/platform/azure-edge-worker.ts",
+  "compatibility_date": "2026-10-06",
+  "workers_dev": true,
+  "routes": [
+    { "pattern": "trycodev.com", "custom_domain": true },
+    { "pattern": "www.trycodev.com", "custom_domain": true },
+    { "pattern": "admins.trycodev.com/*", "zone_name": "trycodev.com" },
+  ],
+  "observability": { "enabled": true },
+  "triggers": { "crons": ["* * * * *"] },
+}

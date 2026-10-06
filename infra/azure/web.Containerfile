@@ -1,0 +1,14 @@
+FROM node:24-bookworm-slim AS build
+RUN npm install --global pnpm@11.5.0
+WORKDIR /app
+COPY . .
+RUN pnpm install --frozen-lockfile
+ARG NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY NEXT_TELEMETRY_DISABLED=1
+RUN pnpm --filter @codev/web build
+ENV NODE_ENV=production PORT=3000
+WORKDIR /app/apps/web
+USER node
+EXPOSE 3000
+CMD ["node", "lib/platform/node-server.mjs"]
