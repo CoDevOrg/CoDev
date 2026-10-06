@@ -1,0 +1,45 @@
+name: Collect ARM owner costs
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: arm-owner-costs
+  cancel-in-progress: false
+jobs:
+  collect:
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      ARM_WORKSPACE_RESOURCE_GROUP: ${{ vars.ARM_WORKSPACE_RESOURCE_GROUP }}
+      ARM_WORKSPACE_COST_TAX_RATE: ${{ vars.ARM_WORKSPACE_COST_TAX_RATE }}
+      ARM_WORKSPACE_COST_REPORT_URL: https://trycodev.com/api/gen2/compute/reconcile
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+      VERCEL_ORG_ID: team_8tQg0IbclwFRP8sVXOqjvbLU
+      VERCEL_PROJECT_ID: prj_N5FCzLUHDVkhId6TGqF6xU9KrvEV
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Pull production database configuration
+        run: pnpm dlx vercel@59.23.2 pull --yes --environment=production --scope=co-dev-admins --token="$VERCEL_TOKEN"
+      - name: Collect and publish complete monthly snapshots
+        run: pnpm exec dotenv -e .vercel/.env.production.local -- node infra/azure/collect-arm-owner-costs.mjs

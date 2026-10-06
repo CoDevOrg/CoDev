@@ -3,12 +3,22 @@
 CoDev's active workspace implementation.
 
 A Gen 2 workspace is a shareable cloud instance that you and Codex work on
-together. Existing workspaces use Firecracker. ARM workspaces use the same domain clients
-through a provider-aware, generation-bound signed tunnel adapter. Phase 4
-implementation is available; image publication and staging acceptance remain
-release gates.
+together. New workspaces use Azure ARM for both paid/admin and eligible free
+owners, with their existing entitlement limits. The shared Firecracker host is
+retired. ARM workspaces use the domain clients through a provider-aware,
+generation-bound signed tunnel adapter.
+
+Cloudflare collaboration sockets own their Redis clients, stream-reader rooms,
+and fan-out identities through `collaboration-context.ts`. Socket callbacks
+restore that context and use message-scoped database pools; HTTP response cleanup
+must not close resources needed by later socket messages.
 
 ## Runtime boundary
+
+`arm-workflow-continuation.ts` claims and activates bounded lifecycle instances
+on Workers Free; `arm-workflow-database.ts` owns their short-lived Hyperdrive
+connections. Completed phases resume from stored runtime resources, while
+unfinished phases carry request checkpoints so retries do not repeat mutations.
 
 The web workbench, terminal, Git operations, and agents all target the
 workspace's selected guest. Gen 2 workspace membership is checked before
@@ -23,7 +33,7 @@ danger-full-access` with prior messages in the prompt, so a shareable machine
 never keeps a personal Codex thread or auth home. The workspace VM is the isolation
 boundary.
 
-A turn runs on the provider the member picks (`provider` on the start request, Codex by default). `agent-command.ts` chooses `codex exec --json` or `claude -p --output-format stream-json`, and `turn-reducer.ts` reads the provider back from the stream itself, so neither the browser nor the `gen2_agent_turns` row needs to remember it.
+A turn runs on the provider the member picks (`provider` on the start request, Codex by default). `agent-command.ts` chooses `codex exec --json`, `claude -p --output-format stream-json`, or `cursor-agent --print --output-format stream-json`, and `turn-reducer.ts` parses output using the provider stored on `gen2_agent_turns`.
 
 `turn-events.ts` reduces the `codex exec --json` NDJSON (`claude-turn-events.ts` does the same for Claude) into typed activity
 items. Codex gives every item a stable `id` across
@@ -67,13 +77,20 @@ The terminal stream and shared-document sockets use the platform WebSocket adapt
 The Azure orchestrator is reused (`provisionSandbox` / `destroySandbox`). Gen 2
 uses its own `gen2_*` tables and does not access the original `workspaces` table.
 
-`compute-quota.ts` bills each running Gen 2 VM interval to its current workspace
-owner. The 1,000-minute allowance is shared across that owner's workspaces and
-resets at the UTC month boundary; application-wide admins are exempt from the
-limit and its enforcement stops. `compute-reconcile.ts` checks runtime state
-without waking guests, closes hibernated intervals, and stops active guests at
-the limit. The Cloudflare per-minute scheduled handler invokes the authenticated
-route; startup checks the same live interval total before provisioning.
+`compute-quota.ts` retains owner-funded intervals across deletion and ownership
+transfer, clipped to UTC months. Billing resolves current entitlements: paid
+owners keep 1,000 minutes, admins remain unlimited, and eligible free ARM owners
+receive 50 hours with one workspace or 35 shared hours with two. Used time never
+resets when slots change. ARM allocated boot time counts; stopped-but-allocated
+VMs remain billable until release. Power-state reads never wake guests.
+
+Free rollout defaults off. `free-compute-claim.ts` serializes one-active reservations
+with create/delete/transfer using owner locks. `compute-switch.ts` requires the
+owner to name the workspace being stopped; callers poll stop completion before
+retrying the target start. `owner-budget-report.ts` accepts authenticated complete
+cost snapshots; the guard blocks free compute on missing/stale telemetry, an
+operator hold, or a US$6.50 monthly total. The per-minute reconciler enforces quota,
+budget, and idle release. See the [Phase 5 review](../../../../docs/arm-workspace-free-tier-phase-5.md).
 
 ## ARM bridge and background turns
 
@@ -85,3 +102,29 @@ cursor from migration `0068`; only saved chunks are acknowledged to the guest.
 `arm-workspace-turns-reconcile.ts` drains turns without recent browser polling.
 Idle shutdown waits for both live agent activity to stop and pending transcripts
 to finish saving. See the Phase 4 review for image and staging requirements.
+
+The hourly `infra/azure/collect-arm-owner-costs.mjs` collector owns Azure billing
+query/attribution and calls the authenticated budget ingestion boundary. The web
+layer does not poll Azure Cost Management on member requests.
+
+`arm-workflow-binding.ts` uses the native lifecycle binding on Cloudflare and
+forwards Vercel dispatch/status calls to the canonical Worker using `CRON_SECRET`.
+`arm-workflow-bridge.ts` validates service authentication and shared operation
+parameters; its endpoint requires a native binding and cannot proxy recursively.
+
+Cursor subscriptions resolve through the provider registry and use a private
+file credential store under each turn profile. The ARM image must include the
+pinned Linux ARM64 Cursor CLI before the workspace picker is deployed.
+
+Cursor currently uses native guest exec even when Superset agent sessions are
+enabled. Start, poll, cancel, and background draining must keep that routing
+consistent. Refreshed auth belongs to the turn’s initiating member.
+
+Guest turn polls use `withDatabaseOperation` for all routing, transaction, and
+auth-refresh queries across the long guest wait. They must not rely on an HTTP
+React cache that can be unavailable inside nested asynchronous work.
+
+Agent starts validate the selected model against the initiating member’s live
+provider catalog before either native or Superset execution. The composer keeps
+catalogs and model preferences separate for each provider; Cursor chats must
+reach the composer as Cursor. No model choices are bundled into the client.

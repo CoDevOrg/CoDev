@@ -15,19 +15,27 @@
 ## Key conventions and gotchas
 
 - Workspace RPC must resolve the provider and current generation on each call; an unavailable ARM route must never fall back to the Firecracker host.
+- Workers Free limits external requests per workflow instance, not per step. Use bounded lifecycle continuations; fence child activation and preserve saved-disk identity across handoffs.
+- Parallel lifecycle branches need independent deterministic step names, a shared request budget, and all branches settled before saving continuation checkpoints.
 - Workspace connection checks must not wake guests or count as activity. Keepalives come from recent member input or running agent work; persisted `ready` state alone does not establish connectivity.
 
 - In guest systemd units, set agent-profile parent permissions inside the final `ExecStart` wrapper; systemd reapplies `StateDirectoryMode` after `ExecStartPre`. Individual profiles and credential files must remain private.
 - ARM guest units must not recursively change permissions on saved workspace disks; they also carry protected Superset metadata.
 - Loopback alone does not isolate privileged workspace RPC from terminal processes. ARM VM images require the local caller firewall before guestd starts; generalized VM administrators use sudo for maintenance RPC.
 
+- Worker WebSocket messages need operation-scoped database pools; Redis clients and stream readers belong to the socket request, never the shared isolate.
+- Worker fetches support `redirect: "manual"`, not `"error"`; reject redirect responses explicitly for authenticated runtime requests.
+- ARM lifecycle polling must honor Azure `Retry-After` while staying within Cloudflare Workflows' per-invocation subrequest budget.
+- ARM connection setup must retry package installation safely while cloud-init or apt holds the dpkg lock.
+
 - Before starting or deploying the web app, run `pnpm db:check`. A newer migration ledger entry does not prove older tables exist; repair skipped schema with a forward migration instead of editing applied history.
 - For Azure subscription inspection, use the signed-in Azure CLI. If it is not authenticated, sign in with `az login --tenant 0841fce6-e7c1-4ea4-b4f1-a238d465137b`.
 
-- CoDev is a hosted web app. `apps/web` deploys to Cloudflare Workers for `trycodev.com` and to Vercel for Vercel-hosted endpoints; active Gen 2 workspaces run in Azure Firecracker guests.
+- CoDev is a hosted web app. `apps/web` deploys to Cloudflare Workers for `trycodev.com` and to Vercel for Vercel-hosted endpoints; active Gen 2 workspaces run in Azure ARM guests. The legacy Firecracker host is retired; keep its deployment workflow disabled unless explicitly restoring it.
 - In Gen 2, the agent, editor, terminal, and Git use the same guest filesystem.
 - Use Node.js 24+ and `pnpm` for this repository.
 - Use the web package’s `dev` script (Webpack, matching production); allow `127.0.0.1` development resources. Initial connection checks must run in background tabs and have a request/body timeout.
+- ARM baked boot must verify the saved disk UUID before mounting or starting guest services; deliver identity and tunnel tokens only through protected Azure settings.
 - Preserve durable guest disks across stops/restarts; never treat missing saved workspace data as permission to initialize a fresh checkout.
 - Superset worktree discovery uses Git’s registered worktrees. Guest agents may create direct-child worktrees under `/workspace`; the bridge must resolve them safely as well as CoDev-managed worktrees under `.git/codev-agent-worktrees/`.
 

@@ -7,7 +7,7 @@ member's personal organization (`organizations.id == users.id`), whose
 
 ## Paywall
 
-- Creating a Gen 2 workspace and starting its compute need the plan.
+- By default, creating a Gen 2 workspace and starting its compute need the plan.
   `requireIndividualPlan(userId)` and `requireWorkspaceOwnerPlan(workspaceId)`
   in `apps/web/lib/billing/` throw `BillingRequiredError` (HTTP 402,
   `code: "subscription_required"`).
@@ -21,6 +21,16 @@ member's personal organization (`organizations.id == users.id`), whose
 - Guarded: `createGen2Workspace`, `ensureGen2Instance`, `startGen2Terminal`,
   `sendGen2TerminalInput`, `startGen2AgentTurn`, and the Superset agent
   session/input/turn starts. Add the guard to any new entry that starts compute.
+
+Free ARM preview is enabled in production with `GEN2_FREE_ARM_ENABLED=true`
+and no owner allowlist. The optional `GEN2_FREE_ARM_OWNER_IDS` binding can restrict
+a future rollout. Eligible free owners create ARM
+workspaces and share 50 hours with one owned workspace or 35 hours with two,
+with one active workspace. Second creation requires explicit quota acknowledgment.
+Paid owners keep the existing 1,000-minute allowance and admins remain exempt.
+Missing/stale complete cost telemetry or the US$6.50 budget breaker pauses free
+compute while retaining saved work. For UI controls and copy, see the
+[Phase 6 review](./arm-workspace-free-tier-phase-6.md).
 
 ## Pages
 

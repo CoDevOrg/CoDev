@@ -46,6 +46,7 @@ export const gen2WorkspaceCreateRequestSchema = z
     /** Both or neither: a repository is identified by its installation. */
     installationId: z.number().int().positive().optional(),
     repositoryId: z.number().int().positive().optional(),
+    acknowledgeReducedQuota: z.boolean().optional(),
   })
   .refine(
     (input) =>
@@ -118,6 +119,7 @@ export const gen2JoinRequestSchema = z.object({
 export const GEN2_AGENT_PROVIDERS = [
   { id: "codex", label: "Codex" },
   { id: "claude", label: "Claude" },
+  { id: "cursor", label: "Cursor" },
 ] as const;
 
 export const gen2AgentProviderSchema = z.enum(
@@ -134,21 +136,18 @@ export const gen2ModelInfoSchema = z.object({
 });
 
 export type Gen2ModelInfo = z.infer<typeof gen2ModelInfoSchema>;
-
-export const GEN2_PROVIDER_MODELS: Record<
-  Gen2AgentProviderName,
-  Gen2ModelInfo[]
-> = {
-  claude: [
-    { id: "sonnet", label: "Claude 3.7 Sonnet" },
-    { id: "opus", label: "Claude 3 Opus" },
-    { id: "haiku", label: "Claude 3.5 Haiku" },
-  ],
-  codex: [
-    { id: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
-    { id: "gpt-4o", label: "GPT-4o" },
-    { id: "o3-mini", label: "o3-mini" },
-  ],
+export const gen2AccountModelRequestSchema = z.object({
+  userId: identifierSchema,
+  provider: z.literal("codex"),
+});
+export const gen2AccountModelResponseSchema = z.object({
+  models: z.array(gen2ModelInfoSchema).min(1),
+});
+export type Gen2ProviderStatus = {
+  connected: boolean;
+  via: "subscription" | "api-key" | null;
+  models?: Gen2ModelInfo[];
+  modelsError?: string;
 };
 
 export type Gen2ProviderModelId = string;
@@ -699,4 +698,72 @@ export type Gen2GitOperation = z.infer<typeof gen2GitOperationSchema>;
 export type Gen2TerminalAction = z.infer<typeof gen2TerminalActionSchema>;
 export type Gen2TerminalPollResponse = z.infer<
   typeof gen2TerminalPollResponseSchema
+>;
+
+export const gen2OwnerBudgetReportSchema = z.object({
+  currency: z.literal("USD"),
+  complete: z.literal(true),
+  ownerId: identifierSchema,
+  month: z.string().datetime(),
+  observedAt: z.string().datetime(),
+  computeCents: z.number().int().nonnegative().max(2_147_483_647),
+  storageCents: z.number().int().nonnegative().max(2_147_483_647),
+  networkCents: z.number().int().nonnegative().max(2_147_483_647),
+  operationsCents: z.number().int().nonnegative().max(2_147_483_647),
+  otherCents: z.number().int().nonnegative().max(2_147_483_647),
+  blocked: z.boolean().default(false),
+});
+export type Gen2OwnerBudgetReport = z.infer<typeof gen2OwnerBudgetReportSchema>;
+export type Gen2OwnerComputeEntitlement = {
+  tier: "free" | "paid";
+  enabled: boolean;
+  unlimited: boolean;
+  ownedWorkspaceCount: number;
+  monthlyLimitMs: number | null;
+};
+
+export const gen2ComputeSwitchRequestSchema = z.object({
+  workspaceId: identifierSchema,
+  activeWorkspaceId: identifierSchema,
+  idempotencyKey: z.string().trim().min(1).max(128),
+});
+
+export type Gen2OwnerBudgetSummary = {
+  spentCents: number | null;
+  limitCents: number;
+  observedAt: string | null;
+  blocked: boolean;
+};
+export type Gen2OwnerComputeSummary = {
+  minutesUsed: number;
+  minutesLimit: number | null;
+  unlimited: boolean;
+  resetsAt: string;
+  tier: "free" | "paid";
+  freeEnabled: boolean;
+  ownedWorkspaceCount: number;
+  activeWorkspaceLimit: number | null;
+  armBootMinutesCount: boolean;
+  budget: Gen2OwnerBudgetSummary | null;
+};
+export type Gen2ComputeSwitchResponse = {
+  accepted: boolean;
+  workspaceId: string;
+  stoppingWorkspaceId: string | null;
+  operationId: string | null;
+};
+
+export const gen2ArmWorkflowParamsSchema = z.object({
+  workspaceId: z.string().uuid(),
+  operationId: z.string().uuid(),
+  generation: z.number().int().nonnegative(),
+  resourceGeneration: z.number().int().nonnegative(),
+  cleanupGeneration: z.number().int().nonnegative().nullable(),
+  kind: gen2RuntimeOperationKindSchema,
+  checkpoints: z.record(z.string(), z.unknown()).optional(),
+  activate: z.boolean().optional(),
+  failureCode: z.string().max(128).optional(),
+});
+export type ArmWorkspaceWorkflowParams = z.infer<
+  typeof gen2ArmWorkflowParamsSchema
 >;

@@ -101,3 +101,24 @@ describe("Gen 2 agent list", () => {
     expect(listed).toEqual(runnable);
   });
 });
+
+describe("Cursor credentials", () => {
+  it("runs only in workspaces with private file authentication", () => {
+    expect(providerRunsOn("cursor", "rooms")).toBe(false);
+    expect(providerRunsOn("cursor", "gen2")).toBe(true);
+    const profile = launchProfileFor("cursor", {
+      kind: "cursor_auth_cache",
+      authCacheJson: '{"accessToken":"test"}',
+    });
+    expect(profile.files).toEqual([
+      { path: ".config/cursor/auth.json", contents: '{"accessToken":"test"}' },
+    ]);
+    expect(profile.env).toMatchObject({
+      XDG_CONFIG_HOME: "{{profileDir}}/.config",
+      AGENT_CLI_CREDENTIAL_STORE: "file",
+    });
+    expect(
+      launchProfileFor("cursor", { kind: "api_key", apiKey: "test-key" }).env,
+    ).toMatchObject({ CURSOR_API_KEY: "test-key" });
+  });
+});

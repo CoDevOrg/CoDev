@@ -3,6 +3,10 @@ import "server-only";
 import { readServerEnvironment } from "@codev/config";
 import { z } from "zod";
 
+import { OrchestratorError } from "./orchestrator-error";
+export { OrchestratorError } from "./orchestrator-error";
+import { workspaceRuntimeTarget } from "./workspace-runtime-target";
+
 import { fakeGuestEnabled, handleFakeGuestRequest } from "./fake-guest";
 
 const errorSchema = z.object({
@@ -10,32 +14,6 @@ const errorSchema = z.object({
   conflictPaths: z.array(z.string()).optional(),
   currentRevision: z.string().optional(),
 });
-
-export class OrchestratorError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-    readonly conflictPaths: string[] = [],
-    readonly currentRevision?: string,
-  ) {
-    super(message);
-    this.name = "OrchestratorError";
-  }
-
-  /** Used by `withUser` in place of the plain error body. */
-  toResponse() {
-    return Response.json(
-      {
-        error: this.message,
-        conflictPaths: this.conflictPaths,
-        ...(this.currentRevision
-          ? { currentRevision: this.currentRevision }
-          : {}),
-      },
-      { status: this.status },
-    );
-  }
-}
 
 /**
  * Every orchestrator call, over the bearer-authenticated direct HTTPS path.
@@ -76,6 +54,7 @@ async function orchestratorDirectRequest(
   body: unknown,
   timeoutMs: number,
   endpointOverride?: string,
+  database?: Parameters<typeof workspaceRuntimeTarget>[1],
 ) {
   // A local stand-in for the Azure guest, so the workspace can be exercised
   // without infrastructure. Gated on an env var that is never set in
@@ -90,9 +69,7 @@ async function orchestratorDirectRequest(
     /^\/v1\/sandboxes\/([^/?]+)(\/(?:files|git|pty|terminals|codex-execs|superset|superset-agents)(?:\/|\?|$).*)$/,
   );
   if (workspaceRoute && !endpointOverride) {
-    const { workspaceRuntimeTarget } =
-      await import("./workspace-runtime-target");
-    const target = await workspaceRuntimeTarget(workspaceRoute[1]!);
+    const target = await workspaceRuntimeTarget(workspaceRoute[1]!, database);
     if (target) {
       const { armWorkspaceRequest } = await import("./arm-workspace-request");
       return assertOrchestratorResponse(
@@ -171,8 +148,16 @@ export async function codexExecRequest(
   path: string,
   body: unknown,
   timeoutMs: number,
+  database?: Parameters<typeof workspaceRuntimeTarget>[1],
 ) {
-  return orchestratorDirectRequest(method, path, body, timeoutMs);
+  return orchestratorDirectRequest(
+    method,
+    path,
+    body,
+    timeoutMs,
+    undefined,
+    database,
+  );
 }
 
 export async function claudeSetupRequest(

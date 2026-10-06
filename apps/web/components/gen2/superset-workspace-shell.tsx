@@ -43,6 +43,7 @@ import { ThemeToggle } from "@/components/shell/theme-toggle";
 import { Gen2ChatPanel } from "./chat-panel";
 import { Gen2TerminalPane } from "./terminal-pane";
 import { WorkspaceLoading } from "./workspace-loading";
+import { WorkspaceSwitchDialog } from "./workspace-switch-dialog";
 import {
   createSupersetWorktree,
   DEFAULT_SUPERSET_WORKTREE_ID,
@@ -343,7 +344,7 @@ export function SupersetWorkspaceShell({
       provider,
     ): provider is (typeof SUPPORTED_AI_PROVIDERS)[number] & {
       id: Gen2AgentProviderName;
-    } => provider.id !== "cursor" && providerStatuses[provider.id]?.connected,
+    } => providerStatuses[provider.id]?.connected,
   );
 
   const handleNewChat = useCallback(() => {
@@ -524,6 +525,7 @@ export function SupersetWorkspaceShell({
       setNotice("");
     },
   );
+  const [showSwitchDialog, setShowSwitchDialog] = useState(false);
   const ensureRunning = connection.reconnect;
   const currentWorkspace = {
     ...activeWorkspace,
@@ -756,7 +758,7 @@ export function SupersetWorkspaceShell({
     chats.find((chat) => chat.id === selectedChatId) ?? chats[0] ?? null;
 
   const connectedProviders = SUPPORTED_AI_PROVIDERS.filter(
-    (p) => p.id !== "cursor" && providerStatuses[p.id]?.connected,
+    (p) => providerStatuses[p.id]?.connected,
   );
 
   if (!runtimeEnabled) {
@@ -1807,9 +1809,7 @@ export function SupersetWorkspaceShell({
                         connectedProviders={connectedChatProviders.map(
                           (provider) => provider.id,
                         )}
-                        activeProvider={
-                          activeProvider === "cursor" ? "codex" : activeProvider
-                        }
+                        activeProvider={activeProvider}
                         onActiveProviderChange={setActiveProvider}
                         hideChatBar={true}
                         onRunningChange={setAgentRunning}
@@ -1824,56 +1824,174 @@ export function SupersetWorkspaceShell({
                       />
                     </div>
                     {connection.state === "connected" ? null : (
-                      <WorkspaceLoading
-                        className="gen2-ide-loading"
-                        busy={
-                          !connection.subscriptionRequired &&
-                          connection.state !== "disconnected"
-                        }
-                        title={
-                          connection.subscriptionRequired
-                            ? "An Individual plan is required"
-                            : connection.state === "disconnected"
-                              ? workspace?.status === "pending"
-                                ? "This workspace hasn't started"
-                                : "This workspace is asleep"
-                              : "Waking your workspace"
-                        }
-                        description={
-                          connection.subscriptionRequired
-                            ? connection.error ||
-                              "Workspace owners can subscribe in Settings, then open this workspace again."
-                            : connection.state === "disconnected"
-                              ? connection.error ||
-                                "Your files are still saved."
-                              : workspaceStartupProgress(connection.progress)
-                        }
-                        action={
-                          connection.subscriptionRequired ? (
-                            <WorkspaceButton
-                              tone="secondary"
-                              type="button"
-                              onClick={() => {
-                                window.location.assign(
-                                  "/settings/personal/billing",
-                                );
-                              }}
-                            >
-                              Open billing
-                            </WorkspaceButton>
-                          ) : connection.state === "disconnected" ? (
-                            <WorkspaceButton
-                              tone="secondary"
-                              type="button"
-                              onClick={() => void ensureRunning()}
-                            >
-                              {workspace?.status === "pending"
-                                ? "Start workspace"
-                                : "Reconnect workspace"}
-                            </WorkspaceButton>
-                          ) : null
-                        }
-                      />
+                      <>
+                        <WorkspaceLoading
+                          className="gen2-ide-loading"
+                          busy={
+                            connection.switching ||
+                            (!connection.subscriptionRequired &&
+                              !connection.conflict &&
+                              connection.state !== "disconnected")
+                          }
+                          title={
+                            connection.conflict
+                              ? connection.switching
+                                ? "Switching active workspace"
+                                : "Active workspace limit reached"
+                              : connection.error &&
+                                  /workspace minutes|monthly limit|quota/i.test(
+                                    connection.error,
+                                  )
+                                ? "Monthly workspace time used"
+                                : connection.error &&
+                                    /budget guard|monthly resource budget/i.test(
+                                      connection.error,
+                                    )
+                                  ? "Compute paused by budget guard"
+                                  : connection.subscriptionRequired
+                                    ? "An Individual plan is required"
+                                    : connection.state === "disconnected"
+                                      ? workspace?.status === "pending"
+                                        ? "This workspace hasn't started"
+                                        : "This workspace is asleep"
+                                      : "Waking your workspace"
+                          }
+                          description={
+                            connection.conflict
+                              ? connection.switching
+                                ? (connection.switchStatus ??
+                                  "Switching workspaces…")
+                                : workspace?.role === "owner"
+                                  ? `“${connection.conflict.activeWorkspace.name}” is currently running. Free accounts can run one workspace at a time. Switch to stop it and start this workspace.`
+                                  : `“${connection.conflict.activeWorkspace.name}” is currently running. Only the workspace owner can switch active workspaces.`
+                              : connection.error &&
+                                  /workspace minutes|monthly limit|quota/i.test(
+                                    connection.error,
+                                  )
+                                ? connection.error
+                                : connection.error &&
+                                    /budget guard|monthly resource budget/i.test(
+                                      connection.error,
+                                    )
+                                  ? connection.error
+                                  : connection.subscriptionRequired
+                                    ? connection.error ||
+                                      "Workspace owners can subscribe in Settings, then open this workspace again."
+                                    : connection.state === "disconnected"
+                                      ? connection.error ||
+                                        "Your files are still saved."
+                                      : workspaceStartupProgress(
+                                          connection.progress,
+                                        )
+                          }
+                          action={
+                            connection.conflict ? (
+                              workspace?.role === "owner" ? (
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <WorkspaceButton
+                                    tone="primary"
+                                    type="button"
+                                    disabled={connection.switching}
+                                    onClick={() => setShowSwitchDialog(true)}
+                                  >
+                                    Switch to this workspace
+                                  </WorkspaceButton>
+                                  <WorkspaceButton
+                                    tone="secondary"
+                                    type="button"
+                                    disabled={connection.switching}
+                                    onClick={() =>
+                                      window.location.assign("/gen2")
+                                    }
+                                  >
+                                    Back to workspaces
+                                  </WorkspaceButton>
+                                </div>
+                              ) : (
+                                <WorkspaceButton
+                                  tone="secondary"
+                                  type="button"
+                                  onClick={() =>
+                                    window.location.assign("/gen2")
+                                  }
+                                >
+                                  Back to workspaces
+                                </WorkspaceButton>
+                              )
+                            ) : connection.error &&
+                              /workspace minutes|monthly limit|quota/i.test(
+                                connection.error,
+                              ) ? (
+                              <WorkspaceButton
+                                tone="secondary"
+                                type="button"
+                                onClick={() => {
+                                  window.location.assign(
+                                    "/settings/personal/billing",
+                                  );
+                                }}
+                              >
+                                View plan details
+                              </WorkspaceButton>
+                            ) : connection.error &&
+                              /budget guard|monthly resource budget/i.test(
+                                connection.error,
+                              ) ? (
+                              <WorkspaceButton
+                                tone="secondary"
+                                type="button"
+                                onClick={() => {
+                                  window.location.assign(
+                                    "/settings/personal/billing",
+                                  );
+                                }}
+                              >
+                                View billing
+                              </WorkspaceButton>
+                            ) : connection.subscriptionRequired ? (
+                              <WorkspaceButton
+                                tone="secondary"
+                                type="button"
+                                onClick={() => {
+                                  window.location.assign(
+                                    "/settings/personal/billing",
+                                  );
+                                }}
+                              >
+                                Open billing
+                              </WorkspaceButton>
+                            ) : connection.state === "disconnected" ? (
+                              <WorkspaceButton
+                                tone="secondary"
+                                type="button"
+                                onClick={() => void ensureRunning()}
+                              >
+                                {workspace?.status === "pending"
+                                  ? "Start workspace"
+                                  : "Reconnect workspace"}
+                              </WorkspaceButton>
+                            ) : null
+                          }
+                        />
+                        {connection.conflict && (
+                          <WorkspaceSwitchDialog
+                            open={showSwitchDialog}
+                            onOpenChange={setShowSwitchDialog}
+                            activeWorkspace={
+                              connection.conflict.activeWorkspace
+                            }
+                            targetWorkspaceName={currentWorkspace.name}
+                            switching={connection.switching}
+                            switchStatus={connection.switchStatus}
+                            onConfirmSwitch={() => {
+                              setShowSwitchDialog(false);
+                              void connection.switchWorkspace(
+                                connection.conflict!.activeWorkspace.id,
+                              );
+                            }}
+                          />
+                        )}
+                      </>
                     )}
                   </div>
 

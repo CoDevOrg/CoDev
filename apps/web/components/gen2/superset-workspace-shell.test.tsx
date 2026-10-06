@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   connected: true,
+  cursorConnected: false,
   renameOk: true,
   listWorktrees: vi.fn(),
   createWorktree: vi.fn(),
@@ -47,8 +48,18 @@ vi.mock("./review-diff-viewer", () => ({
 }));
 
 vi.mock("./chat-panel", () => ({
-  Gen2ChatPanel: ({ worktreeId }: { worktreeId?: string }) => (
-    <div data-testid="chat-panel" data-worktree-id={worktreeId} />
+  Gen2ChatPanel: ({
+    worktreeId,
+    activeProvider,
+  }: {
+    worktreeId?: string;
+    activeProvider?: string;
+  }) => (
+    <div
+      data-testid="chat-panel"
+      data-worktree-id={worktreeId}
+      data-provider={activeProvider}
+    />
   ),
 }));
 
@@ -86,6 +97,7 @@ function stubMatchMedia(matchesFor: (query: string) => boolean) {
 describe("SupersetWorkspaceShell", () => {
   beforeEach(() => {
     mocks.connected = true;
+    mocks.cursorConnected = false;
     mocks.renameOk = true;
     stubMatchMedia(() => false);
     mocks.listWorktrees.mockResolvedValue([
@@ -107,7 +119,7 @@ describe("SupersetWorkspaceShell", () => {
             Response.json({
               codex: { connected: true, via: "api-key" },
               claude: { connected: false, via: null },
-              cursor: { connected: false, via: null },
+              cursor: { connected: mocks.cursorConnected, via: "subscription" },
             }),
           );
         }
@@ -382,6 +394,27 @@ describe("SupersetWorkspaceShell", () => {
     // Disconnected providers should NOT be rendered
     expect(screen.queryByText("Claude")).not.toBeInTheDocument();
     expect(screen.queryByText("Cursor")).not.toBeInTheDocument();
+  });
+
+  it("shows a connected Cursor subscription in the workspace provider picker", async () => {
+    mocks.cursorConnected = true;
+    render(
+      <SupersetWorkspaceShell
+        workspaceId={workspaceId}
+        canEdit
+        runtimeEnabled
+      />,
+    );
+    const cursor = await screen.findAllByText("Cursor");
+    expect(cursor.length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "New Chat" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Cursor" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("chat-panel")).toHaveAttribute(
+        "data-provider",
+        "cursor",
+      ),
+    );
   });
 
   it("renames a chat after the server accepts the title", async () => {

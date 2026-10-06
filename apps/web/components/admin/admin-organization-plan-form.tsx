@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useTransition, type FormEvent } from "react";
+import { CreditCard } from "lucide-react";
 
 import { updateOrganizationPlan } from "@/app/admin/actions";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -21,19 +21,7 @@ import {
 } from "@/components/ui/field";
 import type { AdminFeatureAccessData } from "@/lib/admin/admin-feature-access";
 import type { AdminFeatureActionResult } from "@/app/admin/actions";
-
-function Notice({ result }: { result: AdminFeatureActionResult | null }) {
-  if (!result) return null;
-  return (
-    <Alert
-      className="admin-action-notice"
-      variant={result.ok ? "default" : "destructive"}
-      role={result.ok ? "status" : "alert"}
-    >
-      <AlertDescription>{result.message}</AlertDescription>
-    </Alert>
-  );
-}
+import { AdminNotice } from "./admin-notice";
 
 export function AdminOrganizationPlanForm({
   data,
@@ -65,69 +53,88 @@ export function AdminOrganizationPlanForm({
   }
 
   return (
-    <Card className="admin-control-card">
-      <CardHeader>
-        <CardTitle>Assign organization plan</CardTitle>
-        <CardDescription>
-          Sets the plan used for this organization&apos;s baseline feature
-          access. This does not charge Stripe. Cancel live Stripe plans in
-          Stripe before changing them here.
-        </CardDescription>
-      </CardHeader>
-      <form onSubmit={submit}>
-        <CardContent className="admin-control-form-content">
-          <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="plan-organization">Organization</FieldLabel>
-              <select
-                id="plan-organization"
-                className="admin-control-select"
-                name="organizationId"
-                value={organizationId}
-                onChange={(event) => setOrganizationId(event.target.value)}
-              >
-                {data.organizations.map((organization) => (
-                  <option key={organization.id} value={organization.id}>
-                    {organization.name}
+    <Card className="flex flex-col justify-between border-border/80 bg-card/60 backdrop-blur-xs">
+      <div>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+            <CreditCard className="size-4 text-primary" />
+            Assign Organization Plan
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Sets the baseline plan for feature access. This does not charge
+            Stripe.
+          </CardDescription>
+        </CardHeader>
+        <form onSubmit={submit}>
+          <CardContent className="space-y-3 pb-4">
+            <FieldGroup className="space-y-3">
+              <Field>
+                <FieldLabel
+                  htmlFor="plan-organization"
+                  className="text-xs font-medium"
+                >
+                  Organization
+                </FieldLabel>
+                <select
+                  id="plan-organization"
+                  className="w-full rounded-md border border-input bg-card px-3 py-2 text-xs text-foreground shadow-xs outline-none transition-colors focus-visible:ring-1 focus-visible:ring-ring"
+                  name="organizationId"
+                  value={organizationId}
+                  onChange={(event) => setOrganizationId(event.target.value)}
+                >
+                  {data.organizations.map((organization) => (
+                    <option key={organization.id} value={organization.id}>
+                      {organization.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field>
+                <FieldLabel
+                  htmlFor="organization-plan"
+                  className="text-xs font-medium"
+                >
+                  Plan to apply
+                </FieldLabel>
+                <select
+                  id="organization-plan"
+                  className="w-full rounded-md border border-input bg-card px-3 py-2 text-xs text-foreground shadow-xs outline-none transition-colors focus-visible:ring-1 focus-visible:ring-ring"
+                  name="planId"
+                  disabled={!canAssignPlan}
+                  required
+                  key={`${organizationId}:${selectedPlan}`}
+                  defaultValue={selectedPlanIsActive ? selectedPlan : ""}
+                >
+                  <option value="" disabled>
+                    Select an active plan
                   </option>
-                ))}
-              </select>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="organization-plan">Plan to apply</FieldLabel>
-              <select
-                id="organization-plan"
-                className="admin-control-select"
-                name="planId"
-                disabled={!canAssignPlan}
-                required
-                key={`${organizationId}:${selectedPlan}`}
-                defaultValue={selectedPlanIsActive ? selectedPlan : ""}
-              >
-                <option value="" disabled>
-                  Select an active plan
-                </option>
-                {data.plans.map((plan) => (
-                  <option key={plan.id} value={plan.id}>
-                    {plan.name}
-                  </option>
-                ))}
-              </select>
-              <FieldDescription>
-                {canAssignPlan
-                  ? `Current plan: ${currentPlanName}.`
-                  : "No active plans are configured."}
-              </FieldDescription>
-            </Field>
-          </FieldGroup>
-          <Notice result={result} />
-        </CardContent>
-        <CardFooter className="admin-control-form-footer">
-          <Button type="submit" disabled={pending || !canAssignPlan}>
-            {pending ? "Applying…" : "Apply plan"}
-          </Button>
-        </CardFooter>
-      </form>
+                  {data.plans.map((plan) => (
+                    <option key={plan.id} value={plan.id}>
+                      {plan.name}
+                    </option>
+                  ))}
+                </select>
+                <FieldDescription className="text-[11px] text-muted-foreground mt-1">
+                  {canAssignPlan
+                    ? `Current plan: ${currentPlanName}.`
+                    : "No active plans are configured."}
+                </FieldDescription>
+              </Field>
+            </FieldGroup>
+            <AdminNotice result={result} />
+          </CardContent>
+          <CardFooter className="border-t border-border/60 pt-3">
+            <Button
+              type="submit"
+              size="sm"
+              disabled={pending || !canAssignPlan}
+              className="text-xs"
+            >
+              {pending ? "Applying…" : "Apply Plan"}
+            </Button>
+          </CardFooter>
+        </form>
+      </div>
     </Card>
   );
 }

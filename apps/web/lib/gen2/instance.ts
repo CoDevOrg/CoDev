@@ -1,4 +1,5 @@
 import "server-only";
+import { cancelFreeComputeReservation } from "./cancel-free-compute-reservation";
 
 import { and, eq, inArray, lt, or } from "drizzle-orm";
 
@@ -423,6 +424,10 @@ export async function stopGen2Instance(
     throw new Gen2AccessError("Only the owner can stop this instance.", 403);
   }
   if (membership.runtimeProvider === "azure_arm" && !runtime) {
+    if (["pending", "stopped"].includes(membership.status)) {
+      await cancelFreeComputeReservation(workspaceId, userId);
+      return requireGen2Member(workspaceId, userId);
+    }
     if (membership.status === "provisioning") {
       throw new Gen2LifecycleError(
         "Wait for the workspace operation to finish before stopping it.",
@@ -431,7 +436,7 @@ export async function stopGen2Instance(
     if (!["ready", "failed", "stopped"].includes(membership.status)) {
       throw new Gen2LifecycleError("This instance is not running.");
     }
-    await queueAzureWorkspaceStop(workspaceId, idempotencyKey);
+    await queueAzureWorkspaceStop(workspaceId, idempotencyKey, userId);
     return requireGen2Member(workspaceId, userId);
   }
   const currentRuntime = runtime ?? createFirecrackerRuntime();

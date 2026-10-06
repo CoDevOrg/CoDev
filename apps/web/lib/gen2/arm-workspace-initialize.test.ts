@@ -7,7 +7,21 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../runtime/arm-workspace-request", () => ({
   armWorkspaceRequest: mocks.request,
 }));
-vi.mock("../github/github", () => ({ getRepositorySnapshot: mocks.snapshot }));
+vi.mock("./arm-workspace-private-source", () => ({
+  initializeArmPrivateSource: async (
+    workspace: Record<string, unknown>,
+    database: unknown,
+    write: (file: unknown) => Promise<unknown>,
+  ) => {
+    const snapshot = await mocks.snapshot(
+      workspace.ownerId,
+      workspace.repository,
+      workspace.baseSha,
+      database,
+    );
+    for (const file of snapshot.files) await write(file);
+  },
+}));
 vi.mock("./instance", () => ({
   buildBlankSandboxSource: () => ({
     repositoryUrl: null,

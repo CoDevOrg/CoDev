@@ -6,6 +6,7 @@ import {
 import { requireUser } from "@/lib/auth/session";
 import { getBillingStatus } from "@/lib/billing/access";
 import { syncCheckoutSession } from "@/lib/billing/checkout";
+import { getOwnerComputeSummary } from "@/lib/gen2/compute-summary";
 import { logEvent } from "@/lib/platform/observability";
 
 export const metadata = { title: "Billing" };
@@ -31,7 +32,10 @@ export default async function PersonalBillingPage({
     }
   }
 
-  const status = await getBillingStatus(user.id);
+  const [status, computeSummary] = await Promise.all([
+    getBillingStatus(user.id),
+    getOwnerComputeSummary(user.id),
+  ]);
 
   return (
     <SettingsPageShell>
@@ -76,7 +80,7 @@ export default async function PersonalBillingPage({
         </p>
       ) : null}
 
-      <BillingPanel status={status} />
+      <BillingPanel status={status} computeSummary={computeSummary} />
     </SettingsPageShell>
   );
 }

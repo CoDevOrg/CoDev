@@ -26,6 +26,9 @@ test("VM attaches exactly one existing disk with explicit retention and outbound
 test("disk initialization refuses unidentified or already initialized saved data", () => {
   const script = read("./scripts/prepare-arm-workspace-disk.sh");
   assert.match(script, /17179869184/);
+  assert.match(script, /CODEV_DISK_MODE/);
+  assert.match(script, /CODEV_DISK_EXPECTED_UUID/);
+  assert.doesNotMatch(script, /readonly mode=\$\{1:/);
   assert.match(script, /wipefs --no-act/);
   assert.match(script, /DISK_ALREADY_INITIALIZED/);
   assert.match(script, /DISK_IDENTITY_MISMATCH/);
@@ -43,12 +46,14 @@ test("disk initialization refuses unidentified or already initialized saved data
   );
 });
 
-test("connection service keeps the connector credential out of process arguments", () => {
+test("connection setup waits for dpkg and keeps connector credentials out of process arguments", () => {
   const script = read("./scripts/install-arm-workspace-connection.sh");
   assert.match(script, /O_NOFOLLOW/);
   assert.match(script, /--token-file \/etc\/codev\/tunnel-token/);
   assert.match(script, /codev-local-api-guard.service/);
   assert.match(script, /sha256sum --check --status/);
+  assert.match(script, /lock was locked by another process/);
+  assert.match(script, /SECONDS >= install_deadline/);
   assert.doesNotMatch(script, /--token \$|set -x/);
 });
 
@@ -114,4 +119,21 @@ esac
   const calls = await readFile(log, "utf8");
   assert.equal(calls.match(/resource delete/g)?.length, 1);
   assert.doesNotMatch(calls, /disk delete|vm deallocate/);
+});
+
+test("baked boot verifies the disk before mounting and turns subsequent boots into saved-disk opens", () => {
+  const image = read("./scripts/provision-arm-workspace-image.sh");
+  const boot = read("./scripts/boot-arm-workspace.sh");
+  const activation = read("./scripts/activate-arm-workspace-boot.sh");
+  const installer = read("./scripts/install-arm-workspace-boot.sh");
+  assert.doesNotMatch(
+    image,
+    /ln -s .*multi-user.target.wants\/(?:workspace.mount|codev-guestd.service)/,
+  );
+  assert.match(boot, /subprocess.run.*codev-prepare-arm-disk.*check=True/);
+  assert.match(boot, /config\["diskMode"\] = "existing"/);
+  assert.doesNotMatch(boot + activation, /curl|apt-get|dpkg|--token /);
+  assert.match(activation, /O_NOFOLLOW/);
+  assert.match(activation, /systemctl start codev-arm-boot/);
+  assert.match(installer, /--token-file \/etc\/codev\/tunnel-token/);
 });

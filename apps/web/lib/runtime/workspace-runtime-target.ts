@@ -4,11 +4,14 @@ import { schema } from "@codev/db";
 import { eq } from "drizzle-orm";
 
 import { getDatabase } from "../platform/database";
-import { OrchestratorError } from "./orchestrator-request";
+import { OrchestratorError } from "./orchestrator-error";
 
 /** Resolve on every call: a socket must not retain a stopped guest's generation. */
-export async function workspaceRuntimeTarget(workspaceId: string) {
-  const [row] = await getDatabase()
+export async function workspaceRuntimeTarget(
+  workspaceId: string,
+  database: Pick<ReturnType<typeof getDatabase>, "select"> = getDatabase(),
+) {
+  const [row] = await database
     .select({
       provider: schema.gen2Workspaces.runtimeProvider,
       status: schema.gen2Workspaces.runtimeStatus,

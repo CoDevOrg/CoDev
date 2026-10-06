@@ -22,8 +22,13 @@ try {
     FROM public.gen2_superset_runs LIMIT 0`);
   await pool.query(`SELECT id, run_id, workspace_id, actor_id, type, result, created_at
     FROM public.gen2_superset_run_events LIMIT 0`);
-  await pool.query(`SELECT id, workspace_id, owner_id, started_at, ended_at, last_activity_at
+  await pool.query(`SELECT id, workspace_id, owner_id, started_at, ended_at, last_activity_at, last_observed_allocated_at
     FROM public.gen2_compute_sessions LIMIT 0`);
+  await pool.query(`SELECT owner_id, workspace_id, claimed_at
+    FROM public.gen2_free_compute_claims LIMIT 0`);
+  await pool.query(`SELECT owner_id, month, compute_cents, storage_cents,
+    network_cents, operations_cents, other_cents, blocked, observed_at
+    FROM public.gen2_owner_budgets LIMIT 0`);
   await pool.query(`SELECT session_id, next_sequence
     FROM public.gen2_agent_turns LIMIT 0`);
   await pool.query(`SELECT id, runtime_provider, runtime_status, runtime_generation,

@@ -13,7 +13,11 @@ import {
 import { schema } from "@codev/db";
 
 import { createInviteToken, hashInviteToken } from "../platform/crypto";
+import { getWorkspaceOwnerEntitlement } from "../billing/workspace-entitlement";
 import { requireIndividualPlan } from "../billing/access";
+import { lockComputeOwners } from "./compute-database";
+import { workspaceCreationPolicy } from "./workspace-create-policy";
+import { prepareWorkspaceOwnerTransfer } from "./workspace-owner-transfer";
 import { getRepository } from "../github/github";
 import { getDatabase } from "../platform/database";
 import { logEvent } from "../platform/observability";
@@ -24,7 +28,6 @@ import {
 } from "../runtime/orchestrator-sandbox";
 import { GEN2_MAX_OWNED_WORKSPACES } from "./constants";
 import {
-  assertComputeAvailable,
   endComputeSession,
   transferActiveComputeSession,
 } from "./compute-quota";
@@ -51,9 +54,11 @@ export async function createGen2Workspace(
   userId: string,
   name?: string,
   repository?: { installationId: number; repositoryId: number },
+  acknowledgeReducedQuota = false,
 ) {
-  // Hard paywall: a workspace costs a machine, so creating one needs the plan.
-  await requireIndividualPlan(userId);
+  const entitlement = await getWorkspaceOwnerEntitlement(userId);
+  if (entitlement.tier === "paid" || !entitlement.enabled)
+    await requireIndividualPlan(userId);
   // Resolve the repository before anything is written: a repo the member
   // cannot see should fail the create, not leave a half-built workspace.
   const source = repository
@@ -86,11 +91,18 @@ export async function createGen2Workspace(
         );
       }
 
+      const runtimeProvider = await workspaceCreationPolicy(
+        transaction,
+        userId,
+        owned?.count ?? 0,
+        acknowledgeReducedQuota,
+      );
       const [created] = await transaction
         .insert(schema.gen2Workspaces)
         .values({
           ownerId: userId,
           name: workspaceName,
+          runtimeProvider,
           ...(source
             ? {
                 githubInstallationId: repository!.installationId,
@@ -272,12 +284,14 @@ export async function deleteGen2Workspace(workspaceId: string, userId: string) {
     const operation = await queueAzureWorkspaceDelete(
       workspaceId,
       crypto.randomUUID(),
+      userId,
     );
     return { accepted: true as const, operationId: operation?.operationId };
   }
 
   const database = getDatabase();
   const currentStatus = await database.transaction(async (transaction) => {
+    await lockComputeOwners(transaction, [userId]);
     const [current] = await transaction
       .select({
         ownerId: schema.gen2Workspaces.ownerId,
@@ -420,6 +434,7 @@ export async function joinGen2Workspace(token: string, userId: string) {
   const [workspace] = await getDatabase()
     .select({
       id: schema.gen2Workspaces.id,
+      ownerId: schema.gen2Workspaces.ownerId,
       status: schema.gen2Workspaces.status,
       activeInviteExpiresAt: schema.gen2Workspaces.activeInviteExpiresAt,
       activeInviteRole: schema.gen2Workspaces.activeInviteRole,
@@ -438,8 +453,13 @@ export async function joinGen2Workspace(token: string, userId: string) {
   const role = workspace.activeInviteRole ?? "editor";
 
   if (role === "owner") {
-    await assertComputeAvailable(userId);
     await getDatabase().transaction(async (tx) => {
+      await prepareWorkspaceOwnerTransfer(
+        tx,
+        workspace.id,
+        userId,
+        workspace.ownerId,
+      );
       await tx
         .update(schema.gen2WorkspaceMembers)
         .set({ role: "editor" })
@@ -451,7 +471,12 @@ export async function joinGen2Workspace(token: string, userId: string) {
         );
       await tx
         .update(schema.gen2Workspaces)
-        .set({ ownerId: userId, updatedAt: new Date() })
+        .set({
+          ownerId: userId,
+          activeInviteTokenHash: null,
+          activeInviteExpiresAt: null,
+          updatedAt: new Date(),
+        })
         .where(eq(schema.gen2Workspaces.id, workspace.id));
       await transferActiveComputeSession(tx, workspace.id, userId);
       const [existing] = await tx
@@ -581,8 +606,13 @@ export async function addGen2WorkspaceMember(
 
   const database = getDatabase();
   if (role === "owner") {
-    await assertComputeAvailable(targetUser.id);
     await database.transaction(async (tx) => {
+      await prepareWorkspaceOwnerTransfer(
+        tx,
+        workspaceId,
+        targetUser.id,
+        currentUserId,
+      );
       await tx
         .update(schema.gen2WorkspaceMembers)
         .set({ role: "editor" })
@@ -594,7 +624,12 @@ export async function addGen2WorkspaceMember(
         );
       await tx
         .update(schema.gen2Workspaces)
-        .set({ ownerId: targetUser.id, updatedAt: new Date() })
+        .set({
+          ownerId: targetUser.id,
+          activeInviteTokenHash: null,
+          activeInviteExpiresAt: null,
+          updatedAt: new Date(),
+        })
         .where(eq(schema.gen2Workspaces.id, workspaceId));
       await transferActiveComputeSession(tx, workspaceId, targetUser.id);
       const [existing] = await tx
@@ -710,8 +745,13 @@ export async function updateGen2WorkspaceMemberRole(
   }
 
   if (role === "owner") {
-    await assertComputeAvailable(targetUserId);
     await database.transaction(async (tx) => {
+      await prepareWorkspaceOwnerTransfer(
+        tx,
+        workspaceId,
+        targetUserId,
+        currentUserId,
+      );
       await tx
         .update(schema.gen2WorkspaceMembers)
         .set({ role: "editor" })
@@ -723,7 +763,12 @@ export async function updateGen2WorkspaceMemberRole(
         );
       await tx
         .update(schema.gen2Workspaces)
-        .set({ ownerId: targetUserId, updatedAt: new Date() })
+        .set({
+          ownerId: targetUserId,
+          activeInviteTokenHash: null,
+          activeInviteExpiresAt: null,
+          updatedAt: new Date(),
+        })
         .where(eq(schema.gen2Workspaces.id, workspaceId));
       await transferActiveComputeSession(tx, workspaceId, targetUserId);
       await tx

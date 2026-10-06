@@ -1,6 +1,6 @@
 {
-  "id": "76bf70bf-93f3-4a0f-8426-819ddfd626ab",
-  "prevId": "14429ff2-e582-4ae6-857b-78c0883fec6c",
+  "id": "14429ff2-e582-4ae6-857b-78c0883fec6c",
+  "prevId": "d9389546-e142-4290-a6b9-668dbcf7c0fd",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3117,12 +3117,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "idempotency_key": {
-          "name": "idempotency_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
         "status": {
           "name": "status",
           "type": "gen2_agent_session_status",
@@ -3207,27 +3201,6 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "gen2_agent_sessions_workspace_idempotency_idx": {
-          "name": "gen2_agent_sessions_workspace_idempotency_idx",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "idempotency_key",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -3674,6 +3647,12 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
+        },
+        "last_observed_allocated_at": {
+          "name": "last_observed_allocated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -3734,6 +3713,160 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.gen2_free_compute_claims": {
+      "name": "gen2_free_compute_claims",
+      "schema": "",
+      "columns": {
+        "owner_id": {
+          "name": "owner_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "claimed_at": {
+          "name": "claimed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "gen2_free_compute_claims_owner_id_users_id_fk": {
+          "name": "gen2_free_compute_claims_owner_id_users_id_fk",
+          "tableFrom": "gen2_free_compute_claims",
+          "tableTo": "users",
+          "columnsFrom": [
+            "owner_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "gen2_free_compute_claims_workspace_id_gen2_workspaces_id_fk": {
+          "name": "gen2_free_compute_claims_workspace_id_gen2_workspaces_id_fk",
+          "tableFrom": "gen2_free_compute_claims",
+          "tableTo": "gen2_workspaces",
+          "columnsFrom": [
+            "workspace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.gen2_owner_budgets": {
+      "name": "gen2_owner_budgets",
+      "schema": "",
+      "columns": {
+        "owner_id": {
+          "name": "owner_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "month": {
+          "name": "month",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "compute_cents": {
+          "name": "compute_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "storage_cents": {
+          "name": "storage_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "network_cents": {
+          "name": "network_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "operations_cents": {
+          "name": "operations_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "other_cents": {
+          "name": "other_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "blocked": {
+          "name": "blocked",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "observed_at": {
+          "name": "observed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "gen2_owner_budgets_owner_id_users_id_fk": {
+          "name": "gen2_owner_budgets_owner_id_users_id_fk",
+          "tableFrom": "gen2_owner_budgets",
+          "tableTo": "users",
+          "columnsFrom": [
+            "owner_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "gen2_owner_budgets_owner_id_month_pk": {
+          "name": "gen2_owner_budgets_owner_id_month_pk",
+          "columns": [
+            "owner_id",
+            "month"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "gen2_owner_budgets_nonnegative": {
+          "name": "gen2_owner_budgets_nonnegative",
+          "value": "\"gen2_owner_budgets\".\"compute_cents\" >= 0 AND \"gen2_owner_budgets\".\"storage_cents\" >= 0 AND \"gen2_owner_budgets\".\"network_cents\" >= 0 AND \"gen2_owner_budgets\".\"operations_cents\" >= 0 AND \"gen2_owner_budgets\".\"other_cents\" >= 0"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.gen2_superset_run_events": {

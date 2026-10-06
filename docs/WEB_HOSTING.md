@@ -6,6 +6,14 @@ Vercel retains its own production and preview deployments. Check the hostname
 and deployment job before changing a setting; the deployments have separate
 runtime secrets.
 
+ARM lifecycle coordination stays on Cloudflare Workers Free. The external
+request limit applies to the whole workflow instance, so splitting `step.do`
+calls or using a service binding does not reset it. Lifecycle instances hand
+off after ten request/progress checkpoints, retain unfinished polling results,
+and compact completed phases into the workspace's stored runtime state. The
+continuation must claim the current operation before its activation event;
+saved disks and VM generations remain unchanged across handoffs.
+
 |                       | Cloudflare                                                                                             | Vercel                                                                                                                       |
 | --------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
 | Serves                | The production Worker on `trycodev.com` and `www.trycodev.com`, plus the `admins.trycodev.com/*` route | The `codev` web project on Vercel deployment URLs; `main` gets a production deployment and other branches get previews       |
@@ -17,7 +25,7 @@ The Cloudflare Worker runs the Next.js app through vinext. It handles Gen 2
 collaboration and terminal WebSocket upgrades, runs the every-minute compute
 reconciliation Cron Trigger, and uses Hyperdrive for PostgreSQL. The ARM
 workspace canary also creates Cloudflare Tunnels and DNS records for runtime
-hostnames; the Firecracker guests themselves run in Azure. See
+hostnames; the ARM workspace guests run in Azure. See
 [`cloudflare-worker.ts`](../apps/web/lib/platform/cloudflare-worker.ts) and
 [`arm-workspace-tunnel.mjs`](../infra/azure/arm-workspace-tunnel.mjs).
 
@@ -30,7 +38,10 @@ hostnames; the Firecracker guests themselves run in Azure. See
 - **Cloudflare Worker:** application secrets are Worker bindings declared in
   `cloudflare.config.ts` and configured on Cloudflare. The `CRON_SECRET` GitHub
   secret is uploaded to the Worker by CI on deployment. The ARM canary uses
-  the GitHub `CLOUDFLARE_API_TOKEN` for Tunnel/DNS setup.
+  the GitHub `CLOUDFLARE_API_TOKEN` for Tunnel/DNS setup. The production Worker's
+  binding with that name uses the separate account-owned `codev-arm-runtime`
+  token: Cloudflare Tunnel Write on the runtime account and DNS Write restricted
+  to the `trycodev.com` zone. It has no Worker deployment permission.
 - **Vercel project:** application environment variables for the Vercel build
   and deployment are configured in Vercel. The deploy workflow pulls the
   selected production or preview environment before building.
@@ -64,3 +75,133 @@ The scheduled compute reconciliation route also drains abandoned ARM turns
 before idle VM release, using the durable cursor added by migration `0068`.
 A candidate image containing `/v1/runtime-activity` and a successful staging
 canary are required before ARM member enablement. See the [Phase 4 review](./arm-workspace-free-tier-phase-4.md).
+
+The Worker now has the ARM image, SSH public key, and Ed25519 signing key
+bindings. The immutable gallery image pin is managed in the shared ARM runtime
+configuration for `codev-arm-workspace-phase1`. Version `1.0.11` remains the
+rollback image for the baked-boot rollout. Operator copies of the signing and SSH keys are
+stored outside the repository in a private configuration directory.
+
+ARM provisioning requires `ARM_WORKSPACE_AZURE_CLIENT_ID`,
+`ARM_WORKSPACE_AZURE_CLIENT_SECRET`, and `ARM_WORKSPACE_RESOURCE_GROUP`.
+Firecracker retains `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, and
+`AZURE_RESOURCE_GROUP`; both providers share the tenant and subscription.
+The staging identity `codev-arm-workspace-staging-worker` has the custom
+`CoDev ARM Workspace Operator` role only on `codev-arm-workspace-staging`,
+and Reader only on the ARM gallery image definition in the build group.
+It has no IAM permissions. Its appended client credential expires on
+2027-01-03 and must be rotated in the Worker secret store before that date.
+A successful staging lifecycle canary is still required before member enablement.
+
+## Free ARM entitlement rollout
+
+`GEN2_FREE_ARM_ENABLED` and `GEN2_FREE_ARM_OWNER_IDS` are non-secret rollout
+configuration. Cloudflare declares text bindings from its build environment in
+`cloudflare.config.ts`; rebuilding is required to change them. Vercel reads its
+project environment. Both default to disabled/empty. No production flag was
+changed by Phase 5. Enable an owner allowlist only after migration `0069`, Phase 6
+controls, and release gates are ready.
+
+A trusted cost collector can POST complete cumulative USD owner/month snapshots
+to `/api/gen2/compute/reconcile` using the platform's existing `CRON_SECRET` bearer
+credential. The schema requires compute, storage, networking, operations, and
+other costs plus an observation timestamp. Do not expose this credential to
+members. This ingestion route does not provision a collector: configure one
+before enablement. Missing snapshots or snapshots older than 24 hours block free
+compute; the existing every-minute cron also shuts down blocked owners' active
+workspaces. See the [Phase 5 review](./arm-workspace-free-tier-phase-5.md).
+
+## ARM production finalization
+
+The legacy `codev-runtime-host` Firecracker VM in `CODEV-RUNTIME-MIGRATION`
+was retired on 2026-10-05. Its dedicated OS/jailer disks and networking are
+removed; ARM workspace disks and infrastructure remain separate. GitHub's
+`Deploy runtime (Azure)` workflow is disabled and has no push trigger, so ARM
+changes cannot recreate the legacy host. Restoring Firecracker requires an
+explicit operator decision before re-enabling that manual workflow.
+New paid/admin workspaces use ARM too; paid quota and unlimited admin
+entitlements remain unchanged. Free eligibility and second-workspace quota
+acknowledgment still apply only to free accounts.
+
+The production ARM resource group is `codev-arm-workspace-production`; staging
+canaries keep using `codev-arm-workspace-staging`. The dedicated ARM application
+has the existing custom workspace-operator role on the production group, and
+GitHub's OIDC deployment identity has Cost Management Reader there.
+
+GitHub secret `ARM_WORKSPACE_RUNTIME_SECRETS` contains the ARM credential/image/
+signing/tunnel configuration. The Cloudflare deployment combines it with
+`CRON_SECRET` in a private secrets file, so future deploys preserve runtime
+settings and keep the Tunnel/DNS token distinct from the CI deployment token.
+Cloudflare now verifies production database schema before building/deploying.
+
+`Collect ARM owner costs` runs hourly and by manual dispatch. It pulls the
+production DB configuration using the existing Vercel deployment credential,
+queries actual Azure resource costs using GitHub OIDC, and POSTs owner snapshots
+to the Worker. `ARM_WORKSPACE_COST_TAX_RATE=0` is the operator-confirmed rate.
+Unknown charged resource attribution blocks owners; unsupported currencies or
+collector failures leave snapshots to expire. Storage includes Azure transaction
+meters; historical transferred resources are conservatively charged to each
+recorded owner. Azure billing is delayed, so this is a reactive guard, not a
+hard billing cap. Invoice-based full-allowance cost acceptance remains separate.
+
+Cloudflare's build reads `GEN2_FREE_ARM_ENABLED` and `GEN2_FREE_ARM_OWNER_IDS`
+from GitHub variables. Vercel requires the equivalent production environment
+variables. Keep the internal allowlist until lifecycle acceptance is recorded.
+
+### ARM lifecycle dispatch from Vercel
+
+Vercel has no Cloudflare workflow binding. Its ARM lifecycle dispatch and status
+reads use `https://trycodev.com/api/gen2/compute/workflow`, authenticated with the
+shared `CRON_SECRET`. The Worker validates operation parameters and requires its
+native `GEN2_ARM_WORKSPACE_LIFECYCLE` binding. Member requests still pass the normal
+workspace authorization and entitlement checks before dispatch. Keep the secret
+identical in both deployments; the runtime Tunnel/DNS token needs no Workflow
+permissions.
+
+ARM runtime configuration and compute service authentication read live Worker
+bindings before Node environment values, so secret updates also reach lifecycle
+workflow entrypoints. Azure Cost Management may throttle queries; a failed run
+publishes no new snapshots and the guard expires stale telemetry.
+
+## ARM guest boot rollout
+
+`ARM_WORKSPACE_BOOT_ENABLED` defaults to false. Its Cloudflare text binding is
+built from the matching GitHub repository variable. The production Vercel deploy
+synchronizes that flag and the image pin from the shared ARM runtime configuration
+into its project environment before pulling/building. Enable it only with a baked image containing cloudflared,
+the gateway, and `codev-arm-boot.service`. The controller supplies the saved UUID
+or a new UUID before VM deployment. One protected extension configuration starts
+local initialization; no guest disk inspection or preparation Run Commands run.
+The guest reports signed readiness after the exact disk and bridge are ready.
+Disk and tunnel preparation run concurrently with independent replay checkpoints
+and a shared Free-plan request budget. Azure operation polling has a five-second
+minimum and honors `Retry-After`; provisioning status includes this setup time.
+
+Roll back new starts by disabling the flag and restoring the previous immutable
+image pin in both secret stores. Existing VMs keep their current image and disk.
+
+Cloudflare collaboration WebSockets retain initialization through `waitUntil`.
+Each socket has its own Redis connection and room reader; each document message
+opens and closes its own Hyperdrive pool after the operation completes. These
+resources must not be reused across Worker requests or closed with the upgrade
+HTTP response. Vercel keeps its process-scoped Redis and Postgres clients.
+
+Workspace Cursor turns use the initiating member’s existing encrypted CLI
+subscription or API key. No additional Worker or Vercel secret is required.
+The ARM image includes pinned `cursor-agent` for Linux ARM64; auth and config
+directories are isolated per turn under private agent profiles.
+
+ARM image `1.0.13` adds Cursor CLI `2026.10.01-e373342`. The production image
+pin is carried in `ARM_WORKSPACE_RUNTIME_SECRETS` and synchronized to Vercel
+by the web deployment workflow. Saved workspace disks survive image upgrades.
+
+Workspace model discovery uses connected member credentials and account catalogs;
+caching is scoped to the member and credential. Cursor and Claude discovery runs
+on the requesting web host. ChatGPT rejects catalog requests from Worker egress,
+so Codex discovery uses `POST https://codev-co-dev-admins.vercel.app/api/gen2/providers`
+with the existing shared `CRON_SECRET`. The service accepts only member identity
+and Codex provider selection, resolves credentials on Vercel, and returns model
+metadata. It refuses requests without service authorization and refuses execution
+on Workers to prevent relay loops. No new secrets or paid Cloudflare services are
+required; keep that Vercel production alias available and deploy Vercel before
+enabling a Worker build that depends on the catalog service.

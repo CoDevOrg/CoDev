@@ -62,6 +62,7 @@ async function drain(
     turn.workspaceId,
     turn.sessionId,
     turn.nextSequence,
+    transaction,
   );
   const chunks = result.chunks.filter(
     (chunk) => chunk.sequence >= turn.nextSequence,

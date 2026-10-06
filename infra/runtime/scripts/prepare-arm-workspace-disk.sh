@@ -5,8 +5,8 @@
 set -euo pipefail
 [[ ${EUID} -eq 0 ]] || { echo 'Root required' >&2; exit 1; }
 readonly disk=/dev/disk/azure/scsi1/lun0
-readonly mode=${1:?Use new or existing}
-readonly expected_uuid=${2:-}
+readonly mode=${CODEV_DISK_MODE:?Use new or existing}
+readonly expected_uuid=${CODEV_DISK_EXPECTED_UUID:-}
 [[ ${mode} == new || ${mode} == existing ]] || exit 1
 [[ ${mode} == new || -n ${expected_uuid} ]] || exit 1
 
@@ -20,11 +20,17 @@ done
 }
 systemctl stop codev-superset-host codev-guestd
 if [[ ${mode} == new ]]; then
-  # A repeated first-boot command must not erase a disk already initialized.
-  [[ -z $(wipefs --no-act --noheadings --output TYPE "${disk}") ]] || {
-    echo 'DISK_ALREADY_INITIALIZED' >&2; exit 1;
-  }
-  mkfs.ext4 -q -m 1 "${disk}"
+  # Only this generation may retry its explicitly authorized fresh disk.
+  if [[ -n $(wipefs --no-act --noheadings --output TYPE "${disk}") ]]; then
+    [[ -n ${expected_uuid} && $(blkid -s TYPE -o value "${disk}") == ext4 &&
+       $(blkid -s UUID -o value "${disk}") == "${expected_uuid}" ]] || {
+      echo 'DISK_ALREADY_INITIALIZED' >&2; exit 1;
+    }
+  elif [[ -n ${expected_uuid} ]]; then
+    mkfs.ext4 -q -m 1 -U "${expected_uuid}" "${disk}"
+  else
+    mkfs.ext4 -q -m 1 "${disk}"
+  fi
 else
   [[ $(blkid -s TYPE -o value "${disk}") == ext4 ]] || exit 1
   [[ $(blkid -s UUID -o value "${disk}") == "${expected_uuid}" ]] || {

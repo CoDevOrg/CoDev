@@ -16,6 +16,16 @@ vi.mock("../platform/database", () => ({
 }));
 vi.mock("../admin/admin", () => ({ isUserAdmin: mocks.isAdmin }));
 
+vi.mock("../billing/workspace-entitlement", () => ({
+  getWorkspaceOwnerEntitlement: vi.fn(async () => ({
+    tier: "paid",
+    enabled: true,
+    unlimited: await mocks.isAdmin(),
+    ownedWorkspaceCount: 1,
+    monthlyLimitMs: (await mocks.isAdmin()) ? null : 60_000_000,
+  })),
+}));
+
 import {
   MONTHLY_COMPUTE_LIMIT_MS,
   assertComputeAvailable,

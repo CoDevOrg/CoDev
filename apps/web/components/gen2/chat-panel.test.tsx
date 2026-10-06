@@ -40,7 +40,12 @@ describe("Gen2ChatPanel", () => {
     start?: () => Response | Promise<Response>;
     poll?: () => unknown | Promise<unknown>;
     messages?: unknown[];
-    provider?: { connected: boolean; via: string | null };
+    provider?: {
+      connected: boolean;
+      via: string | null;
+      models?: Array<{ id: string; label: string }>;
+      modelsError?: string;
+    };
     allProviders?: unknown;
   }) {
     let turnFinished = false;
@@ -77,7 +82,35 @@ describe("Gen2ChatPanel", () => {
           if (path.includes("provider=all") && handlers.allProviders) {
             return json(handlers.allProviders);
           }
-          return json(handlers.provider ?? { connected: true, via: "api-key" });
+          if (handlers.allProviders && !path.includes("provider=all")) {
+            const entry = (handlers.allProviders as Record<string, unknown>)[
+              path.includes("provider=cursor")
+                ? "cursor"
+                : path.includes("provider=claude")
+                  ? "claude"
+                  : "codex"
+            ];
+            if (entry) return json(entry);
+          }
+          const fixtures = {
+            codex: [{ id: "gpt-5.6-luna", label: "GPT-5.6 Luna" }],
+            claude: [{ id: "sonnet", label: "Sonnet" }],
+            cursor: [{ id: "composer-2.5", label: "Composer 2.5" }],
+          };
+          return json(
+            handlers.provider ?? {
+              connected: true,
+              via: "api-key",
+              models:
+                fixtures[
+                  path.includes("provider=cursor")
+                    ? "cursor"
+                    : path.includes("provider=claude")
+                      ? "claude"
+                      : "codex"
+                ],
+            },
+          );
         }
         if (path.endsWith("/chats")) {
           return init?.method === "POST"
@@ -112,6 +145,9 @@ describe("Gen2ChatPanel", () => {
     fireEvent.change(screen.getByLabelText("Prompt"), {
       target: { value: "Please review my files" },
     });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Send" })).toBeEnabled(),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     expect(
       await screen.findByText(
@@ -145,6 +181,9 @@ describe("Gen2ChatPanel", () => {
     fireEvent.change(screen.getByLabelText("Prompt"), {
       target: { value: "Keep this draft" },
     });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Send" })).toBeEnabled(),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     expect(
       await screen.findByText("Couldn't reach CoDev. Try again."),
@@ -217,6 +256,9 @@ describe("Gen2ChatPanel", () => {
     fireEvent.change(screen.getByLabelText("Prompt"), {
       target: { value: "list the files" },
     });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Send" })).toBeEnabled(),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
     // Live turns keep the step timeline open with a short label.
@@ -258,6 +300,9 @@ describe("Gen2ChatPanel", () => {
     fireEvent.change(screen.getByLabelText("Prompt"), {
       target: { value: "edit a.ts" },
     });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Send" })).toBeEnabled(),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
     await waitFor(() => expect(onFilesChanged).toHaveBeenCalled());
@@ -285,6 +330,9 @@ describe("Gen2ChatPanel", () => {
     fireEvent.change(screen.getByLabelText("Prompt"), {
       target: { value: "go" },
     });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Send" })).toBeEnabled(),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
     await waitFor(() => expect(onRunningChange).toHaveBeenCalledWith(true));
@@ -312,6 +360,9 @@ describe("Gen2ChatPanel", () => {
     expect(prompt).not.toBeDisabled();
 
     fireEvent.change(prompt, { target: { value: "go" } });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Send" })).toBeEnabled(),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
     await waitFor(() => expect(onNeedsMachine).toHaveBeenCalled());
@@ -331,6 +382,9 @@ describe("Gen2ChatPanel", () => {
     fireEvent.change(screen.getByLabelText("Prompt"), {
       target: { value: "do the thing" },
     });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Send" })).toBeEnabled(),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
@@ -399,6 +453,9 @@ describe("Gen2ChatPanel", () => {
     fireEvent.change(screen.getByLabelText("Prompt"), {
       target: { value: "review this" },
     });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Send" })).toBeEnabled(),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
     await waitFor(() => {
@@ -458,38 +515,52 @@ describe("Gen2ChatPanel", () => {
     ).toBe(false);
   });
 
-  it("includes the selected model in the turn request body", async () => {
-    stubFetch({});
-    render(
-      <Gen2ChatPanel
-        workspace={workspace}
-        onRunningChange={vi.fn()}
-        onFilesChanged={vi.fn()}
-        onOpenFile={vi.fn()}
-        onNeedsMachine={async () => true}
-        activeProvider="claude"
-      />,
-    );
-
-    await screen.findByRole("heading", { name: "What should we build?" });
-    fireEvent.change(screen.getByLabelText("Prompt"), {
-      target: { value: "hello agent" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Send" }));
-
-    await waitFor(() => {
-      const agentCall = vi
-        .mocked(fetch)
-        .mock.calls.find(
-          ([url, init]) =>
-            String(url).endsWith("/agent") && init?.method === "POST",
+  it.each([
+    { provider: "claude", model: "sonnet" },
+    { provider: "cursor", model: "composer-2.5" },
+  ] as const)(
+    "sends a valid $provider model even with a saved model from another provider",
+    async ({ provider, model }) => {
+      if (provider === "cursor")
+        sessionStorage.setItem(
+          `codev-gen2-model:${workspace.id}`,
+          "gpt-5.6-luna",
         );
-      expect(agentCall).toBeDefined();
-      const body = JSON.parse(String(agentCall?.[1]?.body));
-      expect(body.provider).toBe("claude");
-      expect(body.model).toBe("sonnet");
-    });
-  });
+      stubFetch({});
+      render(
+        <Gen2ChatPanel
+          workspace={workspace}
+          onRunningChange={vi.fn()}
+          onFilesChanged={vi.fn()}
+          onOpenFile={vi.fn()}
+          onNeedsMachine={async () => true}
+          activeProvider={provider}
+        />,
+      );
+
+      await screen.findByRole("heading", { name: "What should we build?" });
+      fireEvent.change(screen.getByLabelText("Prompt"), {
+        target: { value: "hello agent" },
+      });
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: "Send" })).toBeEnabled(),
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+      await waitFor(() => {
+        const agentCall = vi
+          .mocked(fetch)
+          .mock.calls.find(
+            ([url, init]) =>
+              String(url).endsWith("/agent") && init?.method === "POST",
+          );
+        expect(agentCall).toBeDefined();
+        const body = JSON.parse(String(agentCall?.[1]?.body));
+        expect(body.provider).toBe(provider);
+        expect(body.model).toBe(model);
+      });
+    },
+  );
 
   it("populates and uses dynamically fetched models from providers endpoint", async () => {
     stubFetch({
@@ -526,5 +597,73 @@ describe("Gen2ChatPanel", () => {
       await screen.findByRole("button", { name: "Agent" }),
     ).toBeInTheDocument();
     expect(await screen.findByText(/Claude Sonnet 5.5/)).toBeInTheDocument();
+  });
+  it("does not let a late Codex catalog overwrite a Cursor selection", async () => {
+    stubFetch({});
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    let resolveCodex!: (response: Response) => void;
+    vi.mocked(fetch).mockImplementation((url, init) => {
+      if (String(url).endsWith("provider=codex"))
+        return new Promise<Response>((resolve) => {
+          resolveCodex = resolve;
+        });
+      return original(url, init);
+    });
+    const props = {
+      workspace,
+      onRunningChange: vi.fn(),
+      onFilesChanged: vi.fn(),
+      onOpenFile: vi.fn(),
+      onNeedsMachine: async () => true,
+    };
+    const view = render(
+      <Gen2ChatPanel
+        {...props}
+        activeProvider="codex"
+        connectedProviders={["codex", "cursor"]}
+      />,
+    );
+    await waitFor(() => expect(resolveCodex).toBeDefined());
+    view.rerender(
+      <Gen2ChatPanel
+        {...props}
+        activeProvider="cursor"
+        connectedProviders={["codex", "cursor"]}
+      />,
+    );
+    expect(
+      await screen.findByText(/Cursor · Composer 2.5/),
+    ).toBeInTheDocument();
+    resolveCodex(
+      Response.json({
+        connected: true,
+        via: "subscription",
+        models: [{ id: "codex-only", label: "Codex only" }],
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Agent" })).toHaveTextContent(
+        "Cursor · Composer 2.5",
+      ),
+    );
+    fireEvent.change(screen.getByLabelText("Prompt"), {
+      target: { value: "hello" },
+    });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Send" })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => {
+      const call = vi
+        .mocked(fetch)
+        .mock.calls.find(
+          ([url, init]) =>
+            String(url).endsWith("/agent") && init?.method === "POST",
+        );
+      expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({
+        provider: "cursor",
+        model: "composer-2.5",
+      });
+    });
   });
 });

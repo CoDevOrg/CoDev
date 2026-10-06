@@ -43,6 +43,11 @@ const FAQ = [
       "Checkout and billing are handled by Stripe. Your card details go straight to Stripe and never touch CoDev's servers.",
   },
   {
+    question: "Is there a free tier for workspaces?",
+    answer:
+      "CoDev offers a free ARM64 workspace preview with up to 50 hours of monthly workspace time (35 shared hours if 2 workspaces are owned), one active workspace, and 16 GiB of storage per workspace. Cold starts can take several minutes. Quota or cost limits can pause compute while preserving saved files. Invited collaborators can join any workspace for free with no plan required.",
+  },
+  {
     question: "What happens if a payment fails?",
     answer:
       "Creating workspaces and running agents pause until you update your payment method. Your settings and billing page stay open so you can fix it.",
@@ -197,6 +202,12 @@ export default async function PricingPage() {
             </ul>
           </article>
         </section>
+
+        <p className="mt-8 text-center text-xs text-muted-foreground">
+          Free ARM-powered workspaces are available in public preview. Cold
+          starts can take several minutes, and quota or cost limits may pause
+          compute.
+        </p>
 
         <section
           aria-labelledby="faq-heading"

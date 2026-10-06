@@ -39,6 +39,12 @@ export default defineConfig({
     },
 
     env: {
+      GEN2_FREE_ARM_ENABLED: bindings.text(
+        process.env.GEN2_FREE_ARM_ENABLED ?? "false",
+      ),
+      GEN2_FREE_ARM_OWNER_IDS: bindings.text(
+        process.env.GEN2_FREE_ARM_OWNER_IDS ?? "",
+      ),
       VERCEL_ENV: bindings.secret(),
       ACCESS_REQUEST_NOTIFY_EMAIL: bindings.secret(),
       AUTH_GITHUB_ID: bindings.secret(),
@@ -49,6 +55,12 @@ export default defineConfig({
       AWS_REGION: bindings.secret(),
       AZURE_CLIENT_ID: bindings.secret(),
       AZURE_CLIENT_SECRET: bindings.secret(),
+      ARM_WORKSPACE_BOOT_ENABLED: bindings.text(
+        process.env.ARM_WORKSPACE_BOOT_ENABLED ?? "false",
+      ),
+      ARM_WORKSPACE_RESOURCE_GROUP: bindings.secret(),
+      ARM_WORKSPACE_AZURE_CLIENT_ID: bindings.secret(),
+      ARM_WORKSPACE_AZURE_CLIENT_SECRET: bindings.secret(),
       ARM_WORKSPACE_IMAGE_VERSION_ID: bindings.secret(),
       ARM_WORKSPACE_SSH_PUBLIC_KEY: bindings.secret(),
       ARM_WORKSPACE_SIGNING_PRIVATE_KEY: bindings.secret(),

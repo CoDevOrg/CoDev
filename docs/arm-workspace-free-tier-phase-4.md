@@ -75,8 +75,7 @@ Verification passed: repository typecheck and lint (existing warnings only),
 tests. Rust formatting and Clippy passed. Both Next.js/Webpack and Cloudflare
 production builds passed. After the Cloudflare build replaced generated route
 types, `next typegen` regenerated them for the final TypeScript check.
-`pnpm db:check` currently fails because the new cursor column has not been
-applied; this is a rollout prerequisite, not a passing database check.
+Migrations `0067` and `0068` have since been applied; `pnpm db:check` passes.
 
 Live Phase 4 acceptance still requires an isolated deployment with the user's
 configured secrets/permissions, migration `0068`, and a newly built ARM image:
@@ -96,8 +95,7 @@ configured secrets/permissions, migration `0068`, and a newly built ARM image:
 6. Measure cold-open/reconnect timing and run the separate recovery, cost, and
    production release gates. No live latency or cost result is claimed here.
 
-No ARM image publication, production deployment, or Azure/Cloudflare resource
-mutation was performed as part of Phase 4 implementation. The ARM image workflow
-signs runtime artifacts only from `main`; rebuild after the Phase 4 runtime
-changes are merged there, then keep the candidate excluded from `latest` until
-staging acceptance.
+Phase 4 was merged through PR #78 and deployed to the Worker. Candidate ARM
+image `1.0.11` was built from the merged main revision and remains excluded from
+`latest`. Runtime secrets and scoped staging Azure permissions are configured;
+see [web hosting](./WEB_HOSTING.md). Full live acceptance remains pending.

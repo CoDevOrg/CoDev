@@ -1,6 +1,13 @@
 import "server-only";
 
+import type { Gen2RuntimeStatus } from "@codev/contracts";
+import { ArmWorkflowIO } from "./arm-workflow-io";
+
 import { createClientSecretCredential } from "./azure";
+import { readArmWorkspaceConfig } from "./arm-workspace-config";
+import { logEvent } from "../platform/observability";
+import { ArmWorkspaceRuntimeError } from "./arm-workspace-error";
+export { ArmWorkspaceRuntimeError } from "./arm-workspace-error";
 
 import armDiskPreparation from "../../../../infra/runtime/scripts/prepare-arm-workspace-disk.sh?raw";
 import armConnectionInstaller from "../../../../infra/runtime/scripts/install-arm-workspace-connection.sh?raw";
@@ -15,6 +22,9 @@ const NETWORK_API = "2024-05-01";
 const DISK_API = "2024-03-02";
 const DEPLOYMENT_API = "2025-04-01";
 const WORKSPACE_LOCATION = "westus2";
+// Keep Azure polling under Cloudflare Workflows' subrequest budget.
+const VM_POLL_INTERVAL_MS = 10_000;
+const ARM_OPERATION_POLL_INTERVAL_MS = 5_000;
 const CLOUDFLARE_ACCOUNT_ID = "84a1d01866de04e04320feddfb199b83";
 const CLOUDFLARE_ZONE_ID = "c474dbc7af01ea073573a250fbd1d5ec";
 const CLOUDFLARE_ZONE_NAME = "trycodev.com";
@@ -25,6 +35,12 @@ export type ArmWorkspaceOperation = {
   generation: number;
   diskId: string | null;
   diskUuid: string | null;
+  resume?: {
+    status: Gen2RuntimeStatus;
+    vmId: string | null;
+    tunnelId: string | null;
+    routeHost: string | null;
+  };
 };
 
 export type ArmWorkspaceProgress = (
@@ -42,13 +58,6 @@ export type ArmWorkspaceProgress = (
     routeHost: string;
   }>,
 ) => Promise<void>;
-
-export class ArmWorkspaceRuntimeError extends Error {
-  constructor(readonly code: string) {
-    super(code);
-    this.name = "ArmWorkspaceRuntimeError";
-  }
-}
 
 function fail(code: string): never {
   throw new ArmWorkspaceRuntimeError(code);
@@ -72,38 +81,6 @@ function checkTags(
 let cachedCredential:
   | ReturnType<typeof createClientSecretCredential>
   | undefined;
-
-function readArmWorkspaceConfig() {
-  const environment = process.env as Record<string, string | undefined>;
-  const required = (name: string) => {
-    const value = environment[name]?.trim();
-    if (!value) fail("RUNTIME_CONFIGURATION_MISSING");
-    return value;
-  };
-  const config = {
-    tenantId: required("AZURE_TENANT_ID"),
-    clientId: required("AZURE_CLIENT_ID"),
-    clientSecret: required("AZURE_CLIENT_SECRET"),
-    subscriptionId: required("AZURE_SUBSCRIPTION_ID"),
-    resourceGroup: required("AZURE_RESOURCE_GROUP"),
-    imageVersionId: required("ARM_WORKSPACE_IMAGE_VERSION_ID"),
-    sshPublicKey: required("ARM_WORKSPACE_SSH_PUBLIC_KEY"),
-    signingPrivateKey: required("ARM_WORKSPACE_SIGNING_PRIVATE_KEY"),
-    signingPublicKey: required("ARM_WORKSPACE_SIGNING_PUBLIC_KEY"),
-    cloudflareToken: required("CLOUDFLARE_API_TOKEN"),
-  };
-  if (
-    !config.resourceGroup.startsWith("codev-arm-workspace-") ||
-    !config.imageVersionId.startsWith(
-      `/subscriptions/${config.subscriptionId}/resourceGroups/${config.resourceGroup}/providers/Microsoft.Compute/galleries/`,
-    ) ||
-    !config.signingPublicKey.includes("BEGIN PUBLIC KEY") ||
-    !config.sshPublicKey.startsWith("ssh-")
-  ) {
-    fail("RUNTIME_CONFIGURATION_INVALID");
-  }
-  return config;
-}
 
 function getCredential() {
   if (cachedCredential) return cachedCredential;
@@ -137,12 +114,13 @@ async function token() {
     const value = await getCredential().getToken(MANAGEMENT_SCOPE);
     if (!value?.token) fail("AZURE_AUTHENTICATION_FAILED");
     return value.token;
-  } catch {
+  } catch (error) {
+    if (error instanceof ArmWorkspaceRuntimeError) throw error;
     fail("AZURE_AUTHENTICATION_FAILED");
   }
 }
 
-async function armFetch(
+async function armFetchDirect(
   url: string,
   method = "GET",
   body?: unknown,
@@ -156,14 +134,38 @@ async function armFetch(
         ...(body === undefined ? {} : { "content-type": "application/json" }),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      redirect: "error",
+      redirect: "manual",
       signal: AbortSignal.timeout(30_000),
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof ArmWorkspaceRuntimeError) throw error;
+    const cause =
+      error instanceof Error && error.cause instanceof Error
+        ? error.cause
+        : undefined;
+    logEvent("error", "gen2.arm.azure_transport_failed", {
+      method,
+      path: new URL(url).pathname,
+      errorName: error instanceof Error ? error.name : "UnknownError",
+      reason:
+        error instanceof Error ? error.message : "Unknown transport error",
+      causeName: cause?.name,
+      cause: cause?.message,
+      causeCode:
+        typeof cause === "object" && cause !== null && "code" in cause
+          ? String(cause.code)
+          : undefined,
+    });
     fail("AZURE_REQUEST_FAILED");
   }
   const payload = await response.json().catch(() => null);
   return { response, payload };
+}
+
+async function armFetch(url: string, method = "GET", body?: unknown) {
+  return ArmWorkflowIO.request("azure", () =>
+    armFetchDirect(url, method, body),
+  );
 }
 
 async function pollArmOperation(response: Response, payload: unknown) {
@@ -171,13 +173,15 @@ async function pollArmOperation(response: Response, payload: unknown) {
     response.headers.get("azure-asyncoperation") ??
     response.headers.get("location");
   if (!operationUrl) fail("AZURE_OPERATION_URL_MISSING");
-  const deadline = Date.now() + 10 * 60_000;
+  const deadline = await ArmWorkflowIO.deadline(10 * 60_000);
   let result = payload;
+  let retryAfter = response.headers.get("retry-after") ?? "5";
   while (Date.now() < deadline) {
-    await new Promise((resolve) =>
-      setTimeout(
-        resolve,
-        Math.max(1, Number(response.headers.get("retry-after") ?? 5)) * 1000,
+    const retryAfterSeconds = Number(retryAfter);
+    await ArmWorkflowIO.sleep(
+      Math.max(
+        ARM_OPERATION_POLL_INTERVAL_MS,
+        (Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : 5) * 1000,
       ),
     );
     const poll = await armFetch(operationUrl);
@@ -197,6 +201,7 @@ async function pollArmOperation(response: Response, payload: unknown) {
     }
     operationUrl =
       poll.response.headers.get("azure-asyncoperation") ?? operationUrl;
+    retryAfter = poll.response.headers.get("retry-after") ?? retryAfter;
   }
   fail("AZURE_OPERATION_TIMEOUT");
 }
@@ -207,7 +212,7 @@ async function armRequest(
   method = "GET",
   body?: unknown,
   allowNotFound = false,
-) {
+): Promise<unknown> {
   const result = await armFetch(apiUrl(path, version), method, body);
   if (allowNotFound && result.response.status === 404) return null;
   if (
@@ -215,7 +220,9 @@ async function armRequest(
     result.response.headers.has("azure-asyncoperation") ||
     (result.response.status === 201 && result.response.headers.has("location"))
   ) {
-    return pollArmOperation(result.response, result.payload);
+    const completed = await pollArmOperation(result.response, result.payload);
+    // Azure operation endpoints return status, not the created resource.
+    return method === "PUT" ? armRequest(path, version) : completed;
   }
   if (!result.response.ok)
     fail(errorCode(result.payload, result.response.status));
@@ -226,6 +233,7 @@ function deploymentTemplate(
   workspaceId: string,
   generation: number,
   diskId: string,
+  bootScript?: string,
 ) {
   const config = readArmWorkspaceConfig();
   const tags = {
@@ -245,6 +253,7 @@ function deploymentTemplate(
       imageVersionId: { type: "string" },
       dataDiskResourceId: { type: "string" },
       adminSshPublicKey: { type: "string" },
+      ...(bootScript ? { bootScript: { type: "secureString" } } : {}),
     },
     variables: {
       resourceTags: tags,
@@ -389,6 +398,26 @@ function deploymentTemplate(
           },
         },
       },
+      ...(bootScript
+        ? [
+            {
+              type: "Microsoft.Compute/virtualMachines/extensions",
+              apiVersion: COMPUTE_API,
+              name: "[format('{0}/CustomScript', parameters('instanceName'))]",
+              location: WORKSPACE_LOCATION,
+              dependsOn: [
+                "[resourceId('Microsoft.Compute/virtualMachines', parameters('instanceName'))]",
+              ],
+              properties: {
+                publisher: "Microsoft.Azure.Extensions",
+                type: "CustomScript",
+                typeHandlerVersion: "2.1",
+                autoUpgradeMinorVersion: false,
+                protectedSettings: { script: "[parameters('bootScript')]" },
+              },
+            },
+          ]
+        : []),
     ],
     outputs: {
       vmResourceId: {
@@ -518,7 +547,7 @@ export async function capabilityToken(
   return `${message}.${base64Url(new Uint8Array(signature))}`;
 }
 
-async function cloudflareRequest<T>(
+async function cloudflareRequestDirect<T>(
   path: string,
   method = "GET",
   body?: unknown,
@@ -533,7 +562,7 @@ async function cloudflareRequest<T>(
         "content-type": "application/json",
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      redirect: "error",
+      redirect: "manual",
       signal: AbortSignal.timeout(15_000),
     });
   } catch {
@@ -545,6 +574,16 @@ async function cloudflareRequest<T>(
   } | null;
   if (!response.ok || !payload?.success) fail("CLOUDFLARE_TUNNEL_FAILED");
   return payload.result as T;
+}
+
+async function cloudflareRequest<T>(
+  path: string,
+  method = "GET",
+  body?: unknown,
+): Promise<T> {
+  return ArmWorkflowIO.checkpoint("azure", () =>
+    cloudflareRequestDirect<T>(path, method, body),
+  );
 }
 
 async function findTunnel(workspaceId: string, generation: number) {
@@ -604,7 +643,7 @@ async function ensureTunnel(workspaceId: string, generation: number) {
   return { id: tunnel.id, host, token };
 }
 
-async function deleteTunnel(workspaceId: string, generation: number) {
+async function revokeTunnelRoute(workspaceId: string, generation: number) {
   const tunnel = await findTunnel(workspaceId, generation);
   if (!tunnel) return;
   const host = `${tunnel.name}.${CLOUDFLARE_ZONE_NAME}`;
@@ -622,6 +661,12 @@ async function deleteTunnel(workspaceId: string, generation: number) {
       "DELETE",
     );
   }
+  return tunnel;
+}
+
+async function deleteTunnel(workspaceId: string, generation: number) {
+  const tunnel = await revokeTunnelRoute(workspaceId, generation);
+  if (!tunnel) return;
   await cloudflareRequest(
     `/accounts/${CLOUDFLARE_ACCOUNT_ID}/cfd_tunnel/${tunnel.id}/connections`,
     "DELETE",
@@ -674,7 +719,11 @@ async function createDisk(workspaceId: string) {
   return created.id;
 }
 
-async function requireDisk(diskId: string, workspaceId: string) {
+async function requireDisk(
+  diskId: string,
+  workspaceId: string,
+  generation: number,
+) {
   const disk = (await armRequest(diskId, DISK_API, "GET", undefined, true)) as {
     id?: string;
     tags?: Record<string, string>;
@@ -690,7 +739,12 @@ async function requireDisk(diskId: string, workspaceId: string) {
   ) {
     fail("DISK_SIZE_MISMATCH");
   }
-  if (disk.managedBy) fail("DISK_ATTACH_CONFLICT");
+  if (
+    disk.managedBy &&
+    disk.managedBy.toLowerCase() !==
+      (await vmId(workspaceId, generation)).toLowerCase()
+  )
+    fail("DISK_ATTACH_CONFLICT");
   return disk.id;
 }
 
@@ -698,6 +752,7 @@ async function deployVm(
   workspaceId: string,
   generation: number,
   diskId: string,
+  bootScript?: string,
 ) {
   const config = readArmWorkspaceConfig();
   const name = `${await resourceName(workspaceId)}-g${generation}`;
@@ -734,7 +789,7 @@ async function deployVm(
   const deployment = {
     properties: {
       mode: "Incremental",
-      template: deploymentTemplate(workspaceId, generation, diskId),
+      template: deploymentTemplate(workspaceId, generation, diskId, bootScript),
       parameters: {
         instanceName: { value: name },
         workspaceId: { value: workspaceId },
@@ -742,6 +797,7 @@ async function deployVm(
         imageVersionId: { value: config.imageVersionId },
         dataDiskResourceId: { value: diskId },
         adminSshPublicKey: { value: config.sshPublicKey },
+        ...(bootScript ? { bootScript: { value: bootScript } } : {}),
       },
     },
   };
@@ -760,7 +816,7 @@ async function waitForVmReady(
   generation: number,
   heartbeat: () => Promise<void>,
 ) {
-  const deadline = Date.now() + 10 * 60_000;
+  const deadline = await ArmWorkflowIO.deadline(10 * 60_000);
   const resource = await vmId(workspaceId, generation);
   while (Date.now() < deadline) {
     const vm = (await armRequest(
@@ -768,16 +824,18 @@ async function waitForVmReady(
       COMPUTE_API,
     )) as {
       tags?: Record<string, string>;
-      instanceView?: {
-        statuses?: Array<{ code?: string }>;
-        vmAgent?: { statuses?: Array<{ code?: string }> };
+      properties?: {
+        instanceView?: {
+          statuses?: Array<{ code?: string }>;
+          vmAgent?: { statuses?: Array<{ code?: string }> };
+        };
       };
     };
     checkTags(vm, workspaceId, generation);
-    const power = vm.instanceView?.statuses?.find((status) =>
+    const power = vm.properties?.instanceView?.statuses?.find((status) =>
       status.code?.startsWith("PowerState/"),
     )?.code;
-    const agent = vm.instanceView?.vmAgent?.statuses?.some(
+    const agent = vm.properties?.instanceView?.vmAgent?.statuses?.some(
       (status) => status.code === "ProvisioningState/succeeded",
     );
     if (power === "PowerState/running" && agent) return;
@@ -785,7 +843,7 @@ async function waitForVmReady(
       fail("VM_FAILED_TO_START");
     }
     await heartbeat();
-    await new Promise((resolve) => setTimeout(resolve, 5_000));
+    await ArmWorkflowIO.sleep(VM_POLL_INTERVAL_MS);
   }
   fail("VM_BOOT_TIMEOUT");
 }
@@ -811,7 +869,7 @@ async function runVmCommand(
       treatFailureAsDeploymentFailure: true,
     },
   });
-  const deadline = Date.now() + 10 * 60_000;
+  const deadline = await ArmWorkflowIO.deadline(10 * 60_000);
   while (Date.now() < deadline) {
     const result = (await armRequest(
       `${commandId}?%24expand=instanceView`,
@@ -843,7 +901,7 @@ async function runVmCommand(
       await deleteResource(commandId, COMPUTE_API).catch(() => undefined);
       return output;
     }
-    await new Promise((resolve) => setTimeout(resolve, 2_000));
+    await ArmWorkflowIO.sleep(VM_POLL_INTERVAL_MS);
   }
   fail("GUEST_COMMAND_TIMEOUT");
 }
@@ -870,8 +928,8 @@ async function prepareDisk(
     generation,
     armDiskPreparation,
     [
-      { name: "mode", value: mode },
-      { name: "expected_uuid", value: foundUuid ?? "" },
+      { name: "CODEV_DISK_MODE", value: mode },
+      { name: "CODEV_DISK_EXPECTED_UUID", value: foundUuid ?? "" },
     ],
   );
   const uuid = output.match(/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}/)?.[0];
@@ -930,23 +988,31 @@ async function waitForHealth(
   routeHost: string,
   heartbeat: () => Promise<void>,
 ) {
-  const deadline = Date.now() + 3 * 60_000;
-  const authorization = `Bearer ${await capabilityToken(routeHost, workspaceId, generation)}`;
+  const deadline = await ArmWorkflowIO.deadline(
+    readArmWorkspaceConfig().bootEnabled ? 10 * 60_000 : 3 * 60_000,
+  );
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(`https://${routeHost}/v1/health`, {
-        headers: { authorization },
-        redirect: "error",
-        signal: AbortSignal.timeout(10_000),
-      });
-      const value = (await response.json().catch(() => null)) as {
-        ready?: boolean;
-        workspaceId?: string;
-        generation?: number;
-        diskUuid?: string;
-      } | null;
+      const authorization = `Bearer ${await capabilityToken(routeHost, workspaceId, generation)}`;
+      const { ok, value } = await ArmWorkflowIO.checkpoint(
+        "health",
+        async () => {
+          const response = await fetch(`https://${routeHost}/v1/health`, {
+            headers: { authorization },
+            redirect: "manual",
+            signal: AbortSignal.timeout(10_000),
+          });
+          const value = (await response.json().catch(() => null)) as {
+            ready?: boolean;
+            workspaceId?: string;
+            generation?: number;
+            diskUuid?: string;
+          } | null;
+          return { ok: response.ok, value };
+        },
+      );
       if (
-        response.ok &&
+        ok &&
         value?.ready &&
         value.workspaceId === workspaceId &&
         value.generation === generation &&
@@ -957,7 +1023,7 @@ async function waitForHealth(
       // The connector and guest bridge can take time to join after boot.
     }
     await heartbeat();
-    await new Promise((resolve) => setTimeout(resolve, 5_000));
+    await ArmWorkflowIO.sleep(5_000);
   }
   fail("GUEST_READINESS_TIMEOUT");
 }
@@ -980,10 +1046,10 @@ async function deallocateVm(
       true,
     ) as Promise<{
       tags?: Record<string, string>;
-      instanceView?: { statuses?: Array<{ code?: string }> };
+      properties?: { instanceView?: { statuses?: Array<{ code?: string }> } };
     } | null>;
   const powerState = (vm: Awaited<ReturnType<typeof readVm>>) =>
-    vm?.instanceView?.statuses?.find((status) =>
+    vm?.properties?.instanceView?.statuses?.find((status) =>
       status.code?.startsWith("PowerState/"),
     )?.code;
   let vm = await readVm();
@@ -992,72 +1058,217 @@ async function deallocateVm(
   if (powerState(vm) !== "PowerState/deallocated") {
     await armRequest(`${id}/deallocate`, COMPUTE_API, "POST");
   }
-  const deadline = Date.now() + 5 * 60_000;
+  const deadline = await ArmWorkflowIO.deadline(5 * 60_000);
   while (Date.now() < deadline) {
     vm = await readVm();
     if (!vm) return;
     checkTags(vm, workspaceId, generation);
     if (powerState(vm) === "PowerState/deallocated") return;
-    await new Promise((resolve) => setTimeout(resolve, 5_000));
+    await ArmWorkflowIO.sleep(5_000);
   }
   fail("VM_DEALLOCATION_TIMEOUT");
 }
 
-export class ArmWorkspaceProvider {
-  async start(input: ArmWorkspaceOperation, progress: ArmWorkspaceProgress) {
-    const diskId = input.diskId
-      ? await requireDisk(input.diskId, input.workspaceId)
-      : await createDisk(input.workspaceId);
+function resumePhase(input: ArmWorkspaceOperation) {
+  return Math.max(
+    0,
+    [
+      "provisioning",
+      "booting",
+      "attaching_disk",
+      "starting_tunnel",
+      "checking_readiness",
+    ].indexOf(input.resume?.status ?? "queued"),
+  );
+}
+
+async function prepareRuntime(
+  input: ArmWorkspaceOperation,
+  progress: ArmWorkspaceProgress,
+) {
+  const phase = resumePhase(input);
+  const diskId =
+    phase > 0 && input.diskId
+      ? input.diskId
+      : input.diskId
+        ? await requireDisk(input.diskId, input.workspaceId, input.generation)
+        : await createDisk(input.workspaceId);
+  let resourceVmId = input.resume?.vmId;
+  if (phase === 0 || !resourceVmId) {
     await progress("provisioning", { diskId });
-    const resourceVmId = await deployVm(
-      input.workspaceId,
-      input.generation,
-      diskId,
-    );
+    resourceVmId = await deployVm(input.workspaceId, input.generation, diskId);
     await progress("booting", { vmId: resourceVmId, diskId });
+  }
+  const resources = { vmId: resourceVmId, diskId };
+  if (phase < 2) {
     await waitForVmReady(input.workspaceId, input.generation, () =>
-      progress("booting", { vmId: resourceVmId, diskId }),
+      progress("booting", resources),
     );
-    await progress("attaching_disk", { vmId: resourceVmId, diskId });
-    const diskUuid = await prepareDisk(
-      input.workspaceId,
-      input.generation,
-      input.diskUuid,
-    );
-    await progress("starting_tunnel", { vmId: resourceVmId, diskId, diskUuid });
-    const route = await installConnection(
-      input.workspaceId,
-      input.generation,
-      diskUuid,
-    );
-    await progress("checking_readiness", {
-      vmId: resourceVmId,
+    await progress("attaching_disk", resources);
+  }
+  const diskUuid =
+    phase >= 3 && input.diskUuid
+      ? input.diskUuid
+      : await prepareDisk(input.workspaceId, input.generation, input.diskUuid);
+  if (phase < 3) await progress("starting_tunnel", { ...resources, diskUuid });
+  return { ...resources, diskUuid };
+}
+
+async function connectRuntime(
+  input: ArmWorkspaceOperation,
+  progress: ArmWorkspaceProgress,
+  resources: Awaited<ReturnType<typeof prepareRuntime>>,
+) {
+  const resume = input.resume;
+  const route =
+    resumePhase(input) >= 4 && resume?.tunnelId && resume.routeHost
+      ? { tunnelId: resume.tunnelId, routeHost: resume.routeHost }
+      : await installConnection(
+          input.workspaceId,
+          input.generation,
+          resources.diskUuid,
+        );
+  const ready = { ...resources, ...route };
+  if (resumePhase(input) < 4) await progress("checking_readiness", ready);
+  await waitForHealth(
+    input.workspaceId,
+    input.generation,
+    resources.diskUuid,
+    route.routeHost,
+    () => progress("checking_readiness", ready),
+  );
+  return ready;
+}
+
+async function bakedBootScript(
+  input: ArmWorkspaceOperation,
+  diskUuid: string,
+  routeHost: string,
+  token: string,
+) {
+  const { workspaceId, generation } = input;
+  const config = readArmWorkspaceConfig();
+  const identity = {
+    workspaceId,
+    generation,
+    audience: routeHost,
+    diskUuid,
+    verificationKey: config.signingPublicKey,
+    tunnelToken: token,
+    diskMode: input.diskId ? "existing" : "new",
+  };
+  const encoded = bytesToBase64(
+    new TextEncoder().encode(JSON.stringify(identity)),
+  );
+  return gzipBase64(
+    `#!/bin/bash\nset -euo pipefail\numask 077\nbase64 -d <<'CONFIG' | /usr/local/sbin/codev-activate-arm-boot\n${encoded}\nCONFIG\n`,
+  );
+}
+
+async function deployBakedVm(
+  input: ArmWorkspaceOperation,
+  progress: ArmWorkspaceProgress,
+  diskId: string,
+  diskUuid: string,
+  route: { tunnelId: string; routeHost: string; token?: string },
+) {
+  const { workspaceId, generation } = input;
+  let virtualMachineId = resumePhase(input) > 0 ? input.resume?.vmId : null;
+  if (!virtualMachineId) {
+    await progress("provisioning", {
       diskId,
       diskUuid,
       tunnelId: route.tunnelId,
       routeHost: route.routeHost,
     });
-    await waitForHealth(
-      input.workspaceId,
-      input.generation,
+    const token = route.token
+      ? route.token
+      : (await ensureTunnel(workspaceId, generation)).token;
+    const script = await bakedBootScript(
+      input,
       diskUuid,
       route.routeHost,
-      () =>
-        progress("checking_readiness", {
-          vmId: resourceVmId,
-          diskId,
-          diskUuid,
-          tunnelId: route.tunnelId,
-          routeHost: route.routeHost,
-        }),
+      token,
     );
-    return { vmId: resourceVmId, diskId, diskUuid, ...route };
+    virtualMachineId = await deployVm(workspaceId, generation, diskId, script);
+  }
+  return virtualMachineId;
+}
+
+async function prepareBakedResources(
+  input: ArmWorkspaceOperation,
+  progress: ArmWorkspaceProgress,
+) {
+  const { workspaceId, generation } = input;
+  // An unidentified saved disk never becomes a fresh disk on retry.
+  if (input.diskId && !input.diskUuid) fail("DISK_IDENTITY_MISMATCH");
+  if (resumePhase(input) === 0) await progress("provisioning", {});
+  const diskUuid =
+    input.diskUuid ??
+    (await ArmWorkflowIO.checkpoint("disk-identity", async () =>
+      crypto.randomUUID(),
+    ));
+  const [diskId, route] = await ArmWorkflowIO.parallel([
+    async () =>
+      resumePhase(input) > 0 && input.resume?.vmId && input.diskId
+        ? input.diskId
+        : input.diskId
+          ? requireDisk(input.diskId, workspaceId, generation)
+          : createDisk(workspaceId),
+    async () =>
+      resumePhase(input) > 0 && input.resume?.tunnelId && input.resume.routeHost
+        ? { tunnelId: input.resume.tunnelId, routeHost: input.resume.routeHost }
+        : ensureTunnel(workspaceId, generation).then((tunnel) => ({
+            tunnelId: tunnel.id,
+            routeHost: tunnel.host,
+            token: tunnel.token,
+          })),
+  ]);
+  return { diskId, diskUuid, route };
+}
+
+async function startBakedRuntime(
+  input: ArmWorkspaceOperation,
+  progress: ArmWorkspaceProgress,
+) {
+  const { workspaceId, generation } = input;
+  const { diskId, diskUuid, route } = await prepareBakedResources(
+    input,
+    progress,
+  );
+  const virtualMachineId = await deployBakedVm(
+    input,
+    progress,
+    diskId,
+    diskUuid,
+    route,
+  );
+  const resources = {
+    vmId: virtualMachineId,
+    diskId,
+    diskUuid,
+    tunnelId: route.tunnelId,
+    routeHost: route.routeHost,
+  };
+  await progress("checking_readiness", resources);
+  await waitForHealth(workspaceId, generation, diskUuid, route.routeHost, () =>
+    progress("checking_readiness", resources),
+  );
+  return resources;
+}
+
+export class ArmWorkspaceProvider {
+  async start(input: ArmWorkspaceOperation, progress: ArmWorkspaceProgress) {
+    if (readArmWorkspaceConfig().bootEnabled)
+      return startBakedRuntime(input, progress);
+    const resources = await prepareRuntime(input, progress);
+    return connectRuntime(input, progress, resources);
   }
 
   async stop(input: ArmWorkspaceOperation) {
     let routeError: unknown;
     try {
-      await deleteTunnel(input.workspaceId, input.generation);
+      await revokeTunnelRoute(input.workspaceId, input.generation);
     } catch (error) {
       routeError = error;
     }
@@ -1066,6 +1277,14 @@ export class ArmWorkspaceProvider {
       input.generation,
     );
     await deallocateVm(vm, input.workspaceId, input.generation);
+    // A running connector can reconnect immediately after connections cleanup.
+    // Deallocate before deleting its tunnel, then finish ephemeral resources.
+    try {
+      await deleteTunnel(input.workspaceId, input.generation);
+      routeError = undefined;
+    } catch (error) {
+      routeError = error;
+    }
     await deleteResource(vm!, COMPUTE_API);
     await deleteResource(nic!, NETWORK_API);
     await deleteResource(publicIp!, NETWORK_API);
@@ -1107,7 +1326,7 @@ export class ArmWorkspaceProvider {
         headers: {
           authorization: `Bearer ${await capabilityToken(routeHost, workspaceId, generation)}`,
         },
-        redirect: "error",
+        redirect: "manual",
         signal: AbortSignal.timeout(5_000),
       });
       const value = (await response.json().catch(() => null)) as {
@@ -1133,28 +1352,46 @@ export class ArmWorkspaceProvider {
     generation: number,
     virtualMachineId: string | null,
   ) {
-    if (!virtualMachineId) return false;
-    try {
-      const vm = (await armRequest(
-        `${virtualMachineId}?%24expand=instanceView`,
-        COMPUTE_API,
-      )) as {
-        tags?: Record<string, string>;
-        instanceView?: { statuses?: Array<{ code?: string }> };
-      };
-      checkTags(vm, workspaceId, generation);
-      return (
-        vm.instanceView?.statuses?.some(
-          (status) => status.code === "PowerState/running",
-        ) ?? false
-      );
-    } catch (error) {
-      if (
-        error instanceof ArmWorkspaceRuntimeError &&
-        error.code === "ResourceNotFound"
-      )
-        return false;
-      throw error;
-    }
+    return (
+      (await this.powerState(workspaceId, generation, virtualMachineId)) ===
+      "PowerState/running"
+    );
+  }
+
+  /** Allocated stopped VMs still incur compute charges until deallocated. */
+  async powerState(
+    workspaceId: string,
+    generation: number,
+    virtualMachineId: string | null,
+  ) {
+    if (!virtualMachineId) return null;
+    const vm = (await armRequest(
+      `${virtualMachineId}?%24expand=instanceView`,
+      COMPUTE_API,
+      "GET",
+      undefined,
+      true,
+    )) as {
+      tags?: Record<string, string>;
+      properties?: { instanceView?: { statuses?: Array<{ code?: string }> } };
+    } | null;
+    if (!vm) return null;
+    checkTags(vm, workspaceId, generation);
+    const state = vm.properties?.instanceView?.statuses?.find((status) =>
+      status.code?.startsWith("PowerState/"),
+    )?.code;
+    if (
+      !state ||
+      ![
+        "running",
+        "starting",
+        "stopping",
+        "stopped",
+        "deallocating",
+        "deallocated",
+      ].some((value) => state === `PowerState/${value}`)
+    )
+      fail("VM_POWER_STATE_UNKNOWN");
+    return state;
   }
 }

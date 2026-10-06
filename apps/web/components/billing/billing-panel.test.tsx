@@ -44,7 +44,9 @@ describe("BillingPanel", () => {
       />,
     );
     expect(screen.getByText("Active")).toBeInTheDocument();
-    expect(screen.getByText("Renews on November 1, 2026.")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Renews on November 1, 2026\./),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Manage billing" }),
     ).toBeInTheDocument();

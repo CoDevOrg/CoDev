@@ -111,6 +111,17 @@ corepack prepare pnpm@11.5.0 --activate
 npm install -g --allow-scripts=@anthropic-ai/claude-code \
   @openai/codex@0.148.0 @anthropic-ai/claude-code@2.1.236
 
+# Pin and checksum the Linux ARM64 CLI; it must never self-update the base image.
+readonly cursor_version="2026.10.01-e373342"
+readonly cursor_sha256="785c5f6bf2a60eb1121e27ed8c14f5ee07ed1b5b6692324f2d9a997238245eb5"
+curl -fsSL "https://downloads.cursor.com/lab/${cursor_version}/linux/arm64/agent-cli-package.tar.gz" -o /tmp/cursor-agent.tar.gz
+printf '%s  %s\n' "${cursor_sha256}" /tmp/cursor-agent.tar.gz | sha256sum --check
+install -d -m 0755 /opt/codev/cursor-agent
+tar -xzf /tmp/cursor-agent.tar.gz --strip-components=1 -C /opt/codev/cursor-agent
+chown -R root:root /opt/codev/cursor-agent
+ln -s /opt/codev/cursor-agent/cursor-agent /usr/local/bin/cursor-agent
+rm -f /tmp/cursor-agent.tar.gz
+
 install -d -m 0755 "${install_dir}" /usr/local/bin /workspace \
   /usr/local/lib/codev /usr/local/sbin \
   /etc/systemd/system/multi-user.target.wants /etc/codev \
@@ -271,11 +282,16 @@ TasksMax=256
 WantedBy=multi-user.target
 UNIT
 
-ln -s ../workspace.mount /etc/systemd/system/multi-user.target.wants/workspace.mount
-ln -s ../codev-local-secrets.service /etc/systemd/system/multi-user.target.wants/codev-local-secrets.service
 ln -s ../codev-local-api-guard.service /etc/systemd/system/multi-user.target.wants/codev-local-api-guard.service
-ln -s ../codev-guestd.service /etc/systemd/system/multi-user.target.wants/codev-guestd.service
-ln -s ../codev-superset-host.service /etc/systemd/system/multi-user.target.wants/codev-superset-host.service
+
+for script in arm-workspace-capability.mjs arm-workspace-gateway.mjs arm-workspace-bootstrap.mjs start-arm-workspace-gateway.mjs; do
+  install -m 0644 "/var/tmp/${script}" "/usr/local/lib/codev/${script}"
+done
+install -m 0755 /var/tmp/boot-arm-workspace.sh /usr/local/sbin/codev-arm-boot
+install -m 0755 /var/tmp/activate-arm-workspace-boot.sh /usr/local/sbin/codev-activate-arm-boot
+install -m 0755 /var/tmp/prepare-arm-workspace-disk.sh /usr/local/sbin/codev-prepare-arm-disk
+bash /var/tmp/install-arm-workspace-boot.sh
+rm -f /var/tmp/arm-workspace-*.mjs /var/tmp/start-arm-workspace-gateway.mjs /var/tmp/*arm-workspace-boot.sh /var/tmp/boot-arm-workspace.sh /var/tmp/prepare-arm-workspace-disk.sh
 
 systemctl daemon-reload
 systemctl start codev-local-api-guard.service

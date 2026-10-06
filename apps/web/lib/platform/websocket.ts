@@ -18,7 +18,10 @@ export interface ServerWebSocket {
 
 export const cloudflareWebSocketUpgradeIdHeader = "x-codev-websocket-id";
 
-const cloudflareClientSockets = new Map<string, WebSocket>();
+const cloudflareClientSockets = new Map<
+  string,
+  { socket: WebSocket; initialized: Promise<void> }
+>();
 
 export function takeCloudflareWebSocket(id: string) {
   const socket = cloudflareClientSockets.get(id);
@@ -136,12 +139,20 @@ export async function upgradeWebSocket(
     const client = pair[0];
     const server = pair[1];
     server.accept();
-    void Promise.resolve(
+    const initialized = Promise.resolve(
       onConnect(fromCloudflare(server, options.maxPayload)),
-    ).catch(() => server.close(1011, "WebSocket handler failed."));
+    )
+      .then(() => undefined)
+      .catch((error: unknown) => {
+        console.error(
+          "WebSocket initialization failed",
+          error instanceof Error ? error.message : "unknown",
+        );
+        server.close(1011, "WebSocket handler failed.");
+      });
     const upgradeId = request.headers.get(cloudflareWebSocketUpgradeIdHeader);
     if (upgradeId) {
-      cloudflareClientSockets.set(upgradeId, client);
+      cloudflareClientSockets.set(upgradeId, { socket: client, initialized });
       return new Response(null, {
         status: 204,
         headers: { "cache-control": "no-store" },

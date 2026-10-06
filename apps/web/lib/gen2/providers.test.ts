@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("../providers/dynamic-models", () => ({
+  getDynamicModelsForProvider: async () => [
+    { id: "account-model", label: "Account model" },
+  ],
+}));
+
 const mocks = vi.hoisted(() => ({
   resolveHosted: vi.fn(),
   decryptMaterial: vi.fn(),

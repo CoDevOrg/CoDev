@@ -4,6 +4,7 @@ import {
   bigint,
   boolean,
   customType,
+  check,
   index,
   integer,
   jsonb,
@@ -1760,6 +1761,44 @@ export const userComputeUsage = pgTable("user_compute_usage", {
     .notNull(),
 });
 
+/** One durable startup/compute reservation per free owner. */
+export const gen2FreeComputeClaims = pgTable("gen2_free_compute_claims", {
+  ownerId: uuid("owner_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => gen2Workspaces.id, { onDelete: "cascade" }),
+  claimedAt: timestamp("claimed_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+/** Complete, cumulative USD cost snapshots from the trusted billing collector. */
+export const gen2OwnerBudgets = pgTable(
+  "gen2_owner_budgets",
+  {
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    month: timestamp("month", { withTimezone: true }).notNull(),
+    computeCents: integer("compute_cents").notNull(),
+    storageCents: integer("storage_cents").notNull(),
+    networkCents: integer("network_cents").notNull(),
+    operationsCents: integer("operations_cents").notNull(),
+    otherCents: integer("other_cents").notNull(),
+    blocked: boolean("blocked").default(false).notNull(),
+    observedAt: timestamp("observed_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.month] }),
+    check(
+      "gen2_owner_budgets_nonnegative",
+      sql`${table.computeCents} >= 0 AND ${table.storageCents} >= 0 AND ${table.networkCents} >= 0 AND ${table.operationsCents} >= 0 AND ${table.otherCents} >= 0`,
+    ),
+  ],
+);
+
 /** Completed and active VM intervals; retained when a workspace is deleted. */
 export const gen2ComputeSessions = pgTable(
   "gen2_compute_sessions",
@@ -1772,6 +1811,9 @@ export const gen2ComputeSessions = pgTable(
     startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
     endedAt: timestamp("ended_at", { withTimezone: true }),
     lastActivityAt: timestamp("last_activity_at", { withTimezone: true }),
+    lastObservedAllocatedAt: timestamp("last_observed_allocated_at", {
+      withTimezone: true,
+    }),
   },
   (table) => [
     index("gen2_compute_sessions_owner_start_idx").on(

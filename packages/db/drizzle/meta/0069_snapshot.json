@@ -1,5 +1,5 @@
 {
-  "id": "14429ff2-e582-4ae6-857b-78c0883fec6c",
+  "id": "d9389546-e142-4290-a6b9-668dbcf7c0fd",
   "prevId": "9fd41f99-c2d0-43db-b1c4-d2cbdf4e0b11",
   "version": "7",
   "dialect": "postgresql",
@@ -3069,190 +3069,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.gen2_agent_sessions": {
-      "name": "gen2_agent_sessions",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "workspace_id": {
-          "name": "workspace_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "chat_id": {
-          "name": "chat_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "task": {
-          "name": "task",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "worktree_id": {
-          "name": "worktree_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "provider": {
-          "name": "provider",
-          "type": "credential_provider",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "gen2_agent_session_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'queued'"
-        },
-        "recovery_state": {
-          "name": "recovery_state",
-          "type": "gen2_agent_session_recovery_state",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'not_required'"
-        },
-        "safe_output": {
-          "name": "safe_output",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
-        "final_changes": {
-          "name": "final_changes",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "gen2_agent_sessions_workspace_updated_idx": {
-          "name": "gen2_agent_sessions_workspace_updated_idx",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "updated_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "gen2_agent_sessions_creator_updated_idx": {
-          "name": "gen2_agent_sessions_creator_updated_idx",
-          "columns": [
-            {
-              "expression": "created_by",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "updated_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "gen2_agent_sessions_workspace_id_gen2_workspaces_id_fk": {
-          "name": "gen2_agent_sessions_workspace_id_gen2_workspaces_id_fk",
-          "tableFrom": "gen2_agent_sessions",
-          "tableTo": "gen2_workspaces",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "gen2_agent_sessions_chat_id_gen2_chats_id_fk": {
-          "name": "gen2_agent_sessions_chat_id_gen2_chats_id_fk",
-          "tableFrom": "gen2_agent_sessions",
-          "tableTo": "gen2_chats",
-          "columnsFrom": [
-            "chat_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "gen2_agent_sessions_created_by_users_id_fk": {
-          "name": "gen2_agent_sessions_created_by_users_id_fk",
-          "tableFrom": "gen2_agent_sessions",
-          "tableTo": "users",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.gen2_agent_turns": {
       "name": "gen2_agent_turns",
       "schema": "",
@@ -3647,6 +3463,12 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
+        },
+        "last_observed_allocated_at": {
+          "name": "last_observed_allocated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -3707,6 +3529,160 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.gen2_free_compute_claims": {
+      "name": "gen2_free_compute_claims",
+      "schema": "",
+      "columns": {
+        "owner_id": {
+          "name": "owner_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "claimed_at": {
+          "name": "claimed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "gen2_free_compute_claims_owner_id_users_id_fk": {
+          "name": "gen2_free_compute_claims_owner_id_users_id_fk",
+          "tableFrom": "gen2_free_compute_claims",
+          "tableTo": "users",
+          "columnsFrom": [
+            "owner_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "gen2_free_compute_claims_workspace_id_gen2_workspaces_id_fk": {
+          "name": "gen2_free_compute_claims_workspace_id_gen2_workspaces_id_fk",
+          "tableFrom": "gen2_free_compute_claims",
+          "tableTo": "gen2_workspaces",
+          "columnsFrom": [
+            "workspace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.gen2_owner_budgets": {
+      "name": "gen2_owner_budgets",
+      "schema": "",
+      "columns": {
+        "owner_id": {
+          "name": "owner_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "month": {
+          "name": "month",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "compute_cents": {
+          "name": "compute_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "storage_cents": {
+          "name": "storage_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "network_cents": {
+          "name": "network_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "operations_cents": {
+          "name": "operations_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "other_cents": {
+          "name": "other_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "blocked": {
+          "name": "blocked",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "observed_at": {
+          "name": "observed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "gen2_owner_budgets_owner_id_users_id_fk": {
+          "name": "gen2_owner_budgets_owner_id_users_id_fk",
+          "tableFrom": "gen2_owner_budgets",
+          "tableTo": "users",
+          "columnsFrom": [
+            "owner_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "gen2_owner_budgets_owner_id_month_pk": {
+          "name": "gen2_owner_budgets_owner_id_month_pk",
+          "columns": [
+            "owner_id",
+            "month"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "gen2_owner_budgets_nonnegative": {
+          "name": "gen2_owner_budgets_nonnegative",
+          "value": "\"gen2_owner_budgets\".\"compute_cents\" >= 0 AND \"gen2_owner_budgets\".\"storage_cents\" >= 0 AND \"gen2_owner_budgets\".\"network_cents\" >= 0 AND \"gen2_owner_budgets\".\"operations_cents\" >= 0 AND \"gen2_owner_budgets\".\"other_cents\" >= 0"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.gen2_superset_run_events": {
@@ -3838,12 +3814,6 @@
           "primaryKey": true,
           "notNull": true,
           "default": "gen_random_uuid()"
-        },
-        "session_id": {
-          "name": "session_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
         },
         "workspace_id": {
           "name": "workspace_id",
@@ -4024,43 +3994,9 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "gen2_superset_runs_session_idx": {
-          "name": "gen2_superset_runs_session_idx",
-          "columns": [
-            {
-              "expression": "session_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
-        "gen2_superset_runs_session_id_gen2_agent_sessions_id_fk": {
-          "name": "gen2_superset_runs_session_id_gen2_agent_sessions_id_fk",
-          "tableFrom": "gen2_superset_runs",
-          "tableTo": "gen2_agent_sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
         "gen2_superset_runs_workspace_id_gen2_workspaces_id_fk": {
           "name": "gen2_superset_runs_workspace_id_gen2_workspaces_id_fk",
           "tableFrom": "gen2_superset_runs",
@@ -10128,27 +10064,6 @@
         "created",
         "updated",
         "deleted"
-      ]
-    },
-    "public.gen2_agent_session_recovery_state": {
-      "name": "gen2_agent_session_recovery_state",
-      "schema": "public",
-      "values": [
-        "not_required",
-        "required",
-        "restarting"
-      ]
-    },
-    "public.gen2_agent_session_status": {
-      "name": "gen2_agent_session_status",
-      "schema": "public",
-      "values": [
-        "queued",
-        "running",
-        "stopped",
-        "completed",
-        "failed",
-        "recovery_required"
       ]
     },
     "public.gen2_runtime_operation_kind": {

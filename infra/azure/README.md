@@ -344,3 +344,16 @@ depends on it.
 
 The other format still read is `v1`, the local development envelope an
 unconfigured checkout writes. Production refuses to write it.
+
+### Baked ARM guest boot
+
+The ARM image build also installs pinned cloudflared, gateway modules, and local
+systemd units. `codev-arm-boot.service` verifies disk identity before mounting;
+workspace services are started by that verified boot rather than enabled
+independently. A secure deployment parameter feeds protected extension settings
+to `codev-activate-arm-boot`. It writes private local identity/token files and
+starts the boot unit, without package downloads or sequential Run Commands.
+
+Enable `ARM_WORKSPACE_BOOT_ENABLED` only after promoting a compatible immutable
+image and verifying startup, saved-disk reopen, and OS reboot. The legacy path
+remains available for rollback with the previous image pin.

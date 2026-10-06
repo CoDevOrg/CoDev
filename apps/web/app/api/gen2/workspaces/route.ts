@@ -23,6 +23,7 @@ export const POST = withUser(
             repositoryId: input.repositoryId,
           }
         : undefined,
+      input.acknowledgeReducedQuota,
     );
     return Response.json({ workspace }, { status: 201 });
   },

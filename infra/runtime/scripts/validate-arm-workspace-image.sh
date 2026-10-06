@@ -6,12 +6,25 @@ node --version | grep -Eq '^v24\.'
 pnpm --version
 codex --version
 claude --version
+cursor-agent --version
 test -x /usr/local/bin/codev-guestd
+cloudflared --version
+test -x /usr/local/sbin/codev-arm-boot
+test -x /usr/local/sbin/codev-activate-arm-boot
+test -f /usr/local/lib/codev/arm-workspace-gateway.mjs
+test ! -e /etc/codev/arm-runtime.json
+test ! -e /etc/codev/arm-boot.json
+test ! -e /etc/codev/tunnel-token
+systemd-analyze verify /etc/systemd/system/codev-arm-{boot,gateway,tunnel}.service
 test "$(getent passwd codev-shell | cut -d: -f3)" = 2000
 test -L /etc/systemd/system/multi-user.target.wants/workspace.mount
 test -L /etc/systemd/system/multi-user.target.wants/codev-guestd.service
 systemctl cat codev-superset-host.service | grep -qx 'ProtectProc=invisible'
 systemctl cat codev-superset-host.service | grep -qx 'ProcSubset=pid'
+test -f /etc/systemd/system/workspace.mount
+test ! -e /etc/systemd/system/multi-user.target.wants/workspace.mount
+test -f /etc/systemd/system/codev-guestd.service
+test ! -e /etc/systemd/system/multi-user.target.wants/codev-guestd.service
 test ! -e /etc/codev/superset-bridge.env
 test ! -e /root/.azure/accessTokens.json
 test ! -e /root/.azure/msal_token_cache.json

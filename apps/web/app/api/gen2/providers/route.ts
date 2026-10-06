@@ -1,6 +1,6 @@
-import { withUser } from "@/lib/http/api-route";
+import { withUser, errorResponse } from "@/lib/http/api-route";
+import { discoverAccountModelsForWorker } from "@/lib/providers/model-catalog-service";
 import { getGen2ProviderStatus } from "@/lib/gen2/providers";
-import { getProviderCredentialStatus } from "@/lib/providers/credentials";
 import { gen2AgentProviderSchema } from "@codev/contracts";
 
 /**
@@ -11,24 +11,16 @@ export const GET = withUser(
   async ({ request, user }) => {
     const requested = new URL(request.url).searchParams.get("provider");
     if (!requested || requested === "all") {
-      const [codex, claude, cursorStatus] = await Promise.all([
+      const [codex, claude, cursor] = await Promise.all([
         getGen2ProviderStatus(user.id, "codex"),
         getGen2ProviderStatus(user.id, "claude"),
-        getProviderCredentialStatus(user.id, "cursor").catch(() => null),
+        getGen2ProviderStatus(user.id, "cursor"),
       ]);
       return Response.json({
         codex,
         claude,
-        cursor: cursorConnection(cursorStatus),
+        cursor,
       });
-    }
-
-    if (requested === "cursor") {
-      const cursorStatus = await getProviderCredentialStatus(
-        user.id,
-        "cursor",
-      ).catch(() => null);
-      return Response.json(cursorConnection(cursorStatus));
     }
 
     const provider = gen2AgentProviderSchema.safeParse(requested);
@@ -40,13 +32,11 @@ export const GET = withUser(
   { errorStatus: 500 },
 );
 
-function cursorConnection(
-  status: Awaited<ReturnType<typeof getProviderCredentialStatus>>,
-) {
-  if (!status) return { connected: false, via: null };
-  return {
-    connected: true,
-    via:
-      status.connectedVia === "cli" ? ("cli" as const) : ("api-key" as const),
-  };
+/** Internal Cloudflare-to-Vercel account catalog service. */
+export async function POST(request: Request) {
+  try {
+    return Response.json(await discoverAccountModelsForWorker(request));
+  } catch (error) {
+    return errorResponse(error, 503);
+  }
 }

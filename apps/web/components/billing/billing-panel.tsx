@@ -1,6 +1,6 @@
 import { Check } from "lucide-react";
 
-import type { BillingStatus } from "@codev/contracts";
+import type { BillingStatus, Gen2OwnerComputeSummary } from "@codev/contracts";
 
 import { BillingButton } from "@/components/billing/billing-button";
 import { INDIVIDUAL_FEATURES } from "@/components/billing/plan";
@@ -14,9 +14,19 @@ function formatDate(iso: string) {
   });
 }
 
-function planSummary(status: BillingStatus) {
-  if (status.accessSource === "admin") {
-    return "Administrator accounts are exempt from billing.";
+const FREE_ARM_FEATURES = [
+  "Up to 2 persistent ARM64 cloud workspaces (1 active at a time)",
+  "50 hours/month compute with 1 workspace, or 35 hours/month shared with 2 workspaces",
+  "ARM64 Linux virtual machines with 16 GiB persistent storage",
+  "Invite collaborators. They join your workspace at no cost",
+] as const;
+
+function planSummary(
+  status: BillingStatus,
+  computeSummary?: Gen2OwnerComputeSummary | null,
+) {
+  if (status.accessSource === "admin" || computeSummary?.unlimited) {
+    return "Administrator accounts are exempt from billing and have unlimited compute.";
   }
   if (status.accessSource === "admin_grant") {
     return "Included with your account. Nothing to pay.";
@@ -28,7 +38,11 @@ function planSummary(status: BillingStatus) {
     if (status.status === "canceled") {
       return "Your subscription has ended. Subscribe again to keep using workspaces.";
     }
-    return "Subscribe to create workspaces and run agents. You can still sign in and read your settings.";
+    if (computeSummary?.tier === "free" && computeSummary.freeEnabled) {
+      const hours = computeSummary.ownedWorkspaceCount >= 2 ? 35 : 50;
+      return `Free ARM plan active. Includes ${hours} hours/month (${computeSummary.ownedWorkspaceCount >= 2 ? "shared across 2 workspaces" : "for 1 workspace"}). Resets on ${formatDate(computeSummary.resetsAt)}.`;
+    }
+    return "Subscribe to create workspaces and run agents. Free ARM preview is unavailable for this account. You can still sign in and join shared workspaces.";
   }
   if (status.cancelAtPeriodEnd && status.currentPeriodEnd) {
     return `Your plan ends on ${formatDate(status.currentPeriodEnd)}. You keep full access until then.`;
@@ -37,55 +51,80 @@ function planSummary(status: BillingStatus) {
     return `Your trial ends on ${formatDate(status.currentPeriodEnd)}.`;
   }
   if (status.currentPeriodEnd) {
-    return `Renews on ${formatDate(status.currentPeriodEnd)}.`;
+    return `Renews on ${formatDate(status.currentPeriodEnd)}. 1,000 monthly compute minutes included.`;
   }
   return "Your plan is active.";
 }
 
-function statusBadge(status: BillingStatus) {
-  if (status.accessSource === "admin") return "Admin";
+function statusBadge(
+  status: BillingStatus,
+  computeSummary?: Gen2OwnerComputeSummary | null,
+) {
+  if (status.accessSource === "admin" || computeSummary?.unlimited)
+    return "Admin";
   if (status.accessSource === "admin_grant") return "Included";
   if (status.hasAccess) {
     return status.cancelAtPeriodEnd ? "Ending" : "Active";
   }
   if (status.status === "past_due") return "Payment failed";
+  if (computeSummary?.tier === "free" && computeSummary.freeEnabled) {
+    return "Active";
+  }
   return "Not subscribed";
 }
 
 /** The plan card on the Billing settings page. */
-export function BillingPanel({ status }: { status: BillingStatus }) {
+export function BillingPanel({
+  status,
+  computeSummary,
+}: {
+  status: BillingStatus;
+  computeSummary?: Gen2OwnerComputeSummary | null;
+}) {
+  const isFreeEligible =
+    !status.hasAccess &&
+    computeSummary?.tier === "free" &&
+    computeSummary.freeEnabled;
   const canSubscribe = !status.hasAccess || status.accessSource === "admin";
   const showPaidPlan = status.accessSource !== "admin_grant";
+  const planTitle = isFreeEligible ? "Free Tier (ARM)" : "Individual";
+  const features = isFreeEligible ? FREE_ARM_FEATURES : INDIVIDUAL_FEATURES;
+
   return (
     <Card className="space-y-6 px-6 py-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <h3 className="text-lg font-semibold">Individual</h3>
+            <h3 className="text-lg font-semibold">{planTitle}</h3>
             <Badge
               variant={
-                status.hasAccess && status.accessSource !== "admin"
+                (status.hasAccess && status.accessSource !== "admin") ||
+                isFreeEligible
                   ? "default"
                   : "outline"
               }
             >
-              {statusBadge(status)}
+              {statusBadge(status, computeSummary)}
             </Badge>
           </div>
-          <p className="text-sm text-muted-foreground">{planSummary(status)}</p>
+          <p className="text-sm text-muted-foreground">
+            {planSummary(status, computeSummary)}
+          </p>
         </div>
         {showPaidPlan ? (
           <p className="text-right">
             <span className="text-3xl font-semibold tracking-tight">
-              ${status.priceUsdPerMonth}
+              {isFreeEligible ? "$0" : `$${status.priceUsdPerMonth}`}
             </span>
-            <span className="text-sm text-muted-foreground"> / month</span>
+            <span className="text-sm text-muted-foreground">
+              {isFreeEligible ? " / free preview" : " / month"}
+            </span>
           </p>
         ) : null}
       </div>
 
       <ul className="space-y-2 border-t border-border/60 pt-5 text-sm">
-        {INDIVIDUAL_FEATURES.map((line) => (
+        {features.map((line) => (
           <li className="flex items-start gap-2" key={line}>
             <Check
               aria-hidden
@@ -100,9 +139,11 @@ export function BillingPanel({ status }: { status: BillingStatus }) {
         <div className="flex flex-wrap items-start gap-3 border-t border-border/60 pt-5">
           {canSubscribe ? (
             <BillingButton action="checkout" size="lg" variant="solid">
-              {status.status === "canceled"
-                ? "Subscribe again"
-                : `Subscribe for $${status.priceUsdPerMonth}/month`}
+              {isFreeEligible
+                ? `Upgrade to Individual ($${status.priceUsdPerMonth}/month)`
+                : status.status === "canceled"
+                  ? "Subscribe again"
+                  : `Subscribe for $${status.priceUsdPerMonth}/month`}
             </BillingButton>
           ) : null}
           {status.hasStripeCustomer ? (

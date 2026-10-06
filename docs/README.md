@@ -33,6 +33,8 @@ intent that may have drifted; confirm details against the code.
 | [arm-workspace-free-tier-phase-2.md](./arm-workspace-free-tier-phase-2.md)       | Review  | Phase 2 lifecycle evidence; integration and launch gates                        |
 | [arm-workspace-free-tier-phase-3.md](./arm-workspace-free-tier-phase-3.md)       | Review  | ARM lifecycle API, Worker workflow, Azure provider, and release gates           |
 | [arm-workspace-free-tier-phase-4.md](./arm-workspace-free-tier-phase-4.md)       | Review  | Provider-aware guest bridge, startup, background transcripts, and staging gates |
+| [arm-workspace-free-tier-phase-5.md](./arm-workspace-free-tier-phase-5.md)       | Review  | Gated free entitlements, dynamic owner quota, active reservations, cost breaker |
+| [arm-workspace-free-tier-phase-6.md](./arm-workspace-free-tier-phase-6.md)       | Review  | Free-tier UI, compute controls, quota warnings, switch dialog, and gated copy   |
 
 ## UI implementation
 

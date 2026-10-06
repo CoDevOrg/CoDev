@@ -1,3 +1,12 @@
+vi.mock("../billing/workspace-entitlement", () => ({
+  getWorkspaceOwnerEntitlement: vi.fn(async () => ({
+    tier: "paid",
+    enabled: true,
+    unlimited: false,
+    ownedWorkspaceCount: 1,
+    monthlyLimitMs: 60_000_000,
+  })),
+}));
 import { beforeEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
@@ -77,8 +86,10 @@ vi.mock("../runtime/orchestrator-sandbox", () => ({
 }));
 vi.mock("../runtime/arm-workspace-provider", () => ({
   ArmWorkspaceProvider: class {
-    running(...args: unknown[]) {
-      return mocks.running(...args);
+    async powerState(...args: unknown[]) {
+      return (await mocks.running(...args))
+        ? "PowerState/running"
+        : "PowerState/deallocated";
     }
   },
 }));

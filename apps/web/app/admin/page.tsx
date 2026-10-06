@@ -1,12 +1,9 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 
-import "./admin.css";
+import "@/app/product-theme.css";
 
-import { AdminWaitlist } from "@/components/admin/admin-waitlist";
-import { AdminFeatureControls } from "@/components/admin/admin-feature-controls";
-import { AdminAccountAccessControls } from "@/components/admin/admin-account-access-controls";
 import { AppChrome } from "@/components/shell/app-chrome";
+import { AdminConsoleClient } from "@/components/admin/admin-console-client";
 import { listAccessRequests } from "@/lib/admin/access-requests";
 import { requireAdmin } from "@/lib/admin/admin";
 import {
@@ -21,29 +18,6 @@ import { getAdminAccountAccessData } from "@/lib/admin/admin-account-access";
 
 export const metadata: Metadata = { title: "Admin" };
 export const dynamic = "force-dynamic";
-
-const numberFmt = new Intl.NumberFormat("en-US");
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function formatRelative(iso: string | null): string {
-  if (!iso) return "never";
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const mins = Math.round(diffMs / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.round(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.round(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  return formatDate(iso);
-}
 
 export default async function AdminPage() {
   const user = await requireAdmin();
@@ -68,297 +42,31 @@ export default async function AdminPage() {
     getAdminAccountAccessData(),
   ]);
 
-  const waitlistPending = waitlist.filter(
-    (row) => row.status === "pending",
-  ).length;
+  const accountAccessMap = new Map(accountAccess.map((acc) => [acc.id, acc]));
 
-  const maxDaily = Math.max(1, ...daily.map((point) => point.views));
-  const stats: { label: string; value: string; hint?: string }[] = [
-    {
-      label: "Total accounts",
-      value: numberFmt.format(summary.totalUsers),
-      hint: `+${summary.newUsers7d} this week · +${summary.newUsers30d} this month`,
-    },
-    {
-      label: "Active accounts · now",
-      value: numberFmt.format(summary.activeAccounts30m),
-      hint: "signed-in, last 30 min",
-    },
-    {
-      label: "Active accounts · 24h",
-      value: numberFmt.format(summary.activeAccounts24h),
-      hint: `${numberFmt.format(summary.activeAccounts7d)} in last 7 days`,
-    },
-    {
-      label: "Page views · 24h",
-      value: numberFmt.format(summary.views24h),
-      hint: `${numberFmt.format(summary.views7d)} in 7d · ${numberFmt.format(summary.views30d)} in 30d`,
-    },
-    {
-      label: "Unique visitors · 7d",
-      value: numberFmt.format(summary.uniqueVisitors7d),
-      hint: "by account or address",
-    },
-    {
-      label: "Page views · all time",
-      value: numberFmt.format(summary.totalViews),
-    },
-  ];
+  const mergedUsers = directory.map((u) => {
+    const acc = accountAccessMap.get(u.id);
+    return {
+      ...u,
+      planId: acc?.planId ?? "free",
+      subscriptionStatus: acc?.subscriptionStatus ?? "canceled",
+      provider: acc?.provider ?? null,
+    };
+  });
 
   return (
     <AppChrome user={user} sidebar>
-      <div className="admin-console">
-        <div className="admin-console-head">
-          <h1>Admin console</h1>
-          <span className="admin-muted">Signed in as {user.email}</span>
-        </div>
-        <p className="admin-console-sub">
-          User directory and site analytics. Visible only to application
-          administrators.
-        </p>
-
-        <div className="admin-stat-grid">
-          {stats.map((stat) => (
-            <div className="admin-stat" key={stat.label}>
-              <div className="admin-stat-label">{stat.label}</div>
-              <div className="admin-stat-value">{stat.value}</div>
-              {stat.hint ? (
-                <div className="admin-stat-hint">{stat.hint}</div>
-              ) : null}
-            </div>
-          ))}
-        </div>
-
-        <section className="admin-section">
-          <h2>Account control</h2>
-          <p className="admin-console-sub admin-section-intro">
-            Manage paid access and administrative or organization permissions
-            without editing database records manually.
-          </p>
-          <AdminAccountAccessControls
-            accounts={accountAccess}
-            members={featureAccess.members}
-            organizations={featureAccess.organizations}
-          />
-        </section>
-
-        <section className="admin-section">
-          <h2>Plans and feature access</h2>
-          <p className="admin-console-sub admin-section-intro">
-            Set an organization&apos;s baseline plan, then allow or block Hosted
-            Codex for an organization or an individual member. Member overrides
-            take precedence over organization rules and plans.
-          </p>
-          <AdminFeatureControls data={featureAccess} />
-        </section>
-
-        <section className="admin-section">
-          <h2>Traffic · last 30 days</h2>
-          {daily.length === 0 ? (
-            <div className="admin-chart">
-              <span className="admin-chart-empty">
-                No page views recorded yet. Data starts collecting once this
-                deploy is live.
-              </span>
-            </div>
-          ) : (
-            <div
-              className="admin-chart"
-              role="img"
-              aria-label="Daily page views"
-            >
-              {daily.map((point) => (
-                <div
-                  key={point.day}
-                  className={`admin-chart-bar${point.views === 0 ? " is-empty" : ""}`}
-                  style={{
-                    height: `${Math.max(3, Math.round((point.views / maxDaily) * 100))}%`,
-                  }}
-                  title={`${point.day}: ${point.views} views, ${point.visitors} visitors`}
-                />
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="admin-section">
-          <h2>
-            Waitlist ({waitlist.length})
-            {waitlistPending ? (
-              <span
-                className="admin-badge status-pending"
-                style={{ marginLeft: "0.5rem" }}
-              >
-                {waitlistPending} pending
-              </span>
-            ) : null}
-          </h2>
-          <p className="admin-console-sub" style={{ marginBottom: "1rem" }}>
-            Registration is closed. Waitlist entries remain available for launch
-            planning, but invitations cannot create accounts yet.
-          </p>
-          <AdminWaitlist rows={waitlist} />
-        </section>
-
-        <section className="admin-section">
-          <h2>All users ({directory.length})</h2>
-          <div className="admin-table-wrap">
-            <div className="admin-table-scroll">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>User</th>
-                    <th>Email</th>
-                    <th>Sign-in</th>
-                    <th>Joined</th>
-                    <th>Last seen</th>
-                    <th className="num">Visits</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {directory.map((row) => (
-                    <tr key={row.id}>
-                      <td>
-                        <div className="admin-user-cell">
-                          {row.avatarUrl ? (
-                            <Image
-                              className="admin-avatar"
-                              src={row.avatarUrl}
-                              alt=""
-                              width={26}
-                              height={26}
-                              unoptimized
-                            />
-                          ) : (
-                            <span className="admin-avatar" aria-hidden="true" />
-                          )}
-                          <span>
-                            <span className="admin-user-name">
-                              {row.name ?? row.login}
-                            </span>
-                            {row.isAdmin ? (
-                              <span className="admin-badge is-admin">
-                                admin
-                              </span>
-                            ) : null}
-                            <br />
-                            <span className="admin-user-login">
-                              @{row.login}
-                            </span>
-                          </span>
-                        </div>
-                      </td>
-                      <td>
-                        {row.email ?? <span className="admin-muted">—</span>}
-                      </td>
-                      <td>
-                        <span className="admin-providers">
-                          {row.hasGithub ? (
-                            <span className="admin-chip">GitHub</span>
-                          ) : null}
-                          {row.hasGoogle ? (
-                            <span className="admin-chip">Google</span>
-                          ) : null}
-                          {row.hasPassword ? (
-                            <span className="admin-chip">Password</span>
-                          ) : null}
-                          {!row.hasGithub &&
-                          !row.hasGoogle &&
-                          !row.hasPassword ? (
-                            <span className="admin-muted">—</span>
-                          ) : null}
-                        </span>
-                      </td>
-                      <td className="admin-time">
-                        {formatDate(row.createdAt)}
-                      </td>
-                      <td className="admin-time">
-                        {formatRelative(row.lastSeenAt)}
-                      </td>
-                      <td className="num">{numberFmt.format(row.visits)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        <div className="admin-two-col">
-          <section className="admin-section">
-            <h2>Top pages · 30d</h2>
-            <div className="admin-table-wrap">
-              <div className="admin-table-scroll">
-                <table className="admin-table">
-                  <thead>
-                    <tr>
-                      <th>Path</th>
-                      <th className="num">Views</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {topPaths.length === 0 ? (
-                      <tr>
-                        <td colSpan={2} className="admin-muted">
-                          No data yet.
-                        </td>
-                      </tr>
-                    ) : (
-                      topPaths.map((row) => (
-                        <tr key={row.path}>
-                          <td className="admin-path">{row.path}</td>
-                          <td className="num">{numberFmt.format(row.views)}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </section>
-
-          <section className="admin-section">
-            <h2>Recent visits</h2>
-            <div className="admin-table-wrap">
-              <div className="admin-table-scroll">
-                <table className="admin-table">
-                  <thead>
-                    <tr>
-                      <th>When</th>
-                      <th>Who</th>
-                      <th>Path</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recentVisits.length === 0 ? (
-                      <tr>
-                        <td colSpan={3} className="admin-muted">
-                          No visits recorded yet.
-                        </td>
-                      </tr>
-                    ) : (
-                      recentVisits.map((row) => (
-                        <tr key={row.id}>
-                          <td className="admin-time">
-                            {formatRelative(row.createdAt)}
-                          </td>
-                          <td>
-                            {row.anon ? (
-                              <span className="admin-muted">anonymous</span>
-                            ) : (
-                              (row.userName ?? row.userEmail ?? "account")
-                            )}
-                          </td>
-                          <td className="admin-path">{row.path}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </section>
-        </div>
+      <div className="product-scope min-h-full">
+        <AdminConsoleClient
+          currentUser={{ id: user.id, email: user.email }}
+          summary={summary}
+          users={mergedUsers}
+          daily={daily}
+          topPaths={topPaths}
+          recentVisits={recentVisits}
+          featureAccess={featureAccess}
+          waitlist={waitlist}
+        />
       </div>
     </AppChrome>
   );
