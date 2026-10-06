@@ -369,7 +369,7 @@ async function pollSession(
         ...result,
         persisted,
         error:
-          "Codex finished, but its sign-in could not be refreshed. Your reply is saved; reconnect Codex before the next turn.",
+          "Codex finished and your reply was saved, but sign-in refresh failed. This workspace needs an agent runtime update before the next turn.",
       };
     }
     await markGen2SupersetRunFinished({
