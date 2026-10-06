@@ -50,14 +50,14 @@ export interface Sky {
 
 const CLOUDS: readonly Cloud[] = [
   { x: 0.15, y: 0.25, size: 0.5, color: VIOLET, alpha: 0.17 },
-  { x: 0.85, y: 0.2, size: 0.55, color: BLUE, alpha: 0.22 },
+  { x: 0.85, y: 0.2, size: 0.55, color: BLUE, alpha: 0.12 },
   { x: 0.5, y: 0.1, size: 0.55, color: BLUE, alpha: 0.16 },
-  { x: 0.3, y: 0.5, size: 0.4, color: CYAN, alpha: 0.1 },
+  { x: 0.3, y: 0.5, size: 0.4, color: CYAN, alpha: 0.07 },
   { x: 0.75, y: 0.45, size: 0.4, color: VIOLET, alpha: 0.135 },
-  { x: 0.06, y: 0.5, size: 0.3, color: BLUE, alpha: 0.2 },
+  { x: 0.06, y: 0.5, size: 0.3, color: BLUE, alpha: 0.15 },
   { x: 0.95, y: 0.5, size: 0.3, color: VIOLET, alpha: 0.135 },
-  { x: 0.35, y: 0.32, size: 0.35, color: TEAL, alpha: 0.12 },
-  { x: 0.8, y: 0.32, size: 0.3, color: TEAL, alpha: 0.1 },
+  { x: 0.35, y: 0.32, size: 0.35, color: TEAL, alpha: 0.09 },
+  { x: 0.8, y: 0.32, size: 0.3, color: TEAL, alpha: 0.075 },
 ];
 
 export function createSky(starCount: number, seed = 5): Sky {
@@ -120,9 +120,9 @@ export function drawSky(f: Frame, sky: Sky): void {
   const { ctx, width, horizon, time } = f;
   const gradient = ctx.createLinearGradient(0, 0, 0, horizon);
   gradient.addColorStop(0, "#01020a");
-  gradient.addColorStop(0.45, "#030826");
-  gradient.addColorStop(0.8, "#0a1a63");
-  gradient.addColorStop(1, "#1a3a9a");
+  gradient.addColorStop(0.45, "#02061c");
+  gradient.addColorStop(0.8, "#07134a");
+  gradient.addColorStop(1, "#112a78");
   ctx.globalCompositeOperation = "source-over";
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, width, f.height);
@@ -160,7 +160,7 @@ export function drawSky(f: Frame, sky: Sky): void {
       wisp.length * width,
       wisp.width * width,
       wisp.color,
-      wisp.alpha * shimmer,
+      wisp.alpha * 0.8 * shimmer,
       wisp.angle,
     );
   }
