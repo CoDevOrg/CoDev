@@ -95,6 +95,7 @@ jobs:
         env:
           ARM_WORKSPACE_RUNTIME_SECRETS: ${{ secrets.ARM_WORKSPACE_RUNTIME_SECRETS }}
           ARM_WORKSPACE_BOOT_ENABLED: ${{ vars.ARM_WORKSPACE_BOOT_ENABLED || 'false' }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           node --input-type=module <<'JS'
           const arm = JSON.parse(process.env.ARM_WORKSPACE_RUNTIME_SECRETS || "{}");
@@ -105,12 +106,13 @@ jobs:
           const inventory = await fetch(root + team, { headers });
           if (!inventory.ok) throw new Error(`Vercel environment inventory failed: ${inventory.status}`);
           const { envs } = await inventory.json();
-          const values = { ARM_WORKSPACE_IMAGE_VERSION_ID: arm.ARM_WORKSPACE_IMAGE_VERSION_ID, ARM_WORKSPACE_BOOT_ENABLED: process.env.ARM_WORKSPACE_BOOT_ENABLED };
+          if (!process.env.CRON_SECRET) throw new Error("Shared compute/catalog service secret is missing");
+          const values = { ARM_WORKSPACE_IMAGE_VERSION_ID: arm.ARM_WORKSPACE_IMAGE_VERSION_ID, ARM_WORKSPACE_BOOT_ENABLED: process.env.ARM_WORKSPACE_BOOT_ENABLED, CRON_SECRET: process.env.CRON_SECRET };
           for (const [key, value] of Object.entries(values)) {
             const current = envs.find(env => env.key === key && env.target?.includes("production"));
             const response = await fetch(current ? `${root.replace("/v10/", "/v9/")}/${current.id}${team}` : root + team, {
               method: current ? "PATCH" : "POST", headers,
-              body: JSON.stringify(current ? { value } : { key, value, type: "plain", target: ["production"] }),
+              body: JSON.stringify(current ? { value } : { key, value, type: key === "CRON_SECRET" ? "sensitive" : "plain", target: ["production"] }),
             });
             if (!response.ok) throw new Error(`Vercel configuration update failed for ${key}: ${response.status}`);
           }

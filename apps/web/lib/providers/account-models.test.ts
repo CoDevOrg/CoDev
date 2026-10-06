@@ -47,7 +47,7 @@ it("shows only the connected Codex plan's visible models and uses its account ro
         "ChatGPT-Account-Id": "account",
         authorization: "Bearer secret",
       }),
-      redirect: "error",
+      redirect: "manual",
     }),
   );
 });
@@ -161,4 +161,17 @@ it("does not expose provider response bodies on authentication failure", async (
   await expect(getCodexAccountModels(codex)).rejects.toThrow(
     "Account model discovery is unavailable.",
   );
+});
+it("rejects redirects without forwarding the account credential", async () => {
+  const fetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(null, {
+      status: 302,
+      headers: { location: "https://example.com/credential-target" },
+    }),
+  );
+  await expect(getCodexAccountModels(codex)).rejects.toThrow(
+    "Account model discovery is unavailable.",
+  );
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(fetch.mock.calls[0]?.[1]?.redirect).toBe("manual");
 });

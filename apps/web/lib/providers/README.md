@@ -25,3 +25,9 @@ and Claude uses Anthropic’s models endpoint. API keys use their own account
 catalogs. Cache keys include member, provider, and credential fingerprint for one
 minute; failures never substitute public or hard-coded model lists. Provider
 catalog availability does not guarantee remaining usage quota or inference access.
+
+Cloudflare relays Codex discovery to the existing Vercel production catalog
+service because ChatGPT returns 403 to Worker egress. The shared `CRON_SECRET`
+authorizes this fixed service; member account tokens stay on Vercel. Cursor and
+Claude continue to query their providers directly. See `docs/WEB_HOSTING.md` for
+the endpoint and rollout ordering.

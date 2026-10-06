@@ -5,10 +5,17 @@ export async function modelCatalogRequest(url: string, init: RequestInit) {
   const response = await fetch(url, {
     ...init,
     cache: "no-store",
-    redirect: "error",
+    // Workers supports manual/follow; reject every redirect without forwarding credentials.
+    redirect: "manual",
     signal: AbortSignal.timeout(8000),
   });
-  if (!response.ok) throw new Error("Account model discovery is unavailable.");
+  if (!response.ok) {
+    console.warn("Account model request failed", {
+      host: new URL(url).hostname,
+      status: response.status,
+    });
+    throw new Error("Account model discovery is unavailable.");
+  }
   const text = await response.text();
   if (text.length > 4_000_000)
     throw new Error("Account model catalog is too large.");

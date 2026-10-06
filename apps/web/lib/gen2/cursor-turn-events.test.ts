@@ -62,4 +62,17 @@ describe("Cursor turn stream", () => {
       ),
     ).toMatchObject({ status: "failed", error: "Access denied" });
   });
+  it("explains Cursor's plain-text named-model quota rejection", () => {
+    expect(
+      settleGen2Turn(
+        "cursor",
+        "ActionRequiredError: Increase limits for faster responses You're out of usage. Switch to Auto, or ask your admin to increase your limit to continue.",
+        1,
+      ).state,
+    ).toMatchObject({
+      status: "failed",
+      error:
+        "Your Cursor account is out of usage for this model. Choose Auto or increase your Cursor usage limit.",
+    });
+  });
 });

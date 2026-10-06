@@ -1,4 +1,5 @@
-import { withUser } from "@/lib/http/api-route";
+import { withUser, errorResponse } from "@/lib/http/api-route";
+import { discoverAccountModelsForWorker } from "@/lib/providers/model-catalog-service";
 import { getGen2ProviderStatus } from "@/lib/gen2/providers";
 import { gen2AgentProviderSchema } from "@codev/contracts";
 
@@ -30,3 +31,12 @@ export const GET = withUser(
   },
   { errorStatus: 500 },
 );
+
+/** Internal Cloudflare-to-Vercel account catalog service. */
+export async function POST(request: Request) {
+  try {
+    return Response.json(await discoverAccountModelsForWorker(request));
+  } catch (error) {
+    return errorResponse(error, 503);
+  }
+}

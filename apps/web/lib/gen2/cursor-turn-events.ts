@@ -114,5 +114,13 @@ export function reduceCursorTurn(output: string): Gen2TurnState {
       error = text(event.message) || "Cursor could not complete this turn.";
     }
   }
+  if (
+    status === "running" &&
+    /^ActionRequiredError: .*You're out of usage\./m.test(output)
+  ) {
+    status = "failed";
+    error =
+      "Your Cursor account is out of usage for this model. Choose Auto or increase your Cursor usage limit.";
+  }
   return { items: [...items.values()], reply, status, error, usage: null };
 }

@@ -136,6 +136,13 @@ export const gen2ModelInfoSchema = z.object({
 });
 
 export type Gen2ModelInfo = z.infer<typeof gen2ModelInfoSchema>;
+export const gen2AccountModelRequestSchema = z.object({
+  userId: identifierSchema,
+  provider: z.literal("codex"),
+});
+export const gen2AccountModelResponseSchema = z.object({
+  models: z.array(gen2ModelInfoSchema).min(1),
+});
 export type Gen2ProviderStatus = {
   connected: boolean;
   via: "subscription" | "api-key" | null;

@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   codex: vi.fn(),
   cursor: vi.fn(),
   claude: vi.fn(),
+  relay: vi.fn(),
 }));
 vi.mock("./resolve", () => ({ requireCredential: mocks.resolve }));
 vi.mock("./codex-account-models", () => ({
@@ -15,17 +16,31 @@ vi.mock("./cursor-account-models", () => ({
 vi.mock("./claude-account-models", () => ({
   getClaudeAccountModels: mocks.claude,
 }));
+vi.mock("./model-catalog-relay", () => ({
+  getRelayedCodexAccountModels: mocks.relay,
+}));
 import {
   clearDynamicModelCache,
   getDynamicModelsForProvider,
 } from "./dynamic-models";
 beforeEach(() => {
+  vi.unstubAllGlobals();
   vi.resetAllMocks();
   clearDynamicModelCache();
   mocks.resolve.mockResolvedValue({
     secret: { kind: "api_key", apiKey: "private-a" },
   });
   mocks.codex.mockResolvedValue([{ id: "account-a", label: "Account A" }]);
+});
+it("relays Worker Codex discovery without decrypting credentials on the Worker", async () => {
+  vi.stubGlobal("navigator", { userAgent: "Cloudflare-Workers" });
+  const models = [{ id: "plan-model", label: "Plan model" }];
+  mocks.relay.mockResolvedValue(models);
+  expect(await getDynamicModelsForProvider("codex", "member-a")).toEqual(
+    models,
+  );
+  expect(mocks.relay).toHaveBeenCalledWith("member-a");
+  expect(mocks.resolve).not.toHaveBeenCalled();
 });
 it("caches an account catalog without sharing another member's results", async () => {
   await getDynamicModelsForProvider("codex", "member-a");

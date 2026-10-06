@@ -195,7 +195,13 @@ ARM image `1.0.13` adds Cursor CLI `2026.10.01-e373342`. The production image
 pin is carried in `ARM_WORKSPACE_RUNTIME_SECRETS` and synchronized to Vercel
 by the web deployment workflow. Saved workspace disks survive image upgrades.
 
-Workspace model discovery uses outbound authenticated requests to the connected
-provider’s catalog on both web hosts. Existing encrypted member credentials supply
-the authentication; catalog caching is scoped to the member and credential, and
-there are no new runtime secrets or paid Cloudflare services.
+Workspace model discovery uses connected member credentials and account catalogs;
+caching is scoped to the member and credential. Cursor and Claude discovery runs
+on the requesting web host. ChatGPT rejects catalog requests from Worker egress,
+so Codex discovery uses `POST https://codev-co-dev-admins.vercel.app/api/gen2/providers`
+with the existing shared `CRON_SECRET`. The service accepts only member identity
+and Codex provider selection, resolves credentials on Vercel, and returns model
+metadata. It refuses requests without service authorization and refuses execution
+on Workers to prevent relay loops. No new secrets or paid Cloudflare services are
+required; keep that Vercel production alias available and deploy Vercel before
+enabling a Worker build that depends on the catalog service.

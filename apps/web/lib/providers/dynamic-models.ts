@@ -4,6 +4,7 @@ import { requireCredential } from "./resolve";
 import { getCodexAccountModels } from "./codex-account-models";
 import { getCursorAccountModels } from "./cursor-account-models";
 import { getClaudeAccountModels } from "./claude-account-models";
+import { getRelayedCodexAccountModels } from "./model-catalog-relay";
 
 const cache = new Map<string, { expiresAt: number; models: Gen2ModelInfo[] }>();
 const discover = {
@@ -16,6 +17,12 @@ export async function getDynamicModelsForProvider(
   provider: Gen2AgentProviderName,
   userId: string,
 ): Promise<Gen2ModelInfo[]> {
+  if (
+    provider === "codex" &&
+    typeof navigator !== "undefined" &&
+    navigator.userAgent === "Cloudflare-Workers"
+  )
+    return getRelayedCodexAccountModels(userId);
   const credential = await requireCredential({
     userId,
     provider,
