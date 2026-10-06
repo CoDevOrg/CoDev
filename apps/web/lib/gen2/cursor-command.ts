@@ -1,6 +1,6 @@
 import "server-only";
 
-import { formatGen2TurnPrompt } from "./chats-format";
+import { formatGen2WorkspaceAgentPrompt } from "./workspace-agent-instructions";
 
 export function buildGen2CursorCommand(
   prompt: string,
@@ -15,13 +15,6 @@ export function buildGen2CursorCommand(
     "--force",
     "--trust",
     ...(model?.trim() ? ["--model", model.trim()] : []),
-    [
-      "You are Cursor on this workspace's machine.",
-      "Use the shell to inspect and change files in the current working directory.",
-      "Answer the user and make requested code changes here.",
-      "Do not inspect environment variables or files that hold credentials.",
-      "",
-      formatGen2TurnPrompt(prompt, history),
-    ].join("\n"),
+    formatGen2WorkspaceAgentPrompt(prompt, history),
   ];
 }

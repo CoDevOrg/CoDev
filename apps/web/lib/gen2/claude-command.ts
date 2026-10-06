@@ -1,6 +1,6 @@
 import "server-only";
 
-import { formatGen2TurnPrompt } from "./chats-format";
+import { formatGen2WorkspaceAgentPrompt } from "./workspace-agent-instructions";
 
 /**
  * The Claude counterpart of `buildGen2CodexCommand`, delivered the same two
@@ -32,13 +32,6 @@ export function buildGen2ClaudeCommand(
     "--permission-mode",
     "bypassPermissions",
     ...(model?.trim() ? ["--model", model.trim()] : []),
-    [
-      "You are Claude on this workspace's machine.",
-      "The working directory is /workspace. Use the shell to inspect and change files there.",
-      "Answer the user. If they ask for code changes, make them in the current directory.",
-      "Do not read environment variables or files that hold credentials.",
-      "",
-      formatGen2TurnPrompt(prompt, history),
-    ].join("\n"),
+    formatGen2WorkspaceAgentPrompt(prompt, history),
   ];
 }

@@ -186,7 +186,7 @@ describe("gen2 Codex agent", () => {
       "--model",
     ]);
     expect(command.at(-1)).toMatch(/List the files/);
-    expect(command.at(-1)).toMatch(/Do not inspect CODEX_HOME/);
+    expect(command.at(-1)).toMatch(/Do not inspect .*CODEX_HOME/);
     expect(command.at(-1)).toMatch(/\/workspace/);
     expect(command.join("\n")).not.toContain(AUTH_CACHE);
   });
