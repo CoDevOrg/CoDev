@@ -2,36 +2,35 @@
    Public landing page.
 
    Scoped entirely under `.lp-page` so marketing-only flourishes (serifs,
-   parallax, the WebGL canvas) never leak into product CSS. The cream/navy
-   palette itself is shared with the product theme in app-theme.css /
-   globals.css — landing invented it; the signed-in surfaces now use it too.
+   parallax, the animated canvas) never leak into product CSS. The page is
+   dark (the product's Midnight Blueprint palette) so content can sit directly
+   on the fixed night-sky backdrop; the cream palette lives in app-theme.css.
    ========================================================================== */
 
 .lp-page {
-  color-scheme: light;
+  color-scheme: dark;
 
-  --lp-bg: #f2e9d6;
-  --lp-bg-2: #e8dcc0;
-  --lp-ink: #0e2f7e;
-  --lp-muted: rgba(14, 47, 126, 0.73);
-  --lp-faint: rgba(14, 47, 126, 0.59);
-  --lp-line: rgba(14, 47, 126, 0.16);
-  --lp-line-strong: rgba(14, 47, 126, 0.28);
-  --lp-panel: rgba(255, 253, 247, 0.62);
-  --lp-panel-2: rgba(255, 253, 247, 0.85);
+  --lp-bg: #060a17;
+  --lp-bg-2: #0d152d;
+  --lp-ink: #f4f6fb;
+  --lp-muted: rgba(244, 246, 251, 0.76);
+  --lp-faint: rgba(244, 246, 251, 0.6);
+  --lp-line: rgba(244, 246, 251, 0.14);
+  --lp-line-strong: rgba(244, 246, 251, 0.26);
+  --lp-panel: rgba(13, 21, 45, 0.62);
+  --lp-panel-2: rgba(13, 21, 45, 0.85);
 
-  /* Accents below are the darkest point of each hue that still clears 5:1
-     against the paper, measured rather than eyeballed: they are used as body
-     text, not only as fills. */
-  --lp-lime: #1b63b3;
+  /* Accents are the bright end of each hue so they clear 4.5:1 on the dark
+     page, since they are used as body text as well as fills. */
+  --lp-lime: #3bc9f2;
   /* Agent identity 1, and the warm counterpoint in the brand gradient. */
-  --lp-orange: #9e4a2a;
+  --lp-orange: #f59e0b;
   /* Agent identity 3. */
-  --lp-sky: #2a6d62;
+  --lp-sky: #2dd4bf;
   /* Agent identity 2. */
-  --lp-violet: #5b4fa8;
-  --lp-review-blue: #1b63b3;
-  --lp-warn: #86590b;
+  --lp-violet: #a78bfa;
+  --lp-review-blue: #3bc9f2;
+  --lp-warn: #e8b44a;
 
   --lp-shell: min(1200px, calc(100% - 48px));
   --lp-px: 0;
@@ -50,16 +49,16 @@
 
 /* globals.css paints html/body the cream product surface and sets
    `color-scheme: light` on :root. Landing repaints the document behind
-   itself the same way so overscroll stays cream. */
+   itself the same way so overscroll stays dark. */
 html:has(.lp-page),
 body:has(.lp-page) {
-  background: #f2e9d6;
-  color-scheme: light;
+  background: #060a17;
+  color-scheme: dark;
 }
 
 .lp-page ::selection {
   background: var(--lp-lime);
-  color: #f7f3e8;
+  color: #060a17;
 }
 
 /* --------------------------------------------------------------------------
@@ -164,7 +163,7 @@ body:has(.lp-page) {
   position: absolute;
   inset: 0;
   background-image: radial-gradient(
-    rgba(14, 47, 126, 0.32) 0.5px,
+    rgba(244, 246, 251, 0.5) 0.5px,
     transparent 0.7px
   );
   background-size: 3px 3px;
@@ -172,13 +171,14 @@ body:has(.lp-page) {
 }
 
 /* --------------------------------------------------------------------------
-   WebGL backdrop.
+   Canvas backdrop.
 
-   `components/landing/webgl/landing-canvas.tsx` mounts the canvas only once it
-   knows the reader wants motion and that the browser can draw it. Until then,
-   and permanently for anyone who opted out of motion or has no WebGL, the
-   generated still below is the backdrop. It sits at the same z-index as
-   `.lp-backdrop`, behind the `z-index: 1` content shell.
+   `components/landing/backdrop/landing-canvas.tsx` mounts the canvas only once
+   it knows the reader wants motion. Until then, and permanently for anyone who
+   opted out of motion, has no JavaScript, or whose machine cannot keep up, the
+   generated still below is the backdrop. Both are fixed to the viewport at the
+   same z-index as `.lp-backdrop`, behind the `z-index: 1` content shell, so the
+   whole page scrolls over the same night sky.
    -------------------------------------------------------------------------- */
 
 .lp-canvas-layer {
@@ -192,15 +192,24 @@ body:has(.lp-page) {
 .lp-canvas-still {
   position: absolute;
   inset: 0;
-  background: url("/brand/landing/hero-still.webp") center / cover no-repeat;
-  opacity: 0.72;
+  background: url("/brand/landing/hero-still.webp") center bottom / cover
+    no-repeat;
   transition: opacity 900ms ease;
-  -webkit-mask-image: radial-gradient(
-    92% 74% at 50% 46%,
-    #000,
-    transparent 86%
+}
+
+/* A soft dark centre keeps copy readable over the branches wherever the page
+   has scrolled to, while the tree stays visible at the edges. */
+.lp-canvas-layer::after,
+.lp-canvas-still::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 62% 72% at 50% 46%,
+    rgba(6, 10, 23, 0.5),
+    rgba(6, 10, 23, 0.22) 70%,
+    rgba(6, 10, 23, 0) 100%
   );
-  mask-image: radial-gradient(92% 74% at 50% 46%, #000, transparent 86%);
 }
 
 .lp-canvas {
@@ -213,9 +222,7 @@ body:has(.lp-page) {
 }
 
 .lp-canvas-layer[data-canvas="on"] .lp-canvas {
-  /* Atmosphere, not decoration: the field has to stay under the body copy
-     without touching its contrast. */
-  opacity: 0.5;
+  opacity: 1;
 }
 
 /* The still is server-rendered inside `.lp-backdrop`, so it is painted before
@@ -292,8 +299,7 @@ body:has(.lp-page) {
 }
 
 .lp-brand img {
-  filter: brightness(0) saturate(100%) invert(16%) sepia(80%) saturate(2200%)
-    hue-rotate(210deg) brightness(0.95) contrast(1.05);
+  filter: brightness(0) invert(1);
 }
 
 .lp-nav nav {
@@ -342,7 +348,7 @@ body:has(.lp-page) {
 
 .lp-cta-primary {
   background: var(--lp-lime);
-  color: #f7f3e8;
+  color: #060a17;
   box-shadow: 0 12px 34px rgba(30, 108, 196, 0.28);
 }
 
@@ -373,7 +379,7 @@ body:has(.lp-page) {
   min-height: 40px;
   padding: 0 18px;
   background: var(--lp-ink);
-  color: #f7f3e8;
+  color: #060a17;
   font-size: 14px;
 }
 
@@ -470,13 +476,13 @@ body:has(.lp-page) {
   background: linear-gradient(
     90deg,
     var(--lp-ink),
-    #17559c,
+    #8fd3ff,
     var(--lp-lime),
-    #17559c,
+    #8fd3ff,
     var(--lp-ink),
-    #17559c,
+    #8fd3ff,
     var(--lp-lime),
-    #17559c,
+    #8fd3ff,
     var(--lp-ink)
   );
   background-clip: text;
@@ -2437,7 +2443,7 @@ body:has(.lp-page) {
   padding: 11px 13px;
   border: 1px solid var(--lp-line);
   border-radius: 10px;
-  background: rgba(255, 253, 247, 0.85);
+  background: var(--lp-panel-2);
   color: var(--lp-ink);
   font: inherit;
   font-size: 14px;
@@ -2451,7 +2457,7 @@ body:has(.lp-page) {
 
 .lp-field input::placeholder,
 .lp-field textarea::placeholder {
-  color: rgba(14, 47, 126, 0.73);
+  color: var(--lp-muted);
 }
 
 .lp-field input:hover,
@@ -2492,7 +2498,7 @@ body:has(.lp-page) {
   padding: 8px 13px;
   border: 1px solid var(--lp-line);
   border-radius: 999px;
-  background: rgba(255, 253, 247, 0.85);
+  background: var(--lp-panel-2);
   color: var(--lp-muted);
   font-size: 13px;
   transition:

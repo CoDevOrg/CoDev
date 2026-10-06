@@ -14,7 +14,7 @@ import { FlaskConical, GitBranch, MessagesSquare } from "lucide-react";
 import { LandingMotion } from "@/components/landing/landing-motion";
 import { RequestAccessButton } from "@/components/landing/request-access-button";
 import { WaitlistInline } from "@/components/landing/waitlist-inline";
-import { LandingBackdrop } from "@/components/landing/webgl/landing-backdrop";
+import { LandingBackdrop } from "@/components/landing/backdrop/landing-backdrop";
 import { getCurrentAppUser } from "@/lib/auth/identity";
 
 import "./landing.css";

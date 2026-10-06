@@ -129,7 +129,7 @@ describe("CoDev product theme", () => {
     // bleed into an authenticated page.
     expect(globals).not.toContain(".landing-page {");
     expect(landing).toContain(".lp-page {");
-    expect(landing).toContain("--lp-bg: #f2e9d6;");
+    expect(landing).toContain("--lp-bg: #060a17;");
     expect(landing).toContain(".lp-hero h1 em {");
     expect(landing).toContain("var(--lp-lime)");
     expect(landing).toContain("var(--lp-sky)");
@@ -145,13 +145,13 @@ describe("CoDev product theme", () => {
     }
   });
 
-  it("shares the cream/navy palette between landing and product", () => {
-    // Landing invented the paper cream + deep navy + blue accent palette;
-    // the product shell now uses the same tokens so the signed-in app
-    // matches the marketing surface. The IDE workspace stays dark.
-    expect(landing).toContain("--lp-bg: #f2e9d6;");
-    expect(landing).toContain("--lp-ink: #0e2f7e;");
-    expect(landing).toContain("color-scheme: light;");
+  it("keeps the landing page dark while the product shell stays cream/navy", () => {
+    // The landing page is dark so its content can sit on the fixed night-sky
+    // backdrop; the signed-in product shell keeps the paper cream + deep navy
+    // + blue palette. The IDE workspace stays dark.
+    expect(landing).toContain("--lp-bg: #060a17;");
+    expect(landing).toContain("--lp-ink: #f4f6fb;");
+    expect(landing).toContain("color-scheme: dark;");
     expect(globals).toContain("color-scheme: light");
     expect(globals).toContain("--surface: #f2e9d6;");
     expect(globals).toContain("--ink: #0e2f7e;");
@@ -162,8 +162,8 @@ describe("CoDev product theme", () => {
     expect(globals).toContain("--workspace-surface: #121417;");
     expect(globals).toMatch(/\.workspace-page \{[^}]*color-scheme: dark;/s);
 
-    // The workspace demo stays a dark panel on the light landing page, so it
-    // re-declares the ink tokens rather than inheriting the navy ones.
+    // The workspace demo keeps its own neutral dark panel palette, so it
+    // re-declares the ink tokens rather than inheriting the page's.
     const demo = landing.slice(landing.indexOf(".lp-demo {"));
     expect(demo).toContain("--lp-ink: #edeef0;");
     expect(demo).toContain("background: #121417;");
