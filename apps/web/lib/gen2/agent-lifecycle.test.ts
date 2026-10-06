@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("./cursor-auth-refresh", () => ({ refreshCursorTurnAuth: vi.fn() }));
+
 vi.mock("../billing/gate", () => ({
   requireWorkspaceOwnerPlan: async () => undefined,
 }));
@@ -407,5 +409,50 @@ describe("gen2 Codex agent", () => {
     expect(mocks.release).toHaveBeenCalledWith(
       expect.objectContaining({ credentialId }),
     );
+  });
+  it("starts, polls, and cancels Cursor through guest exec when Superset sessions are enabled", async () => {
+    vi.stubEnv("CODEV_SUPERSET_AGENT_SESSIONS_ENABLED", "true");
+    mocks.turnProvider.mockResolvedValue("cursor");
+    mocks.resolveCredential.mockResolvedValue({
+      credentialId: null,
+      launchProfile: { files: [], env: {} },
+      via: "subscription",
+    });
+    try {
+      await startGen2AgentTurn({
+        workspaceId,
+        userId,
+        chatId,
+        prompt: "Say hello",
+        idempotencyKey: "cursor-turn-1234",
+        provider: "cursor",
+      });
+      expect(mocks.start).toHaveBeenCalledWith(
+        workspaceId,
+        expect.objectContaining({
+          command: expect.arrayContaining(["cursor-agent", "--print"]),
+        }),
+      );
+      expect(mocks.createTurn).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: "cursor" }),
+      );
+      await pollGen2AgentTurn({
+        workspaceId,
+        userId,
+        chatId,
+        sessionId: "session-1",
+        after: 0,
+      });
+      expect(mocks.poll).toHaveBeenCalled();
+      await cancelGen2AgentTurn({
+        workspaceId,
+        userId,
+        sessionId: "session-1",
+      });
+      expect(mocks.close).toHaveBeenCalledWith(workspaceId, "session-1");
+      expect(mocks.claim).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });

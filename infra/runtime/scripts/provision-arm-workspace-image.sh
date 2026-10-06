@@ -110,6 +110,17 @@ corepack prepare pnpm@11.5.0 --activate
 npm install -g --allow-scripts=@anthropic-ai/claude-code \
   @openai/codex@0.148.0 @anthropic-ai/claude-code@2.1.236
 
+# Pin and checksum the Linux ARM64 CLI; it must never self-update the base image.
+readonly cursor_version="2026.10.01-e373342"
+readonly cursor_sha256="785c5f6bf2a60eb1121e27ed8c14f5ee07ed1b5b6692324f2d9a997238245eb5"
+curl -fsSL "https://downloads.cursor.com/lab/${cursor_version}/linux/arm64/agent-cli-package.tar.gz" -o /tmp/cursor-agent.tar.gz
+printf '%s  %s\n' "${cursor_sha256}" /tmp/cursor-agent.tar.gz | sha256sum --check
+install -d -m 0755 /opt/codev/cursor-agent
+tar -xzf /tmp/cursor-agent.tar.gz --strip-components=1 -C /opt/codev/cursor-agent
+chown -R root:root /opt/codev/cursor-agent
+ln -s /opt/codev/cursor-agent/cursor-agent /usr/local/bin/cursor-agent
+rm -f /tmp/cursor-agent.tar.gz
+
 install -d -m 0755 "${install_dir}" /usr/local/bin /workspace \
   /usr/local/lib/codev /usr/local/sbin \
   /etc/systemd/system/multi-user.target.wants /etc/codev \

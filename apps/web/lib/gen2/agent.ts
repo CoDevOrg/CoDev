@@ -35,6 +35,8 @@ import {
   getGen2TurnProvider,
   recordGen2TurnChunks,
 } from "./turns";
+import { withDatabaseOperation } from "../platform/database-operation";
+import { refreshCursorTurnAuth } from "./cursor-auth-refresh";
 import { isGen2SupersetAgentSessionsEnabled } from "./superset-agent-sessions-feature";
 import {
   cancelGen2SupersetAgentTurn,
@@ -73,7 +75,8 @@ export async function startGen2AgentTurn(input: {
   await requireWorkspaceOwnerPlan(input.workspaceId);
   await requireGen2Chat(input.workspaceId, input.chatId);
 
-  if (isGen2SupersetAgentSessionsEnabled()) {
+  // Cursor uses the provider-neutral guest exec until Superset supports its CLI.
+  if (isGen2SupersetAgentSessionsEnabled() && input.provider !== "cursor") {
     return startGen2AgentTurnViaSuperset(input);
   }
 
@@ -223,7 +226,13 @@ async function startGen2AgentTurnViaSuperset(input: {
   }
 }
 
-export async function pollGen2AgentTurn(input: {
+export async function pollGen2AgentTurn(
+  input: Parameters<typeof pollGen2AgentTurnOperation>[0],
+) {
+  return withDatabaseOperation(() => pollGen2AgentTurnOperation(input));
+}
+
+async function pollGen2AgentTurnOperation(input: {
   workspaceId: string;
   userId: string;
   chatId?: string;
@@ -232,7 +241,10 @@ export async function pollGen2AgentTurn(input: {
 }) {
   const membership = await requireGen2Member(input.workspaceId, input.userId);
 
-  if (isGen2SupersetAgentSessionsEnabled()) {
+  if (
+    isGen2SupersetAgentSessionsEnabled() &&
+    (await getGen2TurnProvider(input.sessionId)) !== "cursor"
+  ) {
     return pollGen2AgentTurnViaSuperset(input);
   }
 
@@ -269,6 +281,14 @@ export async function pollGen2AgentTurn(input: {
         exited: result.exited,
         exitCode: result.exitCode,
       });
+
+  if (
+    result.exited &&
+    result.codexAuthCacheJson &&
+    (await getGen2TurnProvider(input.sessionId)) === "cursor"
+  ) {
+    await refreshCursorTurnAuth(input.sessionId, result.codexAuthCacheJson);
+  }
 
   // The hosted ChatGPT seat and its refreshed auth cache belong to Codex
   // turns only; another provider's turn has neither to hand back.
@@ -344,7 +364,10 @@ export async function cancelGen2AgentTurn(input: {
 }) {
   await requireGen2Member(input.workspaceId, input.userId);
 
-  if (isGen2SupersetAgentSessionsEnabled()) {
+  if (
+    isGen2SupersetAgentSessionsEnabled() &&
+    (await getGen2TurnProvider(input.sessionId)) !== "cursor"
+  ) {
     try {
       await cancelGen2SupersetAgentTurn(input);
     } catch (error) {

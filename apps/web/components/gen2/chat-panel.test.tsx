@@ -458,38 +458,49 @@ describe("Gen2ChatPanel", () => {
     ).toBe(false);
   });
 
-  it("includes the selected model in the turn request body", async () => {
-    stubFetch({});
-    render(
-      <Gen2ChatPanel
-        workspace={workspace}
-        onRunningChange={vi.fn()}
-        onFilesChanged={vi.fn()}
-        onOpenFile={vi.fn()}
-        onNeedsMachine={async () => true}
-        activeProvider="claude"
-      />,
-    );
-
-    await screen.findByRole("heading", { name: "What should we build?" });
-    fireEvent.change(screen.getByLabelText("Prompt"), {
-      target: { value: "hello agent" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Send" }));
-
-    await waitFor(() => {
-      const agentCall = vi
-        .mocked(fetch)
-        .mock.calls.find(
-          ([url, init]) =>
-            String(url).endsWith("/agent") && init?.method === "POST",
+  it.each([
+    { provider: "claude", model: "sonnet" },
+    { provider: "cursor", model: "auto" },
+  ] as const)(
+    "sends a valid $provider model even with a saved model from another provider",
+    async ({ provider, model }) => {
+      if (provider === "cursor")
+        sessionStorage.setItem(
+          `codev-gen2-model:${workspace.id}`,
+          "gpt-5.6-luna",
         );
-      expect(agentCall).toBeDefined();
-      const body = JSON.parse(String(agentCall?.[1]?.body));
-      expect(body.provider).toBe("claude");
-      expect(body.model).toBe("sonnet");
-    });
-  });
+      stubFetch({});
+      render(
+        <Gen2ChatPanel
+          workspace={workspace}
+          onRunningChange={vi.fn()}
+          onFilesChanged={vi.fn()}
+          onOpenFile={vi.fn()}
+          onNeedsMachine={async () => true}
+          activeProvider={provider}
+        />,
+      );
+
+      await screen.findByRole("heading", { name: "What should we build?" });
+      fireEvent.change(screen.getByLabelText("Prompt"), {
+        target: { value: "hello agent" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+      await waitFor(() => {
+        const agentCall = vi
+          .mocked(fetch)
+          .mock.calls.find(
+            ([url, init]) =>
+              String(url).endsWith("/agent") && init?.method === "POST",
+          );
+        expect(agentCall).toBeDefined();
+        const body = JSON.parse(String(agentCall?.[1]?.body));
+        expect(body.provider).toBe(provider);
+        expect(body.model).toBe(model);
+      });
+    },
+  );
 
   it("populates and uses dynamically fetched models from providers endpoint", async () => {
     stubFetch({

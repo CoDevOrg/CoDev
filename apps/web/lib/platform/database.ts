@@ -36,7 +36,6 @@ const getHyperdriveDatabase = cache(() => {
   }
   const database = createDatabase(connectionString, {
     max: HYPERDRIVE_POOL_MAX,
-    maxUses: 1,
   });
   after(() => database.pool.end().catch(() => undefined));
   return database;

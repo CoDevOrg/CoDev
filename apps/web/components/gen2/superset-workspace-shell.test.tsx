@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   connected: true,
+  cursorConnected: false,
   renameOk: true,
   listWorktrees: vi.fn(),
   createWorktree: vi.fn(),
@@ -86,6 +87,7 @@ function stubMatchMedia(matchesFor: (query: string) => boolean) {
 describe("SupersetWorkspaceShell", () => {
   beforeEach(() => {
     mocks.connected = true;
+    mocks.cursorConnected = false;
     mocks.renameOk = true;
     stubMatchMedia(() => false);
     mocks.listWorktrees.mockResolvedValue([
@@ -107,7 +109,7 @@ describe("SupersetWorkspaceShell", () => {
             Response.json({
               codex: { connected: true, via: "api-key" },
               claude: { connected: false, via: null },
-              cursor: { connected: false, via: null },
+              cursor: { connected: mocks.cursorConnected, via: "subscription" },
             }),
           );
         }
@@ -382,6 +384,18 @@ describe("SupersetWorkspaceShell", () => {
     // Disconnected providers should NOT be rendered
     expect(screen.queryByText("Claude")).not.toBeInTheDocument();
     expect(screen.queryByText("Cursor")).not.toBeInTheDocument();
+  });
+
+  it("shows a connected Cursor subscription in the workspace provider picker", async () => {
+    mocks.cursorConnected = true;
+    render(
+      <SupersetWorkspaceShell
+        workspaceId={workspaceId}
+        canEdit
+        runtimeEnabled
+      />,
+    );
+    expect((await screen.findAllByText("Cursor")).length).toBeGreaterThan(0);
   });
 
   it("renames a chat after the server accepts the title", async () => {

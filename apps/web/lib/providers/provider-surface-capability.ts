@@ -24,6 +24,7 @@ const VENDOR_SUBSCRIPTION: Record<RegistryVendor, "codex" | "claude"> = {
 const SUBSCRIPTION_KIND: Record<ProviderId, CredentialKind> = {
   codex: "codex_auth_cache",
   claude: "claude_setup_token",
+  cursor: "cursor_auth_cache",
 };
 
 const SURFACES: readonly ExecutorSurface[] = ["gen2", "rooms"];

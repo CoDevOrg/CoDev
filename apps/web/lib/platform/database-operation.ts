@@ -16,11 +16,12 @@ export function hyperdriveConnectionString() {
   return url.toString();
 }
 
-/** WebSocket messages need a pool that outlives neither the message nor the socket. */
+// Reuse connections within this operation; closing the pool prevents cross-request sockets.
+/** Bound the pool to an async operation, including socket messages and guest polls. */
 export async function withDatabaseOperation<T>(action: () => Promise<T>) {
   const connectionString = hyperdriveConnectionString();
   if (!connectionString) return action();
-  const database = createDatabase(connectionString, { max: 10, maxUses: 1 });
+  const database = createDatabase(connectionString, { max: 10 });
   return databaseOperationContext.run(database, async () => {
     try {
       return await action();

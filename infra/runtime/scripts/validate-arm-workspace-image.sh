@@ -6,6 +6,7 @@ node --version | grep -Eq '^v24\.'
 pnpm --version
 codex --version
 claude --version
+cursor-agent --version
 test -x /usr/local/bin/codev-guestd
 cloudflared --version
 test -x /usr/local/sbin/codev-arm-boot

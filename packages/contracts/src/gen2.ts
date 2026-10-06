@@ -119,6 +119,7 @@ export const gen2JoinRequestSchema = z.object({
 export const GEN2_AGENT_PROVIDERS = [
   { id: "codex", label: "Codex" },
   { id: "claude", label: "Claude" },
+  { id: "cursor", label: "Cursor" },
 ] as const;
 
 export const gen2AgentProviderSchema = z.enum(
@@ -140,6 +141,7 @@ export const GEN2_PROVIDER_MODELS: Record<
   Gen2AgentProviderName,
   Gen2ModelInfo[]
 > = {
+  cursor: [{ id: "auto", label: "Auto" }],
   claude: [
     { id: "sonnet", label: "Claude 3.7 Sonnet" },
     { id: "opus", label: "Claude 3 Opus" },

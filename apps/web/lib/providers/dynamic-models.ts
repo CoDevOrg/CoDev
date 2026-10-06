@@ -78,6 +78,7 @@ function extractCodexModels(allModels: RawOpenRouterModel[]): Gen2ModelInfo[] {
 export async function getDynamicModelsForProvider(
   provider: Gen2AgentProviderName,
 ): Promise<Gen2ModelInfo[]> {
+  if (provider === "cursor") return GEN2_PROVIDER_MODELS.cursor;
   const cached = cache.get(provider);
   if (cached && cached.expiresAt > Date.now()) {
     return cached.models;

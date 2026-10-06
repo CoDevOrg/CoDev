@@ -66,7 +66,7 @@ describe("database client", () => {
 
     expect(mocks.createDatabase).toHaveBeenCalledWith(
       "postgres://hyperdrive.local/codev?sslmode=disable",
-      { max: 10, maxUses: 1 },
+      { max: 10 },
     );
     expect(mocks.attachDatabasePool).not.toHaveBeenCalled();
     expect(mocks.after).toHaveBeenCalledTimes(1);

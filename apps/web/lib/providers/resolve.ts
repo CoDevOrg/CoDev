@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 
+import { cursorLaunchSecret } from "./cursor-launch-secret";
 import { getDatabase } from "../platform/database";
 import { decryptSecret } from "../platform/kms";
 import {
@@ -185,11 +186,23 @@ async function decryptCredential(encrypted: string | null) {
   }
 }
 
+async function loadCursorAuthCache(
+  input: ResolveInput,
+): Promise<Loaded | null> {
+  const row = await findRow(input.userId, "cursor", "OAUTH_TOKEN");
+  if (!row?.encryptedAccessToken) return null;
+  return loadedFromRow(row, async (row) => {
+    const authCacheJson = await decryptCredential(row.encryptedAccessToken);
+    return authCacheJson ? cursorLaunchSecret(authCacheJson) : null;
+  });
+}
+
 const LOADERS: Record<
   CredentialKind,
   (input: ResolveInput) => Promise<Loaded | null>
 > = {
   codex_auth_cache: loadCodexAuthCache,
+  cursor_auth_cache: loadCursorAuthCache,
   claude_setup_token: loadClaudeSetupToken,
   api_key: loadApiKey,
 };
@@ -299,6 +312,7 @@ export class CredentialUnavailableError extends Error {
 const PROVIDER_LABEL: Record<ProviderId, string> = {
   codex: "Codex",
   claude: "Claude",
+  cursor: "Cursor",
 };
 
 export function describeUnavailable(

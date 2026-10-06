@@ -54,7 +54,12 @@ it("acknowledges only chunks persisted, including the guest's 128-chunk limit", 
     exitCode: 0,
   });
   const result = await pollPersistedArmTurn(input);
-  expect(mocks.poll).toHaveBeenCalledWith("workspace-a", "session-a", 2);
+  expect(mocks.poll).toHaveBeenCalledWith(
+    "workspace-a",
+    "session-a",
+    2,
+    transaction,
+  );
   expect(mocks.record).toHaveBeenCalledWith(
     {
       sessionId: "session-a",

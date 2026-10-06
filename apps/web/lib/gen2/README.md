@@ -33,7 +33,7 @@ danger-full-access` with prior messages in the prompt, so a shareable machine
 never keeps a personal Codex thread or auth home. The workspace VM is the isolation
 boundary.
 
-A turn runs on the provider the member picks (`provider` on the start request, Codex by default). `agent-command.ts` chooses `codex exec --json` or `claude -p --output-format stream-json`, and `turn-reducer.ts` reads the provider back from the stream itself, so neither the browser nor the `gen2_agent_turns` row needs to remember it.
+A turn runs on the provider the member picks (`provider` on the start request, Codex by default). `agent-command.ts` chooses `codex exec --json`, `claude -p --output-format stream-json`, or `cursor-agent --print --output-format stream-json`, and `turn-reducer.ts` parses output using the provider stored on `gen2_agent_turns`.
 
 `turn-events.ts` reduces the `codex exec --json` NDJSON (`claude-turn-events.ts` does the same for Claude) into typed activity
 items. Codex gives every item a stable `id` across
@@ -111,3 +111,15 @@ layer does not poll Azure Cost Management on member requests.
 forwards Vercel dispatch/status calls to the canonical Worker using `CRON_SECRET`.
 `arm-workflow-bridge.ts` validates service authentication and shared operation
 parameters; its endpoint requires a native binding and cannot proxy recursively.
+
+Cursor subscriptions resolve through the provider registry and use a private
+file credential store under each turn profile. The ARM image must include the
+pinned Linux ARM64 Cursor CLI before the workspace picker is deployed.
+
+Cursor currently uses native guest exec even when Superset agent sessions are
+enabled. Start, poll, cancel, and background draining must keep that routing
+consistent. Refreshed auth belongs to the turn’s initiating member.
+
+Guest turn polls use `withDatabaseOperation` for all routing, transaction, and
+auth-refresh queries across the long guest wait. They must not rely on an HTTP
+React cache that can be unavailable inside nested asynchronous work.

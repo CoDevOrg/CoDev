@@ -212,14 +212,17 @@ export function Gen2ChatPanel({
   >([]);
   const availableProviders = connectedProviders ?? detectedConnectedProviders;
   const [selectedModel, setSelectedModel] = useState<string>(() => {
-    if (typeof window === "undefined") return "sonnet";
+    if (typeof window === "undefined")
+      return GEN2_PROVIDER_MODELS[
+        activeProvider ?? GEN2_AGENT_PROVIDERS[0].id
+      ][0]!.id;
     try {
       const saved = sessionStorage.getItem(`codev-gen2-model:${workspace.id}`);
       if (saved) return saved;
     } catch {}
-    return (activeProvider ?? GEN2_AGENT_PROVIDERS[0].id) === "claude"
-      ? "sonnet"
-      : "gpt-5.6-luna";
+    return GEN2_PROVIDER_MODELS[
+      activeProvider ?? GEN2_AGENT_PROVIDERS[0].id
+    ][0]!.id;
   });
   const agentLabel =
     GEN2_AGENT_PROVIDERS.find((entry) => entry.id === agent)?.label ?? "Agent";
@@ -240,6 +243,7 @@ export function Gen2ChatPanel({
         const data = value as {
           claude?: { connected?: boolean; models?: Gen2ModelInfo[] };
           codex?: { connected?: boolean; models?: Gen2ModelInfo[] };
+          cursor?: { connected?: boolean; models?: Gen2ModelInfo[] };
         } | null;
         if (!mounted || !data) return;
         setDetectedConnectedProviders(
@@ -250,6 +254,7 @@ export function Gen2ChatPanel({
         setModelsByProvider({
           claude: data.claude?.models ?? [],
           codex: data.codex?.models ?? [],
+          cursor: data.cursor?.models ?? [],
         });
       })
       .catch(() => {});
@@ -600,7 +605,7 @@ export function Gen2ChatPanel({
             provider: agent,
             idempotencyKey: crypto.randomUUID(),
             ...(worktreeId ? { worktreeId } : {}),
-            ...(selectedModel ? { model: selectedModel } : {}),
+            ...(currentModelItem?.id ? { model: currentModelItem.id } : {}),
           }),
         },
       );
@@ -861,7 +866,9 @@ export function Gen2ChatPanel({
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent className="gen2-workspace-surface min-w-[220px] max-h-[360px] overflow-y-auto">
                       <DropdownMenuRadioGroup
-                        value={isSelectedProvider ? selectedModel : ""}
+                        value={
+                          isSelectedProvider ? (currentModelItem?.id ?? "") : ""
+                        }
                         onValueChange={(val) => {
                           handleProviderSelect(entry.id, val);
                         }}
