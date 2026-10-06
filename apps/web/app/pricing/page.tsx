@@ -1,67 +1,62 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { Check, ChevronDown, Lock } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 
 import "@/app/product-theme.css";
 
-import { INDIVIDUAL_FEATURES } from "@/components/billing/plan";
-import { Button, LinkButton } from "@/components/ui/button";
+import { PricingPlanCard } from "@/components/billing/pricing-plan-card";
 import { getCurrentAppUser } from "@/lib/auth/identity";
 import { getBillingStatus } from "@/lib/billing/access";
 import {
-  INDIVIDUAL_PLAN_NAME,
-  INDIVIDUAL_PRICE_USD_PER_MONTH,
-} from "@/lib/billing/config";
+  ENTERPRISE_PLAN,
+  FREE_PLAN,
+  SELF_SERVE_PLANS,
+} from "@/lib/billing/plans";
 
 export const metadata: Metadata = {
   title: "Pricing",
   description:
-    "One plan, everything included: cloud workspaces with built-in AI agents. Teammates you invite join at no cost.",
+    "Cloud development workspaces from $20/month. Bring your own AI provider and invite collaborators for free.",
 };
-
-const COLLABORATOR_FEATURES = [
-  "Join any workspace you are invited to",
-  "Work in the same terminals and with the same agents",
-  "Nothing to pay, no card required",
-] as const;
 
 const FAQ = [
   {
-    question: "Who pays for a workspace?",
+    question: "What counts as workspace time?",
     answer:
-      "Only the person who owns it. Teammates you invite join your workspace at no cost, and they never need a plan of their own to take part.",
+      "Time counts while an Azure workspace VM is allocated, including startup. Idle workspaces stop automatically after 15 minutes and your persistent files remain saved.",
   },
   {
-    question: "Can I cancel anytime?",
+    question: "Are AI model charges included?",
     answer:
-      "Yes. Manage billing opens Stripe's customer portal, where you can cancel in a click. Your plan stays active until the end of the period you have already paid for.",
+      "No. You connect your own supported AI provider account, so model usage is billed directly by that provider. CoDev pricing covers the hosted workspace, collaboration, and control plane.",
   },
   {
-    question: "How do I pay?",
+    question: "Do collaborators need a paid seat?",
     answer:
-      "Checkout and billing are handled by Stripe. Your card details go straight to Stripe and never touch CoDev's servers.",
+      "No. People you invite can join and collaborate at no extra charge. Compute and workspace limits belong to the workspace owner's plan.",
   },
   {
-    question: "Is there a free tier for workspaces?",
+    question: "Can I change or cancel my plan?",
     answer:
-      "CoDev offers a free ARM64 workspace preview with up to 50 hours of monthly workspace time (35 shared hours if 2 workspaces are owned), one active workspace, and 16 GiB of storage per workspace. Cold starts can take several minutes. Quota or cost limits can pause compute while preserving saved files. Invited collaborators can join any workspace for free with no plan required.",
+      "Yes. Stripe's customer portal lets you change plans, update payment details, view invoices, or cancel. Cancellation takes effect at the end of the paid period.",
   },
   {
-    question: "What happens if a payment fails?",
+    question: "What happens when I reach my hours?",
     answer:
-      "Creating workspaces and running agents pause until you update your payment method. Your settings and billing page stay open so you can fix it.",
+      "Compute pauses until the next monthly reset. Your workspace files stay on persistent storage, and you can change plans from Billing if you need more time sooner.",
   },
 ] as const;
 
 export default async function PricingPage() {
   const user = await getCurrentAppUser();
   const billing = user ? await getBillingStatus(user.id) : null;
-  const owned = billing?.hasAccess === true && billing.accessSource !== "admin";
+  const currentPlanId = billing?.hasAccess ? billing.planId : "free";
+  const plans = [FREE_PLAN, ...SELF_SERVE_PLANS];
 
   return (
     <div className="product-scope min-h-dvh">
-      <header className="mx-auto flex max-w-5xl items-center justify-between px-6 py-5">
+      <header className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
         <Link
           aria-label="CoDev home"
           className="flex items-center gap-2.5 text-[15px] font-semibold tracking-tight"
@@ -71,15 +66,14 @@ export default async function PricingPage() {
             alt=""
             height={26}
             priority
-            src="/brand/codev-mark-v3.png"
+            src="/brand/codev-mark.svg"
             width={26}
           />
           CoDev
         </Link>
         <nav aria-label="Primary" className="flex items-center gap-1 text-sm">
           <Link
-            aria-current="page"
-            className="rounded-full px-3 py-1.5 font-medium text-foreground"
+            className="rounded-full px-3 py-1.5 font-medium"
             href="/pricing"
           >
             Pricing
@@ -93,120 +87,53 @@ export default async function PricingPage() {
         </nav>
       </header>
 
-      <main className="mx-auto max-w-5xl px-6 pt-12 pb-24 sm:pt-20">
-        <section className="mx-auto max-w-2xl space-y-4 text-center">
+      <main className="mx-auto max-w-7xl px-6 pt-12 pb-24 sm:pt-20">
+        <section className="mx-auto max-w-3xl text-center">
           <p className="text-[11px] font-semibold tracking-[0.14em] text-primary uppercase">
             Pricing
           </p>
-          <h1 className="text-4xl leading-[1.08] font-semibold tracking-tight text-balance sm:text-6xl">
-            One plan. Everything included.
+          <h1 className="mt-4 text-4xl leading-[1.08] font-semibold tracking-tight text-balance sm:text-6xl">
+            Pay for workspace time, not seats.
           </h1>
-          <p className="text-base leading-relaxed text-pretty text-muted-foreground sm:text-lg">
-            A cloud workspace with an AI agent built in. You pay once for the
-            workspace; everyone you invite works in it for free.
+          <p className="mt-5 text-base leading-relaxed text-pretty text-muted-foreground sm:text-lg">
+            Every plan includes persistent ARM64 workspaces and free
+            collaborators. Connect your own AI provider account and keep model
+            billing under your control.
           </p>
         </section>
 
         <section
           aria-label="Plans"
-          className="mx-auto mt-14 grid max-w-3xl gap-5 md:grid-cols-[1.15fr_1fr] md:items-stretch"
+          className="mt-14 grid gap-5 md:grid-cols-2 xl:grid-cols-4"
         >
-          <article className="relative flex flex-col gap-7 rounded-3xl border border-primary/30 bg-gradient-to-b from-primary/[0.09] via-card to-card p-8 shadow-[0_30px_80px_-40px] shadow-primary/50">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold tracking-tight">
-                {INDIVIDUAL_PLAN_NAME}
-              </h2>
-              {owned ? (
-                <span className="rounded-full bg-primary/15 px-2.5 py-1 text-xs font-medium text-primary">
-                  Your plan
-                </span>
-              ) : null}
-            </div>
+          {plans.map((plan) => (
+            <PricingPlanCard
+              current={currentPlanId === plan.id}
+              featured={plan.id === "power"}
+              hasPaidPlan={
+                billing?.hasAccess === true || billing?.status === "past_due"
+              }
+              key={plan.id}
+              plan={plan}
+              signedIn={Boolean(user)}
+            />
+          ))}
+        </section>
 
-            <p className="flex items-baseline gap-2">
-              <span className="text-6xl font-semibold tracking-tight tabular-nums">
-                ${INDIVIDUAL_PRICE_USD_PER_MONTH}
-              </span>
-              <span className="text-sm text-muted-foreground">
-                per month, billed monthly
-              </span>
-            </p>
-
-            {!user ? (
-              <LinkButton
-                className="w-full"
-                href="/sign-in?callbackUrl=/pricing"
-                size="lg"
-                variant="solid"
-              >
-                Get started
-              </LinkButton>
-            ) : owned ? (
-              <LinkButton
-                className="w-full"
-                href="/settings/personal/billing"
-                size="lg"
-                variant="outline"
-              >
-                Manage plan
-              </LinkButton>
-            ) : (
-              <Button className="w-full" disabled size="lg" variant="solid">
-                Subscribe for ${INDIVIDUAL_PRICE_USD_PER_MONTH}/month
-              </Button>
-            )}
-
-            <ul className="space-y-3 border-t border-border/60 pt-6 text-sm">
-              {INDIVIDUAL_FEATURES.map((line) => (
-                <li className="flex items-start gap-3" key={line}>
-                  <Check
-                    aria-hidden
-                    className="mt-0.5 size-4 shrink-0 text-primary"
-                  />
-                  <span>{line}</span>
-                </li>
-              ))}
-            </ul>
-
-            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Lock aria-hidden className="size-3" />
-              Secure checkout by Stripe. Cancel anytime.
-            </p>
-          </article>
-
-          <article className="flex flex-col gap-7 rounded-3xl border border-border bg-card/60 p-8">
-            <h2 className="text-lg font-semibold tracking-tight">
-              Collaborator
-            </h2>
-            <p className="flex items-baseline gap-2">
-              <span className="text-6xl font-semibold tracking-tight tabular-nums">
-                $0
-              </span>
-              <span className="text-sm text-muted-foreground">
-                when you are invited
-              </span>
-            </p>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              Ask the workspace owner for an invite link. No plan needed.
-            </p>
-            <ul className="space-y-3 border-t border-border/60 pt-6 text-sm">
-              {COLLABORATOR_FEATURES.map((line) => (
-                <li className="flex items-start gap-3" key={line}>
-                  <Check
-                    aria-hidden
-                    className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-                  />
-                  <span>{line}</span>
-                </li>
-              ))}
-            </ul>
-          </article>
+        <section className="mt-8">
+          <PricingPlanCard
+            current={currentPlanId === "enterprise"}
+            hasPaidPlan={
+              billing?.hasAccess === true || billing?.status === "past_due"
+            }
+            plan={ENTERPRISE_PLAN}
+            signedIn={Boolean(user)}
+          />
         </section>
 
         <p className="mt-8 text-center text-xs text-muted-foreground">
-          Free ARM-powered workspaces are available in public preview. Cold
-          starts can take several minutes, and quota or cost limits may pause
-          compute.
+          Monthly hours are shared across the workspaces on your plan. AI usage
+          is billed separately by your connected provider.
         </p>
 
         <section
@@ -226,7 +153,8 @@ export default async function PricingPage() {
                   {item.question}
                   <ChevronDown
                     aria-hidden
-                    className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180 motion-reduce:transition-none"
+                    className="shrink-0 text-muted-foreground transition-transform group-open:rotate-180 motion-reduce:transition-none"
+                    data-icon="inline-end"
                   />
                 </summary>
                 <p className="pr-8 pb-4 text-sm leading-relaxed text-muted-foreground">
@@ -241,7 +169,7 @@ export default async function PricingPage() {
       <footer className="border-t border-border/60 px-6 py-8">
         <nav
           aria-label="Footer"
-          className="mx-auto flex max-w-5xl flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground"
+          className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground"
         >
           <Link className="hover:text-foreground" href="/">
             Home

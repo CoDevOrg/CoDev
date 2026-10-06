@@ -11,7 +11,13 @@ export const organizationRoleSchema = z.enum([
 export type OrganizationRole = z.infer<typeof organizationRoleSchema>;
 
 /** Stable product plan identifiers; billing providers map into these values. */
-export const planIdSchema = z.enum(["free", "pro", "team", "enterprise"]);
+export const planIdSchema = z.enum([
+  "free",
+  "pro",
+  "power",
+  "team",
+  "enterprise",
+]);
 
 export type PlanId = z.infer<typeof planIdSchema>;
 

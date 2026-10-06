@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { LoaderCircle } from "lucide-react";
+import type { SelfServePlanId } from "@codev/contracts";
 
 import { Button } from "@/components/ui/button";
 
@@ -18,6 +19,7 @@ export function BillingButton({
   size = "default",
   className,
   fullWidth = false,
+  planId,
 }: {
   action: "checkout" | "portal";
   children: React.ReactNode;
@@ -25,6 +27,7 @@ export function BillingButton({
   size?: "default" | "sm" | "lg";
   className?: string;
   fullWidth?: boolean;
+  planId?: SelfServePlanId;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -35,6 +38,12 @@ export function BillingButton({
     try {
       const response = await fetch(`/api/billing/${action}`, {
         method: "POST",
+        ...(action === "checkout"
+          ? {
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ planId: planId ?? "pro" }),
+            }
+          : {}),
       });
       const payload = (await response.json().catch(() => ({}))) as {
         url?: string;

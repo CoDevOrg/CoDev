@@ -2,6 +2,17 @@ import { z } from "zod";
 
 import { planIdSchema } from "./entitlements";
 
+/** Plans that can be purchased directly through Stripe Checkout. */
+export const selfServePlanIdSchema = z.enum(["pro", "power", "team"]);
+export type SelfServePlanId = z.infer<typeof selfServePlanIdSchema>;
+
+export const billingCheckoutRequestSchema = z.object({
+  planId: selfServePlanIdSchema,
+});
+export type BillingCheckoutRequest = z.infer<
+  typeof billingCheckoutRequestSchema
+>;
+
 /** The plan a signed-in member is billed on, as `GET /api/billing` reports it. */
 export const billingStatusSchema = z.object({
   planId: planIdSchema,
@@ -17,6 +28,9 @@ export const billingStatusSchema = z.object({
   /** True when a Stripe customer exists, so the portal can be opened. */
   hasStripeCustomer: z.boolean(),
   priceUsdPerMonth: z.number(),
+  monthlyComputeHours: z.number().nullable(),
+  workspaceLimit: z.number().int().positive(),
+  activeWorkspaceLimit: z.number().int().positive(),
 });
 
 export type BillingStatus = z.infer<typeof billingStatusSchema>;

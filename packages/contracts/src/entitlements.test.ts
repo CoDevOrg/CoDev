@@ -19,7 +19,13 @@ describe("entitlement contracts", () => {
   });
 
   it("defines stable plan and feature identifiers", () => {
-    expect(planIdSchema.options).toEqual(["free", "pro", "team", "enterprise"]);
+    expect(planIdSchema.options).toEqual([
+      "free",
+      "pro",
+      "power",
+      "team",
+      "enterprise",
+    ]);
     expect(featureKeySchema.parse("hosted_codex_subscription")).toBe(
       "hosted_codex_subscription",
     );

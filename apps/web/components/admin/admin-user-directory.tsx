@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { Search, ArrowUpDown } from "lucide-react";
+import type { PlanId } from "@codev/contracts";
 
 import {
   Card,
@@ -32,7 +33,7 @@ export type AdminUserDirectoryItem = {
   createdAt: string;
   lastSeenAt: string | null;
   visits: number;
-  planId?: "free" | "pro" | "team" | "enterprise";
+  planId?: PlanId;
   subscriptionStatus?: string;
   provider?: string | null;
 };

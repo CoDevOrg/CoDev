@@ -806,7 +806,7 @@ export function SupersetWorkspaceShell({
 
             <img
               className="gen2-brand-mark"
-              src="/brand/codev-mark-v3.png"
+              src="/brand/codev-mark.svg"
               alt="CoDev"
               width={22}
               height={22}
@@ -1849,7 +1849,7 @@ export function SupersetWorkspaceShell({
                                     )
                                   ? "Compute paused by budget guard"
                                   : connection.subscriptionRequired
-                                    ? "An Individual plan is required"
+                                    ? "An active paid plan is required"
                                     : connection.state === "disconnected"
                                       ? workspace?.status === "pending"
                                         ? "This workspace hasn't started"

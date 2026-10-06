@@ -193,7 +193,7 @@ describe("SupersetWorkspaceShell", () => {
     );
     expect(screen.getByRole("img", { name: "CoDev" })).toHaveAttribute(
       "src",
-      "/brand/codev-mark-v3.png",
+      "/brand/codev-mark.svg",
     );
   });
 

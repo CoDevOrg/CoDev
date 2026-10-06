@@ -4,6 +4,7 @@ import type Stripe from "stripe";
 const mocks = vi.hoisted(() => ({
   selects: [] as unknown[][],
   written: [] as Record<string, unknown>[],
+  pricePlan: null as "pro" | "power" | "team" | null,
 }));
 
 vi.mock("../platform/database", () => ({
@@ -29,6 +30,9 @@ vi.mock("../platform/database", () => ({
   }),
 }));
 vi.mock("../platform/observability", () => ({ logEvent: vi.fn() }));
+vi.mock("./config", () => ({
+  selfServePlanIdForStripePrice: () => mocks.pricePlan,
+}));
 
 import {
   mapStripeStatus,
@@ -43,7 +47,7 @@ function subscription(
     id: "sub_new",
     status: "active",
     customer: "cus_1",
-    metadata: { userId: "user-1" },
+    metadata: { userId: "user-1", planId: "pro" },
     cancel_at_period_end: false,
     cancel_at: null,
     canceled_at: null,
@@ -80,6 +84,7 @@ describe("syncStripeSubscription", () => {
   beforeEach(() => {
     mocks.selects.length = 0;
     mocks.written.length = 0;
+    mocks.pricePlan = null;
   });
 
   it("writes an active subscription for the member named in metadata", async () => {
@@ -128,6 +133,25 @@ describe("syncStripeSubscription", () => {
       status: "active",
       cancelAtPeriodEnd: true,
     });
+  });
+
+  it("uses the current Stripe price after a portal plan change", async () => {
+    mocks.pricePlan = "team";
+    mocks.selects.push([], [{ id: "user-1" }], []);
+    await syncStripeSubscription(
+      subscription({
+        metadata: { userId: "user-1", planId: "pro" },
+        items: {
+          data: [
+            {
+              current_period_end: 1_800_000_000,
+              price: { id: "price_team" },
+            },
+          ],
+        },
+      } as unknown as Partial<Stripe.Subscription>),
+    );
+    expect(mocks.written[0]).toMatchObject({ planId: "team" });
   });
 
   it("ignores a late cancel of an old subscription when a newer one is live", async () => {

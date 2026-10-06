@@ -1,13 +1,9 @@
 import "server-only";
 import { and, count, eq, ne } from "drizzle-orm";
 import { schema } from "@codev/db";
-import {
-  GEN2_FREE_ONE_WORKSPACE_LIMIT_MS,
-  GEN2_FREE_TWO_WORKSPACE_LIMIT_MS,
-} from "../billing/config";
 import { getWorkspaceOwnerEntitlement } from "../billing/workspace-entitlement";
 import { lockComputeOwners, type ComputeTransaction } from "./compute-database";
-import { assertComputeAvailable, usedComputeMs } from "./compute-quota";
+import { assertComputeAvailable } from "./compute-quota";
 import { assertOwnerBudget } from "./owner-budget-guard";
 import { Gen2LifecycleError } from "./errors";
 import { FreeComputeConflictError } from "./errors";
@@ -34,30 +30,31 @@ export async function prepareWorkspaceOwnerTransfer(
         ne(schema.gen2Workspaces.id, workspaceId),
       ),
     );
-  if ((owned?.count ?? 0) >= 2)
+  const policy = await getWorkspaceOwnerEntitlement(newOwnerId, db);
+  if ((owned?.count ?? 0) >= policy.workspaceLimit)
     throw new Gen2LifecycleError(
-      "The new owner already owns two workspaces.",
+      `The new owner's plan includes ${policy.workspaceLimit} workspace${policy.workspaceLimit === 1 ? "" : "s"}.`,
       409,
     );
   const active =
     workspace.status === "ready" || Boolean(workspace.runtimeVmResourceId);
-  const policy = await getWorkspaceOwnerEntitlement(newOwnerId, db);
-  if (active && policy.tier === "paid")
+  if (active && policy.tier === "paid") {
     await assertComputeAvailable(newOwnerId, new Date(), db);
-  if (active && policy.tier === "free")
-    await acceptActiveFreeTransfer(
+    const otherActive = await findOtherOwnerCompute(
       db,
-      workspace,
       newOwnerId,
-      owned?.count ?? 0,
-      policy.enabled,
+      workspace.id,
     );
-  await transferClaim(
-    db,
-    workspace,
-    newOwnerId,
-    active && policy.tier === "free",
-  );
+    if (otherActive.length >= policy.activeWorkspaceLimit) {
+      throw new Gen2LifecycleError(
+        `The new owner's plan allows ${policy.activeWorkspaceLimit} active workspaces at a time.`,
+        409,
+      );
+    }
+  }
+  if (active && policy.tier === "free")
+    await acceptActiveFreeTransfer(db, workspace, newOwnerId, policy.enabled);
+  await transferClaim(db, workspace, newOwnerId, active);
 }
 
 async function lockTransferredWorkspace(
@@ -110,7 +107,6 @@ async function acceptActiveFreeTransfer(
   db: ComputeTransaction,
   workspace: typeof schema.gen2Workspaces.$inferSelect,
   newOwnerId: string,
-  owned: number,
   enabled: boolean,
 ) {
   if (!enabled || workspace.runtimeProvider !== "azure_arm")
@@ -119,17 +115,8 @@ async function acceptActiveFreeTransfer(
       409,
     );
   const active = await findOtherOwnerCompute(db, newOwnerId, workspace.id);
-  if (active) throw new FreeComputeConflictError(active);
-  if (
-    (await usedComputeMs(newOwnerId, new Date(), db)) >=
-    (owned >= 1
-      ? GEN2_FREE_TWO_WORKSPACE_LIMIT_MS
-      : GEN2_FREE_ONE_WORKSPACE_LIMIT_MS)
-  )
-    throw new Gen2LifecycleError(
-      "The new owner has no monthly compute time remaining.",
-      429,
-    );
+  if (active[0]) throw new FreeComputeConflictError(active[0]);
+  await assertComputeAvailable(newOwnerId, new Date(), db);
   await assertOwnerBudget(newOwnerId, db);
 }
 
@@ -152,7 +139,10 @@ async function transferClaim(
       .insert(schema.gen2FreeComputeClaims)
       .values({ ownerId: newOwnerId, workspaceId: workspace.id })
       .onConflictDoUpdate({
-        target: schema.gen2FreeComputeClaims.ownerId,
+        target: [
+          schema.gen2FreeComputeClaims.ownerId,
+          schema.gen2FreeComputeClaims.workspaceId,
+        ],
         set: { workspaceId: workspace.id, claimedAt: new Date() },
       });
 }

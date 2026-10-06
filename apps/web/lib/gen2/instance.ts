@@ -4,12 +4,13 @@ import { cancelFreeComputeReservation } from "./cancel-free-compute-reservation"
 import { and, eq, inArray, lt, or } from "drizzle-orm";
 
 import { schema } from "@codev/db";
-import type { Gen2WorkspaceStatus } from "@codev/contracts";
+import type { Gen2RuntimeStatus, Gen2WorkspaceStatus } from "@codev/contracts";
 
 import { requireWorkspaceOwnerPlan } from "../billing/gate";
 import { getDatabase } from "../platform/database";
 import { logEvent } from "../platform/observability";
 import { ensureHostReady } from "../runtime/orchestrator-health";
+import { fakeGuestEnabled } from "../runtime/fake-guest";
 import { OrchestratorError } from "../runtime/orchestrator-request";
 import {
   destroySandbox,
@@ -187,6 +188,7 @@ async function writeGen2Instance(
   values: {
     status: Gen2WorkspaceStatus;
     sandboxId?: string | null;
+    runtimeStatus?: Gen2RuntimeStatus;
     lastError: string | null;
   },
   expectedProvisioningAt?: Date,
@@ -266,18 +268,21 @@ export async function ensureGen2Instance(
   idempotencyKey = crypto.randomUUID(),
 ) {
   const membership = await requireGen2Member(workspaceId, userId);
-  // Starting or resuming a machine is the cost the plan pays for.
-  await requireWorkspaceOwnerPlan(workspaceId);
+  const localGuest = fakeGuestEnabled();
   const ownerId = await workspaceOwnerId(workspaceId);
-  try {
+  if (!localGuest) {
+    // Starting or resuming a machine is the cost the plan pays for.
+    await requireWorkspaceOwnerPlan(workspaceId);
+    try {
+      await assertComputeAvailable(ownerId);
+    } catch (error) {
+      if (!(error instanceof Gen2LifecycleError) || error.status !== 429)
+        throw error;
+      await reconcileWorkspaceComputeSession(workspaceId);
+    }
     await assertComputeAvailable(ownerId);
-  } catch (error) {
-    if (!(error instanceof Gen2LifecycleError) || error.status !== 429)
-      throw error;
-    await reconcileWorkspaceComputeSession(workspaceId);
   }
-  await assertComputeAvailable(ownerId);
-  if (membership.runtimeProvider === "azure_arm" && !runtime) {
+  if (membership.runtimeProvider === "azure_arm" && !runtime && !localGuest) {
     const result = await queueAzureWorkspaceStart(workspaceId, idempotencyKey);
     if (!result.accepted) await startComputeSession(workspaceId, ownerId);
     return Object.assign(await requireGen2Member(workspaceId, userId), {
@@ -370,14 +375,18 @@ export async function ensureGen2Instance(
             ),
           ),
       ));
-    const billingOwnerId = await workspaceOwnerId(workspaceId);
-    await assertComputeAvailable(billingOwnerId);
-    await startComputeSession(workspaceId, billingOwnerId);
+    if (!localGuest) {
+      await assertComputeAvailable(ownerId);
+      await startComputeSession(workspaceId, ownerId);
+    }
     const committed = await writeGen2Instance(
       workspaceId,
       {
         status: "ready",
         sandboxId: sandbox.id,
+        ...(membership.runtimeProvider === "azure_arm"
+          ? { runtimeStatus: "ready" as const }
+          : {}),
         lastError: null,
       },
       provisioningAt,

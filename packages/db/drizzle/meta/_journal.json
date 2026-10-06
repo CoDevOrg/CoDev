@@ -505,6 +505,20 @@
       "when": 1791258853501,
       "tag": "0071_lazy_nekra",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1791262823069,
+      "tag": "0072_add_power_plan_enum",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1791262840190,
+      "tag": "0073_expand_compute_claims",
+      "breakpoints": true
     }
   ]
 }

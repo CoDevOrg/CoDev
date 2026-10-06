@@ -15,10 +15,9 @@ export async function enforceArmComputeEntitlement(
 ) {
   const policy = await getWorkspaceOwnerEntitlement(ownerId, db);
   await assertComputeAvailable(ownerId, new Date(), db);
-  if (policy.tier === "paid") return;
-  if (!policy.enabled)
+  if (policy.tier === "free" && !policy.enabled)
     throw new Gen2LifecycleError("Free ARM compute is not enabled.", 403);
-  await assertOwnerBudget(ownerId, db);
+  if (policy.tier === "free") await assertOwnerBudget(ownerId, db);
   const [claim] = await db
     .select()
     .from(schema.gen2FreeComputeClaims)
@@ -31,7 +30,7 @@ export async function enforceArmComputeEntitlement(
     .limit(1);
   if (!claim)
     throw new Gen2LifecycleError(
-      "The free workspace reservation changed. Try again.",
+      "The workspace compute reservation changed. Try again.",
       409,
     );
 }

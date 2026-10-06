@@ -10,12 +10,8 @@ import { schema } from "@codev/db";
 
 import { isUserAdmin } from "../admin/admin";
 import { getDatabase } from "../platform/database";
-import {
-  INDIVIDUAL_PLAN_ID,
-  INDIVIDUAL_PLAN_NAME,
-  INDIVIDUAL_PRICE_USD_PER_MONTH,
-  STRIPE_PERIOD_GRACE_MS,
-} from "./config";
+import { INDIVIDUAL_PLAN_ID, STRIPE_PERIOD_GRACE_MS } from "./config";
+import { getBillingPlan, isPaidPlanId } from "./plans";
 
 type SubscriptionRow = typeof schema.organizationSubscriptions.$inferSelect;
 
@@ -27,7 +23,7 @@ export class BillingRequiredError extends Error {
   readonly code = SUBSCRIPTION_REQUIRED_CODE;
 
   constructor(
-    message = "An active Individual plan is required. Workspace owners can subscribe in Settings > Billing.",
+    message = "An active paid plan is required. Workspace owners can subscribe in Settings > Billing.",
   ) {
     super(message);
     this.name = "BillingRequiredError";
@@ -43,7 +39,7 @@ export class BillingRequiredError extends Error {
 
 /**
  * Pure access rule. Application admins are exempt. Everyone else needs the
- * Individual plan in `trialing` or `active`. A Stripe-managed row also has to
+ * paid plan in `trialing` or `active`. A Stripe-managed row also has to
  * be inside its paid period (plus a short grace) so a lost webhook cannot
  * keep access open forever. Admin comps have no provider and no period.
  */
@@ -58,7 +54,7 @@ export function resolveBillingAccess(input: {
   const row = input.row;
   const paid =
     row &&
-    row.planId === INDIVIDUAL_PLAN_ID &&
+    isPaidPlanId(row.planId) &&
     (row.status === "active" || row.status === "trialing");
   if (paid) {
     if (row.provider !== "stripe") {
@@ -93,12 +89,13 @@ export async function getBillingStatus(userId: string): Promise<BillingStatus> {
     isUserAdmin(userId),
   ]);
   const access = resolveBillingAccess({ isAdmin, row });
-  const subscribed = row?.planId === INDIVIDUAL_PLAN_ID;
+  const subscribed = Boolean(row && isPaidPlanId(row.planId));
+  const planId =
+    access.source === "admin" ? INDIVIDUAL_PLAN_ID : (row?.planId ?? "free");
+  const plan = getBillingPlan(planId);
   return {
-    planId:
-      access.source === "admin" ? INDIVIDUAL_PLAN_ID : (row?.planId ?? "free"),
-    planName:
-      subscribed || access.source === "admin" ? INDIVIDUAL_PLAN_NAME : "Free",
+    planId,
+    planName: plan.name,
     status:
       row?.provider === "stripe" || subscribed ? (row?.status ?? null) : null,
     hasAccess: access.hasAccess,
@@ -107,7 +104,10 @@ export async function getBillingStatus(userId: string): Promise<BillingStatus> {
     cancelAtPeriodEnd: row?.cancelAtPeriodEnd ?? false,
     hasStripeCustomer:
       row?.provider === "stripe" && Boolean(row.providerCustomerId),
-    priceUsdPerMonth: INDIVIDUAL_PRICE_USD_PER_MONTH,
+    priceUsdPerMonth: plan.priceUsdPerMonth,
+    monthlyComputeHours: plan.monthlyComputeHours,
+    workspaceLimit: plan.workspaceLimit,
+    activeWorkspaceLimit: plan.activeWorkspaceLimit,
   };
 }
 

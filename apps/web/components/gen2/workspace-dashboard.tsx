@@ -3,7 +3,6 @@
 import { useMemo, useState, useEffect, useSyncExternalStore } from "react";
 import { LayoutGrid, List, Search } from "lucide-react";
 import type { Gen2OwnerComputeSummary, Gen2Workspace } from "@codev/contracts";
-import { GEN2_MAX_OWNED_WORKSPACES } from "@/lib/gen2/constants";
 
 import {
   Dialog,
@@ -103,7 +102,7 @@ export function Gen2WorkspaceDashboard({
 
   const canCreate =
     (billing?.hasAccess !== false || isFreeEligible) &&
-    ownedCount < GEN2_MAX_OWNED_WORKSPACES;
+    ownedCount < (computeSummary?.workspaceLimit ?? 1);
 
   const displayName = useMemo(() => {
     const raw =

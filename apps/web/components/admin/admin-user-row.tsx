@@ -34,7 +34,8 @@ export function AdminUserRow({
   onToggleSubscription: (user: AdminUserDirectoryItem) => void;
 }) {
   const isCurrent = user.id === currentUserId;
-  const isPro = user.planId === "pro";
+  const planId = user.planId ?? "free";
+  const isPro = planId !== "free";
 
   return (
     <tr className="transition-colors hover:bg-muted/20">
@@ -86,7 +87,11 @@ export function AdminUserRow({
               : "text-muted-foreground"
           }`}
         >
-          {isPro ? "Individual Pro" : "Free"}
+          {isPro
+            ? planId === "pro"
+              ? "Individual"
+              : planId.charAt(0).toUpperCase() + planId.slice(1)
+            : "Free"}
         </Badge>
       </td>
       <td className="px-3 py-2.5">

@@ -41,6 +41,7 @@ export async function usedComputeMs(
   ownerId: string,
   now = new Date(),
   db: ComputeDatabase = getDatabase(),
+  usageWindow: "lifetime" | "month" = "month",
 ) {
   const month = computeMonth(now);
   const intervals = await db
@@ -50,19 +51,30 @@ export async function usedComputeMs(
     })
     .from(schema.gen2ComputeSessions)
     .where(
-      and(
-        eq(schema.gen2ComputeSessions.ownerId, ownerId),
-        lt(schema.gen2ComputeSessions.startedAt, month.end),
-        or(
-          isNull(schema.gen2ComputeSessions.endedAt),
-          gt(schema.gen2ComputeSessions.endedAt, month.start),
-        ),
-      ),
+      usageWindow === "lifetime"
+        ? eq(schema.gen2ComputeSessions.ownerId, ownerId)
+        : and(
+            eq(schema.gen2ComputeSessions.ownerId, ownerId),
+            lt(schema.gen2ComputeSessions.startedAt, month.end),
+            or(
+              isNull(schema.gen2ComputeSessions.endedAt),
+              gt(schema.gen2ComputeSessions.endedAt, month.start),
+            ),
+          ),
     );
   return intervals.reduce(
     (total, interval) =>
       total +
-      intervalWithinMonth(interval.startedAt, interval.endedAt ?? now, now),
+      (usageWindow === "lifetime"
+        ? Math.max(
+            0,
+            (interval.endedAt ?? now).getTime() - interval.startedAt.getTime(),
+          )
+        : intervalWithinMonth(
+            interval.startedAt,
+            interval.endedAt ?? now,
+            now,
+          )),
     0,
   );
 }
@@ -74,9 +86,15 @@ export async function assertComputeAvailable(
 ) {
   const policy = await getWorkspaceOwnerEntitlement(ownerId, db);
   if (policy.monthlyLimitMs === null) return;
-  if ((await usedComputeMs(ownerId, now, db)) < policy.monthlyLimitMs) return;
+  if (
+    (await usedComputeMs(ownerId, now, db, policy.usageWindow)) <
+    policy.monthlyLimitMs
+  )
+    return;
   throw new Gen2LifecycleError(
-    `You've used your ${policy.monthlyLimitMs / 60_000} workspace minutes for this month. Your work is saved; you can reconnect next month.`,
+    policy.usageWindow === "lifetime"
+      ? `You've used your ${policy.monthlyLimitMs / 3_600_000} free workspace hours. Your work is saved; subscribe to reconnect.`
+      : `You've used your ${policy.monthlyLimitMs / 60_000} workspace minutes for this month. Your work is saved; you can reconnect next month.`,
     429,
   );
 }

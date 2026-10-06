@@ -52,7 +52,15 @@ export function Gen2ConnectProvider({
         Turns run on your own ChatGPT subscription or OpenAI key — CoDev does
         not supply one. Everyone in this workspace connects their own.
       </p>
-      <CodexHostedConnect connected={false} onConnected={onConnected} />
+      <div className="gen2-connect-actions">
+        <CodexHostedConnect
+          buttonClassName="min-h-10"
+          buttonSize="default"
+          buttonVariant="solid"
+          connected={false}
+          onConnected={onConnected}
+        />
+      </div>
       <p className="gen2-connect-alt">
         Prefer an API key?{" "}
         <Link href="/settings/personal/providers#coding-workspaces">

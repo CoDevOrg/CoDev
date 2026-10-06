@@ -2,7 +2,7 @@ import "server-only";
 
 import { and, eq, sql } from "drizzle-orm";
 
-import type { OrganizationRole } from "@codev/contracts";
+import type { OrganizationRole, PlanId } from "@codev/contracts";
 import { schema } from "@codev/db";
 
 import { getStripe } from "../billing/stripe";
@@ -15,7 +15,7 @@ export type AdminAccountAccessData = Array<{
   name: string | null;
   email: string | null;
   isAdmin: boolean;
-  planId: "free" | "pro" | "team" | "enterprise";
+  planId: PlanId;
   subscriptionStatus: string;
   provider: string | null;
 }>;

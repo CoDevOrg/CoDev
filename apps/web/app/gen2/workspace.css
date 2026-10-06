@@ -5167,6 +5167,10 @@
   font-size: 0.78125rem;
 }
 
+.gen2-connect-actions + .gen2-connect-alt {
+  margin-top: 18px;
+}
+
 .gen2-connect-alt a {
   color: var(--gold);
   text-decoration: underline;

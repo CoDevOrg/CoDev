@@ -3,12 +3,14 @@ import "server-only";
 import { eq } from "drizzle-orm";
 
 import { schema } from "@codev/db";
+import type { SelfServePlanId } from "@codev/contracts";
 
 import { ApiError } from "../http/api-route";
 import { getDatabase } from "../platform/database";
 import { logEvent } from "../platform/observability";
 import { getSubscriptionRow, resolveBillingAccess } from "./access";
-import { requireBillingEnv } from "./config";
+import { stripePriceIdForPlan } from "./config";
+import { getSelfServePlan } from "./plans";
 import { getStripe } from "./stripe";
 import { stripeId, syncStripeSubscription } from "./subscriptions";
 
@@ -72,29 +74,45 @@ async function ensureStripeCustomer(member: Member) {
   return customer.id;
 }
 
-/** Starts a Stripe Checkout for the $20/month Individual plan. */
-export async function createCheckoutSession(member: Member, origin: string) {
+/** Starts Stripe Checkout for one of CoDev's self-serve monthly plans. */
+export async function createCheckoutSession(
+  member: Member,
+  origin: string,
+  planId: SelfServePlanId,
+) {
   const row = await getSubscriptionRow(member.id);
+  if (
+    row?.provider === "stripe" &&
+    row.providerSubscriptionId &&
+    row.status === "past_due"
+  ) {
+    throw new ApiError(
+      "Update the payment method on your existing subscription before changing plans.",
+      409,
+    );
+  }
   // Admins are exempt from the paywall but may still subscribe (to test it).
   const access = resolveBillingAccess({ isAdmin: false, row });
   if (access.hasAccess) {
     throw new ApiError(
       access.source === "subscription"
-        ? "You already have an active Individual plan. Use Manage billing to change it."
-        : "Your account already includes the Individual plan.",
+        ? "You already have an active plan. Use Manage billing to change it."
+        : "Your account already includes a paid plan.",
       409,
     );
   }
-  const priceId = requireBillingEnv("STRIPE_PRICE_ID_INDIVIDUAL");
+  const plan = getSelfServePlan(planId);
+  const priceId = stripePriceIdForPlan(planId);
   const customerId = await ensureStripeCustomer(member);
   const session = await getStripe().checkout.sessions.create({
     mode: "subscription",
     customer: customerId,
     client_reference_id: member.id,
     line_items: [{ price: priceId, quantity: 1 }],
-    subscription_data: { metadata: { userId: member.id } },
+    subscription_data: { metadata: { userId: member.id, planId } },
     metadata: {
       userId: member.id,
+      planId,
       termsVersion: "2026-10-04",
       refundPolicyVersion: "2026-10-04",
     },
@@ -115,7 +133,11 @@ export async function createCheckoutSession(member: Member, origin: string) {
   });
   if (!session.url)
     throw new ApiError("Stripe did not return a checkout URL.", 502);
-  logEvent("info", "billing.checkout.created", { userId: member.id });
+  logEvent("info", "billing.checkout.created", {
+    userId: member.id,
+    planId,
+    amountUsd: plan.priceUsdPerMonth,
+  });
   return session.url;
 }
 

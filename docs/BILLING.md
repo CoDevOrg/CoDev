@@ -1,111 +1,109 @@
 # Billing (Stripe)
 
-The **Individual** plan is $20/month, sold through Stripe Checkout. It is the
-existing `pro` plan (`plans.name = 'Individual'`); the billing entity is the
-member's personal organization (`organizations.id == users.id`), whose
-`organization_subscriptions` row holds the Stripe ids.
+CoDev bills for hosted ARM64 workspace capacity, not collaborator seats or AI
+model usage. Members connect their own AI provider account. The workspace owner
+pays; invited collaborators are free and consume the owner's shared allowance.
 
-## Paywall
+## Plans
 
-- By default, creating a Gen 2 workspace and starting its compute need the plan.
-  `requireIndividualPlan(userId)` and `requireWorkspaceOwnerPlan(workspaceId)`
-  in `apps/web/lib/billing/` throw `BillingRequiredError` (HTTP 402,
-  `code: "subscription_required"`).
-- **The workspace owner pays.** Collaborators need no plan. A lapsed owner
-  blocks machine start, terminals and agent turns for everyone; reads stay open.
-- Access = `plan_id = pro` and `status in (active, trialing)`. A Stripe row also
-  has to be inside its paid period plus 3 days, so a lost webhook cannot keep
-  access open. `past_due` and `canceled` are blocked.
-- Application admins are exempt. An admin can comp a plan from the admin
-  console; that cannot overwrite a live Stripe subscription.
-- Guarded: `createGen2Workspace`, `ensureGen2Instance`, `startGen2Terminal`,
-  `sendGen2TerminalInput`, `startGen2AgentTurn`, and the Superset agent
-  session/input/turn starts. Add the guard to any new entry that starts compute.
+| Plan               |    Stripe price |         Workspace time | Persistent workspaces | Active at once |
+| ------------------ | --------------: | ---------------------: | --------------------: | -------------: |
+| Free               |              $0 |       5 lifetime hours |                     1 |              1 |
+| Individual (`pro`) |       $20/month |         40 hours/month |                     1 |              1 |
+| Power              |       $50/month |        120 hours/month |                     2 |              2 |
+| Team               |       $99/month |        200 hours/month |                     5 |              3 |
+| Enterprise         | From $499/month | From 1,000 hours/month |               From 20 |        From 10 |
 
-Free ARM preview is enabled in production with `GEN2_FREE_ARM_ENABLED=true`
-and no owner allowlist. The optional `GEN2_FREE_ARM_OWNER_IDS` binding can restrict
-a future rollout. Eligible free owners create ARM
-workspaces and share 50 hours with one owned workspace or 35 hours with two,
-with one active workspace. Second creation requires explicit quota acknowledgment.
-Paid owners keep the existing 1,000-minute allowance and admins remain exempt.
-Missing/stale complete cost telemetry or the US$6.50 budget breaker pauses free
-compute while retaining saved work. For UI controls and copy, see the
-[Phase 6 review](./arm-workspace-free-tier-phase-6.md).
+Individual, Power, and Team are self-serve monthly subscriptions. Enterprise is
+sales-assisted and is not exposed as a self-serve Stripe price. Monthly hours
+are pooled across an owner's workspaces. Idle workspaces stop after 15 minutes;
+persistent disks remain attached across stops.
 
-## Pages
+`apps/web/lib/billing/plans.ts` is the product catalog used by pricing, Billing,
+and runtime entitlements. Keep Stripe product metadata and this catalog aligned.
 
-`/pricing` is public (plan, FAQ, and a Subscribe / Manage plan button that
-depends on sign-in and plan). The paywall callout on `/gen2` and the settings
-Billing page share the same plan copy (`components/billing/plan.ts`).
+## Paywall and limits
 
-Local `.env.local` uses Stripe **sandbox** keys. It points at the shared
-Postgres, so a sandbox checkout there writes a real subscription row; use a
-throwaway account when testing. A stored customer id from the other Stripe
-mode is replaced automatically on the next checkout.
+- `requireIndividualPlan(userId)` retains its historical name but accepts any
+  active paid plan. `requireWorkspaceOwnerPlan(workspaceId)` gates compute for
+  the workspace owner.
+- Access requires a non-Free plan in `active` or `trialing`. Stripe rows must be
+  inside their paid period plus the three-day webhook grace. `past_due` and
+  `canceled` are blocked.
+- Application admins are exempt. Provider-less paid rows are admin grants.
+- Free usage is cumulative across the account's lifetime and does not reset.
+  Paid usage resets at the start of each UTC month.
+- Durable compute claims enforce plan concurrency before an Azure start is
+  queued. Workspace creation enforces the plan's persistent-workspace limit.
+- The free monthly US$6.50 Azure budget guard remains a safety breaker in
+  addition to the five-hour lifetime allowance.
 
-## Flow
+Additional usage is intentionally not sold yet. Do not advertise top-ups or
+automatic overages until metered usage reporting and customer opt-in exist.
 
-1. `POST /api/billing/checkout` creates (once) a Stripe customer, remembers it
-   on the subscription row, and returns a Checkout Session URL.
-2. The member pays on Stripe. On return, `/settings/personal/billing` syncs the
-   finished session immediately; the webhook is the durable path.
-3. `POST /api/billing/webhook` verifies the signature, re-fetches the
-   subscription from Stripe (never trusts the payload), and upserts the row.
-   Handled events: `checkout.session.completed`,
-   `customer.subscription.created|updated|deleted`, `invoice.paid`,
-   `invoice.payment_failed`. Processed event ids are stored in
-   `stripe_webhook_events`; a failure returns 500 so Stripe retries.
-4. `POST /api/billing/portal` opens the Stripe Customer Portal (card, invoices,
-   cancel). Cancelling keeps access until the period ends.
+## Checkout and synchronization
+
+1. `POST /api/billing/checkout` validates `{ planId: "pro" | "power" | "team" }`,
+   creates or reuses the member's Stripe customer, and starts Checkout.
+2. Checkout stamps `userId` and `planId` on the subscription. The return page
+   syncs immediately; webhooks remain the durable path.
+3. Subscription sync maps a configured Stripe price ID to a CoDev plan. An
+   unknown price never grants access.
+4. `POST /api/billing/portal` opens the configured Customer Portal. The portal
+   allows prorated switching among Individual, Power, and Team, plus payment
+   updates, invoices, and cancellation.
+
+Handled webhook events are `checkout.session.completed`,
+`customer.subscription.created|updated|deleted`, `invoice.paid`, and
+`invoice.payment_failed`. Processed event IDs are stored in
+`stripe_webhook_events`.
 
 ## Environment (server only)
 
-| Variable                         | Purpose                                             |
-| -------------------------------- | --------------------------------------------------- |
-| `STRIPE_SECRET_KEY`              | Stripe API key (`sk_...` or a restricted `rk_...`)  |
-| `STRIPE_WEBHOOK_SECRET`          | `whsec_...` of the webhook endpoint                 |
-| `STRIPE_PRICE_ID_INDIVIDUAL`     | `price_...` of the $20/month recurring price        |
-| `STRIPE_PORTAL_CONFIGURATION_ID` | Optional `bpc_...`; omit to use the account default |
+| Variable                         | Purpose                                          |
+| -------------------------------- | ------------------------------------------------ |
+| `STRIPE_SECRET_KEY`              | Stripe API key for the current mode              |
+| `STRIPE_WEBHOOK_SECRET`          | Signing secret for the webhook endpoint          |
+| `STRIPE_PRICE_ID_INDIVIDUAL`     | $20 monthly recurring price                      |
+| `STRIPE_PRICE_ID_POWER`          | $50 monthly recurring price                      |
+| `STRIPE_PRICE_ID_TEAM`           | $99 monthly recurring price                      |
+| `STRIPE_PORTAL_CONFIGURATION_ID` | Portal configuration with plan switching enabled |
 
-Vercel **Production** uses live keys; **Preview** and local use a Stripe sandbox.
-A restricted key needs write access to Customers, Checkout Sessions, Customer
-portal and Subscriptions (read is enough for Subscriptions).
+Local and Preview use the Stripe sandbox. Production must use the matching live
+price and portal IDs; never mix IDs across modes.
 
-## Provisioning
+## Provisioned Stripe objects
 
-```bash
-# product + recurring price (add --live for the live account)
-stripe products create --name "CoDev Individual"
-stripe prices create --product prod_... --currency usd --unit-amount 2000 \
-  -d "recurring[interval]=month" --lookup-key codev_individual_monthly
-# webhook (pin the API version to the SDK's)
-stripe webhook_endpoints create --url https://www.trycodev.com/api/billing/webhook \
-  --api-version 2026-08-26.dahlia \
-  -d "enabled_events[]=checkout.session.completed" \
-  -d "enabled_events[]=customer.subscription.created" \
-  -d "enabled_events[]=customer.subscription.updated" \
-  -d "enabled_events[]=customer.subscription.deleted" \
-  -d "enabled_events[]=invoice.paid" \
-  -d "enabled_events[]=invoice.payment_failed"
-# local development
-stripe listen --forward-to localhost:3000/api/billing/webhook
-```
+Lookup keys are stable across modes:
 
-Apply migration `0064_stripe_billing` to the database before deploying.
+- `codev_individual_monthly`
+- `codev_power_monthly`
+- `codev_team_monthly`
+
+The Stripe products carry `plan_id`, `monthly_hours`, `workspace_limit`, and
+`active_workspace_limit` metadata for operator visibility. Runtime enforcement
+uses the checked-in catalog, not mutable Stripe metadata.
+
+## Database rollout
+
+Run `pnpm db:migrate` immediately before deploying the matching application
+build. Migrations `0072_add_power_plan_enum` and `0073_expand_compute_claims`
+add the `power` enum value and change compute claims to a composite key so paid
+tiers can reserve concurrent workspaces. The migration command seeds the Power
+plan after PostgreSQL commits the new enum value. Do not apply `0073` while old
+application instances still use owner-only claim conflicts.
 
 ## Troubleshooting
 
-- Member paid but is blocked: check their `organization_subscriptions` row
-  (`provider = 'stripe'`, `status`, `current_period_end`), then the webhook
-  delivery log in Stripe. Re-sending the event repairs the row.
-- Webhooks 400: wrong `STRIPE_WEBHOOK_SECRET` for the mode (live vs sandbox).
-- Refunds, tax and invoices are handled in the Stripe Dashboard.
+- Paid member is blocked: compare the subscription item price to the matching
+  environment variable, then inspect `organization_subscriptions` and Stripe
+  webhook deliveries.
+- Portal lacks plan choices: verify the configured portal belongs to the same
+  Stripe mode and has subscription updates enabled for all three products.
+- Webhooks return 400: the signing secret belongs to a different endpoint or
+  mode.
+- Checkout returns 503: the selected tier's price environment variable is
+  missing.
 
-## Legal disclosures and deletion
-
-Checkout requires Stripe terms consent and attaches policy version metadata.
-Configure public policy URLs in Stripe business settings before release; see
-[LEGAL.md](./LEGAL.md). Account deletion expires open checkouts and deletes the
-Stripe customer, so the restricted key also needs Checkout Sessions read/write
-and Customers write. Normal cancellation through the portal remains available.
-Support and refund requests go to admins@trycodev.com.
+Checkout requires terms consent and attaches policy version metadata. Refunds,
+tax, invoices, and cancellation are handled through Stripe; see [LEGAL.md](./LEGAL.md).

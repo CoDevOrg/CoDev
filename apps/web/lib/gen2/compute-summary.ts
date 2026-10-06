@@ -10,7 +10,7 @@ export async function getOwnerComputeSummary(
 ): Promise<Gen2OwnerComputeSummary> {
   const policy = await getWorkspaceOwnerEntitlement(ownerId);
   const [used, budget] = await Promise.all([
-    usedComputeMs(ownerId, now),
+    usedComputeMs(ownerId, now, undefined, policy.usageWindow),
     policy.tier === "free" && policy.enabled
       ? getOwnerBudget(ownerId, now)
       : null,
@@ -20,11 +20,15 @@ export async function getOwnerComputeSummary(
     minutesLimit:
       policy.monthlyLimitMs === null ? null : policy.monthlyLimitMs / 60_000,
     unlimited: policy.unlimited,
-    resetsAt: computeMonth(now).end.toISOString(),
+    resetsAt:
+      policy.usageWindow === "month"
+        ? computeMonth(now).end.toISOString()
+        : null,
     tier: policy.tier,
     freeEnabled: policy.tier === "free" && policy.enabled,
     ownedWorkspaceCount: policy.ownedWorkspaceCount,
-    activeWorkspaceLimit: policy.tier === "free" ? 1 : null,
+    workspaceLimit: policy.workspaceLimit,
+    activeWorkspaceLimit: policy.activeWorkspaceLimit,
     armBootMinutesCount: true,
     budget,
   };

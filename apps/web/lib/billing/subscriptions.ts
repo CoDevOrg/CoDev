@@ -7,7 +7,7 @@ import { schema } from "@codev/db";
 
 import { getDatabase } from "../platform/database";
 import { logEvent } from "../platform/observability";
-import { INDIVIDUAL_PLAN_ID } from "./config";
+import { selfServePlanIdForStripePrice } from "./config";
 
 type SubscriptionStatus =
   (typeof schema.organizationSubscriptions.$inferSelect)["status"];
@@ -108,6 +108,24 @@ export async function syncStripeSubscription(
   const status = mapStripeStatus(subscription.status);
   if (!status) return { synced: false, reason: "subscription_incomplete" };
 
+  const priceIds = subscription.items.data
+    .map((item) => stripeId(item.price))
+    .filter((id): id is string => Boolean(id));
+  const planId =
+    priceIds.map(selfServePlanIdForStripePrice).find(Boolean) ??
+    (subscription.metadata?.planId === "pro" ||
+    subscription.metadata?.planId === "power" ||
+    subscription.metadata?.planId === "team"
+      ? subscription.metadata.planId
+      : null);
+  if (status !== "canceled" && !planId) {
+    logEvent("warn", "billing.subscription.unknown_price", {
+      subscription: subscription.id,
+      priceIds,
+    });
+    return { synced: false, reason: "unknown_price" };
+  }
+
   const organizationId = await resolveOrganizationId(subscription);
   if (!organizationId) {
     logEvent("warn", "billing.subscription.unmatched", {
@@ -142,7 +160,7 @@ export async function syncStripeSubscription(
   const periodEnd = subscriptionPeriodEnd(subscription);
   const values = {
     // A canceled subscription drops the member back to Free.
-    planId: status === "canceled" ? ("free" as const) : INDIVIDUAL_PLAN_ID,
+    planId: status === "canceled" ? ("free" as const) : planId!,
     status,
     provider: "stripe",
     providerCustomerId: customerId,

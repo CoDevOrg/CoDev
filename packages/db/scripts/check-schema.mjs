@@ -33,6 +33,22 @@ try {
     FROM public.gen2_agent_turns LIMIT 0`);
   await pool.query(`SELECT id, runtime_provider, runtime_status, runtime_generation,
     runtime_route_host FROM public.gen2_workspaces LIMIT 0`);
+  const powerPlan = await pool.query(
+    `SELECT id FROM public.plans
+      WHERE id = 'power'::public.subscription_plan AND active = true`,
+  );
+  if (powerPlan.rowCount !== 1) {
+    throw new Error("The active Power billing plan is missing.");
+  }
+  const computeClaimKey = await pool.query(
+    `SELECT 1 FROM pg_constraint
+      WHERE conrelid = 'public.gen2_free_compute_claims'::regclass
+        AND conname = 'gen2_free_compute_claims_owner_id_workspace_id_pk'
+        AND contype = 'p'`,
+  );
+  if (computeClaimKey.rowCount !== 1) {
+    throw new Error("The compute claim concurrency key is missing.");
+  }
   console.log("Gen 2 runtime and agent storage schema is ready.");
 } catch (error) {
   console.error(

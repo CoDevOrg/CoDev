@@ -9,11 +9,11 @@ const content = (
     <section>
       <h2>What you purchase</h2>
       <p>
-        The Individual subscription provides the CoDev features and limits shown
-        on our <Link href="/pricing">pricing page</Link>. It renews monthly at
-        the amount and currency displayed in Stripe Checkout until canceled.
-        Separate AI-provider subscriptions and API charges are not included
-        unless expressly stated.
+        A paid subscription provides the CoDev features and limits shown for the
+        selected tier on our <Link href="/pricing">pricing page</Link>. It
+        renews monthly at the amount and currency displayed in Stripe Checkout
+        until canceled. Separate AI-provider subscriptions and API charges are
+        not included unless expressly stated.
       </p>
     </section>
     <section>

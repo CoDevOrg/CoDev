@@ -19,6 +19,8 @@ import { Gen2LifecycleError } from "./errors";
 import { initializeGen2ArmWorkspace } from "./arm-workspace-initialize";
 import { getDatabase } from "../platform/database";
 import { logEvent } from "../platform/observability";
+import { fakeGuestEnabled } from "../runtime/fake-guest";
+import { getSandbox } from "../runtime/orchestrator-sandbox";
 import {
   ArmWorkspaceProvider,
   ArmWorkspaceRuntimeError,
@@ -405,6 +407,13 @@ export async function queueAzureWorkspaceDelete(
 export async function checkAzureWorkspaceConnection(workspaceId: string) {
   const row = await loadRuntimeRow(workspaceId);
   if (row.runtimeStatus !== "ready") return false;
+  if (fakeGuestEnabled()) {
+    try {
+      return (await getSandbox(workspaceId, 8_000)).status === "ready";
+    } catch {
+      return false;
+    }
+  }
   return new ArmWorkspaceProvider().healthy(
     row.id,
     row.runtimeGeneration,

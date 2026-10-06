@@ -5,11 +5,8 @@ import type { Gen2OwnerComputeEntitlement } from "@codev/contracts";
 import { getDatabase } from "../platform/database";
 import type { ComputeDatabase } from "../gen2/compute-database";
 import { resolveBillingAccess } from "./access";
-import {
-  GEN2_PAID_MONTHLY_COMPUTE_LIMIT_MS,
-  GEN2_FREE_ONE_WORKSPACE_LIMIT_MS,
-  GEN2_FREE_TWO_WORKSPACE_LIMIT_MS,
-} from "./config";
+import { GEN2_FREE_LIFETIME_COMPUTE_LIMIT_MS } from "./config";
+import { FREE_PLAN, getBillingPlan } from "./plans";
 
 export async function getWorkspaceOwnerEntitlement(
   ownerId: string,
@@ -32,10 +29,14 @@ export async function getWorkspaceOwnerEntitlement(
       .where(eq(schema.gen2Workspaces.ownerId, ownerId)),
   ]);
   const unlimited = Boolean(user?.isAdmin);
-  const paid = resolveBillingAccess({
+  const access = resolveBillingAccess({
     isAdmin: unlimited,
     row: subscription ?? null,
-  }).hasAccess;
+  });
+  const paid = access.hasAccess;
+  const plan = getBillingPlan(
+    access.source === "admin" ? "enterprise" : (subscription?.planId ?? "free"),
+  );
   const countOwned = owned?.count ?? 0;
   const allowed = process.env.GEN2_FREE_ARM_OWNER_IDS?.split(",")
     .map((id) => id.trim())
@@ -48,12 +49,21 @@ export async function getWorkspaceOwnerEntitlement(
     enabled: paid || enabled,
     unlimited,
     ownedWorkspaceCount: countOwned,
+    usageWindow: paid ? "month" : "lifetime",
     monthlyLimitMs: unlimited
       ? null
-      : paid || !enabled
-        ? GEN2_PAID_MONTHLY_COMPUTE_LIMIT_MS
-        : countOwned >= 2
-          ? GEN2_FREE_TWO_WORKSPACE_LIMIT_MS
-          : GEN2_FREE_ONE_WORKSPACE_LIMIT_MS,
+      : paid
+        ? (plan.monthlyComputeHours ?? 0) * 3_600_000
+        : GEN2_FREE_LIFETIME_COMPUTE_LIMIT_MS,
+    workspaceLimit: unlimited
+      ? 20
+      : paid
+        ? plan.workspaceLimit
+        : FREE_PLAN.workspaceLimit,
+    activeWorkspaceLimit: unlimited
+      ? 10
+      : paid
+        ? plan.activeWorkspaceLimit
+        : FREE_PLAN.activeWorkspaceLimit,
   };
 }

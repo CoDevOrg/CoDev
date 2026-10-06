@@ -4,7 +4,10 @@ vi.mock("./workspace-entitlement", () => ({
     enabled: true,
     unlimited: false,
     ownedWorkspaceCount: 1,
+    usageWindow: "month",
     monthlyLimitMs: 60_000_000,
+    workspaceLimit: 1,
+    activeWorkspaceLimit: 1,
   })),
 }));
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -27,6 +30,9 @@ vi.mock("../platform/database", () => ({
 }));
 vi.mock("./access", () => ({
   requireIndividualPlan: (...args: unknown[]) => mocks.require(...args),
+}));
+vi.mock("../gen2/free-compute-claim", () => ({
+  reserveFreeWorkspaceCompute: vi.fn(),
 }));
 
 import { requireWorkspaceOwnerPlan } from "./gate";

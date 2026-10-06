@@ -22,7 +22,9 @@ vi.mock("../platform/database", () => ({
   }),
 }));
 vi.mock("./access", () => accessMock);
-vi.mock("./config", () => ({ requireBillingEnv: () => "price_test" }));
+vi.mock("./config", () => ({
+  stripePriceIdForPlan: () => "price_test",
+}));
 vi.mock("./stripe", () => ({ getStripe: () => stripeMock }));
 vi.mock("./subscriptions", () => ({
   stripeId: (value: unknown) =>
@@ -95,7 +97,7 @@ describe("createCheckoutSession customer", () => {
       providerCustomerId: "cus_old",
     });
     stripeMock.customers.retrieve.mockResolvedValue({ id: "cus_old" });
-    await createCheckoutSession(member, "https://app.test");
+    await createCheckoutSession(member, "https://app.test", "pro");
     expect(stripeMock.customers.create).not.toHaveBeenCalled();
     expect(stripeMock.checkout.sessions.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -114,7 +116,7 @@ describe("createCheckoutSession customer", () => {
     stripeMock.customers.retrieve.mockRejectedValue({
       code: "resource_missing",
     });
-    await createCheckoutSession(member, "https://app.test");
+    await createCheckoutSession(member, "https://app.test", "pro");
     expect(stripeMock.customers.create).toHaveBeenCalledOnce();
     expect(stripeMock.checkout.sessions.create).toHaveBeenCalledWith(
       expect.objectContaining({ customer: "cus_new" }),

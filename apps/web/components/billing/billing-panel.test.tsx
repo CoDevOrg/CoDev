@@ -13,7 +13,10 @@ const base: BillingStatus = {
   currentPeriodEnd: null,
   cancelAtPeriodEnd: false,
   hasStripeCustomer: false,
-  priceUsdPerMonth: 20,
+  priceUsdPerMonth: 0,
+  monthlyComputeHours: null,
+  workspaceLimit: 1,
+  activeWorkspaceLimit: 1,
 };
 
 describe("BillingPanel", () => {
@@ -21,9 +24,9 @@ describe("BillingPanel", () => {
 
   it("offers a $20 subscription to a member with no plan", () => {
     render(<BillingPanel status={base} />);
-    expect(screen.getByText("Not subscribed")).toBeInTheDocument();
+    expect(screen.getByText("Unavailable")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Subscribe for $20/month" }),
+      screen.getByRole("button", { name: "Choose Individual" }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Manage billing" })).toBeNull();
   });
@@ -48,7 +51,7 @@ describe("BillingPanel", () => {
       screen.getByText(/Renews on November 1, 2026\./),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Manage billing" }),
+      screen.getByRole("button", { name: "Manage or change plan" }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Subscribe/ })).toBeNull();
   });
@@ -121,12 +124,14 @@ describe("BillingPanel", () => {
       ),
     );
     render(<BillingPanel status={base} />);
-    fireEvent.click(screen.getByRole("button", { name: /Subscribe/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Choose Individual" }));
     await waitFor(() =>
       expect(assign).toHaveBeenCalledWith("https://checkout.stripe.com/x"),
     );
     expect(fetch).toHaveBeenCalledWith("/api/billing/checkout", {
       method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ planId: "pro" }),
     });
   });
 
@@ -144,7 +149,7 @@ describe("BillingPanel", () => {
       ),
     );
     render(<BillingPanel status={base} />);
-    fireEvent.click(screen.getByRole("button", { name: /Subscribe/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Choose Individual" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Billing is not configured.",
     );

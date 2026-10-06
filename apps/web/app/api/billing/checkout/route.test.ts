@@ -23,7 +23,11 @@ import { POST } from "./route";
 
 const call = () =>
   POST(
-    new Request("https://codev.test/api/billing/checkout", { method: "POST" }),
+    new Request("https://codev.test/api/billing/checkout", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ planId: "power" }),
+    }),
     { params: Promise.resolve({}) },
   );
 
@@ -49,6 +53,7 @@ describe("billing checkout route", () => {
     expect(mocks.create).toHaveBeenCalledWith(
       expect.objectContaining({ id: "user-1" }),
       "https://codev.test",
+      "power",
     );
   });
 

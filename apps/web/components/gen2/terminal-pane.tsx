@@ -366,7 +366,7 @@ export function Gen2TerminalPane({
         <div className="gen2-term-start is-loading">
           <WorkspaceLoading
             busy={false}
-            title="An Individual plan is required"
+            title="An active paid plan is required"
             description="The shell opens after the workspace owner subscribes."
             action={
               <WorkspaceButton

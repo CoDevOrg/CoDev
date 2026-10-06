@@ -10,14 +10,15 @@ export async function workspaceCreationPolicy(
   ownedCount: number,
   acknowledgeReducedQuota: boolean,
 ) {
+  void acknowledgeReducedQuota;
   const policy = await getWorkspaceOwnerEntitlement(ownerId, db);
-  if (policy.tier === "paid") return "azure_arm" as const;
-  if (!policy.enabled) throw new BillingRequiredError();
-  if (ownedCount >= 1 && !acknowledgeReducedQuota) {
+  if (ownedCount >= policy.workspaceLimit) {
     throw new Gen2LifecycleError(
-      "Adding a second workspace gives you more storage and changes your monthly workspace time from 50 hours to 35 hours. Both workspaces share those 35 hours. Acknowledge this change before creating it.",
+      `Your plan includes ${policy.workspaceLimit} workspace${policy.workspaceLimit === 1 ? "" : "s"}. Delete one or change plans to create another.`,
       409,
     );
   }
+  if (policy.tier === "paid") return "azure_arm" as const;
+  if (!policy.enabled) throw new BillingRequiredError();
   return "azure_arm" as const;
 }

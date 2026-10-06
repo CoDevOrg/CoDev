@@ -7,10 +7,9 @@ import { Card } from "@/components/ui/card";
 
 /** Shown where a workspace would be created when the member has no plan. */
 export function SubscribeCallout({
-  priceUsdPerMonth,
   pastDue = false,
 }: {
-  priceUsdPerMonth: number;
+  priceUsdPerMonth?: number;
   pastDue?: boolean;
 }) {
   if (pastDue) {
@@ -37,13 +36,14 @@ export function SubscribeCallout({
       <div className="space-y-5">
         <div className="space-y-2">
           <p className="text-[11px] font-semibold tracking-[0.12em] text-primary uppercase">
-            Individual plan
+            Hosted workspace plans
           </p>
           <h2 className="text-2xl font-semibold tracking-tight">
             Subscribe to create workspaces
           </h2>
           <p className="max-w-lg text-sm leading-relaxed text-muted-foreground">
-            One plan, everything included. Teammates you invite join at no cost.
+            Choose the workspace hours and concurrency you need. Teammates you
+            invite join at no cost.
           </p>
         </div>
         <ul className="space-y-2 text-sm">
@@ -62,13 +62,16 @@ export function SubscribeCallout({
       <div className="flex flex-col gap-4 md:w-60 md:items-stretch">
         <p className="flex items-baseline gap-1.5">
           <span className="text-5xl font-semibold tracking-tight tabular-nums">
-            ${priceUsdPerMonth}
+            $20
           </span>
           <span className="text-sm text-muted-foreground">/ month</span>
         </p>
-        <BillingButton action="checkout" fullWidth size="lg" variant="solid">
-          Subscribe
-        </BillingButton>
+        <Link
+          className="inline-flex h-11 items-center justify-center rounded-full bg-foreground px-6 text-[15px] font-semibold text-background transition-opacity hover:opacity-90"
+          href="/pricing"
+        >
+          Compare plans
+        </Link>
         <div className="space-y-1.5 text-xs text-muted-foreground">
           <p className="flex items-center gap-1.5">
             <Lock aria-hidden className="size-3" />

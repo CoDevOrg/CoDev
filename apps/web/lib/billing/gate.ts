@@ -30,6 +30,7 @@ export async function requireWorkspaceOwnerPlan(workspaceId: string) {
     workspace.runtimeProvider !== "azure_arm"
   ) {
     await requireIndividualPlan(workspace.ownerId);
+    await reserveFreeWorkspaceCompute(workspaceId);
     return;
   }
   await reserveFreeWorkspaceCompute(workspaceId);

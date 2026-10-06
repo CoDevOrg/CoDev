@@ -239,7 +239,7 @@ Focus: 2px `--ws-accent` outline, 1px offset, `:focus-visible` only. Hover: 120m
 
 Three zones. Right zone `flex-shrink: 0`. Center truncates first. Left truncates next.
 
-1. **Left:** back link to `/` (signed-in visitors land on the workspace list), 22×22 CoDev mark (`/brand/codev-mark-v3.png`, recolored with `--brand-logo-filter`), rail toggle, workspace name (13px semibold), branch pill (mono 12px).
+1. **Left:** back link to `/` (signed-in visitors land on the workspace list), 22×22 CoDev mark (`/brand/codev-mark.svg`, recolored with `--brand-logo-filter`), rail toggle, workspace name (13px semibold), branch pill (mono 12px).
    - ≤1023px: hide breadcrumb.
    - ≤768px: hide branch name/status; keep the pill as an icon button.
 2. **Center:** session card (surface-3, 32px): provider mark, title max 240px (180px below 1440), working chip only while a turn is actually running. Hide the whole center at ≤1279px.

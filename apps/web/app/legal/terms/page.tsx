@@ -70,7 +70,7 @@ const content = (
     <section>
       <h2>Subscriptions, cancellation and refunds</h2>
       <p>
-        The Individual plan is billed monthly in USD at the price shown at
+        Paid plans are billed monthly in USD at the selected tier price shown at
         checkout. Any applicable taxes and discounts are shown before payment.
         Subscriptions renew automatically until canceled. You authorize
         recurring charges only when confirming the purchase in checkout.

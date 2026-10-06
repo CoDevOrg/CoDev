@@ -26,7 +26,6 @@ import {
   destroySandbox,
   discardSandboxSnapshot,
 } from "../runtime/orchestrator-sandbox";
-import { GEN2_MAX_OWNED_WORKSPACES } from "./constants";
 import {
   endComputeSession,
   transferActiveComputeSession,
@@ -84,13 +83,6 @@ export async function createGen2Workspace(
         .select({ count: count() })
         .from(schema.gen2Workspaces)
         .where(eq(schema.gen2Workspaces.ownerId, userId));
-      if ((owned?.count ?? 0) >= GEN2_MAX_OWNED_WORKSPACES) {
-        throw new Gen2LifecycleError(
-          `You can own up to ${GEN2_MAX_OWNED_WORKSPACES} Gen 2 workspaces. Delete one to create another.`,
-          409,
-        );
-      }
-
       const runtimeProvider = await workspaceCreationPolicy(
         transaction,
         userId,

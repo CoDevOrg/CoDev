@@ -70,6 +70,7 @@ describe("database schema", () => {
     expect(subscriptionPlan.enumValues).toEqual([
       "free",
       "pro",
+      "power",
       "team",
       "enterprise",
     ]);

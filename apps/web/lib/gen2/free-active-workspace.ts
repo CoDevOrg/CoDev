@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, isNull, isNotNull, ne, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import { schema } from "@codev/db";
 import type { ComputeDatabase } from "./compute-database";
 
@@ -8,7 +8,7 @@ export async function findOtherOwnerCompute(
   ownerId: string,
   workspaceId: string,
 ) {
-  const [other] = await db
+  const others = await db
     .select({ id: schema.gen2Workspaces.id, name: schema.gen2Workspaces.name })
     .from(schema.gen2Workspaces)
     .leftJoin(
@@ -27,14 +27,20 @@ export async function findOtherOwnerCompute(
         eq(schema.gen2Workspaces.ownerId, ownerId),
         ne(schema.gen2Workspaces.id, workspaceId),
         or(
-          eq(schema.gen2Workspaces.status, "ready"),
-          eq(schema.gen2Workspaces.status, "provisioning"),
-          isNotNull(schema.gen2Workspaces.runtimeVmResourceId),
+          inArray(schema.gen2Workspaces.runtimeStatus, [
+            "queued",
+            "provisioning",
+            "booting",
+            "attaching_disk",
+            "starting_tunnel",
+            "checking_readiness",
+            "ready",
+            "stopping",
+          ]),
           eq(schema.gen2FreeComputeClaims.ownerId, ownerId),
           eq(schema.gen2ComputeSessions.ownerId, ownerId),
         ),
       ),
-    )
-    .limit(1);
-  return other ?? null;
+    );
+  return Array.from(new Map(others.map((row) => [row.id, row])).values());
 }

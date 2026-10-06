@@ -128,7 +128,7 @@ describe("Gen2WorkspaceRoom", () => {
     render(<Gen2WorkspaceRoom workspace={workspace} />);
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent(/needs an active Individual plan/);
+    expect(alert).toHaveTextContent(/needs an active paid plan/);
     expect(screen.getByRole("link", { name: "Subscribe" })).toHaveAttribute(
       "href",
       "/settings/personal/billing",

@@ -22,7 +22,10 @@ vi.mock("../billing/workspace-entitlement", () => ({
     enabled: true,
     unlimited: await mocks.isAdmin(),
     ownedWorkspaceCount: 1,
-    monthlyLimitMs: (await mocks.isAdmin()) ? null : 60_000_000,
+    usageWindow: "month",
+    monthlyLimitMs: (await mocks.isAdmin()) ? null : 40 * 3_600_000,
+    workspaceLimit: 1,
+    activeWorkspaceLimit: 1,
   })),
 }));
 
@@ -59,7 +62,7 @@ describe("monthly VM minute allowance", () => {
     expect(await usedComputeMs("owner", now)).toBe(120 * 60_000);
   });
 
-  it("rejects new runtime use at 1,000 minutes", async () => {
+  it("rejects new runtime use at the Individual allowance", async () => {
     const now = new Date("2026-10-10T00:00:00Z");
     mocks.intervals.push({
       startedAt: new Date(now.getTime() - MONTHLY_COMPUTE_LIMIT_MS),

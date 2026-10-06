@@ -1,0 +1,1 @@
+ALTER TYPE "public"."subscription_plan" ADD VALUE 'power' BEFORE 'team';

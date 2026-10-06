@@ -15,7 +15,10 @@ const policy: Gen2OwnerComputeEntitlement = {
   enabled: true,
   unlimited: false,
   ownedWorkspaceCount: 1,
+  usageWindow: "month",
   monthlyLimitMs: 60_000_000,
+  workspaceLimit: 2,
+  activeWorkspaceLimit: 2,
 };
 
 describe("workspace runtime creation policy", () => {
@@ -52,14 +55,15 @@ describe("workspace runtime creation policy", () => {
     );
   });
 
-  it("still requires a free owner's second-workspace quota acknowledgment", async () => {
-    mocks.entitlement.mockResolvedValue({ ...policy, tier: "free" });
+  it("enforces the workspace limit without a legacy quota acknowledgment", async () => {
+    mocks.entitlement.mockResolvedValue({
+      ...policy,
+      tier: "free",
+      workspaceLimit: 1,
+    });
 
     await expect(
       workspaceCreationPolicy(db, "owner", 1, false),
     ).rejects.toMatchObject({ status: 409 });
-    await expect(workspaceCreationPolicy(db, "owner", 1, true)).resolves.toBe(
-      "azure_arm",
-    );
   });
 });

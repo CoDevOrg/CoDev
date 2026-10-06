@@ -69,6 +69,7 @@ export const organizationRole = pgEnum("organization_role", [
 export const subscriptionPlan = pgEnum("subscription_plan", [
   "free",
   "pro",
+  "power",
   "team",
   "enterprise",
 ]);
@@ -1761,18 +1762,22 @@ export const userComputeUsage = pgTable("user_compute_usage", {
     .notNull(),
 });
 
-/** One durable startup/compute reservation per free owner. */
-export const gen2FreeComputeClaims = pgTable("gen2_free_compute_claims", {
-  ownerId: uuid("owner_id")
-    .primaryKey()
-    .references(() => users.id, { onDelete: "cascade" }),
-  workspaceId: uuid("workspace_id")
-    .notNull()
-    .references(() => gen2Workspaces.id, { onDelete: "cascade" }),
-  claimedAt: timestamp("claimed_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-});
+/** Durable startup/compute reservations used to enforce plan concurrency. */
+export const gen2FreeComputeClaims = pgTable(
+  "gen2_free_compute_claims",
+  {
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => gen2Workspaces.id, { onDelete: "cascade" }),
+    claimedAt: timestamp("claimed_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.workspaceId] })],
+);
 
 /** Complete, cumulative USD cost snapshots from the trusted billing collector. */
 export const gen2OwnerBudgets = pgTable(

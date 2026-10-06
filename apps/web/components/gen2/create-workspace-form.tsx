@@ -23,7 +23,6 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { GEN2_MAX_OWNED_WORKSPACES } from "@/lib/gen2/constants";
 import { cn } from "@/lib/platform/utils";
 
 type Loaded<T> = {
@@ -66,7 +65,8 @@ export function CreateGen2WorkspaceForm({
   connectGitHub?: (() => void) | undefined;
 }) {
   const router = useRouter();
-  const atWorkspaceLimit = ownedWorkspaceCount >= GEN2_MAX_OWNED_WORKSPACES;
+  const workspaceLimit = computeSummary?.workspaceLimit ?? 1;
+  const atWorkspaceLimit = ownedWorkspaceCount >= workspaceLimit;
   const [source, setSource] = useState<"blank" | "github">("blank");
   const [name, setName] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
@@ -77,14 +77,8 @@ export function CreateGen2WorkspaceForm({
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [acknowledgeReducedQuota, setAcknowledgeReducedQuota] = useState(false);
-
   const isFreeTier =
     computeSummary?.tier === "free" && computeSummary.freeEnabled;
-  const isSecondFreeWorkspace = Boolean(isFreeTier && ownedWorkspaceCount >= 1);
-  const usageExceeds35Hours = Boolean(
-    computeSummary && computeSummary.minutesUsed >= 2100,
-  );
 
   // Loading is derived, not stored: a result belongs to the request key that
   // produced it, so "no result for the current key yet" means "loading".
@@ -179,10 +173,7 @@ export function CreateGen2WorkspaceForm({
     (installsFailed && installs?.authFailed === true) ||
     (reposFailed && repos?.authFailed === true);
   const canCreate =
-    !busy &&
-    !atWorkspaceLimit &&
-    (source === "blank" || selectedRepo !== null) &&
-    (!isSecondFreeWorkspace || acknowledgeReducedQuota);
+    !busy && !atWorkspaceLimit && (source === "blank" || selectedRepo !== null);
 
   async function create() {
     const trimmedName = name.trim();
@@ -191,9 +182,6 @@ export function CreateGen2WorkspaceForm({
     if (source === "github" && selectedRepo && installationId !== null) {
       body.installationId = selectedRepo.installationId ?? installationId;
       body.repositoryId = selectedRepo.id;
-    }
-    if (acknowledgeReducedQuota) {
-      body.acknowledgeReducedQuota = true;
     }
 
     setBusy(true);
@@ -244,10 +232,10 @@ export function CreateGen2WorkspaceForm({
             </CardDescription>
           </div>
           <Badge
-            aria-label={`You own ${ownedWorkspaceCount} of ${GEN2_MAX_OWNED_WORKSPACES} workspaces`}
+            aria-label={`You own ${ownedWorkspaceCount} of ${workspaceLimit} workspaces`}
             variant={atWorkspaceLimit ? "default" : "muted"}
           >
-            {ownedWorkspaceCount} of {GEN2_MAX_OWNED_WORKSPACES} used
+            {ownedWorkspaceCount} of {workspaceLimit} used
           </Badge>
         </CardHeader>
 
@@ -502,49 +490,10 @@ export function CreateGen2WorkspaceForm({
             </p>
           ) : null}
 
-          {isSecondFreeWorkspace ? (
-            <div className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-foreground">
-              <p className="font-medium text-amber-900 dark:text-amber-200">
-                Adding a second workspace gives you more storage and changes
-                your monthly workspace time from 50 hours to 35 hours. Both
-                workspaces share those 35 hours.
-              </p>
-              {usageExceeds35Hours && computeSummary ? (
-                <p className="text-amber-800 dark:text-amber-300">
-                  Your current monthly usage (
-                  {Math.floor(computeSummary.minutesUsed / 60)} hours) already
-                  exceeds 35 hours. Both workspaces remain saved but cannot run
-                  until the next UTC reset (
-                  {new Date(computeSummary.resetsAt).toLocaleDateString(
-                    "en-US",
-                    { month: "short", day: "numeric", timeZone: "UTC" },
-                  )}
-                  ).
-                </p>
-              ) : null}
-              <label
-                htmlFor="gen2-ack-reduced-quota"
-                className="flex cursor-pointer items-start gap-2.5 font-medium"
-              >
-                <input
-                  type="checkbox"
-                  id="gen2-ack-reduced-quota"
-                  checked={acknowledgeReducedQuota}
-                  onChange={(e) => setAcknowledgeReducedQuota(e.target.checked)}
-                  className="mt-0.5 size-4 rounded border-border"
-                />
-                <span>
-                  I acknowledge that monthly workspace time changes to 35 shared
-                  hours.
-                </span>
-              </label>
-            </div>
-          ) : null}
-
           {atWorkspaceLimit ? (
             <p className="text-sm text-muted-foreground" role="status">
-              You own {ownedWorkspaceCount} of {GEN2_MAX_OWNED_WORKSPACES} Gen 2
-              workspaces. Delete one to create another.
+              You own {ownedWorkspaceCount} of {workspaceLimit} Gen 2
+              workspaces. Delete one or change plans to create another.
             </p>
           ) : null}
 

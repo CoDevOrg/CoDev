@@ -1,7 +1,6 @@
 "use client";
 
 import type { Gen2OwnerComputeSummary } from "@codev/contracts";
-import { GEN2_MAX_OWNED_WORKSPACES } from "@/lib/gen2/constants";
 
 function formatUtcReset(isoDate: string): string {
   try {
@@ -28,9 +27,7 @@ export function WorkspaceComputeStatsCards({
   if (!computeSummary) {
     return (
       <div className="gen2-stat-card">
-        <span className="gen2-stat-value">
-          {ownedCount} of {GEN2_MAX_OWNED_WORKSPACES}
-        </span>
+        <span className="gen2-stat-value">{ownedCount}</span>
         <span className="gen2-stat-label">Owned workspaces</span>
       </div>
     );
@@ -50,7 +47,7 @@ export function WorkspaceComputeStatsCards({
     <>
       <div className="gen2-stat-card">
         <span className="gen2-stat-value">
-          {effectiveOwned} of {GEN2_MAX_OWNED_WORKSPACES}
+          {effectiveOwned} of {computeSummary.workspaceLimit}
         </span>
         <span className="gen2-stat-label">Owned workspaces</span>
       </div>
@@ -74,9 +71,13 @@ export function WorkspaceComputeStatsCards({
 
       <div className="gen2-stat-card">
         <span className="gen2-stat-value is-handle">
-          {formatUtcReset(computeSummary.resetsAt)}
+          {computeSummary.resetsAt
+            ? formatUtcReset(computeSummary.resetsAt)
+            : "No reset"}
         </span>
-        <span className="gen2-stat-label">Monthly reset</span>
+        <span className="gen2-stat-label">
+          {computeSummary.resetsAt ? "Monthly reset" : "Trial usage"}
+        </span>
       </div>
     </>
   );
@@ -102,13 +103,16 @@ export function WorkspaceComputeAlerts({
         role="alert"
       >
         <p className="font-semibold text-amber-900 dark:text-amber-200">
-          Monthly workspace time used
+          {computeSummary.resetsAt
+            ? "Monthly workspace time used"
+            : "Free trial time used"}
         </p>
         <p className="mt-1 text-muted-foreground">
-          You have used all {Math.floor(limit / 60)} hours for this month. Both
-          workspaces and all saved files remain safe on persistent disks.
-          Compute will resume at the next UTC reset on{" "}
-          {formatUtcReset(computeSummary.resetsAt)}.
+          You have used all {Math.floor(limit / 60)} included hours. Your
+          workspace and saved files remain safe on persistent storage.{" "}
+          {computeSummary.resetsAt
+            ? `Compute will resume at the next UTC reset on ${formatUtcReset(computeSummary.resetsAt)}.`
+            : "Choose a paid plan to reconnect."}
         </p>
       </div>
     );

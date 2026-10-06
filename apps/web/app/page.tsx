@@ -96,7 +96,7 @@ export default async function HomePage() {
       <header className="lp-nav">
         <Link className="lp-brand" href="/" aria-label="CoDev home">
           <Image
-            src="/brand/codev-mark-v3.png"
+            src="/brand/codev-mark.svg"
             alt=""
             width={32}
             height={32}
@@ -240,7 +240,7 @@ export default async function HomePage() {
 
       <footer className="lp-footer">
         <Link className="lp-brand" href="/" aria-label="CoDev home">
-          <Image src="/brand/codev-mark-v3.png" alt="" width={26} height={26} />
+          <Image src="/brand/codev-mark.svg" alt="" width={26} height={26} />
           <span>CoDev</span>
         </Link>
         <p>People and agents, building in the same room.</p>

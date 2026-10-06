@@ -29,14 +29,15 @@ the file the agent just edited.
 - Create a workspace from a GitHub repository (public repositories are cloned
   by the host, private ones arrive as a bounded snapshot the control plane
   fetched, so no GitHub token enters the VM)
-- Own up to two Gen 2 workspaces at a time; shared workspaces do not count
+- Own the persistent workspace count included with the billing plan; shared
+  workspaces do not count
 - Delete an owned workspace to remove its guest and saved disk snapshots and
   free an ownership slot
 - Run up to six active sandboxes per host; idle guests hibernate after 15
   minutes and the host stays running
-- Use up to 1,000 VM minutes per UTC month across all workspaces you own;
-  shared workspace time is charged to its owner while the VM runs, including
-  agent work after the browser closes
+- Use the shared workspace hours included with the billing plan (or five
+  lifetime hours on Free); shared workspace time is charged to its owner while
+  the VM runs, including agent work after the browser closes
 - Upload a local file onto the machine
 - A workbench beside the chat — file tree with Git status, a CodeMirror 6
   editor with revision-checked saves, a shell, and a live Git status/diff

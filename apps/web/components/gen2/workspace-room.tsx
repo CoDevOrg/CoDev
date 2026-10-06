@@ -161,7 +161,7 @@ export function Gen2WorkspaceRoom({
               </>
             ) : (
               <>
-                Running this workspace needs an active Individual plan.{" "}
+                Running this workspace needs an active paid plan.{" "}
                 <Link
                   className="gen2-ws-retry"
                   href="/settings/personal/billing"

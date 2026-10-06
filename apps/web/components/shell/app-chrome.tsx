@@ -20,7 +20,7 @@ export function Brand({ isAdminHost = false }: { isAdminHost?: boolean }) {
     >
       <Image
         className="brand-image"
-        src="/brand/codev-mark-v3.png"
+        src="/brand/codev-mark.svg"
         alt=""
         width={28}
         height={28}

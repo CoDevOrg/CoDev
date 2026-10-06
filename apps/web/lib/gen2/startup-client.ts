@@ -167,7 +167,7 @@ export async function ensureGen2WorkspaceReady(
           return {
             error:
               payload.error ??
-              "An active Individual plan is required to run this workspace.",
+              "An active paid plan is required to run this workspace.",
             subscriptionRequired: true,
           };
         }

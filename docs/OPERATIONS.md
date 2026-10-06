@@ -161,9 +161,10 @@ that name to the Worker. For a manual run, call the route with
 `Authorization: Bearer $CRON_SECRET` at
 `https://trycodev.com/api/gen2/compute/reconcile`. Monitor Cloudflare scheduled
 invocations and Worker logs. The route measures running Gen 2 guest intervals
-and hibernates an owner's active workspaces once their combined UTC-month
-usage reaches 1,000 minutes. A missed scheduled run delays enforcement, so
-alert on repeated failures.
+and hibernates an owner's active workspaces once their combined usage reaches
+the plan allowance. Paid usage resets monthly; Free's five-hour allowance is
+lifetime usage. A missed scheduled run delays enforcement, so alert on repeated
+failures.
 A failed chat start restores the draft and attachments and removes the optimistic
 message so the user can retry. Transient outages are not automatically retried
 because a start request may already have reached the server.

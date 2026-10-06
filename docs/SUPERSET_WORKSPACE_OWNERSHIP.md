@@ -129,8 +129,9 @@ host-wide managed provider environment for multi-member agent sessions.
 
 ### Current bridge boundary
 
-`CODEV_SUPERSET_RUNTIME_ENABLED` is deliberately off by default. When enabled
-for an internal workspace, the authenticated terminal and Git routes call the
+`CODEV_SUPERSET_RUNTIME_ENABLED` is on by default during local development and
+deliberately off in production. When enabled for an internal workspace, the
+authenticated terminal and Git routes call the
 private Superset runtime bridge for the selected worktree; the
 `/superset/worktrees` route lists and creates host-owned checkouts. The
 `/superset` browser page is the acceptance surface: its branch selector drives

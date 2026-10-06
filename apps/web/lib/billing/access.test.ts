@@ -166,7 +166,7 @@ describe("getBillingStatus", () => {
       status: null,
       hasAccess: false,
       hasStripeCustomer: false,
-      priceUsdPerMonth: 20,
+      priceUsdPerMonth: 0,
     });
   });
 

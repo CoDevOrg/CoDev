@@ -33,22 +33,39 @@ export async function reserveFreeWorkspaceCompute(workspaceId: string) {
         409,
       );
     const policy = await getWorkspaceOwnerEntitlement(current.ownerId, db);
-    if (policy.tier === "paid") return;
-    if (!policy.enabled || current.runtimeProvider !== "azure_arm")
+    if (
+      policy.tier === "free" &&
+      (!policy.enabled || current.runtimeProvider !== "azure_arm")
+    )
       throw new Gen2LifecycleError(
         "Free ARM compute is not enabled for this workspace.",
         403,
       );
     await assertComputeAvailable(current.ownerId, new Date(), db);
-    await assertOwnerBudget(current.ownerId, db);
-    const other = await findOtherOwnerCompute(db, current.ownerId, workspaceId);
-    if (other) throw new FreeComputeConflictError(other);
+    if (policy.tier === "free") await assertOwnerBudget(current.ownerId, db);
+    const others = await findOtherOwnerCompute(
+      db,
+      current.ownerId,
+      workspaceId,
+    );
+    if (others.length >= policy.activeWorkspaceLimit) {
+      if (policy.activeWorkspaceLimit === 1 && others[0]) {
+        throw new FreeComputeConflictError(others[0]);
+      }
+      throw new Gen2LifecycleError(
+        `Your plan allows ${policy.activeWorkspaceLimit} active workspaces at a time. Stop one or change plans to start another.`,
+        409,
+      );
+    }
     await db
       .insert(schema.gen2FreeComputeClaims)
       .values({ ownerId: current.ownerId, workspaceId })
       .onConflictDoUpdate({
-        target: schema.gen2FreeComputeClaims.ownerId,
-        set: { workspaceId, claimedAt: new Date() },
+        target: [
+          schema.gen2FreeComputeClaims.ownerId,
+          schema.gen2FreeComputeClaims.workspaceId,
+        ],
+        set: { claimedAt: new Date() },
       });
   });
 }

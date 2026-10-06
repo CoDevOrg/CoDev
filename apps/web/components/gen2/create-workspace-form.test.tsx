@@ -86,22 +86,22 @@ describe("CreateGen2WorkspaceForm", () => {
         ownedWorkspaceCount={1}
       />,
     );
-    expect(screen.getByText("1 of 2 used")).toBeInTheDocument();
-    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.getByText("1 of 1 used")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toBeInTheDocument();
   });
 
   it("blocks workspace creation when the owner limit is reached", () => {
     render(
       <CreateGen2WorkspaceForm
         githubConnected={false}
-        ownedWorkspaceCount={2}
+        ownedWorkspaceCount={1}
       />,
     );
     expect(
       screen.getByRole("button", { name: "Create workspace" }),
     ).toBeDisabled();
     expect(screen.getByRole("status")).toHaveTextContent(
-      "You own 2 of 2 Gen 2 workspaces. Delete one to create another.",
+      "You own 1 of 1 Gen 2 workspaces. Delete one or change plans to create another.",
     );
   });
 

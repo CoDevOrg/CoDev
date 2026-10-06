@@ -1,8 +1,15 @@
 "use client";
 
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import {
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  type ComponentProps,
+} from "react";
 
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/platform/utils";
 
 type Phase = "idle" | "starting" | "authorizing" | "polling" | "failed";
 
@@ -28,9 +35,15 @@ const RETURN_TO = "/settings/personal/providers";
 export function CodexHostedConnect({
   connected,
   onConnected,
+  buttonVariant = "default",
+  buttonSize = "sm",
+  buttonClassName,
 }: {
   connected: boolean;
   onConnected: () => void;
+  buttonVariant?: "default" | "solid";
+  buttonSize?: Extract<ComponentProps<typeof Button>["size"], "sm" | "default">;
+  buttonClassName?: string;
 }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [device, setDevice] = useState<DeviceSession | null>(null);
@@ -160,10 +173,11 @@ export function CodexHostedConnect({
   if (phase === "idle") {
     return (
       <Button
-        className="min-h-11 w-fit"
+        className={cn("min-h-11 w-fit", buttonClassName)}
         onClick={() => void start()}
-        size="sm"
+        size={buttonSize}
         type="button"
+        variant={buttonVariant}
       >
         Connect ChatGPT
       </Button>

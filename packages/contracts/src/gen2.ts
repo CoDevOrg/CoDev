@@ -719,7 +719,10 @@ export type Gen2OwnerComputeEntitlement = {
   enabled: boolean;
   unlimited: boolean;
   ownedWorkspaceCount: number;
+  usageWindow: "lifetime" | "month";
   monthlyLimitMs: number | null;
+  workspaceLimit: number;
+  activeWorkspaceLimit: number;
 };
 
 export const gen2ComputeSwitchRequestSchema = z.object({
@@ -738,10 +741,11 @@ export type Gen2OwnerComputeSummary = {
   minutesUsed: number;
   minutesLimit: number | null;
   unlimited: boolean;
-  resetsAt: string;
+  resetsAt: string | null;
   tier: "free" | "paid";
   freeEnabled: boolean;
   ownedWorkspaceCount: number;
+  workspaceLimit: number;
   activeWorkspaceLimit: number | null;
   armBootMinutesCount: boolean;
   budget: Gen2OwnerBudgetSummary | null;

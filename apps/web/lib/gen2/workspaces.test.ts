@@ -4,7 +4,10 @@ vi.mock("../billing/workspace-entitlement", () => ({
     enabled: true,
     unlimited: false,
     ownedWorkspaceCount: 1,
+    usageWindow: "month",
     monthlyLimitMs: 60_000_000,
+    workspaceLimit: 2,
+    activeWorkspaceLimit: 2,
   })),
 }));
 import { getTableName } from "drizzle-orm";
@@ -259,7 +262,7 @@ describe("gen2 workspaces", () => {
     mocks.ownedCount = 2;
     await expect(createGen2Workspace("user-1")).rejects.toMatchObject({
       message:
-        "You can own up to 2 Gen 2 workspaces. Delete one to create another.",
+        "Your plan includes 2 workspaces. Delete one or change plans to create another.",
       status: 409,
     });
     expect(mocks.inserted).toHaveLength(0);
