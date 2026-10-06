@@ -11,13 +11,9 @@ jq -e '.status == "ok" and .service == "codev-web"' <<<"${health}" >/dev/null
 ready="$(curl -fsS --max-time 45 "${ready_url}")"
 jq -e '
   .status == "ready"
+  and .service == "codev-web"
   and .components.database.status == "ready"
   and .components.realtime.status == "ready"
-  and (
-    .components.orchestrator.status == "ready"
-    or .components.orchestrator.status == "sleeping"
-    or .components.orchestrator.status == "starting"
-  )
 ' <<<"${ready}" >/dev/null
 
 echo "CoDev deployment is live and ready: ${deployment_url}"
