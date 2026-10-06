@@ -35,7 +35,7 @@ it("ignores forged proxy headers and unapproved hosts", () => {
   for (const [credential, host] of [
     ["forged", "www.trycodev.com"],
     [secret, "evil.test"],
-  ]) {
+  ] as const) {
     const request = new Request("https://existing.test/api/test", {
       headers: {
         "x-codev-origin-secret": credential,
