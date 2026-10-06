@@ -54,6 +54,7 @@ async function orchestratorDirectRequest(
   body: unknown,
   timeoutMs: number,
   endpointOverride?: string,
+  database?: Parameters<typeof workspaceRuntimeTarget>[1],
 ) {
   // A local stand-in for the Azure guest, so the workspace can be exercised
   // without infrastructure. Gated on an env var that is never set in
@@ -68,7 +69,7 @@ async function orchestratorDirectRequest(
     /^\/v1\/sandboxes\/([^/?]+)(\/(?:files|git|pty|terminals|codex-execs|superset|superset-agents)(?:\/|\?|$).*)$/,
   );
   if (workspaceRoute && !endpointOverride) {
-    const target = await workspaceRuntimeTarget(workspaceRoute[1]!);
+    const target = await workspaceRuntimeTarget(workspaceRoute[1]!, database);
     if (target) {
       const { armWorkspaceRequest } = await import("./arm-workspace-request");
       return assertOrchestratorResponse(
@@ -147,8 +148,16 @@ export async function codexExecRequest(
   path: string,
   body: unknown,
   timeoutMs: number,
+  database?: Parameters<typeof workspaceRuntimeTarget>[1],
 ) {
-  return orchestratorDirectRequest(method, path, body, timeoutMs);
+  return orchestratorDirectRequest(
+    method,
+    path,
+    body,
+    timeoutMs,
+    undefined,
+    database,
+  );
 }
 
 export async function claudeSetupRequest(

@@ -24,7 +24,8 @@ This module owns the communication and integration with external execution envir
   membership before using these clients; the adapter does not authorize users.
   Runtime routing is imported statically so its database lookup shares the
   caller’s request or operation context. `orchestrator-error.ts` owns the shared
-  transport error without a routing import cycle.
+  transport error without a routing import cycle. Durable agent polls pass their
+  transaction through the transport to resolve the route on the live connection.
 - `arm-workspace-activity.ts`, `arm-workspace-member-activity.ts`: Observe live
   guest agent work and record successful member mutations without counting
   reads, connection checks, or polls as input.

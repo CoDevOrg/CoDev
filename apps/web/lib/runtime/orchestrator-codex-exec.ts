@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 
 import type { SandboxExecInput } from "./orchestrator-files";
+import type { workspaceRuntimeTarget } from "./workspace-runtime-target";
 import { codexExecRequest } from "./orchestrator-request";
 
 const codexExecPollSchema = z.object({
@@ -73,12 +74,14 @@ export async function pollCodexExecInSandbox(
   workspaceId: string,
   sessionId: string,
   after: number,
+  database?: Parameters<typeof workspaceRuntimeTarget>[1],
 ) {
   const response = await codexExecRequest(
     "POST",
     `/v1/sandboxes/${workspaceId}/codex-execs/${sessionId}/poll`,
     { after, waitMilliseconds: 25_000 },
     35_000,
+    database,
   );
   return z.object({ result: codexExecPollSchema }).parse(await response.json())
     .result;
