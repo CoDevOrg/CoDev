@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   getStatus: vi.fn(),
   healthy: vi.fn(),
+  running: vi.fn(),
 }));
 
 vi.mock("cloudflare:workers", () => ({
@@ -27,19 +28,21 @@ vi.mock("../platform/database", () => ({
       }),
     }),
     update: () => ({
-      set: (values: Record<string, unknown>) => ({
-        where: () => ({
-          returning: async () => {
-            mocks.updates.push(values);
-            const result = mocks.claimResults.shift() ?? [
-              { id: String(mocks.row.id) },
-            ];
-            if (result.length) Object.assign(mocks.row, values);
-            else mocks.onClaimFailure();
-            return result;
-          },
-        }),
-      }),
+      set: (values: Record<string, unknown>) => {
+        mocks.updates.push(values);
+        return {
+          where: () => ({
+            returning: async () => {
+              const result = mocks.claimResults.shift() ?? [
+                { id: String(mocks.row.id) },
+              ];
+              if (result.length) Object.assign(mocks.row, values);
+              else mocks.onClaimFailure();
+              return result;
+            },
+          }),
+        };
+      },
     }),
   }),
 }));
@@ -51,6 +54,9 @@ vi.mock("../runtime/arm-workspace-provider", () => ({
     healthy(...args: unknown[]) {
       return mocks.healthy(...args);
     }
+    running(...args: unknown[]) {
+      return mocks.running(...args);
+    }
   },
   ArmWorkspaceRuntimeError: class ArmWorkspaceRuntimeError extends Error {
     constructor(readonly code: string) {
@@ -59,7 +65,10 @@ vi.mock("../runtime/arm-workspace-provider", () => ({
   },
 }));
 
-import { queueAzureWorkspaceStart } from "./runtime-operations";
+import {
+  queueAzureWorkspaceStart,
+  touchAzureWorkspaceActivity,
+} from "./runtime-operations";
 
 const workspaceId = "e010bd2c-a3c1-438f-acef-166287a3b1cb";
 
@@ -95,6 +104,7 @@ describe("Azure workspace operation claims", () => {
     mocks.create.mockReset().mockResolvedValue(undefined);
     mocks.getStatus.mockReset().mockResolvedValue({ status: "running" });
     mocks.healthy.mockReset().mockResolvedValue(false);
+    mocks.running.mockReset().mockResolvedValue(false);
   });
 
   it("persists a new resource generation before dispatching its workflow", async () => {
@@ -147,6 +157,43 @@ describe("Azure workspace operation claims", () => {
     });
   });
 
+  it("keeps a running VM when only its tunnel health check fails", async () => {
+    mocks.row = workspaceRow({
+      status: "ready",
+      runtimeStatus: "ready",
+      runtimeGeneration: 4,
+      runtimeVmResourceId: "/subscriptions/s/resourceGroups/r/vms/current",
+    });
+    mocks.running.mockResolvedValue(true);
+
+    expect(await queueAzureWorkspaceStart(workspaceId, "retry-key")).toEqual({
+      accepted: false,
+      operationId: null,
+    });
+    expect(mocks.running).toHaveBeenCalledWith(
+      workspaceId,
+      4,
+      mocks.row.runtimeVmResourceId,
+    );
+    expect(mocks.updates).toEqual([]);
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+
+  it("does not replace a VM when Azure power state is unavailable", async () => {
+    mocks.row = workspaceRow({
+      status: "ready",
+      runtimeStatus: "ready",
+      runtimeVmResourceId: "/subscriptions/s/resourceGroups/r/vms/current",
+    });
+    mocks.running.mockRejectedValue(new Error("Azure unavailable"));
+
+    await expect(
+      queueAzureWorkspaceStart(workspaceId, "retry-key"),
+    ).rejects.toThrow("Azure unavailable");
+    expect(mocks.updates).toEqual([]);
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+
   it("joins the operation that won the database compare-and-set race", async () => {
     const existingOperationId = "8a149e5a-d974-48d9-a0b3-cb2fa5c537d1";
     mocks.claimResults = [[]];
@@ -174,5 +221,20 @@ describe("Azure workspace operation claims", () => {
       generation: 1,
     });
     expect(mocks.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("records member activity when a ready ARM guest fails its health probe", async () => {
+    mocks.row = workspaceRow({ runtimeStatus: "ready", runtimeGeneration: 4 });
+    mocks.healthy.mockResolvedValue(false);
+
+    expect(await touchAzureWorkspaceActivity(workspaceId)).toBe(false);
+    expect(mocks.updates).toEqual([{ lastActivityAt: expect.any(Date) }]);
+    expect(mocks.healthy).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not keep a stopped ARM guest awake", async () => {
+    expect(await touchAzureWorkspaceActivity(workspaceId)).toBe(false);
+    expect(mocks.updates).toEqual([]);
+    expect(mocks.healthy).not.toHaveBeenCalled();
   });
 });

@@ -1820,7 +1820,7 @@ export function SupersetWorkspaceShell({
                                     : connection.state === "disconnected"
                                       ? workspace?.status === "pending"
                                         ? "This workspace hasn't started"
-                                        : "This workspace is asleep"
+                                        : "Can't connect to this workspace"
                                       : "Waking your workspace"
                           }
                           description={
