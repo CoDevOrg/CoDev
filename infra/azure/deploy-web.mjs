@@ -17,7 +17,7 @@ const registry = "codevwebprod8ad43";
 const release =
   process.env.GITHUB_SHA ||
   execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
-const base = JSON.parse(
+const { WORKFLOW_POSTGRES_ADMIN_URL, ...base } = JSON.parse(
   process.env.AZURE_WEB_RUNTIME_SECRETS ||
     readFileSync(".codev-local/azure-web-secrets.json", "utf8"),
 );
@@ -120,7 +120,11 @@ try {
   const runtime = { ...process.env, ...values };
   run("pnpm", ["db:check"], { env: runtime });
   run("pnpm", ["--filter", "@codev/web", "exec", "bootstrap"], {
-    env: runtime,
+    env: {
+      ...runtime,
+      WORKFLOW_POSTGRES_URL:
+        WORKFLOW_POSTGRES_ADMIN_URL || values.WORKFLOW_POSTGRES_URL,
+    },
   });
   const tag = `codev-web:${release}`;
   run("az", [

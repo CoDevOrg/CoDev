@@ -4,6 +4,14 @@ export async function register() {
     process.env.WORKFLOW_TARGET_WORLD === "@workflow/world-postgres"
   ) {
     const { getWorld } = await import("workflow/runtime");
-    await getWorld().start?.();
+    const world = getWorld();
+    const start = () => {
+      void world.start?.().catch(() => {
+        console.error("Workflow queue startup failed; retrying in 30 seconds.");
+        setTimeout(start, 30_000).unref();
+      });
+    };
+    // Durable jobs can wait for their queue without taking HTTP serving down.
+    start();
   }
 }

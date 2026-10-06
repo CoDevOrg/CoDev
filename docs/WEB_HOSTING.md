@@ -62,11 +62,19 @@ per-member workspace compute allowances. Replica capacity is bounded at six.
   Graphile Worker jobs in dedicated PostgreSQL schemas. CI runs its idempotent
   bootstrap before deployment. `WORKFLOW_POSTGRES_URL` must use the Supabase
   session pooler (5432), not the transaction pooler (6543); workers need LISTEN.
+  The dedicated `codev_workflow` login can access only `workflow`,
+  `workflow_drizzle`, and `graphile_worker`. Its separate pool avoids exhausting
+  the app login during rolling deployments. Two connections and one runner per
+  replica keep six replicas within its session limit. Schema bootstrap uses
+  `WORKFLOW_POSTGRES_ADMIN_URL` from the CI JSON bundle; that value is excluded
+  from the Azure runtime environment. Grant future postgres-owned objects to
+  the workflow role through schema-scoped default privileges.
   `WORKFLOW_LOCAL_BASE_URL=http://127.0.0.1:3000` dispatches local queue handlers.
   Cloudflare refuses public workflow handler paths, and the Azure server accepts
   them only from the real process loopback address, even if an external request
   carries the edge credential.
-  These schemas are separate from the application migration ledger.
+  These schemas are separate from the application migration ledger. Queue startup
+  failures retry in the background instead of making the HTTP app fail to load.
 
 Update a runtime variable on the platform serving the affected URL. A change
 to one platform's secrets does not update the other. For deployment steps and
