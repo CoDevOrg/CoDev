@@ -277,7 +277,7 @@ export function Gen2ChatPanel({
     Boolean(prompt.trim() || attachments.length > 0) &&
     !busy &&
     Boolean(currentModelItem);
-  const empty = thread.messages.length === 0 && !running;
+  const empty = thread.messages.length === 0 && !busy;
   const contentKey = `${chatId ?? ""}:${thread.messages.length}:${items.length}:${liveReply.length}`;
   const { onScroll, showJump, jumpToLatest, pinToLatest } = useGen2ChatScroll(
     transcriptRef,
@@ -328,7 +328,21 @@ export function Gen2ChatPanel({
       );
       if (!response.ok) return;
       const payload = (await response.json()) as { chat?: Gen2ChatDetail };
-      setThread({ messages: payload.chat?.messages ?? [] });
+      setThread((current) => {
+        const messages = payload.chat?.messages ?? [];
+        const pending = current.messages.filter(
+          (message) =>
+            message.id.startsWith("pending-") &&
+            !messages.some(
+              (saved) =>
+                saved.role === "user" &&
+                saved.body === message.body &&
+                Date.parse(saved.createdAt) >=
+                  Date.parse(message.createdAt) - 5_000,
+            ),
+        );
+        return { messages: [...messages, ...pending] };
+      });
     },
     [workspace.id],
   );
@@ -381,6 +395,7 @@ export function Gen2ChatPanel({
             nextSequence?: number;
             exited?: boolean;
             exitCode?: number | null;
+            error?: string;
           };
           chunks = mergeAgentExecChunks(
             chunks,
@@ -409,7 +424,8 @@ export function Gen2ChatPanel({
           }
 
           if (payload.exited) {
-            if (state.error) setError(state.error);
+            if (payload.error || state.error)
+              setError(payload.error || state.error || "");
             break;
           }
         }
@@ -1114,7 +1130,9 @@ export function Gen2ChatPanel({
                           />
                         ) : items.length === 0 ? (
                           <div className="gen2-chat-thinking" role="status">
-                            Thinking…
+                            {starting && !running
+                              ? "Starting the agent…"
+                              : "Thinking…"}
                           </div>
                         ) : null}
                       </div>

@@ -187,6 +187,7 @@ export const gen2AgentPollResponseSchema = z.object({
   /** Set on the poll that ends a turn: the reply the server persisted. */
   reply: z.string().nullable().default(null),
   persistedMessageId: identifierSchema.nullable().default(null),
+  error: z.string().optional(),
 });
 
 export const gen2AgentCancelRequestSchema = z.object({

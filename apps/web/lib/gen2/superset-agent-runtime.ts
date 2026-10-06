@@ -330,6 +330,17 @@ async function pollSession(
     input.after,
   );
 
+  // Save output before refreshing credentials: account recovery must not hide a reply.
+  const persisted =
+    mode === "turn"
+      ? await recordGen2SupersetRunOutput({
+          sessionId: input.runId,
+          chunks: result.chunks,
+          exited: result.exited,
+          exitCode: result.exitCode,
+        })
+      : null;
+
   // Being polled is what holding the seat means; a run that stops polling
   // stops blocking the member's other surfaces.
   if (run.leaseClaimed && run.connectionId && !result.exited) {
@@ -344,14 +355,22 @@ async function pollSession(
       if (result.refreshReady) {
         await persistSupersetAgentCredential(run, input.workspaceId);
       }
-    } catch (error) {
+    } catch {
       await markGen2SupersetRunRecoveryRequired({
         runId: run.id,
         workspaceId: input.workspaceId,
         lastError: "Could not save refreshed provider credentials.",
         actorId: input.userId,
       });
-      throw error;
+      logEvent("error", "gen2.superset_agent.credential_refresh_failed", {
+        runId: run.id,
+      });
+      return {
+        ...result,
+        persisted,
+        error:
+          "Codex finished and your reply was saved, but sign-in refresh failed. This workspace needs an agent runtime update before the next turn.",
+      };
     }
     await markGen2SupersetRunFinished({
       runId: run.id,
@@ -386,7 +405,7 @@ async function pollSession(
     );
   }
 
-  return result;
+  return { ...result, persisted, error: undefined };
 }
 
 type CancelSessionInput = {
@@ -817,12 +836,7 @@ export async function pollGen2SupersetAgentTurn(input: {
     "turn",
   );
 
-  const persisted = await recordGen2SupersetRunOutput({
-    sessionId: input.sessionId,
-    chunks: result.chunks,
-    exited: result.exited,
-    exitCode: result.exitCode,
-  });
+  const persisted = result.persisted;
 
   return {
     chunks: toAgentExecChunks(result.chunks),
@@ -831,6 +845,7 @@ export async function pollGen2SupersetAgentTurn(input: {
     exitCode: result.exitCode,
     reply: persisted?.reply ?? null,
     persistedMessageId: persisted?.messageId ?? null,
+    ...(result.error ? { error: result.error } : {}),
   };
 }
 
