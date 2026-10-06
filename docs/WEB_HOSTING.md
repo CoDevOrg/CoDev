@@ -10,7 +10,7 @@ zero outages: database, Redis, runtime tunnels, and Azure can still fail.
 | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
 | `codev-azure-edge` Worker         | `trycodev.com`, `www.trycodev.com`, `admins.trycodev.com/*`; streams requests and dispatches the two every-minute maintenance routes to Azure                    | `apps/web/wrangler.azure-edge.jsonc`                               |
 | `codev-web-origin` Container App  | Next.js HTTP server and authorized Gen 2 WebSockets; two warm 1 CPU/2 GiB replicas, autoscaling to six at 20 concurrent HTTP requests or 70% CPU                 | `infra/azure/web-app.bicep`, `web.Containerfile`, `deploy-web.mjs` |
-| `codev-cloudflare-preview` Worker | Retained ARM lifecycle Workflows and authenticated workflow bridge on its `admins-84a.workers.dev` URL; no public domains or cron when `AZURE_WEB_ORIGIN` is set | `apps/web/cloudflare.config.ts`                                    |
+| `codev-cloudflare-preview` Worker | Retained ARM lifecycle Workflows and authenticated workflow bridge on its `admins-84a.workers.dev` URL; no public domains or cron when `AZURE_WEB_ORIGIN` is set | `apps/web/wrangler.arm-lifecycle.jsonc`                            |
 | Vercel `codev` project            | Existing Vercel deployment URLs and previews; no public production traffic depends on its hosting allocation                                                     | `.github/workflows/deploy-web.yml`                                 |
 
 Azure hosting uses `codev-web-production` in West US 2, the
@@ -21,7 +21,8 @@ Workspace VMs and saved disks remain in their separate ARM infrastructure.
 
 The CI production deployment job verifies the DB schema, builds and deploys an
 immutable Azure image through ACR Tasks, waits up to five minutes for the new origin's release and
-secret gate, switches the proxy, then deploys the retained ARM Worker without public routes. Azure
+secret gate, switches the proxy, then deploys the retained ARM Worker without public routes.
+The native lifecycle bundle omits the web app and uses vinext API shims instead of bundling the Next.js server, so it fits Workers Free. Azure
 single-revision deployments retain the previous healthy revision until the new
 one is ready. Startup/liveness probes check the process; readiness checks DB and
 Redis. Long lived sockets can reconnect during release replacement.

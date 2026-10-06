@@ -7,7 +7,14 @@ const port = Number(process.env.PORT || 3000);
 const secret = process.env.AZURE_WEB_ORIGIN_SECRET;
 if (!secret || secret.length < 32)
   throw new Error("Azure origin authentication is missing.");
-const application = next({ dev: false, hostname: "0.0.0.0", port });
+// Next installs its own upgrade listener after the first HTTP request. Give it
+// a non-listening server so only CoDev handles authenticated workspace sockets.
+const application = next({
+  dev: false,
+  hostname: "0.0.0.0",
+  port,
+  httpServer: createServer(),
+});
 await application.prepare();
 const handle = application.getRequestHandler();
 
