@@ -334,7 +334,11 @@ export function Gen2ChatPanel({
           (message) =>
             message.id.startsWith("pending-") &&
             !messages.some(
-              (saved) => saved.role === "user" && saved.body === message.body,
+              (saved) =>
+                saved.role === "user" &&
+                saved.body === message.body &&
+                Date.parse(saved.createdAt) >=
+                  Date.parse(message.createdAt) - 5_000,
             ),
         );
         return { messages: [...messages, ...pending] };
