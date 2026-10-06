@@ -50,8 +50,12 @@ per-member workspace compute allowances. Replica capacity is bounded at six.
   `CLOUDFLARE_ACCOUNT_ID` selects the account. `VERCEL_TOKEN` lets the other
   workflow deploy to Vercel. These are deployment credentials, not a shared
   store of application environment variables.
-- **Cloudflare Worker:** application secrets are Worker bindings declared in
-  `cloudflare.config.ts` and configured on Cloudflare. CI uploads `CRON_SECRET`,
+- **Cloudflare Worker:** the retained native ARM lifecycle service uses Worker
+  bindings in `wrangler.arm-lifecycle.jsonc`; `cloudflare.config.ts` describes
+  the legacy full-app deployment. `FEEDBACK_GITHUB_REPO` and
+  `FEEDBACK_GITHUB_TOKEN` now belong to Azure only and are removed from this
+  Worker. Keep native bindings within Workers Free's 64-variable limit (secrets
+  plus text); retained web-only bindings also count. CI uploads `CRON_SECRET`,
   the ARM JSON bundle, and the `STRIPE_BILLING_SECRETS` JSON bundle to the
   Worker on deployment. The ARM canary uses
   the GitHub `CLOUDFLARE_API_TOKEN` for Tunnel/DNS setup. The production Worker's
