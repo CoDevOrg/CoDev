@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
+  RefreshCw,
   Check,
   ChevronDown,
   Copy,
@@ -15,7 +16,6 @@ import {
 } from "lucide-react";
 import {
   GEN2_AGENT_PROVIDERS,
-  GEN2_PROVIDER_MODELS,
   type Gen2AgentProviderName,
   type Gen2Chat,
   type Gen2ChatDetail,
@@ -212,28 +212,27 @@ export function Gen2ChatPanel({
   >([]);
   const availableProviders = connectedProviders ?? detectedConnectedProviders;
   const [selectedModel, setSelectedModel] = useState<string>(() => {
-    if (typeof window === "undefined")
-      return GEN2_PROVIDER_MODELS[
-        activeProvider ?? GEN2_AGENT_PROVIDERS[0].id
-      ][0]!.id;
+    if (typeof window === "undefined") return "";
     try {
-      const saved = sessionStorage.getItem(`codev-gen2-model:${workspace.id}`);
-      if (saved) return saved;
-    } catch {}
-    return GEN2_PROVIDER_MODELS[
-      activeProvider ?? GEN2_AGENT_PROVIDERS[0].id
-    ][0]!.id;
+      return (
+        sessionStorage.getItem(
+          `codev-gen2-model:${workspace.id}:${activeProvider ?? GEN2_AGENT_PROVIDERS[0].id}`,
+        ) ?? ""
+      );
+    } catch {
+      return "";
+    }
   });
   const agentLabel =
     GEN2_AGENT_PROVIDERS.find((entry) => entry.id === agent)?.label ?? "Agent";
-  const providerModels: Gen2ModelInfo[] = modelsByProvider[agent]?.length
-    ? modelsByProvider[agent]!
-    : (GEN2_PROVIDER_MODELS[agent as keyof typeof GEN2_PROVIDER_MODELS] ?? []);
+  const providerModels: Gen2ModelInfo[] = modelsByProvider[agent] ?? [];
   const currentModelItem =
     providerModels.find((m) => m.id === selectedModel) ?? providerModels[0];
-  const currentModelLabel = currentModelItem?.label ?? selectedModel;
   const { status: provider, refresh: refreshProvider } =
     useGen2ProviderStatus(agent);
+  const currentModelLabel =
+    currentModelItem?.label ??
+    (provider?.modelsError ? "Models unavailable" : "Loading models…");
 
   useEffect(() => {
     let mounted = true;
@@ -264,9 +263,8 @@ export function Gen2ChatPanel({
   }, []);
 
   const incomingModels = provider?.models;
-  const incomingModelKey =
-    incomingModels?.map((model) => model.id).join("\0") ?? "";
-  if (incomingModels?.length && incomingModelKey !== appliedModelKey) {
+  const incomingModelKey = `${agent}:${incomingModels?.map((model) => model.id).join("\0") ?? ""}`;
+  if (incomingModels && incomingModelKey !== appliedModelKey) {
     setAppliedModelKey(incomingModelKey);
     setModelsByProvider((prev) => ({
       ...prev,
@@ -275,7 +273,10 @@ export function Gen2ChatPanel({
   }
   const ready = canRunGen2Agent(workspace.status);
   const busy = running || starting || waking;
-  const canSend = Boolean(prompt.trim() || attachments.length > 0) && !busy;
+  const canSend =
+    Boolean(prompt.trim() || attachments.length > 0) &&
+    !busy &&
+    Boolean(currentModelItem);
   const empty = thread.messages.length === 0 && !running;
   const contentKey = `${chatId ?? ""}:${thread.messages.length}:${items.length}:${liveReply.length}`;
   const { onScroll, showJump, jumpToLatest, pinToLatest } = useGen2ChatScroll(
@@ -520,7 +521,8 @@ export function Gen2ChatPanel({
       (!text && pending.length === 0) ||
       running ||
       starting ||
-      sendingRef.current
+      sendingRef.current ||
+      !currentModelItem
     )
       return;
     sendingRef.current = true;
@@ -677,18 +679,25 @@ export function Gen2ChatPanel({
   ) => {
     setAgent(newAgent);
     onActiveProviderChange?.(newAgent);
-    const models: Gen2ModelInfo[] = modelsByProvider[newAgent]?.length
-      ? modelsByProvider[newAgent]!
-      : (GEN2_PROVIDER_MODELS[newAgent as keyof typeof GEN2_PROVIDER_MODELS] ??
-        []);
+    const models = modelsByProvider[newAgent] ?? [];
+    let saved = "";
+    try {
+      saved =
+        sessionStorage.getItem(
+          `codev-gen2-model:${workspace.id}:${newAgent}`,
+        ) ?? "";
+    } catch {}
     const modelToSet =
       newModel ??
-      (models.find((m) => m.id === selectedModel)?.id ||
-        models[0]?.id ||
-        "sonnet");
+      models.find((model) => model.id === saved)?.id ??
+      models[0]?.id ??
+      "";
     setSelectedModel(modelToSet);
     try {
-      sessionStorage.setItem(`codev-gen2-model:${workspace.id}`, modelToSet);
+      sessionStorage.setItem(
+        `codev-gen2-model:${workspace.id}:${newAgent}`,
+        modelToSet,
+      );
     } catch {}
   };
 
@@ -836,19 +845,12 @@ export function Gen2ChatPanel({
                 availableProviders.includes(entry.id),
               ).map((entry) => {
                 const isSelectedProvider = agent === entry.id;
-                const models: Gen2ModelInfo[] = modelsByProvider[entry.id]
-                  ?.length
-                  ? modelsByProvider[entry.id]!
-                  : (GEN2_PROVIDER_MODELS[
-                      entry.id as keyof typeof GEN2_PROVIDER_MODELS
-                    ] ?? []);
+                const models = modelsByProvider[entry.id] ?? [];
                 return (
                   <DropdownMenuSub key={entry.id}>
                     <DropdownMenuSubTrigger
                       className="cursor-pointer py-1.5 px-2 text-xs flex items-center justify-between"
-                      onClick={() =>
-                        handleProviderSelect(entry.id, models[0]?.id)
-                      }
+                      onClick={() => handleProviderSelect(entry.id)}
                     >
                       <span
                         className={cn(
@@ -865,6 +867,11 @@ export function Gen2ChatPanel({
                       </span>
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent className="gen2-workspace-surface min-w-[220px] max-h-[360px] overflow-y-auto">
+                      {models.length === 0 ? (
+                        <DropdownMenuLabel>
+                          Account models unavailable
+                        </DropdownMenuLabel>
+                      ) : null}
                       <DropdownMenuRadioGroup
                         value={
                           isSelectedProvider ? (currentModelItem?.id ?? "") : ""
@@ -938,19 +945,31 @@ export function Gen2ChatPanel({
     </form>
   );
 
-  const errorBanner = error ? (
-    <div className="gen2-chat-alert" role="alert">
-      <span>{error}</span>
-      <WorkspaceButton
-        size="icon"
-        type="button"
-        aria-label="Dismiss error"
-        onClick={() => setError("")}
-      >
-        <X aria-hidden="true" />
-      </WorkspaceButton>
-    </div>
-  ) : null;
+  const errorBanner =
+    error || provider?.modelsError ? (
+      <div className="gen2-chat-alert" role="alert">
+        <span>{error || provider?.modelsError}</span>
+        <WorkspaceButton
+          size="icon"
+          type="button"
+          aria-label={
+            provider?.modelsError && !error
+              ? "Retry model discovery"
+              : "Dismiss error"
+          }
+          onClick={() => {
+            if (provider?.modelsError && !error) void refreshProvider();
+            else setError("");
+          }}
+        >
+          {provider?.modelsError && !error ? (
+            <RefreshCw aria-hidden="true" />
+          ) : (
+            <X aria-hidden="true" />
+          )}
+        </WorkspaceButton>
+      </div>
+    ) : null;
 
   return (
     <TooltipProvider delayDuration={300}>

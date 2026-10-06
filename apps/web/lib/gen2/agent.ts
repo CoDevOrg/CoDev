@@ -1,3 +1,4 @@
+import { getDynamicModelsForProvider } from "../providers/dynamic-models";
 import "server-only";
 
 import { logEvent } from "../platform/observability";
@@ -75,9 +76,25 @@ export async function startGen2AgentTurn(input: {
   await requireWorkspaceOwnerPlan(input.workspaceId);
   await requireGen2Chat(input.workspaceId, input.chatId);
 
+  const models = await getDynamicModelsForProvider(
+    input.provider,
+    input.userId,
+  ).catch(() => {
+    throw new Gen2LifecycleError(
+      "Couldn't load your account's models. Please refresh and try again.",
+      503,
+    );
+  });
+  const model = input.model ?? models[0]?.id;
+  if (!model || !models.some((entry) => entry.id === model))
+    throw new Gen2LifecycleError(
+      "This model isn't available for your connected account. Refresh the model picker and choose an available model.",
+      400,
+    );
+
   // Cursor uses the provider-neutral guest exec until Superset supports its CLI.
   if (isGen2SupersetAgentSessionsEnabled() && input.provider !== "cursor") {
-    return startGen2AgentTurnViaSuperset(input);
+    return startGen2AgentTurnViaSuperset({ ...input, model });
   }
 
   const history = await listGen2ChatMessages(input.chatId);
@@ -105,12 +122,7 @@ export async function startGen2AgentTurn(input: {
     }
   }
   const execInput = {
-    command: buildGen2AgentCommand(
-      provider,
-      input.prompt,
-      history,
-      input.model,
-    ),
+    command: buildGen2AgentCommand(provider, input.prompt, history, model),
     launchProfile: credential.launchProfile,
     idempotencyKey: input.idempotencyKey,
     ...(input.worktreeId && input.worktreeId !== "main"

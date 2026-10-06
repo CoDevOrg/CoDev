@@ -12,8 +12,6 @@ import { formatGen2TurnPrompt } from "./chats-format";
  * re-reduced stream. The credential is never an argument — it arrives as
  * `CLAUDE_CODE_OAUTH_TOKEN` in the launch profile's environment.
  */
-export const GEN2_CLAUDE_MODEL = "sonnet";
-
 export function buildGen2ClaudeCommand(
   prompt: string,
   history: Array<{ role: "user" | "assistant"; body: string }> = [],
@@ -33,10 +31,9 @@ export function buildGen2ClaudeCommand(
     '{"mcpServers":{}}',
     "--permission-mode",
     "bypassPermissions",
-    "--model",
-    model?.trim() || GEN2_CLAUDE_MODEL,
+    ...(model?.trim() ? ["--model", model.trim()] : []),
     [
-      "You are Claude on this workspace's Firecracker machine.",
+      "You are Claude on this workspace's machine.",
       "The working directory is /workspace. Use the shell to inspect and change files there.",
       "Answer the user. If they ask for code changes, make them in the current directory.",
       "Do not read environment variables or files that hold credentials.",

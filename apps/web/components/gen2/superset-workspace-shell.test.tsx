@@ -48,8 +48,18 @@ vi.mock("./review-diff-viewer", () => ({
 }));
 
 vi.mock("./chat-panel", () => ({
-  Gen2ChatPanel: ({ worktreeId }: { worktreeId?: string }) => (
-    <div data-testid="chat-panel" data-worktree-id={worktreeId} />
+  Gen2ChatPanel: ({
+    worktreeId,
+    activeProvider,
+  }: {
+    worktreeId?: string;
+    activeProvider?: string;
+  }) => (
+    <div
+      data-testid="chat-panel"
+      data-worktree-id={worktreeId}
+      data-provider={activeProvider}
+    />
   ),
 }));
 
@@ -395,7 +405,16 @@ describe("SupersetWorkspaceShell", () => {
         runtimeEnabled
       />,
     );
-    expect((await screen.findAllByText("Cursor")).length).toBeGreaterThan(0);
+    const cursor = await screen.findAllByText("Cursor");
+    expect(cursor.length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "New Chat" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Cursor" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("chat-panel")).toHaveAttribute(
+        "data-provider",
+        "cursor",
+      ),
+    );
   });
 
   it("renames a chat after the server accepts the title", async () => {

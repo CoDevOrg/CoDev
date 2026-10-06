@@ -136,22 +136,18 @@ export const gen2ModelInfoSchema = z.object({
 });
 
 export type Gen2ModelInfo = z.infer<typeof gen2ModelInfoSchema>;
-
-export const GEN2_PROVIDER_MODELS: Record<
-  Gen2AgentProviderName,
-  Gen2ModelInfo[]
-> = {
-  cursor: [{ id: "auto", label: "Auto" }],
-  claude: [
-    { id: "sonnet", label: "Claude 3.7 Sonnet" },
-    { id: "opus", label: "Claude 3 Opus" },
-    { id: "haiku", label: "Claude 3.5 Haiku" },
-  ],
-  codex: [
-    { id: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
-    { id: "gpt-4o", label: "GPT-4o" },
-    { id: "o3-mini", label: "o3-mini" },
-  ],
+export const gen2AccountModelRequestSchema = z.object({
+  userId: identifierSchema,
+  provider: z.literal("codex"),
+});
+export const gen2AccountModelResponseSchema = z.object({
+  models: z.array(gen2ModelInfoSchema).min(1),
+});
+export type Gen2ProviderStatus = {
+  connected: boolean;
+  via: "subscription" | "api-key" | null;
+  models?: Gen2ModelInfo[];
+  modelsError?: string;
 };
 
 export type Gen2ProviderModelId = string;

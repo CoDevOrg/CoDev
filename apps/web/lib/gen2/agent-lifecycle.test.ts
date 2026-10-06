@@ -1,5 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("../providers/dynamic-models", () => ({
+  getDynamicModelsForProvider: async () => [
+    { id: "gpt-5.6-luna", label: "Codex" },
+    { id: "auto", label: "Auto" },
+    { id: "sonnet", label: "Sonnet" },
+  ],
+}));
+
 vi.mock("./cursor-auth-refresh", () => ({ refreshCursorTurnAuth: vi.fn() }));
 
 vi.mock("../billing/gate", () => ({
@@ -158,7 +166,11 @@ describe("gen2 Codex agent", () => {
   });
 
   it("runs Codex with full guest access so the inner sandbox can use the shell", () => {
-    const command = buildGen2CodexCommand("List the files");
+    const command = buildGen2CodexCommand(
+      "List the files",
+      [],
+      "account-model",
+    );
     expect(command.slice(0, 12)).toEqual([
       "codex",
       "exec",
@@ -177,6 +189,14 @@ describe("gen2 Codex agent", () => {
     expect(command.at(-1)).toMatch(/Do not inspect CODEX_HOME/);
     expect(command.at(-1)).toMatch(/\/workspace/);
     expect(command.join("\n")).not.toContain(AUTH_CACHE);
+  });
+
+  it("rejects a model outside the connected account catalog before launching a guest", async () => {
+    await expect(
+      startGen2AgentTurn({ ...turn, model: "not-in-this-plan" }),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(mocks.start).not.toHaveBeenCalled();
+    expect(mocks.claim).not.toHaveBeenCalled();
   });
 
   it("starts a turn with the personal cache and returns only a session id", async () => {
