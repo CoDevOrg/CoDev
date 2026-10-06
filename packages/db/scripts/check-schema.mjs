@@ -16,10 +16,14 @@ try {
   // Probe actual objects, not only migration timestamps: merged migration
   // histories can skip an older migration even when later ones are recorded.
   await pool.query(`SELECT id, workspace_id, chat_id, created_by, worktree_id,
-    host_workspace_id, host_terminal_id, host_agent_session_id, provider,
+    session_id, host_workspace_id, host_terminal_id, host_agent_session_id, provider,
     connection_id, credential_revision, status, lease_claimed, exit_reason,
     recovery_count, idempotency_key, last_error, created_at, updated_at
     FROM public.gen2_superset_runs LIMIT 0`);
+  await pool.query(`SELECT id, workspace_id, chat_id, created_by, task, worktree_id,
+    provider, idempotency_key, status, recovery_state, safe_output, final_changes,
+    created_at, updated_at
+    FROM public.gen2_agent_sessions LIMIT 0`);
   await pool.query(`SELECT id, run_id, workspace_id, actor_id, type, result, created_at
     FROM public.gen2_superset_run_events LIMIT 0`);
   await pool.query(`SELECT id, workspace_id, owner_id, started_at, ended_at, last_activity_at, last_observed_allocated_at
