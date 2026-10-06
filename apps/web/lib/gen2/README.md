@@ -35,6 +35,11 @@ boundary.
 
 A turn runs on the provider the member picks (`provider` on the start request, Codex by default). `agent-command.ts` chooses `codex exec --json`, `claude -p --output-format stream-json`, or `cursor-agent --print --output-format stream-json`, and `turn-reducer.ts` parses output using the provider stored on `gen2_agent_turns`.
 
+`workspace-agent-instructions.ts` owns the provider-neutral workspace contract
+prepended to every agent turn. Provider command builders own CLI flags only and
+must use that shared formatter so current and future agents receive the same
+durability, protected-path, credential, and user-facing environment guidance.
+
 `turn-events.ts` reduces the `codex exec --json` NDJSON (`claude-turn-events.ts` does the same for Claude) into typed activity
 items. Codex gives every item a stable `id` across
 `item.started`/`item.updated`/`item.completed`, so re-reducing the accumulated

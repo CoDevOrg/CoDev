@@ -1,6 +1,6 @@
 import "server-only";
 
-import { formatGen2TurnPrompt } from "./chats-format";
+import { formatGen2WorkspaceAgentPrompt } from "./workspace-agent-instructions";
 
 /**
  * Shared by the direct `codex exec` sandbox path (`agent.ts`) and the
@@ -28,13 +28,6 @@ export function buildGen2CodexCommand(
     ...(model?.trim() ? ["--model", model.trim()] : []),
     "--cd",
     ".",
-    [
-      "You are Codex on this workspace's machine.",
-      "The working directory is /workspace. Use the shell to inspect and change files there.",
-      "Answer the user. If they ask for code changes, make them in the current directory.",
-      "Do not inspect CODEX_HOME or authentication files.",
-      "",
-      formatGen2TurnPrompt(prompt, history),
-    ].join("\n"),
+    formatGen2WorkspaceAgentPrompt(prompt, history),
   ];
 }
