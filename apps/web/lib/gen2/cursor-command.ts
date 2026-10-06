@@ -14,8 +14,7 @@ export function buildGen2CursorCommand(
     "stream-json",
     "--force",
     "--trust",
-    "--model",
-    model?.trim() || "auto",
+    ...(model?.trim() ? ["--model", model.trim()] : []),
     [
       "You are Cursor on this workspace's machine.",
       "Use the shell to inspect and change files in the current working directory.",

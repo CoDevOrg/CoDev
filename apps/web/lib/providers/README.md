@@ -17,3 +17,11 @@ shared checkout; Cursor does not run in Rooms.
 `cursor-launch-secret.ts` accepts the CLI JSON cache and older stored session
 tokens. Legacy tokens use the CLI’s explicit auth-token environment path,
 inside the same private profile.
+
+Workspace model discovery authenticates with the initiating member’s resolved
+connection. Codex uses its ChatGPT account catalog (including visibility and plan
+restrictions), Cursor uses its CLI account catalog and selection restrictions,
+and Claude uses Anthropic’s models endpoint. API keys use their own account
+catalogs. Cache keys include member, provider, and credential fingerprint for one
+minute; failures never substitute public or hard-coded model lists. Provider
+catalog availability does not guarantee remaining usage quota or inference access.

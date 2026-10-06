@@ -1,6 +1,5 @@
 import "server-only";
 
-import { getAgentModel } from "../providers/ai-model";
 import { formatGen2TurnPrompt } from "./chats-format";
 
 /**
@@ -26,12 +25,11 @@ export function buildGen2CodexCommand(
     "danger-full-access",
     "-c",
     'approval_policy="never"',
-    "--model",
-    model?.trim() || getAgentModel("openai"),
+    ...(model?.trim() ? ["--model", model.trim()] : []),
     "--cd",
     ".",
     [
-      "You are Codex on this workspace's Firecracker machine.",
+      "You are Codex on this workspace's machine.",
       "The working directory is /workspace. Use the shell to inspect and change files there.",
       "Answer the user. If they ask for code changes, make them in the current directory.",
       "Do not inspect CODEX_HOME or authentication files.",

@@ -194,3 +194,8 @@ directories are isolated per turn under private agent profiles.
 ARM image `1.0.13` adds Cursor CLI `2026.10.01-e373342`. The production image
 pin is carried in `ARM_WORKSPACE_RUNTIME_SECRETS` and synchronized to Vercel
 by the web deployment workflow. Saved workspace disks survive image upgrades.
+
+Workspace model discovery uses outbound authenticated requests to the connected
+provider’s catalog on both web hosts. Existing encrypted member credentials supply
+the authentication; catalog caching is scoped to the member and credential, and
+there are no new runtime secrets or paid Cloudflare services.

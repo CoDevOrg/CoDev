@@ -1776,9 +1776,7 @@ export function SupersetWorkspaceShell({
                         connectedProviders={connectedChatProviders.map(
                           (provider) => provider.id,
                         )}
-                        activeProvider={
-                          activeProvider === "cursor" ? "codex" : activeProvider
-                        }
+                        activeProvider={activeProvider}
                         onActiveProviderChange={setActiveProvider}
                         hideChatBar={true}
                         onRunningChange={setAgentRunning}

@@ -1,109 +1,42 @@
 import "server-only";
+import type { Gen2AgentProviderName, Gen2ModelInfo } from "@codev/contracts";
+import { requireCredential } from "./resolve";
+import { getCodexAccountModels } from "./codex-account-models";
+import { getCursorAccountModels } from "./cursor-account-models";
+import { getClaudeAccountModels } from "./claude-account-models";
 
-import {
-  GEN2_PROVIDER_MODELS,
-  type Gen2AgentProviderName,
-  type Gen2ModelInfo,
-} from "@codev/contracts";
-
-const CACHE_TTL_MS = 10 * 60 * 1_000; // 10 minutes
 const cache = new Map<string, { expiresAt: number; models: Gen2ModelInfo[] }>();
-
-type RawOpenRouterModel = {
-  id: string;
-  name: string;
-  created?: number;
-  description?: string;
+const discover = {
+  codex: getCodexAccountModels,
+  cursor: getCursorAccountModels,
+  claude: getClaudeAccountModels,
 };
-
-function parseClaudeModel(raw: RawOpenRouterModel): Gen2ModelInfo {
-  const id = raw.id.replace(/^anthropic\//, "");
-  const label = raw.name.replace(/^Anthropic:\s*/, "");
-  const description = raw.description
-    ? raw.description.slice(0, 90).trim() + "…"
-    : undefined;
-  return { id, label, description };
-}
-
-function parseCodexModel(raw: RawOpenRouterModel): Gen2ModelInfo {
-  const id = raw.id.replace(/^openai\//, "");
-  const label = raw.name.replace(/^OpenAI:\s*/, "");
-  const description = raw.description
-    ? raw.description.slice(0, 90).trim() + "…"
-    : undefined;
-  return { id, label, description };
-}
-
-async function fetchPublicCatalog(): Promise<RawOpenRouterModel[]> {
-  const response = await fetch("https://openrouter.ai/api/v1/models", {
-    cache: "no-store",
-    signal: AbortSignal.timeout(6000),
-  });
-  if (!response.ok) {
-    throw new Error(
-      `Public models registry returned status ${response.status}`,
-    );
-  }
-  const payload = (await response.json()) as { data?: RawOpenRouterModel[] };
-  return payload.data ?? [];
-}
-
-function extractClaudeModels(allModels: RawOpenRouterModel[]): Gen2ModelInfo[] {
-  return allModels
-    .filter(
-      (m) =>
-        m.id.startsWith("anthropic/claude-") &&
-        !m.id.includes(":batch") &&
-        !m.id.includes("latest"),
-    )
-    .sort((a, b) => (b.created ?? 0) - (a.created ?? 0))
-    .map(parseClaudeModel);
-}
-
-function extractCodexModels(allModels: RawOpenRouterModel[]): Gen2ModelInfo[] {
-  return allModels
-    .filter(
-      (m) =>
-        m.id.startsWith("openai/") &&
-        !m.id.includes(":batch") &&
-        !m.id.includes("latest") &&
-        !/(audio|image|realtime|transcribe|tts|embedding|moderation|safeguard)/i.test(
-          m.id,
-        ),
-    )
-    .sort((a, b) => (b.created ?? 0) - (a.created ?? 0))
-    .map(parseCodexModel);
-}
-
+/** Cache only account results, keyed by member, provider and credential fingerprint. */
 export async function getDynamicModelsForProvider(
   provider: Gen2AgentProviderName,
+  userId: string,
 ): Promise<Gen2ModelInfo[]> {
-  if (provider === "cursor") return GEN2_PROVIDER_MODELS.cursor;
-  const cached = cache.get(provider);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.models;
-  }
-
-  const fallback = GEN2_PROVIDER_MODELS[provider] ?? [];
-  try {
-    const rawCatalog = await fetchPublicCatalog();
-    const models =
-      provider === "claude"
-        ? extractClaudeModels(rawCatalog)
-        : extractCodexModels(rawCatalog);
-
-    const result = models.length > 0 ? models : fallback;
-    cache.set(provider, {
-      expiresAt: Date.now() + CACHE_TTL_MS,
-      models: result,
-    });
-    return result;
-  } catch {
-    return fallback;
-  }
+  const credential = await requireCredential({
+    userId,
+    provider,
+    surface: "gen2",
+  });
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(JSON.stringify(credential.secret)),
+  );
+  const fingerprint = Buffer.from(digest).toString("hex");
+  const key = `${userId}:${provider}:${fingerprint}`;
+  const previous = cache.get(key);
+  if (previous && previous.expiresAt > Date.now()) return previous.models;
+  const models = await discover[provider](credential.secret);
+  if (!models.length) throw new Error("No account models are available.");
+  for (const [entry, value] of cache)
+    if (value.expiresAt <= Date.now()) cache.delete(entry);
+  if (cache.size >= 500) cache.delete(cache.keys().next().value!);
+  cache.set(key, { expiresAt: Date.now() + 60_000, models });
+  return models;
 }
-
-/** Clear cache (useful in unit tests). */
-export function clearDynamicModelCache(): void {
+export function clearDynamicModelCache() {
   cache.clear();
 }

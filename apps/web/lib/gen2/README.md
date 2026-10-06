@@ -123,3 +123,8 @@ consistent. Refreshed auth belongs to the turn’s initiating member.
 Guest turn polls use `withDatabaseOperation` for all routing, transaction, and
 auth-refresh queries across the long guest wait. They must not rely on an HTTP
 React cache that can be unavailable inside nested asynchronous work.
+
+Agent starts validate the selected model against the initiating member’s live
+provider catalog before either native or Superset execution. The composer keeps
+catalogs and model preferences separate for each provider; Cursor chats must
+reach the composer as Cursor. No model choices are bundled into the client.
