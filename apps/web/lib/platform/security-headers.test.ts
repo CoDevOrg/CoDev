@@ -26,3 +26,16 @@ it("keeps HTTP development and framework hot reload usable", () => {
     "upgrade-insecure-requests",
   );
 });
+
+it("allows canonical public redirects from the admin host without sharing runtime origins", () => {
+  const policy = securityHeaders(
+    "test-nonce",
+    true,
+    "https://admins.trycodev.com",
+  ).find(({ key }) => key === "Content-Security-Policy")!.value;
+  expect(policy).toContain(
+    "connect-src 'self' https://www.trycodev.com wss://admins.trycodev.com",
+  );
+  expect(policy).toContain("form-action 'self' https://www.trycodev.com");
+  expect(policy).not.toContain("https://*.trycodev.com");
+});

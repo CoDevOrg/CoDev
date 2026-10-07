@@ -261,7 +261,9 @@ framework bootstrap scripts inherit it from the request CSP. All pages must
 remain dynamically rendered so a cached page cannot reuse another request's
 nonce. The shared Next.js headers add framing protection, MIME sniffing
 protection, referrer and permissions policies, and production HSTS. HSTS is
-host-only: runtime subdomains do not inherit the application's policy.
+host-only: runtime subdomains do not inherit the application's policy. CSP
+allows the canonical public app origin for admin link prefetch redirects and
+OAuth form returns; runtime and arbitrary sibling origins remain excluded.
 
 Production sessions use `__Host-codev.session-token` with no `Domain` attribute.
 Public, admin, preview, and runtime hosts cannot share this cookie. Visiting an
