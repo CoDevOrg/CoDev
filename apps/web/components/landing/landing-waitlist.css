@@ -202,3 +202,16 @@
   flex-wrap: wrap;
   gap: 16px;
 }
+.lp-footer nav .lp-footer-sign-in {
+  min-height: 34px;
+  padding-inline: 14px;
+  border-color: var(--lp-line-strong);
+  background: var(--lp-panel);
+  color: var(--lp-ink);
+  font-size: 13px;
+}
+.lp-footer nav .lp-footer-sign-in:hover {
+  border-color: var(--lp-lime);
+  background: var(--lp-panel-2);
+  color: var(--lp-ink);
+}

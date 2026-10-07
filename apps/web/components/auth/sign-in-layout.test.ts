@@ -41,28 +41,21 @@ describe("sign-in provider layout", () => {
     );
   });
 
-  it("keeps a recoverable sign-in experience and a separate create-account path", () => {
+  it("keeps sign-in available while account creation is paused", () => {
     expect(signInPage).toContain('dynamic = "force-dynamic"');
     expect(signInPage).toContain("sessionCheckUnavailable");
-    expect(signInPage).toMatch(
-      /You can still sign in or\r?\n\s*create an account below\./,
-    );
+    expect(signInPage).toMatch(/You can still sign in\s+below\./);
+    expect(signInPage).toContain("New accounts are paused");
     expect(signInPage).toContain("CredentialsSignin");
     expect(signInPage).toContain("CredentialsSignInForm");
-    // The ?mode=sign-up param still selects sign-up; the page routes it through
-    // startInSignUp so an invite grant opens that tab too.
-    expect(signInPage).toContain('const startInSignUp = mode === "sign-up"');
-    expect(signInPage).toContain(
-      'initialMode={startInSignUp ? "sign-up" : "sign-in"}',
-    );
+    expect(signInPage).not.toContain("startInSignUp");
+    expect(signInPage).toContain("assertCanRegister");
     expect(credentialsSignInForm).toContain('name="intent"');
-    expect(credentialsSignInForm).toContain("Create an account");
+    expect(credentialsSignInForm).toContain('value="sign-in"');
+    expect(credentialsSignInForm).not.toContain("Create an account");
     expect(credentialsSignInForm).toContain("Sign in with email");
     expect(credentialsSignInForm).toContain('href="/forgot-password"');
-    expect(credentialsSignInForm).toContain(
-      'aria-label="New account password requirements"',
-    );
-    expect(credentialsSignInForm).toContain(
+    expect(credentialsSignInForm).not.toContain(
       "getNewAccountPasswordRequirements",
     );
     expect(signInPage).toContain("AuthError");

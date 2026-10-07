@@ -9,6 +9,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { buttonClassName } from "@/components/ui/button";
 import { LandingNavigation } from "@/components/landing/landing-navigation";
 import { CompanyLogos } from "@/components/landing/company-logos";
 import { HowItWorks } from "@/components/landing/how-it-works";
@@ -170,6 +171,16 @@ export default async function HomePage() {
           <Link href="/legal/terms">Terms</Link>
           <Link href="/legal/refunds">Refunds & cancellation</Link>
           <Link href="/legal/retention">Data retention</Link>
+          <Link
+            className={buttonClassName({
+              variant: "outline",
+              size: "sm",
+              className: "lp-footer-sign-in",
+            })}
+            href="/sign-in"
+          >
+            Sign in
+          </Link>
         </nav>
       </footer>
     </main>
