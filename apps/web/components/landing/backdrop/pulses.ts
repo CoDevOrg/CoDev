@@ -1,13 +1,5 @@
 import { projectPoint } from "./branches";
-import {
-  CYAN,
-  ICE,
-  at,
-  glow,
-  rgba,
-  smoothstep,
-  type Frame,
-} from "./draw-kit";
+import { CYAN, ICE, at, glow, rgba, smoothstep, type Frame } from "./draw-kit";
 import type { TreeLine } from "./tree-geometry";
 
 const TRAIL_STEPS = [0, 0.7, 1.6, 2.8, 4.2] as const;
@@ -68,10 +60,7 @@ export function drawPulses(
         const from = at(trail, i);
         const to = at(trail, i + 1);
         const falloff = 1 - i / (trail.length - 1);
-        ctx.strokeStyle = rgba(
-          i === 0 ? ICE : CYAN,
-          strength * falloff * 0.9,
-        );
+        ctx.strokeStyle = rgba(i === 0 ? ICE : CYAN, strength * falloff * 0.9);
         ctx.lineWidth = (2.4 - line.depth * 0.5) * falloff + 0.6;
         ctx.beginPath();
         ctx.moveTo(from[0], from[1]);

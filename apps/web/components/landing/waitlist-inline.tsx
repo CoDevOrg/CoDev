@@ -31,9 +31,8 @@ export function WaitlistInline() {
     const reduced = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
-    const card = wrapRef.current?.querySelector<HTMLDivElement>(
-      ".lp-waitlist-card",
-    );
+    const card =
+      wrapRef.current?.querySelector<HTMLDivElement>(".lp-waitlist-card");
     if (!card) return;
     card.scrollIntoView({
       behavior: reduced ? "auto" : "smooth",
