@@ -38,7 +38,6 @@ function scrollProgress(): number {
 export default function LandingCanvas() {
   const layerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const accentRef = useRef<HTMLCanvasElement | null>(null);
   const [active, setActive] = useState(false);
 
   useEffect(() => {
@@ -161,7 +160,6 @@ export default function LandingCanvas() {
 
       scene = createLandingScene({
         canvas: surface,
-        accentCanvas: accentRef.current ?? undefined,
         pixelRatio: pixelRatio(),
         lite,
       });
@@ -208,7 +206,6 @@ export default function LandingCanvas() {
       aria-hidden="true"
     >
       <canvas ref={canvasRef} className="lp-canvas" />
-      <canvas ref={accentRef} className="lp-accent-canvas" />
     </div>
   );
 }

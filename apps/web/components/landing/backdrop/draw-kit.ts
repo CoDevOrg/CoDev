@@ -1,8 +1,5 @@
 export type Rgb = readonly [number, number, number];
 
-export const EMBER: Rgb = [255, 105, 46];
-export const GOLD: Rgb = [255, 211, 136];
-
 export const ICE: Rgb = [232, 248, 255];
 export const CYAN: Rgb = [110, 200, 255];
 export const BLUE: Rgb = [50, 110, 255];
