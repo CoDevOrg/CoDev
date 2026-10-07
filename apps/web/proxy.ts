@@ -34,8 +34,7 @@ function shouldAuthenticate(pathname: string): boolean {
     pathname === "/gen2" ||
     pathname.startsWith("/settings/") ||
     pathname === "/settings" ||
-    pathname.startsWith("/api/gen2") ||
-    pathname.startsWith("/api/auth/")
+    pathname.startsWith("/api/gen2")
   );
 }
 

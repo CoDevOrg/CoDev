@@ -97,21 +97,26 @@ it("retains rate-limit responses and protects admin boundary errors", async () =
 
 it("keeps POST bodies available to the route after middleware", async () => {
   vi.stubEnv("AZURE_WEB_ORIGIN_SECRET", "trusted-edge");
-  const request = new NextRequest(
-    "http://0.0.0.0:3000/api/auth/signin/github",
-    {
-      method: "POST",
-      headers: {
-        "x-codev-origin-secret": "trusted-edge",
-        "x-codev-public-host": "admins.trycodev.com",
-      },
-      body: "csrfToken=test",
+  const request = new NextRequest("http://0.0.0.0:3000/api/gen2/workspaces", {
+    method: "POST",
+    headers: {
+      "x-codev-origin-secret": "trusted-edge",
+      "x-codev-public-host": "www.trycodev.com",
     },
-  );
+    body: "csrfToken=test",
+  });
   await proxy(request, event);
   expect(await request.text()).toBe("csrfToken=test");
   const secured = mocks.auth.mock.calls[0]![0] as NextRequest;
-  expect(secured.url).toBe(
-    "https://admins.trycodev.com/api/auth/signin/github",
+  expect(secured.url).toBe("https://www.trycodev.com/api/gen2/workspaces");
+});
+
+it("leaves Auth.js CSRF and OAuth cookies to the auth route handler", async () => {
+  const response = await proxy(
+    new NextRequest("https://www.trycodev.com/api/auth/csrf"),
+    event,
   );
+  expect(mocks.limit).toHaveBeenCalledOnce();
+  expect(mocks.auth).not.toHaveBeenCalled();
+  expect(response.headers.getSetCookie()).toEqual([]);
 });
