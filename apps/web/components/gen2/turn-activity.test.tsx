@@ -34,6 +34,29 @@ describe("Gen2TurnActivity", () => {
     expect(screen.getByText("pnpm test")).toBeInTheDocument();
   });
 
+  it("does not present a saved command with a missing completion event as live", () => {
+    render(
+      <Gen2TurnActivity
+        settled
+        items={[
+          {
+            id: "stale",
+            kind: "command",
+            status: "running",
+            command: "bash -lc ls",
+            output: "",
+            exitCode: null,
+          },
+        ]}
+        onOpenFile={noop}
+      />,
+    );
+    expect(screen.queryByText(/Working for/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Worked/ }));
+    expect(screen.getByText("Command result unavailable")).toBeInTheDocument();
+    expect(screen.queryByText("Running…")).not.toBeInTheDocument();
+  });
+
   it("humanizes bash wrappers instead of showing the raw blob", () => {
     render(
       <Gen2TurnActivity

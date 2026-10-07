@@ -26,17 +26,19 @@ export function Gen2TurnActivity({
   items,
   onOpenFile,
   live = false,
+  settled = false,
 }: {
   items: Gen2TurnItem[];
   onOpenFile: (path: string) => void;
   live?: boolean;
+  settled?: boolean;
 }) {
   const visible = useMemo(
     () => items.filter((item) => item.kind !== "message"),
     [items],
   );
   const itemRunning = visible.some((item) => item.status === "running");
-  const active = live || itemRunning;
+  const active = !settled && (live || itemRunning);
   const [openOverride, setOpenOverride] = useState<{
     active: boolean;
     value: boolean;
@@ -71,11 +73,17 @@ export function Gen2TurnActivity({
   const steps = (
     <ol className="gen2-turn-steps">
       {visible.map((item) => (
-        <li key={item.id} data-status={item.status}>
+        <li
+          key={item.id}
+          data-status={
+            settled && item.status === "running" ? undefined : item.status
+          }
+        >
           <StepRow
             item={item}
             onOpenFile={onOpenFile}
-            defaultExpanded={item.status === "running"}
+            defaultExpanded={!settled && item.status === "running"}
+            settled={settled}
           />
         </li>
       ))}
@@ -118,10 +126,12 @@ function StepRow({
   item,
   onOpenFile,
   defaultExpanded = false,
+  settled = false,
 }: {
   item: Gen2TurnItem;
   onOpenFile: (path: string) => void;
   defaultExpanded?: boolean;
+  settled?: boolean;
 }) {
   switch (item.kind) {
     case "message":
@@ -131,11 +141,15 @@ function StepRow({
       return (
         <StepDisclosure
           icon={<Brain aria-hidden="true" />}
-          label={item.status === "running" ? "Thinking" : "Thought"}
+          label={item.status === "running" && !settled ? "Thinking" : "Thought"}
           detail={
-            item.status === "running" ? "Reasoning…" : "Reasoning complete"
+            item.status === "running" && !settled
+              ? "Reasoning…"
+              : "Reasoning complete"
           }
-          status={item.status}
+          status={
+            settled && item.status === "running" ? undefined : item.status
+          }
           defaultExpanded={defaultExpanded}
         >
           {item.text.trim() ? (
@@ -150,7 +164,9 @@ function StepRow({
       const label = summarizeGen2Command(item.command);
       const detail =
         item.status === "running"
-          ? "Running…"
+          ? settled
+            ? "Command result unavailable"
+            : "Running…"
           : item.exitCode === null
             ? "Command finished"
             : item.exitCode === 0
@@ -162,7 +178,9 @@ function StepRow({
           icon={<TerminalIcon aria-hidden="true" />}
           label={label}
           detail={detail}
-          status={item.status}
+          status={
+            settled && item.status === "running" ? undefined : item.status
+          }
           defaultExpanded={defaultExpanded}
         >
           <div className="gen2-turn-command">
@@ -255,7 +273,11 @@ function StepRow({
           <Wrench aria-hidden="true" />
           <span>
             {item.server}/{item.tool} ·{" "}
-            {item.status === "running" ? "Running…" : "Done"}
+            {item.status === "running"
+              ? settled
+                ? "Result unavailable"
+                : "Running…"
+              : "Done"}
           </span>
         </div>
       );
@@ -273,7 +295,7 @@ function StepDisclosure({
   icon: ReactNode;
   label: string;
   detail: string;
-  status: Gen2TurnItem["status"];
+  status: Gen2TurnItem["status"] | undefined;
   defaultExpanded?: boolean;
   children: ReactNode;
 }) {
