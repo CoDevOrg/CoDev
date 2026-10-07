@@ -93,7 +93,7 @@ async function rateLimitRequest(request: NextRequest) {
  */
 async function routeRequest(request: NextRequest, event: NextFetchEvent) {
   const pathname = request.nextUrl.pathname;
-  const publicUrl = new URL(forwardedRequest(request).url);
+  const publicUrl = new URL(request.url);
   const adminHost = isAdminHostname(publicUrl.hostname);
 
   // The admin hostname is an application boundary, not just an alias. Only
@@ -128,11 +128,12 @@ async function routeRequest(request: NextRequest, event: NextFetchEvent) {
 }
 
 export async function proxy(request: NextRequest, event: NextFetchEvent) {
+  const publicRequest = forwardedRequest(request.clone() as Request);
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   const protections = securityHeaders(
     nonce,
     process.env.NODE_ENV === "production",
-    new URL(forwardedRequest(request).url).origin,
+    new URL(publicRequest.url).origin,
   );
   const headers = new Headers(request.headers);
   headers.set("x-nonce", nonce);
@@ -141,9 +142,7 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     protections.find((header) => header.key === "Content-Security-Policy")!
       .value,
   );
-  const securedRequest = new NextRequest(forwardedRequest(request), {
-    headers,
-  });
+  const securedRequest = new NextRequest(publicRequest, { headers });
   const response =
     (await routeRequest(securedRequest, event)) ?? NextResponse.next();
   // Forward the trusted nonce to SSR, including responses produced by Auth.js.
@@ -157,7 +156,7 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     }
   });
   protections.forEach(({ key, value }) => response.headers.set(key, value));
-  clearLegacySessionCookies(forwardedRequest(request), response);
+  clearLegacySessionCookies(securedRequest, response);
   return response;
 }
 

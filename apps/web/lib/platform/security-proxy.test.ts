@@ -94,3 +94,24 @@ it("retains rate-limit responses and protects admin boundary errors", async () =
   expect(response.status).toBe(404);
   expect(response.headers.get("x-frame-options")).toBe("DENY");
 });
+
+it("keeps POST bodies available to the route after middleware", async () => {
+  vi.stubEnv("AZURE_WEB_ORIGIN_SECRET", "trusted-edge");
+  const request = new NextRequest(
+    "http://0.0.0.0:3000/api/auth/signin/github",
+    {
+      method: "POST",
+      headers: {
+        "x-codev-origin-secret": "trusted-edge",
+        "x-codev-public-host": "admins.trycodev.com",
+      },
+      body: "csrfToken=test",
+    },
+  );
+  await proxy(request, event);
+  expect(await request.text()).toBe("csrfToken=test");
+  const secured = mocks.auth.mock.calls[0]![0] as NextRequest;
+  expect(secured.url).toBe(
+    "https://admins.trycodev.com/api/auth/signin/github",
+  );
+});
