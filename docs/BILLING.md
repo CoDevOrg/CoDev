@@ -31,6 +31,9 @@ and runtime entitlements. Keep Stripe product metadata and this catalog aligned.
   inside their paid period plus the three-day webhook grace. `past_due` and
   `canceled` are blocked.
 - Application admins are exempt. Provider-less paid rows are admin grants.
+- Runtime reconciliation uses lifetime usage for Free and UTC-month usage for
+  Individual when stopping machines at their allowance. New entitlements are
+  applied from subscription state on each compute request.
 - Free usage is cumulative across the account's lifetime and does not reset.
   Paid usage resets at the start of each UTC month.
 - Durable compute claims enforce plan concurrency before an Azure start is

@@ -177,7 +177,8 @@ async function stopExhaustedOwner(ownerId: string, now: Date) {
   const policy = await getWorkspaceOwnerEntitlement(ownerId);
   const exhausted =
     policy.monthlyLimitMs !== null &&
-    (await usedComputeMs(ownerId, now)) >= policy.monthlyLimitMs;
+    (await usedComputeMs(ownerId, now, undefined, policy.usageWindow)) >=
+      policy.monthlyLimitMs;
   const budgetBlocked =
     policy.tier === "free" &&
     (!policy.enabled || (await getOwnerBudget(ownerId, now)).blocked);

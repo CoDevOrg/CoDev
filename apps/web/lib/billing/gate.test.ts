@@ -13,7 +13,7 @@ vi.mock("./workspace-entitlement", () => ({
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  owner: null as { ownerId: string } | null,
+  owner: null as { ownerId: string; runtimeProvider?: string } | null,
   require: vi.fn(),
 }));
 
@@ -35,6 +35,8 @@ vi.mock("../gen2/free-compute-claim", () => ({
   reserveFreeWorkspaceCompute: vi.fn(),
 }));
 
+import { getWorkspaceOwnerEntitlement } from "./workspace-entitlement";
+import { reserveFreeWorkspaceCompute } from "../gen2/free-compute-claim";
 import { requireWorkspaceOwnerPlan } from "./gate";
 
 describe("requireWorkspaceOwnerPlan", () => {
@@ -60,4 +62,23 @@ describe("requireWorkspaceOwnerPlan", () => {
     await requireWorkspaceOwnerPlan("ws-missing");
     expect(mocks.require).not.toHaveBeenCalled();
   });
+});
+
+it("lets collaborators reserve an eligible Free owner's ARM allowance without a paid seat", async () => {
+  mocks.owner = { ownerId: "free-owner", runtimeProvider: "azure_arm" };
+  vi.mocked(getWorkspaceOwnerEntitlement).mockResolvedValueOnce({
+    tier: "free",
+    enabled: true,
+    unlimited: false,
+    ownedWorkspaceCount: 1,
+    usageWindow: "lifetime",
+    monthlyLimitMs: 5 * 3_600_000,
+    workspaceLimit: 1,
+    activeWorkspaceLimit: 1,
+  });
+  mocks.require.mockClear();
+  await requireWorkspaceOwnerPlan("shared-workspace");
+  expect(getWorkspaceOwnerEntitlement).toHaveBeenCalledWith("free-owner");
+  expect(mocks.require).not.toHaveBeenCalled();
+  expect(reserveFreeWorkspaceCompute).toHaveBeenCalledWith("shared-workspace");
 });
