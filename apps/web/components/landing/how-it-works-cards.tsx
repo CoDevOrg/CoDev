@@ -2,6 +2,8 @@
 
 import { Check, Flame, Handshake, ShieldCheck } from "lucide-react";
 
+import { AiSubscriptions } from "./ai-subscriptions";
+
 export function CoordinationCard() {
   return (
     <div
@@ -12,12 +14,13 @@ export function CoordinationCard() {
       <div className="lp-triple-text">
         <h3 className="lp-triple-title">Keep your team’s agents in sync.</h3>{" "}
         <p className="lp-triple-desc">
-          Agents divide tasks and agree on who works on each file. They build in
-          parallel without duplicating work or editing over each other.
+          Connect your own OpenAI, Claude, or Cursor subscription. Your team’s
+          agents divide tasks and agree on who works on each file, so they can
+          build in parallel without duplicate work or conflicting changes.
         </p>
       </div>
 
-      <div className="lp-feature-preview">
+      <div className="lp-feature-preview lp-coordination-preview">
         <div className="lp-feature-dots" aria-hidden="true" />
         <div className="lp-triple-stage lp-stage-coord">
           <div className="lp-coord-topbar">
@@ -65,6 +68,8 @@ export function CoordinationCard() {
               <div className="lp-lane-progress" />
             </div>
           </div>
+
+          <AiSubscriptions />
 
           <div className="lp-coord-footer">
             <Check size={11} className="text-emerald-400" />
