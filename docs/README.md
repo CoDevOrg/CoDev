@@ -45,9 +45,10 @@ intent that may have drifted; confirm details against the code.
 
 ## Product
 
-| Document                                                           | Status | Covers                                                    |
-| ------------------------------------------------------------------ | ------ | --------------------------------------------------------- |
-| [product/ENTERPRISE_FEATURES.md](./product/ENTERPRISE_FEATURES.md) | Design | Long-range product vision; not a list of shipped features |
+| Document                                                           | Status  | Covers                                                              |
+| ------------------------------------------------------------------ | ------- | ------------------------------------------------------------------- |
+| [product/PRODUCT_OVERVIEW.md](./product/PRODUCT_OVERVIEW.md)       | Current | Product surfaces, account model, system shape, and roadmap boundary |
+| [product/ENTERPRISE_FEATURES.md](./product/ENTERPRISE_FEATURES.md) | Design  | Long-range product vision; not a list of shipped features           |
 
 Add new documents to the matching folder and update this index. Remove index
 entries when documents are deleted.
