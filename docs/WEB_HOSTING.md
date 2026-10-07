@@ -3,6 +3,9 @@
 Public requests follow **Cloudflare → Azure Container Apps → Supabase/Redis**.
 Cloudflare Workers Free runs a small streaming proxy, including WebSocket upgrades;
 Next.js rendering, authorization, database work, and socket messages run on Azure.
+The admin console lives at `/admin`; Next.js permanently redirects the legacy
+`/gen2/admin` link on the admin hostname before workspace routing, preserving the admin authorization gate.
+The Next.js proxy uses the authenticated edge public hostname, not the custom server’s internal URL, for the admin boundary.
 API requests preserve the authenticated edge origin for terminal same-origin checks,
 billing return URLs, workspace shares, and CLI sign-in links.
 This removes the 10 ms Worker CPU limit from app execution. It does not guarantee

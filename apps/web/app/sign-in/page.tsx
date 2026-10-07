@@ -119,8 +119,8 @@ export default async function SignInPage({
         <p className="eyebrow">Sign in</p>
         <h1>Welcome to CoDev.</h1>
         <p>
-          Sign in with Google, GitHub, or the email you already use. New accounts
-          are paused while CoDev is on the waitlist.
+          Sign in with Google, GitHub, or the email you already use. New
+          accounts are paused while CoDev is on the waitlist.
         </p>
 
         {deleted === "1" ? (
