@@ -1,5 +1,7 @@
 @media (max-width: 1000px) {
   .lp-feature-preview {
+    aspect-ratio: auto;
+    min-height: 350px;
     padding: 32px 24px;
   }
   .lp-triple-title,
@@ -14,8 +16,8 @@
 }
 @media (max-width: 720px) {
   .lp-feature-preview {
-    aspect-ratio: 1.4;
-    padding: 32px 22px;
+    aspect-ratio: auto;
+    padding: 28px 20px;
   }
   .lp-how-header {
     margin-bottom: 36px;
@@ -24,7 +26,20 @@
     gap: 36px;
   }
   .lp-terminal-browser {
-    width: 43%;
+    width: 58%;
+    top: 24px;
+    right: 6%;
+  }
+  .lp-terminal-preview {
+    min-height: 420px;
+  }
+  .lp-stage-terminal {
+    width: 88%;
+    left: 6%;
+    bottom: 24px;
+  }
+  .lp-terminal-browser .lp-browser-content {
+    padding: 14px;
   }
   .lp-terminal-files {
     left: 18px;
