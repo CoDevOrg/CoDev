@@ -5,6 +5,8 @@ import {
   NextResponse,
 } from "next/server";
 
+import { forwardedRequest } from "@/lib/http/forwarded-request";
+
 import { auth as nextAuth } from "@/auth";
 import {
   apiEdgeLimiter,
@@ -46,12 +48,16 @@ function clientIdentifier(request: NextRequest) {
  */
 export async function proxy(request: NextRequest, event: NextFetchEvent) {
   const pathname = request.nextUrl.pathname;
-  const adminHost = isAdminHostname(request.nextUrl.hostname);
+  const publicUrl = new URL(forwardedRequest(request).url);
+  const adminHost = isAdminHostname(publicUrl.hostname);
 
   // The admin hostname is an application boundary, not just an alias. Only
   // the admin page, its sign-in flow, and framework assets are served there.
   // Workspaces and the rest of the product live on the public site.
   if (adminHost) {
+    if (pathname === "/gen2/admin") {
+      return NextResponse.redirect(new URL("/admin", publicUrl), 308);
+    }
     if (pathname === "/") {
       const url = request.nextUrl.clone();
       url.pathname = "/admin";
