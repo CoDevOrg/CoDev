@@ -9,6 +9,7 @@ import { schema } from "@codev/db";
 
 import { resolveSignInProviderGate } from "@/lib/auth/auth-sign-in-gate";
 import { resolveCredentialsSignIn } from "@/lib/auth/credentials-auth";
+import { sessionRevision } from "@/lib/auth/session-revision";
 import { encryptSecret } from "@/lib/platform/crypto";
 import { getDatabase } from "@/lib/platform/database";
 import {
@@ -16,10 +17,7 @@ import {
   openGithubLinkState,
 } from "@/lib/github/github-link";
 import { resolveGithubConnection } from "@/lib/github/github";
-import {
-  getSharedAuthCookieDomain,
-  getSharedAuthCookieName,
-} from "@/lib/auth/auth-cookie";
+import { getSessionCookie } from "@/lib/auth/auth-cookie";
 import {
   assertCanRegister,
   clearInviteGrantCookie,
@@ -80,10 +78,6 @@ const googleClientId =
   process.env.AUTH_GOOGLE_ID ?? "google-auth-not-configured";
 const googleClientSecret =
   process.env.AUTH_GOOGLE_SECRET ?? "google-auth-not-configured";
-const sharedAuthCookieDomain = getSharedAuthCookieDomain(
-  process.env.VERCEL_ENV,
-);
-const sharedAuthCookieName = getSharedAuthCookieName(process.env.VERCEL_ENV);
 
 async function getGithubLinkCookie() {
   try {
@@ -106,12 +100,7 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
   trustHost: true,
   session: { strategy: "jwt" },
   cookies: {
-    sessionToken: {
-      ...(sharedAuthCookieName ? { name: sharedAuthCookieName } : {}),
-      options: {
-        ...(sharedAuthCookieDomain ? { domain: sharedAuthCookieDomain } : {}),
-      },
-    },
+    sessionToken: getSessionCookie(),
   },
   pages: {
     signIn: "/sign-in",
@@ -156,6 +145,7 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
               name: user.name,
               email: user.email,
               image: user.avatarUrl,
+              credentialRevision: user.credentialRevision,
             }
           : null;
       },
@@ -411,10 +401,11 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
         const name = (session as { user?: { name?: unknown } } | undefined)
           ?.user?.name;
         if (typeof name === "string" && name.trim()) token.name = name.trim();
-        return token;
       }
       if (account?.provider === "credentials" && user?.id) {
+        if (!user.credentialRevision) return null;
         token.localUserId = user.id;
+        token.credentialRevision = user.credentialRevision;
       } else if (
         account?.provider === "google" &&
         !token.localUserId &&
@@ -475,15 +466,24 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
 
       if (token.localUserId) {
         const [current] = await getDatabase()
-          .select({ id: schema.users.id })
+          .select({
+            id: schema.users.id,
+            passwordHash: schema.users.passwordHash,
+          })
           .from(schema.users)
           .where(eq(schema.users.id, token.localUserId))
           .limit(1);
         if (!current) return null;
+        const revision = sessionRevision(current.passwordHash);
+        if (account && account.provider !== "credentials")
+          token.credentialRevision = revision;
+        if (token.credentialRevision !== revision) return null;
       }
       return token;
     },
     session({ session, token }) {
+      if (token.credentialRevision)
+        session.credentialRevision = token.credentialRevision;
       if (session.user && token.localUserId) {
         session.user.id = token.localUserId;
       }

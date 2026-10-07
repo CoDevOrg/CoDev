@@ -7,9 +7,10 @@ import { redirect } from "next/navigation";
 import { schema } from "@codev/db";
 
 import { unstable_update } from "@/auth";
+import { updateAccountPassword } from "@/lib/auth/update-account-password";
 import { getNewAccountPasswordError } from "@/lib/auth/password-policy";
 import { requireUser } from "@/lib/auth/session";
-import { hashPassword, verifyPassword } from "@/lib/platform/crypto";
+import { verifyPassword } from "@/lib/platform/crypto";
 import { getDatabase } from "@/lib/platform/database";
 
 const PROFILE_PATH = "/settings/personal/profile";
@@ -76,10 +77,9 @@ export async function changeAccountPassword(
     redirect(`${redirectTo}?error=policy`);
   }
 
-  await getDatabase()
-    .update(schema.users)
-    .set({ passwordHash: await hashPassword(password), updatedAt: new Date() })
-    .where(eq(schema.users.id, user.id));
+  if (!(await updateAccountPassword(user.id, row.passwordHash, password))) {
+    redirect(`${redirectTo}?error=current`);
+  }
 
   redirect(`${redirectTo}?password=changed`);
 }

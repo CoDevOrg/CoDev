@@ -36,6 +36,10 @@ const values = {
     process.env.ARM_WORKSPACE_BOOT_ENABLED || base.ARM_WORKSPACE_BOOT_ENABLED,
   VERCEL_GIT_COMMIT_SHA: release,
 };
+// Auth.js must retain the authenticated public host for host-only session cookies.
+// The existing redirect proxy carries OAuth callbacks back to that host.
+delete values.AUTH_URL;
+delete values.NEXTAUTH_URL;
 if (!values.AZURE_WEB_ORIGIN_SECRET || !values.WORKFLOW_POSTGRES_URL)
   throw new Error("Azure runtime configuration is missing.");
 

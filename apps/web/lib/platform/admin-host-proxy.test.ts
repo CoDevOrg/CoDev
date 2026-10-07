@@ -43,3 +43,19 @@ it.each([
     expect(response?.status).toBe(404);
   },
 );
+
+it("uses the authenticated public origin for CSP and legacy cookie retirement", async () => {
+  vi.stubEnv("AZURE_WEB_ORIGIN_SECRET", secret);
+  const incoming = request("/admin");
+  incoming.headers.set("cookie", "__Secure-codev.session-token=old");
+  const response = await proxy(incoming, event);
+  expect(response.headers.get("content-security-policy")).toContain(
+    "wss://admins.trycodev.com",
+  );
+  expect(response.headers.get("content-security-policy")).not.toContain(
+    "0.0.0.0",
+  );
+  expect(response.headers.getSetCookie()).toContain(
+    "__Secure-codev.session-token=; Domain=trycodev.com; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax",
+  );
+});

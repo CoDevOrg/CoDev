@@ -1,12 +1,8 @@
 "use server";
 
-import { and, eq, isNull } from "drizzle-orm";
 import { redirect } from "next/navigation";
 
-import { schema } from "@codev/db";
-
-import { hashPassword } from "@/lib/platform/crypto";
-import { getDatabase } from "@/lib/platform/database";
+import { updateAccountPassword } from "@/lib/auth/update-account-password";
 import { getNewAccountPasswordError } from "@/lib/auth/password-policy";
 import { requireUser } from "@/lib/auth/session";
 
@@ -34,11 +30,7 @@ export async function setAccountPassword(
     redirect(`${redirectTo}?error=policy`);
   }
 
-  const [updated] = await getDatabase()
-    .update(schema.users)
-    .set({ passwordHash: await hashPassword(password), updatedAt: new Date() })
-    .where(and(eq(schema.users.id, user.id), isNull(schema.users.passwordHash)))
-    .returning({ id: schema.users.id });
+  const updated = await updateAccountPassword(user.id, null, password);
 
   if (!updated) {
     redirect(`${redirectTo}?error=exists`);

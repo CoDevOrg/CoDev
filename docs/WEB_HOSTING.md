@@ -252,3 +252,31 @@ metadata. It refuses requests without service authorization and refuses executio
 on Workers to prevent relay loops. No new secrets or paid Cloudflare services are
 required; keep that Vercel production alias available and deploy Vercel before
 enabling a Worker build that depends on the catalog service.
+
+## Browser security and session rollout
+
+Azure and Vercel web deployments generate a fresh CSP script nonce in `apps/web/proxy.ts`
+and forward it to SSR. The root layout reads that nonce for the theme script;
+framework bootstrap scripts inherit it from the request CSP. All pages must
+remain dynamically rendered so a cached page cannot reuse another request's
+nonce. The shared Next.js headers add framing protection, MIME sniffing
+protection, referrer and permissions policies, and production HSTS. HSTS is
+host-only: runtime subdomains do not inherit the application's policy.
+
+Production sessions use `__Host-codev.session-token` with no `Domain` attribute.
+Public, admin, preview, and runtime hosts cannot share this cookie. Visiting an
+application host expires the previous domain-wide session cookies; this rollout
+requires members to sign in again. Admin sign-in is independent of public-site
+sign-in. Azure releases omit `AUTH_URL`/`NEXTAUTH_URL` from the runtime so
+Auth.js retains the authenticated public host. The existing
+`AUTH_REDIRECT_PROXY_URL` on `www.trycodev.com/api/auth` keeps the registered
+provider callback canonical and forwards signed OAuth state back to the host
+starting sign-in. Keep that redirect proxy and the shared `AUTH_SECRET` intact.
+
+Password login allows ten attempts per normalized account per fifteen minutes,
+including server-action requests. It uses the existing REST Redis settings
+(`KV_REST_API_URL`/`KV_REST_API_TOKEN`, or the Upstash equivalents), with
+`REDIS_URL` as a fallback. Missing or failing production rate-limit storage
+rejects password login. Password changes invalidate browser sessions, retire
+CLI tokens and approved device flows atomically, and close existing workspace
+sockets within fifteen seconds. No database migration is required.

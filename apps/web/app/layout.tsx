@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter_Tight, JetBrains_Mono } from "next/font/google";
+import { headers } from "next/headers";
 
 import "./theme-tokens.css";
 import "./globals.css";
@@ -24,8 +25,7 @@ const mono = JetBrains_Mono({
 /**
  * Base for resolving the relative social image on the landing page. Without
  * it Next falls back to the opaque per-deployment vercel.app host, so a shared
- * link from production would not point at trycodev.com. Mirrors the
- * environment split already used by `lib/auth/auth-cookie.ts`.
+ * link from production would not point at trycodev.com.
  */
 function metadataBase(): URL {
   if (process.env.VERCEL_ENV === "production") {
@@ -47,11 +47,12 @@ export const metadata: Metadata = {
     "A hosted browser workspace where people and AI agents build together.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -59,7 +60,10 @@ export default function RootLayout({
             returning dark-mode visitor never sees a light flash. Nothing to
             do when no choice is stored -- the CSS `prefers-color-scheme`
             query already handles that case without JS. */}
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <script
+          nonce={nonce}
+          dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }}
+        />
       </head>
       <body
         className={`${sans.variable} ${mono.variable}`}
