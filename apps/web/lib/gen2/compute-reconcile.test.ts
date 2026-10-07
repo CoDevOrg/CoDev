@@ -4,6 +4,7 @@ vi.mock("../billing/workspace-entitlement", () => ({
     enabled: true,
     unlimited: false,
     ownedWorkspaceCount: 1,
+    usageWindow: "month",
     monthlyLimitMs: 60_000_000,
   })),
 }));
@@ -69,6 +70,10 @@ const mocks = vi.hoisted(() => {
   };
 });
 
+vi.mock("./owner-budget", () => ({
+  getOwnerBudget: vi.fn(async () => ({ blocked: false })),
+}));
+
 vi.mock("./arm-workspace-turns-reconcile", () => ({
   reconcileArmWorkspaceTurns: vi.fn(async () => undefined),
 }));
@@ -105,6 +110,7 @@ vi.mock("./compute-quota", () => ({
   usedComputeMs: mocks.usedComputeMs,
 }));
 
+import { getWorkspaceOwnerEntitlement } from "../billing/workspace-entitlement";
 import { reconcileComputeQuota } from "./compute-reconcile";
 
 beforeEach(() => {
@@ -227,4 +233,29 @@ it("stops an idle ARM guest only after confirming no agent is running", async ()
   mocks.usedComputeMs.mockResolvedValue(0);
   await reconcileComputeQuota(new Date("2026-10-01T12:00:00Z"));
   expect(mocks.stop).toHaveBeenCalledWith("workspace-a", "owner");
+});
+
+it("stops Free compute after five lifetime hours rather than checking this month only", async () => {
+  const now = new Date("2026-10-01T12:00:00Z");
+  vi.mocked(getWorkspaceOwnerEntitlement).mockResolvedValueOnce({
+    tier: "free",
+    enabled: true,
+    unlimited: false,
+    ownedWorkspaceCount: 1,
+    usageWindow: "lifetime",
+    monthlyLimitMs: 5 * 3_600_000,
+    workspaceLimit: 1,
+    activeWorkspaceLimit: 1,
+  });
+  mocks.usedComputeMs.mockImplementation(async (_owner, _now, _db, window) =>
+    window === "lifetime" ? 5 * 3_600_000 : 0,
+  );
+  const result = await reconcileComputeQuota(now);
+  expect(mocks.usedComputeMs).toHaveBeenCalledWith(
+    "owner",
+    now,
+    undefined,
+    "lifetime",
+  );
+  expect(result.stopped).toBe(2);
 });

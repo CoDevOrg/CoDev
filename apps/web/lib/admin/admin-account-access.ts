@@ -16,8 +16,9 @@ export type AdminAccountAccessData = Array<{
   email: string | null;
   isAdmin: boolean;
   planId: PlanId;
-  subscriptionStatus: string;
+  subscriptionStatus: typeof schema.organizationSubscriptions.$inferSelect.status;
   provider: string | null;
+  currentPeriodEnd: Date | null;
 }>;
 
 export async function getAdminAccountAccessData(): Promise<AdminAccountAccessData> {
@@ -31,6 +32,7 @@ export async function getAdminAccountAccessData(): Promise<AdminAccountAccessDat
       planId: schema.organizationSubscriptions.planId,
       subscriptionStatus: schema.organizationSubscriptions.status,
       provider: schema.organizationSubscriptions.provider,
+      currentPeriodEnd: schema.organizationSubscriptions.currentPeriodEnd,
     })
     .from(schema.users)
     .leftJoin(

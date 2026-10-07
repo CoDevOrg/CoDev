@@ -16,11 +16,15 @@ import type { AdminSummary } from "@/lib/admin/admin-stats";
 import type { AdminFeatureAccessData } from "@/lib/admin/admin-feature-access";
 import type { AccessRequestRow } from "@/lib/admin/access-requests";
 
+import { AdminPlanSummary } from "./admin-plan-summary";
+import type { AdminPlanSummaryRow } from "@/lib/admin/admin-plan-summary";
+
 type TabValue = "overview" | "users" | "organizations" | "waitlist";
 
 export function AdminConsoleClient({
   currentUser,
   summary,
+  plans,
   users,
   daily,
   topPaths,
@@ -30,6 +34,7 @@ export function AdminConsoleClient({
 }: {
   currentUser: { id: string; email?: string | null | undefined };
   summary: AdminSummary;
+  plans: AdminPlanSummaryRow[];
   users: AdminUserDirectoryItem[];
   daily: Array<{ day: string; views: number; visitors: number }>;
   topPaths: Array<{ path: string; views: number }>;
@@ -140,12 +145,15 @@ export function AdminConsoleClient({
       {/* Tab Panels */}
       <div>
         {activeTab === "overview" ? (
-          <AdminOverview
-            summary={summary}
-            daily={daily}
-            topPaths={topPaths}
-            recentVisits={recentVisits}
-          />
+          <div className="space-y-6">
+            <AdminPlanSummary plans={plans} />
+            <AdminOverview
+              summary={summary}
+              daily={daily}
+              topPaths={topPaths}
+              recentVisits={recentVisits}
+            />
+          </div>
         ) : null}
 
         {activeTab === "users" ? (

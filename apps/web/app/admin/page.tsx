@@ -16,6 +16,8 @@ import {
 import { getAdminFeatureAccessData } from "@/lib/admin/admin-feature-access";
 import { getAdminAccountAccessData } from "@/lib/admin/admin-account-access";
 
+import { buildAdminPlanSummary } from "@/lib/admin/admin-plan-summary";
+
 export const metadata: Metadata = { title: "Admin" };
 export const dynamic = "force-dynamic";
 
@@ -60,6 +62,7 @@ export default async function AdminPage() {
         <AdminConsoleClient
           currentUser={{ id: user.id, email: user.email }}
           summary={summary}
+          plans={buildAdminPlanSummary(accountAccess)}
           users={mergedUsers}
           daily={daily}
           topPaths={topPaths}
