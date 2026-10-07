@@ -1,53 +1,54 @@
 import Link from "next/link";
+import Image from "next/image";
 import type { Metadata } from "next";
+import { buttonClassName } from "@/components/ui/button";
+import { DocsOverview } from "./docs-overview";
+import { DocsGuides } from "./docs-guides";
+import { DocsNavigation } from "./docs-navigation";
+import "./docs.css";
+import "./docs-responsive.css";
 
-export const metadata: Metadata = { title: "Getting started · CoDev" };
+export const metadata: Metadata = {
+  title: "Documentation · CoDev",
+  description:
+    "Get started with CoDev: invite your team, connect your AI subscriptions, and build together in a shared cloud workspace.",
+};
 
 export default function DocsPage() {
   return (
-    <main className="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-16">
-      <Link href="/" className="text-sm text-muted-foreground">
-        ← CoDev
-      </Link>
-      <header className="flex flex-col gap-3">
-        <p className="text-sm text-muted-foreground">DOCUMENTATION</p>
-        <h1 className="text-4xl font-semibold tracking-tight">
-          Build together in CoDev
-        </h1>
-        <p className="text-muted-foreground">
-          Your team and AI agents work in one shared cloud workspace.
-        </p>
+    <div className="docs-page">
+      <a className="docs-skip" href="#docs-main">
+        Skip to content
+      </a>
+      <header className="docs-header">
+        <div className="docs-header-inner">
+          <Link href="/" className="docs-brand" aria-label="CoDev home">
+            <Image
+              src="/brand/codev-mark-v3.png"
+              alt=""
+              width={28}
+              height={28}
+            />
+            <strong>CoDev</strong>
+            <span>/</span>
+            <span>Docs</span>
+          </Link>
+          <Link
+            href="/#get-access"
+            className={buttonClassName({ variant: "default", size: "sm" })}
+          >
+            Join the waitlist
+          </Link>
+        </div>
       </header>
-      <section className="flex flex-col gap-3">
-        <h2 className="text-xl font-medium">Join the private beta</h2>
-        <p>
-          Start by joining the waitlist. We’ll email you when access is
-          available.
-        </p>
-        <Link href="/#get-access" className="underline">
-          Join the waitlist
-        </Link>
-      </section>
-      <section className="flex flex-col gap-3">
-        <h2 className="text-xl font-medium">Open a shared workspace</h2>
-        <p>
-          Bring your repository into a workspace. Your editor, terminal, Git,
-          and agents use the same files.
-        </p>
-      </section>
-      <section className="flex flex-col gap-3">
-        <h2 className="text-xl font-medium">Work with your team and agents</h2>
-        <p>
-          Invite teammates, follow agent activity, and review changes together.
-          Divide agent tasks across separate files to avoid duplicated work.
-        </p>
-      </section>
-      <section className="flex flex-col gap-3">
-        <h2 className="text-xl font-medium">Need a hand?</h2>
-        <a href="mailto:admins@trycodev.com" className="underline">
-          Contact the CoDev team
-        </a>
-      </section>
-    </main>
+      <div className="docs-layout">
+        <DocsNavigation />
+        <main id="docs-main">
+          <DocsOverview />
+          <DocsGuides />
+        </main>
+        <DocsNavigation outline />
+      </div>
+    </div>
   );
 }
