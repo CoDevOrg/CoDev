@@ -12,34 +12,43 @@ import { RequestAccessForm } from "@/components/landing/request-access-form";
 export function WaitlistInline() {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  const [requestCount, setRequestCount] = useState(0);
 
   // The hero and nav "Join the waitlist" buttons scroll the page down to this
   // form and drop the caret in the email field.
   useEffect(() => {
     const onRequest = () => {
       setOpen(true);
-      const node = wrapRef.current;
-      if (!node) return;
-      const reduced = window.matchMedia(
-        "(prefers-reduced-motion: reduce)",
-      ).matches;
-      node.scrollIntoView({
-        behavior: reduced ? "auto" : "smooth",
-        block: "center",
-      });
-      window.setTimeout(
-        () => {
-          node
-            .querySelector<HTMLInputElement>('input[name="email"]')
-            ?.focus({ preventScroll: true });
-        },
-        reduced ? 0 : 460,
-      );
+      setRequestCount((count) => count + 1);
     };
     window.addEventListener(REQUEST_ACCESS_EVENT, onRequest);
     if (window.location.hash === `#${REQUEST_ACCESS_TARGET_ID}`) onRequest();
     return () => window.removeEventListener(REQUEST_ACCESS_EVENT, onRequest);
   }, []);
+
+  useEffect(() => {
+    if (requestCount === 0) return;
+    const reduced = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    const card = wrapRef.current?.querySelector<HTMLDivElement>(
+      ".lp-waitlist-card",
+    );
+    if (!card) return;
+    card.scrollIntoView({
+      behavior: reduced ? "auto" : "smooth",
+      block: "center",
+    });
+    const focusTimer = window.setTimeout(
+      () => {
+        wrapRef.current
+          ?.querySelector<HTMLInputElement>('input[name="email"]')
+          ?.focus({ preventScroll: true });
+      },
+      reduced ? 0 : 460,
+    );
+    return () => window.clearTimeout(focusTimer);
+  }, [requestCount]);
 
   return (
     <div className="lp-waitlist" id={REQUEST_ACCESS_TARGET_ID} ref={wrapRef}>

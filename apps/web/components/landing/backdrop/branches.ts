@@ -1,7 +1,5 @@
 import {
   BLUE,
-  EMBER,
-  GOLD,
   CYAN,
   ICE,
   at,
@@ -10,7 +8,6 @@ import {
   smoothstep,
   type Frame,
 } from "./draw-kit";
-import { isWarmBranch } from "./branch-color";
 import { GROW_SPAN, type TreeLine } from "./tree-geometry";
 
 const ALPHA = [1, 0.95, 0.8] as const;
@@ -58,10 +55,9 @@ function strokeLine(
 
   // The first stretch fades in from nothing so the branch seems to rise out of
   // the trunk's light instead of starting at a hard edge.
-  const warm = isWarmBranch(line);
-  const tipColor = warm ? EMBER : BLUE;
-  const midColor = warm ? EMBER : CYAN;
-  const rootColor = warm ? GOLD : ICE;
+  const tipColor = BLUE;
+  const midColor = CYAN;
+  const rootColor = ICE;
   const core = ctx.createLinearGradient(first[0], first[1], last[0], last[1]);
   core.addColorStop(0, rgba(rootColor, 0));
   core.addColorStop(0.16, rgba(rootColor, 0.95 * alpha));
@@ -102,13 +98,11 @@ export function drawBranches(
   lines: readonly TreeLine[],
   trunkWidth: number,
   grown: Float32Array,
-  warm = false,
 ): void {
   const fade = smoothstep(0, 0.12, f.growth);
   const maxDepth = f.lite ? 1 : 2;
 
   lines.forEach((line, index) => {
-    if (isWarmBranch(line) !== warm) return;
     grown[index] = 0;
     if (line.depth > maxDepth) return;
     const progress = clamp((f.growth - line.start) / GROW_SPAN);
