@@ -7,6 +7,8 @@ import { schema } from "@codev/db";
 import { hashPassword, verifyPassword } from "../platform/crypto";
 import { getDatabase } from "../platform/database";
 import { getNewAccountPasswordError } from "./password-policy";
+import { sessionRevision } from "./session-revision";
+import { allowPasswordLogin } from "./password-login-limit";
 
 export type CredentialsIntent = "sign-in" | "sign-up";
 
@@ -61,6 +63,7 @@ export type CredentialsUser = {
   name: string | null;
   email: string | null;
   avatarUrl: string | null;
+  credentialRevision: string;
 };
 
 export type CredentialsSignInHooks = {
@@ -90,6 +93,8 @@ export async function resolveCredentialsSignIn(
 ): Promise<CredentialsUser | null> {
   const { intent, name, email, password } = parseCredentialsFields(credentials);
   if (!email || !password) return null;
+
+  if (!(await allowPasswordLogin(email))) return null;
 
   const database = getDatabase();
   const [existingUser] = await database
@@ -136,16 +141,18 @@ export async function resolveCredentialsSignIn(
       name: existingUser.name,
       email: existingUser.email,
       avatarUrl: existingUser.avatarUrl,
+      credentialRevision: sessionRevision(existingUser.passwordHash),
     };
   }
 
+  const passwordHash = await hashPassword(password);
   const [localUser] = await database
     .insert(schema.users)
     .values({
       login: `local-${randomBytes(8).toString("hex")}`,
       name,
       email,
-      passwordHash: await hashPassword(password),
+      passwordHash,
     })
     .returning({
       id: schema.users.id,
@@ -161,6 +168,7 @@ export async function resolveCredentialsSignIn(
     name: localUser.name,
     email: localUser.email,
     avatarUrl: localUser.avatarUrl,
+    credentialRevision: sessionRevision(passwordHash),
   };
   await hooks.onRegistered?.(created);
   return created;

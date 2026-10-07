@@ -2,7 +2,11 @@ import "next-auth";
 import "next-auth/jwt";
 
 declare module "next-auth" {
+  interface User {
+    credentialRevision?: string;
+  }
   interface Session {
+    credentialRevision?: string;
     user: {
       id: string;
       githubLogin?: string;
@@ -16,6 +20,7 @@ declare module "next-auth" {
 declare module "next-auth/jwt" {
   interface JWT {
     localUserId?: string;
+    credentialRevision?: string;
     githubLogin?: string;
     githubConnectionCheckedAt?: number;
   }

@@ -16,6 +16,7 @@ export type AppUser = {
   email?: string | null;
   image?: string | null;
   githubLogin?: string;
+  credentialRevision?: string;
 };
 
 export type ConnectedAccounts = {
@@ -60,5 +61,12 @@ export async function getConnectedAccounts(
 // one session/DB round trip per request instead of one per call site.
 export const getCurrentAppUser = cache(async (): Promise<AppUser | null> => {
   const session = await nextAuth();
-  return session?.user ?? null;
+  return session?.user
+    ? {
+        ...session.user,
+        ...(session.credentialRevision
+          ? { credentialRevision: session.credentialRevision }
+          : {}),
+      }
+    : null;
 });

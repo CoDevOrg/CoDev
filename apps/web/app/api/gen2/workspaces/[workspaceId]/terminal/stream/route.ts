@@ -1,3 +1,5 @@
+import { guardSessionSocket } from "@/lib/auth/session-socket";
+import { hasSameOrigin } from "@/lib/http/same-origin";
 import { ApiError, withUser } from "@/lib/http/api-route";
 import {
   gen2TerminalStreamMaxPayload,
@@ -17,8 +19,7 @@ export const GET = withUser<Params>(
   async ({ request, user, params: { workspaceId } }) => {
     // A cookie-authenticated socket must come from this site, or another
     // page could open the victim's shell.
-    const origin = request.headers.get("origin");
-    if (origin && new URL(origin).host !== new URL(request.url).host) {
+    if (!hasSameOrigin(request)) {
       throw new ApiError("Cross-origin terminal streams are not allowed.", 403);
     }
     const query = gen2TerminalStreamQuerySchema.safeParse(
@@ -30,14 +31,17 @@ export const GET = withUser<Params>(
     await authorizeGen2TerminalStream(workspaceId, user.id);
     return upgradeWebSocket(
       request,
-      (socket) =>
-        handleGen2TerminalSocket(socket, {
-          workspaceId,
-          userId: user.id,
-          sessionId: query.data.sessionId,
-          worktreeId: query.data.worktreeId,
-          after: query.data.after,
-        }),
+      async (socket) => {
+        const guarded = await guardSessionSocket(socket, user);
+        if (guarded)
+          await handleGen2TerminalSocket(guarded, {
+            workspaceId,
+            userId: user.id,
+            sessionId: query.data.sessionId,
+            worktreeId: query.data.worktreeId,
+            after: query.data.after,
+          });
+      },
       { maxPayload: gen2TerminalStreamMaxPayload },
     );
   },

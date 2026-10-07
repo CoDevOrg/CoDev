@@ -1,6 +1,7 @@
 import path from "node:path";
 import type { NextConfig } from "next";
 import { withWorkflow } from "workflow/next";
+import { securityHeaders } from "./lib/platform/security-headers";
 
 const cloudflareWorkersStub = path.join(
   import.meta.dirname,
@@ -9,6 +10,10 @@ const cloudflareWorkersStub = path.join(
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  poweredByHeader: false,
+  async headers() {
+    return [{ source: "/:path*", headers: securityHeaders() }];
+  },
   allowedDevOrigins: ["127.0.0.1"],
   transpilePackages: ["@pierre/diffs", "@pierre/theme", "@pierre/theming"],
   serverExternalPackages: ["ioredis", "node-pty", "pg", "ws"],
