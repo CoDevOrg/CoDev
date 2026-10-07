@@ -2,14 +2,13 @@ import { drawBranches } from "./branches";
 import { createMotes, drawDunes } from "./dunes";
 import { MAX_GROWTH, clamp, smoothstep, type Frame } from "./draw-kit";
 import { drawPulses } from "./pulses";
-import { drawMeteors } from "./meteors";
 import { createSky, drawPillar, drawSky, drawSwirls } from "./sky";
 import { buildTree } from "./tree-geometry";
 import { drawTrunk, trunkWidth } from "./trunk";
 
 export interface LandingSceneOptions {
   canvas: HTMLCanvasElement;
-  meteorCanvas?: HTMLCanvasElement | undefined;
+  accentCanvas?: HTMLCanvasElement | undefined;
   pixelRatio: number;
   /** Fewer stars, branches and pulses, for small or slow screens. */
   lite: boolean;
@@ -41,7 +40,7 @@ export function createLandingScene(
 ): LandingScene | null {
   const ctx = options.canvas.getContext("2d");
   if (!ctx) return null;
-  const meteorCtx = options.meteorCanvas?.getContext("2d");
+  const accentCtx = options.accentCanvas?.getContext("2d");
 
   const tree = buildTree();
   const grown = new Float32Array(tree.length);
@@ -60,9 +59,9 @@ export function createLandingScene(
       pixelRatio = nextPixelRatio;
       options.canvas.width = Math.round(width * pixelRatio);
       options.canvas.height = Math.round(height * pixelRatio);
-      if (options.meteorCanvas) {
-        options.meteorCanvas.width = options.canvas.width;
-        options.meteorCanvas.height = options.canvas.height;
+      if (options.accentCanvas) {
+        options.accentCanvas.width = options.canvas.width;
+        options.accentCanvas.height = options.canvas.height;
       }
     },
 
@@ -95,10 +94,16 @@ export function createLandingScene(
       drawBranches(f, tree, trunkWidth(f), grown);
       drawPulses(f, tree, grown, trunkWidth(f));
       drawDunes(f, motes);
-      if (meteorCtx) {
-        meteorCtx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-        meteorCtx.clearRect(0, 0, width, height);
-        drawMeteors({ ...f, ctx: meteorCtx });
+      if (accentCtx) {
+        accentCtx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+        accentCtx.clearRect(0, 0, width, height);
+        const accentFrame = { ...f, ctx: accentCtx };
+        drawBranches(accentFrame, tree, trunkWidth(f), grown, true);
+        drawPulses(accentFrame, tree, grown, trunkWidth(f), true);
+      }
+      if (!accentCtx) {
+        drawBranches(f, tree, trunkWidth(f), grown, true);
+        drawPulses(f, tree, grown, trunkWidth(f), true);
       }
       ctx.globalCompositeOperation = "source-over";
     },

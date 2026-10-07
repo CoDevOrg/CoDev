@@ -20,7 +20,7 @@
   position: absolute;
   z-index: -1;
 }
-.lp-meteor-canvas {
+.lp-accent-canvas {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -29,7 +29,7 @@
   opacity: 0;
   transition: opacity 1s ease;
 }
-.lp-canvas-layer[data-canvas="on"] .lp-meteor-canvas {
+.lp-canvas-layer[data-canvas="on"] .lp-accent-canvas {
   opacity: 1;
 }
 .lp-hero .lp-canvas,
