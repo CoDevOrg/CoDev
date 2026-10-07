@@ -1101,6 +1101,7 @@ export function Gen2ChatPanel({
                             {message.items?.length ? (
                               <Gen2TurnActivity
                                 items={message.items}
+                                settled
                                 onOpenFile={onOpenFile}
                               />
                             ) : null}
