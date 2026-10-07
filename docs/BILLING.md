@@ -110,3 +110,9 @@ application instances still use owner-only claim conflicts.
 
 Checkout requires terms consent and attaches policy version metadata. Refunds,
 tax, invoices, and cancellation are handled through Stripe; see [LEGAL.md](./LEGAL.md).
+
+## Admin plan estimates
+
+The admin overview shows accounts, active Stripe subscribers, trials, and granted access for every catalog plan. Counts use the billing access resolver, including the paid-period grace window; lapsed accounts fall back to Free and application admins are excluded.
+
+Cost estimates assume full compute allowances and one month of all permitted 16 GiB saved disks. Free uses its five lifetime hours, not a recurring monthly compute grant. Rates are a dated USD Azure retail snapshot (West US 2, Linux Standard_D2ps_v6: $0.0702/hour; E2 LRS disk: $0.60/month, checked October 7, 2026). Update the snapshot when rates or ARM resources change. These partial infrastructure estimates exclude OS disks, IPs, disk operations, network, shared services, tax and discounts, and must not be treated as actual Azure spend or profit margins.
