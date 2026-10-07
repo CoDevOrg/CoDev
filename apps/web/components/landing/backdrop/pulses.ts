@@ -1,5 +1,16 @@
+import { isWarmBranch } from "./branch-color";
 import { projectPoint } from "./branches";
-import { CYAN, ICE, at, glow, rgba, smoothstep, type Frame } from "./draw-kit";
+import {
+  CYAN,
+  ICE,
+  EMBER,
+  GOLD,
+  at,
+  glow,
+  rgba,
+  smoothstep,
+  type Frame,
+} from "./draw-kit";
 import type { TreeLine } from "./tree-geometry";
 
 const TRAIL_STEPS = [0, 0.7, 1.6, 2.8, 4.2] as const;
@@ -37,12 +48,16 @@ export function drawPulses(
   lines: readonly TreeLine[],
   grown: Float32Array,
   trunkWidth: number,
+  warm = false,
 ): void {
   const { ctx } = f;
   const fade = smoothstep(0, 0.12, f.growth);
   ctx.lineCap = "round";
 
   lines.forEach((line, index) => {
+    if (isWarmBranch(line) !== warm) return;
+    const headColor = warm ? GOLD : ICE;
+    const trailColor = warm ? EMBER : CYAN;
     const segments = grown[index] ?? 0;
     if (segments < 2 || line.pulses.length === 0) return;
     const tip = line.routeBase + segments;
@@ -60,7 +75,10 @@ export function drawPulses(
         const from = at(trail, i);
         const to = at(trail, i + 1);
         const falloff = 1 - i / (trail.length - 1);
-        ctx.strokeStyle = rgba(i === 0 ? ICE : CYAN, strength * falloff * 0.9);
+        ctx.strokeStyle = rgba(
+          i === 0 ? headColor : trailColor,
+          strength * falloff * 0.9,
+        );
         ctx.lineWidth = (2.4 - line.depth * 0.5) * falloff + 0.6;
         ctx.beginPath();
         ctx.moveTo(from[0], from[1]);
@@ -68,7 +86,7 @@ export function drawPulses(
         ctx.stroke();
       }
       const front = at(trail, 0);
-      glow(ctx, front[0], front[1], 7, 7, ICE, 0.45 * strength);
+      glow(ctx, front[0], front[1], 7, 7, headColor, 0.45 * strength);
     }
   });
 }

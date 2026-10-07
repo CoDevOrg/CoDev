@@ -56,10 +56,10 @@ describe("createLandingScene", () => {
   it("draws every stage of growth without producing NaN", () => {
     const { ctx, calls } = fakeContext();
     const canvas = canvasWith(ctx);
-    const meteorCanvas = document.createElement("canvas");
+    const accentCanvas = document.createElement("canvas");
     const scene = createLandingScene({
       canvas,
-      meteorCanvas,
+      accentCanvas,
       pixelRatio: 2,
       lite: false,
     });
@@ -70,10 +70,10 @@ describe("createLandingScene", () => {
       scene?.render(3.2, progress, { x: 640, y: 300 });
     }
     scene?.render(3.2, 1, null);
-    // Cover flight, sand impact, and a later cycle on the warm overlay.
+    // Cover several cycles of branch pulses on the warm overlay.
     for (const time of [0, 1.8, 3.6, 6.2, 15.6]) scene?.render(time, 0, null);
     expect(canvas.width).toBe(2560);
-    expect(meteorCanvas.width).toBe(2560);
+    expect(accentCanvas.width).toBe(2560);
     expect(calls.get("clearRect")).toBeGreaterThan(0);
     // Branches and pulses are strokes; a grown tree draws many of them.
     expect(calls.get("stroke") ?? 0).toBeGreaterThan(500);
