@@ -9,7 +9,7 @@ describe("branch accents", () => {
     const roots = tree.filter((line) => line.depth === 0);
     const warm = roots.filter(isWarmBranch);
     expect(warm.length).toBeGreaterThan(0);
-    expect(warm.length).toBeLessThan(roots.length / 2);
+    expect(warm.length).toBeLessThanOrEqual(3);
     for (const root of roots) {
       for (const child of tree.filter((line) => line.rootX === root.rootX)) {
         expect(isWarmBranch(child)).toBe(isWarmBranch(root));
