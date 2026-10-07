@@ -1,0 +1,42 @@
+@media (max-width: 1000px) {
+  .lp-feature-preview {
+    padding: 32px 24px;
+  }
+  .lp-triple-title,
+  .lp-triple-desc {
+    font-size: 16px;
+  }
+  .lp-doc-editor,
+  .lp-agent-edit,
+  .lp-merge-snippet {
+    font-size: 9px;
+  }
+}
+@media (max-width: 720px) {
+  .lp-feature-preview {
+    aspect-ratio: 1.4;
+    padding: 32px 22px;
+  }
+  .lp-how-header {
+    margin-bottom: 36px;
+  }
+  .lp-triple-grid {
+    gap: 36px;
+  }
+  .lp-terminal-browser {
+    width: 43%;
+  }
+  .lp-terminal-files {
+    left: 18px;
+    top: 24px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lp-terminal-test,
+  .lp-terminal-start,
+  .lp-terminal-browser {
+    animation: none !important;
+    opacity: 1;
+    transform: none;
+  }
+}

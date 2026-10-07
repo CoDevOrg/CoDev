@@ -20,6 +20,10 @@ function readCss(name: string): string {
 const appTheme = readCss("app-theme.css");
 const globals = readCss("globals.css");
 const landing = readCss("landing.css");
+const landingDesign = readFileSync(
+  resolve(process.cwd(), "components/landing/landing-shell.css"),
+  "utf8",
+);
 const themeTokens = readCss("theme-tokens.css");
 const productTheme = readCss("product-theme.css");
 const settingsTheme = readCss("settings/settings-theme.css");
@@ -129,7 +133,7 @@ describe("CoDev product theme", () => {
     // bleed into an authenticated page.
     expect(globals).not.toContain(".landing-page {");
     expect(landing).toContain(".lp-page {");
-    expect(landing).toContain("--lp-bg: #f2e9d6;");
+    expect(landingDesign).toContain("--lp-bg: #060a17;");
     expect(landing).toContain(".lp-hero h1 em {");
     expect(landing).toContain("var(--lp-lime)");
     expect(landing).toContain("var(--lp-sky)");
@@ -145,13 +149,12 @@ describe("CoDev product theme", () => {
     }
   });
 
-  it("shares the cream/navy palette between landing and product", () => {
-    // Landing invented the paper cream + deep navy + blue accent palette;
-    // the product shell now uses the same tokens so the signed-in app
-    // matches the marketing surface. The IDE workspace stays dark.
-    expect(landing).toContain("--lp-bg: #f2e9d6;");
-    expect(landing).toContain("--lp-ink: #0e2f7e;");
-    expect(landing).toContain("color-scheme: light;");
+  it("keeps the dark landing palette independent of the light product palette", () => {
+    // Marketing stays dark regardless of the member's product theme.
+    // Product surfaces retain their existing light/dark token behavior.
+    expect(landingDesign).toContain("--lp-bg: #060a17;");
+    expect(landingDesign).toContain("--lp-ink: #f4f6fb;");
+    expect(landingDesign).toContain("--lp-lime: #00bde8;");
     expect(globals).toContain("color-scheme: light");
     expect(globals).toContain("--surface: #f2e9d6;");
     expect(globals).toContain("--ink: #0e2f7e;");
