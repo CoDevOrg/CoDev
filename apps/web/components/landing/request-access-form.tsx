@@ -1,6 +1,10 @@
 "use client";
 
 import { useId, useState } from "react";
+import { ArrowRight } from "lucide-react";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 type Status = "idle" | "sending" | "done" | "error";
 
@@ -75,34 +79,35 @@ export function RequestAccessForm() {
 
   return (
     <form className="lp-form" onSubmit={submit} noValidate={false}>
-      <div className="lp-field">
-        <label htmlFor={`${ids}-email`}>Email</label>
-        <input
-          id={`${ids}-email`}
-          name="email"
-          type="email"
-          autoComplete="email"
-          required
-          maxLength={320}
-          placeholder="you@gmail.com"
-        />
-        <small>We&apos;ll send your invite here.</small>
-      </div>
+      <FieldGroup>
+        <Field className="lp-field">
+          <FieldLabel htmlFor={`${ids}-email`}>Email</FieldLabel>
+          <Input
+            id={`${ids}-email`}
+            name="email"
+            type="email"
+            autoComplete="email"
+            required
+            maxLength={320}
+            placeholder="you@company.com"
+          />
+          <small>We&apos;ll send your invite here.</small>
+        </Field>
 
-      <div className="lp-field">
-        <label htmlFor={`${ids}-name`}>
-          Name <span>Optional</span>
-        </label>
-        <input
-          id={`${ids}-name`}
-          name="name"
-          type="text"
-          autoComplete="name"
-          maxLength={120}
-          placeholder="What should we call you?"
-        />
-      </div>
-
+        <Field className="lp-field">
+          <FieldLabel htmlFor={`${ids}-name`}>
+            Name <span>Optional</span>
+          </FieldLabel>
+          <Input
+            id={`${ids}-name`}
+            name="name"
+            type="text"
+            autoComplete="name"
+            maxLength={120}
+            placeholder="Your name"
+          />
+        </Field>
+      </FieldGroup>
       <fieldset className="lp-field lp-field-choices">
         <legend>
           What will you use CoDev for? <span>Optional</span>
@@ -129,13 +134,16 @@ export function RequestAccessForm() {
         <a href="mailto:admins@trycodev.com">admins@trycodev.com</a> to remove
         your request.
       </p>
-      <button
-        className="lp-cta lp-cta-primary lp-form-submit"
+      <Button
+        variant="default"
+        size="lg"
+        className="lp-form-submit lp-cta lp-cta-primary"
         type="submit"
         disabled={status === "sending"}
       >
         {status === "sending" ? "Joining…" : "Join the waitlist"}
-      </button>
+        <ArrowRight aria-hidden="true" data-icon="inline-end" />
+      </Button>
     </form>
   );
 }

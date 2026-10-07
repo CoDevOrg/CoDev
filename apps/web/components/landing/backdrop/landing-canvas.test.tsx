@@ -5,7 +5,7 @@ import LandingCanvas from "./landing-canvas";
 
 const createLandingScene = vi.hoisted(() => vi.fn());
 
-vi.mock("./scene", () => ({ createLandingScene }));
+vi.mock("./landing-scene", () => ({ createLandingScene }));
 
 function setMotionPreference(reduced: boolean) {
   vi.spyOn(window, "matchMedia").mockImplementation(
@@ -23,16 +23,11 @@ function setMotionPreference(reduced: boolean) {
   );
 }
 
-function setWebGL(available: boolean) {
-  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(() =>
-    available ? ({ getExtension: () => null } as never) : null,
-  );
-}
-
 function scene() {
   return {
     resize: vi.fn(),
     render: vi.fn(),
+    setLite: vi.fn(),
     dispose: vi.fn(),
   };
 }
@@ -43,9 +38,8 @@ afterEach(() => {
 });
 
 describe("LandingCanvas", () => {
-  it("never builds a renderer when the reader asked for reduced motion", async () => {
+  it("never builds a scene when the reader asked for reduced motion", async () => {
     setMotionPreference(true);
-    setWebGL(true);
 
     const { container } = render(<LandingCanvas />);
 
@@ -59,27 +53,28 @@ describe("LandingCanvas", () => {
     ).toBe("off");
   });
 
-  it("falls back silently when the browser has no WebGL", async () => {
+  it("falls back silently when the scene cannot get a 2D context", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     setMotionPreference(false);
-    setWebGL(false);
+    createLandingScene.mockReturnValue(null);
 
     const { container } = render(<LandingCanvas />);
 
     await waitFor(() => {
-      expect(container.querySelector(".lp-canvas-layer")).not.toBeNull();
+      expect(createLandingScene).toHaveBeenCalledTimes(1);
     });
-    expect(createLandingScene).not.toHaveBeenCalled();
     // The landing e2e suite fails the build on any console error, so the
-    // fallback has to be completely quiet.
+    // fallback has to be completely quiet and keep the still on screen.
     expect(error).not.toHaveBeenCalled();
     expect(warn).not.toHaveBeenCalled();
+    expect(
+      container.querySelector(".lp-canvas-layer")?.getAttribute("data-canvas"),
+    ).toBe("off");
   });
 
-  it("starts the scene when motion is allowed and WebGL is present", async () => {
+  it("starts the scene when motion is allowed", async () => {
     setMotionPreference(false);
-    setWebGL(true);
     const instance = scene();
     createLandingScene.mockReturnValue(instance);
 
@@ -100,7 +95,6 @@ describe("LandingCanvas", () => {
 
   it("disposes the scene and drops its listeners on unmount", async () => {
     setMotionPreference(false);
-    setWebGL(true);
     const instance = scene();
     createLandingScene.mockReturnValue(instance);
     const removeListener = vi.spyOn(window, "removeEventListener");
@@ -121,7 +115,6 @@ describe("LandingCanvas", () => {
 
   it("marks the whole layer decorative", async () => {
     setMotionPreference(false);
-    setWebGL(true);
     createLandingScene.mockReturnValue(scene());
 
     const { container } = render(<LandingCanvas />);
