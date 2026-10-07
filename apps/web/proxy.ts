@@ -141,7 +141,9 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     protections.find((header) => header.key === "Content-Security-Policy")!
       .value,
   );
-  const securedRequest = new NextRequest(request, { headers });
+  const securedRequest = new NextRequest(forwardedRequest(request), {
+    headers,
+  });
   const response =
     (await routeRequest(securedRequest, event)) ?? NextResponse.next();
   // Forward the trusted nonce to SSR, including responses produced by Auth.js.
