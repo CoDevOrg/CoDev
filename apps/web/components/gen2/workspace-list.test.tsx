@@ -30,10 +30,6 @@ describe("Gen2WorkspaceList", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal(
-      "confirm",
-      vi.fn(() => true),
-    );
-    vi.stubGlobal(
       "fetch",
       vi.fn(async () => new Response(null, { status: 204 })),
     );
@@ -42,15 +38,16 @@ describe("Gen2WorkspaceList", () => {
   it("confirms permanent deletion and refreshes the owner count", async () => {
     render(<Gen2WorkspaceList workspaces={[ownerWorkspace]} />);
     fireEvent.click(screen.getByRole("button", { name: "Delete Studio" }));
+    expect(screen.getByRole("alertdialog")).toHaveTextContent(
+      "permanently deletes the workspace",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Delete workspace" }));
 
     await waitFor(() =>
       expect(fetch).toHaveBeenCalledWith(
         `/api/gen2/workspaces/${ownerWorkspace.id}`,
         { method: "DELETE" },
       ),
-    );
-    expect(window.confirm).toHaveBeenCalledWith(
-      expect.stringContaining("permanently deletes the workspace"),
     );
     expect(mocks.refresh).toHaveBeenCalledOnce();
     expect(screen.getByText("No workspaces yet.")).toBeInTheDocument();
