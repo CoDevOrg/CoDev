@@ -1,6 +1,6 @@
 # Superset agent coordination
 
-**Status:** Released in ARM image `1.0.16` (2026-10-08) and off everywhere: no workspace is in `CODEV_AGENT_COORDINATION_WORKSPACES` yet. Proposed and built 2026-10-08.
+**Status:** Released in ARM image `1.0.16` (2026-10-08); Cursor runs as a Superset agent from image `1.0.19` with `CODEV_SUPERSET_CURSOR_AGENTS_ENABLED` on (2026-10-08). Enabled for one internal workspace through `CODEV_AGENT_COORDINATION_WORKSPACES`. Proposed and built 2026-10-08.
 **Depends on:** [SUPERSET_MULTI_AGENT_HANDOFF.md](./SUPERSET_MULTI_AGENT_HANDOFF.md) (one worktree per independent agent, per-launch hook identity) and [SUPERSET_WORKSPACE_OWNERSHIP.md](./SUPERSET_WORKSPACE_OWNERSHIP.md) (CoDev authorizes every operation).
 
 ## Problem
@@ -149,15 +149,18 @@ Shipped through CoDevOrg/CoDev#119, #125 (security fixes it depends on), and #12
 
 Verified on 2026-10-08:
 
-| Check                                                          | Where                        | Result                                                                                           |
-| -------------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------ |
-| Standard lifecycle canary                                      | Staging, `1.0.16`            | Fresh start, guest command, stop, saved-disk reopen, stale-generation rejection all passed       |
-| Host creates worktrees and reads change sets as `codev-shell`  | Staging, `1.0.16`            | Passed; the overlap report found a function-level overlap across two agent worktrees             |
-| Repository `core.fsmonitor` never runs as root                 | Staging, `1.0.16`            | Host `/codev/git` and guestd `/v1/git/status` ran it only as uid 2000                            |
-| Native registration and the real hook command deliver a notice | Staging, `1.0.16`            | `additional_context` arrived within the hook's 300 ms limit; a forged token got nothing          |
-| guestd refuses Cursor turns with repository hooks              | Staging, `1.0.16`            | 400 naming `.cursor/hooks.json`; 200 once removed                                                |
-| Codex runs the profile hook and the model sees the notice      | Local, pinned Codex 0.148.0  | Passed on the native and Superset paths; repository `.codex/hooks.json` and `notify` did not run |
-| Claude accepts the hook settings                               | Local, pinned Claude 2.1.286 | Inline and file `--settings` are accepted under `--setting-sources ""`                           |
+| Check                                                             | Where                        | Result                                                                                                                                     |
+| ----------------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Standard lifecycle canary                                         | Staging, `1.0.16`            | Fresh start, guest command, stop, saved-disk reopen, stale-generation rejection all passed                                                 |
+| Host creates worktrees and reads change sets as `codev-shell`     | Staging, `1.0.16`            | Passed; the overlap report found a function-level overlap across two agent worktrees                                                       |
+| Repository `core.fsmonitor` never runs as root                    | Staging, `1.0.16`            | Host `/codev/git` and guestd `/v1/git/status` ran it only as uid 2000                                                                      |
+| Native registration and the real hook command deliver a notice    | Staging, `1.0.16`            | `additional_context` arrived within the hook's 300 ms limit; a forged token got nothing                                                    |
+| guestd refuses Cursor turns with repository hooks                 | Staging, `1.0.16`            | 400 naming `.cursor/hooks.json`; 200 once removed                                                                                          |
+| Superset launches Cursor with the coordination hook               | Staging, `1.0.19`            | Launch accepted; `HOME/.cursor/hooks.json` written mode 600, owned by the agent's private UID; `cursor-agent` ran in the Superset terminal |
+| Host refuses Superset Cursor beside repository hooks              | Staging, `1.0.19`            | 400 naming `.cursor/hooks.json`                                                                                                            |
+| Codex 0.160.1 runs the profile hook and the model sees the notice | Local, pinned CLI            | Passed on the native and Superset paths                                                                                                    |
+| Codex runs the profile hook and the model sees the notice         | Local, pinned Codex 0.148.0  | Passed on the native and Superset paths; repository `.codex/hooks.json` and `notify` did not run                                           |
+| Claude accepts the hook settings                                  | Local, pinned Claude 2.1.286 | Inline and file `--settings` are accepted under `--setting-sources ""`                                                                     |
 
 Not yet verified, because no Claude or Cursor login was available: that pinned Claude and Cursor actually fire the hook and show its notice to the model. Verify both with real turns in the first enabled workspace.
 
