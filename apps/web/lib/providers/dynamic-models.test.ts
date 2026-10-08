@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   cursor: vi.fn(),
   claude: vi.fn(),
   relay: vi.fn(),
+  fresh: vi.fn(),
 }));
 vi.mock("./resolve", () => ({ requireCredential: mocks.resolve }));
 vi.mock("./codex-account-models", () => ({
@@ -19,6 +20,7 @@ vi.mock("./claude-account-models", () => ({
 vi.mock("./model-catalog-relay", () => ({
   getRelayedCodexAccountModels: mocks.relay,
 }));
+vi.mock("./codex-token-refresh", () => ({ freshCodexSecret: mocks.fresh }));
 import {
   clearDynamicModelCache,
   getDynamicModelsForProvider,
@@ -31,6 +33,7 @@ beforeEach(() => {
     secret: { kind: "api_key", apiKey: "private-a" },
   });
   mocks.codex.mockResolvedValue([{ id: "account-a", label: "Account A" }]);
+  mocks.fresh.mockImplementation(async ({ secret }) => secret);
 });
 it("relays Worker Codex discovery without decrypting credentials on the Worker", async () => {
   vi.stubGlobal("navigator", { userAgent: "Cloudflare-Workers" });
@@ -77,4 +80,24 @@ it("uses Cursor's account discovery instead of a public OpenAI catalog", async (
     { id: "cursor-model", label: "Cursor model" },
   ]);
   expect(mocks.codex).not.toHaveBeenCalled();
+});
+it("discovers Codex models with a refreshed sign-in rather than the expired one", async () => {
+  const stored = { kind: "codex_auth_cache", authCacheJson: "expired" };
+  const renewed = { kind: "codex_auth_cache", authCacheJson: "renewed" };
+  mocks.resolve.mockResolvedValue({
+    credentialId: "credential-1",
+    credentialRevision: "revision-1",
+    secret: stored,
+  });
+  mocks.fresh.mockResolvedValue(renewed);
+  await getDynamicModelsForProvider("codex", "member-a");
+  expect(mocks.fresh).toHaveBeenCalledWith(
+    expect.objectContaining({ credentialId: "credential-1", secret: stored }),
+  );
+  expect(mocks.codex).toHaveBeenCalledWith(renewed);
+});
+it("only refreshes Codex credentials", async () => {
+  mocks.claude.mockResolvedValue([{ id: "claude-model", label: "Claude" }]);
+  await getDynamicModelsForProvider("claude", "member-a");
+  expect(mocks.fresh).not.toHaveBeenCalled();
 });

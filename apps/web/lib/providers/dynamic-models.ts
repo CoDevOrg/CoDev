@@ -5,6 +5,7 @@ import { getCodexAccountModels } from "./codex-account-models";
 import { getCursorAccountModels } from "./cursor-account-models";
 import { getClaudeAccountModels } from "./claude-account-models";
 import { getRelayedCodexAccountModels } from "./model-catalog-relay";
+import { freshCodexSecret } from "./codex-token-refresh";
 
 const cache = new Map<string, { expiresAt: number; models: Gen2ModelInfo[] }>();
 const discover = {
@@ -28,15 +29,19 @@ export async function getDynamicModelsForProvider(
     provider,
     surface: "gen2",
   });
+  const secret =
+    provider === "codex"
+      ? await freshCodexSecret(credential)
+      : credential.secret;
   const digest = await crypto.subtle.digest(
     "SHA-256",
-    new TextEncoder().encode(JSON.stringify(credential.secret)),
+    new TextEncoder().encode(JSON.stringify(secret)),
   );
   const fingerprint = Buffer.from(digest).toString("hex");
   const key = `${userId}:${provider}:${fingerprint}`;
   const previous = cache.get(key);
   if (previous && previous.expiresAt > Date.now()) return previous.models;
-  const models = await discover[provider](credential.secret);
+  const models = await discover[provider](secret);
   if (!models.length) throw new Error("No account models are available.");
   for (const [entry, value] of cache)
     if (value.expiresAt <= Date.now()) cache.delete(entry);

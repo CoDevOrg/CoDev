@@ -13,6 +13,7 @@ import {
 import type { Gen2AgentProviderName } from "@codev/contracts";
 import type { LaunchProfile } from "../providers/registry";
 import { getDynamicModelsForProvider } from "../providers/dynamic-models";
+import { CodexReconnectRequiredError } from "../providers/codex-token-refresh";
 import { listDecryptedUserEnvironmentVariables } from "../providers/user-environment";
 import { Gen2LifecycleError } from "./errors";
 
@@ -118,13 +119,16 @@ export async function getGen2ProviderStatus(
       via,
       models: await getDynamicModelsForProvider(provider, userId),
     };
-  } catch {
+  } catch (error) {
     return {
       connected: true,
       via,
       models: [],
+      // A dead refresh token needs a reconnect; refreshing the page won't help.
       modelsError:
-        "Couldn't load your account's models. Please refresh and try again.",
+        error instanceof CodexReconnectRequiredError
+          ? error.message
+          : "Couldn't load your account's models. Please refresh and try again.",
     };
   }
 }

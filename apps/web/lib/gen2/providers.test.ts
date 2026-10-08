@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const discovery = vi.hoisted(() => ({ models: vi.fn() }));
 vi.mock("../providers/dynamic-models", () => ({
-  getDynamicModelsForProvider: async () => [
-    { id: "account-model", label: "Account model" },
-  ],
+  getDynamicModelsForProvider: (...args: unknown[]) =>
+    discovery.models(...args),
 }));
 
 const mocks = vi.hoisted(() => ({
@@ -38,12 +38,17 @@ vi.mock("../platform/database", () => {
 
 const { buildApiKeyAuthCache, getGen2ProviderStatus, resolveGen2Credential } =
   await import("./providers");
+const { CodexReconnectRequiredError } =
+  await import("../providers/codex-token-refresh");
 
 const userId = "22222222-2222-4222-8222-222222222222";
 
 describe("gen2 provider resolution", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    discovery.models.mockResolvedValue([
+      { id: "account-model", label: "Account model" },
+    ]);
     mocks.resolveHosted.mockResolvedValue(null);
     mocks.limit.mockResolvedValue([]);
     mocks.envRows.mockResolvedValue([]);
@@ -133,6 +138,20 @@ describe("gen2 provider resolution", () => {
     const status = await getGen2ProviderStatus(userId, "codex");
     expect(status).toMatchObject({ connected: true, via: "api-key" });
     expect(JSON.stringify(status)).not.toContain("sk-test");
+  });
+
+  it("tells the member to reconnect when the ChatGPT sign-in cannot be refreshed", async () => {
+    mocks.limit.mockResolvedValue([{ encryptedApiKey: "enc" }]);
+    mocks.decryptSecret.mockResolvedValue("sk-test-123");
+    discovery.models.mockRejectedValueOnce(new CodexReconnectRequiredError());
+    await expect(getGen2ProviderStatus(userId, "codex")).resolves.toMatchObject(
+      {
+        connected: true,
+        models: [],
+        modelsError:
+          "Your ChatGPT sign-in expired. Reconnect Codex in Settings.",
+      },
+    );
   });
 
   it("reports not connected when there is nothing", async () => {
