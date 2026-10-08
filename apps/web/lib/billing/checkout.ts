@@ -120,11 +120,11 @@ export async function createCheckoutSession(
     custom_text: {
       terms_of_service_acceptance: {
         message:
-          "I agree to the [CoDev Terms](https://trycodev.com/legal/terms) and [refund and cancellation policy](https://trycodev.com/legal/refunds).",
+          "I agree to the [CoDev Terms](https://www.trycodev.com/legal/terms) and [refund and cancellation policy](https://www.trycodev.com/legal/refunds).",
       },
       submit: {
         message:
-          "Renews monthly until canceled. Cancel in Settings → Billing → Manage billing. Refunds are reviewed individually; statutory rights apply. Privacy: https://trycodev.com/legal/privacy",
+          "Renews monthly until canceled. Cancel in Settings → Billing → Manage billing. Refunds are reviewed individually; statutory rights apply. Privacy: https://www.trycodev.com/legal/privacy",
       },
     },
     allow_promotion_codes: true,

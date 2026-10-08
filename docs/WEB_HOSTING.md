@@ -18,6 +18,12 @@ zero outages: database, Redis, runtime tunnels, and Azure can still fail.
 | `codev-cloudflare-preview` Worker | Retained ARM lifecycle Workflows and authenticated workflow bridge on its `admins-84a.workers.dev` URL; no public domains or cron when `AZURE_WEB_ORIGIN` is set | `apps/web/wrangler.arm-lifecycle.jsonc`                            |
 | Vercel `codev` project            | Existing Vercel deployment URLs and previews; no public production traffic depends on its hosting allocation                                                     | `.github/workflows/deploy-web.yml`                                 |
 
+`https://www.trycodev.com` is the canonical public origin; generated links,
+metadata, and default service URLs use it. A zone Redirect Rule (phase
+`http_request_dynamic_redirect`) sends apex `GET`/`HEAD` requests outside
+`/api/` to `www` with a 301, preserving path and query. Apex API calls are not
+redirected, because authenticated runtime fetches reject redirects.
+
 Azure hosting uses `codev-web-production` in West US 2, the
 `codev-web-environment` Consumption environment, Basic registry
 `codevwebprod8ad43`, and `codev-web-logs` (30 day Log Analytics retention).
@@ -299,7 +305,7 @@ including for handlers outside the shared route wrapper. Auth.js token-validated
 flows and signed Stripe webhooks keep their existing authentication. CLI bearer
 requests remain supported on explicitly enabled routes.
 
-Password-reset links default to `https://trycodev.com` in production when no
+Password-reset links default to `https://www.trycodev.com` in production when no
 explicit Auth.js or Vercel URL is available; development retains localhost.
 
 `AUTH_SECRET` also signs reusable workspace invitation capabilities on each web

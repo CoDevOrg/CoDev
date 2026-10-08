@@ -63,7 +63,7 @@ export function getPublicAppOrigin(
   }
   if (env.VERCEL_URL) return `https://${env.VERCEL_URL}`;
   return env.NODE_ENV === "production"
-    ? "https://trycodev.com"
+    ? "https://www.trycodev.com"
     : "http://localhost:3000";
 }
 
