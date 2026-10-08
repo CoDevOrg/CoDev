@@ -295,6 +295,10 @@ export function Gen2ChatPanel({
     !busy &&
     Boolean(currentModelItem);
   const empty = thread.messages.length === 0 && !busy;
+  // Every turn launches the CLI, but only a chat's first one reads as a start.
+  const replied = thread.messages.some(
+    (message) => message.role === "assistant",
+  );
   const contentKey = `${chatId ?? ""}:${thread.messages.length}:${items.length}:${liveReply.length}`;
   const { onScroll, showJump, jumpToLatest, pinToLatest } = useGen2ChatScroll(
     transcriptRef,
@@ -1217,7 +1221,7 @@ export function Gen2ChatPanel({
                           />
                         ) : items.length === 0 ? (
                           <div className="gen2-chat-thinking" role="status">
-                            {starting && !running
+                            {starting && !running && !replied
                               ? "Starting the agent…"
                               : "Thinking…"}
                           </div>
