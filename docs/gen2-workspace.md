@@ -141,9 +141,10 @@ stack against it.
 The previous Gen 1 workspace runtime and its application code have been
 removed. Historical database migrations and stored records remain intact.
 
-Concurrent agents: the guest serialises Codex (`start_codex_exec` waits on
-`codex_busy`), so one turn runs at a time per machine. Parallelism today means
-more workspaces.
+Concurrent agents: native turns (every Cursor turn, and Codex or Claude when
+`CODEV_SUPERSET_AGENT_SESSIONS_ENABLED` is off) are serialised by the guest
+(`start_codex_exec` waits on `codex_busy`). Superset agent sessions, on in
+production, run Codex and Claude concurrently, each in its own worktree.
 
 Not yet built here: a browser/preview tab (live port forwarding is deferred in
 `lib/runtime/preview.ts` and needs guest networking), Git staging and commit
