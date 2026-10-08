@@ -12,7 +12,6 @@ import {
 } from "@codev/contracts";
 import { schema } from "@codev/db";
 
-import { createInviteToken, hashInviteToken } from "../platform/crypto";
 import { getWorkspaceOwnerEntitlement } from "../billing/workspace-entitlement";
 import { requireIndividualPlan } from "../billing/access";
 import { lockComputeOwners } from "./compute-database";
@@ -31,11 +30,13 @@ import {
   transferActiveComputeSession,
 } from "./compute-quota";
 import { Gen2AccessError, Gen2LifecycleError } from "./errors";
+import { getOrCreateWorkspaceShareInvite } from "./workspace-share-invite";
+import { workspaceShareToken } from "./workspace-share-token";
+import { workspaceShareTokenHash } from "./workspace-share-token-hash";
 import { requireActiveWorkspaceInvite } from "./workspace-invite-access";
 import { queueAzureWorkspaceDelete } from "./runtime-operations";
 
 const DEFAULT_WORKSPACE_NAME = "Workspace";
-const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
 
 export function defaultGen2WorkspaceName(name?: string) {
   const trimmed = name?.trim();
@@ -366,34 +367,26 @@ export async function createGen2ShareLink(
   workspaceId: string,
   userId: string,
   origin: string,
-  role: Gen2WorkspaceRole = "editor",
+  role?: Gen2WorkspaceRole,
 ) {
   const membership = await requireGen2Member(workspaceId, userId);
   if (membership.role === "viewer") {
     throw new Gen2AccessError("Viewers cannot share this workspace.", 403);
   }
-  if (role === "owner" && membership.role !== "owner") {
+  if (role === "owner") {
     throw new Gen2AccessError(
-      "Only the owner can create an owner share link.",
-      403,
+      "Share links invite editors or viewers. Transfer ownership to an existing member.",
+      400,
     );
   }
-  const token = createInviteToken();
-  const createdAt = new Date();
-  await getDatabase()
-    .update(schema.gen2Workspaces)
-    .set({
-      activeInviteTokenHash: hashInviteToken(token),
-      activeInviteCreatedByUserId: userId,
-      activeInviteRole: role,
-      activeInviteCreatedAt: createdAt,
-      activeInviteExpiresAt: new Date(createdAt.getTime() + INVITE_TTL_MS),
-      updatedAt: new Date(),
-    })
-    .where(eq(schema.gen2Workspaces.id, workspaceId));
-  return {
-    inviteUrl: `${origin}/gen2/join/${token}`,
+  const invite = await getOrCreateWorkspaceShareInvite(
+    workspaceId,
+    userId,
     role,
+  );
+  return {
+    inviteUrl: `${origin}/gen2/join/${workspaceShareToken(invite.hash)}`,
+    role: invite.role,
   };
 }
 
@@ -423,7 +416,7 @@ export async function getGen2ActiveShare(
 }
 
 export async function joinGen2Workspace(token: string, userId: string) {
-  const tokenHash = hashInviteToken(token);
+  const tokenHash = workspaceShareTokenHash(token);
   const [workspace] = await getDatabase()
     .select({
       id: schema.gen2Workspaces.id,

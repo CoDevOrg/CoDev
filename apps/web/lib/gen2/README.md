@@ -144,3 +144,9 @@ Existing member role changes require the owner, including through add-member.
 Removing a member clears the active shared invitation in the same transaction.
 `workspace-invite-access.ts` locks and revalidates invitations before admission,
 using the workspace row shared with removal; owner admission retains owner-lock ordering.
+
+Viewer/editor share links admit multiple people until their original seven-day
+expiry or revocation. Opening sharing reuses the active link and its access role.
+`workspace-share-invite.ts` serializes creation and reuse; signed capabilities
+are reconstructed from the stored random hash using `AUTH_SECRET`, preserving
+existing opaque links. Ownership transfer is separate from group invitations.

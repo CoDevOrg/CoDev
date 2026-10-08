@@ -92,7 +92,7 @@ export const gen2WorkspaceDetailSchema = gen2WorkspaceSchema.extend({
 });
 
 export const gen2ShareRequestSchema = z.object({
-  role: gen2WorkspaceRoleSchema.optional().default("editor"),
+  role: z.enum(["editor", "viewer"]).optional(),
 });
 
 export const gen2ShareResponseSchema = z.object({

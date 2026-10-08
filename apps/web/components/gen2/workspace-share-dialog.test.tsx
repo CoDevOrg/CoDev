@@ -220,6 +220,27 @@ describe("WorkspaceShareDialog", () => {
     });
   });
 
+  it("loads the reusable link without resetting its access role", async () => {
+    render(
+      <WorkspaceShareDialog
+        open={true}
+        onOpenChange={vi.fn()}
+        workspaceId="ws-123"
+        workspaceName="Group project"
+        currentUserRole="owner"
+        currentUserId="user-1"
+        initialMembers={initialMembers}
+      />,
+    );
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/gen2/workspaces/ws-123/share",
+        expect.objectContaining({ method: "POST", body: "{}" }),
+      ),
+    );
+    expect(screen.getByText(/everyone can join/i)).toBeInTheDocument();
+  });
+
   it("copies the invite link to the clipboard", async () => {
     render(
       <WorkspaceShareDialog

@@ -1,4 +1,4 @@
-import { withUser } from "@/lib/http/api-route";
+import { ApiError, withUser } from "@/lib/http/api-route";
 import { createGen2ShareLink, getGen2ActiveShare } from "@/lib/gen2/workspaces";
 import { gen2ShareRequestSchema } from "@codev/contracts";
 
@@ -17,7 +17,9 @@ export const POST = withUser<Params>(
     const origin = new URL(request.url).origin;
     const body = (await request.json().catch(() => ({}))) as unknown;
     const parsed = gen2ShareRequestSchema.safeParse(body);
-    const role = parsed.success ? parsed.data.role : "editor";
+    if (!parsed.success)
+      throw new ApiError("Share links invite editors or viewers.", 400);
+    const role = parsed.data.role;
     return Response.json(
       await createGen2ShareLink(workspaceId, user.id, origin, role),
     );

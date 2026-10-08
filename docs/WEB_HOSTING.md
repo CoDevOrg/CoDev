@@ -294,3 +294,7 @@ requests remain supported on explicitly enabled routes.
 
 Password-reset links default to `https://trycodev.com` in production when no
 explicit Auth.js or Vercel URL is available; development retains localhost.
+
+`AUTH_SECRET` also signs reusable workspace invitation capabilities on each web
+host. Keep it consistent across hosts. Invitation hashes remain in the database;
+opening sharing does not rotate active links or extend their seven-day expiry.

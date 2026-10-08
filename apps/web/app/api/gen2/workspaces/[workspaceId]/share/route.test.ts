@@ -34,6 +34,22 @@ describe("gen2 share route", () => {
   });
   afterEach(() => vi.resetAllMocks());
 
+  it("rejects owner links instead of creating a single-use ownership invitation", async () => {
+    const response = await POST(
+      new Request(url, {
+        method: "POST",
+        headers: {
+          origin: "https://codev.test",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ role: "owner" }),
+      }),
+      { params },
+    );
+    expect(response.status).toBe(400);
+    expect(mocks.createShareLink).not.toHaveBeenCalled();
+  });
+
   it("creates a share link with the specified role", async () => {
     mocks.createShareLink.mockResolvedValue({
       inviteUrl: "https://codev.test/gen2/join/tok-1",
