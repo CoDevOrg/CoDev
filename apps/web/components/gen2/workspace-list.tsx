@@ -6,6 +6,7 @@ import Link from "next/link";
 import { LoaderCircle, Plus, Trash2 } from "lucide-react";
 import type { Gen2Workspace } from "@codev/contracts";
 
+import { ConfirmDialog } from "@/components/settings/confirm-dialog";
 import { GithubMark } from "@/components/settings/github-mark";
 
 const STATUS_LABEL: Record<Gen2Workspace["status"], string> = {
@@ -38,6 +39,7 @@ export function Gen2WorkspaceList({
   const [workspaces, setWorkspaces] = useState(initialWorkspaces);
   const [workspaceSource, setWorkspaceSource] = useState(initialWorkspaces);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<Gen2Workspace | null>(null);
   const [actionError, setActionError] = useState<{
     workspaceId: string;
     message: string;
@@ -48,11 +50,7 @@ export function Gen2WorkspaceList({
   }
 
   async function deleteWorkspace(workspace: Gen2Workspace) {
-    const confirmed = window.confirm(
-      `Delete “${workspace.name}”? This permanently deletes the workspace, its saved files, and all chat history for everyone with access.`,
-    );
-    if (!confirmed) return;
-
+    setConfirming(null);
     setDeletingId(workspace.id);
     setActionError(null);
     try {
@@ -101,6 +99,82 @@ export function Gen2WorkspaceList({
     });
   }, [workspaces, filter, searchQuery]);
 
+  function deletionNote(workspace: Gen2Workspace, isDeleting: boolean) {
+    const error =
+      actionError?.workspaceId === workspace.id ? actionError.message : null;
+    if (error) {
+      return (
+        <p className="gen2-card-note gen2-card-note-error" role="alert">
+          {error}
+        </p>
+      );
+    }
+    if (!isDeleting && workspace.status !== "deleting") return null;
+    if (!isDeleting && workspace.lastError) {
+      return (
+        <p className="gen2-card-note gen2-card-note-error" role="alert">
+          Deletion did not finish. Retry deletion to continue.
+        </p>
+      );
+    }
+    return (
+      <p className="gen2-card-note" role="status">
+        Removing saved files and chat history…
+      </p>
+    );
+  }
+
+  function deleteButton(
+    workspace: Gen2Workspace,
+    className: string,
+    size: number,
+  ) {
+    if (workspace.role !== "owner") return null;
+    const isDeleting = deletingId === workspace.id;
+    const retry = workspace.status === "deleting";
+    return (
+      <button
+        type="button"
+        className={className}
+        aria-label={
+          isDeleting
+            ? `Deleting ${workspace.name}`
+            : retry
+              ? `Retry deletion of ${workspace.name}`
+              : `Delete ${workspace.name}`
+        }
+        title={retry ? "Retry deletion" : "Delete workspace"}
+        disabled={deletingId !== null}
+        onClick={(e) => {
+          e.stopPropagation();
+          setConfirming(workspace);
+        }}
+      >
+        {isDeleting ? (
+          <LoaderCircle
+            className="gen2-delete-spinner"
+            aria-hidden="true"
+            size={size}
+          />
+        ) : (
+          <Trash2 aria-hidden="true" size={size} />
+        )}
+      </button>
+    );
+  }
+
+  const confirmDialog = confirming ? (
+    <ConfirmDialog
+      title={`Delete “${confirming.name}”?`}
+      confirmLabel="Delete workspace"
+      onConfirm={() => void deleteWorkspace(confirming)}
+      onCancel={() => setConfirming(null)}
+    >
+      This permanently deletes the workspace, its saved files, and all chat
+      history for everyone with access.
+    </ConfirmDialog>
+  ) : null;
+
   if (workspaces.length === 0 && !showCreateCard) {
     return <p className="gen2-empty">No workspaces yet.</p>;
   }
@@ -108,6 +182,7 @@ export function Gen2WorkspaceList({
   if (viewMode === "grid") {
     return (
       <div className="gen2-grid">
+        {confirmDialog}
         {showCreateCard ? (
           <button
             type="button"
@@ -127,11 +202,8 @@ export function Gen2WorkspaceList({
 
         {filteredWorkspaces.map((workspace) => {
           const isDeleting = deletingId === workspace.id;
-          const deletionPending = workspace.status === "deleting";
-          const error =
-            actionError?.workspaceId === workspace.id
-              ? actionError.message
-              : null;
+          const pending = isDeleting || workspace.status === "deleting";
+          const status = isDeleting ? "deleting" : workspace.status;
 
           const gridContent = (
             <>
@@ -154,17 +226,18 @@ export function Gen2WorkspaceList({
                 )}
               </div>
               <div className="gen2-grid-card-bottom">
-                <span className={`gen2-status gen2-status-${workspace.status}`}>
+                <span className={`gen2-status gen2-status-${status}`}>
                   <span className="gen2-status-dot" aria-hidden="true" />
-                  {STATUS_LABEL[workspace.status]}
+                  {STATUS_LABEL[status]}
                 </span>
               </div>
+              {deletionNote(workspace, isDeleting)}
             </>
           );
 
           return (
             <div key={workspace.id} className="gen2-grid-item">
-              {deletionPending ? (
+              {pending ? (
                 <div className="gen2-grid-card gen2-card-pending">
                   {gridContent}
                 </div>
@@ -173,52 +246,7 @@ export function Gen2WorkspaceList({
                   {gridContent}
                 </Link>
               )}
-              {workspace.role === "owner" ? (
-                <button
-                  type="button"
-                  className="gen2-grid-delete-button"
-                  aria-label={
-                    isDeleting
-                      ? `Deleting ${workspace.name}`
-                      : deletionPending
-                        ? `Retry deletion of ${workspace.name}`
-                        : `Delete ${workspace.name}`
-                  }
-                  title={
-                    deletionPending ? "Retry deletion" : "Delete workspace"
-                  }
-                  disabled={deletingId !== null}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void deleteWorkspace(workspace);
-                  }}
-                >
-                  {isDeleting ? (
-                    <LoaderCircle
-                      className="gen2-delete-spinner"
-                      aria-hidden="true"
-                      size={16}
-                    />
-                  ) : (
-                    <Trash2 aria-hidden="true" size={16} />
-                  )}
-                </button>
-              ) : null}
-              {deletionPending && !error ? (
-                <p
-                  className="gen2-action-error"
-                  role={workspace.lastError ? "alert" : "status"}
-                >
-                  {workspace.lastError
-                    ? "Deletion did not finish. Retry deletion to continue."
-                    : "Workspace deletion is in progress."}
-                </p>
-              ) : null}
-              {error ? (
-                <p className="gen2-action-error" role="alert">
-                  {error}
-                </p>
-              ) : null}
+              {deleteButton(workspace, "gen2-grid-delete-button", 16)}
             </div>
           );
         })}
@@ -228,13 +256,11 @@ export function Gen2WorkspaceList({
 
   return (
     <ul className="gen2-list">
+      {confirmDialog}
       {filteredWorkspaces.map((workspace) => {
         const isDeleting = deletingId === workspace.id;
-        const deletionPending = workspace.status === "deleting";
-        const error =
-          actionError?.workspaceId === workspace.id
-            ? actionError.message
-            : null;
+        const pending = isDeleting || workspace.status === "deleting";
+        const status = isDeleting ? "deleting" : workspace.status;
         const cardContent = (
           <>
             <strong>{workspace.name}</strong>
@@ -243,9 +269,9 @@ export function Gen2WorkspaceList({
                 {workspace.repository.fullName}
               </span>
             ) : null}
-            <span className={`gen2-status gen2-status-${workspace.status}`}>
+            <span className={`gen2-status gen2-status-${status}`}>
               <span className="gen2-status-dot" aria-hidden="true" />
-              {STATUS_LABEL[workspace.status]}
+              {STATUS_LABEL[status]}
             </span>
           </>
         );
@@ -253,57 +279,16 @@ export function Gen2WorkspaceList({
         return (
           <li key={workspace.id}>
             <div className="gen2-card-row">
-              {deletionPending ? (
+              {pending ? (
                 <div className="gen2-card gen2-card-pending">{cardContent}</div>
               ) : (
                 <Link className="gen2-card" href={`/gen2/${workspace.id}`}>
                   {cardContent}
                 </Link>
               )}
-              {workspace.role === "owner" ? (
-                <button
-                  type="button"
-                  className="gen2-delete-button"
-                  aria-label={
-                    isDeleting
-                      ? `Deleting ${workspace.name}`
-                      : deletionPending
-                        ? `Retry deletion of ${workspace.name}`
-                        : `Delete ${workspace.name}`
-                  }
-                  title={
-                    deletionPending ? "Retry deletion" : "Delete workspace"
-                  }
-                  disabled={deletingId !== null}
-                  onClick={() => void deleteWorkspace(workspace)}
-                >
-                  {isDeleting ? (
-                    <LoaderCircle
-                      className="gen2-delete-spinner"
-                      aria-hidden="true"
-                      size={18}
-                    />
-                  ) : (
-                    <Trash2 aria-hidden="true" size={18} />
-                  )}
-                </button>
-              ) : null}
+              {deleteButton(workspace, "gen2-delete-button", 18)}
             </div>
-            {deletionPending && !error ? (
-              <p
-                className="gen2-action-error"
-                role={workspace.lastError ? "alert" : "status"}
-              >
-                {workspace.lastError
-                  ? "Deletion did not finish. Retry deletion to continue."
-                  : "Workspace deletion is in progress."}
-              </p>
-            ) : null}
-            {error ? (
-              <p className="gen2-action-error" role="alert">
-                {error}
-              </p>
-            ) : null}
+            {deletionNote(workspace, isDeleting)}
           </li>
         );
       })}
