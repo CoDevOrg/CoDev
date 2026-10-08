@@ -1,23 +1,8 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { Check, Copy, MousePointer2, Share2, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Check, Copy, Share2, Sparkles } from "lucide-react";
 import "./multiplayer-preview.css";
-
-const DURATIONS = [2200, 2400, 1800, 5500];
+import "./multiplayer-motion.css";
 
 export function MultiplayerCard() {
-  const [phase, setPhase] = useState(0);
-  useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const timer = window.setTimeout(
-      () => setPhase((phase + 1) % 4),
-      DURATIONS[phase],
-    );
-    return () => window.clearTimeout(timer);
-  }, [phase]);
-
   return (
     <div className="lp-triple-card" data-reveal>
       <div className="lp-triple-text">
@@ -27,122 +12,107 @@ export function MultiplayerCard() {
           other’s agent sessions and see changes as they happen.
         </p>
       </div>
-      <InvitePreview phase={phase} setPhase={setPhase} />
+      <InvitePreview />
     </div>
   );
 }
 
-function InvitePreview({
-  phase,
-  setPhase,
-}: {
-  phase: number;
-  setPhase: (phase: number) => void;
-}) {
+// A CSS-only loop: share the workspace, copy the link, then a teammate joins
+// and edits beside you. Without motion it rests on the joined frame.
+function InvitePreview() {
   return (
     <div
-      className={`lp-feature-preview lp-invite-preview lp-invite-phase-${phase}`}
-      aria-label="Interactive sharing preview"
+      className="lp-feature-preview lp-invite-preview"
+      role="img"
+      aria-label="A teammate joins from a shared link and edits the same file live"
     >
-      <div className="lp-feature-dots" aria-hidden="true" />
+      <div className="lp-feature-dots" />
       <div className="lp-triple-stage lp-invite-editor">
         <div className="lp-invite-toolbar">
           <span>workspace / api.ts</span>
-          <Button variant="secondary" size="xs" onClick={() => setPhase(1)}>
-            <Share2 data-icon="inline-start" />
+          <span className="lp-invite-share">
+            <Share2 size={11} />
             Share
-          </Button>
+          </span>
         </div>
-        <EditorScene joined={phase === 3} />
+        <EditorScene />
         <div className="lp-doc-footer">
           <span className="lp-doc-live-dot" />
-          {phase === 3
-            ? "3 in room · editing together"
-            : "You and Claude · ready to build"}
+          <Swap
+            before="You and Claude · ready to build"
+            after="3 in room · editing together"
+          />
         </div>
+        <InvitePopover />
+        <span className="lp-invite-pointer">
+          <svg width="16" height="16" viewBox="0 0 16 16">
+            <path d="M1.5 1.5 14 6.6 8.4 8.4 6.6 14Z" />
+          </svg>
+          <b>You</b>
+        </span>
       </div>
-      {(phase === 1 || phase === 2) && (
-        <InviteLink
-          copied={phase === 2}
-          onCopy={() => setPhase(phase === 2 ? 3 : 2)}
-        />
-      )}
-      <div className="lp-invite-pointer" aria-hidden="true">
-        <MousePointer2 size={20} fill="white" />
-      </div>
-      {phase === 3 && <JoinedNotice />}
     </div>
   );
 }
 
-function JoinedNotice() {
+function Swap({ before, after }: { before: string; after: string }) {
   return (
-    <div className="lp-invite-joined">
-      <span className="lp-invite-avatar">S</span>
-      <span>
-        <strong>Sarah joined your workspace</strong>
-        <small>Same files. Same terminal. Ready to build.</small>
-      </span>
-      <Check size={14} />
-    </div>
+    <span className="lp-invite-swap">
+      <span className="lp-invite-before">{before}</span>
+      <span className="lp-invite-after">{after}</span>
+    </span>
   );
 }
 
-function InviteLink({
-  copied,
-  onCopy,
-}: {
-  copied: boolean;
-  onCopy: () => void;
-}) {
+function InvitePopover() {
   return (
-    <div className="lp-invite-dialog">
-      <strong>Build together</strong>
-      <p>Anyone you invite can join this workspace.</p>
+    <div className="lp-invite-popover">
+      <strong>Invite to workspace</strong>
+      <p>Anyone with this link can join.</p>
       <div className="lp-invite-link">
         <span>trycodev.com/room/team</span>
-        <Button
-          variant="secondary"
-          size="icon-xs"
-          aria-label={
-            copied ? "Preview teammate joining" : "Try copying the demo invite"
-          }
-          onClick={onCopy}
-        >
-          {copied ? <Check /> : <Copy />}
-        </Button>
+        <span className="lp-invite-copy">
+          <Copy size={11} />
+          <Check size={11} />
+        </span>
       </div>
       <small>
-        {copied
-          ? "Link copied · waiting for your teammate…"
-          : "Copy the link and send it to your teammate."}
+        <Swap
+          before="Copy the link and send it to your team."
+          after="Link copied"
+        />
       </small>
     </div>
   );
 }
 
-function EditorScene({ joined }: { joined: boolean }) {
+function EditorScene() {
   return (
     <div className="lp-invite-code">
       <div className="lp-invite-presence">
-        <span className="lp-invite-avatar lp-invite-you">Y</span>
-        {joined && <span className="lp-invite-avatar">S</span>}
-        <span className="lp-invite-avatar lp-invite-agent">
-          <Sparkles size={10} />
+        <Swap
+          before="Claude is working…"
+          after="Sarah joined · editing api.ts"
+        />
+        <span className="lp-invite-avatars">
+          <span className="lp-invite-avatar lp-invite-you">Y</span>
+          <span className="lp-invite-avatar lp-invite-agent">
+            <Sparkles size={10} />
+          </span>
+          <span className="lp-invite-avatar lp-invite-sarah">S</span>
         </span>
-        <span>{joined ? "Sarah is editing…" : "Claude is working…"}</span>
       </div>
       <div>
         <i>12</i>
         <span className="lp-invite-keyword">export async function</span>{" "}
-        handle(req) &#123;
+        GET(req) &#123;
       </div>
-      <div className={joined ? "lp-invite-edit-line" : ""}>
-        <i>13</i>&nbsp; const ok ={" "}
-        <span className="lp-invite-typed">
-          {joined ? "await checkRateLimit(req.ip);" : "true;"}
-        </span>
-        {joined && <b className="lp-invite-caret">Sarah</b>}
+      <div className="lp-invite-edit-line">
+        <i>13</i>&nbsp; const ok = <span className="lp-invite-old">true;</span>
+        <span className="lp-invite-typed">await rateLimit(req);</span>
+        <b className="lp-invite-caret">
+          <span>Sarah</span>
+        </b>
       </div>
       <div>
         <i>14</i>&nbsp; return Response.json(&#123; ok &#125;);
