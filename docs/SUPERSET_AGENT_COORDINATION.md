@@ -157,7 +157,7 @@ Verified on 2026-10-08:
 | Native registration and the real hook command deliver a notice | Staging, `1.0.16`            | `additional_context` arrived within the hook's 300 ms limit; a forged token got nothing          |
 | guestd refuses Cursor turns with repository hooks              | Staging, `1.0.16`            | 400 naming `.cursor/hooks.json`; 200 once removed                                                |
 | Codex runs the profile hook and the model sees the notice      | Local, pinned Codex 0.148.0  | Passed on the native and Superset paths; repository `.codex/hooks.json` and `notify` did not run |
-| Claude accepts the hook settings                               | Local, pinned Claude 2.1.236 | Inline and file `--settings` are accepted under `--setting-sources ""`                           |
+| Claude accepts the hook settings                               | Local, pinned Claude 2.1.286 | Inline and file `--settings` are accepted under `--setting-sources ""`                           |
 
 Not yet verified, because no Claude or Cursor login was available: that pinned Claude and Cursor actually fire the hook and show its notice to the model. Verify both with real turns in the first enabled workspace.
 
