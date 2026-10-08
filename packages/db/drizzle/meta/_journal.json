@@ -526,6 +526,13 @@
       "when": 1791483565422,
       "tag": "0074_agent_cli_model_fallback",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1791488207301,
+      "tag": "0075_gen2_chat_provider",
+      "breakpoints": true
     }
   ]
 }

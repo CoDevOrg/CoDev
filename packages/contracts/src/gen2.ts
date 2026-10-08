@@ -292,10 +292,16 @@ export const gen2ChatMessageSchema = z.object({
 export const gen2ChatSchema = z.object({
   id: identifierSchema,
   title: z.string().min(1).max(80),
+  /** The agent the chat was started with; null only for an untouched legacy chat. */
+  provider: gen2AgentProviderSchema.nullable().optional(),
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
   messageCount: z.number().int().nonnegative().optional(),
 });
+
+export const gen2CreateChatRequestSchema = z
+  .object({ provider: gen2AgentProviderSchema.optional() })
+  .default({});
 
 export const gen2RenameChatRequestSchema = z.object({
   title: z.string().trim().min(1).max(80),

@@ -73,10 +73,12 @@ vi.mock("./workspaces", () => ({
   requireGen2Member: (...args: unknown[]) => mocks.requireMember(...args),
 }));
 
+const chatProvider = vi.hoisted(() => ({ claim: vi.fn() }));
 vi.mock("./chats", () => ({
   requireGen2Chat: (...args: unknown[]) => mocks.requireChat(...args),
   listGen2ChatMessages: (...args: unknown[]) => mocks.listMessages(...args),
   appendGen2ChatMessage: (...args: unknown[]) => mocks.appendMessage(...args),
+  claimGen2ChatProvider: (...args: unknown[]) => chatProvider.claim(...args),
 }));
 
 vi.mock("./turns", () => ({
@@ -239,6 +241,7 @@ describe("gen2 Codex agent", () => {
     await expect(startGen2AgentTurn(turn)).resolves.toEqual({
       sessionId: "session-1",
     });
+    expect(chatProvider.claim).toHaveBeenCalledWith(chatId, turn.provider);
     expect(mocks.claim).toHaveBeenCalledWith(
       expect.objectContaining({ credentialId, surface: "gen2" }),
     );

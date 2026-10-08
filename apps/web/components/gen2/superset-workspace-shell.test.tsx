@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   connected: true,
   cursorConnected: false,
+  initialChatProvider: undefined as string | undefined,
   renameOk: true,
   listWorktrees: vi.fn(),
   createWorktree: vi.fn(),
@@ -98,6 +99,7 @@ describe("SupersetWorkspaceShell", () => {
   beforeEach(() => {
     mocks.connected = true;
     mocks.cursorConnected = false;
+    mocks.initialChatProvider = undefined;
     mocks.renameOk = true;
     stubMatchMedia(() => false);
     mocks.listWorktrees.mockResolvedValue([
@@ -145,11 +147,15 @@ describe("SupersetWorkspaceShell", () => {
           );
         }
         if (urlStr.includes("/chats") && init?.method === "POST") {
+          const { provider } = JSON.parse(String(init.body ?? "{}")) as {
+            provider?: string;
+          };
           return Promise.resolve(
             Response.json({
               chat: {
                 id: "chat-new",
                 title: "New Chat",
+                provider,
                 messageCount: 0,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
@@ -164,6 +170,7 @@ describe("SupersetWorkspaceShell", () => {
                 {
                   id: "chat-1",
                   title: "Initial Workspace Session",
+                  provider: mocks.initialChatProvider,
                   messageCount: 1,
                   createdAt: new Date().toISOString(),
                   updatedAt: new Date().toISOString(),
@@ -415,6 +422,49 @@ describe("SupersetWorkspaceShell", () => {
         "cursor",
       ),
     );
+  });
+
+  it("keeps each chat under the agent it started with when another agent starts a chat", async () => {
+    mocks.cursorConnected = true;
+    mocks.initialChatProvider = "codex";
+    const { container } = render(
+      <SupersetWorkspaceShell
+        workspaceId={workspaceId}
+        canEdit
+        runtimeEnabled
+      />,
+    );
+    const group = (name: string) =>
+      [...container.querySelectorAll(".gen2-sidebar-provider-group")].find(
+        (element) =>
+          element.querySelector(".gen2-sidebar-provider-name")?.textContent ===
+          name,
+      );
+    await waitFor(() =>
+      expect(group("Codex")?.textContent).toContain(
+        "Initial Workspace Session",
+      ),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "New Chat" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Cursor" }));
+
+    await waitFor(() =>
+      expect(group("Cursor")?.textContent).toContain("New Chat"),
+    );
+    expect(group("Codex")?.textContent).toContain("Initial Workspace Session");
+    expect(group("Cursor")?.textContent).not.toContain(
+      "Initial Workspace Session",
+    );
+    const create = vi
+      .mocked(fetch)
+      .mock.calls.find(
+        ([url, init]) =>
+          String(url).endsWith("/chats") && init?.method === "POST",
+      );
+    expect(JSON.parse(String(create?.[1]?.body))).toEqual({
+      provider: "cursor",
+    });
   });
 
   it("renames a chat after the server accepts the title", async () => {

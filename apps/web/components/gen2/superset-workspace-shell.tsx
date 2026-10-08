@@ -326,6 +326,8 @@ export function SupersetWorkspaceShell({
           `/api/gen2/workspaces/${encodeURIComponent(workspaceId)}/chats`,
           {
             method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ provider }),
           },
         );
         if (!response.ok) return;
@@ -788,6 +790,12 @@ export function SupersetWorkspaceShell({
   const connectedProviders = SUPPORTED_AI_PROVIDERS.filter(
     (p) => providerStatuses[p.id]?.connected,
   );
+  // A chat stays under the agent it started with. The server records it; the
+  // session map only covers a chat created before that record existed.
+  // Unknown legacy chats sit under the first connected agent, never under
+  // whichever agent happens to be selected.
+  const chatProviderOf = (chat: Gen2Chat) =>
+    chat.provider ?? chatProviders[chat.id] ?? connectedProviders[0]?.id;
 
   if (!runtimeEnabled) {
     return (
@@ -1378,7 +1386,7 @@ export function SupersetWorkspaceShell({
                           </WorkspaceButton>
                         </TooltipTrigger>
                         <TooltipContent side="right">
-                          {`${provider.name} (${chats.filter((c) => chatProviders[c.id] === provider.id || (connectedProviders.length === 1 && !chatProviders[c.id])).length} chats)`}
+                          {`${provider.name} (${chats.filter((c) => chatProviderOf(c) === provider.id).length} chats)`}
                         </TooltipContent>
                       </Tooltip>
                     ))}
@@ -1651,13 +1659,9 @@ export function SupersetWorkspaceShell({
                         ) : (
                           <div className="gen2-sidebar-providers-list">
                             {connectedProviders.map((provider) => {
-                              const providerChats = chats.filter((c) => {
-                                const mapped = chatProviders[c.id];
-                                if (mapped) return mapped === provider.id;
-                                if (connectedProviders.length === 1)
-                                  return true;
-                                return provider.id === activeProvider;
-                              });
+                              const providerChats = chats.filter(
+                                (c) => chatProviderOf(c) === provider.id,
+                              );
 
                               return (
                                 <div
