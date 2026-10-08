@@ -1,0 +1,145 @@
+# Ships agent CLI updates without a human step: build the next ARM image, run
+# the staging canary against it, then promote it and redeploy. Any failure
+# leaves production on its current image and opens an issue.
+name: Release ARM workspace image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - infra/runtime/scripts/provision-arm-workspace-image.sh
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-arm-workspace-image
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    environment: arm-workspace
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image_version: ${{ steps.plan.outputs.image_version }}
+      image_id: ${{ steps.plan.outputs.image_id }}
+      release_version: ${{ steps.plan.outputs.release_version }}
+      codex_version: ${{ steps.plan.outputs.codex_version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - id: plan
+        shell: bash
+        env:
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          latest="$(az sig image-version list -g "$AZURE_RESOURCE_GROUP" \
+            -r codevarmworkspacegallery -i codev-workspace-arm64 --query "[].name" -o tsv | sort -V | tail -1)"
+          IFS=. read -r major minor patch <<<"$latest"
+          next="${major}.${minor}.$((patch + 1))"
+          # The runtime config requires the lowercase resource group.
+          group="$(tr '[:upper:]' '[:lower:]' <<<"$AZURE_RESOURCE_GROUP")"
+          eval "$(node infra/runtime/scripts/agent-cli-pins.mjs)"
+          {
+            echo "image_version=${next}"
+            echo "image_id=/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${group}/providers/Microsoft.Compute/galleries/codevarmworkspacegallery/images/codev-workspace-arm64/versions/${next}"
+            echo "release_version=$(date -u +%Y.%m.%d).r${GITHUB_RUN_ID}"
+            echo "codex_version=${codex}"
+          } >>"$GITHUB_OUTPUT"
+          echo "Releasing image ${next} after ${latest} (Codex ${codex}, Claude Code ${claudeCode}, Cursor ${cursorVersion})."
+
+  build:
+    needs: plan
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/build-arm-workspace-image-azure.yml
+    with:
+      release_version: ${{ needs.plan.outputs.release_version }}
+      image_version: ${{ needs.plan.outputs.image_version }}
+
+  canary:
+    needs: [plan, build]
+    runs-on: ubuntu-24.04
+    environment: arm-workspace
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.0
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Fresh start, saved-disk reopen, and stale-generation rejection in staging
+        env:
+          ARM_WORKSPACE_RUNTIME_SECRETS: ${{ secrets.ARM_WORKSPACE_RUNTIME_SECRETS }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          ARM_WORKSPACE_BOOT_ENABLED: "true"
+          CODEV_ARM_CANARY_FROM_RUNTIME_SECRETS: "1"
+          CODEV_ARM_CANARY_IMAGE_VERSION_ID: ${{ needs.plan.outputs.image_id }}
+        run: pnpm --filter @codev/web exec vitest run lib/runtime/arm-workspace-staging-canary.test.ts
+
+  promote:
+    needs: [plan, canary]
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      contents: read
+    env:
+      GH_REPO: ${{ github.repository }}
+      AUTOMATION_TOKEN: ${{ secrets.AGENT_CLI_AUTOMATION_TOKEN }}
+      IMAGE_ID: ${{ needs.plan.outputs.image_id }}
+      CODEX_VERSION: ${{ needs.plan.outputs.codex_version }}
+    steps:
+      - name: Promote the image and the Codex catalog version together
+        shell: bash
+        run: |
+          if [ -z "$AUTOMATION_TOKEN" ]; then
+            echo "::error::Add the AGENT_CLI_AUTOMATION_TOKEN secret (see infra/azure/README.md) so releases can set repository variables."
+            exit 1
+          fi
+          GH_TOKEN="$AUTOMATION_TOKEN" gh variable set ARM_WORKSPACE_IMAGE_VERSION_ID --body "$IMAGE_ID"
+          GH_TOKEN="$AUTOMATION_TOKEN" gh variable set CODEX_CATALOG_CLIENT_VERSION --body "$CODEX_VERSION"
+
+      - name: Redeploy so the web app, lifecycle Worker, and Vercel use it
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run ci.yml --ref main
+          gh workflow run deploy-web.yml --ref main
+
+  report-failure:
+    needs: [plan, build, canary, promote]
+    if: failure()
+    runs-on: ubuntu-24.04
+    permissions:
+      issues: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          IMAGE_VERSION: ${{ needs.plan.outputs.image_version }}
+        run: |
+          gh issue create --title "ARM image release ${IMAGE_VERSION:-unplanned} failed" \
+            --body "The automated release stopped before promotion, so production stays on its current image. Run: ${RUN_URL}"

@@ -45,6 +45,12 @@ const values = {
   }),
   VERCEL_GIT_COMMIT_SHA: release,
 };
+// Releases set the catalog's Codex version together with the image pin, so
+// the catalog matches the promoted image's CLI.
+const codexCatalog = process.env.CODEX_CATALOG_CLIENT_VERSION;
+if (codexCatalog && !/^\d+\.\d+\.\d+$/.test(codexCatalog))
+  throw new Error("CODEX_CATALOG_CLIENT_VERSION must be a Codex version.");
+if (codexCatalog) values.CODEX_CATALOG_CLIENT_VERSION = codexCatalog;
 // Runtime config rejects any other shape; fail before anything is deployed.
 if (
   values.ARM_WORKSPACE_IMAGE_VERSION_ID &&

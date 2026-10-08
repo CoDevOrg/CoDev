@@ -1,7 +1,8 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createHash, createPrivateKey, randomUUID } from "node:crypto";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import {
@@ -9,41 +10,82 @@ import {
   capabilityToken,
 } from "./arm-workspace-provider";
 
+const RUNTIME_KEYS = [
+  "AZURE_TENANT_ID",
+  "AZURE_SUBSCRIPTION_ID",
+  "ARM_WORKSPACE_AZURE_CLIENT_ID",
+  "ARM_WORKSPACE_AZURE_CLIENT_SECRET",
+  "ARM_WORKSPACE_SSH_PUBLIC_KEY",
+  "ARM_WORKSPACE_SIGNING_PRIVATE_KEY",
+  "ARM_WORKSPACE_SIGNING_PUBLIC_KEY",
+  "CLOUDFLARE_API_TOKEN",
+];
+
+/** CI releases reuse the production ARM bundle, always against staging. */
+function runtimeSecretEnvironment() {
+  const bundle = JSON.parse(
+    process.env.ARM_WORKSPACE_RUNTIME_SECRETS ?? "{}",
+  ) as Record<string, string>;
+  const image = process.env.CODEV_ARM_CANARY_IMAGE_VERSION_ID;
+  if (!image) throw new Error("Set CODEV_ARM_CANARY_IMAGE_VERSION_ID.");
+  return {
+    ...Object.fromEntries(
+      RUNTIME_KEYS.map((key) => [key, bundle[key] ?? process.env[key]]),
+    ),
+    ARM_WORKSPACE_RESOURCE_GROUP: "codev-arm-workspace-staging",
+    ARM_WORKSPACE_IMAGE_VERSION_ID: image,
+  };
+}
+
+async function operatorEnvironment(directory: string) {
+  const credential = JSON.parse(
+    await readFile(join(directory, "azure-client-credential.json"), "utf8"),
+  );
+  const cloudflare = JSON.parse(
+    await readFile(join(directory, "token-response.json"), "utf8"),
+  );
+  return {
+    AZURE_TENANT_ID: credential.tenant,
+    AZURE_SUBSCRIPTION_ID: "8ad43e43-af64-4d36-afc5-5e01b23833e4",
+    ARM_WORKSPACE_AZURE_CLIENT_ID: credential.appId,
+    ARM_WORKSPACE_AZURE_CLIENT_SECRET: credential.password,
+    ARM_WORKSPACE_RESOURCE_GROUP: "codev-arm-workspace-staging",
+    ARM_WORKSPACE_IMAGE_VERSION_ID:
+      process.env.CODEV_ARM_CANARY_IMAGE_VERSION_ID ??
+      "/subscriptions/8ad43e43-af64-4d36-afc5-5e01b23833e4/resourceGroups/codev-arm-workspace-phase1/providers/Microsoft.Compute/galleries/codevarmworkspacegallery/images/codev-workspace-arm64/versions/1.0.11",
+    ARM_WORKSPACE_SSH_PUBLIC_KEY: await readFile(
+      join(directory, "ssh-ed25519.pub"),
+      "utf8",
+    ),
+    ARM_WORKSPACE_SIGNING_PRIVATE_KEY: createPrivateKey(
+      await readFile(join(directory, "signing-private.pem")),
+    )
+      .export({ type: "pkcs8", format: "der" })
+      .toString("base64"),
+    ARM_WORKSPACE_SIGNING_PUBLIC_KEY: await readFile(
+      join(directory, "signing-public.pem"),
+      "utf8",
+    ),
+    CLOUDFLARE_API_TOKEN: cloudflare.value,
+  };
+}
+
+const fromRuntimeSecrets =
+  process.env.CODEV_ARM_CANARY_FROM_RUNTIME_SECRETS === "1";
+
 // Opt-in only: creates disposable Azure resources and verifies durable disk reuse.
-it.skipIf(!process.env.CODEV_ARM_CANARY_CREDENTIAL_DIR)(
+it.skipIf(!process.env.CODEV_ARM_CANARY_CREDENTIAL_DIR && !fromRuntimeSecrets)(
   "passes the ARM staging lifecycle canary",
   async () => {
-    const directory = process.env.CODEV_ARM_CANARY_CREDENTIAL_DIR!;
-    const credential = JSON.parse(
-      await readFile(join(directory, "azure-client-credential.json"), "utf8"),
+    const directory =
+      process.env.CODEV_ARM_CANARY_CREDENTIAL_DIR ??
+      (await mkdtemp(join(tmpdir(), "codev-arm-canary-")));
+    Object.assign(
+      process.env,
+      fromRuntimeSecrets
+        ? runtimeSecretEnvironment()
+        : await operatorEnvironment(directory),
     );
-    const cloudflare = JSON.parse(
-      await readFile(join(directory, "token-response.json"), "utf8"),
-    );
-    Object.assign(process.env, {
-      AZURE_TENANT_ID: credential.tenant,
-      AZURE_SUBSCRIPTION_ID: "8ad43e43-af64-4d36-afc5-5e01b23833e4",
-      ARM_WORKSPACE_AZURE_CLIENT_ID: credential.appId,
-      ARM_WORKSPACE_AZURE_CLIENT_SECRET: credential.password,
-      ARM_WORKSPACE_RESOURCE_GROUP: "codev-arm-workspace-staging",
-      ARM_WORKSPACE_IMAGE_VERSION_ID:
-        process.env.CODEV_ARM_CANARY_IMAGE_VERSION_ID ??
-        "/subscriptions/8ad43e43-af64-4d36-afc5-5e01b23833e4/resourceGroups/codev-arm-workspace-phase1/providers/Microsoft.Compute/galleries/codevarmworkspacegallery/images/codev-workspace-arm64/versions/1.0.11",
-      ARM_WORKSPACE_SSH_PUBLIC_KEY: await readFile(
-        join(directory, "ssh-ed25519.pub"),
-        "utf8",
-      ),
-      ARM_WORKSPACE_SIGNING_PRIVATE_KEY: createPrivateKey(
-        await readFile(join(directory, "signing-private.pem")),
-      )
-        .export({ type: "pkcs8", format: "der" })
-        .toString("base64"),
-      ARM_WORKSPACE_SIGNING_PUBLIC_KEY: await readFile(
-        join(directory, "signing-public.pem"),
-        "utf8",
-      ),
-      CLOUDFLARE_API_TOKEN: cloudflare.value,
-    });
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async (...args) => {
       const response = await originalFetch(...args);

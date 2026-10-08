@@ -265,6 +265,10 @@ otherwise the value in `ARM_WORKSPACE_RUNTIME_SECRETS`. Promote or roll back wit
 `gh variable set ARM_WORKSPACE_IMAGE_VERSION_ID`, then run the CI and Deploy web
 workflows on `main`; the Azure deploy rejects an ID outside a lowercase
 `codev-arm-workspace-*` gallery. Saved workspace disks survive image upgrades.
+`CODEX_CATALOG_CLIENT_VERSION` must equal the promoted image's Codex pin.
+ChatGPT's catalog lists only models that version can run. Releases set both
+variables together (see `infra/azure/README.md`). Without it, the catalog uses
+the version in `codex-account-models.ts`.
 
 Workspace model discovery uses connected member credentials and account catalogs;
 caching is scoped to the member and credential. Cursor and Claude discovery runs
