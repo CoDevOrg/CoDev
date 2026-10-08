@@ -26,9 +26,7 @@ function scrollProgress(): number {
 /**
  * The animated landing backdrop, fixed behind the whole page.
  *
- * Default export so `next/dynamic` can load it, following the one existing
- * precedent for a browser-only module in this app
- * (`components/gen2/editor-pane.tsx`).
+ * Default export so `next/dynamic` can load it as a browser-only module.
  *
  * Everything here is progressive enhancement over the static still underneath:
  * a reader with reduced motion, without JavaScript, or on a machine too slow to

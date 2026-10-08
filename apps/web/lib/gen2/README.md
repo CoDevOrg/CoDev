@@ -88,14 +88,14 @@ The terminal stream and shared-document sockets use the platform WebSocket adapt
 
 ## Layout
 
-| Path                           | Role                                                                     |
-| ------------------------------ | ------------------------------------------------------------------------ |
-| `apps/web/lib/gen2`            | Domain: create, members, share, start/stop, Codex, files, Git, terminals |
-| `apps/web/components/gen2`     | Chat column, activity cards, workbench, editor, terminal, Git            |
-| `apps/web/app/gen2`            | Pages and CSS                                                            |
-| `apps/web/app/api/gen2`        | HTTP                                                                     |
-| `packages/db` `gen2_*` tables  | Persistence                                                              |
-| `packages/contracts` `gen2.ts` | Request/response shapes                                                  |
+| Path                           | Role                                                                         |
+| ------------------------------ | ---------------------------------------------------------------------------- |
+| `apps/web/lib/gen2`            | Domain: create, members, share, start/stop, Codex, files, Git, terminals     |
+| `apps/web/components/gen2`     | Superset workspace shell: chat, activity cards, files, editor, terminal, Git |
+| `apps/web/app/gen2`            | Pages and CSS                                                                |
+| `apps/web/app/api/gen2`        | HTTP                                                                         |
+| `packages/db` `gen2_*` tables  | Persistence                                                                  |
+| `packages/contracts` `gen2.ts` | Request/response shapes                                                      |
 
 The Azure orchestrator is reused (`provisionSandbox` / `destroySandbox`). Gen 2
 uses its own `gen2_*` tables and does not access the original `workspaces` table.
