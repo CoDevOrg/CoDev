@@ -12,6 +12,20 @@ const claude = [
 	"--permission-mode", "bypassPermissions", "--model", "sonnet", "prompt",
 ];
 
+const cursor = [
+	"cursor-agent", "--print", "--output-format", "stream-json", "--force", "--trust",
+	"--disable-project-configs", "--model", "composer-2", "prompt",
+];
+
+test("only accepts the approved Cursor launch shape", () => {
+	assert.equal(isApprovedAgentCommand("cursor", cursor), true);
+	assert.equal(isApprovedAgentCommand("cursor", cursor.filter((value) => value !== "--disable-project-configs")), false);
+	assert.equal(isApprovedAgentCommand("cursor", [...cursor.slice(0, 7), "--approve-mcps", ...cursor.slice(7)]), false);
+	assert.equal(isApprovedAgentCommand("cursor", [...cursor.slice(0, 9), ""]), false);
+	assert.equal(isApprovedAgentCommand("cursor", codex), false);
+	assert.equal(isApprovedAgentCommand("openai", cursor), false);
+});
+
 test("only accepts the approved Codex and Claude launch shapes", () => {
 	assert.equal(isApprovedAgentCommand("openai", codex), true);
 	assert.equal(isApprovedAgentCommand("anthropic", claude), true);

@@ -1,6 +1,9 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, it } from "bun:test";
-import { resolve } from "node:path";
+import { execFileSync } from "node:child_process";
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import { migrate } from "drizzle-orm/bun-sqlite/migrator";
 import { Hono } from "hono";
@@ -111,5 +114,49 @@ describe("CoDev agent bridge registration", () => {
 		seedRun(db, "codev-agent-other");
 		const response = await bridge(db).fetch(startRequest());
 		expect(response.status).toBe(409);
+	});
+});
+
+describe("CoDev Cursor agents", () => {
+	const cursorCommand = [
+		"cursor-agent", "--print", "--output-format", "stream-json", "--force", "--trust",
+		"--disable-project-configs", "--model", "composer-2", "prompt",
+	];
+
+	it("refuses to launch Cursor beside repository hooks it would run", async () => {
+		const root = await realpath(await mkdtemp(join(tmpdir(), "codev-cursor-agent-")));
+		try {
+			execFileSync("git", ["init", "-q", root]);
+			await mkdir(join(root, ".cursor"));
+			await writeFile(join(root, ".cursor", "hooks.json"), "{}");
+			const app = new Hono();
+			registerCoDevAgentBridge({
+				app,
+				db: createDb(),
+				eventBus: {} as EventBus,
+				git: async () => ({ raw: async () => "main" }),
+				workspaceRoot: root,
+				bridgeSecret: SECRET,
+			});
+
+			const response = await app.fetch(
+				startRequest({ worktreeId: "main", provider: "cursor", command: cursorCommand }),
+			);
+
+			expect(response.status).toBe(400);
+			expect(((await response.json()) as { error: string }).error).toContain(
+				"Cursor would run hooks from .cursor/hooks.json",
+			);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("rejects a Cursor command outside the approved shape", async () => {
+		const response = await bridge(createDb()).fetch(
+			startRequest({ provider: "cursor", command: [...cursorCommand.slice(0, 6), ...cursorCommand.slice(7)] }),
+		);
+		expect(response.status).toBe(400);
+		expect(await response.json()).toEqual({ error: "Unsupported Superset agent launch command." });
 	});
 });

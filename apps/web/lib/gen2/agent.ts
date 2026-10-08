@@ -42,7 +42,11 @@ import { withNativeCoordinationHooks } from "./agent-coordination-hooks";
 import { findPossibleDuplicateTask } from "./duplicate-task-check";
 import { avoidBlockedCliModel } from "./agent-cli-fallback";
 import { refreshCursorTurnAuth } from "./cursor-auth-refresh";
-import { isGen2SupersetAgentSessionsEnabled } from "./superset-agent-sessions-feature";
+import {
+  isGen2SupersetAgentSessionsEnabled,
+  isGen2SupersetCursorAgentsEnabled,
+  isGen2SupersetTurn,
+} from "./superset-agent-sessions-feature";
 import {
   cancelGen2SupersetAgentTurn,
   pollGen2SupersetAgentTurn,
@@ -121,8 +125,10 @@ export async function startGen2AgentTurn(input: {
     : await avoidBlockedCliModel(input.provider, requested, models);
   if (!model) throw new Gen2LifecycleError(fallbackNote!, 409);
 
-  // Cursor uses the provider-neutral guest exec until Superset supports its CLI.
-  if (isGen2SupersetAgentSessionsEnabled() && input.provider !== "cursor") {
+  if (
+    isGen2SupersetAgentSessionsEnabled() &&
+    (input.provider !== "cursor" || isGen2SupersetCursorAgentsEnabled())
+  ) {
     return startGen2AgentTurnViaSuperset({ ...input, model });
   }
 
@@ -307,10 +313,7 @@ async function pollGen2AgentTurnOperation(input: {
 }) {
   const membership = await requireGen2Member(input.workspaceId, input.userId);
 
-  if (
-    isGen2SupersetAgentSessionsEnabled() &&
-    (await getGen2TurnProvider(input.sessionId)) !== "cursor"
-  ) {
+  if (isGen2SupersetTurn(input.sessionId)) {
     return pollGen2AgentTurnViaSuperset(input);
   }
 
@@ -445,10 +448,7 @@ export async function cancelGen2AgentTurn(input: {
 }) {
   await requireGen2Member(input.workspaceId, input.userId);
 
-  if (
-    isGen2SupersetAgentSessionsEnabled() &&
-    (await getGen2TurnProvider(input.sessionId)) !== "cursor"
-  ) {
+  if (isGen2SupersetTurn(input.sessionId)) {
     try {
       await cancelGen2SupersetAgentTurn(input);
     } catch (error) {

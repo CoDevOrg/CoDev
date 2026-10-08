@@ -1,4 +1,4 @@
-export type CoDevAgentProvider = "openai" | "anthropic";
+export type CoDevAgentProvider = "openai" | "anthropic" | "cursor";
 
 const codexPrefix = [
 	"codex",
@@ -30,6 +30,16 @@ const claudePrefix = [
 	"bypassPermissions",
 ];
 
+const cursorPrefix = [
+	"cursor-agent",
+	"--print",
+	"--output-format",
+	"stream-json",
+	"--force",
+	"--trust",
+	"--disable-project-configs",
+];
+
 function matchesPrefix(command: string[], prefix: string[]) {
 	return prefix.every((value, index) => command[index] === value);
 }
@@ -49,6 +59,15 @@ export function isApprovedAgentCommand(provider: CoDevAgentProvider, command: st
 			command[13] === "--cd" &&
 			command[14] === "." &&
 			command[15]!.length > 0
+		);
+	}
+	if (provider === "cursor") {
+		return (
+			command.length === cursorPrefix.length + 3 &&
+			matchesPrefix(command, cursorPrefix) &&
+			command[7] === "--model" &&
+			command[8]!.length > 0 &&
+			command[9]!.length > 0
 		);
 	}
 	return (

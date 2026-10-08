@@ -156,6 +156,11 @@ origin's runtime values, so changing it needs only a CI deploy from `main`, not
 a rewrite of `AZURE_WEB_RUNTIME_SECRETS`. Unset or empty means off. See
 [SUPERSET_AGENT_COORDINATION.md](./SUPERSET_AGENT_COORDINATION.md).
 
+`CODEV_SUPERSET_CURSOR_AGENTS_ENABLED` (`true` to enable) is overlaid the same
+way. It moves Cursor from native guest turns to Superset agent sessions, so set
+it only once no running workspace VM predates an image whose host service
+accepts Cursor (ARM image 1.0.17 or later).
+
 A trusted cost collector can POST complete cumulative USD owner/month snapshots
 to `/api/gen2/compute/reconcile` using the platform's existing `CRON_SECRET` bearer
 credential. The schema requires compute, storage, networking, operations, and

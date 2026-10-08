@@ -9,6 +9,16 @@ vi.mock("../providers/dynamic-models", () => ({
 }));
 
 vi.mock("./cursor-auth-refresh", () => ({ refreshCursorTurnAuth: vi.fn() }));
+const superset = vi.hoisted(() => ({
+  start: vi.fn(),
+  poll: vi.fn(),
+  cancel: vi.fn(),
+}));
+vi.mock("./superset-agent-runtime", () => ({
+  startGen2SupersetAgentTurn: (...args: unknown[]) => superset.start(...args),
+  pollGen2SupersetAgentTurn: (...args: unknown[]) => superset.poll(...args),
+  cancelGen2SupersetAgentTurn: (...args: unknown[]) => superset.cancel(...args),
+}));
 const fallback = vi.hoisted(() => ({
   avoid: vi.fn(),
   continueOn: vi.fn(),
@@ -581,6 +591,63 @@ describe("gen2 Codex agent", () => {
       });
       expect(mocks.close).toHaveBeenCalledWith(workspaceId, "session-1");
       expect(mocks.claim).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("moves new Cursor turns to Superset only when Cursor agents are enabled", async () => {
+    const runId = "77777777-7777-4777-8777-777777777777";
+    vi.stubEnv("CODEV_SUPERSET_AGENT_SESSIONS_ENABLED", "true");
+    vi.stubEnv("CODEV_SUPERSET_CURSOR_AGENTS_ENABLED", "true");
+    mocks.turnProvider.mockResolvedValue("cursor");
+    superset.start.mockResolvedValue({ sessionId: runId, agentSessionId: "s" });
+    superset.poll.mockResolvedValue({
+      chunks: [],
+      nextSequence: 1,
+      exited: false,
+      exitCode: null,
+    });
+    try {
+      await startGen2AgentTurn({
+        workspaceId,
+        userId,
+        chatId,
+        prompt: "Say hello",
+        idempotencyKey: "cursor-superset-1",
+        provider: "cursor",
+      });
+      expect(superset.start).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: "cursor" }),
+      );
+      expect(mocks.start).not.toHaveBeenCalled();
+
+      await pollGen2AgentTurn({
+        workspaceId,
+        userId,
+        chatId,
+        sessionId: runId,
+        after: 0,
+      });
+      expect(superset.poll).toHaveBeenCalled();
+      await cancelGen2AgentTurn({ workspaceId, userId, sessionId: runId });
+      expect(superset.cancel).toHaveBeenCalled();
+
+      // A native Cursor turn already in flight keeps the guest path.
+      await pollGen2AgentTurn({
+        workspaceId,
+        userId,
+        chatId,
+        sessionId: "codex-1-1",
+        after: 0,
+      });
+      expect(mocks.poll).toHaveBeenCalled();
+      await cancelGen2AgentTurn({
+        workspaceId,
+        userId,
+        sessionId: "codex-1-1",
+      });
+      expect(mocks.close).toHaveBeenCalledWith(workspaceId, "codex-1-1");
     } finally {
       vi.unstubAllEnvs();
     }
