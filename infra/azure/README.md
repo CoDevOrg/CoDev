@@ -187,6 +187,17 @@ blobs, contributor access to only its candidate gallery, and permission to
 attach that identity to the temporary build VM. Keyless Sigstore signatures
 are checked inside the image builder before artifacts are installed.
 
+After publishing, the build boots one disposable VM from the new version in the
+builder's subnet, with no public IP, then deletes it. The first VM from a new
+gallery version boots several times slower (119 s versus about 25 s for
+`1.0.14`), so this keeps that cost off members' starts. It also proves the
+published image boots with the production VM shape. Promote a version only from
+a run whose log shows that first boot.
+
+The guest clones public repositories blobless (`--filter=blob:none`): full
+commit history, but file contents only for the base commit, with older blobs
+fetched on demand. A clone change ships with the next image release.
+
 The candidate builder is an unzoned native ARM64 VM with all inbound traffic denied.
 Azure Run Command installs and verifies signed artifacts and checks runtime health.
 Host-key-pinned SSH restricted to the runner IPv4 generalizes the VM; its temporary
