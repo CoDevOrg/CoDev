@@ -161,7 +161,7 @@ Verified on 2026-10-08:
 
 Not yet verified, because no Claude or Cursor login was available: that pinned Claude and Cursor actually fire the hook and show its notice to the model. Verify both with real turns in the first enabled workspace.
 
-Production runs Superset agent sessions off, and native turns run one at a time per VM, so two agents never run at once there today. Until Superset sessions are enabled, an enabled workspace gets the duplicate check and hook setup but no overlap notices or UI overlaps.
+Production runs with `CODEV_SUPERSET_RUNTIME_ENABLED`, `CODEV_SUPERSET_AGENT_SESSIONS_ENABLED`, and `CODEV_SUPERSET_FILE_PANE_ENABLED` on (checked on the live Azure app, 2026-10-08). Codex and Claude run as concurrent Superset agents in their own worktrees, so an enabled workspace gets notices, UI overlaps, and the duplicate check. Cursor runs as native turns, one at a time per VM.
 
 To enable, add one internal workspace to `CODEV_AGENT_COORDINATION_WORKSPACES` and start a new CI run from `main`. Watch overlap counts, false positives, and duplicate warnings, then widen. Removing a workspace restores current behavior for its next agent starts.
 
