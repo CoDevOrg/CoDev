@@ -10,4 +10,4 @@ This module owns site administration and organization-level management functiona
 - `access-requests.ts`, `access-request-mail.ts`: Handling workspace or site access requests.
 - `admin-stats.ts`: High-level site usage and reporting.
 
-- `admin-plan-summary.ts`: Effective account/subscriber counts and dated Azure VM/saved-disk retail estimates; excludes administrators and does not replace actual spend reporting.
+- `admin-plan-summary.ts`: Effective account/subscriber counts and dated Azure VM/saved-disk retail estimates; includes administrators in plan counts but excludes them from allowance cost estimates; does not replace actual spend reporting.

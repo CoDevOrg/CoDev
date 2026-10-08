@@ -52,7 +52,7 @@ describe("admin plan reporting", () => {
       ],
       now,
     );
-    expect(rows.find((row) => row.id === "free")?.accounts).toBe(3);
+    expect(rows.find((row) => row.id === "free")?.accounts).toBe(4);
     expect(rows.find((row) => row.id === "pro")).toMatchObject({
       accounts: 3,
       subscribers: 1,
@@ -60,6 +60,30 @@ describe("admin plan reporting", () => {
       grants: 1,
     });
     expect(rows.find((row) => row.id === "power")?.accounts).toBe(0);
+  });
+
+  it("counts administrator plans alongside members without adding unlimited admin usage to estimates", () => {
+    const rows = buildAdminPlanSummary(
+      [
+        account({ planId: "pro", subscriptionStatus: "active" }),
+        ...Array.from({ length: 3 }, () =>
+          account({
+            isAdmin: true,
+            planId: "pro",
+            subscriptionStatus: "active",
+          }),
+        ),
+        account({ isAdmin: true }),
+        account(),
+      ],
+      now,
+    );
+    const individual = rows.find((row) => row.id === "pro")!;
+    expect(individual.accounts).toBe(4);
+    expect(individual.grants).toBe(4);
+    expect(individual.totalCostUsd).toBe(individual.costPerAccountUsd);
+    expect(rows.find((row) => row.id === "free")?.accounts).toBe(2);
+    expect(rows.reduce((sum, row) => sum + row.accounts, 0)).toBe(6);
   });
 
   it("estimates Free lifetime hours and Individual monthly hours with persistent disk storage", () => {
