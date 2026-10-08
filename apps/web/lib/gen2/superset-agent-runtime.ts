@@ -105,6 +105,8 @@ type StartSessionInput = {
   command: string[];
   idempotencyKey: string;
   provider: Gen2AgentProvider;
+  /** The caller already checked membership, the chat and the owner's plan. */
+  verified?: boolean;
 };
 
 export async function startGen2SupersetAgentSession(input: StartSessionInput) {
@@ -122,10 +124,12 @@ async function startSession(
       workspaceId: input.workspaceId,
       userId: input.userId,
     });
-  } else {
+  } else if (!input.verified) {
     await requireGen2Member(input.workspaceId, input.userId);
   }
-  await requireWorkspaceOwnerPlan(input.workspaceId);
+  // Each database trip crosses the country, so the plan check (a dozen of
+  // them) runs once per turn; a verified caller has already run it.
+  if (!input.verified) await requireWorkspaceOwnerPlan(input.workspaceId);
   const provider = input.provider;
   const credential = await resolveGen2Credential(input.userId, provider);
 
@@ -189,21 +193,23 @@ async function startSession(
         ? { coordination: true }
         : {}),
     });
-    await markGen2SupersetRunStarted({
-      runId: registration.runId,
-      workspaceId: input.workspaceId,
-      hostWorkspaceId: started.hostWorkspaceId,
-      hostTerminalId: started.hostTerminalId,
-      hostAgentSessionId: started.hostAgentSessionId,
-      actorId: input.userId,
-    });
-    if (input.sessionId) {
-      await updateGen2AgentSessionStatus({
-        sessionId: input.sessionId,
-        status: "running",
-        recoveryState: "not_required",
-      });
-    }
+    await Promise.all([
+      markGen2SupersetRunStarted({
+        runId: registration.runId,
+        workspaceId: input.workspaceId,
+        hostWorkspaceId: started.hostWorkspaceId,
+        hostTerminalId: started.hostTerminalId,
+        hostAgentSessionId: started.hostAgentSessionId,
+        actorId: input.userId,
+      }),
+      input.sessionId
+        ? updateGen2AgentSessionStatus({
+            sessionId: input.sessionId,
+            status: "running",
+            recoveryState: "not_required",
+          })
+        : null,
+    ]);
     return { ...registration, status: "running" as const };
   } catch (error) {
     if (claimed && credential.credentialId) {
@@ -746,18 +752,22 @@ export async function startGen2SupersetAgentTurn(input: {
   provider: Gen2AgentProvider;
   worktreeId?: string | undefined;
   model?: string | undefined;
+  /** `startGen2AgentTurn` already checked membership, the chat and the plan. */
+  verified?: boolean;
 }) {
   requireEnabled();
-  await requireGen2Member(input.workspaceId, input.userId);
-  await requireWorkspaceOwnerPlan(input.workspaceId);
-  await requireGen2Chat(input.workspaceId, input.chatId);
-  const history = await listGen2ChatMessages(input.chatId);
-  const worktreeId =
+  if (!input.verified) {
+    await requireGen2Member(input.workspaceId, input.userId);
+    await Promise.all([
+      requireWorkspaceOwnerPlan(input.workspaceId),
+      requireGen2Chat(input.workspaceId, input.chatId),
+    ]);
+  }
+  const [history, worktreeId] = await Promise.all([
+    listGen2ChatMessages(input.chatId),
     input.worktreeId ??
-    (await ensureGen2SupersetAgentWorktree(
-      input.workspaceId,
-      input.idempotencyKey,
-    ));
+      ensureGen2SupersetAgentWorktree(input.workspaceId, input.idempotencyKey),
+  ]);
   const provider = input.provider;
   const command = buildGen2AgentCommand(
     provider,
@@ -785,32 +795,37 @@ export async function startGen2SupersetAgentTurn(input: {
       command,
       provider,
       idempotencyKey: input.idempotencyKey,
+      verified: true,
     },
     "turn",
   );
 
-  try {
-    await appendGen2ChatMessage({
+  await Promise.all([
+    (async () => {
+      try {
+        await appendGen2ChatMessage({
+          chatId: input.chatId,
+          role: "user",
+          body: input.prompt,
+        });
+      } catch (error) {
+        logEvent("error", "gen2.agent.persist_user_failed", {
+          detail: error instanceof Error ? error.message : "unknown",
+        });
+      }
+    })(),
+    // From here the server owns the transcript: every poll appends to this
+    // row, so the reply survives the browser going away mid-turn. Matches
+    // `startGen2AgentTurn`'s `createGen2Turn` call in agent.ts; safe to repeat
+    // on a retried start because of `onConflictDoNothing`.
+    createGen2Turn({
+      sessionId: session.runId,
+      provider,
+      workspaceId: input.workspaceId,
       chatId: input.chatId,
-      role: "user",
-      body: input.prompt,
-    });
-  } catch (error) {
-    logEvent("error", "gen2.agent.persist_user_failed", {
-      detail: error instanceof Error ? error.message : "unknown",
-    });
-  }
-  // From here the server owns the transcript: every poll appends to this
-  // row, so the reply survives the browser going away mid-turn. Matches
-  // `startGen2AgentTurn`'s `createGen2Turn` call in agent.ts; safe to repeat
-  // on a retried start because of `onConflictDoNothing`.
-  await createGen2Turn({
-    sessionId: session.runId,
-    provider,
-    workspaceId: input.workspaceId,
-    chatId: input.chatId,
-    userId: input.userId,
-  });
+      userId: input.userId,
+    }),
+  ]);
   return { sessionId: session.runId, agentSessionId: logicalSession.id };
 }
 

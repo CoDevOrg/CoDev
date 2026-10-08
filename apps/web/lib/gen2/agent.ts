@@ -92,12 +92,21 @@ export async function startGen2AgentTurn(input: {
       "Edit permission is required to run agents.",
       403,
     );
-  await requireWorkspaceOwnerPlan(input.workspaceId);
-  await requireGen2Chat(input.workspaceId, input.chatId);
-  await claimGen2ChatProvider(input.chatId, input.provider);
-  const possibleDuplicate = input.continuation
-    ? null
-    : await findPossibleDuplicateTask(input);
+  // Every database trip crosses the country, so independent checks run
+  // together instead of one after another.
+  const [, possibleDuplicate, models] = await Promise.all([
+    requireWorkspaceOwnerPlan(input.workspaceId),
+    requireGen2Chat(input.workspaceId, input.chatId).then(async () => {
+      await claimGen2ChatProvider(input.chatId, input.provider);
+      return input.continuation ? null : findPossibleDuplicateTask(input);
+    }),
+    getDynamicModelsForProvider(input.provider, input.userId).catch(() => {
+      throw new Gen2LifecycleError(
+        "Couldn't load your account's models. Please refresh and try again.",
+        503,
+      );
+    }),
+  ]);
   if (
     possibleDuplicate &&
     possibleDuplicate.runId !== input.acknowledgedDuplicateOf
@@ -105,15 +114,6 @@ export async function startGen2AgentTurn(input: {
     return { possibleDuplicate };
   }
 
-  const models = await getDynamicModelsForProvider(
-    input.provider,
-    input.userId,
-  ).catch(() => {
-    throw new Gen2LifecycleError(
-      "Couldn't load your account's models. Please refresh and try again.",
-      503,
-    );
-  });
   const requested = input.model ?? models[0]?.id;
   if (!requested || !models.some((entry) => entry.id === requested))
     throw new Gen2LifecycleError(
@@ -131,7 +131,7 @@ export async function startGen2AgentTurn(input: {
     isGen2SupersetAgentSessionsEnabled() &&
     (input.provider !== "cursor" || isGen2SupersetCursorAgentsEnabled())
   ) {
-    return startGen2AgentTurnViaSuperset({ ...input, model });
+    return startGen2AgentTurnViaSuperset({ ...input, model, verified: true });
   }
 
   const history =
@@ -277,6 +277,7 @@ async function startGen2AgentTurnViaSuperset(input: {
   provider: Gen2AgentProvider;
   worktreeId?: string | undefined;
   model?: string | undefined;
+  verified?: boolean;
 }) {
   try {
     return await startGen2SupersetAgentTurn(input);

@@ -702,6 +702,34 @@ describe("gen2 Superset agent turn (Phase 4 browser-facing delegate)", () => {
     });
   });
 
+  it("checks the owner's plan once per turn", async () => {
+    mocks.register.mockResolvedValue({
+      runId,
+      status: "creating",
+      created: true,
+    });
+    mocks.start.mockResolvedValue({
+      hostWorkspaceId: "host-ws-1",
+      hostTerminalId: "term-1",
+      hostAgentSessionId: "agent-1",
+    });
+    const turn = {
+      workspaceId,
+      userId,
+      chatId,
+      prompt: "hello",
+      provider: "codex" as const,
+      idempotencyKey: "key-1",
+    };
+
+    await startGen2SupersetAgentTurn(turn);
+    expect(mocks.bill).toHaveBeenCalledTimes(1);
+
+    mocks.bill.mockClear();
+    await startGen2SupersetAgentTurn({ ...turn, verified: true });
+    expect(mocks.bill).not.toHaveBeenCalled();
+  });
+
   it("provisions a per-agent worktree, starts the run, and persists the prompt", async () => {
     mocks.register.mockResolvedValue({
       runId,
