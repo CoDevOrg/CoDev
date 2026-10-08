@@ -26,6 +26,13 @@ catalogs. Cache keys include member, provider, and credential fingerprint for on
 minute; failures never substitute public or hard-coded model lists. Provider
 catalog availability does not guarantee remaining usage quota or inference access.
 
+Outside turns nothing else refreshes a ChatGPT sign-in, so `codex-token-refresh.ts`
+refreshes an access token within five minutes of expiry before Codex discovery.
+It sends the pinned CLI's refresh request and saves the rotated tokens only if
+the credential revision is unchanged. It never refreshes while a turn holds the
+credential seat, because that CLI refreshes the same rotating token. A refresh
+token OpenAI rejects surfaces a reconnect message instead of a retry hint.
+
 Cloudflare relays Codex discovery to the existing Vercel production catalog
 service because ChatGPT returns 403 to Worker egress. The shared `CRON_SECRET`
 authorizes this fixed service; member account tokens stay on Vercel. Cursor and
