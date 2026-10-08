@@ -33,8 +33,10 @@ try {
   await pool.query(`SELECT owner_id, month, compute_cents, storage_cents,
     network_cents, operations_cents, other_cents, blocked, observed_at
     FROM public.gen2_owner_budgets LIMIT 0`);
-  await pool.query(`SELECT session_id, next_sequence
-    FROM public.gen2_agent_turns LIMIT 0`);
+  await pool.query(`SELECT session_id, next_sequence, model, worktree_id,
+    continued_as_session_id FROM public.gen2_agent_turns LIMIT 0`);
+  await pool.query(`SELECT provider, model, min_version, observed_version,
+    image_version_id FROM public.agent_cli_model_requirements LIMIT 0`);
   await pool.query(`SELECT id, runtime_provider, runtime_status, runtime_generation,
     runtime_route_host FROM public.gen2_workspaces LIMIT 0`);
   const powerPlan = await pool.query(
