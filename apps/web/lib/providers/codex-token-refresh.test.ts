@@ -135,3 +135,23 @@ it("passes API keys through untouched", async () => {
     }),
   ).toBe(secret);
 });
+
+it("force-refreshes a token ChatGPT rejected before its expiry", async () => {
+  const fetch = vi.fn(async () =>
+    Response.json({ access_token: jwt({ exp: now() + 3600 }) }),
+  );
+  vi.stubGlobal("fetch", fetch);
+  const input = credential(now() + 3600);
+  const secret = await freshCodexSecret(input, { force: true });
+  expect(fetch).toHaveBeenCalledOnce();
+  expect(secret).not.toBe(input.secret);
+});
+
+it("still defers to a running turn when forced", async () => {
+  const fetch = vi.fn();
+  vi.stubGlobal("fetch", fetch);
+  mocks.seat.mockResolvedValue({ surface: "gen2", ref: "session-1" });
+  const input = credential(now() + 3600);
+  expect(await freshCodexSecret(input, { force: true })).toBe(input.secret);
+  expect(fetch).not.toHaveBeenCalled();
+});

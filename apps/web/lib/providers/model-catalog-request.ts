@@ -1,5 +1,13 @@
 import "server-only";
 
+/** Carries only the HTTP status, so callers can react to a rejected token. */
+export class ModelCatalogRequestError extends Error {
+  constructor(readonly status: number) {
+    super("Account model discovery is unavailable.");
+    this.name = "ModelCatalogRequestError";
+  }
+}
+
 /** Provider errors must never echo a response body or authentication material. */
 export async function modelCatalogRequest(url: string, init: RequestInit) {
   const response = await fetch(url, {
@@ -14,7 +22,7 @@ export async function modelCatalogRequest(url: string, init: RequestInit) {
       host: new URL(url).hostname,
       status: response.status,
     });
-    throw new Error("Account model discovery is unavailable.");
+    throw new ModelCatalogRequestError(response.status);
   }
   const text = await response.text();
   if (text.length > 4_000_000)

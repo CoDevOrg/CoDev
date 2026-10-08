@@ -6,6 +6,7 @@ import { getCursorAccountModels } from "./cursor-account-models";
 import { getClaudeAccountModels } from "./claude-account-models";
 import { getRelayedCodexAccountModels } from "./model-catalog-relay";
 import { freshCodexSecret } from "./codex-token-refresh";
+import { ModelCatalogRequestError } from "./model-catalog-request";
 
 const cache = new Map<string, { expiresAt: number; models: Gen2ModelInfo[] }>();
 const discover = {
@@ -41,7 +42,21 @@ export async function getDynamicModelsForProvider(
   const key = `${userId}:${provider}:${fingerprint}`;
   const previous = cache.get(key);
   if (previous && previous.expiresAt > Date.now()) return previous.models;
-  const models = await discover[provider](secret);
+  const models = await discover[provider](secret).catch(
+    async (error: unknown) => {
+      // ChatGPT can reject a token before its expiry: refresh once and retry,
+      // unless this request already refreshed it.
+      if (
+        provider !== "codex" ||
+        secret !== credential.secret ||
+        !(error instanceof ModelCatalogRequestError && error.status === 401)
+      )
+        throw error;
+      const renewed = await freshCodexSecret(credential, { force: true });
+      if (renewed === credential.secret) throw error;
+      return discover[provider](renewed);
+    },
+  );
   if (!models.length) throw new Error("No account models are available.");
   for (const [entry, value] of cache)
     if (value.expiresAt <= Date.now()) cache.delete(entry);

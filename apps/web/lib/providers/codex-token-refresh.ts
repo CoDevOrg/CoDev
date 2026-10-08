@@ -78,13 +78,17 @@ async function requestRefresh(refreshToken: string) {
 /**
  * Model discovery runs outside turns, where nothing else refreshes the ChatGPT
  * access token. Refresh an expired one and save the rotated tokens, so the
- * catalog (and the turn it gates) keep working without a reconnect.
+ * catalog (and the turn it gates) keep working without a reconnect. `force`
+ * refreshes a token ChatGPT rejected before its expiry.
  */
-export async function freshCodexSecret(credential: {
-  credentialId: string | null;
-  credentialRevision: string | null;
-  secret: ResolvedSecret;
-}): Promise<ResolvedSecret> {
+export async function freshCodexSecret(
+  credential: {
+    credentialId: string | null;
+    credentialRevision: string | null;
+    secret: ResolvedSecret;
+  },
+  { force = false } = {},
+): Promise<ResolvedSecret> {
   const { credentialId, credentialRevision, secret } = credential;
   if (
     secret.kind !== "codex_auth_cache" ||
@@ -94,7 +98,8 @@ export async function freshCodexSecret(credential: {
     return secret;
   const { tokens } = authCache.parse(JSON.parse(secret.authCacheJson));
   const expiry = expiresAt(tokens.access_token);
-  if (expiry === null || expiry - Date.now() > EXPIRY_MARGIN_MS) return secret;
+  if (!force && (expiry === null || expiry - Date.now() > EXPIRY_MARGIN_MS))
+    return secret;
   // A running turn's CLI refreshes the same rotating token and saves it on exit.
   if (await credentialSeatHolder(credentialId)) return secret;
   const next = await requestRefresh(tokens.refresh_token);
