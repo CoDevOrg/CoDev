@@ -105,10 +105,6 @@
   font-weight: 700;
 }
 
-.app-page .brand-image {
-  filter: var(--brand-logo-filter);
-}
-
 .auth-page {
   position: relative;
   overflow: hidden;
@@ -157,10 +153,6 @@
 .auth-page .wordmark,
 .auth-page .auth-nav > a {
   color: var(--codev-beige-100);
-}
-
-.auth-page .brand-image {
-  filter: var(--brand-logo-filter);
 }
 
 .auth-page .auth-card {

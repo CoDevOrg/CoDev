@@ -68,13 +68,6 @@
      just for this one property. */
   --brand-color-scheme: light;
   color-scheme: light;
-
-  /* The wordmark logo asset is recolored from a black source via filter
-     rather than a mask, so it needs its own chain per theme instead of
-     inheriting a color directly. Approximate; may want a visual tweak once
-     seen against the real asset. */
-  --brand-logo-filter: brightness(0) saturate(100%) invert(16%) sepia(80%)
-    saturate(2200%) hue-rotate(210deg) brightness(0.95) contrast(1.05);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -107,8 +100,6 @@
     --brand-orange-rgb: 245, 158, 11;
     --brand-color-scheme: dark;
     color-scheme: dark;
-    --brand-logo-filter: brightness(0) saturate(100%) invert(92%) sepia(24%)
-      saturate(320%) hue-rotate(345deg) brightness(1.02) contrast(0.94);
   }
 }
 
@@ -141,6 +132,4 @@
   --brand-orange-rgb: 245, 158, 11;
   --brand-color-scheme: dark;
   color-scheme: dark;
-  --brand-logo-filter: brightness(0) saturate(100%) invert(92%) sepia(24%)
-    saturate(320%) hue-rotate(345deg) brightness(1.02) contrast(0.94);
 }
