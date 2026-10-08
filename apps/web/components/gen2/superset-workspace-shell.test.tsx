@@ -189,7 +189,7 @@ describe("SupersetWorkspaceShell", () => {
     );
     expect(screen.getByRole("link", { name: "Back to home" })).toHaveAttribute(
       "href",
-      "/",
+      "/gen2",
     );
     expect(screen.getByRole("img", { name: "CoDev" })).toHaveAttribute(
       "src",
