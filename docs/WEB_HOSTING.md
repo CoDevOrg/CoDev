@@ -237,8 +237,8 @@ controller waits 30 seconds, polls health every 3 seconds (5 after a minute),
 and reads the deployment every tenth attempt to surface failures. Legacy starts
 still poll the deployment to completion. Provisioning status includes this setup time.
 
-Roll back new starts by disabling the flag and restoring the previous immutable
-image pin in both secret stores. Existing VMs keep their current image and disk.
+Roll back new starts by disabling the flag and setting the previous immutable
+image as the pin. Existing VMs keep their current image and disk.
 
 Cloudflare collaboration WebSockets retain initialization through `waitUntil`.
 Each socket has its own Redis connection and room reader; each document message
@@ -252,8 +252,11 @@ The ARM image includes pinned `cursor-agent` for Linux ARM64; auth and config
 directories are isolated per turn under private agent profiles.
 
 ARM image `1.0.13` adds Cursor CLI `2026.10.01-e373342`. The production image
-pin is carried in `ARM_WORKSPACE_RUNTIME_SECRETS` and synchronized to Vercel
-by the web deployment workflow. Saved workspace disks survive image upgrades.
+pin is the `ARM_WORKSPACE_IMAGE_VERSION_ID` repository variable when it is set,
+otherwise the value in `ARM_WORKSPACE_RUNTIME_SECRETS`. Promote or roll back with
+`gh variable set ARM_WORKSPACE_IMAGE_VERSION_ID`, then run the CI and Deploy web
+workflows on `main`; the Azure deploy rejects an ID outside a lowercase
+`codev-arm-workspace-*` gallery. Saved workspace disks survive image upgrades.
 
 Workspace model discovery uses connected member credentials and account catalogs;
 caching is scoped to the member and credential. Cursor and Claude discovery runs
