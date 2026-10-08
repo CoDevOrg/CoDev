@@ -20,7 +20,7 @@ export function LandingNavigation() {
       <header className="lp-nav" data-compact={compact}>
         <Link className="lp-brand" href="/" aria-label="CoDev home">
           <Image
-            src="/brand/codev-mark-v3.png"
+            src="/brand/codev-mark.svg"
             alt=""
             width={40}
             height={40}

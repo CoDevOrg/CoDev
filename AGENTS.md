@@ -74,6 +74,8 @@ For any UI work, use shadcn/ui and the `shadcn` skill. If the skill is unavailab
 - `yarn dlx skills add shadcn/ui`
 - `bun x skills add shadcn/ui`
 
+The public landing page (`app/page.tsx`) does not load Tailwind utilities (only `app/product-theme.css` imports them), so shadcn components render unstyled there; style landing previews with the CSS files in `components/landing/`. The CoDev mark is `/brand/codev-mark.svg` in ice blue `#00bde8`; do not recolor it with filters.
+
 For Gen 2 Superset workspace visual direction and tokens, follow [`docs/design/superset-workspace-ui.md`](docs/design/superset-workspace-ui.md). Chat, composer, and tool activity follow section 8.1 of that contract. Files, editor, terminal, and review follow section 8.2. For workspace controls, follow [`docs/design/workspace-controls.md`](docs/design/workspace-controls.md) and reuse `WorkspaceButton` for actions, including portaled dialogs; keep visual variants centralized and call-site styling limited to layout.
 
 ## Maintain this guidance
