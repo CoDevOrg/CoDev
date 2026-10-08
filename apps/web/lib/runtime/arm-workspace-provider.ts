@@ -175,19 +175,37 @@ async function armFetch(url: string, method = "GET", body?: unknown) {
   );
 }
 
-async function pollArmOperation(response: Response, payload: unknown) {
+type PollInterval = (elapsedMs: number) => number;
+
+const steadyPoll: PollInterval = () => ARM_OPERATION_POLL_INTERVAL_MS;
+
+// Production VM deployments finish 35-60 s after submission and send no
+// Retry-After. Skip early polls, then check often around the usual finish.
+const deploymentPoll: PollInterval = (elapsed) =>
+  elapsed < 30_000
+    ? 30_000 - elapsed
+    : elapsed >= 40_000 && elapsed < 70_000
+      ? 2_000
+      : ARM_OPERATION_POLL_INTERVAL_MS;
+
+async function pollArmOperation(
+  response: Response,
+  payload: unknown,
+  interval: PollInterval,
+) {
   let operationUrl =
     response.headers.get("azure-asyncoperation") ??
     response.headers.get("location");
   if (!operationUrl) fail("AZURE_OPERATION_URL_MISSING");
-  const deadline = await ArmWorkflowIO.deadline(10 * 60_000);
+  const started = await ArmWorkflowIO.deadline(0);
+  const deadline = started + 10 * 60_000;
   let result = payload;
-  let retryAfter = response.headers.get("retry-after") ?? "5";
+  let retryAfter = response.headers.get("retry-after");
   while (Date.now() < deadline) {
-    const retryAfterSeconds = Number(retryAfter);
+    const retryAfterSeconds = Number(retryAfter ?? 0);
     await ArmWorkflowIO.sleep(
       Math.max(
-        ARM_OPERATION_POLL_INTERVAL_MS,
+        interval(Date.now() - started),
         (Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : 5) * 1000,
       ),
     );
@@ -208,7 +226,8 @@ async function pollArmOperation(response: Response, payload: unknown) {
     }
     operationUrl =
       poll.response.headers.get("azure-asyncoperation") ?? operationUrl;
-    retryAfter = poll.response.headers.get("retry-after") ?? retryAfter;
+    // Each response's Retry-After governs only the next poll.
+    retryAfter = poll.response.headers.get("retry-after");
   }
   fail("AZURE_OPERATION_TIMEOUT");
 }
@@ -219,6 +238,7 @@ async function armRequest(
   method = "GET",
   body?: unknown,
   allowNotFound = false,
+  interval = steadyPoll,
 ): Promise<unknown> {
   const result = await armFetch(apiUrl(path, version), method, body);
   if (allowNotFound && result.response.status === 404) return null;
@@ -227,7 +247,11 @@ async function armRequest(
     result.response.headers.has("azure-asyncoperation") ||
     (result.response.status === 201 && result.response.headers.has("location"))
   ) {
-    const completed = await pollArmOperation(result.response, result.payload);
+    const completed = await pollArmOperation(
+      result.response,
+      result.payload,
+      interval,
+    );
     // Azure operation endpoints return status, not the created resource.
     return method === "PUT" ? armRequest(path, version) : completed;
   }
@@ -785,7 +809,14 @@ async function deployVm(
       },
     },
   });
-  await armRequest(path, DEPLOYMENT_API, "PUT", deployment);
+  await armRequest(
+    path,
+    DEPLOYMENT_API,
+    "PUT",
+    deployment,
+    false,
+    deploymentPoll,
+  );
   const vm = (await armRequest(
     `${virtualMachineId}?%24expand=instanceView`,
     COMPUTE_API,

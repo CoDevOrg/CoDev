@@ -13,6 +13,19 @@ type Context = {
 };
 const context = new AsyncLocalStorage<Context>();
 
+// Workers Free allows 50 external subrequests per instance. Azure calls may
+// also need an Entra sign-in, and a repository file step can refresh a GitHub
+// token and write to the guest. The rest of the 50 absorbs step retries.
+const REQUEST_BUDGET = 36;
+const REQUEST_COST: Record<string, number> = {
+  azure: 2,
+  health: 1,
+  guest: 1,
+  progress: 1,
+  "repository-tree": 3,
+  "repository-file": 3,
+};
+
 /** Checkpoint bounded I/O, rather than an entire polling lifecycle. */
 export class ArmWorkflowIO {
   static run<T>(
@@ -43,17 +56,8 @@ export class ArmWorkflowIO {
     const name = `${current.prefix}-${++current.sequence.value}-${label}`;
     if (Object.hasOwn(current.checkpoints, name))
       return current.checkpoints[name] as T;
-    if (
-      [
-        "azure",
-        "health",
-        "guest",
-        "progress",
-        "repository-tree",
-        "repository-file",
-      ].includes(label) &&
-      (current.requests.value += label.startsWith("repository-") ? 5 : 1) > 10
-    )
+    const cost = REQUEST_COST[label] ?? 0;
+    if (cost && (current.requests.value += cost) > REQUEST_BUDGET)
       throw new ArmWorkspaceRuntimeError("WORKFLOW_CONTINUE");
     const result = await current.step.do(
       name,

@@ -46,6 +46,7 @@ describe("ARM workspace provider stop", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
   });
@@ -558,6 +559,76 @@ describe("ARM workspace provider stop", () => {
     const journal = JSON.stringify({ outputs, checkpoints });
     for (const secret of ["connector-token", "create-token", "tunnel-secret"])
       expect(journal).not.toContain(secret);
+  });
+
+  it("polls a VM deployment near its usual finish and wakes after one handoff", async () => {
+    const state = stubBakedStart(false);
+    const fallback = fetch;
+    const savedDisk = `/subscriptions/subscription/resourceGroups/codev-arm-workspace-phase1/providers/Microsoft.Compute/disks/saved-data`;
+    let now = 1_000_000;
+    let finishAt = Number.POSITIVE_INFINITY;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    vi.stubGlobal(
+      "fetch",
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes("/deployments/") && init?.method === "PUT") {
+          await fallback(input, init);
+          finishAt = now + 50_000;
+          return new Response("{}", {
+            status: 201,
+            headers: {
+              "azure-asyncoperation": "https://management.azure.com/deploy-op",
+            },
+          });
+        }
+        if (url.includes("/deployments/")) return jsonResponse({});
+        if (url === "https://management.azure.com/deploy-op")
+          return jsonResponse({
+            status: now >= finishAt ? "Succeeded" : "Running",
+          });
+        if (url.includes("/disks/"))
+          return jsonResponse({
+            id: savedDisk,
+            tags: { Runtime: "arm-workspace", WorkspaceId: workspaceId },
+            sku: { name: "StandardSSD_LRS" },
+            properties: { diskSizeGB: 16, diskState: "Unattached" },
+          });
+        return fallback(input, init);
+      },
+    );
+    const sleeps: number[] = [];
+    const step = {
+      do: async (_name: string, _options: unknown, action: () => unknown) =>
+        action(),
+      sleep: async (_name: string, milliseconds: number) => {
+        sleeps.push(milliseconds);
+        now += milliseconds;
+      },
+    } as unknown as WorkflowStep;
+    let checkpoints: Record<string, unknown> = {};
+    let runs = 0;
+    for (let complete = false; !complete; runs++) {
+      expect(runs).toBeLessThan(5);
+      await ArmWorkflowIO.run(step, "arm-start-2", checkpoints, async () => {
+        try {
+          await new ArmWorkspaceProvider().start(
+            { ...freshStart, diskId: savedDisk, diskUuid: "saved-uuid" },
+            vi.fn(async () => undefined),
+          );
+          complete = true;
+        } catch (error) {
+          expect(error).toMatchObject({ code: "WORKFLOW_CONTINUE" });
+          checkpoints = JSON.parse(JSON.stringify(ArmWorkflowIO.saved()));
+        }
+      });
+    }
+    expect(state.identity?.diskMode).toBe("existing");
+    expect(sleeps).toEqual([
+      30_000, 5_000, 5_000, 2_000, 2_000, 2_000, 2_000, 2_000,
+    ]);
+    // Lifecycle progress writes add a few requests in production; still one handoff.
+    expect(runs).toBe(2);
   });
 
   it("does not replace a missing saved disk with a fresh disk", async () => {
