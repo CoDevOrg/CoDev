@@ -221,6 +221,23 @@ describe("gen2 Codex agent", () => {
     expect(mocks.release).not.toHaveBeenCalled();
   });
 
+  it("asks the guest to coordinate only turns in a coordination workspace", async () => {
+    await startGen2AgentTurn(turn);
+    expect(mocks.start.mock.calls.at(-1)?.[1]).not.toHaveProperty(
+      "coordination",
+    );
+
+    vi.stubEnv("CODEV_AGENT_COORDINATION_WORKSPACES", workspaceId);
+    try {
+      await startGen2AgentTurn({ ...turn, idempotencyKey: "turn-5678" });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    expect(mocks.start.mock.calls.at(-1)?.[1]).toMatchObject({
+      coordination: true,
+    });
+  });
+
   it("replays this chat's transcript in the next exec prompt", async () => {
     mocks.listMessages.mockResolvedValue([
       { role: "user", body: "hi" },

@@ -422,7 +422,6 @@ export function createApp(options: CreateAppOptions): CreateAppResult {
 			db,
 			workspaceRoot: codevWorkspaceRoot,
 			bridgeSecret: codevBridgeSecret,
-			noticesEnabled: process.env.CODEV_AGENT_COORDINATION_ENABLED === "true",
 		});
 	}
 

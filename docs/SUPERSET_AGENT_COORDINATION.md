@@ -1,6 +1,6 @@
 # Superset agent coordination
 
-**Status:** Implemented behind flags and unreleased. Guest pieces need a signed ARM runtime release; nothing has run on a Linux ARM64 guest yet. Proposed and built 2026-10-08.
+**Status:** Implemented behind a per-workspace flag and unreleased. Guest pieces need a signed ARM runtime release; nothing has run on a Linux ARM64 guest yet. Proposed and built 2026-10-08.
 **Depends on:** [SUPERSET_MULTI_AGENT_HANDOFF.md](./SUPERSET_MULTI_AGENT_HANDOFF.md) (one worktree per independent agent, per-launch hook identity) and [SUPERSET_WORKSPACE_OWNERSHIP.md](./SUPERSET_WORKSPACE_OWNERSHIP.md) (CoDev authorizes every operation).
 
 ## Problem
@@ -53,7 +53,7 @@ The host coordinates two kinds of live agent ([coordination-agents.ts](../vendor
 
 ### 3. Notices (agent-facing)
 
-Each agent's private hook configuration runs one extra command on `PostToolUse`. It presents the agent's ID and token to `POST /codev/coordination/notices` on the host and prints only the host's reply. The host answers from its last overlap snapshot and then schedules a background refresh, debounced to 2 seconds, so a hook never waits on Git. A snapshot older than 60 seconds is not used.
+In an enabled workspace, each agent's private hook configuration runs one extra command on `PostToolUse`. It presents the agent's ID and token to `POST /codev/coordination/notices` on the host and prints only the host's reply. The host answers from its last overlap snapshot and then schedules a background refresh, debounced to 2 seconds, so a hook never waits on Git. A snapshot older than 60 seconds is not used.
 
 When there is a new overlap involving that agent, the reply adds this to the model's context:
 
@@ -97,14 +97,15 @@ Data comes from `GET /api/gen2/workspaces/:id/superset/overlaps` ([agent-overlap
 
 Deviations from the original design: the overlap details use the existing `DropdownMenu` rather than adding a Popover dependency; the Changes marker uses a native title and screen-reader text because it sits inside a button; per-session "coordination notice" activity rows are not built; and native turns get notices but do not appear in the UI because CoDev does not record their worktree.
 
-## Rollout flags
+## Rollout flag
 
-| Flag                                  | Where                       | Effect                                                                                                                           |
-| ------------------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `CODEV_AGENT_COORDINATION_WORKSPACES` | Web (Cloudflare and Azure)  | Comma-separated workspace IDs, or `*`. Enables the overlap UI and API, native-turn hook config, and the duplicate check.         |
-| `CODEV_AGENT_COORDINATION_ENABLED`    | Guest host service (`true`) | Enables the notices route and native-turn registration. Without it guestd registration fails and turns run without coordination. |
+`CODEV_AGENT_COORDINATION_WORKSPACES` on the web (Cloudflare and Azure) takes comma-separated workspace IDs, or `*`. It is the only switch, and it works per workspace:
 
-The overlap report itself (`POST /codev/coordination/overlaps`) is always available to the bridge secret. With both flags off, behavior is unchanged except that Superset-launched agents run one extra hook command that receives a 404 and prints nothing.
+- It enables the overlap UI and API and the duplicate check for listed workspaces.
+- Agent starts in a listed workspace carry `coordination: true` to the guest. Only those Superset launches get the coordination hook in their private profile, and only those native turns get hook config and a guestd registration.
+- Starts in other workspaces carry nothing, so their agents run exactly as before, with no extra hook command.
+
+The guest routes are always present, behind the bridge secret or an agent's own token, so a new image can roll out before any workspace is enabled.
 
 ## Security
 
@@ -114,6 +115,7 @@ The overlap report itself (`POST /codev/coordination/overlaps`) is always availa
 - Missing, forged, or another agent's tokens, unknown or ended agents, and runs without a stored token all receive the same empty 204 as "no overlap". Token mismatches are logged without the token.
 - Human terminals have no token. Loopback is not an isolation boundary; the token is. For Superset runs it lives in the agent's private launch script; for native turns it exists only in the turn's environment.
 - The hook pipes the token to curl as a header on stdin, so it never appears in a process argument list. The command always exits 0.
+- Coordination is opt-in per launch: CoDev sets `coordination` on agent starts only for enabled workspaces.
 - Registering a native turn requires the bridge secret, a `native-<16 hex>` ID, a valid worktree ID, a known CLI, and a 64-hex hash. Re-registering an ID with a different hash is refused.
 - The CoDev-to-host overlap report requires the bridge secret and at most 16 worktree IDs. Both the orchestrator and `codev-guestd` allowlist the operation, and the host resolves worktrees only through Git's registered worktrees.
 
@@ -149,7 +151,7 @@ Shipping requires a signed ARM runtime release with the new host service and `co
 2. A real Claude, Codex, and Cursor agent each receive a notice through `PostToolUse`, on both the Superset and native paths. In particular, confirm that Superset-launched Claude loads the profile hooks passed with `--settings` under `--setting-sources ""` (verified against Claude Code 2.1.272; guests pin 2.1.236), that Codex loads `hooks.json` with `--ignore-user-config`, and that the Cursor CLI runs hooks on Linux.
 3. Hook latency stays under the budget, and notice tokens per run match the budget above.
 
-Then enable `CODEV_AGENT_COORDINATION_ENABLED` on the guest and `CODEV_AGENT_COORDINATION_WORKSPACES` for one workspace, watch overlap counts, false positives, and duplicate warnings, and widen. Turning both off restores current behavior.
+Then add one internal workspace to `CODEV_AGENT_COORDINATION_WORKSPACES`, watch overlap counts, false positives, and duplicate warnings, and widen. Removing a workspace restores current behavior for its next agent starts.
 
 ## Follow-ups
 

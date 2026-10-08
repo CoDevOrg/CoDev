@@ -135,7 +135,14 @@ export async function startGen2AgentTurn(input: {
   const command = buildGen2AgentCommand(provider, input.prompt, history, model);
   const execInput = {
     ...(isGen2AgentCoordinationEnabled(input.workspaceId)
-      ? withNativeCoordinationHooks(provider, command, credential.launchProfile)
+      ? {
+          ...withNativeCoordinationHooks(
+            provider,
+            command,
+            credential.launchProfile,
+          ),
+          coordination: true,
+        }
       : { command, launchProfile: credential.launchProfile }),
     idempotencyKey: input.idempotencyKey,
     ...(input.worktreeId && input.worktreeId !== "main"

@@ -314,6 +314,10 @@ pub struct CodexExecStartRequest {
     pub codex_auth_cache_json: String,
     #[serde(default)]
     pub launch_profile: Option<LaunchProfile>,
+    /// CoDev sets this only for workspaces in the agent coordination rollout;
+    /// the guest then registers the turn for overlap notices.
+    #[serde(default)]
+    pub coordination: bool,
     /// The caller's Vercel Workflow DevKit step id. A retried "start" step
     /// reuses the same id, letting the guest reattach to the still-running
     /// session instead of spawning a second Codex process.
@@ -370,6 +374,9 @@ pub struct SupersetAgentStartRequest {
     pub codex_auth_cache_json: Option<String>,
     #[serde(default)]
     pub launch_profile: Option<LaunchProfile>,
+    /// Forwarded verbatim; the host adds its coordination hook only when set.
+    #[serde(default)]
+    pub coordination: bool,
     pub command: Vec<String>,
     /// A retried "start" call with the same key reattaches to the run
     /// Superset already has in flight, matching `CodexExecStartRequest`'s

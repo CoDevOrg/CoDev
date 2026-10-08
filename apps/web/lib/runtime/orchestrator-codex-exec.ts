@@ -57,6 +57,8 @@ export async function startCodexExecInSandbox(
       env?: Record<string, string>;
     };
     idempotencyKey: string;
+    /** Set only for workspaces in the agent coordination rollout. */
+    coordination?: boolean;
   },
 ) {
   const body = { rows: 1_000, columns: 4_096, ...input };

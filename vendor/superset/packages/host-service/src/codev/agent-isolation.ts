@@ -149,8 +149,9 @@ export async function prepareAgentLaunch(input: {
 	profile?: AgentLaunchProfile;
 	provider: "openai" | "anthropic";
 	hookToken: string;
+	coordination?: boolean;
 }): Promise<AgentLaunch> {
-	const profile = buildCoDevAgentProfile(input.profile ?? {}, input.provider);
+	const profile = buildCoDevAgentProfile(input.profile ?? {}, input.provider, input.coordination === true);
 	validateAgentLaunchProfile(profile);
 	const root = await lstat(input.root);
 	if (
@@ -203,6 +204,7 @@ export async function prepareAgentLaunch(input: {
 export function buildCoDevAgentProfile(
 	profile: AgentLaunchProfile,
 	provider: "openai" | "anthropic",
+	coordination = false,
 ): AgentLaunchProfile {
 	if ((profile.files?.length ?? 0) >= MAX_PROFILE_FILES) {
 		throw new Error("Launch profile must leave room for the CoDev hook configuration.");
@@ -218,7 +220,7 @@ export function buildCoDevAgentProfile(
 					...(matcher ? { matcher } : {}),
 					hooks: [
 						{ type: "command", command },
-						...(name === "PostToolUse"
+						...(coordination && name === "PostToolUse"
 							? [{ type: "command", command: COORDINATION_HOOK_COMMAND }]
 							: []),
 					],

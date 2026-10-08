@@ -92,14 +92,12 @@ export function registerCoDevCoordinationBridge({
 	db,
 	workspaceRoot,
 	bridgeSecret,
-	noticesEnabled,
 	noticeRefreshDelayMs,
 }: {
 	app: Hono;
 	db: HostDb;
 	workspaceRoot: string;
 	bridgeSecret: string;
-	noticesEnabled: boolean;
 	noticeRefreshDelayMs?: number;
 }) {
 	const nativeAgents = createNativeAgentRegistry();
@@ -155,8 +153,6 @@ export function registerCoDevCoordinationBridge({
 			truncated: overlaps.length > MAX_REPORTED_OVERLAPS,
 		});
 	});
-
-	if (!noticesEnabled) return;
 
 	app.post("/codev/coordination/agents", async (context) => {
 		if (!requireBridge(context.req.header("x-codev-bridge-secret"))) {

@@ -39,14 +39,13 @@ function git(cwd: string, ...args: string[]) {
 	);
 }
 
-function bridge(noticesEnabled = true) {
+function bridge() {
 	const app = new Hono();
 	registerCoDevCoordinationBridge({
 		app,
 		db,
 		workspaceRoot: root,
 		bridgeSecret: SECRET,
-		noticesEnabled,
 		noticeRefreshDelayMs: 0,
 	});
 	return app;
@@ -379,30 +378,5 @@ describe("native coordination agents", () => {
 		expect(
 			(await app.request(noticeRequest(NATIVE_ID, NATIVE_TOKEN))).status,
 		).toBe(204);
-	});
-});
-
-describe("disabled agent notices", () => {
-	it("keeps the overlap report but serves no hook or registration routes", async () => {
-		seedAgent("agent-one", "openai");
-		const app = bridge(false);
-
-		expect(
-			(await app.request(overlapRequest({ worktreeIds: ["agent-one"] })))
-				.status,
-		).toBe(200);
-		expect(
-			(await app.request(noticeRequest("term-agent-one", "token-agent-one")))
-				.status,
-		).toBe(404);
-		const register = new Request("http://host/codev/coordination/agents", {
-			method: "POST",
-			headers: {
-				"content-type": "application/json",
-				"x-codev-bridge-secret": SECRET,
-			},
-			body: "{}",
-		});
-		expect((await app.request(register)).status).toBe(404);
 	});
 });

@@ -52,8 +52,9 @@ test("CoDev installs provider hooks beside the private credential profile", () =
 	const codex = buildCoDevAgentProfile(
 		{ env: { CODEX_HOME: "{{profileDir}}/.codex" } },
 		"openai",
+		true,
 	);
-	const claude = buildCoDevAgentProfile({}, "anthropic");
+	const claude = buildCoDevAgentProfile({}, "anthropic", true);
 	const codexHooks = JSON.parse(codex.files?.[0]?.contents ?? "{}") as {
 		hooks?: Record<string, unknown>;
 	};
@@ -72,6 +73,8 @@ test("CoDev installs provider hooks beside the private credential profile", () =
 		assert.ok(commands("PostToolUse").includes(COORDINATION_HOOK_COMMAND));
 		assert.ok(!commands("Stop").includes(COORDINATION_HOOK_COMMAND));
 	}
+	const uncoordinated = buildCoDevAgentProfile({}, "anthropic");
+	assert.ok(!uncoordinated.files?.[0]?.contents.includes(COORDINATION_HOOK_COMMAND));
 });
 
 const canExerciseLinuxPermissions =

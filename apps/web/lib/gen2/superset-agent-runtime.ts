@@ -31,6 +31,7 @@ import {
   startSupersetAgent,
   stopSupersetAgent,
 } from "./superset-agent-orchestrator-client";
+import { isGen2AgentCoordinationEnabled } from "./agent-coordination-feature";
 import { isGen2SupersetAgentSessionsEnabled } from "./superset-agent-sessions-feature";
 import {
   claimGen2SupersetRunLease,
@@ -183,6 +184,9 @@ async function startSession(
       launchProfile: credential.launchProfile,
       command: input.command,
       idempotencyKey: input.idempotencyKey,
+      ...(isGen2AgentCoordinationEnabled(input.workspaceId)
+        ? { coordination: true }
+        : {}),
     });
     await markGen2SupersetRunStarted({
       runId: registration.runId,

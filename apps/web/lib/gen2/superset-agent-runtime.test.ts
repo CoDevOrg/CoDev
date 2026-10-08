@@ -713,6 +713,43 @@ describe("gen2 Superset agent turn (Phase 4 browser-facing delegate)", () => {
     );
   });
 
+  it("asks the host to coordinate only runs in a coordination workspace", async () => {
+    mocks.register.mockResolvedValue({
+      runId,
+      status: "creating",
+      created: true,
+    });
+    mocks.start.mockResolvedValue({
+      hostWorkspaceId: "host-ws-1",
+      hostTerminalId: "term-1",
+      hostAgentSessionId: "agent-1",
+    });
+    const start = (idempotencyKey: string) =>
+      startGen2SupersetAgentTurn({
+        workspaceId,
+        userId,
+        chatId,
+        prompt: "hello",
+        provider: "codex",
+        idempotencyKey,
+      });
+
+    await start("key-1");
+    expect(mocks.start.mock.calls.at(-1)?.[1]).not.toHaveProperty(
+      "coordination",
+    );
+
+    vi.stubEnv("CODEV_AGENT_COORDINATION_WORKSPACES", workspaceId);
+    try {
+      await start("key-2");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    expect(mocks.start.mock.calls.at(-1)?.[1]).toMatchObject({
+      coordination: true,
+    });
+  });
+
   it("reuses the idempotent start worktree instead of creating a second one", async () => {
     mocks.listWorktrees.mockResolvedValue([
       {

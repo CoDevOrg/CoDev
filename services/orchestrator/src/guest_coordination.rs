@@ -114,6 +114,18 @@ mod tests {
     }
 
     #[test]
+    fn coordinates_only_turns_codev_opted_in() {
+        let request = |extra: &str| -> crate::model::CodexExecStartRequest {
+            serde_json::from_str(&format!(
+                r#"{{"command":["cursor-agent"],"idempotencyKey":"key"{extra}}}"#
+            ))
+            .expect("request")
+        };
+        assert!(!request("").coordination);
+        assert!(request(r#","coordination":true"#).coordination);
+    }
+
+    #[test]
     fn defaults_to_the_primary_worktree() {
         let agent = CoordinationAgent::new("codex", None).expect("agent");
         let registration: serde_json::Value =

@@ -1473,14 +1473,15 @@ impl GuestService {
         }
         // Agent coordination is best effort: without a registered host
         // identity the turn simply runs without overlap notices.
-        let coordination = CoordinationAgent::new(
-            &request.command[0],
-            request.worktree_id.as_deref(),
-        )
-        .filter(|agent| {
-            Self::superset_bridge("POST", COORDINATION_AGENTS_PATH, &agent.registration()).status
-                == 201
-        });
+        let coordination = request
+            .coordination
+            .then(|| CoordinationAgent::new(&request.command[0], request.worktree_id.as_deref()))
+            .flatten()
+            .filter(|agent| {
+                Self::superset_bridge("POST", COORDINATION_AGENTS_PATH, &agent.registration())
+                    .status
+                    == 201
+            });
         for (name, value) in coordination.iter().flat_map(CoordinationAgent::environment) {
             command.env(name, value);
         }
