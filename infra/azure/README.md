@@ -192,7 +192,8 @@ builder's subnet, with no public IP, then deletes it. The first VM from a new
 gallery version boots several times slower (119 s versus about 25 s for
 `1.0.14`), so this keeps that cost off members' starts. It also proves the
 published image boots with the production VM shape. Promote a version only from
-a run whose log shows that first boot.
+a run whose log shows that first boot, through the `ARM_WORKSPACE_IMAGE_VERSION_ID`
+repository variable described in [WEB_HOSTING.md](../../docs/WEB_HOSTING.md).
 
 The guest clones public repositories blobless (`--filter=blob:none`): full
 commit history, but file contents only for the base commit, with older blobs

@@ -34,8 +34,23 @@ const values = {
     process.env.GEN2_FREE_ARM_OWNER_IDS ?? base.GEN2_FREE_ARM_OWNER_IDS,
   ARM_WORKSPACE_BOOT_ENABLED:
     process.env.ARM_WORKSPACE_BOOT_ENABLED || base.ARM_WORKSPACE_BOOT_ENABLED,
+  // A non-secret repository variable promotes images without rewriting the
+  // write-only ARM credential bundle; the bundle's pin is the fallback.
+  ...(process.env.ARM_WORKSPACE_IMAGE_VERSION_ID && {
+    ARM_WORKSPACE_IMAGE_VERSION_ID: process.env.ARM_WORKSPACE_IMAGE_VERSION_ID,
+  }),
   VERCEL_GIT_COMMIT_SHA: release,
 };
+// Runtime config rejects any other shape; fail before anything is deployed.
+if (
+  values.ARM_WORKSPACE_IMAGE_VERSION_ID &&
+  !/^\/subscriptions\/[^/]+\/resourceGroups\/codev-arm-workspace-[a-z0-9-]+\/providers\/Microsoft\.Compute\/galleries\/[^/]+\/images\/[^/]+\/versions\/\d+\.\d+\.\d+$/.test(
+    values.ARM_WORKSPACE_IMAGE_VERSION_ID,
+  )
+)
+  throw new Error(
+    "ARM_WORKSPACE_IMAGE_VERSION_ID must be a gallery image version in a lowercase codev-arm-workspace-* resource group.",
+  );
 // Auth.js must retain the authenticated public host for host-only session cookies.
 // The existing redirect proxy carries OAuth callbacks back to that host.
 delete values.AUTH_URL;
