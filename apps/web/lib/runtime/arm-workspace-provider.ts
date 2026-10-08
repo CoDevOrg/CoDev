@@ -162,9 +162,14 @@ async function armFetchDirect(
   return { response, payload };
 }
 
+/** A function body is built inside the checkpoint, so secrets it carries are never journaled. */
 async function armFetch(url: string, method = "GET", body?: unknown) {
-  return ArmWorkflowIO.request("azure", () =>
-    armFetchDirect(url, method, body),
+  return ArmWorkflowIO.request("azure", async () =>
+    armFetchDirect(
+      url,
+      method,
+      typeof body === "function" ? await body() : body,
+    ),
   );
 }
 
@@ -233,7 +238,7 @@ function deploymentTemplate(
   workspaceId: string,
   generation: number,
   diskId: string,
-  bootScript?: string,
+  boot: boolean,
 ) {
   const config = readArmWorkspaceConfig();
   const tags = {
@@ -253,7 +258,7 @@ function deploymentTemplate(
       imageVersionId: { type: "string" },
       dataDiskResourceId: { type: "string" },
       adminSshPublicKey: { type: "string" },
-      ...(bootScript ? { bootScript: { type: "secureString" } } : {}),
+      ...(boot ? { bootScript: { type: "secureString" } } : {}),
     },
     variables: {
       resourceTags: tags,
@@ -398,7 +403,7 @@ function deploymentTemplate(
           },
         },
       },
-      ...(bootScript
+      ...(boot
         ? [
             {
               type: "Microsoft.Compute/virtualMachines/extensions",
@@ -576,32 +581,51 @@ async function cloudflareRequestDirect<T>(
   return payload.result as T;
 }
 
-async function cloudflareRequest<T>(
+/** `select` runs inside the checkpoint, so only its result is journaled. */
+async function cloudflareRequest<T, R = T>(
   path: string,
   method = "GET",
   body?: unknown,
-): Promise<T> {
-  return ArmWorkflowIO.checkpoint("azure", () =>
-    cloudflareRequestDirect<T>(path, method, body),
+  select: (result: T) => R = (result) => result as unknown as R,
+): Promise<R> {
+  return ArmWorkflowIO.checkpoint("azure", async () =>
+    select(await cloudflareRequestDirect<T>(path, method, body)),
   );
 }
 
+type TunnelIdentity = { id: string; name: string };
+
+// Tunnel responses carry connector credentials; journal only the identity.
+const tunnelIdentity = ({ id, name }: TunnelIdentity) => ({ id, name });
+const discard = () => null;
+
 async function findTunnel(workspaceId: string, generation: number) {
   const name = await workspaceTunnelName(workspaceId, generation);
-  const tunnels = await cloudflareRequest<Array<{ id: string; name: string }>>(
+  const tunnels = await cloudflareRequest(
     `/accounts/${CLOUDFLARE_ACCOUNT_ID}/cfd_tunnel?name=${encodeURIComponent(name)}&is_deleted=false`,
+    "GET",
+    undefined,
+    (result: TunnelIdentity[]) => result.map(tunnelIdentity),
   );
   return tunnels.find((tunnel) => tunnel.name === name) ?? null;
+}
+
+/** Call only inside a checkpoint whose output excludes the token. */
+function tunnelToken(tunnelId: string) {
+  return cloudflareRequestDirect<string>(
+    `/accounts/${CLOUDFLARE_ACCOUNT_ID}/cfd_tunnel/${tunnelId}/token`,
+  );
 }
 
 async function ensureTunnel(workspaceId: string, generation: number) {
   const name = await workspaceTunnelName(workspaceId, generation);
   const tunnel =
     (await findTunnel(workspaceId, generation)) ??
-    (await cloudflareRequest<{ id: string; name: string }>(
+    (await cloudflareRequest(
       `/accounts/${CLOUDFLARE_ACCOUNT_ID}/cfd_tunnel`,
       "POST",
       { name, config_src: "cloudflare" },
+      tunnelIdentity,
     ));
   const host = `${name}.${CLOUDFLARE_ZONE_NAME}`;
   await cloudflareRequest(
@@ -637,10 +661,7 @@ async function ensureTunnel(workspaceId: string, generation: number) {
       },
     );
   }
-  const token = await cloudflareRequest<string>(
-    `/accounts/${CLOUDFLARE_ACCOUNT_ID}/cfd_tunnel/${tunnel.id}/token`,
-  );
-  return { id: tunnel.id, host, token };
+  return { id: tunnel.id, host };
 }
 
 async function revokeTunnelRoute(workspaceId: string, generation: number) {
@@ -670,10 +691,14 @@ async function deleteTunnel(workspaceId: string, generation: number) {
   await cloudflareRequest(
     `/accounts/${CLOUDFLARE_ACCOUNT_ID}/cfd_tunnel/${tunnel.id}/connections`,
     "DELETE",
+    undefined,
+    discard,
   );
   await cloudflareRequest(
     `/accounts/${CLOUDFLARE_ACCOUNT_ID}/cfd_tunnel/${tunnel.id}`,
     "DELETE",
+    undefined,
+    discard,
   );
 }
 
@@ -752,7 +777,7 @@ async function deployVm(
   workspaceId: string,
   generation: number,
   diskId: string,
-  bootScript?: string,
+  bootScript?: () => Promise<string>,
 ) {
   const config = readArmWorkspaceConfig();
   const name = `${await resourceName(workspaceId)}-g${generation}`;
@@ -786,10 +811,15 @@ async function deployVm(
     }
     return existing.id;
   }
-  const deployment = {
+  const deployment = async () => ({
     properties: {
       mode: "Incremental",
-      template: deploymentTemplate(workspaceId, generation, diskId, bootScript),
+      template: deploymentTemplate(
+        workspaceId,
+        generation,
+        diskId,
+        Boolean(bootScript),
+      ),
       parameters: {
         instanceName: { value: name },
         workspaceId: { value: workspaceId },
@@ -797,10 +827,10 @@ async function deployVm(
         imageVersionId: { value: config.imageVersionId },
         dataDiskResourceId: { value: diskId },
         adminSshPublicKey: { value: config.sshPublicKey },
-        ...(bootScript ? { bootScript: { value: bootScript } } : {}),
+        ...(bootScript ? { bootScript: { value: await bootScript() } } : {}),
       },
     },
-  };
+  });
   await armRequest(path, DEPLOYMENT_API, "PUT", deployment);
   const vm = (await armRequest(
     `${virtualMachineId}?%24expand=instanceView`,
@@ -944,6 +974,19 @@ async function installConnection(
   diskUuid: string,
 ) {
   const tunnel = await ensureTunnel(workspaceId, generation);
+  const ext = `${await vmId(workspaceId, generation)}/extensions/CustomScript`;
+  await armRequest(ext, COMPUTE_API, "PUT", async () =>
+    connectionExtension(workspaceId, generation, diskUuid, tunnel),
+  );
+  return { tunnelId: tunnel.id, routeHost: tunnel.host };
+}
+
+async function connectionExtension(
+  workspaceId: string,
+  generation: number,
+  diskUuid: string,
+  tunnel: { id: string; host: string },
+) {
   const config = readArmWorkspaceConfig();
   const identity = {
     workspaceId,
@@ -951,7 +994,7 @@ async function installConnection(
     audience: tunnel.host,
     diskUuid,
     verificationKey: config.signingPublicKey,
-    tunnelToken: tunnel.token,
+    tunnelToken: await tunnelToken(tunnel.id),
   };
   let script =
     "#!/bin/bash\nset -euo pipefail\numask 077\ninstall -d -m 0755 /usr/local/lib/codev\n";
@@ -966,7 +1009,7 @@ async function installConnection(
   }
   script += `base64 -d > /root/codev-install-connection.sh <<'DATA'\n${bytesToBase64(new TextEncoder().encode(armConnectionInstaller))}\nDATA\n`;
   script += `base64 -d <<'CONFIG' | bash /root/codev-install-connection.sh\n${bytesToBase64(new TextEncoder().encode(JSON.stringify(identity)))}\nCONFIG\nrm -f /root/codev-install-connection.sh\n`;
-  const body = {
+  return {
     location: WORKSPACE_LOCATION,
     properties: {
       publisher: "Microsoft.Azure.Extensions",
@@ -976,9 +1019,6 @@ async function installConnection(
       protectedSettings: { script: await gzipBase64(script) },
     },
   };
-  const ext = `${await vmId(workspaceId, generation)}/extensions/CustomScript`;
-  await armRequest(ext, COMPUTE_API, "PUT", body);
-  return { tunnelId: tunnel.id, routeHost: tunnel.host };
 }
 
 async function waitForHealth(
@@ -1019,7 +1059,13 @@ async function waitForHealth(
         value.diskUuid === diskUuid
       )
         return;
-    } catch {
+    } catch (error) {
+      // A handoff must not spin in place until the readiness deadline.
+      if (
+        error instanceof ArmWorkspaceRuntimeError &&
+        error.code === "WORKFLOW_CONTINUE"
+      )
+        throw error;
       // The connector and guest bridge can take time to join after boot.
     }
     await heartbeat();
@@ -1170,27 +1216,24 @@ async function deployBakedVm(
   progress: ArmWorkspaceProgress,
   diskId: string,
   diskUuid: string,
-  route: { tunnelId: string; routeHost: string; token?: string },
+  route: { tunnelId: string; routeHost: string },
 ) {
   const { workspaceId, generation } = input;
   let virtualMachineId = resumePhase(input) > 0 ? input.resume?.vmId : null;
   if (!virtualMachineId) {
-    await progress("provisioning", {
+    await progress("provisioning", { diskId, diskUuid, ...route });
+    virtualMachineId = await deployVm(
+      workspaceId,
+      generation,
       diskId,
-      diskUuid,
-      tunnelId: route.tunnelId,
-      routeHost: route.routeHost,
-    });
-    const token = route.token
-      ? route.token
-      : (await ensureTunnel(workspaceId, generation)).token;
-    const script = await bakedBootScript(
-      input,
-      diskUuid,
-      route.routeHost,
-      token,
+      async () =>
+        bakedBootScript(
+          input,
+          diskUuid,
+          route.routeHost,
+          await tunnelToken(route.tunnelId),
+        ),
     );
-    virtualMachineId = await deployVm(workspaceId, generation, diskId, script);
   }
   return virtualMachineId;
 }
@@ -1221,7 +1264,6 @@ async function prepareBakedResources(
         : ensureTunnel(workspaceId, generation).then((tunnel) => ({
             tunnelId: tunnel.id,
             routeHost: tunnel.host,
-            token: tunnel.token,
           })),
   ]);
   return { diskId, diskUuid, route };

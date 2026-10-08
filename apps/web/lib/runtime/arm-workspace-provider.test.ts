@@ -2,6 +2,8 @@ import { gunzipSync } from "node:zlib";
 import { createHash, generateKeyPairSync } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { WorkflowStep } from "cloudflare:workers";
+import { ArmWorkflowIO } from "./arm-workflow-io";
 import { ArmWorkspaceProvider } from "./arm-workspace-provider";
 
 const workspaceId = "a61dc667-3fc5-451f-9f45-9308c8f50376";
@@ -369,7 +371,7 @@ describe("ARM workspace provider stop", () => {
     expect(progress).not.toHaveBeenCalled();
   });
 
-  it("delivers boot identity in protected deployment settings without sequential guest commands", async () => {
+  function stubBakedStart(gateDiskOnTunnel = true) {
     vi.stubEnv("ARM_WORKSPACE_BOOT_ENABLED", "true");
     const keys = generateKeyPairSync("ed25519");
     vi.stubEnv(
@@ -379,7 +381,10 @@ describe("ARM workspace provider stop", () => {
         .toString("base64"),
     );
     const requests: string[] = [];
-    let identity: { diskUuid: string; diskMode: string } | undefined;
+    const state: {
+      identity?: { diskUuid: string; diskMode: string; tunnelToken: string };
+      requests: string[];
+    } = { requests };
     let vmReads = 0;
     let releaseDisk!: () => void;
     const tunnelConfigured = new Promise<void>((resolve) => {
@@ -396,16 +401,25 @@ describe("ARM workspace provider stop", () => {
             expires_in: 3600,
           });
         if (url.includes("api.cloudflare.com")) {
-          if (url.endsWith("/token")) releaseDisk();
+          if (url.endsWith("/dns_records") && init?.method === "POST")
+            releaseDisk();
           const result = url.includes("?name=")
             ? []
             : url.endsWith("/token")
               ? "connector-token"
-              : { id: tunnel.id };
+              : url.endsWith("/cfd_tunnel")
+                ? {
+                    id: tunnel.id,
+                    name: tunnel.name,
+                    token: "create-token",
+                    credentials_file: { TunnelSecret: "tunnel-secret" },
+                  }
+                : { id: tunnel.id };
           return jsonResponse({ success: true, result });
         }
         if (url.includes("/disks/")) {
-          if (init?.method === "PUT") await tunnelConfigured;
+          if (init?.method === "PUT" && gateDiskOnTunnel)
+            await tunnelConfigured;
           return init?.method === "PUT"
             ? jsonResponse({
                 id: "disk-id",
@@ -431,7 +445,7 @@ describe("ARM workspace provider stop", () => {
             ),
           ).toString();
           expect(script).not.toMatch(/curl|apt|dpkg|mkfs/);
-          identity = JSON.parse(
+          state.identity = JSON.parse(
             Buffer.from(script.split("\n")[4] ?? "", "base64").toString(),
           );
           return jsonResponse({});
@@ -452,30 +466,76 @@ describe("ARM workspace provider stop", () => {
             ready: true,
             workspaceId,
             generation,
-            diskUuid: identity?.diskUuid,
+            diskUuid: state.identity?.diskUuid,
           });
         throw new Error(`Unexpected ${url}`);
       },
     );
-    const resources = await new ArmWorkspaceProvider().start(
-      {
-        workspaceId,
-        generation,
-        diskId: null,
-        diskUuid: null,
-        resume: {
-          status: "queued",
-          vmId: "old-generation-vm",
-          tunnelId: "old-tunnel",
-          routeHost: "old.trycodev.com",
-        },
-      },
-      vi.fn(async () => undefined),
-    );
+    return state;
+  }
+
+  const freshStart = {
+    workspaceId,
+    generation,
+    diskId: null,
+    diskUuid: null,
+    resume: {
+      status: "queued" as const,
+      vmId: "old-generation-vm",
+      tunnelId: "old-tunnel",
+      routeHost: "old.trycodev.com",
+    },
+  };
+
+  it("delivers boot identity in protected deployment settings without sequential guest commands", async () => {
+    const { identity, requests } = await (async () => {
+      const state = stubBakedStart();
+      const resources = await new ArmWorkspaceProvider().start(
+        freshStart,
+        vi.fn(async () => undefined),
+      );
+      expect(resources.diskUuid).toBe(state.identity?.diskUuid);
+      return state;
+    })();
     expect(identity?.diskMode).toBe("new");
-    expect(resources.diskUuid).toBe(identity?.diskUuid);
+    expect(identity?.tunnelToken).toBe("connector-token");
     expect(requests.some((url) => url.includes("/runCommands/"))).toBe(false);
     expect(requests.some((url) => url.includes("/extensions/"))).toBe(false);
+  });
+
+  it("never journals tunnel credentials in workflow outputs or handoffs", async () => {
+    // Handoffs can split the parallel tunnel branch, so the disk is not gated.
+    const state = stubBakedStart(false);
+    const outputs: unknown[] = [];
+    const step = {
+      do: vi.fn(async (_name, _options, action) => {
+        const value = await action();
+        outputs.push(value);
+        return value;
+      }),
+      sleep: vi.fn(async () => undefined),
+    } as unknown as WorkflowStep;
+    let checkpoints: Record<string, unknown> = {};
+    let complete = false;
+    for (let runs = 0; !complete; runs++) {
+      expect(runs).toBeLessThan(10);
+      await ArmWorkflowIO.run(step, "arm-start-2", checkpoints, async () => {
+        try {
+          await new ArmWorkspaceProvider().start(
+            freshStart,
+            vi.fn(async () => undefined),
+          );
+          complete = true;
+        } catch (error) {
+          expect(error).toMatchObject({ code: "WORKFLOW_CONTINUE" });
+          checkpoints = JSON.parse(JSON.stringify(ArmWorkflowIO.saved()));
+        }
+      });
+    }
+    expect(state.identity?.tunnelToken).toBe("connector-token");
+    const journal = JSON.stringify({ outputs, checkpoints });
+    for (const secret of ["connector-token", "create-token", "tunnel-secret"])
+      expect(journal).not.toContain(secret);
   });
 
   it("does not replace a missing saved disk with a fresh disk", async () => {
