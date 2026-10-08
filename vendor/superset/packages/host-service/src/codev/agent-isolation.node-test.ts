@@ -9,6 +9,7 @@ import {
 	agentLaunchScript,
 	buildCoDevAgentProfile,
 	COORDINATION_HOOK_COMMAND,
+	withProfileClaudeSettings,
 	prepareAgentLaunch,
 	removeAgentLaunch,
 	validateAgentLaunchProfile,
@@ -23,6 +24,13 @@ test("launch script quotes every argument and exports profile environment", () =
 	assert.match(script, /export CLAUDE_CODE_OAUTH_TOKEN='test-only-token'/);
 	assert.match(script, /'a'\\''\$\(id\)`b'/);
 	assert.match(script, /umask 0002/);
+});
+
+test("Claude receives its private hook settings on the command line", () => {
+	assert.deepEqual(
+		withProfileClaudeSettings(["claude", "-p", "--setting-sources", "", "the prompt"], "/profiles/agent-1"),
+		["claude", "-p", "--setting-sources", "", "--settings", "/profiles/agent-1/.claude/settings.json", "the prompt"],
+	);
 });
 
 test("launch profiles cannot escape the private directory or inject shell environment names", () => {

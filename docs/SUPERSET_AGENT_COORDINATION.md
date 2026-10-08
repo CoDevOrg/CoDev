@@ -70,11 +70,11 @@ Rules ([coordination-notices.ts](../vendor/superset/packages/host-service/src/co
 - At most three per reply and twenty per run. When the run cap is reached, one line says how many overlapping files were not listed.
 - The other agent learns of the overlap at its own next hook event. Agents in the same worktree are not paired.
 
-| CLI         | Reply field                            | Superset launch config                  | Native turn config                                             |
-| ----------- | -------------------------------------- | --------------------------------------- | -------------------------------------------------------------- |
-| Claude Code | `hookSpecificOutput.additionalContext` | Private profile `.claude/settings.json` | `--settings` JSON, because Gen 2 passes `--setting-sources ""` |
-| Codex       | `hookSpecificOutput.additionalContext` | Private profile `.codex/hooks.json`     | Profile `CODEX_HOME/hooks.json`                                |
-| Cursor      | `additional_context`                   | —                                       | Profile `HOME/.cursor/hooks.json`                              |
+| CLI         | Reply field                            | Superset launch config                           | Native turn config                                             |
+| ----------- | -------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------- |
+| Claude Code | `hookSpecificOutput.additionalContext` | Profile `.claude/settings.json` via `--settings` | `--settings` JSON, because Gen 2 passes `--setting-sources ""` |
+| Codex       | `hookSpecificOutput.additionalContext` | Private profile `.codex/hooks.json`              | Profile `CODEX_HOME/hooks.json`                                |
+| Cursor      | `additional_context`                   | —                                                | Profile `HOME/.cursor/hooks.json`                              |
 
 Codex supports the reply field since about 0.117.0 (guests pin 0.148.0). The pinned Cursor CLI `2026.10.01-e373342` supports it according to its code. Native hook config is added by [agent-coordination-hooks.ts](../apps/web/lib/gen2/agent-coordination-hooks.ts).
 
@@ -146,7 +146,7 @@ A notice places data influenced by another member's agent into this agent's cont
 Shipping requires a signed ARM runtime release with the new host service and `codev-guestd`, image promotion, and an update for existing VMs, plus a web deploy. Before enabling the flags for an internal workspace, verify on a Linux ARM64 guest:
 
 1. `codev-shell` can read agent worktrees and their Git metadata; otherwise those worktrees report `unavailable`.
-2. A real Claude, Codex, and Cursor agent each receive a notice through `PostToolUse`, on both the Superset and native paths. In particular, confirm that Superset-launched Claude loads hooks from `CLAUDE_CONFIG_DIR/settings.json` despite `--setting-sources ""` (this predates coordination), that Codex loads `hooks.json` with `--ignore-user-config`, and that the Cursor CLI runs hooks on Linux.
+2. A real Claude, Codex, and Cursor agent each receive a notice through `PostToolUse`, on both the Superset and native paths. In particular, confirm that Superset-launched Claude loads the profile hooks passed with `--settings` under `--setting-sources ""` (verified against Claude Code 2.1.272; guests pin 2.1.236), that Codex loads `hooks.json` with `--ignore-user-config`, and that the Cursor CLI runs hooks on Linux.
 3. Hook latency stays under the budget, and notice tokens per run match the budget above.
 
 Then enable `CODEV_AGENT_COORDINATION_ENABLED` on the guest and `CODEV_AGENT_COORDINATION_WORKSPACES` for one workspace, watch overlap counts, false positives, and duplicate warnings, and widen. Turning both off restores current behavior.

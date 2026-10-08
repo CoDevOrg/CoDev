@@ -173,7 +173,11 @@ export async function prepareAgentLaunch(input: {
 			await chown(path, uid, WORKSPACE_GID);
 		}
 		const scriptPath = join(directory, "launch.sh");
-		await writeFile(scriptPath, agentLaunchScript(directory, input.command, {
+		const command =
+			input.provider === "anthropic"
+				? withProfileClaudeSettings(input.command, directory)
+				: input.command;
+		await writeFile(scriptPath, agentLaunchScript(directory, command, {
 			...profile.env,
 			SUPERSET_ACCOUNT_ATTRIBUTION_TOKEN: input.hookToken,
 		}), {
@@ -234,6 +238,20 @@ export function buildCoDevAgentProfile(
 				: {}),
 		},
 	};
+}
+
+/**
+ * Gen 2 starts Claude with `--setting-sources ""` so repository settings never
+ * load, which also skips the profile's own settings file. Command-line
+ * settings always load, so CoDev's hook settings are passed before the prompt.
+ */
+export function withProfileClaudeSettings(command: string[], directory: string): string[] {
+	return [
+		...command.slice(0, -1),
+		"--settings",
+		join(directory, ".claude", "settings.json"),
+		...command.slice(-1),
+	];
 }
 
 export async function removeAgentLaunch(launch: AgentLaunch | undefined): Promise<void> {
