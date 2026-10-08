@@ -159,7 +159,7 @@ in `apps/web/cloudflare.config.ts`. Configure `CRON_SECRET` as a Worker secret.
 The Cloudflare deployment workflow uploads the GitHub repository secret with
 that name to the Worker. For a manual run, call the route with
 `Authorization: Bearer $CRON_SECRET` at
-`https://trycodev.com/api/gen2/compute/reconcile`. Monitor Cloudflare scheduled
+`https://www.trycodev.com/api/gen2/compute/reconcile`. Monitor Cloudflare scheduled
 invocations and Worker logs. The route measures running Gen 2 guest intervals
 and hibernates an owner's active workspaces once their combined usage reaches
 the plan allowance. Paid usage resets monthly; Free's five-hour allowance is

@@ -18,7 +18,7 @@ jobs:
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       ARM_WORKSPACE_RESOURCE_GROUP: ${{ vars.ARM_WORKSPACE_RESOURCE_GROUP }}
       ARM_WORKSPACE_COST_TAX_RATE: ${{ vars.ARM_WORKSPACE_COST_TAX_RATE }}
-      ARM_WORKSPACE_COST_REPORT_URL: https://trycodev.com/api/gen2/compute/reconcile
+      ARM_WORKSPACE_COST_REPORT_URL: https://www.trycodev.com/api/gen2/compute/reconcile
       CRON_SECRET: ${{ secrets.CRON_SECRET }}
       VERCEL_ORG_ID: team_8tQg0IbclwFRP8sVXOqjvbLU
       VERCEL_PROJECT_ID: prj_N5FCzLUHDVkhId6TGqF6xU9KrvEV

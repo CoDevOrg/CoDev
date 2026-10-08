@@ -91,7 +91,7 @@ describe("password reset tokens", () => {
 
   it("uses the canonical HTTPS site in production without Auth.js URL overrides", () => {
     expect(getPublicAppOrigin({ NODE_ENV: "production" })).toBe(
-      "https://trycodev.com",
+      "https://www.trycodev.com",
     );
     expect(getPublicAppOrigin({ NODE_ENV: "development" })).toBe(
       "http://localhost:3000",

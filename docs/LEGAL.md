@@ -30,7 +30,7 @@ identify the service as **CoDev**, omit a business address as requested, and use
    alone cannot verify these contractual settings. Check any infrastructure
    service not named in the repository against the published privacy notice.
 7. Configure Stripe **live and sandbox** public business details with
-   `https://trycodev.com/legal/terms`, `/legal/privacy`, `/legal/refunds` and
+   `https://www.trycodev.com/legal/terms`, `/legal/privacy`, `/legal/refunds` and
    the support address. Required `terms_of_service` consent in Checkout needs
    the account's terms URL. Confirm the customer portal allows cancellation
    at period end and invoice access; validate receipts, tax handling, billing

@@ -29,7 +29,7 @@ const mono = JetBrains_Mono({
  */
 function metadataBase(): URL {
   if (process.env.VERCEL_ENV === "production") {
-    return new URL("https://trycodev.com");
+    return new URL("https://www.trycodev.com");
   }
   if (process.env.VERCEL_URL) {
     return new URL(`https://${process.env.VERCEL_URL}`);

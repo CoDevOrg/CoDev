@@ -60,13 +60,13 @@ const DESCRIPTION =
   "Build software with your team and AI agents in one live cloud workspace. Share code, a terminal, and localhost. Join the private beta waitlist.";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://trycodev.com"),
+  metadataBase: new URL("https://www.trycodev.com"),
   title: "One cloud workspace for your team and AI agents",
   description: DESCRIPTION,
   openGraph: {
     type: "website",
     siteName: "CoDev",
-    url: "https://trycodev.com",
+    url: "https://www.trycodev.com",
     title: "One cloud workspace for your team and AI agents",
     description: DESCRIPTION,
     images: [
