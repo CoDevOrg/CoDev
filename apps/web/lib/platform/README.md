@@ -18,7 +18,7 @@ This module owns foundational infrastructure integrations and platform-level cro
 - `privacy-preferences.ts`: analytics consent interpretation and URL minimization shared by browser and server ingestion.
 - `runtime-environment.ts`: Live Worker bindings take precedence over Node environment values for runtime secrets; Vercel uses its Node environment.
 
-- `azure-edge-worker.ts`: minimal streaming Cloudflare proxy and scheduled Azure calls; no app execution.
+- `azure-edge-worker.ts`: minimal streaming Cloudflare proxy and scheduled Azure calls; replaces client IP headers and strips Vercel-specific forwarding headers before Azure. No app execution.
 - `node-server.mjs`: protected Azure Next.js origin, health probes, and authenticated socket handoff through existing Next routes.
 - `node-websocket.ts`, `node-websocket-server.mjs`: single-use process-local upgrade capabilities; membership and session checks remain in route handlers.
 

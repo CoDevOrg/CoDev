@@ -52,6 +52,7 @@ import {
   reconcileGen2Document,
   saveGen2Document,
 } from "./collaboration-documents";
+import { requireGen2Member } from "./workspaces";
 import { gen2CollaborationRoom } from "./collaboration-events";
 
 export const gen2CollaborationSocketMaxPayload = MAX_SOCKET_PAYLOAD_BYTES;
@@ -406,6 +407,11 @@ async function handleMessage(
         message.stateVector,
       );
     else if (message.type === "update") {
+      const membership = await requireGen2Member(
+        workspaceId,
+        connection.user.id,
+      );
+      connection.canEdit = membership.role !== "viewer";
       if (!connection.canEdit) {
         sendError(
           connection,

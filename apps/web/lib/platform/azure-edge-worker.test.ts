@@ -25,6 +25,7 @@ describe("Azure edge proxy", () => {
           "x-codev-origin-secret": "forged",
           "x-codev-node-websocket-id": "forged",
           "x-forwarded-for": "forged",
+          "x-vercel-forwarded-for": "forged-vercel-ip",
           "cf-connecting-ip": "192.0.2.1",
         },
       }),
@@ -42,6 +43,7 @@ describe("Azure edge proxy", () => {
       "origin-secret",
     );
     expect(forwarded.headers.get("x-forwarded-for")).toBe("192.0.2.1");
+    expect(forwarded.headers.get("x-vercel-forwarded-for")).toBeNull();
     expect(forwarded.headers.get("x-codev-node-websocket-id")).toBeNull();
     expect(result).toBe(redirected);
   });

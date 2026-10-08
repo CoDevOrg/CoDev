@@ -60,7 +60,8 @@ membership **before** touching `lib/runtime/orchestrator-*`, which performs no
 authorization of its own — a route reaching those clients directly would be an
 IDOR across every gen 2 workspace. Keeping the guard in this layer means a new
 route cannot forget it. Terminal operations and socket membership rechecks require
-an editor or owner role; viewers cannot access the shared shell.
+an editor or owner role; viewers cannot access the shared shell. Collaboration
+updates recheck the current member role rather than trusting handshake permissions.
 
 Only some guest handlers wait for Codex to go idle (`write_file`, `/pty/exec`,
 `start_terminal`); `read_file`, `git/*`, and terminal poll/input do not. The

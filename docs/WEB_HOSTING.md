@@ -282,3 +282,7 @@ including server-action requests. It uses the existing REST Redis settings
 rejects password login. Password changes invalidate browser sessions, retire
 CLI tokens and approved device flows atomically, and close existing workspace
 sockets within fifteen seconds. No database migration is required.
+
+The Azure edge replaces `x-forwarded-for` with Cloudflare’s client IP and strips
+caller-supplied `x-vercel-forwarded-for`. CLI device login throttling uses the
+trusted `x-forwarded-for` header on both hosting paths.
