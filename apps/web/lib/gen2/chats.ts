@@ -1,11 +1,12 @@
 import "server-only";
 
-import { and, count, desc, eq, inArray } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull } from "drizzle-orm";
 
 import {
   gen2ChatDetailSchema,
   gen2ChatMessageSchema,
   gen2ChatSchema,
+  type Gen2AgentProviderName,
   type Gen2Chat,
   type Gen2ChatDetail,
   type Gen2ChatMessage,
@@ -31,6 +32,7 @@ function toIso(value: Date) {
 function toChat(row: {
   id: string;
   title: string;
+  provider?: string | null;
   createdAt: Date;
   updatedAt: Date;
   messageCount?: number | null;
@@ -38,6 +40,7 @@ function toChat(row: {
   return gen2ChatSchema.parse({
     id: row.id,
     title: row.title,
+    provider: row.provider ?? null,
     createdAt: toIso(row.createdAt),
     updatedAt: toIso(row.updatedAt),
     messageCount: row.messageCount ?? undefined,
@@ -70,6 +73,7 @@ export async function listGen2Chats(workspaceId: string, userId: string) {
     .select({
       id: schema.gen2Chats.id,
       title: schema.gen2Chats.title,
+      provider: schema.gen2Chats.provider,
       createdAt: schema.gen2Chats.createdAt,
       updatedAt: schema.gen2Chats.updatedAt,
     })
@@ -102,7 +106,11 @@ export async function listGen2Chats(workspaceId: string, userId: string) {
   }
 }
 
-export async function createGen2Chat(workspaceId: string, userId: string) {
+export async function createGen2Chat(
+  workspaceId: string,
+  userId: string,
+  provider?: Gen2AgentProviderName,
+) {
   await requireGen2Member(workspaceId, userId);
   const [created] = await getDatabase()
     .insert(schema.gen2Chats)
@@ -110,6 +118,7 @@ export async function createGen2Chat(workspaceId: string, userId: string) {
       workspaceId,
       createdByUserId: userId,
       title: GEN2_NEW_CHAT_TITLE,
+      provider: provider ?? null,
     })
     .returning();
   if (!created) {
@@ -140,6 +149,23 @@ export async function renameGen2Chat(
     throw new Gen2AccessError("Chat not found.");
   }
   return toChat(updated);
+}
+
+/**
+ * A chat belongs to the agent it started with. One created without a provider
+ * takes its first turn's provider; later provider changes in the chat do not
+ * move it.
+ */
+export async function claimGen2ChatProvider(
+  chatId: string,
+  provider: Gen2AgentProviderName,
+) {
+  await getDatabase()
+    .update(schema.gen2Chats)
+    .set({ provider })
+    .where(
+      and(eq(schema.gen2Chats.id, chatId), isNull(schema.gen2Chats.provider)),
+    );
 }
 
 export async function requireGen2Chat(workspaceId: string, chatId: string) {

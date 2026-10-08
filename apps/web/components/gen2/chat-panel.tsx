@@ -595,7 +595,11 @@ export function Gen2ChatPanel({
       if (!target) {
         const created = await fetch(
           `/api/gen2/workspaces/${workspace.id}/chats`,
-          { method: "POST" },
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ provider: agent }),
+          },
         );
         if (!created.ok) {
           setError("Couldn't start a chat.");
@@ -710,6 +714,8 @@ export function Gen2ChatPanel({
     handleProviderSelect(provider);
     const response = await fetch(`/api/gen2/workspaces/${workspace.id}/chats`, {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider }),
     });
     if (!response.ok) return;
     const { chat } = (await response.json()) as { chat: Gen2Chat };

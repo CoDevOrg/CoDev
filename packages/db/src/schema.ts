@@ -2304,6 +2304,8 @@ export const gen2Chats = pgTable(
       .references(() => users.id, { onDelete: "restrict" })
       .notNull(),
     title: text("title").notNull(),
+    /** The agent the chat was started with; it never changes afterwards. */
+    provider: text("provider"),
     ...timestamps,
   },
   (table) => [

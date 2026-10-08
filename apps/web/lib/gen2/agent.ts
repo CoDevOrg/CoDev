@@ -27,6 +27,7 @@ import { describeGen2RuntimeFailure } from "./instance";
 import { canRunGen2Agent } from "./agent-policy";
 import {
   appendGen2ChatMessage,
+  claimGen2ChatProvider,
   listGen2ChatMessages,
   requireGen2Chat,
 } from "./chats";
@@ -93,6 +94,7 @@ export async function startGen2AgentTurn(input: {
     );
   await requireWorkspaceOwnerPlan(input.workspaceId);
   await requireGen2Chat(input.workspaceId, input.chatId);
+  await claimGen2ChatProvider(input.chatId, input.provider);
   const possibleDuplicate = input.continuation
     ? null
     : await findPossibleDuplicateTask(input);
