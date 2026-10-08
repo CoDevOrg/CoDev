@@ -213,7 +213,11 @@ jobs:
             "STRIPE_PORTAL_CONFIGURATION_ID",
           ];
           if (billingKeys.some((key) => !billing[key])) throw new Error("Stripe billing secret configuration is missing");
-          const values = { ...arm, ...billing, CRON_SECRET: process.env.CRON_SECRET };
+          const values = {
+            ...arm,
+            STRIPE_BILLING_SECRETS: process.env.STRIPE_BILLING_SECRETS,
+            CRON_SECRET: process.env.CRON_SECRET,
+          };
           writeFileSync(process.env.SECRETS_FILE, Object.entries(values).map(([key, value]) => `${key}=${JSON.stringify(value)}`).join("\n"), { mode: 0o600 });
           JS
           if [[ -n "$AZURE_WEB_ORIGIN" ]]; then

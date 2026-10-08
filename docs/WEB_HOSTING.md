@@ -174,11 +174,12 @@ signing/tunnel configuration. The Cloudflare deployment combines it with
 settings and keep the Tunnel/DNS token distinct from the CI deployment token.
 Cloudflare now verifies production database schema before building/deploying.
 
-GitHub secret `STRIPE_BILLING_SECRETS` contains the six production Worker
-bindings documented in [`BILLING.md`](./BILLING.md): the restricted API key,
-webhook signing secret, three live price IDs, and portal configuration ID.
-Vercel stores the same values as separate production environment variables;
-updating one host does not update the other.
+GitHub secret `STRIPE_BILLING_SECRETS` contains the six production billing
+values documented in [`BILLING.md`](./BILLING.md): the restricted API key,
+webhook signing secret, three live price IDs, and portal configuration ID. It
+is deployed to Cloudflare as one JSON binding to stay below the Worker variable
+limit. Vercel stores the same values as separate production environment
+variables; updating one host does not update the other.
 
 `Collect ARM owner costs` runs hourly and by manual dispatch. It pulls the
 production DB configuration using the existing Vercel deployment credential,

@@ -26,16 +26,38 @@ export class BillingConfigError extends Error {
   }
 }
 
-export function requireBillingEnv(
-  name:
-    | "STRIPE_SECRET_KEY"
-    | "STRIPE_WEBHOOK_SECRET"
-    | "STRIPE_PRICE_ID_INDIVIDUAL"
-    | "STRIPE_PRICE_ID_POWER"
-    | "STRIPE_PRICE_ID_TEAM",
+type BillingEnvName =
+  | "STRIPE_SECRET_KEY"
+  | "STRIPE_WEBHOOK_SECRET"
+  | "STRIPE_PRICE_ID_INDIVIDUAL"
+  | "STRIPE_PRICE_ID_POWER"
+  | "STRIPE_PRICE_ID_TEAM"
+  | "STRIPE_PORTAL_CONFIGURATION_ID";
+
+export function billingEnvValue(
+  name: BillingEnvName,
   env: Record<string, string | undefined> = process.env,
 ) {
-  const value = env[name]?.trim();
+  const direct = env[name]?.trim();
+  if (direct) return direct;
+  const bundle = env.STRIPE_BILLING_SECRETS?.trim();
+  if (!bundle) return undefined;
+  try {
+    const value = (JSON.parse(bundle) as Record<string, unknown>)[name];
+    return typeof value === "string" && value.trim() ? value.trim() : undefined;
+  } catch {
+    console.error(
+      "Billing is not configured: STRIPE_BILLING_SECRETS is invalid JSON.",
+    );
+    return undefined;
+  }
+}
+
+export function requireBillingEnv(
+  name: BillingEnvName,
+  env: Record<string, string | undefined> = process.env,
+) {
+  const value = billingEnvValue(name, env);
   if (!value) throw new BillingConfigError(name);
   return value;
 }
@@ -60,8 +82,7 @@ export function selfServePlanIdForStripePrice(priceId: string) {
         SelfServePlanId,
         (typeof PRICE_ENV_BY_PLAN)[SelfServePlanId],
       ][]
-    ).find(([, variable]) => process.env[variable]?.trim() === priceId)?.[0] ??
-    null
+    ).find(([, variable]) => billingEnvValue(variable) === priceId)?.[0] ?? null
   );
 }
 

@@ -9,7 +9,7 @@ import { ApiError } from "../http/api-route";
 import { getDatabase } from "../platform/database";
 import { logEvent } from "../platform/observability";
 import { getSubscriptionRow, resolveBillingAccess } from "./access";
-import { stripePriceIdForPlan } from "./config";
+import { billingEnvValue, stripePriceIdForPlan } from "./config";
 import { getSelfServePlan } from "./plans";
 import { getStripe } from "./stripe";
 import { stripeId, syncStripeSubscription } from "./subscriptions";
@@ -147,7 +147,7 @@ export async function createPortalSession(memberId: string, origin: string) {
   if (row?.provider !== "stripe" || !row.providerCustomerId) {
     throw new ApiError("There is no billing account to manage yet.", 409);
   }
-  const configuration = process.env.STRIPE_PORTAL_CONFIGURATION_ID?.trim();
+  const configuration = billingEnvValue("STRIPE_PORTAL_CONFIGURATION_ID");
   const session = await getStripe().billingPortal.sessions.create({
     customer: row.providerCustomerId,
     return_url: `${origin}${BILLING_PATH}`,
