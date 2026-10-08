@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   input: vi.fn(),
   resize: vi.fn(),
   poll: vi.fn(),
-  recheck: vi.fn(),
+  access: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -16,7 +16,9 @@ vi.mock("./terminals", () => ({
     resize: (...args: unknown[]) => mocks.resize(...args),
     poll: (...args: unknown[]) => mocks.poll(...args),
   }),
-  recheckGen2TerminalMember: (...args: unknown[]) => mocks.recheck(...args),
+}));
+vi.mock("./terminal-access", () => ({
+  gen2TerminalAccess: (...args: unknown[]) => mocks.access(...args),
 }));
 
 import {
@@ -70,6 +72,13 @@ class FakeSocket implements ServerWebSocket {
   }
 }
 
+const access = {
+  provider: "azure_arm",
+  status: "ready",
+  generation: 2,
+  host: "codev-a-g2.trycodev.com",
+};
+
 const target = {
   workspaceId: "11111111-1111-4111-8111-111111111111",
   userId: "user-1",
@@ -89,7 +98,7 @@ describe("handleGen2TerminalSocket", () => {
     vi.clearAllMocks();
     mocks.input.mockResolvedValue(undefined);
     mocks.resize.mockResolvedValue(undefined);
-    mocks.recheck.mockResolvedValue(undefined);
+    mocks.access.mockResolvedValue(access);
   });
 
   it("pushes output from the cursor it was given, then the exit", async () => {
@@ -114,9 +123,11 @@ describe("handleGen2TerminalSocket", () => {
     await done;
 
     expect(mocks.poll.mock.calls).toEqual([
-      ["term-1-1", 4],
-      ["term-1-1", 6],
+      ["term-1-1", 4, access],
+      ["term-1-1", 6, access],
     ]);
+    // One live check opens the stream, then one per poll before delivery.
+    expect(mocks.access).toHaveBeenCalledTimes(3);
     expect(socket.sent).toEqual([
       { type: "ready", after: 4 },
       { type: "data", data: "sh: nope: not found\r\n", next: 6 },
@@ -125,7 +136,7 @@ describe("handleGen2TerminalSocket", () => {
     expect(socket.closed).toBe(true);
   });
 
-  it("forwards input in order and resizes without re-checking membership", async () => {
+  it("forwards input in order and checks access once per batch", async () => {
     let releasePoll!: () => void;
     mocks.poll.mockImplementationOnce(
       () =>
@@ -147,12 +158,14 @@ describe("handleGen2TerminalSocket", () => {
     message({ type: "resize", rows: 30, columns: 100 });
     await vi.waitFor(() => expect(mocks.resize).toHaveBeenCalled());
     await vi.waitFor(() => expect(order.join("")).toBe("ls"));
-    expect(mocks.resize).toHaveBeenCalledWith("term-1-1", {
-      type: "resize",
-      rows: 30,
-      columns: 100,
-    });
-    expect(mocks.recheck).toHaveBeenCalled();
+    expect(mocks.resize).toHaveBeenCalledWith(
+      "term-1-1",
+      { type: "resize", rows: 30, columns: 100 },
+      access,
+    );
+    expect(mocks.input.mock.calls.every((call) => call[2] === access)).toBe(
+      true,
+    );
 
     await vi.waitFor(() => expect(releasePoll).toBeTypeOf("function"));
     releasePoll();
@@ -177,7 +190,7 @@ describe("handleGen2TerminalSocket", () => {
       );
       const { socket, done } = open();
       await vi.waitFor(() => expect(releasePoll).toBeTypeOf("function"));
-      mocks.recheck.mockRejectedValue(new Error("Edit permission required"));
+      mocks.access.mockRejectedValue(new Error("Edit permission required"));
       socket.emitMessage(
         JSON.stringify(
           type === "input"
@@ -195,7 +208,7 @@ describe("handleGen2TerminalSocket", () => {
 
   it("does not deliver output fetched while membership was revoked", async () => {
     mocks.poll.mockImplementationOnce(async () => {
-      mocks.recheck.mockRejectedValue(new Error("No longer a member"));
+      mocks.access.mockRejectedValue(new Error("No longer a member"));
       return {
         chunks: [{ sequence: 4, data: "private output" }],
         nextSequence: 5,

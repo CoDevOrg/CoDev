@@ -5,6 +5,10 @@ import { and, eq, exists, isNull } from "drizzle-orm";
 
 import { getDatabase } from "../platform/database";
 
+/** Idle stops come after 15 minutes, so typing needs one write per interval. */
+const RECORD_INTERVAL_MS = 30_000;
+const recordedAt = new Map<string, number>();
+
 /** Successful member mutations count as input; reads and polls never do. */
 export async function recordArmWorkspaceMemberActivity(
   workspaceId: string,
@@ -19,6 +23,8 @@ export async function recordArmWorkspaceMemberActivity(
     )
   )
     return;
+  const key = `${workspaceId}:${generation}`;
+  if (Date.now() - (recordedAt.get(key) ?? 0) < RECORD_INTERVAL_MS) return;
   const db = getDatabase();
   await db
     .update(schema.gen2ComputeSessions)
@@ -41,4 +47,6 @@ export async function recordArmWorkspaceMemberActivity(
         ),
       ),
     );
+  if (recordedAt.size >= 1_000) recordedAt.clear();
+  recordedAt.set(key, Date.now());
 }

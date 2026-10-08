@@ -21,3 +21,24 @@ it("connection checks, file reads, Git refreshes, overlap polls and terminal pol
     await recordArmWorkspaceMemberActivity("workspace-a", 2, method!, path!);
   expect(mocks.database).not.toHaveBeenCalled();
 });
+it("records continuous typing once per interval for each generation", async () => {
+  const where = vi.fn().mockResolvedValue(undefined);
+  mocks.database.mockReturnValue({
+    update: () => ({ set: () => ({ where }) }),
+    select: () => ({ from: () => ({ where: () => ({}) }) }),
+  });
+  vi.useFakeTimers({ now: 1_000_000 });
+  try {
+    const input = "/v1/superset/runtime/terminal/input";
+    await recordArmWorkspaceMemberActivity("workspace-b", 1, "POST", input);
+    await recordArmWorkspaceMemberActivity("workspace-b", 1, "POST", input);
+    expect(where).toHaveBeenCalledTimes(1);
+    await recordArmWorkspaceMemberActivity("workspace-b", 2, "POST", input);
+    expect(where).toHaveBeenCalledTimes(2);
+    vi.advanceTimersByTime(30_000);
+    await recordArmWorkspaceMemberActivity("workspace-b", 1, "POST", input);
+    expect(where).toHaveBeenCalledTimes(3);
+  } finally {
+    vi.useRealTimers();
+  }
+});

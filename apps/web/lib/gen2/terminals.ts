@@ -19,6 +19,8 @@ import { Gen2AccessError, Gen2LifecycleError } from "./errors";
 import { requireWorkspaceOwnerPlan } from "../billing/gate";
 import { requireGen2Member } from "./workspaces";
 import { isGen2SupersetRuntimeEnabled } from "./superset-runtime-feature";
+import type { Gen2TerminalAccess } from "./terminal-access";
+import { runtimeTargetFromRow } from "../runtime/workspace-runtime-target";
 
 const PRIMARY_WORKTREE_ID = "main";
 
@@ -86,8 +88,8 @@ export async function startGen2Terminal(
 }
 
 /**
- * The runtime calls behind an already-authorized terminal, so a socket that
- * checked membership once does not repeat it for every keystroke.
+ * The runtime calls behind a terminal socket. Each call takes the access its
+ * caller just checked and routes with it instead of reading the route again.
  * Marwan's stream (320c5f27) uses this.
  */
 export function gen2TerminalBackend(
@@ -95,18 +97,39 @@ export function gen2TerminalBackend(
   worktreeId = PRIMARY_WORKTREE_ID,
 ) {
   if (isGen2SupersetRuntimeEnabled()) {
+    const route = (access: Gen2TerminalAccess) =>
+      runtimeTargetFromRow(workspaceId, access);
     return {
-      input: (sessionId: string, data: string) =>
-        sendSupersetTerminalInput(workspaceId, { worktreeId, sessionId, data }),
-      resize: (sessionId: string, size: { rows: number; columns: number }) =>
-        resizeSupersetTerminal(workspaceId, {
-          worktreeId,
-          sessionId,
-          rows: size.rows,
-          columns: size.columns,
-        }),
-      poll: (sessionId: string, after: number) =>
-        pollSupersetTerminal(workspaceId, { worktreeId, sessionId, after }),
+      input: async (
+        sessionId: string,
+        data: string,
+        access: Gen2TerminalAccess,
+      ) =>
+        sendSupersetTerminalInput(
+          workspaceId,
+          { worktreeId, sessionId, data },
+          await route(access),
+        ),
+      resize: async (
+        sessionId: string,
+        size: { rows: number; columns: number },
+        access: Gen2TerminalAccess,
+      ) =>
+        resizeSupersetTerminal(
+          workspaceId,
+          { worktreeId, sessionId, rows: size.rows, columns: size.columns },
+          await route(access),
+        ),
+      poll: async (
+        sessionId: string,
+        after: number,
+        access: Gen2TerminalAccess,
+      ) =>
+        pollSupersetTerminal(
+          workspaceId,
+          { worktreeId, sessionId, after },
+          await route(access),
+        ),
       close: (sessionId: string) =>
         closeSupersetTerminal(workspaceId, { sessionId, worktreeId }),
     };
@@ -131,14 +154,6 @@ export async function authorizeGen2TerminalStream(
   userId: string,
 ) {
   await requireReadyMember(workspaceId, userId);
-}
-
-/** Live permission check before socket input, resize, polling, or output delivery. */
-export async function recheckGen2TerminalMember(
-  workspaceId: string,
-  userId: string,
-) {
-  requireTerminalPermission(await requireGen2Member(workspaceId, userId));
 }
 
 export async function sendGen2TerminalInput(

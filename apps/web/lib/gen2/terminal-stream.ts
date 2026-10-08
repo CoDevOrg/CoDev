@@ -7,7 +7,8 @@ import {
   gen2SupersetWorktreeIdSchema,
 } from "@codev/contracts";
 
-import { gen2TerminalBackend, recheckGen2TerminalMember } from "./terminals";
+import { gen2TerminalAccess } from "./terminal-access";
+import { gen2TerminalBackend } from "./terminals";
 import type { ServerWebSocket } from "../platform/websocket";
 
 /**
@@ -17,10 +18,12 @@ import type { ServerWebSocket } from "../platform/websocket";
  * The session itself is still started, sized and closed over the ordinary
  * terminal route. The socket only replaces the per-keystroke HTTP round trip:
  * input is authorized against current membership, and the server holds one upstream
- * poll open and pushes output the moment the shell prints it. Closing the
- * socket never closes the shell; the browser reconnects with the cursor of the
- * last output it saw and picks up exactly where it stopped. An open socket
- * does not count as workspace activity — only the input and resize it forwards.
+ * poll open and pushes output the moment the shell prints it. Each membership
+ * check also reads the guest route, so a keystroke or poll costs one database
+ * round trip. Closing the socket never closes the shell; the browser
+ * reconnects with the cursor of the last output it saw and picks up exactly
+ * where it stopped. An open socket does not count as workspace activity —
+ * only the input and resize it forwards.
  */
 
 export const gen2TerminalStreamQuerySchema = z.object({
@@ -97,9 +100,12 @@ export async function handleGen2TerminalSocket(
       while (pendingInput && !closed) {
         const data = pendingInput;
         pendingInput = "";
-        await recheckGen2TerminalMember(input.workspaceId, input.userId);
+        const access = await gen2TerminalAccess(
+          input.workspaceId,
+          input.userId,
+        );
         if (closed) return;
-        await backend.input(input.sessionId, data);
+        await backend.input(input.sessionId, data, access);
       }
     } catch (error) {
       fail(error);
@@ -123,8 +129,11 @@ export async function handleGen2TerminalSocket(
       void flushInput();
     } else {
       void (async () => {
-        await recheckGen2TerminalMember(input.workspaceId, input.userId);
-        if (!closed) await backend.resize(input.sessionId, message);
+        const access = await gen2TerminalAccess(
+          input.workspaceId,
+          input.userId,
+        );
+        if (!closed) await backend.resize(input.sessionId, message, access);
       })().catch((error) => fail(error));
     }
   });
@@ -138,12 +147,13 @@ export async function handleGen2TerminalSocket(
   send(socket, { type: "ready", after: cursor });
 
   try {
+    let access = await gen2TerminalAccess(input.workspaceId, input.userId);
     while (!closed) {
-      await recheckGen2TerminalMember(input.workspaceId, input.userId);
       const requestedAt = Date.now();
-      const result = await backend.poll(input.sessionId, cursor);
+      const result = await backend.poll(input.sessionId, cursor, access);
       if (closed) return;
-      await recheckGen2TerminalMember(input.workspaceId, input.userId);
+      // The check before delivery also authorizes and routes the next poll.
+      access = await gen2TerminalAccess(input.workspaceId, input.userId);
       if (closed) return;
       const data = result.chunks.map((chunk) => chunk.data).join("");
       cursor = result.nextSequence;

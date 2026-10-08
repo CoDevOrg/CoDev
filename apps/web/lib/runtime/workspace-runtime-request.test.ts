@@ -27,7 +27,10 @@ import {
 } from "./orchestrator-files";
 import { pollSandboxTerminal } from "./orchestrator-terminals";
 import { pollCodexExecInSandbox } from "./orchestrator-codex-exec";
-import { getSupersetGitOutput } from "./orchestrator-superset-runtime";
+import {
+  getSupersetGitOutput,
+  pollSupersetTerminal,
+} from "./orchestrator-superset-runtime";
 import { orchestratorRequest, OrchestratorError } from "./orchestrator-request";
 
 const target = {
@@ -137,6 +140,36 @@ describe("provider-aware workspace transport", () => {
       }),
     ).rejects.toMatchObject({ status: 409, currentRevision: "r3" });
     expect(mocks.activity).not.toHaveBeenCalled();
+  });
+  it("routes with a target the caller just read, never another workspace's", async () => {
+    mocks.fetch.mockResolvedValueOnce(
+      Response.json({
+        chunks: [],
+        nextSequence: 0,
+        exited: false,
+        exitCode: 0,
+      }),
+    );
+    await pollSupersetTerminal(
+      target.workspaceId,
+      { worktreeId: "main", sessionId: "term-1-1", after: 0 },
+      target,
+    );
+    expect(mocks.target).not.toHaveBeenCalled();
+    expect(mocks.fetch.mock.lastCall?.[0]).toBe(
+      `https://${target.host}/v1/superset/runtime/terminal/poll`,
+    );
+    mocks.fetch.mockClear();
+    await expect(
+      orchestratorRequest(
+        "GET",
+        "/v1/sandboxes/workspace-b/git/status",
+        undefined,
+        undefined,
+        target,
+      ),
+    ).rejects.toMatchObject({ status: 503 });
+    expect(mocks.fetch).not.toHaveBeenCalled();
   });
   it("retains Firecracker routing and never falls back after an ARM target failure", async () => {
     mocks.target.mockResolvedValueOnce(null);

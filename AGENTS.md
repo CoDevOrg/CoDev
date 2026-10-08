@@ -31,6 +31,7 @@
 - GitHub resolves repository variables when a workflow run is created. After changing a rollout or image variable such as `ARM_WORKSPACE_IMAGE_VERSION_ID`, start a new run; one already queued deploys the old value.
 - Azure web releases must pass origin readiness before Cloudflare traffic switches; keep the ARM workflow bridge on its separate workers.dev URL to avoid proxy loops.
 - Worker WebSocket messages need operation-scoped database pools; Redis clients and stream readers belong to the socket request, never the shared isolate.
+- Production Postgres is in AWS us-east-1 while the Azure origin is in West US 2, so each query costs about 70 ms. Keep per-keystroke paths to one query; terminal sockets read membership and the guest route together (`lib/gen2/terminal-access.ts`).
 - Worker fetches support `redirect: "manual"`, not `"error"`; reject redirect responses explicitly for authenticated runtime requests.
 - ARM lifecycle polling must honor Azure `Retry-After` while staying within Cloudflare Workflows' per-invocation subrequest budget.
 - ARM workflow checkpoints are persisted and copied into continuations; never return secrets from one. Build secret-bearing request bodies inside the step that sends them.
