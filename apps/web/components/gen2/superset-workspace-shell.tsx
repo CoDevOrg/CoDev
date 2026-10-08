@@ -1105,23 +1105,6 @@ export function SupersetWorkspaceShell({
 
             <Tooltip>
               <TooltipTrigger asChild>
-                <Link
-                  href={`/gen2/${workspaceId}/second`}
-                  className="gen2-workspace-button gen2-topbar-nav-button"
-                  data-slot="button"
-                  data-tone="ghost"
-                  aria-label="Switch to classic view"
-                >
-                  <span className="gen2-topbar-action-label">Classic</span>
-                </Link>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                Switch to classic view
-              </TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
                 <WorkspaceButton
                   size="icon"
                   type="button"
