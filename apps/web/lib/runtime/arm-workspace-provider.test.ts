@@ -432,6 +432,28 @@ describe("ARM workspace provider stop", () => {
           expect(
             deployment.properties.template.parameters.bootScript.type,
           ).toBe("secureString");
+          const resources: Array<{
+            type: string;
+            properties: {
+              ipConfigurations?: Array<{
+                properties: { subnet: { id: string } };
+              }>;
+            };
+          }> = deployment.properties.template.resources;
+          // Starts reuse the resource group's network instead of creating one.
+          expect(resources.map((resource) => resource.type)).toEqual([
+            "Microsoft.Network/publicIPAddresses",
+            "Microsoft.Network/networkInterfaces",
+            "Microsoft.Compute/virtualMachines",
+            "Microsoft.Compute/virtualMachines/extensions",
+          ]);
+          expect(deployment.properties.template.variables.subnetId).toBe(
+            "[resourceId('Microsoft.Network/virtualNetworks/subnets', 'codev-arm-workspace-vnet', 'workspace')]",
+          );
+          expect(
+            resources[1]?.properties.ipConfigurations?.[0]?.properties.subnet
+              .id,
+          ).toBe("[variables('subnetId')]");
           const extension = deployment.properties.template.resources.find(
             (r: { type: string }) => r.type.endsWith("/extensions"),
           );

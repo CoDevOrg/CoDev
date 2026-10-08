@@ -29,6 +29,8 @@
 - Worker WebSocket messages need operation-scoped database pools; Redis clients and stream readers belong to the socket request, never the shared isolate.
 - Worker fetches support `redirect: "manual"`, not `"error"`; reject redirect responses explicitly for authenticated runtime requests.
 - ARM lifecycle polling must honor Azure `Retry-After` while staying within Cloudflare Workflows' per-invocation subrequest budget.
+- ARM workflow checkpoints are persisted and copied into continuations; never return secrets from one. Build secret-bearing request bodies inside the step that sends them.
+- ARM VMs join their resource group's shared network from `infra/azure/arm-workspace-network.bicep`; deploy it to a group before web releases start VMs there.
 - ARM connection setup must retry package installation safely while cloud-init or apt holds the dpkg lock.
 
 - Before starting or deploying the web app, run `pnpm db:check`. A newer migration ledger entry does not prove older tables exist; repair skipped schema with a forward migration instead of editing applied history.

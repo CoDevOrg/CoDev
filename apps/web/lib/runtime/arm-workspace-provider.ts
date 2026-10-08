@@ -29,6 +29,8 @@ const CLOUDFLARE_ACCOUNT_ID = "84a1d01866de04e04320feddfb199b83";
 const CLOUDFLARE_ZONE_ID = "c474dbc7af01ea073573a250fbd1d5ec";
 const CLOUDFLARE_ZONE_NAME = "trycodev.com";
 const PHASE2_SIGNING_ISSUER = "codev-control-plane";
+const SHARED_NSG = "codev-arm-workspace-nsg";
+const SHARED_VNET = "codev-arm-workspace-vnet";
 
 export type ArmWorkspaceOperation = {
   workspaceId: string;
@@ -262,58 +264,14 @@ function deploymentTemplate(
     },
     variables: {
       resourceTags: tags,
-      nsgId:
-        "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-nsg', parameters('instanceName')))]",
-      vnetId:
-        "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-vnet', parameters('instanceName')))]",
+      // Shared per resource group by infra/azure/arm-workspace-network.bicep.
+      nsgId: `[resourceId('Microsoft.Network/networkSecurityGroups', '${SHARED_NSG}')]`,
+      subnetId: `[resourceId('Microsoft.Network/virtualNetworks/subnets', '${SHARED_VNET}', 'workspace')]`,
       ipId: "[resourceId('Microsoft.Network/publicIPAddresses', format('{0}-ip', parameters('instanceName')))]",
       nicId:
         "[resourceId('Microsoft.Network/networkInterfaces', format('{0}-nic', parameters('instanceName')))]",
     },
     resources: [
-      {
-        type: "Microsoft.Network/networkSecurityGroups",
-        apiVersion: NETWORK_API,
-        name: "[format('{0}-nsg', parameters('instanceName'))]",
-        location: WORKSPACE_LOCATION,
-        tags: "[variables('resourceTags')]",
-        properties: {
-          securityRules: [
-            {
-              name: "DenyAllInbound",
-              properties: {
-                priority: 100,
-                direction: "Inbound",
-                access: "Deny",
-                protocol: "*",
-                sourcePortRange: "*",
-                destinationPortRange: "*",
-                sourceAddressPrefix: "*",
-                destinationAddressPrefix: "*",
-              },
-            },
-          ],
-        },
-      },
-      {
-        type: "Microsoft.Network/virtualNetworks",
-        apiVersion: NETWORK_API,
-        name: "[format('{0}-vnet', parameters('instanceName'))]",
-        location: WORKSPACE_LOCATION,
-        tags: "[variables('resourceTags')]",
-        properties: {
-          addressSpace: { addressPrefixes: ["10.242.0.0/16"] },
-          subnets: [
-            {
-              name: "workspace",
-              properties: {
-                addressPrefix: "10.242.0.0/24",
-                defaultOutboundAccess: false,
-              },
-            },
-          ],
-        },
-      },
       {
         type: "Microsoft.Network/publicIPAddresses",
         apiVersion: NETWORK_API,
@@ -329,11 +287,7 @@ function deploymentTemplate(
         name: "[format('{0}-nic', parameters('instanceName'))]",
         location: WORKSPACE_LOCATION,
         tags: "[variables('resourceTags')]",
-        dependsOn: [
-          "[variables('nsgId')]",
-          "[variables('vnetId')]",
-          "[variables('ipId')]",
-        ],
+        dependsOn: ["[variables('ipId')]"],
         properties: {
           enableAcceleratedNetworking: true,
           networkSecurityGroup: { id: "[variables('nsgId')]" },
@@ -342,9 +296,7 @@ function deploymentTemplate(
               name: "primary",
               properties: {
                 privateIPAllocationMethod: "Dynamic",
-                subnet: {
-                  id: "[format('{0}/subnets/workspace', variables('vnetId'))]",
-                },
+                subnet: { id: "[variables('subnetId')]" },
                 publicIPAddress: { id: "[variables('ipId')]" },
               },
             },
@@ -461,6 +413,8 @@ async function resourceIds(
   const config = readArmWorkspaceConfig();
   const name = `${await resourceName(workspaceId)}-g${generation}`;
   const root = `/subscriptions/${config.subscriptionId}/resourceGroups/${config.resourceGroup}/providers/Microsoft.Network`;
+  // Generations deployed before the shared network also own a VNet and NSG;
+  // deleting them is a no-op once those generations are gone.
   return [
     await vmId(workspaceId, generation),
     `${root}/networkInterfaces/${name}-nic`,

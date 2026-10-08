@@ -359,6 +359,23 @@ Enable `ARM_WORKSPACE_BOOT_ENABLED` only after promoting a compatible immutable
 image and verifying startup, saved-disk reopen, and OS reboot. The legacy path
 remains available for rollback with the previous image pin.
 
+### Shared ARM workspace network
+
+Each workspace start creates only a public IP and NIC. They join the
+resource group's shared `codev-arm-workspace-vnet` subnet and
+`codev-arm-workspace-nsg`. Its deny-all inbound rule also blocks traffic between
+workspace VMs. Deploy the network to every `codev-arm-workspace-*` group that
+starts VMs before deploying a web release that references it:
+
+```bash
+az deployment group create -g codev-arm-workspace-production \
+  --name arm-workspace-network \
+  --template-file infra/azure/arm-workspace-network.bicep
+```
+
+Never delete the shared network while VMs are attached. Stop still deletes a
+generation-owned VNet and NSG left by releases that predate the shared network.
+
 ## Public web origin
 
 `web.Containerfile` builds the Node 24 Next.js server. `web-app.bicep` configures
