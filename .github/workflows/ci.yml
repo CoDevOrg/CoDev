@@ -127,6 +127,7 @@ jobs:
       GEN2_FREE_ARM_OWNER_IDS: ${{ vars.GEN2_FREE_ARM_OWNER_IDS }}
       ARM_WORKSPACE_BOOT_ENABLED: ${{ vars.ARM_WORKSPACE_BOOT_ENABLED || 'false' }}
       ARM_WORKSPACE_IMAGE_VERSION_ID: ${{ vars.ARM_WORKSPACE_IMAGE_VERSION_ID }}
+      CODEV_AGENT_COORDINATION_WORKSPACES: ${{ vars.CODEV_AGENT_COORDINATION_WORKSPACES }}
     steps:
       - name: Check Cloudflare credentials
         shell: bash
