@@ -12,6 +12,6 @@ This module owns user authentication, identity, and session management. It provi
 - `password-login-limit.ts`: Account-wide password throttling for both Auth.js HTTP handlers and server actions, using the existing Redis configuration and failing closed in production.
 - `update-account-password.ts`: Conditional password changes and atomic CLI-token/device-approval revocation.
 - `identity.ts`, `registration.ts`: Core user identity and signup flows.
-- `password-reset.ts`, `password-reset-mail.ts`: Password recovery mechanisms.
+- `password-reset.ts`, `password-reset-mail.ts`: Password recovery mechanisms. Production reset links default to the canonical HTTPS site when Auth.js URL overrides are omitted.
 
 - `account-deletion*.ts`: verified self-service deletion, resource checks, account erasure and shared-history attribution. See `docs/LEGAL.md` for retention limits.

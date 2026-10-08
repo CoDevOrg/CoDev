@@ -59,9 +59,18 @@ async function prepare(stage, source, input, executable) {
   // Only controller-owned staging is disposable; never delete saved workspace files.
   await rm(checkout, { recursive: true, force: true });
   if (input.repositoryUrl) {
+    // Blobless: full commit history, but only the base commit's file contents.
+    // Older blobs are fetched on demand from the public remote.
     await execute(
       executable,
-      ["clone", "--no-checkout", "--", input.repositoryUrl, checkout],
+      [
+        "clone",
+        "--no-checkout",
+        "--filter=blob:none",
+        "--",
+        input.repositoryUrl,
+        checkout,
+      ],
       {
         timeout: 55_000,
         maxBuffer: 1 << 20,

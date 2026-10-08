@@ -41,7 +41,9 @@ vi.mock("../runtime/orchestrator-superset-runtime", () => ({
 }));
 
 const {
-  clearGen2TerminalMemberCache,
+  authorizeGen2TerminalStream,
+  recheckGen2TerminalMember,
+  resizeGen2Terminal,
   closeGen2Terminal,
   pollGen2Terminal,
   sendGen2TerminalInput,
@@ -56,13 +58,106 @@ const originalSupersetRuntime = process.env.CODEV_SUPERSET_RUNTIME_ENABLED;
 describe("gen2 terminals", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    clearGen2TerminalMemberCache();
     delete process.env.CODEV_SUPERSET_RUNTIME_ENABLED;
     mocks.requireMember.mockResolvedValue({
       id: workspaceId,
       status: "ready",
       role: "owner",
     });
+  });
+
+  it.each([false, true])(
+    "rejects viewers for every terminal operation (Superset: %s)",
+    async (superset) => {
+      process.env.CODEV_SUPERSET_RUNTIME_ENABLED = String(superset);
+      mocks.requireMember.mockResolvedValue({
+        id: workspaceId,
+        status: "ready",
+        role: "viewer",
+      });
+      const operations = [
+        () => startGen2Terminal(workspaceId, userId, { rows: 24, columns: 80 }),
+        () => sendGen2TerminalInput(workspaceId, userId, sessionId, "ls\n"),
+        () =>
+          resizeGen2Terminal(workspaceId, userId, sessionId, {
+            rows: 24,
+            columns: 80,
+          }),
+        () => pollGen2Terminal(workspaceId, userId, sessionId, 0),
+        () => closeGen2Terminal(workspaceId, userId, sessionId),
+        () => authorizeGen2TerminalStream(workspaceId, userId),
+        () => recheckGen2TerminalMember(workspaceId, userId),
+      ];
+      for (const operation of operations) {
+        await expect(operation()).rejects.toMatchObject({ status: 403 });
+      }
+      for (const runtime of [
+        mocks.start,
+        mocks.input,
+        mocks.resize,
+        mocks.poll,
+        mocks.close,
+        mocks.supersetStart,
+        mocks.supersetInput,
+        mocks.supersetResize,
+        mocks.supersetPoll,
+        mocks.supersetClose,
+      ]) {
+        expect(runtime).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it("rejects a demoted member when a terminal socket rechecks access", async () => {
+    await authorizeGen2TerminalStream(workspaceId, userId);
+    mocks.requireMember.mockResolvedValue({
+      id: workspaceId,
+      status: "ready",
+      role: "viewer",
+    });
+    await expect(
+      recheckGen2TerminalMember(workspaceId, userId),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("allows editors to start and use a terminal", async () => {
+    mocks.requireMember.mockResolvedValue({
+      id: workspaceId,
+      status: "ready",
+      role: "editor",
+    });
+    await startGen2Terminal(workspaceId, userId, { rows: 24, columns: 80 });
+    await sendGen2TerminalInput(workspaceId, userId, sessionId, "ls\n");
+    expect(mocks.start).toHaveBeenCalled();
+    expect(mocks.input).toHaveBeenCalled();
+  });
+
+  it("does not reuse membership granted before demotion or removal", async () => {
+    await startGen2Terminal(workspaceId, userId, { rows: 24, columns: 80 });
+    mocks.requireMember.mockResolvedValue({ status: "ready", role: "viewer" });
+    await expect(
+      sendGen2TerminalInput(workspaceId, userId, sessionId, "ls\n"),
+    ).rejects.toMatchObject({ status: 403 });
+    mocks.requireMember.mockRejectedValue(new Error("Not a member"));
+    await expect(
+      pollGen2Terminal(workspaceId, userId, sessionId, 0),
+    ).rejects.toThrow("Not a member");
+    expect(mocks.input).not.toHaveBeenCalled();
+    expect(mocks.poll).not.toHaveBeenCalled();
+  });
+
+  it("rejects HTTP poll output if membership was removed during the guest wait", async () => {
+    mocks.poll.mockImplementationOnce(async () => {
+      mocks.requireMember.mockRejectedValue(new Error("Not a member"));
+      return {
+        chunks: [{ sequence: 1, data: "private output" }],
+        nextSequence: 2,
+        exited: false,
+      };
+    });
+    await expect(
+      pollGen2Terminal(workspaceId, userId, sessionId, 0),
+    ).rejects.toThrow("Not a member");
   });
 
   it("checks membership before it reaches the orchestrator", async () => {

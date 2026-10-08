@@ -7,6 +7,8 @@ import {
 import type Redis from "ioredis";
 import { collaborationContext } from "./collaboration-context";
 
+import { requireGen2Member } from "./workspaces";
+import { withDatabaseOperation } from "../platform/database-operation";
 import { send, type Connection } from "./collaboration-connection";
 import {
   REPLAY_LIMIT,
@@ -33,18 +35,32 @@ function rooms() {
   return collaborationContext.getStore()?.rooms ?? localRooms;
 }
 
-export function broadcastLocal(
+export async function broadcastLocal(
   workspaceId: string,
   message: CollaborationServerMessage,
   except?: Connection,
 ) {
   const room = rooms().get(workspaceId);
   if (!room) return;
-  for (const connection of room.connections) {
-    if (connection !== except && shouldReceive(connection, message)) {
-      send(connection, message);
-    }
-  }
+  await withDatabaseOperation(async () => {
+    await Promise.all(
+      [...room.connections].map(async (connection) => {
+        if (connection === except || !shouldReceive(connection, message))
+          return;
+        try {
+          await requireGen2Member(
+            workspaceId.replace(/^gen2:/, ""),
+            connection.user.id,
+          );
+        } catch {
+          room.connections.delete(connection);
+          connection.socket.close(1008, "Workspace access unavailable.");
+          return;
+        }
+        if (room.connections.has(connection)) send(connection, message);
+      }),
+    );
+  });
 }
 
 function shouldReceive(
@@ -151,7 +167,7 @@ async function pollRoom(workspaceId: string, room: LocalRoom) {
       for (const event of parseStreamResult(result)) {
         room.cursor = event.id;
         if (event.instance !== getInstanceId()) {
-          broadcastLocal(workspaceId, event.message);
+          await broadcastLocal(workspaceId, event.message);
         }
       }
     }
@@ -187,7 +203,7 @@ export async function publish(workspaceId: string, message: StreamEvent) {
     "payload",
     JSON.stringify(message),
   );
-  broadcastLocal(workspaceId, message);
+  await broadcastLocal(workspaceId, message);
   return streamId ?? "0-0";
 }
 
@@ -197,6 +213,10 @@ export async function replay(
   resumeFrom: string,
   path: string,
 ) {
+  await requireGen2Member(
+    workspaceId.replace(/^gen2:/, ""),
+    connection.user.id,
+  );
   const entries = await redisClient().xrange(
     streamKey(workspaceId),
     `(${resumeFrom}`,

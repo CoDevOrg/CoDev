@@ -22,7 +22,10 @@ import { POST } from "./route";
 
 const call = () =>
   POST(
-    new Request("https://codev.test/api/billing/portal", { method: "POST" }),
+    new Request("https://codev.test/api/billing/portal", {
+      method: "POST",
+      headers: { origin: "https://codev.test" },
+    }),
     {
       params: Promise.resolve({}),
     },

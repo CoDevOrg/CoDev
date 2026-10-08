@@ -48,7 +48,10 @@ describe("gen2 member item route", () => {
     const response = await PATCH(
       new Request(url, {
         method: "PATCH",
-        headers: { "content-type": "application/json" },
+        headers: {
+          origin: "https://codev.test",
+          "content-type": "application/json",
+        },
         body: JSON.stringify({ role: "viewer" }),
       }),
       { params },
@@ -66,9 +69,15 @@ describe("gen2 member item route", () => {
   it("removes a member", async () => {
     mocks.removeMember.mockResolvedValue([]);
 
-    const response = await DELETE(new Request(url, { method: "DELETE" }), {
-      params,
-    });
+    const response = await DELETE(
+      new Request(url, {
+        method: "DELETE",
+        headers: { origin: "https://codev.test" },
+      }),
+      {
+        params,
+      },
+    );
 
     expect(mocks.removeMember).toHaveBeenCalledWith(
       workspaceId,

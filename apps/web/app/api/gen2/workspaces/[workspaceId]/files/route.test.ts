@@ -34,7 +34,10 @@ const url = `https://codev.test/api/gen2/workspaces/${workspaceId}/files`;
 function put(body: unknown) {
   return new Request(url, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      origin: "https://codev.test",
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify(body),
   });
 }
@@ -83,7 +86,10 @@ describe("gen2 files route", () => {
     const response = await POST(
       new Request(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          origin: "https://codev.test",
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ path: "a.ts" }),
       }),
       { params },

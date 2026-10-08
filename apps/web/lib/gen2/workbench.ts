@@ -16,7 +16,11 @@ import {
   parseSearchMatches,
 } from "../runtime/ide";
 import { canRunGen2Agent } from "./agent-policy";
-import { Gen2FileConflictError, Gen2LifecycleError } from "./errors";
+import {
+  Gen2AccessError,
+  Gen2FileConflictError,
+  Gen2LifecycleError,
+} from "./errors";
 import { requireGen2Member } from "./workspaces";
 import { isGen2SupersetRuntimeEnabled } from "./superset-runtime-feature";
 
@@ -138,7 +142,12 @@ export async function writeGen2File(
   userId: string,
   input: { path: string; contents: string; expectedRevision: string },
 ) {
-  await requireReadyMember(workspaceId, userId);
+  const membership = await requireReadyMember(workspaceId, userId);
+  if (membership.role === "viewer")
+    throw new Gen2AccessError(
+      "Edit permission is required to write files.",
+      403,
+    );
   try {
     return await writeSandboxFile(workspaceId, input);
   } catch (error) {
@@ -163,7 +172,12 @@ export async function uploadGen2File(
   userId: string,
   input: { path: string; contents: string; overwrite?: boolean },
 ) {
-  await requireReadyMember(workspaceId, userId);
+  const membership = await requireReadyMember(workspaceId, userId);
+  if (membership.role === "viewer")
+    throw new Gen2AccessError(
+      "Edit permission is required to write files.",
+      403,
+    );
   try {
     return await writeSandboxFile(workspaceId, {
       path: input.path,

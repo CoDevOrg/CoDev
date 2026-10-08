@@ -16,7 +16,7 @@ import type { ServerWebSocket } from "../platform/websocket";
  *
  * The session itself is still started, sized and closed over the ordinary
  * terminal route. The socket only replaces the per-keystroke HTTP round trip:
- * input arrives on it already authorized, and the server holds one upstream
+ * input is authorized against current membership, and the server holds one upstream
  * poll open and pushes output the moment the shell prints it. Closing the
  * socket never closes the shell; the browser reconnects with the cursor of the
  * last output it saw and picks up exactly where it stopped. An open socket
@@ -37,8 +37,6 @@ const messageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("resize"), rows: dimension, columns: dimension }),
 ]);
 
-/** How long a socket may go without re-proving the user is still a member. */
-const MEMBERSHIP_RECHECK_MS = 60_000;
 /** An upstream that answers at once (not parked) must not spin this loop. */
 const MIN_EMPTY_POLL_MS = 300;
 const EMPTY_POLL_PAUSE_MS = 60;
@@ -72,7 +70,6 @@ export async function handleGen2TerminalSocket(
   const backend = gen2TerminalBackend(input.workspaceId, input.worktreeId);
   let closed = false;
   let cursor = input.after;
-  let lastMembershipCheck = Date.now();
   let pendingInput = "";
   let flushing = false;
 
@@ -100,6 +97,8 @@ export async function handleGen2TerminalSocket(
       while (pendingInput && !closed) {
         const data = pendingInput;
         pendingInput = "";
+        await recheckGen2TerminalMember(input.workspaceId, input.userId);
+        if (closed) return;
         await backend.input(input.sessionId, data);
       }
     } catch (error) {
@@ -123,9 +122,10 @@ export async function handleGen2TerminalSocket(
       pendingInput += message.data;
       void flushInput();
     } else {
-      void backend
-        .resize(input.sessionId, message)
-        .catch((error) => fail(error));
+      void (async () => {
+        await recheckGen2TerminalMember(input.workspaceId, input.userId);
+        if (!closed) await backend.resize(input.sessionId, message);
+      })().catch((error) => fail(error));
     }
   });
   socket.onceClose(() => {
@@ -139,12 +139,11 @@ export async function handleGen2TerminalSocket(
 
   try {
     while (!closed) {
-      if (Date.now() - lastMembershipCheck > MEMBERSHIP_RECHECK_MS) {
-        await recheckGen2TerminalMember(input.workspaceId, input.userId);
-        lastMembershipCheck = Date.now();
-      }
+      await recheckGen2TerminalMember(input.workspaceId, input.userId);
       const requestedAt = Date.now();
       const result = await backend.poll(input.sessionId, cursor);
+      if (closed) return;
+      await recheckGen2TerminalMember(input.workspaceId, input.userId);
       if (closed) return;
       const data = result.chunks.map((chunk) => chunk.data).join("");
       cursor = result.nextSequence;

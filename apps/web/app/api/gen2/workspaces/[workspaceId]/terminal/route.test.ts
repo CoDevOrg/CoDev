@@ -36,7 +36,10 @@ const url = `https://codev.test/api/gen2/workspaces/${workspaceId}/terminal`;
 function post(body: unknown) {
   return new Request(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      origin: "https://codev.test",
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify(body),
   });
 }
@@ -131,7 +134,10 @@ describe("gen2 terminal route", () => {
 
   it("closes a session named in the query string", async () => {
     const response = await DELETE(
-      new Request(`${url}?sessionId=term-1-2`, { method: "DELETE" }),
+      new Request(`${url}?sessionId=term-1-2`, {
+        method: "DELETE",
+        headers: { origin: "https://codev.test" },
+      }),
       { params },
     );
     expect(response.status).toBe(204);

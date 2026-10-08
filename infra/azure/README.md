@@ -187,6 +187,17 @@ blobs, contributor access to only its candidate gallery, and permission to
 attach that identity to the temporary build VM. Keyless Sigstore signatures
 are checked inside the image builder before artifacts are installed.
 
+After publishing, the build boots one disposable VM from the new version in the
+builder's subnet, with no public IP, then deletes it. The first VM from a new
+gallery version boots several times slower (119 s versus about 25 s for
+`1.0.14`), so this keeps that cost off members' starts. It also proves the
+published image boots with the production VM shape. Promote a version only from
+a run whose log shows that first boot.
+
+The guest clones public repositories blobless (`--filter=blob:none`): full
+commit history, but file contents only for the base commit, with older blobs
+fetched on demand. A clone change ships with the next image release.
+
 The candidate builder is an unzoned native ARM64 VM with all inbound traffic denied.
 Azure Run Command installs and verifies signed artifacts and checks runtime health.
 Host-key-pinned SSH restricted to the runner IPv4 generalizes the VM; its temporary
@@ -358,6 +369,23 @@ starts the boot unit, without package downloads or sequential Run Commands.
 Enable `ARM_WORKSPACE_BOOT_ENABLED` only after promoting a compatible immutable
 image and verifying startup, saved-disk reopen, and OS reboot. The legacy path
 remains available for rollback with the previous image pin.
+
+### Shared ARM workspace network
+
+Each workspace start creates only a public IP and NIC. They join the
+resource group's shared `codev-arm-workspace-vnet` subnet and
+`codev-arm-workspace-nsg`. Its deny-all inbound rule also blocks traffic between
+workspace VMs. Deploy the network to every `codev-arm-workspace-*` group that
+starts VMs before deploying a web release that references it:
+
+```bash
+az deployment group create -g codev-arm-workspace-production \
+  --name arm-workspace-network \
+  --template-file infra/azure/arm-workspace-network.bicep
+```
+
+Never delete the shared network while VMs are attached. Stop still deletes a
+generation-owned VNet and NSG left by releases that predate the shared network.
 
 ## Public web origin
 

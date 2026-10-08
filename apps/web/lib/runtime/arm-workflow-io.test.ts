@@ -27,7 +27,7 @@ describe("free-plan ARM workflow I/O", () => {
           }),
         async () => {
           try {
-            for (let index = 0; index < 12; index++) {
+            for (let index = 0; index < 20; index++) {
               await ArmWorkflowIO.checkpoint("azure", async () => {
                 mutations.push(index);
                 return index;
@@ -50,7 +50,8 @@ describe("free-plan ARM workflow I/O", () => {
         checkpoints = JSON.parse(JSON.stringify(ArmWorkflowIO.saved()));
       },
     );
-    expect(mutations).toHaveLength(10);
+    // Azure calls cost two of the 36-request budget: 18 run before handoff.
+    expect(mutations).toHaveLength(18);
     expect(Object.values(checkpoints)).toContain("disk");
     await ArmWorkflowIO.run(
       steps() as unknown as WorkflowStep,
@@ -62,7 +63,7 @@ describe("free-plan ARM workflow I/O", () => {
     );
     expect(mutations.filter((value) => value === "disk")).toHaveLength(1);
     expect(mutations.filter((value) => typeof value === "number")).toEqual(
-      Array.from({ length: 12 }, (_, index) => index),
+      Array.from({ length: 20 }, (_, index) => index),
     );
   });
 
@@ -112,7 +113,7 @@ describe("free-plan ARM workflow I/O", () => {
       );
       segmentCounts.push(mutations.length - before);
     }
-    expect(segmentCounts).toEqual([10, 10, 10, 1]);
+    expect(segmentCounts).toEqual([18, 13]);
     expect(mutations).toEqual(Array.from({ length: 31 }, (_, index) => index));
   });
 

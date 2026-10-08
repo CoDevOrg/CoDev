@@ -112,3 +112,31 @@ test("source identity cannot change during initialization", async (t) => {
     /SOURCE_MISMATCH/,
   );
 });
+
+test("public repositories are cloned blobless at the base commit", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "codev-bootstrap-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const stage = join(root, ".codev-runtime", "bootstrap");
+  await mkdir(stage, { recursive: true });
+  await writeFile(join(stage, "new-disk"), "");
+  const log = join(root, "git-calls");
+  const fakeGit = join(root, "fake-git");
+  // Records each call; a clone creates its target like the real one would.
+  await writeFile(
+    fakeGit,
+    `#!/bin/sh\nprintf '%s\\n' "$*" >> '${log}'\n[ "$1" = clone ] && mkdir -p "$(eval echo \\\${$#})"\nexit 0\n`,
+    { mode: 0o755 },
+  );
+  const initialize = workspaceBootstrap(root, async () => {}, fakeGit);
+  const publicSource = {
+    repositoryUrl: "https://github.com/octo/repo.git",
+    baseSha: "b".repeat(40),
+  };
+  await initialize(publicSource);
+  const calls = (await readFile(log, "utf8")).trim().split("\n");
+  assert.match(
+    calls[0],
+    /^clone --no-checkout --filter=blob:none -- https:\/\/github\.com\/octo\/repo\.git /,
+  );
+  assert.match(calls[1], new RegExp(`checkout --detach ${"b".repeat(40)}$`));
+});

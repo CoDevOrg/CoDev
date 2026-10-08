@@ -7,6 +7,9 @@ const STARTUP_MAX_WAIT_MS = 480_000;
 const STARTUP_REQUEST_TIMEOUT_MS = 210_000;
 const STARTUP_RECHECK_MS = 60_000;
 const MAX_BACKOFF_MS = 15_000;
+// Startup progress is a cheap database read that never wakes the guest. Poll
+// it steadily so ready is noticed within one poll; back off only on failures.
+const STARTUP_POLL_MS = 2_000;
 
 type WorkspaceResponse = {
   workspace?: Gen2WorkspaceDetail;
@@ -105,6 +108,7 @@ export async function ensureGen2WorkspaceReady(
   let lastPostAt = Number.NEGATIVE_INFINITY;
   let postNext = true;
   let posted = false;
+  let progressing = false;
 
   while (now() < deadline && !dependencies.signal?.aborted) {
     if (posted && dependencies.isVisible?.() === false) {
@@ -180,10 +184,12 @@ export async function ensureGen2WorkspaceReady(
           attempt += 1;
           postNext = true;
         }
+        progressing = response.ok && !readyWorkspace(payload.workspace);
       } catch {
         // A response can be lost after the server claims startup. The next
         // status read can join it without holding another long request open.
         attempt += 1;
+        progressing = false;
       }
       if (postNext) {
         if (now() < deadline) {
@@ -198,7 +204,10 @@ export async function ensureGen2WorkspaceReady(
       }
     } else {
       await wait(
-        Math.min(retryDelay(attempt, random), Math.max(0, deadline - now())),
+        Math.min(
+          progressing ? STARTUP_POLL_MS : retryDelay(attempt, random),
+          Math.max(0, deadline - now()),
+        ),
       );
       if (now() >= deadline) break;
       if (now() - lastPostAt >= recheckMs) {
@@ -233,6 +242,7 @@ export async function ensureGen2WorkspaceReady(
             };
           }
           attempt += 1;
+          progressing = false;
           continue;
         }
         const workspace = payload.workspace;
@@ -261,11 +271,17 @@ export async function ensureGen2WorkspaceReady(
         }
         if (workspace.status === "pending" || workspace.status === "stopped") {
           postNext = true;
-        } else {
+        } else if (readyWorkspace(workspace)) {
+          // Ready in the database but not live: a real failure, so back off.
           attempt += 1;
+          progressing = false;
+        } else {
+          attempt = 0;
+          progressing = true;
         }
       } catch {
         attempt += 1;
+        progressing = false;
       }
     }
   }

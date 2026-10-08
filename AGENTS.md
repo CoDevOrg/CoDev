@@ -29,6 +29,9 @@
 - Worker WebSocket messages need operation-scoped database pools; Redis clients and stream readers belong to the socket request, never the shared isolate.
 - Worker fetches support `redirect: "manual"`, not `"error"`; reject redirect responses explicitly for authenticated runtime requests.
 - ARM lifecycle polling must honor Azure `Retry-After` while staying within Cloudflare Workflows' per-invocation subrequest budget.
+- ARM workflow checkpoints are persisted and copied into continuations; never return secrets from one. Build secret-bearing request bodies inside the step that sends them.
+- Baked ARM starts poll signed guest health instead of waiting for the deployment. Workflow loops must branch on the attempt count, never the clock, so a continuation replays the same step names.
+- ARM VMs join their resource group's shared network from `infra/azure/arm-workspace-network.bicep`; deploy it to a group before web releases start VMs there.
 - ARM connection setup must retry package installation safely while cloud-init or apt holds the dpkg lock.
 
 - Before starting or deploying the web app, run `pnpm db:check`. A newer migration ledger entry does not prove older tables exist; repair skipped schema with a forward migration instead of editing applied history.
@@ -44,6 +47,7 @@
 - Preserve durable guest disks across stops/restarts; never treat missing saved workspace data as permission to initialize a fresh checkout.
 - Superset worktree discovery uses Git’s registered worktrees. Guest agents may create direct-child worktrees under `/workspace`; the bridge must resolve them safely as well as CoDev-managed worktrees under `.git/codev-agent-worktrees/`.
 
+- Viewer/editor workspace invite links are reusable for groups; opening sharing must preserve the active token, role, and expiry.
 - GitHub account choices show the authenticated member and organizations only; shared personal repositories belong under the member and must retain their original installation ID for workspace creation.
 
 ## Code standards
@@ -53,6 +57,7 @@
 - No speculative abstractions. Add a pattern (factory, strategy, registry) only when there are two or more concrete consumers today. Remove abstractions that serve a single caller.
 - Every new file must belong to an existing directory. If none fits, justify the new directory in the commit message.
 - Prefer early returns over nested conditionals. Prefer `map`/`filter` over manual loops. Prefer computed values over mutable state.
+- Cookie-authenticated API mutations must validate the exact Origin; viewers must be rejected before file writes, shell access, or agent execution. Revalidate membership before delivering collaboration or terminal data; never cache terminal mutation permissions.
 - API route handlers must be thin: validate input → call a `lib/` function → return a response. Business logic lives in `lib/`, never in `app/api/`.
 - Shared types and request/response shapes go in `packages/contracts` or `packages/shared-types`. Never duplicate a type definition across packages.
 - Each `lib/` subdirectory has a README describing what it owns and what it does not. Check the README before adding files; update it when the boundary shifts.

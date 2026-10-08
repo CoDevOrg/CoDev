@@ -1,4 +1,4 @@
-/** Browser-only sockets must send an exact origin, including scheme and port. */
+/** Browser-only requests must send an exact origin, including scheme and port. */
 export function hasSameOrigin(request: Request) {
   const origin = request.headers.get("origin");
   if (!origin) return false;

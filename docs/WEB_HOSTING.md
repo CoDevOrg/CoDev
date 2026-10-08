@@ -221,8 +221,14 @@ or a new UUID before VM deployment. One protected extension configuration starts
 local initialization; no guest disk inspection or preparation Run Commands run.
 The guest reports signed readiness after the exact disk and bridge are ready.
 Disk and tunnel preparation run concurrently with independent replay checkpoints
-and a shared Free-plan request budget. Azure operation polling has a five-second
-minimum and honors `Retry-After`; provisioning status includes this setup time.
+and a shared Free-plan request budget: each run spends at most 36 of the 50
+external subrequests, counting Azure calls twice for a possible sign-in. Azure
+operation polling has a five-second minimum and honors `Retry-After`. A baked
+start submits the VM deployment without polling it: guest services answer
+signed health checks 10-20 seconds before Azure reports the extension. The
+controller waits 30 seconds, polls health every 3 seconds (5 after a minute),
+and reads the deployment every tenth attempt to surface failures. Legacy starts
+still poll the deployment to completion. Provisioning status includes this setup time.
 
 Roll back new starts by disabling the flag and restoring the previous immutable
 image pin in both secret stores. Existing VMs keep their current image and disk.
@@ -282,3 +288,19 @@ including server-action requests. It uses the existing REST Redis settings
 rejects password login. Password changes invalidate browser sessions, retire
 CLI tokens and approved device flows atomically, and close existing workspace
 sockets within fifteen seconds. No database migration is required.
+
+The Azure edge replaces `x-forwarded-for` with Cloudflare’s client IP and strips
+caller-supplied `x-vercel-forwarded-for`. CLI device login throttling uses the
+trusted `x-forwarded-for` header on both hosting paths.
+
+Browser API mutations using session cookies require an exact matching Origin,
+including for handlers outside the shared route wrapper. Auth.js token-validated
+flows and signed Stripe webhooks keep their existing authentication. CLI bearer
+requests remain supported on explicitly enabled routes.
+
+Password-reset links default to `https://trycodev.com` in production when no
+explicit Auth.js or Vercel URL is available; development retains localhost.
+
+`AUTH_SECRET` also signs reusable workspace invitation capabilities on each web
+host. Keep it consistent across hosts. Invitation hashes remain in the database;
+opening sharing does not rotate active links or extend their seven-day expiry.

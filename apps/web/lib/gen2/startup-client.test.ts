@@ -280,3 +280,58 @@ it("starts once in a hidden tab and pauses later startup reads until visible", a
   expect(result.workspace).toEqual(ready);
   expect(fetcher).toHaveBeenCalledTimes(3);
 });
+
+function armStarting() {
+  return {
+    ...workspace("provisioning"),
+    runtimeProvider: "azure_arm",
+    runtimeStatus: "booting",
+  } as Gen2WorkspaceDetail;
+}
+
+function clockedStartup(readyAt: number, failures = 0) {
+  const clock = { now: 0 };
+  const waits: number[] = [];
+  const starting = armStarting();
+  const ready = { ...starting, status: "ready", runtimeStatus: "ready" };
+  let failed = 0;
+  const fetcher = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (init?.method === "POST") return response(202, { workspace: starting });
+    if (url.endsWith("/activity")) return response(200, { connected: true });
+    if (failed < failures) {
+      failed += 1;
+      return response(500, { error: "Temporary failure." });
+    }
+    return response(200, {
+      workspace: clock.now >= readyAt ? ready : starting,
+    });
+  }) as typeof fetch;
+  const start = () =>
+    ensureGen2WorkspaceReady("workspace-1", {
+      fetcher,
+      now: () => clock.now,
+      random: () => 0.5,
+      pause: async (milliseconds) => {
+        waits.push(milliseconds);
+        clock.now += milliseconds;
+      },
+    });
+  return { clock, waits, start };
+}
+
+it("polls startup progress steadily and notices ready within one poll", async () => {
+  const { clock, waits, start } = clockedStartup(46_000);
+  const result = await start();
+  expect(result.workspace?.runtimeStatus).toBe("ready");
+  expect(new Set(waits)).toEqual(new Set([2_000]));
+  // Exponential backoff noticed this start at ~60 s; steady polls at 46 s.
+  expect(clock.now - 46_000).toBeLessThan(2_000);
+});
+
+it("backs off on failed status reads, then resumes steady progress polls", async () => {
+  const { waits, start } = clockedStartup(20_000, 3);
+  await start();
+  // Three failures back off 2, 4, 8 s; the next progress read resets to 2 s.
+  expect(waits).toEqual([2_000, 2_000, 4_000, 8_000, 2_000, 2_000]);
+});

@@ -3,6 +3,7 @@ import "server-only";
 import { apiError, getApiUser, getApiUserAnyAuth } from "@/lib/http/api";
 import type { AppUser } from "@/lib/auth/identity";
 import { databaseErrorResponse } from "./database-error";
+import { hasSameOrigin } from "./same-origin";
 import { forwardedRequest } from "./forwarded-request";
 
 /**
@@ -108,9 +109,16 @@ export function withUser<P extends RouteParams = Record<string, never>>(
         ? await getApiUserAnyAuth(request)
         : await getApiUser();
       if (!user) return apiError(new Error("Authentication required."), 401);
+      request = forwardedRequest(request);
+      const mutation = !["GET", "HEAD", "OPTIONS"].includes(request.method);
+      const bearerAuth =
+        options.anyAuth && request.headers.has("authorization");
+      if (mutation && !bearerAuth && !hasSameOrigin(request)) {
+        throw new ApiError("Invalid request origin.", 403);
+      }
       const params = ((await context?.params) ?? {}) as P;
       return await handler({
-        request: forwardedRequest(request),
+        request,
         user,
         params,
       });

@@ -62,7 +62,9 @@ export function getPublicAppOrigin(
     return `https://${env.VERCEL_PROJECT_PRODUCTION_URL}`;
   }
   if (env.VERCEL_URL) return `https://${env.VERCEL_URL}`;
-  return "http://localhost:3000";
+  return env.NODE_ENV === "production"
+    ? "https://trycodev.com"
+    : "http://localhost:3000";
 }
 
 export function createPasswordResetToken(input: {

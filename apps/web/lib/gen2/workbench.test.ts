@@ -45,6 +45,7 @@ const {
   searchGen2Files,
   showGen2HeadFile,
   writeGen2File,
+  uploadGen2File,
 } = await import("./workbench");
 
 const workspaceId = "11111111-1111-4111-8111-111111111111";
@@ -62,6 +63,26 @@ describe("gen2 workbench", () => {
     });
     mocks.exec.mockResolvedValue({ output: "", exitCode: 0 });
     mocks.git.mockResolvedValue("");
+  });
+
+  it("blocks viewer file writes and uploads before runtime access", async () => {
+    mocks.requireMember.mockResolvedValue({ status: "ready", role: "viewer" });
+    await expect(
+      writeGen2File(workspaceId, userId, {
+        path: "a.ts",
+        contents: "changed",
+        expectedRevision: "r1",
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      uploadGen2File(workspaceId, userId, {
+        path: "a.ts",
+        contents: "changed",
+        overwrite: true,
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(mocks.write).not.toHaveBeenCalled();
+    expect(mocks.read).not.toHaveBeenCalled();
   });
 
   it("checks membership before it reaches the orchestrator", async () => {

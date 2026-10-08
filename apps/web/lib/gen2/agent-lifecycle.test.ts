@@ -165,6 +165,15 @@ describe("gen2 Codex agent", () => {
     mocks.updateCache.mockResolvedValue(undefined);
   });
 
+  it("blocks viewers from starting native agent turns", async () => {
+    mocks.requireMember.mockResolvedValue({ status: "ready", role: "viewer" });
+    await expect(
+      startGen2AgentTurn({ ...turn, provider: "cursor" }),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(mocks.start).not.toHaveBeenCalled();
+    expect(mocks.resolveCredential).not.toHaveBeenCalled();
+  });
+
   it("runs Codex with full guest access so the inner sandbox can use the shell", () => {
     const command = buildGen2CodexCommand(
       "List the files",
