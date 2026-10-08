@@ -42,6 +42,46 @@ jobs:
         if: ${{ hashFiles('apps/web/app/verification/b0-2/page.tsx') != '' }}
         run: pnpm test:e2e
 
+  # Installs exactly the ARM image's pinned agent CLIs and drives them with
+  # CoDev's real command builders, so an update that breaks a flag cannot merge.
+  agent-clis:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.0
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install the image's pinned agent CLIs
+        shell: bash
+        run: |
+          eval "$(node infra/runtime/scripts/agent-cli-pins.mjs)"
+          npm install -g --allow-scripts=@anthropic-ai/claude-code \
+            "@openai/codex@${codex}" "@anthropic-ai/claude-code@${claudeCode}"
+          curl -fsSL "https://downloads.cursor.com/lab/${cursorVersion}/linux/arm64/agent-cli-package.tar.gz" \
+            -o "$RUNNER_TEMP/cursor-agent.tar.gz"
+          printf '%s  %s\n' "${cursorSha256}" "$RUNNER_TEMP/cursor-agent.tar.gz" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/cursor-agent"
+          tar -xzf "$RUNNER_TEMP/cursor-agent.tar.gz" --strip-components=1 -C "$RUNNER_TEMP/cursor-agent"
+          echo "$RUNNER_TEMP/cursor-agent" >> "$GITHUB_PATH"
+
+      - run: claude --version && codex --version && cursor-agent --version
+
+      - name: Run CoDev's commands against the pinned CLIs
+        env:
+          CODEV_AGENT_CLI_COMPAT: "1"
+        run: pnpm --filter @codev/web exec vitest run lib/gen2/agent-cli-compat.test.ts
+
   rust:
     runs-on: ubuntu-latest
     steps:
@@ -127,6 +167,7 @@ jobs:
       GEN2_FREE_ARM_OWNER_IDS: ${{ vars.GEN2_FREE_ARM_OWNER_IDS }}
       ARM_WORKSPACE_BOOT_ENABLED: ${{ vars.ARM_WORKSPACE_BOOT_ENABLED || 'false' }}
       ARM_WORKSPACE_IMAGE_VERSION_ID: ${{ vars.ARM_WORKSPACE_IMAGE_VERSION_ID }}
+      CODEX_CATALOG_CLIENT_VERSION: ${{ vars.CODEX_CATALOG_CLIENT_VERSION }}
       CODEV_AGENT_COORDINATION_WORKSPACES: ${{ vars.CODEV_AGENT_COORDINATION_WORKSPACES }}
     steps:
       - name: Check Cloudflare credentials

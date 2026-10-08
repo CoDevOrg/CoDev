@@ -1,0 +1,75 @@
+# Keeps the ARM image's agent CLIs current (see update-agent-clis.mjs for the
+# release-age rule). A changed pin opens a PR that merges once CI's agent CLI
+# compatibility checks pass; release-arm-image.yml then ships it.
+name: Update agent CLIs
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+    inputs:
+      require:
+        description: Requirements such as "claude-code=2.1.280 codex=latest"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: update-agent-clis
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+    env:
+      AUTOMATION_TOKEN: ${{ secrets.AGENT_CLI_AUTOMATION_TOKEN }}
+      BRANCH: automation/agent-clis
+    steps:
+      - name: Require the automation token
+        run: |
+          if [ -z "$AUTOMATION_TOKEN" ]; then
+            echo "::error::Add the AGENT_CLI_AUTOMATION_TOKEN secret (see infra/azure/README.md). Pushes and PRs made with the default token do not run CI."
+            exit 1
+          fi
+
+      # The token's pushes trigger CI, which GITHUB_TOKEN's do not.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.AGENT_CLI_AUTOMATION_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - id: update
+        env:
+          REQUIRE: ${{ inputs.require }}
+        # Word splitting is intended; the script validates every requirement.
+        run: node infra/runtime/scripts/update-agent-clis.mjs $REQUIRE
+
+      - name: Open or refresh the update PR
+        if: steps.update.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_CLI_AUTOMATION_TOKEN }}
+          SUMMARY: ${{ steps.update.outputs.summary }}
+        shell: bash
+        run: |
+          script=infra/runtime/scripts/provision-arm-workspace-image.sh
+          if git fetch --quiet origin "$BRANCH" 2>/dev/null &&
+            git diff --quiet FETCH_HEAD -- "$script"; then
+            echo "The open update PR already carries these pins."
+            exit 0
+          fi
+          git config user.name "codev-agent-cli-updater"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -C "$BRANCH"
+          git commit -m "chore(arm): update agent CLIs" -m "$SUMMARY" -- "$script"
+          git push --force origin "$BRANCH"
+          if ! gh pr view "$BRANCH" --json state --jq .state 2>/dev/null | grep -q OPEN; then
+            gh pr create --base main --head "$BRANCH" --title "Update agent CLIs" \
+              --body "Automated by update-agent-clis.yml: ${SUMMARY}. Merges once CI, including the agent CLI compatibility checks, passes; release-arm-image.yml then builds, canaries, and promotes the image."
+          fi
+          gh pr merge "$BRANCH" --auto --squash

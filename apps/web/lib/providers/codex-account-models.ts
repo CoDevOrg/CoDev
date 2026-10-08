@@ -2,6 +2,17 @@ import "server-only";
 import { z } from "zod";
 import type { ResolvedSecret } from "./registry";
 import { modelCatalogRequest } from "./model-catalog-request";
+import { runtimeEnvironment } from "../platform/runtime-environment";
+
+/**
+ * ChatGPT lists only the models this Codex version supports. Image releases
+ * set it to the promoted image's Codex pin, so the catalog never offers a
+ * model the live workspace CLI cannot run.
+ */
+function codexClientVersion() {
+  const version = runtimeEnvironment().CODEX_CATALOG_CLIENT_VERSION?.trim();
+  return version && /^\d+\.\d+\.\d+$/.test(version) ? version : "0.148.0";
+}
 
 const catalog = z.object({
   models: z.array(
@@ -63,10 +74,9 @@ export async function getCodexAccountModels(secret: ResolvedSecret) {
     authorization: `Bearer ${tokens.access_token}`,
   };
   if (tokens.account_id) headers["ChatGPT-Account-Id"] = tokens.account_id;
-  // Matches the pinned guest CLI; the provider controls the returned catalog.
   const data = catalog.parse(
     await modelCatalogRequest(
-      "https://chatgpt.com/backend-api/codex/models?client_version=0.148.0",
+      `https://chatgpt.com/backend-api/codex/models?client_version=${codexClientVersion()}`,
       { headers },
     ),
   );

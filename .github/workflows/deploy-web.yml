@@ -96,6 +96,7 @@ jobs:
           ARM_WORKSPACE_RUNTIME_SECRETS: ${{ secrets.ARM_WORKSPACE_RUNTIME_SECRETS }}
           ARM_WORKSPACE_BOOT_ENABLED: ${{ vars.ARM_WORKSPACE_BOOT_ENABLED || 'false' }}
           ARM_WORKSPACE_IMAGE_VERSION_ID: ${{ vars.ARM_WORKSPACE_IMAGE_VERSION_ID }}
+          CODEX_CATALOG_CLIENT_VERSION: ${{ vars.CODEX_CATALOG_CLIENT_VERSION }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           node --input-type=module <<'JS'
@@ -110,6 +111,8 @@ jobs:
           const { envs } = await inventory.json();
           if (!process.env.CRON_SECRET) throw new Error("Shared compute/catalog service secret is missing");
           const values = { ARM_WORKSPACE_IMAGE_VERSION_ID: image, ARM_WORKSPACE_BOOT_ENABLED: process.env.ARM_WORKSPACE_BOOT_ENABLED, CRON_SECRET: process.env.CRON_SECRET };
+          // Vercel answers relayed Codex catalogs, so it follows the promoted image too.
+          if (process.env.CODEX_CATALOG_CLIENT_VERSION) values.CODEX_CATALOG_CLIENT_VERSION = process.env.CODEX_CATALOG_CLIENT_VERSION;
           for (const [key, value] of Object.entries(values)) {
             const current = envs.find(env => env.key === key && env.target?.includes("production"));
             const response = await fetch(current ? `${root.replace("/v10/", "/v9/")}/${current.id}${team}` : root + team, {

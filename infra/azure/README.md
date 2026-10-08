@@ -195,6 +195,33 @@ published image boots with the production VM shape. Promote a version only from
 a run whose log shows that first boot, through the `ARM_WORKSPACE_IMAGE_VERSION_ID`
 repository variable described in [WEB_HOSTING.md](../../docs/WEB_HOSTING.md).
 
+### Automated agent CLI updates
+
+Codex, Claude Code, and Cursor are pinned in
+`infra/runtime/scripts/provision-arm-workspace-image.sh` and kept current
+without a human step:
+
+1. `update-agent-clis.yml` runs hourly. It picks the newest release at least
+   two days old (Claude Code capped at its `stable` tag), or the oldest release
+   that satisfies a model's stated minimum. It then opens an
+   `automation/agent-clis` PR that auto-merges once CI passes. Pins never
+   move backward.
+2. CI's required `agent-clis` job installs exactly those pins on ARM64 and runs
+   CoDev's real command builders against them
+   (`apps/web/lib/gen2/agent-cli-compat.test.ts`). An update that breaks a flag
+   cannot merge.
+3. `release-arm-image.yml` runs when the pins merge. It builds the next image
+   version and runs the staging canary with `ARM_WORKSPACE_RUNTIME_SECRETS`
+   against `codev-arm-workspace-staging`. It then sets
+   `ARM_WORKSPACE_IMAGE_VERSION_ID` and `CODEX_CATALOG_CLIENT_VERSION` together,
+   and redeploys. A failure leaves production on its current image and opens
+   an issue.
+
+Both workflows need the `AGENT_CLI_AUTOMATION_TOKEN` repository secret: a
+fine-grained token for this repository with Contents, Pull requests, and
+Variables read/write. Pushes and PRs made with the default `GITHUB_TOKEN` do
+not start CI, and that token cannot set repository variables.
+
 The guest clones public repositories blobless (`--filter=blob:none`): full
 commit history, but file contents only for the base commit, with older blobs
 fetched on demand. A clone change ships with the next image release.

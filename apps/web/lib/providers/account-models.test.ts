@@ -175,3 +175,18 @@ it("rejects redirects without forwarding the account credential", async () => {
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(fetch.mock.calls[0]?.[1]?.redirect).toBe("manual");
 });
+it("asks ChatGPT for the models the promoted image's Codex version supports", async () => {
+  const fetch = vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(async () => Response.json({ models: [] }));
+  const requested = () => String(fetch.mock.calls.at(-1)?.[0]);
+  await getCodexAccountModels(codex);
+  expect(requested()).toContain("client_version=0.148.0");
+  vi.stubEnv("CODEX_CATALOG_CLIENT_VERSION", "0.160.1");
+  await getCodexAccountModels(codex);
+  expect(requested()).toContain("client_version=0.160.1");
+  vi.stubEnv("CODEX_CATALOG_CLIENT_VERSION", "latest; drop");
+  await getCodexAccountModels(codex);
+  expect(requested()).toContain("client_version=0.148.0");
+  vi.unstubAllEnvs();
+});
