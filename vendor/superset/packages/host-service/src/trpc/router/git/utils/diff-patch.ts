@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { workspaceGitSpawnOptions } from "../../../../runtime/git/workspace-git-identity.ts";
 import {
 	type DiffCategory,
 	type DiffCategoryRefs,
@@ -182,6 +183,7 @@ function runDiff(
 	return new Promise<DiffSection>((resolve, reject) => {
 		const child = spawn("git", [...CONFIG_ARGS, ...args], {
 			...options,
+			...workspaceGitSpawnOptions(),
 			windowsHide: true,
 		});
 		const chunks: Buffer[] = [];

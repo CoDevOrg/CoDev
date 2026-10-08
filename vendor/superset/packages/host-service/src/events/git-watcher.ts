@@ -7,6 +7,7 @@ import type { HostDb } from "../db/index.ts";
 import { workspaces } from "../db/schema.ts";
 import type { WorkspaceFilesystemManager } from "../runtime/filesystem/index.ts";
 import { listGitIgnoredDirs } from "../runtime/git/index.ts";
+import { workspaceGitSpawnOptions } from "../runtime/git/workspace-git-identity.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -689,7 +690,7 @@ export class GitWatcher {
 			const { stdout } = await execFileAsync(
 				"git",
 				["rev-parse", "--git-dir"],
-				{ cwd: worktreePath },
+				{ cwd: worktreePath, ...workspaceGitSpawnOptions() },
 			);
 			gitDir = stdout.trim();
 			// If relative, resolve against worktree path

@@ -7,13 +7,14 @@ describe("Cursor workspace command", () => {
       [{ role: "user", body: "Earlier request" }],
       "account-model",
     );
-    expect(command.slice(0, 8)).toEqual([
+    expect(command.slice(0, 9)).toEqual([
       "cursor-agent",
       "--print",
       "--output-format",
       "stream-json",
       "--force",
       "--trust",
+      "--disable-project-configs",
       "--model",
       "account-model",
     ]);

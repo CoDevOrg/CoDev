@@ -14,6 +14,9 @@ export function buildGen2CursorCommand(
     "stream-json",
     "--force",
     "--trust",
+    // Shared repositories are writable by every member; do not let one
+    // member's project CLI config steer another member's Cursor turn.
+    "--disable-project-configs",
     ...(model?.trim() ? ["--model", model.trim()] : []),
     formatGen2WorkspaceAgentPrompt(prompt, history),
   ];
