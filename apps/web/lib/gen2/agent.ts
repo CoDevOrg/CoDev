@@ -40,6 +40,7 @@ import { withDatabaseOperation } from "../platform/database-operation";
 import { isGen2AgentCoordinationEnabled } from "./agent-coordination-feature";
 import { withNativeCoordinationHooks } from "./agent-coordination-hooks";
 import { findPossibleDuplicateTask } from "./duplicate-task-check";
+import { avoidBlockedCliModel } from "./agent-cli-fallback";
 import { refreshCursorTurnAuth } from "./cursor-auth-refresh";
 import { isGen2SupersetAgentSessionsEnabled } from "./superset-agent-sessions-feature";
 import {
@@ -75,6 +76,10 @@ export async function startGen2AgentTurn(input: {
   worktreeId?: string | undefined;
   model?: string | undefined;
   acknowledgedDuplicateOf?: string | undefined;
+  /** A re-run of the latest prompt on a fallback model, with its history. */
+  continuation?: {
+    history: Array<{ role: "user" | "assistant"; body: string }>;
+  };
 }) {
   const membership = await requireReadyMember(input.workspaceId, input.userId);
   if (membership.role === "viewer")
@@ -84,7 +89,9 @@ export async function startGen2AgentTurn(input: {
     );
   await requireWorkspaceOwnerPlan(input.workspaceId);
   await requireGen2Chat(input.workspaceId, input.chatId);
-  const possibleDuplicate = await findPossibleDuplicateTask(input);
+  const possibleDuplicate = input.continuation
+    ? null
+    : await findPossibleDuplicateTask(input);
   if (
     possibleDuplicate &&
     possibleDuplicate.runId !== input.acknowledgedDuplicateOf
@@ -101,19 +108,26 @@ export async function startGen2AgentTurn(input: {
       503,
     );
   });
-  const model = input.model ?? models[0]?.id;
-  if (!model || !models.some((entry) => entry.id === model))
+  const requested = input.model ?? models[0]?.id;
+  if (!requested || !models.some((entry) => entry.id === requested))
     throw new Gen2LifecycleError(
       "This model isn't available for your connected account. Refresh the model picker and choose an available model.",
       400,
     );
+  // A model the live workspace CLI is known not to support runs on the
+  // closest one it does, with a note, until the CLI update ships.
+  const { model, note: fallbackNote } = input.continuation
+    ? { model: requested, note: null }
+    : await avoidBlockedCliModel(input.provider, requested, models);
+  if (!model) throw new Gen2LifecycleError(fallbackNote!, 409);
 
   // Cursor uses the provider-neutral guest exec until Superset supports its CLI.
   if (isGen2SupersetAgentSessionsEnabled() && input.provider !== "cursor") {
     return startGen2AgentTurnViaSuperset({ ...input, model });
   }
 
-  const history = await listGen2ChatMessages(input.chatId);
+  const history =
+    input.continuation?.history ?? (await listGen2ChatMessages(input.chatId));
   const provider = input.provider;
   const credential = await resolveGen2Credential(input.userId, provider);
 
@@ -170,11 +184,18 @@ export async function startGen2AgentTurn(input: {
       sessionId = await startCodexExecInSandbox(input.workspaceId, execInput);
     }
     try {
-      await appendGen2ChatMessage({
-        chatId: input.chatId,
-        role: "user",
-        body: input.prompt,
-      });
+      if (!input.continuation)
+        await appendGen2ChatMessage({
+          chatId: input.chatId,
+          role: "user",
+          body: input.prompt,
+        });
+      if (fallbackNote)
+        await appendGen2ChatMessage({
+          chatId: input.chatId,
+          role: "assistant",
+          body: fallbackNote,
+        });
     } catch (error) {
       logEvent("error", "gen2.agent.persist_user_failed", {
         detail: error instanceof Error ? error.message : "unknown",
@@ -188,6 +209,11 @@ export async function startGen2AgentTurn(input: {
       workspaceId: input.workspaceId,
       chatId: input.chatId,
       userId: input.userId,
+      model,
+      worktreeId:
+        input.worktreeId && input.worktreeId !== "main"
+          ? input.worktreeId
+          : null,
     });
     if (credential.credentialId) {
       // The poll and cleanup paths know the session id and nothing else, so
@@ -198,7 +224,10 @@ export async function startGen2AgentTurn(input: {
         toRef: sessionId,
       });
     }
-    return { sessionId };
+    return {
+      sessionId,
+      ...(fallbackNote ? { fallback: { from: requested, to: model } } : {}),
+    };
   } catch (error) {
     if (credential.credentialId) {
       await releaseCredentialSeat({
@@ -353,6 +382,20 @@ async function pollGen2AgentTurnOperation(input: {
     }
   }
 
+  // After the turn's transaction committed: a CLI too old for the model
+  // re-runs the turn on a fallback model, which the browser then follows.
+  const continuation = result.exited
+    ? await import("./agent-cli-continuation")
+    : null;
+  const continuedAs = !continuation
+    ? null
+    : persisted?.cliRequirement
+      ? await continuation.continueOnFallbackModel(
+          input.sessionId,
+          persisted.cliRequirement,
+        )
+      : await continuation.continuedSessionId(input.sessionId);
+
   return {
     chunks: result.chunks,
     nextSequence: result.nextSequence,
@@ -362,6 +405,7 @@ async function pollGen2AgentTurnOperation(input: {
     // already saved, so the client does not have to save it too.
     reply: persisted?.reply ?? null,
     persistedMessageId: persisted?.messageId ?? null,
+    continuedAs,
   };
 }
 

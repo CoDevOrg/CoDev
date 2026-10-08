@@ -162,3 +162,17 @@ expiry or revocation. Opening sharing reuses the active link and its access role
 `workspace-share-invite.ts` serializes creation and reuse; signed capabilities
 are reconstructed from the stored random hash using `AUTH_SECRET`, preserving
 existing opaque links. Ownership transfer is separate from group invitations.
+
+## Models the workspace CLI cannot run yet
+
+`agent-cli-fallback.ts` covers the gap between a provider shipping a model and
+the image update that can run it. Claude Code reports `Claude Code X does not
+support this model; version Y or newer is required`. When it does, the turn
+saves no error. After its poll commits, `agent-cli-continuation.ts` records the
+requirement in `agent_cli_model_requirements` against the promoted image. It
+then re-runs the latest prompt on the closest same-family model with a note,
+and links the turns through `continued_as_session_id` so the browser follows.
+Later turns on that model start on the fallback directly. The CLI updater reads
+`/api/gen2/agent-cli-requirements` (service secret) and ships a satisfying CLI
+without its release delay. A newer promoted image retries the model. Codex
+needs none of this: its catalog follows `CODEX_CATALOG_CLIENT_VERSION`.

@@ -29,6 +29,8 @@ const authenticationProxy = nextAuth as unknown as NextMiddleware;
 
 function shouldAuthenticate(pathname: string): boolean {
   if (pathname === "/api/gen2/compute/reconcile") return false;
+  // The CLI updater authenticates with the service secret, not a session.
+  if (pathname === "/api/gen2/agent-cli-requirements") return false;
   if (pathname.startsWith("/gen2/join")) return false;
   return (
     pathname.startsWith("/gen2/") ||

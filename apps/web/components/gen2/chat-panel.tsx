@@ -370,7 +370,7 @@ export function Gen2ChatPanel({
       startAfter: number,
       turnProvider: Gen2AgentChoice,
     ) => {
-      if (drivingRef.current) return;
+      if (drivingRef.current) return null;
       drivingRef.current = true;
       const controller = new AbortController();
       abortRef.current = controller;
@@ -379,6 +379,8 @@ export function Gen2ChatPanel({
       let chunks: AgentExecChunk[] = [];
       let after = startAfter;
       let sawFileChange = false;
+      // A turn the server re-ran on a fallback model continues in this session.
+      let continuedAs: string | null = null;
 
       try {
         for (;;) {
@@ -403,6 +405,7 @@ export function Gen2ChatPanel({
             exited?: boolean;
             exitCode?: number | null;
             error?: string;
+            continuedAs?: string | null;
           };
           chunks = mergeAgentExecChunks(
             chunks,
@@ -431,7 +434,8 @@ export function Gen2ChatPanel({
           }
 
           if (payload.exited) {
-            if (payload.error || state.error)
+            continuedAs = payload.continuedAs ?? null;
+            if (!continuedAs && (payload.error || state.error))
               setError(payload.error || state.error || "");
             break;
           }
@@ -455,8 +459,24 @@ export function Gen2ChatPanel({
         await loadChats();
         if (sawFileChange) onFilesChanged();
       }
+      return continuedAs;
     },
     [workspace.id, loadThread, loadChats, onFilesChanged, refreshProvider],
+  );
+
+  /** Drives a turn and any fallback re-runs the server chains onto it. */
+  const follow = useCallback(
+    async (
+      session: string,
+      chat: string,
+      startAfter: number,
+      turnProvider: Gen2AgentChoice,
+    ) => {
+      let next: string | null = session;
+      for (let after = startAfter; next; after = 0)
+        next = await drive(next, chat, after, turnProvider);
+    },
+    [drive],
   );
 
   // Rejoin a turn that was still running when the page reloaded.
@@ -465,7 +485,7 @@ export function Gen2ChatPanel({
       const stored = storedTurn(workspace.id);
       if (!stored) return;
       setChatId(stored.chatId);
-      void drive(
+      void follow(
         stored.sessionId,
         stored.chatId,
         stored.after,
@@ -643,6 +663,7 @@ export function Gen2ChatPanel({
         sessionId?: string;
         error?: string;
         possibleDuplicate?: Gen2PossibleDuplicateTask;
+        fallback?: { from: string; to: string };
       };
       if (response.ok && payload.possibleDuplicate) {
         setPossibleDuplicate(payload.possibleDuplicate);
@@ -654,7 +675,9 @@ export function Gen2ChatPanel({
         return;
       }
       accepted = true;
-      await drive(payload.sessionId, target, 0, agent);
+      // Show the fallback note right away, before the reply streams in.
+      if (payload.fallback) await loadThread(target);
+      await follow(payload.sessionId, target, 0, agent);
     } catch {
       setError("Couldn't reach CoDev. Try again.");
     } finally {

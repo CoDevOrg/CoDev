@@ -35,6 +35,7 @@
 - ARM workflow checkpoints are persisted and copied into continuations; never return secrets from one. Build secret-bearing request bodies inside the step that sends them.
 - Promote ARM images with the `ARM_WORKSPACE_IMAGE_VERSION_ID` repository variable (lowercase resource group), not by rewriting the write-only `ARM_WORKSPACE_RUNTIME_SECRETS` bundle. Set `CODEX_CATALOG_CLIENT_VERSION` to the same image's Codex pin.
 - Agent CLI pins update automatically (`update-agent-clis.yml`); a new CoDev flag for a CLI must also pass `agent-cli-compat.test.ts`.
+- A CLI's "too old for this model" error must be matched in `lib/gen2/agent-cli-fallback.ts`, so turns fall back with a note instead of showing it.
 - Baked ARM starts poll signed guest health instead of waiting for the deployment. Workflow loops must branch on the attempt count, never the clock, so a continuation replays the same step names.
 - ARM VMs join their resource group's shared network from `infra/azure/arm-workspace-network.bicep`; deploy it to a group before web releases start VMs there.
 - ARM connection setup must retry package installation safely while cloud-init or apt holds the dpkg lock.
