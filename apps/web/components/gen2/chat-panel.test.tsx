@@ -163,6 +163,67 @@ describe("Gen2ChatPanel", () => {
     expect(screen.getByRole("button", { name: "Send" })).toBeEnabled();
   });
 
+  it("warns about a similar active task and starts only when the member confirms", async () => {
+    const duplicate = {
+      runId: "44444444-4444-4444-8444-444444444444",
+      worktreeId: "fix-auth",
+      provider: "claude",
+      createdBy: "55555555-5555-4555-8555-555555555555",
+      status: "running",
+      task: "Fix the token refresh bug in auth middleware",
+    };
+    const starts: unknown[] = [];
+    stubFetch({
+      start: () => {
+        starts.push(null);
+        return starts.length === 1
+          ? Response.json({ possibleDuplicate: duplicate })
+          : Response.json({ sessionId: "session-1" });
+      },
+    });
+    const onOpenWorktree = vi.fn();
+    render(
+      <Gen2ChatPanel
+        workspace={workspace}
+        onRunningChange={vi.fn()}
+        onFilesChanged={vi.fn()}
+        onOpenFile={vi.fn()}
+        onNeedsMachine={async () => true}
+        onOpenWorktree={onOpenWorktree}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Prompt"), {
+      target: { value: "The auth middleware token refresh bug needs a fix" },
+    });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Send" })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByText(duplicate.task)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByLabelText("Prompt")).toHaveValue(
+        "The auth middleware token refresh bug needs a fix",
+      ),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Start anyway" }));
+    await waitFor(() => expect(starts).toHaveLength(2));
+    const bodies = vi
+      .mocked(fetch)
+      .mock.calls.filter(
+        ([url, init]) =>
+          String(url).endsWith("/agent") && init?.method === "POST",
+      )
+      .map(([, init]) => JSON.parse(String(init?.body)));
+    expect(bodies[0]).not.toHaveProperty("acknowledgedDuplicateOf");
+    expect(bodies[1]).toMatchObject({
+      acknowledgedDuplicateOf: duplicate.runId,
+    });
+    expect(screen.queryByText(duplicate.task)).not.toBeInTheDocument();
+    expect(onOpenWorktree).not.toHaveBeenCalled();
+  });
+
   it("restores the draft after a network failure while starting", async () => {
     stubFetch({
       start: () => {

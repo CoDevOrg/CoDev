@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import { Columns2, RefreshCw, Rows2 } from "lucide-react";
+import { Columns2, GitCompareArrows, RefreshCw, Rows2 } from "lucide-react";
 
 import { parseGitStatus } from "@/lib/runtime/ide";
 import { gen2StatusLabel } from "@/lib/gen2/file-tree";
@@ -56,12 +56,15 @@ export function SupersetChangesPane({
   visible,
   mode,
   onOpenFile,
+  overlapFor,
 }: {
   workspaceId: string;
   worktreeId: string;
   visible: boolean;
   mode: "changes" | "review";
   onOpenFile?: (path: string) => void;
+  /** Who else is changing a path, when another active agent is. */
+  overlapFor?: (path: string) => string | undefined;
 }) {
   const [status, setStatus] = useState("");
   const [diff, setDiff] = useState("");
@@ -232,6 +235,15 @@ export function SupersetChangesPane({
                     {file.code}
                   </code>
                   <span>{file.path}</span>
+                  {overlapFor?.(file.path) ? (
+                    <span
+                      className="gen2-superset-change-overlap"
+                      title={overlapFor(file.path)}
+                    >
+                      <GitCompareArrows aria-hidden="true" />
+                      <span className="sr-only">{overlapFor(file.path)}</span>
+                    </span>
+                  ) : null}
                 </button>
               </li>
             ))}

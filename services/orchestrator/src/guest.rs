@@ -21,6 +21,7 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use wait_timeout::ChildExt;
 
+use crate::guest_coordination::{COORDINATION_AGENTS_PATH, CoordinationAgent};
 use crate::guest_executable_architecture::guest_executable_architecture_error;
 use crate::guest_spawn_error::guest_spawn_error;
 use crate::model::{
@@ -600,6 +601,24 @@ impl GuestService {
                 )
             }
             ("GET", "worktrees") => self.superset_bridge_request("GET", "/codev/worktrees", &[]),
+            ("POST", "coordination/overlaps") => {
+                let Some(worktree_ids) = request
+                    .get("worktreeIds")
+                    .and_then(serde_json::Value::as_array)
+                    .filter(|ids| (1..=16).contains(&ids.len()))
+                else {
+                    return GuestResponse::error(400, "between 1 and 16 worktree IDs are required");
+                };
+                for worktree_id in worktree_ids {
+                    let Some(worktree_id) = worktree_id.as_str() else {
+                        return GuestResponse::error(400, "invalid worktree ID");
+                    };
+                    if let Err(error) = validate_worktree_id(worktree_id) {
+                        return GuestResponse::error(400, error);
+                    }
+                }
+                self.superset_bridge_request("POST", "/codev/coordination/overlaps", body)
+            }
             ("POST", "worktrees") => {
                 let worktree_id = match worktree_id() {
                     Ok(value) => value,
@@ -767,6 +786,10 @@ impl GuestService {
     }
 
     fn superset_bridge_request(&self, method: &str, path: &str, body: &[u8]) -> GuestResponse {
+        Self::superset_bridge(method, path, body)
+    }
+
+    fn superset_bridge(method: &str, path: &str, body: &[u8]) -> GuestResponse {
         let secret = match std::env::var("CODEV_SUPERSET_BRIDGE_SECRET") {
             Ok(secret) if !secret.is_empty() => secret,
             _ => return GuestResponse::error(503, "Superset file bridge is not configured"),
@@ -1448,9 +1471,25 @@ impl GuestService {
         for (name, value) in &profile_env {
             command.env(name, value);
         }
+        // Agent coordination is best effort: without a registered host
+        // identity the turn simply runs without overlap notices.
+        let coordination = CoordinationAgent::new(
+            &request.command[0],
+            request.worktree_id.as_deref(),
+        )
+        .filter(|agent| {
+            Self::superset_bridge("POST", COORDINATION_AGENTS_PATH, &agent.registration()).status
+                == 201
+        });
+        for (name, value) in coordination.iter().flat_map(CoordinationAgent::environment) {
+            command.env(name, value);
+        }
         let mut child = match pty.slave.spawn_command(command) {
             Ok(child) => child,
             Err(error) => {
+                if let Some(agent) = &coordination {
+                    Self::superset_bridge("DELETE", &agent.release_path(), &[]);
+                }
                 return Err(RuntimeError::BadRequest(guest_spawn_error(
                     &request.command[0],
                     error.as_ref(),
@@ -1544,6 +1583,9 @@ impl GuestService {
                 }
                 thread::sleep(Duration::from_millis(25));
             };
+            if let Some(agent) = &coordination {
+                Self::superset_bridge("DELETE", &agent.release_path(), &[]);
+            }
             drop(pty.master);
             let updated_auth_cache = fs::read_to_string(codex_home.0.join(&refresh_relative_path))
                 .ok()
@@ -2600,6 +2642,29 @@ mod tests {
         let service = GuestService::new(directory.path()).expect("service");
         let response = service.handle("POST", "/v1/files/read", br#"{"path":"../outside"}"#);
         assert_eq!(response.status, 400);
+    }
+
+    #[test]
+    fn coordination_overlaps_reject_invalid_worktree_lists_before_the_host() {
+        let directory = tempdir().expect("tempdir");
+        let service = GuestService::new(directory.path()).expect("service");
+        let seventeen = (0..17)
+            .map(|index| format!("\"agent-{index}\""))
+            .collect::<Vec<_>>();
+        for body in [
+            "{}".to_string(),
+            r#"{"worktreeIds":[]}"#.to_string(),
+            r#"{"worktreeIds":["../escape"]}"#.to_string(),
+            r#"{"worktreeIds":[7]}"#.to_string(),
+            format!(r#"{{"worktreeIds":[{}]}}"#, seventeen.join(",")),
+        ] {
+            let response = service.handle(
+                "POST",
+                "/v1/superset/runtime/coordination/overlaps",
+                body.as_bytes(),
+            );
+            assert_eq!(response.status, 400, "{body}");
+        }
     }
 
     #[test]

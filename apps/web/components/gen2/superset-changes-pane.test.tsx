@@ -25,6 +25,35 @@ describe("SupersetChangesPane", () => {
     vi.stubGlobal("fetch", vi.fn());
   });
 
+  it("marks a changed file another active agent is also changing", async () => {
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) =>
+      gitResponse(
+        String(input).includes("operation=status")
+          ? "## main\n M src/login.ts\n?? notes.md\n"
+          : "",
+      ),
+    );
+
+    render(
+      <SupersetChangesPane
+        workspaceId={workspaceId}
+        worktreeId="main"
+        visible
+        mode="changes"
+        overlapFor={(path) =>
+          path === "src/login.ts"
+            ? "Also changed by fix-auth (claude, Sara)"
+            : undefined
+        }
+      />,
+    );
+
+    expect(
+      await screen.findByText("Also changed by fix-auth (claude, Sara)"),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText(/Also changed by/)).toHaveLength(1);
+  });
+
   it("does not report a clean tree before git status loads", () => {
     vi.mocked(fetch).mockImplementation(() => new Promise(() => {}));
     render(

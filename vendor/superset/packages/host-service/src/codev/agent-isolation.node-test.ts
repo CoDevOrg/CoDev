@@ -8,6 +8,7 @@ import { test } from "node:test";
 import {
 	agentLaunchScript,
 	buildCoDevAgentProfile,
+	COORDINATION_HOOK_COMMAND,
 	prepareAgentLaunch,
 	removeAgentLaunch,
 	validateAgentLaunchProfile,
@@ -54,6 +55,15 @@ test("CoDev installs provider hooks beside the private credential profile", () =
 	assert.ok(codexHooks.hooks?.SubagentStart);
 	assert.equal(claude.files?.[0]?.path, ".claude/settings.json");
 	assert.equal(claude.env?.CLAUDE_CONFIG_DIR, "{{profileDir}}/.claude");
+	for (const profile of [codex, claude]) {
+		const { hooks } = JSON.parse(profile.files?.[0]?.contents ?? "{}") as {
+			hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
+		};
+		const commands = (name: string) =>
+			(hooks[name] ?? []).flatMap((entry) => entry.hooks.map((hook) => hook.command));
+		assert.ok(commands("PostToolUse").includes(COORDINATION_HOOK_COMMAND));
+		assert.ok(!commands("Stop").includes(COORDINATION_HOOK_COMMAND));
+	}
 });
 
 const canExerciseLinuxPermissions =

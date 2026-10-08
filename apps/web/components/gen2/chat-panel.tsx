@@ -25,6 +25,7 @@ import {
   type Gen2WorkspaceDetail,
 } from "@codev/contracts";
 
+import type { Gen2PossibleDuplicateTask } from "@codev/contracts";
 import { MarkdownContent } from "@/components/markdown/markdown-content";
 import { cn } from "@/lib/platform/utils";
 import { canRunGen2Agent } from "@/lib/gen2/agent-policy";
@@ -77,6 +78,7 @@ import {
 import { ProviderLogo } from "./provider-logos";
 import { Gen2TurnActivity } from "./turn-activity";
 import { useGen2ChatScroll } from "./use-gen2-chat-scroll";
+import { DuplicateTaskNotice } from "./duplicate-task-notice";
 import { WorkspaceButton } from "./workspace-button";
 
 type Thread = { messages: Gen2ChatMessage[] };
@@ -159,6 +161,7 @@ export function Gen2ChatPanel({
   connectedProviders,
   onActiveProviderChange,
   hideChatBar = false,
+  onOpenWorktree,
 }: {
   workspace: Gen2WorkspaceDetail;
   onRunningChange: (running: boolean) => void;
@@ -174,6 +177,7 @@ export function Gen2ChatPanel({
   connectedProviders?: Gen2AgentProviderName[];
   onActiveProviderChange?: (provider: Gen2AgentChoice) => void;
   hideChatBar?: boolean;
+  onOpenWorktree?: (worktreeId: string) => void;
 }) {
   const [chats, setChats] = useState<Gen2Chat[]>([]);
   const [chatId, setChatId] = useState<string | null>(activeChatId ?? null);
@@ -188,6 +192,9 @@ export function Gen2ChatPanel({
   const [showProviderPicker, setShowProviderPicker] = useState(false);
   const [dragging, setDragging] = useState(false);
   const sendingRef = useRef(false);
+  const [possibleDuplicate, setPossibleDuplicate] =
+    useState<Gen2PossibleDuplicateTask | null>(null);
+  const acknowledgedDuplicateRef = useRef<string | null>(null);
   const drivingRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const sessionRef = useRef<string | null>(null);
@@ -545,6 +552,7 @@ export function Gen2ChatPanel({
     pinToLatest();
     setStarting(true);
     setError("");
+    setPossibleDuplicate(null);
     setPrompt("");
     setAttachments([]);
 
@@ -624,13 +632,22 @@ export function Gen2ChatPanel({
             idempotencyKey: crypto.randomUUID(),
             ...(worktreeId ? { worktreeId } : {}),
             ...(currentModelItem?.id ? { model: currentModelItem.id } : {}),
+            ...(acknowledgedDuplicateRef.current
+              ? { acknowledgedDuplicateOf: acknowledgedDuplicateRef.current }
+              : {}),
           }),
         },
       );
+      acknowledgedDuplicateRef.current = null;
       const payload = (await response.json().catch(() => ({}))) as {
         sessionId?: string;
         error?: string;
+        possibleDuplicate?: Gen2PossibleDuplicateTask;
       };
+      if (response.ok && payload.possibleDuplicate) {
+        setPossibleDuplicate(payload.possibleDuplicate);
+        return;
+      }
       if (!response.ok || !payload.sessionId) {
         setError(payload.error ?? `${agentLabel} couldn't start.`);
         if (response.status === 409) void refreshProvider();
@@ -961,6 +978,34 @@ export function Gen2ChatPanel({
     </form>
   );
 
+  const duplicateOwner = workspace.members.find(
+    (member) => member.userId === possibleDuplicate?.createdBy,
+  );
+  const duplicateNotice = possibleDuplicate ? (
+    <DuplicateTaskNotice
+      duplicate={possibleDuplicate}
+      ownerLabel={duplicateOwner?.name ?? duplicateOwner?.login ?? "a member"}
+      onOpen={
+        onOpenWorktree
+          ? () => {
+              onOpenWorktree(possibleDuplicate.worktreeId);
+              setPossibleDuplicate(null);
+              textareaRef.current?.focus();
+            }
+          : undefined
+      }
+      onStartAnyway={() => {
+        acknowledgedDuplicateRef.current = possibleDuplicate.runId;
+        setPossibleDuplicate(null);
+        void send();
+      }}
+      onDismiss={() => {
+        setPossibleDuplicate(null);
+        textareaRef.current?.focus();
+      }}
+    />
+  ) : null;
+
   const errorBanner =
     error || provider?.modelsError ? (
       <div className="gen2-chat-alert" role="alert">
@@ -1047,6 +1092,7 @@ export function Gen2ChatPanel({
               ) : (
                 <>
                   {composer}
+                  {duplicateNotice}
                   {errorBanner}
                   <div className="gen2-chat-suggestions">
                     {SUGGESTIONS.map((sug) => (
@@ -1157,6 +1203,7 @@ export function Gen2ChatPanel({
             </div>
 
             <div className="gen2-chat-dock">
+              {duplicateNotice}
               {errorBanner}
               {composer}
             </div>

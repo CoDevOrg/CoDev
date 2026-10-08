@@ -23,6 +23,7 @@
 - In guest systemd units, set agent-profile parent permissions inside the final `ExecStart` wrapper; systemd reapplies `StateDirectoryMode` after `ExecStartPre`. Individual profiles and credential files must remain private.
 - ARM guest units must not recursively change permissions on saved workspace disks; they also carry protected Superset metadata.
 - Guest RPC changes require a signed ARM runtime release, image promotion, and an update for existing VMs; a web deployment alone does not update guestd or the Superset host bundle.
+- The guest Superset host service runs as root, but workspace users can write the repository's Git config and attributes. New host Git calls must run as `codev-shell` (uid/gid 2000) with `core.fsmonitor=false`; see `codev/change-set.ts`.
 - Loopback alone does not isolate privileged workspace RPC from terminal processes. ARM VM images require the local caller firewall before guestd starts; generalized VM administrators use sudo for maintenance RPC.
 
 - Azure web releases must pass origin readiness before Cloudflare traffic switches; keep the ARM workflow bridge on its separate workers.dev URL to avoid proxy loops.

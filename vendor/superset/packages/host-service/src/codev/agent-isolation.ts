@@ -15,6 +15,21 @@ const reservedUids = new Set<number>();
 
 type HookEvent = { name: string; matcher?: string };
 
+/**
+ * PostToolUse hook command for CoDev agent profiles. The token is piped to
+ * curl as a header so it never appears in a process argument list. The hook
+ * always exits 0 and prints only the host's reply, so an unreachable or slow
+ * host leaves the agent untouched.
+ */
+export const COORDINATION_HOOK_COMMAND = [
+	'[ -n "$SUPERSET_HOST_AGENT_HOOK_URL" ] && [ -n "$SUPERSET_TERMINAL_ID" ] && [ -n "$SUPERSET_ACCOUNT_ATTRIBUTION_TOKEN" ] &&',
+	`printf 'x-codev-hook-token: %s\\n' "$SUPERSET_ACCOUNT_ATTRIBUTION_TOKEN" |`,
+	"curl -sf --connect-timeout 0.2 --max-time 0.3 -H @- -H 'content-type: application/json'",
+	'--data "{\\"agentId\\":\\"$SUPERSET_TERMINAL_ID\\"}"',
+	`"\${SUPERSET_HOST_AGENT_HOOK_URL%/trpc/notifications.hook}/codev/coordination/notices";`,
+	"exit 0",
+].join(" ");
+
 const CODEX_HOOK_EVENTS: HookEvent[] = [
 	{ name: "SessionStart" },
 	{ name: "SessionEnd" },
@@ -197,7 +212,12 @@ export function buildCoDevAgentProfile(
 			[
 				{
 					...(matcher ? { matcher } : {}),
-					hooks: [{ type: "command", command }],
+					hooks: [
+						{ type: "command", command },
+						...(name === "PostToolUse"
+							? [{ type: "command", command: COORDINATION_HOOK_COMMAND }]
+							: []),
+					],
 				},
 			],
 		]),

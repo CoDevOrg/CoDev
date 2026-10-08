@@ -162,6 +162,8 @@ export const gen2AgentStartRequestSchema = z.object({
   worktreeId: z.string().trim().min(1).max(128).optional(),
   /** Optional model override for the agent turn. */
   model: z.string().trim().min(1).max(128).optional(),
+  /** The active run a member chose to start alongside after a duplicate warning. */
+  acknowledgedDuplicateOf: z.string().uuid().optional(),
 });
 
 export const gen2AgentStartResponseSchema = z.object({
