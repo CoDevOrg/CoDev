@@ -27,6 +27,7 @@
 - The Cursor CLI always loads hooks from the repository (`.cursor/hooks.json`, `.claude/settings*.json`) and has no switch to stop it; `codev-guestd` refuses Cursor turns while those files exist. Codex and Claude ignore repository hooks under Gen 2's flags; keep it that way.
 - Loopback alone does not isolate privileged workspace RPC from terminal processes. ARM VM images require the local caller firewall before guestd starts; generalized VM administrators use sudo for maintenance RPC.
 
+- GitHub resolves repository variables when a workflow run is created. After changing a rollout or image variable such as `ARM_WORKSPACE_IMAGE_VERSION_ID`, start a new run; one already queued deploys the old value.
 - Azure web releases must pass origin readiness before Cloudflare traffic switches; keep the ARM workflow bridge on its separate workers.dev URL to avoid proxy loops.
 - Worker WebSocket messages need operation-scoped database pools; Redis clients and stream readers belong to the socket request, never the shared isolate.
 - Worker fetches support `redirect: "manual"`, not `"error"`; reject redirect responses explicitly for authenticated runtime requests.
