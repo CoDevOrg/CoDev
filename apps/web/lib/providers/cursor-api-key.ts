@@ -62,11 +62,7 @@ async function cursorIdentity(
   }
 }
 
-export async function saveCursorCredential(
-  userId: string,
-  apiKey: string,
-  allowInSharedWorkspaces?: boolean,
-) {
+export async function saveCursorCredential(userId: string, apiKey: string) {
   const normalized = await verifyCursorApiKey(apiKey);
   await saveProviderCredential({
     userId,
@@ -75,6 +71,5 @@ export async function saveCursorCredential(
     apiKey: normalized,
     lastFour: normalized.slice(-4),
     connectedVia: "api_key",
-    allowInSharedWorkspaces,
   });
 }

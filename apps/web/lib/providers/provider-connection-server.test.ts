@@ -106,7 +106,6 @@ describe("provider connection server", () => {
           provider: "claude",
           status: "connected",
           provenance: "browser",
-          allowInSharedWorkspaces: true,
         },
         { provider: "cursor", status: "not_connected" },
       ],

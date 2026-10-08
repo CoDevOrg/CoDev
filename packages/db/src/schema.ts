@@ -719,14 +719,10 @@ export const providerCredentials = pgTable(
     // the 0042 migration backfills them and code treats NULL conservatively
     // (not workspace-eligible).
     connectedVia: credentialConnectedVia("connected_via"),
-    // Whether this credential may fund a turn inside a workspace other people
-    // can see. It replaced `enabled_for_rooms` / `enabled_for_workspace`,
-    // which claimed to gate surfaces but were read on one path out of three —
-    // the subscription resolvers ignored them entirely, so the settings
-    // toggles changed a badge and nothing else. Where a credential *can* run
-    // is a property of the credential kind and belongs in the provider
-    // registry, not in a column; the only thing left for a member to decide
-    // is this one, which is about whose subscription gets spent.
+    // Unread: every workspace is shared, so a switch keeping a member's own
+    // login out of shared workspaces kept it out of all of them. Kept until
+    // the web release that stopped reading it is live, because migrations
+    // run before deploys; drop it in a follow-up migration after that.
     allowInSharedWorkspaces: boolean("allow_in_shared_workspaces")
       .default(true)
       .notNull(),

@@ -12,6 +12,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { cn } from "@/lib/platform/utils";
 
 /**
  * Confirmation for destructive settings actions, built on the shared
@@ -26,6 +27,7 @@ export function ConfirmDialog({
   busy = false,
   onConfirm,
   onCancel,
+  className,
 }: {
   title: string;
   children: ReactNode;
@@ -33,6 +35,8 @@ export function ConfirmDialog({
   busy?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  /** A surface class for content portaled outside its caller's theme. */
+  className?: string | undefined;
 }) {
   const confirmed = useRef(false);
 
@@ -44,7 +48,7 @@ export function ConfirmDialog({
       }}
       open
     >
-      <AlertDialogContent className="max-w-sm">
+      <AlertDialogContent className={cn("max-w-sm", className)}>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription asChild>

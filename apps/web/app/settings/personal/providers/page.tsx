@@ -1,36 +1,10 @@
-import { CursorLogo } from "@/components/gen2/provider-logos";
-import { ProviderAccountCard } from "@/components/settings/provider-account-card";
-import { ClaudeMark, OpenAIMark } from "@/components/settings/provider-logos";
+import { ProviderAccountList } from "@/components/settings/provider-account-list";
 import {
   SettingsPageHeader,
   SettingsPageShell,
 } from "@/components/settings/settings-style";
-import { isHostedClaudeConnectEnabled } from "@/lib/providers/claude-connection-runner";
-import { isHostedCodexSubscriptionEnabled } from "@/lib/providers/hosted-codex-subscription-flag";
 import { loadProviderConnectionSnapshot } from "@/lib/providers/provider-connection-server";
-import { providerRunsIn } from "@/lib/providers/provider-surface-capability";
 import { requireUser } from "@/lib/auth/session";
-
-const CARDS = [
-  {
-    label: "Claude",
-    logo: <ClaudeMark className="size-5" />,
-    subscription: "claude",
-    connection: "anthropic",
-  },
-  {
-    label: "Codex",
-    logo: <OpenAIMark className="size-5" />,
-    subscription: "codex",
-    connection: "openai",
-  },
-  {
-    label: "Cursor",
-    logo: <CursorLogo className="size-5" size={20} />,
-    subscription: "cursor",
-    connection: "cursor",
-  },
-] as const;
 
 /**
  * One card per agent account, each stating where it runs.
@@ -46,51 +20,20 @@ const CARDS = [
  *
  * So the member connects an account, and CoDev says where it works —
  * `providerRunsIn` reads the same registry the server resolves turns from,
- * so the two cannot disagree. The one thing still worth asking is whether a
- * personal login may fund a turn inside a workspace other people can see,
- * which lives on the card as a single switch.
+ * so the two cannot disagree. A login is only ever used by turns its owner
+ * starts, so there is nothing left to ask about sharing it.
  */
 export default async function PersonalProvidersPage() {
   const user = await requireUser();
   const snapshot = await loadProviderConnectionSnapshot(user);
-  const hostedClaudeConnect = isHostedClaudeConnectEnabled();
-  const hostedOpenAIConnect = isHostedCodexSubscriptionEnabled();
 
   return (
     <SettingsPageShell>
       <SettingsPageHeader
-        badge="Optional"
-        description="Connect the accounts your agents run on. Each card shows where that account can be used once it is connected. Everything is encrypted on the CoDev server and never shown again after you save it."
+        description="Agents you start run on your own accounts; other workspace members connect their own. Connect at least one to start agents in workspaces and rooms. Logins and keys are encrypted on the CoDev server and never shown again."
         title="AI Provider Accounts"
       />
-      <div className="flex flex-col gap-3">
-        {CARDS.map((card) => {
-          const subscription = snapshot.cliSubscriptions.find(
-            (row) => row.provider === card.subscription,
-          );
-          const connection = snapshot.connections.find(
-            (row) => row.provider === card.connection,
-          );
-          if (!subscription || !connection) return null;
-          return (
-            <ProviderAccountCard
-              claudeCliToken={snapshot.claudeCliToken}
-              connection={connection}
-              hostedClaudeConnect={
-                hostedClaudeConnect && card.connection === "anthropic"
-              }
-              hostedOpenAIConnect={
-                hostedOpenAIConnect && card.connection === "openai"
-              }
-              key={card.label}
-              label={card.label}
-              logo={card.logo}
-              runsIn={providerRunsIn(snapshot, card.connection)}
-              subscription={subscription}
-            />
-          );
-        })}
-      </div>
+      <ProviderAccountList snapshot={snapshot} />
     </SettingsPageShell>
   );
 }

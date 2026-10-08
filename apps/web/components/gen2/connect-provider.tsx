@@ -5,6 +5,9 @@ import Link from "next/link";
 import type { Gen2AgentProviderName } from "@codev/contracts";
 
 import { CodexHostedConnect } from "@/components/settings/codex-hosted-connect";
+import { WorkspaceButton } from "./workspace-button";
+
+const SETTINGS_HREF = "/settings/personal/providers";
 
 export type Gen2AgentChoice = Gen2AgentProviderName;
 
@@ -15,13 +18,16 @@ import type { Gen2ProviderStatus } from "@codev/contracts";
  * Codex runs on the member's own credential, so a workspace is useless to
  * someone who has not connected one. Rather than let every turn fail with a
  * "connect Codex in Settings" error, ask for it here, in the place the work
- * is about to happen.
+ * is about to happen. With `onOpenSettings` the member connects without
+ * leaving the workspace; without it, the prompt links to the settings page.
  */
 export function Gen2ConnectProvider({
   onConnected,
+  onOpenSettings,
   agent,
 }: {
   onConnected: () => void;
+  onOpenSettings?: (() => void) | undefined;
   agent: Gen2AgentChoice;
 }) {
   if (agent === "claude" || agent === "cursor") {
@@ -33,15 +39,36 @@ export function Gen2ConnectProvider({
           Turns run on your own {name} connection — CoDev does not supply one.
           Everyone in this workspace connects their own.
         </p>
-        <p className="gen2-connect-alt">
-          <Link href="/settings/personal/providers#coding-workspaces">
-            Connect {name} in settings
-          </Link>
-          , then come back and refresh.
-        </p>
-        <button type="button" onClick={onConnected}>
-          I&rsquo;ve connected it
-        </button>
+        {onOpenSettings ? (
+          <div className="gen2-connect-actions">
+            <WorkspaceButton
+              tone="primary"
+              size="action"
+              onClick={onOpenSettings}
+            >
+              Connect {name}
+            </WorkspaceButton>
+          </div>
+        ) : (
+          <div className="gen2-connect-actions">
+            <Link
+              href={SETTINGS_HREF}
+              className="gen2-workspace-button"
+              data-slot="button"
+              data-tone="primary"
+              data-size="action"
+            >
+              Connect {name} in settings
+            </Link>
+            <WorkspaceButton
+              tone="secondary"
+              size="action"
+              onClick={onConnected}
+            >
+              I&rsquo;ve connected it
+            </WorkspaceButton>
+          </div>
+        )}
       </div>
     );
   }
@@ -63,9 +90,17 @@ export function Gen2ConnectProvider({
       </div>
       <p className="gen2-connect-alt">
         Prefer an API key?{" "}
-        <Link href="/settings/personal/providers#coding-workspaces">
-          Add one in settings
-        </Link>
+        {onOpenSettings ? (
+          <button
+            type="button"
+            className="gen2-connect-link"
+            onClick={onOpenSettings}
+          >
+            Add one in settings
+          </button>
+        ) : (
+          <Link href={SETTINGS_HREF}>Add one in settings</Link>
+        )}
         .
       </p>
     </div>

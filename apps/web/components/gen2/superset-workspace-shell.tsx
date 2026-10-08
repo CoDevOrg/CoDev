@@ -27,6 +27,7 @@ import {
   PanelRight,
   Pencil,
   Plus,
+  Settings,
   SquareTerminal,
   UserPlus,
 } from "lucide-react";
@@ -40,6 +41,7 @@ import { parseGitStatus } from "@/lib/runtime/ide";
 import { WorkspaceButton } from "./workspace-button";
 import { cn } from "@/lib/platform/utils";
 import { WorkspaceShareDialog } from "./workspace-share-dialog";
+import { WorkspaceSettingsDialog } from "./workspace-settings-dialog";
 import { ThemeToggle } from "@/components/shell/theme-toggle";
 import { Gen2ChatPanel } from "./chat-panel";
 import { Gen2TerminalPane } from "./terminal-pane";
@@ -187,6 +189,8 @@ export function SupersetWorkspaceShell({
   const [terminalExpanded, setTerminalExpanded] = useState(false);
   const [viewMode, setViewMode] = useState<"ide" | "board">("ide");
   const [shareOpen, setShareOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [providersRevision, setProvidersRevision] = useState(0);
   const [activeRuns, setActiveRuns] = useState<
     Array<{
       id: string;
@@ -295,6 +299,13 @@ export function SupersetWorkspaceShell({
       void refreshProviderStatuses();
     }, 0);
     return () => clearTimeout(timeout);
+  }, [refreshProviderStatuses]);
+
+  // An account connected from the settings dialog is usable at once: the
+  // shell's list and the chat panel's status and models both reload.
+  const providersChanged = useCallback(() => {
+    void refreshProviderStatuses();
+    setProvidersRevision((revision) => revision + 1);
   }, [refreshProviderStatuses]);
 
   const refreshChats = useCallback(async () => {
@@ -1101,6 +1112,21 @@ export function SupersetWorkspaceShell({
               </TooltipContent>
             </Tooltip>
 
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <WorkspaceButton
+                  size="icon"
+                  type="button"
+                  className="gen2-ide-icon-button"
+                  onClick={() => setSettingsOpen(true)}
+                  aria-label="Settings"
+                >
+                  <Settings size={16} />
+                </WorkspaceButton>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Settings</TooltipContent>
+            </Tooltip>
+
             <ThemeToggle compact />
 
             {viewMode === "ide" ? (
@@ -1641,12 +1667,13 @@ export function SupersetWorkspaceShell({
                             <p className="text-xs text-muted-foreground">
                               Connect Codex or Claude to start a workspace chat.
                             </p>
-                            <Link
-                              href="/settings/personal/providers#coding-workspaces"
-                              className="text-xs text-primary hover:underline mt-1 inline-block"
+                            <WorkspaceButton
+                              tone="secondary"
+                              className="mt-2"
+                              onClick={() => setSettingsOpen(true)}
                             >
-                              Connect in Settings
-                            </Link>
+                              Connect an account
+                            </WorkspaceButton>
                           </div>
                         ) : (
                           <div className="gen2-sidebar-providers-list">
@@ -1866,6 +1893,8 @@ export function SupersetWorkspaceShell({
                           setTab("changes");
                           setInspectorCollapsed(false);
                         }}
+                        onOpenSettings={() => setSettingsOpen(true)}
+                        providersRevision={providersRevision}
                       />
                     </div>
                     {connection.state === "connected" ? null : (
@@ -2220,6 +2249,12 @@ export function SupersetWorkspaceShell({
           workspaceName={activeWorkspace.name}
           currentUserRole={activeWorkspace.role}
           initialMembers={activeWorkspace.members}
+        />
+
+        <WorkspaceSettingsDialog
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          onProvidersChanged={providersChanged}
         />
 
         <AlertDialog

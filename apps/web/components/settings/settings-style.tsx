@@ -25,12 +25,14 @@ export function SettingsPageHeader({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="text-lg font-semibold tracking-tight text-foreground">
+        <h1 className="m-0 text-lg font-semibold tracking-tight text-foreground">
           {title}
         </h1>
         {badge ? <Badge variant="muted">{badge}</Badge> : null}
       </div>
-      <p className="max-w-2xl text-sm text-muted-foreground">{description}</p>
+      <p className="m-0 max-w-2xl text-sm text-muted-foreground">
+        {description}
+      </p>
     </div>
   );
 }

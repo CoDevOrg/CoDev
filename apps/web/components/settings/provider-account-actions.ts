@@ -39,10 +39,14 @@ export function useProviderAccountCard({
   connection,
   label,
   subscription,
+  onChange,
 }: {
   connection: ProviderConnectionRecord;
   label: string;
   subscription: CliSubscriptionRecord;
+  /** Reload whatever shows these connections; the settings page re-renders
+   *  its server component when omitted. */
+  onChange?: (() => void) | undefined;
 }) {
   const router = useRouter();
   const [apiKeyState, setApiKeyState] = useState(connection);
@@ -84,7 +88,7 @@ export function useProviderAccountCard({
     setConnected,
     setApiKeyState,
     setDraft,
-    refresh: () => router.refresh(),
+    refresh: onChange ?? (() => router.refresh()),
   };
 
   return {
@@ -100,13 +104,11 @@ export function useProviderAccountCard({
     disconnect: () => disconnectAccount(handlers),
     save: () => saveApiKey(handlers),
     revoke: () => revokeApiKey(handlers),
-    setSharedWorkspaceUse: (
-      kind: "api_key" | "subscription" | "claude_cli_token",
-      enabled: boolean,
-    ) => setSharedWorkspaceUse(handlers, kind, enabled),
     revokeClaudeCliToken: () => revokeClaudeCliToken(handlers),
   };
 }
+
+export type ProviderAccount = ReturnType<typeof useProviderAccountCard>;
 
 function finishConnected(handlers: AccountHandlers) {
   handlers.setBusy("");
@@ -159,6 +161,7 @@ async function saveApiKey(handlers: AccountHandlers) {
     if (next) handlers.setApiKeyState(next);
     handlers.setDraft("");
     handlers.setMessage(`${handlers.apiKeyLabel} saved.`);
+    handlers.refresh();
   } finally {
     handlers.setBusy("");
   }
@@ -183,38 +186,6 @@ async function revokeApiKey(handlers: AccountHandlers) {
     if (next) handlers.setApiKeyState(next);
     handlers.setDraft("");
     handlers.setMessage(`${handlers.apiKeyLabel} revoked.`);
-  } finally {
-    handlers.setBusy("");
-  }
-}
-
-async function setSharedWorkspaceUse(
-  handlers: AccountHandlers,
-  kind: "api_key" | "subscription" | "claude_cli_token",
-  enabled: boolean,
-) {
-  handlers.setBusy("save");
-  handlers.setMessage("");
-  try {
-    const response = await fetch("/api/personal/connections", {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        provider: handlers.provider,
-        kind,
-        allowInSharedWorkspaces: enabled,
-      }),
-    });
-    const payload = await readPayload(response);
-    if (!response.ok) {
-      handlers.fail(payload?.error ?? "The setting could not be saved.");
-      return;
-    }
-    handlers.setMessage(
-      enabled
-        ? `${handlers.label} can be used in shared workspaces.`
-        : `${handlers.label} will stay out of shared workspaces.`,
-    );
     handlers.refresh();
   } finally {
     handlers.setBusy("");

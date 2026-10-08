@@ -40,7 +40,7 @@
 - ARM VMs join their resource group's shared network from `infra/azure/arm-workspace-network.bicep`; deploy it to a group before web releases start VMs there.
 - ARM connection setup must retry package installation safely while cloud-init or apt holds the dpkg lock.
 
-- Before starting or deploying the web app, run `pnpm db:check`. A newer migration ledger entry does not prove older tables exist; repair skipped schema with a forward migration instead of editing applied history.
+- Before starting or deploying the web app, run `pnpm db:check`. A newer migration ledger entry does not prove older tables exist; repair skipped schema with a forward migration instead of editing applied history. Migrations run before the web deploy, so drop a column only after the release that stopped reading it is live.
 - For Azure subscription inspection, use the signed-in Azure CLI. If it is not authenticated, sign in with `az login --tenant 0841fce6-e7c1-4ea4-b4f1-a238d465137b`.
 
 - The Azure Node adapter must own workspace WebSocket upgrades; isolate Next.js's automatic upgrade listener on a non-listening `httpServer`.
@@ -78,6 +78,8 @@ For any UI work, use shadcn/ui and the `shadcn` skill. If the skill is unavailab
 - `npx skills add shadcn/ui`
 - `yarn dlx skills add shadcn/ui`
 - `bun x skills add shadcn/ui`
+
+Settings and the workspace load Tailwind utilities without its preflight, so browser margins on `p`/headings and the global `button { font: inherit }` beat utility classes; reset margins and set font size on the component's root rather than relying on `text-sm` on a button.
 
 The public landing page (`app/page.tsx`) does not load Tailwind utilities (only `app/product-theme.css` imports them), so shadcn components render unstyled there; style landing previews with the CSS files in `components/landing/`. The CoDev mark is `/brand/codev-mark.svg` in ice blue `#00bde8`; do not recolor it with filters.
 

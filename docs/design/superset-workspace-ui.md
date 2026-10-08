@@ -243,7 +243,7 @@ Three zones. Right zone `flex-shrink: 0`. Center truncates first. Left truncates
    - ≤1023px: hide breadcrumb.
    - ≤768px: hide branch name/status; keep the pill as an icon button.
 2. **Center:** session card (surface-3, 32px): provider mark, title max 240px (180px below 1440), working chip only while a turn is actually running. Hide the whole center at ≤1279px.
-3. **Right:** Share (secondary), Board (`aria-pressed`), machine as **text + dot**, theme, inspector icon. The label is Checking…, Starting…, Ready, or Offline. Ready means the activity check returned connected. Offline keeps the dot and adds Reconnect.
+3. **Right:** Share (secondary), Board (`aria-pressed`), machine as **text + dot**, settings icon, theme, inspector icon. Settings opens the member's own settings in a `.gen2-workspace-surface` dialog (AI provider accounts today), so connecting an agent never leaves the workspace. The label is Checking…, Starting…, Ready, or Offline. Ready means the activity check returned connected. Offline keeps the dot and adds Reconnect.
    - ≤1279px: hide the session card.
    - ≤1023px: hide the breadcrumb and the machine word; keep the dot.
    - ≤768px: hide Share/Board labels, keep icons. Hide the branch name; keep the branch button.

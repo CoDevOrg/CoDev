@@ -5,7 +5,6 @@ import {
   loadProviderConnectionSnapshot,
   revokePersonalProviderConnection,
   savePersonalProviderConnection,
-  setPersonalSharedWorkspaceUse,
 } from "@/lib/providers/provider-connection-server";
 import { publicProviderConnectionPayload } from "@/lib/providers/provider-connection-view";
 
@@ -13,12 +12,6 @@ const providerSchema = z.enum(["openai", "anthropic", "cursor"]);
 const putSchema = z.object({
   provider: providerSchema,
   apiKey: z.string().trim().min(20).max(512),
-});
-
-const patchSchema = z.object({
-  provider: providerSchema,
-  kind: z.enum(["api_key", "subscription", "claude_cli_token"]),
-  allowInSharedWorkspaces: z.boolean(),
 });
 
 /**
@@ -45,24 +38,6 @@ export async function PUT(request: Request) {
     const input = putSchema.parse(await request.json());
     return Response.json(
       await savePersonalProviderConnection(user, input.provider, input.apiKey),
-    );
-  } catch (error) {
-    return apiError(error);
-  }
-}
-
-/** Update whether this member's credential may fund shared workspace turns. */
-export async function PATCH(request: Request) {
-  const user = await getApiUser();
-  if (!user) return apiError(new Error("Authentication required."), 401);
-  try {
-    const input = patchSchema.parse(await request.json());
-    return Response.json(
-      await setPersonalSharedWorkspaceUse(user, {
-        provider: input.provider,
-        kind: input.kind,
-        enabled: input.allowInSharedWorkspaces,
-      }),
     );
   } catch (error) {
     return apiError(error);
