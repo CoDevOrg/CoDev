@@ -159,9 +159,6 @@ export async function saveProviderCredential(input: {
   lastFour?: string | undefined;
   /** Provenance. Key-like types default to `api_key`; OAuth defaults to `browser`. */
   connectedVia?: CredentialConnectedVia | undefined;
-  /** Whether this credential may fund a turn in a shared workspace.
-   *  Defaults to true on create; preserved on reconnect unless given. */
-  allowInSharedWorkspaces?: boolean | undefined;
 }) {
   const provider = parseProvider(input.provider);
   const credentialType = parseCredentialType(input.credentialType);
@@ -241,7 +238,6 @@ export async function saveProviderCredential(input: {
       keyVersion: 2,
       lastFour: input.lastFour ?? null,
       connectedVia,
-      allowInSharedWorkspaces: input.allowInSharedWorkspaces ?? true,
     })
     .onConflictDoUpdate({
       target: [
@@ -262,19 +258,12 @@ export async function saveProviderCredential(input: {
         keyVersion: 2,
         lastFour: input.lastFour ?? null,
         connectedVia,
-        ...(input.allowInSharedWorkspaces !== undefined
-          ? { allowInSharedWorkspaces: input.allowInSharedWorkspaces }
-          : {}),
         updatedAt: new Date(),
       },
     });
 }
 
-export async function saveOpenAICredential(
-  userId: string,
-  apiKey: string,
-  allowInSharedWorkspaces?: boolean,
-) {
+export async function saveOpenAICredential(userId: string, apiKey: string) {
   const normalized = apiKey.trim();
   if (!normalized.startsWith("sk-") || normalized.length < 20) {
     throw new Error("Enter a valid OpenAI API key.");
@@ -285,15 +274,10 @@ export async function saveOpenAICredential(
     credentialType: "API_KEY",
     apiKey: normalized,
     lastFour: normalized.slice(-4),
-    allowInSharedWorkspaces,
   });
 }
 
-export async function saveAnthropicCredential(
-  userId: string,
-  apiKey: string,
-  allowInSharedWorkspaces?: boolean,
-) {
+export async function saveAnthropicCredential(userId: string, apiKey: string) {
   const normalized = apiKey.trim();
   if (!normalized.startsWith("sk-ant-") || normalized.length < 20) {
     throw new Error("Enter a valid Anthropic API key.");
@@ -304,38 +288,7 @@ export async function saveAnthropicCredential(
     credentialType: "API_KEY",
     apiKey: normalized,
     lastFour: normalized.slice(-4),
-    allowInSharedWorkspaces,
   });
-}
-
-/**
- * Flip whether a stored credential may fund a turn inside a shared
- * workspace. Unlike the two per-surface flags this replaced, it is read on
- * every resolution path, so it is a real setting rather than a badge.
- */
-export async function updateCredentialSharedWorkspacePermission(
-  userId: string,
-  provider: AuthProvider,
-  credentialType: CredentialType,
-  allowInSharedWorkspaces: boolean,
-) {
-  await getDatabase()
-    .update(schema.providerCredentials)
-    .set({
-      allowInSharedWorkspaces,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(schema.providerCredentials.scopeType, "USER"),
-        eq(schema.providerCredentials.scopeId, userId),
-        eq(schema.providerCredentials.provider, parseProvider(provider)),
-        eq(
-          schema.providerCredentials.credentialType,
-          parseCredentialType(credentialType),
-        ),
-      ),
-    );
 }
 
 export async function getProviderCredentialStatus(
@@ -361,7 +314,6 @@ export async function getProviderCredentialStatus(
     awsRoleArn: credential.awsRoleArn ?? undefined,
     updatedAt: credential.updatedAt,
     connectedVia: credential.connectedVia ?? undefined,
-    allowInSharedWorkspaces: credential.allowInSharedWorkspaces,
   };
 }
 

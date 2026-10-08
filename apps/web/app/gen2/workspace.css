@@ -5297,9 +5297,24 @@
   margin-top: 18px;
 }
 
-.gen2-connect-alt a {
+.gen2-connect-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.gen2-connect-alt a,
+.gen2-connect-link {
   color: var(--gold);
   text-decoration: underline;
+}
+
+.gen2-connect-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
 }
 
 /* Shared workspace control contract: docs/design/workspace-controls.md. */

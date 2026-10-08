@@ -1,14 +1,11 @@
 import "server-only";
 
-import type { CredentialType } from "@codev/shared-types";
-
 import { saveCursorCredential } from "./cursor-api-key";
 import {
   deleteProviderCredential,
   getProviderCredentialStatus,
   saveAnthropicCredential,
   saveOpenAICredential,
-  updateCredentialSharedWorkspacePermission,
 } from "./credentials";
 import { isHostedClaudeConnectEnabled } from "./claude-connection-runner";
 import { isHostedCodexSubscriptionEnabled } from "./hosted-codex-subscription-flag";
@@ -121,49 +118,6 @@ export async function revokePersonalProviderConnection(
   } else {
     await deleteProviderCredential(user.id, provider, "API_KEY");
   }
-  return publicProviderConnectionPayload(
-    await loadProviderConnectionSnapshot(user),
-  );
-}
-
-/** The toggleable credential kinds on the settings page. The Claude browser
- *  runtime has no provider_credentials row and is rooms-only by construction,
- *  so it is deliberately not one of them. */
-export type PersonalCredentialKind =
-  | "api_key"
-  | "subscription"
-  | "claude_cli_token";
-
-/**
- * Flip whether a credential may fund a turn inside a shared workspace.
- */
-export async function setPersonalSharedWorkspaceUse(
-  user: ConnectionUser,
-  input: {
-    provider: ProviderConnectionProvider;
-    kind: PersonalCredentialKind;
-    enabled: boolean;
-  },
-): Promise<ProviderConnectionSnapshot> {
-  let credentialType: CredentialType;
-  if (input.kind === "api_key") {
-    credentialType = "API_KEY";
-  } else if (input.kind === "claude_cli_token") {
-    if (input.provider !== "anthropic") {
-      throw new Error("Only Claude has a CLI token.");
-    }
-    credentialType = "OAUTH_TOKEN";
-  } else if (input.provider === "openai" && input.kind === "subscription") {
-    credentialType = "HOSTED_CODEX_SUBSCRIPTION";
-  } else {
-    credentialType = "OAUTH_TOKEN";
-  }
-  await updateCredentialSharedWorkspacePermission(
-    user.id,
-    input.provider,
-    credentialType,
-    input.enabled,
-  );
   return publicProviderConnectionPayload(
     await loadProviderConnectionSnapshot(user),
   );

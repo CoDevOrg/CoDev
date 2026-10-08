@@ -36,8 +36,7 @@ consumes it and does not change it.** Nothing in this plan may:
   with `dryRun`) or add a second resolver or readiness shape;
 - add per-provider capability exceptions outside `registry.ts`;
 - change the lease model (run-derived seats with heartbeats; executors wait
-  rather than refuse), the `allow_in_shared_workspaces` enforcement, or the
-  single `WORKSPACE` scope;
+  rather than refuse) or the single `WORKSPACE` scope;
 - reintroduce `sharing_enabled`, per-member login snapshots, or a second Claude
   login path (`claude_connection_sessions` and the subprocess login backend stay
   as they are);
@@ -55,7 +54,7 @@ foundation.
 | -------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------- |
 | Resolution     | 3 resolvers + a UI table                              | one `resolveCredential`; readiness is the same walk with `dryRun`                |
 | Capability     | hand-maintained per-provider exceptions               | `registry.ts`: one table keyed by credential kind                                |
-| Surface flags  | 2 columns read on 1 path of 3                         | `allow_in_shared_workspaces`, enforced everywhere                                |
+| Surface flags  | 2 columns read on 1 path of 3                         | none: the registry decides; a member's turns always use their own login          |
 | Leases         | 16-min stamp, no reaper; Gen 2 ignored it             | run-derived seats with heartbeats; every executor waits rather than refusing     |
 | Shared scope   | `WORKSPACE` and `ORGANIZATION` meaning the same thing | one `WORKSPACE` scope; `sharing_enabled` deleted                                 |
 | Claude         | two logins, one in a per-member VM snapshot           | one setup-token; ephemeral sandboxes; runs in rooms, workspaces and Gen 2        |

@@ -28,7 +28,6 @@ function subscription(
     connectMode: "device_code",
     command: "codev codex-auth",
     provenance: null,
-    allowInSharedWorkspaces: true,
     ...overrides,
   };
 }
@@ -45,7 +44,6 @@ function connection(
     suppliedBy: null,
     scope: "personal",
     provenance: null,
-    allowInSharedWorkspaces: true,
     ...overrides,
   };
 }
@@ -53,7 +51,6 @@ function connection(
 const NO_CLI_TOKEN = {
   status: "not_connected" as const,
   lastFour: null,
-  allowInSharedWorkspaces: true,
 };
 
 function jsonResponse(body: unknown, ok = true) {
@@ -464,7 +461,13 @@ describe("ProviderAccountCard", () => {
   it("summarises how a connected account signs in", () => {
     render(
       <ProviderAccountCard
-        connection={connection({ provider: "openai", label: "OpenAI" })}
+        connection={connection({
+          provider: "openai",
+          label: "OpenAI",
+          status: "connected",
+          credentialType: "API_KEY",
+          lastFour: "9kQ2",
+        })}
         label="Codex"
         logo={null}
         runsIn={[]}
@@ -472,14 +475,37 @@ describe("ProviderAccountCard", () => {
           provider: "codex",
           label: "Codex",
           status: "connected",
+          provenance: "cli",
           command: "codev codex-auth",
         })}
       />,
     );
     expect(
-      screen.getByText("Signed in with a subscription"),
+      screen.getByText(
+        "Subscription, signed in from the CLI · API key ending 9kQ2",
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText("Manage connection")).toBeInTheDocument();
+  });
+
+  it("does not report Claude's CLI login on another provider's card", () => {
+    render(
+      <ProviderAccountCard
+        claudeCliToken={{ status: "connected", lastFour: "wxyz" }}
+        connection={connection({ provider: "openai", label: "OpenAI" })}
+        label="Codex"
+        logo={null}
+        runsIn={[]}
+        subscription={subscription({
+          provider: "codex",
+          label: "Codex",
+          command: "codev codex-auth",
+        })}
+      />,
+    );
+    expect(screen.getByText("Not connected")).toBeInTheDocument();
+    expect(screen.queryByText(/signed in from the CLI/)).toBeNull();
+    expect(screen.queryByText(/codev claude-auth/)).toBeNull();
   });
 
   describe("where a connection runs", () => {
@@ -533,7 +559,6 @@ describe("ProviderAccountCard", () => {
           claudeCliToken={{
             status: "connected",
             lastFour: "wxyz",
-            allowInSharedWorkspaces: true,
           }}
           connection={connection({ provider: "anthropic", label: "Anthropic" })}
           label="Claude"
@@ -599,33 +624,7 @@ describe("ProviderAccountCard", () => {
       expect(screen.getByText("Use an API key instead")).toBeInTheDocument();
     });
 
-    it("asks about shared workspaces only for a login a workspace can run", async () => {
-      const fetchMock = vi
-        .fn()
-        .mockResolvedValue(jsonResponse({ connections: [] }));
-      vi.stubGlobal("fetch", fetchMock);
-
-      const { unmount } = render(
-        <ProviderAccountCard
-          claudeCliToken={NO_CLI_TOKEN}
-          connection={connection({ provider: "anthropic", label: "Anthropic" })}
-          label="Claude"
-          logo={null}
-          runsIn={["rooms"]}
-          subscription={subscription({
-            provider: "claude",
-            label: "Claude Code",
-            status: "connected",
-            provenance: "browser",
-          })}
-        />,
-      );
-      // Rooms run in the member's own session, so there is nothing to ask.
-      expect(
-        screen.queryByRole("switch", { name: "Allow in shared workspaces" }),
-      ).toBeNull();
-      unmount();
-
+    it("has no switch for sharing a login, which is only its owner's", () => {
       render(
         <ProviderAccountCard
           claudeCliToken={NO_CLI_TOKEN}
@@ -642,16 +641,7 @@ describe("ProviderAccountCard", () => {
           })}
         />,
       );
-      const toggle = screen.getByRole("switch", {
-        name: "Allow in shared workspaces",
-      });
-      fireEvent.click(toggle);
-      await waitFor(() => {
-        expect(fetchMock).toHaveBeenCalledWith(
-          "/api/personal/connections",
-          expect.objectContaining({ method: "PATCH" }),
-        );
-      });
+      expect(screen.queryByRole("switch")).toBeNull();
     });
 
     it("shows and revokes Claude's CLI login beside the command that made it", async () => {
@@ -663,7 +653,6 @@ describe("ProviderAccountCard", () => {
           claudeCliToken={{
             status: "connected",
             lastFour: "wxyz",
-            allowInSharedWorkspaces: true,
           }}
           connection={connection({ provider: "anthropic", label: "Anthropic" })}
           label="Claude"

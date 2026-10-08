@@ -1,12 +1,10 @@
 "use client";
 
 import { useState, type ComponentType, type ReactNode } from "react";
-import { Check, ChevronDown, Copy } from "lucide-react";
+import { Check, Copy } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { Switch } from "@/components/ui/switch";
 import { SURFACE_LABEL } from "@/lib/providers/provider-surface-capability";
 import type { ExecutorSurface } from "@/lib/providers/registry";
 
@@ -35,41 +33,15 @@ export function CopyableCommand({ command }: { command: string }) {
   );
 }
 
-export function SurfaceToggle({
-  heading,
-  label,
-  note,
-  checked,
-  disabled,
-  onChange,
-}: {
-  /** A section title above the switch, for a choice with a cost attached. */
-  heading?: string;
-  label: string;
-  note?: string;
-  checked: boolean;
-  disabled?: boolean;
-  onChange: (next: boolean) => void;
-}) {
-  return (
-    <div className="flex flex-col gap-3">
-      <Separator />
-      {heading ? <h4 className="text-sm font-semibold">{heading}</h4> : null}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <p className="text-sm font-medium">{label}</p>
-          {note ? (
-            <p className="text-sm text-muted-foreground">{note}</p>
-          ) : null}
-        </div>
-        <Switch
-          aria-label={label}
-          checked={checked}
-          disabled={disabled}
-          onCheckedChange={onChange}
-        />
-      </div>
-    </div>
+/** Whether anything is connected, in words as well as color. */
+export function ConnectionBadge({ connected }: { connected: boolean }) {
+  return connected ? (
+    <Badge variant="secondary">
+      <Check aria-hidden className="size-3" />
+      Connected
+    </Badge>
+  ) : (
+    <Badge variant="outline">Not connected</Badge>
   );
 }
 
@@ -81,14 +53,13 @@ export function RunsIn({
   surfaces: ExecutorSurface[];
   connected: boolean;
 }) {
+  // A disconnected account runs nowhere; its badge already says so.
   if (surfaces.length === 0) {
-    return (
+    return connected ? (
       <p className="text-sm text-muted-foreground">
-        {connected
-          ? "Connected, but nothing here can run it yet"
-          : "Not connected"}
+        Connected, but nothing here can run it yet
       </p>
-    );
+    ) : null;
   }
   const names = surfaces.map((surface) => SURFACE_LABEL[surface]);
   const spoken =
@@ -108,33 +79,34 @@ export function RunsIn({
   );
 }
 
-export function FallbackRow({
+/** One way to connect, shown flat rather than as a disclosure of its own. */
+export function ConnectSection({
   icon: Icon,
   title,
   description,
   connected,
-  defaultOpen,
   children,
 }: {
   icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
   title: string;
   description: string;
   connected?: boolean;
-  defaultOpen?: boolean;
   children: ReactNode;
 }) {
   return (
-    <details className="group" open={defaultOpen}>
-      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2.5 [&::-webkit-details-marker]:hidden">
-        <Icon aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+    <section className="flex flex-col gap-3 py-3">
+      <div className="flex items-start gap-2.5">
+        <Icon
+          aria-hidden
+          className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+        />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <p className="text-sm font-medium">{title}</p>
+          <h4 className="text-sm font-medium">{title}</h4>
           <p className="text-sm text-muted-foreground">{description}</p>
         </div>
         {connected ? <Badge variant="secondary">Connected</Badge> : null}
-        <ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
-      </summary>
-      <div className="flex flex-col gap-3 pt-3">{children}</div>
-    </details>
+      </div>
+      <div className="flex flex-col gap-3 pl-6.5">{children}</div>
+    </section>
   );
 }

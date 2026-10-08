@@ -162,6 +162,8 @@ export function Gen2ChatPanel({
   onActiveProviderChange,
   hideChatBar = false,
   onOpenWorktree,
+  onOpenSettings,
+  providersRevision = 0,
 }: {
   workspace: Gen2WorkspaceDetail;
   onRunningChange: (running: boolean) => void;
@@ -178,6 +180,10 @@ export function Gen2ChatPanel({
   onActiveProviderChange?: (provider: Gen2AgentChoice) => void;
   hideChatBar?: boolean;
   onOpenWorktree?: (worktreeId: string) => void;
+  /** Opens the workspace's settings so an account connects in place. */
+  onOpenSettings?: () => void;
+  /** Bumped when the member's accounts change; reloads provider state. */
+  providersRevision?: number;
 }) {
   const [chats, setChats] = useState<Gen2Chat[]>([]);
   const [chatId, setChatId] = useState<string | null>(activeChatId ?? null);
@@ -267,7 +273,11 @@ export function Gen2ChatPanel({
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [providersRevision]);
+
+  useEffect(() => {
+    if (providersRevision > 0) void refreshProvider();
+  }, [providersRevision, refreshProvider]);
 
   const incomingModels = provider?.models;
   const incomingModelKey = `${agent}:${incomingModels?.map((model) => model.id).join("\0") ?? ""}`;
@@ -1117,6 +1127,7 @@ export function Gen2ChatPanel({
                 <Gen2ConnectProvider
                   agent={agent}
                   onConnected={() => void refreshProvider()}
+                  onOpenSettings={onOpenSettings}
                 />
               ) : (
                 <>

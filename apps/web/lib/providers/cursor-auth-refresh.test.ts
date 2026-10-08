@@ -18,7 +18,7 @@ describe("Cursor login refresh", () => {
     mocks.encrypt.mockResolvedValue("encrypted-cache");
     mocks.set.mockReturnValue({ where: mocks.where });
   });
-  it("updates only an active personal Cursor subscription, preserving its sharing preference", async () => {
+  it("updates only an active personal Cursor subscription", async () => {
     await updateCursorAuthCache(
       "member",
       JSON.stringify({ accessToken: "cursor-access-token-value-0001" }),
@@ -26,9 +26,6 @@ describe("Cursor login refresh", () => {
     expect(mocks.set.mock.calls[0]?.[0]).toMatchObject({
       encryptedAccessToken: "encrypted-cache",
     });
-    expect(mocks.set.mock.calls[0]?.[0]).not.toHaveProperty(
-      "allowInSharedWorkspaces",
-    );
     expect(mocks.set.mock.calls[0]?.[0]).not.toHaveProperty("status");
     const query = new PgDialect().sqlToQuery(mocks.where.mock.calls[0]![0]);
     expect(query.params).toEqual([

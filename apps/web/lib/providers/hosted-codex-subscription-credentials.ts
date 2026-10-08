@@ -110,9 +110,6 @@ export async function persistHostedCodexConnection(input: {
   accountLabel?: string;
   /** Browser and CLI logins produce the same auth cache for the agent runtime. */
   connectedVia: "browser" | "cli";
-  /** Whether this login may fund a turn in a shared workspace; the member's
-   *  existing choice is kept on reconnect unless this is given. */
-  allowInSharedWorkspaces?: boolean;
 }) {
   validateAuthCache(input.material.authCacheJson);
   const encryptedMaterial = await encryptHostedMaterial(input.material);
@@ -132,7 +129,6 @@ export async function persistHostedCodexConnection(input: {
       createdBy: input.userId,
       revokedAt: null,
       connectedVia: input.connectedVia,
-      allowInSharedWorkspaces: input.allowInSharedWorkspaces ?? true,
     })
     .onConflictDoUpdate({
       target: [
@@ -151,9 +147,6 @@ export async function persistHostedCodexConnection(input: {
         createdBy: input.userId,
         revokedAt: null,
         connectedVia: input.connectedVia,
-        ...(input.allowInSharedWorkspaces !== undefined
-          ? { allowInSharedWorkspaces: input.allowInSharedWorkspaces }
-          : {}),
         updatedAt: new Date(),
       },
     })

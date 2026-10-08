@@ -58,9 +58,7 @@ export type CredentialUnavailableReason =
   /** Nothing connected for this provider at all. */
   | "not_connected"
   /** Connected, but no connected kind runs on this executor. */
-  | "unsupported_here"
-  /** Connected and runnable, but the member kept it out of shared workspaces. */
-  | "not_allowed_in_shared_workspaces";
+  | "unsupported_here";
 
 export type CredentialUnavailable = {
   ok: false;
@@ -78,8 +76,6 @@ type Loaded = {
   credentialId: string | null;
   credentialRevision: string | null;
   source: CredentialSource;
-  /** Whether the member allows this credential inside a shared workspace. */
-  allowInSharedWorkspaces: boolean;
   read: () => Promise<ResolvedSecret | null>;
 };
 
@@ -100,8 +96,6 @@ async function loadCodexAuthCache(input: ResolveInput): Promise<Loaded | null> {
     credentialId: hosted.credential.id,
     credentialRevision: credentialRevision(hosted.credential.updatedAt),
     source: "personal",
-    allowInSharedWorkspaces:
-      hosted.credential.allowInSharedWorkspaces !== false,
     read: async () => {
       const decrypted = await decryptHostedMaterial(material);
       return decrypted.authCacheJson
@@ -143,9 +137,6 @@ function loadedFromRow(
     credentialId: row.id,
     credentialRevision: credentialRevision(row.updatedAt),
     source: "personal",
-    // NOT NULL default true in the schema; `!== false` keeps a row read
-    // through a partial projection from reading as "denied".
-    allowInSharedWorkspaces: row.allowInSharedWorkspaces !== false,
     read: () => read(row),
   };
 }
@@ -239,17 +230,10 @@ export async function resolveCredential(
   input: ResolveInput,
 ): Promise<ResolveResult> {
   const runnable = runnableKinds(input.provider, input.surface);
-  let blockedBySharing = false;
 
   for (const entry of runnable) {
     const loaded = await LOADERS[entry.kind](input);
     if (!loaded) continue;
-    // The member's own credential funds the turn, so they decide whether it
-    // may be spent inside a workspace other people can see.
-    if (input.surface !== "rooms" && !loaded.allowInSharedWorkspaces) {
-      blockedBySharing = true;
-      continue;
-    }
     if (input.dryRun) {
       return {
         ok: true,
@@ -277,11 +261,7 @@ export async function resolveCredential(
   return {
     ok: false,
     provider: input.provider,
-    reason: blockedBySharing
-      ? "not_allowed_in_shared_workspaces"
-      : connected.length > 0
-        ? "unsupported_here"
-        : "not_connected",
+    reason: connected.length > 0 ? "unsupported_here" : "not_connected",
     connectedKinds: connected,
   };
 }
@@ -337,7 +317,5 @@ export function describeUnavailable(
       // Naming this case matters: the member *has* connected the agent and
       // would read "not set up" as a bug.
       return `Your ${label} connection cannot run here yet. Connect a login this surface supports in Settings.`;
-    case "not_allowed_in_shared_workspaces":
-      return `${label} is set to stay out of shared workspaces. Allow it in Settings to run it here.`;
   }
 }

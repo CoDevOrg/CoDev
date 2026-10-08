@@ -9,10 +9,7 @@ export type ProviderConnectionCredentialType = "API_KEY" | "OAUTH_TOKEN";
  */
 export type CredentialProvenance = "browser" | "cli" | "api_key";
 
-/** Whether this member allows their credential to fund shared workspace work. */
-export type ProviderSurfaceFlags = { allowInSharedWorkspaces: boolean };
-
-export type ProviderConnectionRecord = ProviderSurfaceFlags & {
+export type ProviderConnectionRecord = {
   provider: ProviderConnectionProvider;
   label: string;
   status: ProviderConnectionStatus;
@@ -40,7 +37,7 @@ export type SubscriptionConnectMode =
   | "manual_code"
   | "device_code";
 
-export type CliSubscriptionRecord = ProviderSurfaceFlags & {
+export type CliSubscriptionRecord = {
   provider: CliSubscriptionProvider;
   label: string;
   status: ProviderConnectionStatus;
@@ -58,7 +55,7 @@ export type CliSubscriptionRecord = ProviderSurfaceFlags & {
  * which powers coding workspaces, and the browser runtime in
  * `cliSubscriptions`, which is rooms-only — and one record cannot show both.
  */
-export type ClaudeCliTokenRecord = ProviderSurfaceFlags & {
+export type ClaudeCliTokenRecord = {
   status: ProviderConnectionStatus;
   lastFour: string | null;
 };
@@ -107,7 +104,6 @@ export function toCliSubscriptionRecords(
       connectMode: connectModes[provider] ?? connectMode,
       command,
       provenance: provenance === "api_key" ? null : provenance,
-      ...surfaceFlags(status),
     };
   });
 }
@@ -118,7 +114,6 @@ export function toClaudeCliTokenRecord(
   return {
     status: status ? "connected" : "not_connected",
     lastFour: status?.lastFour?.trim() || null,
-    ...surfaceFlags(status),
   };
 }
 
@@ -137,7 +132,6 @@ export type ProviderCredentialStatus = {
   credentialType?: string | null | undefined;
   lastFour?: string | null | undefined;
   connectedVia?: CredentialProvenance | null | undefined;
-  allowInSharedWorkspaces?: boolean | undefined;
   encryptedApiKey?: string | null | undefined;
   encryptedAccessToken?: string | null | undefined;
   encryptedRefreshToken?: string | null | undefined;
@@ -193,23 +187,6 @@ function publicProvenance(
   return null;
 }
 
-/**
- * Where a connected credential can run. These are no longer stored per row:
- * the provider registry decides, because it is a property of the credential
- * kind and not of the member's preferences. A disconnected credential runs
- * nowhere.
- */
-function surfaceFlags(
-  status: ProviderCredentialStatus | null,
-): ProviderSurfaceFlags {
-  return {
-    // Missing means the stored default (allowed). No row means off.
-    allowInSharedWorkspaces: status
-      ? status.allowInSharedWorkspaces !== false
-      : false,
-  };
-}
-
 export function toProviderConnectionRecord(input: {
   provider: ProviderConnectionProvider;
   label: string;
@@ -228,7 +205,6 @@ export function toProviderConnectionRecord(input: {
     suppliedBy: connected ? input.suppliedBy : null,
     scope: "personal",
     provenance: connected ? "api_key" : null,
-    ...surfaceFlags(connected ? input.status : null),
   };
 }
 
