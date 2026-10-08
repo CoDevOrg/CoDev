@@ -223,9 +223,12 @@ The guest reports signed readiness after the exact disk and bridge are ready.
 Disk and tunnel preparation run concurrently with independent replay checkpoints
 and a shared Free-plan request budget: each run spends at most 36 of the 50
 external subrequests, counting Azure calls twice for a possible sign-in. Azure
-operation polling has a five-second minimum and honors `Retry-After`. VM
-deployments, which finish 35-60 seconds after submission, first poll at 30
-seconds and every 2 seconds between 40 and 70. Provisioning status includes this setup time.
+operation polling has a five-second minimum and honors `Retry-After`. A baked
+start submits the VM deployment without polling it: guest services answer
+signed health checks 10-20 seconds before Azure reports the extension. The
+controller waits 30 seconds, polls health every 3 seconds (5 after a minute),
+and reads the deployment every tenth attempt to surface failures. Legacy starts
+still poll the deployment to completion. Provisioning status includes this setup time.
 
 Roll back new starts by disabling the flag and restoring the previous immutable
 image pin in both secret stores. Existing VMs keep their current image and disk.

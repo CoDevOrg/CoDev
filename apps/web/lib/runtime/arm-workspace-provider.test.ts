@@ -374,6 +374,11 @@ describe("ARM workspace provider stop", () => {
 
   function stubBakedStart(gateDiskOnTunnel = true) {
     vi.stubEnv("ARM_WORKSPACE_BOOT_ENABLED", "true");
+    // Outside a workflow, the post-submit boot wait is a real timer.
+    vi.stubGlobal("setTimeout", ((callback: () => void) => {
+      queueMicrotask(callback);
+      return 0;
+    }) as typeof setTimeout);
     const keys = generateKeyPairSync("ed25519");
     vi.stubEnv(
       "ARM_WORKSPACE_SIGNING_PRIVATE_KEY",
@@ -561,40 +566,45 @@ describe("ARM workspace provider stop", () => {
       expect(journal).not.toContain(secret);
   });
 
-  it("polls a VM deployment near its usual finish and wakes after one handoff", async () => {
+  function stubWake(deploymentState: () => unknown) {
     const state = stubBakedStart(false);
     const fallback = fetch;
     const savedDisk = `/subscriptions/subscription/resourceGroups/codev-arm-workspace-phase1/providers/Microsoft.Compute/disks/saved-data`;
-    let now = 1_000_000;
-    let finishAt = Number.POSITIVE_INFINITY;
-    vi.spyOn(Date, "now").mockImplementation(() => now);
+    const clock = { now: 1_000_000, readyAt: Number.POSITIVE_INFINITY };
+    vi.spyOn(Date, "now").mockImplementation(() => clock.now);
+    const own = (url: string, init?: RequestInit) => {
+      if (url.includes("/deployments/") && init?.method === "PUT") {
+        clock.readyAt = clock.now + 45_000;
+        return new Response("{}", {
+          status: 201,
+          headers: {
+            "azure-asyncoperation": "https://management.azure.com/deploy-op",
+          },
+        });
+      }
+      if (url.includes("/deployments/")) return jsonResponse(deploymentState());
+      if (url.endsWith("/v1/health") && clock.now < clock.readyAt)
+        return jsonResponse({ ready: false });
+      if (url.includes("/disks/"))
+        return jsonResponse({
+          id: savedDisk,
+          tags: { Runtime: "arm-workspace", WorkspaceId: workspaceId },
+          sku: { name: "StandardSSD_LRS" },
+          properties: { diskSizeGB: 16, diskState: "Unattached" },
+        });
+      return null;
+    };
     vi.stubGlobal(
       "fetch",
       async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
-        if (url.includes("/deployments/") && init?.method === "PUT") {
-          await fallback(input, init);
-          finishAt = now + 50_000;
-          return new Response("{}", {
-            status: 201,
-            headers: {
-              "azure-asyncoperation": "https://management.azure.com/deploy-op",
-            },
-          });
-        }
-        if (url.includes("/deployments/")) return jsonResponse({});
-        if (url === "https://management.azure.com/deploy-op")
-          return jsonResponse({
-            status: now >= finishAt ? "Succeeded" : "Running",
-          });
-        if (url.includes("/disks/"))
-          return jsonResponse({
-            id: savedDisk,
-            tags: { Runtime: "arm-workspace", WorkspaceId: workspaceId },
-            sku: { name: "StandardSSD_LRS" },
-            properties: { diskSizeGB: 16, diskState: "Unattached" },
-          });
-        return fallback(input, init);
+        // The shared stub records the PUT and reads its boot script.
+        const submit = url.includes("/deployments/") && init?.method === "PUT";
+        if (submit) await fallback(input, init);
+        const response = own(url, init);
+        if (!response) return fallback(input, init);
+        if (!submit) state.requests.push(url);
+        return response;
       },
     );
     const sleeps: number[] = [];
@@ -603,32 +613,53 @@ describe("ARM workspace provider stop", () => {
         action(),
       sleep: async (_name: string, milliseconds: number) => {
         sleeps.push(milliseconds);
-        now += milliseconds;
+        clock.now += milliseconds;
       },
     } as unknown as WorkflowStep;
-    let checkpoints: Record<string, unknown> = {};
-    let runs = 0;
-    for (let complete = false; !complete; runs++) {
-      expect(runs).toBeLessThan(5);
-      await ArmWorkflowIO.run(step, "arm-start-2", checkpoints, async () => {
-        try {
-          await new ArmWorkspaceProvider().start(
-            { ...freshStart, diskId: savedDisk, diskUuid: "saved-uuid" },
-            vi.fn(async () => undefined),
-          );
-          complete = true;
-        } catch (error) {
-          expect(error).toMatchObject({ code: "WORKFLOW_CONTINUE" });
-          checkpoints = JSON.parse(JSON.stringify(ArmWorkflowIO.saved()));
-        }
-      });
-    }
+    const start = () =>
+      ArmWorkflowIO.run(step, "arm-start-2", {}, () =>
+        new ArmWorkspaceProvider().start(
+          { ...freshStart, diskId: savedDisk, diskUuid: "saved-uuid" },
+          vi.fn(async () => undefined),
+        ),
+      );
+    return { state, sleeps, start };
+  }
+
+  it("polls guest health directly after submitting the deployment, within one run", async () => {
+    const { state, sleeps, start } = stubWake(() => ({
+      properties: { provisioningState: "Running" },
+    }));
+    await start();
     expect(state.identity?.diskMode).toBe("existing");
-    expect(sleeps).toEqual([
-      30_000, 5_000, 5_000, 2_000, 2_000, 2_000, 2_000, 2_000,
-    ]);
-    // Lifecycle progress writes add a few requests in production; still one handoff.
-    expect(runs).toBe(2);
+    // Ready 45 s after submission: one boot wait, then 3 s polls.
+    expect(sleeps).toEqual([30_000, 3_000, 3_000, 3_000, 3_000, 3_000]);
+    expect(state.requests.some((url) => url.includes("deploy-op"))).toBe(false);
+    // One PUT, plus one failure check at the first health miss.
+    expect(
+      state.requests.filter((url) => url.includes("/deployments/")),
+    ).toHaveLength(2);
+  });
+
+  it("surfaces a failed deployment at the first health miss instead of the readiness deadline", async () => {
+    const { sleeps, start } = stubWake(() => ({
+      properties: {
+        provisioningState: "Failed",
+        error: {
+          code: "DeploymentFailed",
+          details: [
+            {
+              code: "ResourceDeploymentFailure",
+              details: [{ code: "VMExtensionProvisioningError" }],
+            },
+          ],
+        },
+      },
+    }));
+    await expect(start()).rejects.toMatchObject({
+      code: "VMExtensionProvisioningError",
+    });
+    expect(sleeps).toEqual([30_000]);
   });
 
   it("does not replace a missing saved disk with a fresh disk", async () => {

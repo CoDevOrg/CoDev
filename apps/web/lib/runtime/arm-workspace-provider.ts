@@ -751,18 +751,19 @@ async function requireDisk(
   return disk.id;
 }
 
-async function deployVm(
+async function deploymentPath(workspaceId: string, generation: number) {
+  const config = readArmWorkspaceConfig();
+  return `/subscriptions/${config.subscriptionId}/resourceGroups/${config.resourceGroup}/providers/Microsoft.Resources/deployments/${await resourceName(workspaceId)}-g${generation}`;
+}
+
+/** A VM left by an earlier attempt is reused only if it is ours and holds the disk. */
+async function existingVm(
   workspaceId: string,
   generation: number,
   diskId: string,
-  bootScript?: () => Promise<string>,
 ) {
-  const config = readArmWorkspaceConfig();
-  const name = `${await resourceName(workspaceId)}-g${generation}`;
-  const path = `/subscriptions/${config.subscriptionId}/resourceGroups/${config.resourceGroup}/providers/Microsoft.Resources/deployments/${name}`;
-  const virtualMachineId = await vmId(workspaceId, generation);
   const existing = (await armRequest(
-    `${virtualMachineId}?%24expand=instanceView`,
+    `${await vmId(workspaceId, generation)}?%24expand=instanceView`,
     COMPUTE_API,
     "GET",
     undefined,
@@ -777,18 +778,31 @@ async function deployVm(
       };
     };
   } | null;
-  if (existing?.id) {
-    checkTags(existing, workspaceId, generation);
-    if (
-      existing.properties?.hardwareProfile?.vmSize !== "Standard_D2ps_v6" ||
-      existing.properties.storageProfile?.dataDisks?.length !== 1 ||
-      existing.properties.storageProfile.dataDisks[0]?.managedDisk?.id?.toLowerCase() !==
-        diskId.toLowerCase()
-    ) {
-      fail("DISK_ATTACH_CONFLICT");
-    }
-    return existing.id;
+  if (!existing?.id) return null;
+  checkTags(existing, workspaceId, generation);
+  if (
+    existing.properties?.hardwareProfile?.vmSize !== "Standard_D2ps_v6" ||
+    existing.properties.storageProfile?.dataDisks?.length !== 1 ||
+    existing.properties.storageProfile.dataDisks[0]?.managedDisk?.id?.toLowerCase() !==
+      diskId.toLowerCase()
+  ) {
+    fail("DISK_ATTACH_CONFLICT");
   }
+  return existing.id;
+}
+
+async function deployVm(
+  workspaceId: string,
+  generation: number,
+  diskId: string,
+  bootScript?: () => Promise<string>,
+) {
+  const config = readArmWorkspaceConfig();
+  const name = `${await resourceName(workspaceId)}-g${generation}`;
+  const path = await deploymentPath(workspaceId, generation);
+  const virtualMachineId = await vmId(workspaceId, generation);
+  const existing = await existingVm(workspaceId, generation, diskId);
+  if (existing) return existing;
   const deployment = async () => ({
     properties: {
       mode: "Incremental",
@@ -809,21 +823,49 @@ async function deployVm(
       },
     },
   });
-  await armRequest(
-    path,
-    DEPLOYMENT_API,
+  if (!bootScript) {
+    await armRequest(
+      path,
+      DEPLOYMENT_API,
+      "PUT",
+      deployment,
+      false,
+      deploymentPoll,
+    );
+    const vm = (await armRequest(
+      `${virtualMachineId}?%24expand=instanceView`,
+      COMPUTE_API,
+    )) as { id?: string; tags?: Record<string, string> };
+    if (!vm.id) fail("VM_CREATE_FAILED");
+    checkTags(vm, workspaceId, generation);
+    return vm.id;
+  }
+  // A baked guest reports signed readiness through its tunnel 10-20 s before
+  // Azure finishes reporting the extension, so the caller polls health instead
+  // of this deployment. Failures surface through requireDeploymentProgress.
+  const { response, payload } = await armFetch(
+    apiUrl(path, DEPLOYMENT_API),
     "PUT",
     deployment,
-    false,
-    deploymentPoll,
   );
-  const vm = (await armRequest(
-    `${virtualMachineId}?%24expand=instanceView`,
-    COMPUTE_API,
-  )) as { id?: string; tags?: Record<string, string> };
-  if (!vm.id) fail("VM_CREATE_FAILED");
-  checkTags(vm, workspaceId, generation);
-  return vm.id;
+  if (!response.ok) fail(errorCode(payload, response.status));
+  return virtualMachineId;
+}
+
+type DeploymentError = { code?: string; details?: DeploymentError[] };
+
+const innermostCode = (error?: DeploymentError): string | undefined =>
+  error?.details?.[0]
+    ? (innermostCode(error.details[0]) ?? error.code)
+    : error?.code;
+
+async function requireDeploymentProgress(path: string) {
+  const deployment = (await armRequest(path, DEPLOYMENT_API)) as {
+    properties?: { provisioningState?: string; error?: DeploymentError };
+  };
+  const state = deployment.properties?.provisioningState;
+  if (state === "Failed" || state === "Canceled")
+    fail(innermostCode(deployment.properties?.error) ?? "VM_CREATE_FAILED");
 }
 
 async function waitForVmReady(
@@ -1006,58 +1048,94 @@ async function connectionExtension(
   };
 }
 
+async function fetchHealth(
+  workspaceId: string,
+  generation: number,
+  routeHost: string,
+  timeoutMs: number,
+) {
+  const authorization = `Bearer ${await capabilityToken(routeHost, workspaceId, generation)}`;
+  const response = await fetch(`https://${routeHost}/v1/health`, {
+    headers: { authorization },
+    redirect: "manual",
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  const value = (await response.json().catch(() => null)) as {
+    ready?: boolean;
+    workspaceId?: string;
+    generation?: number;
+    diskUuid?: string;
+  } | null;
+  return { ok: response.ok, value };
+}
+
+async function guestReady(
+  workspaceId: string,
+  generation: number,
+  diskUuid: string,
+  routeHost: string,
+) {
+  try {
+    const { ok, value } = await ArmWorkflowIO.checkpoint("health", () =>
+      fetchHealth(workspaceId, generation, routeHost, 10_000),
+    );
+    return Boolean(
+      ok &&
+      value?.ready &&
+      value.workspaceId === workspaceId &&
+      value.generation === generation &&
+      value.diskUuid === diskUuid,
+    );
+  } catch (error) {
+    // A handoff must not spin in place until the readiness deadline.
+    if (
+      error instanceof ArmWorkspaceRuntimeError &&
+      error.code === "WORKFLOW_CONTINUE"
+    )
+      throw error;
+    // The connector and guest bridge can take time to join after boot.
+    return false;
+  }
+}
+
+/** Decisions depend on the attempt count, never the clock, so replays align. */
+type HealthSchedule = {
+  intervalMs: (attempt: number) => number;
+  onAttempt: (attempt: number) => Promise<void>;
+};
+
 async function waitForHealth(
   workspaceId: string,
   generation: number,
   diskUuid: string,
   routeHost: string,
-  heartbeat: () => Promise<void>,
+  schedule: HealthSchedule,
 ) {
   const deadline = await ArmWorkflowIO.deadline(
     readArmWorkspaceConfig().bootEnabled ? 10 * 60_000 : 3 * 60_000,
   );
-  while (Date.now() < deadline) {
-    try {
-      const authorization = `Bearer ${await capabilityToken(routeHost, workspaceId, generation)}`;
-      const { ok, value } = await ArmWorkflowIO.checkpoint(
-        "health",
-        async () => {
-          const response = await fetch(`https://${routeHost}/v1/health`, {
-            headers: { authorization },
-            redirect: "manual",
-            signal: AbortSignal.timeout(10_000),
-          });
-          const value = (await response.json().catch(() => null)) as {
-            ready?: boolean;
-            workspaceId?: string;
-            generation?: number;
-            diskUuid?: string;
-          } | null;
-          return { ok: response.ok, value };
-        },
-      );
-      if (
-        ok &&
-        value?.ready &&
-        value.workspaceId === workspaceId &&
-        value.generation === generation &&
-        value.diskUuid === diskUuid
-      )
-        return;
-    } catch (error) {
-      // A handoff must not spin in place until the readiness deadline.
-      if (
-        error instanceof ArmWorkspaceRuntimeError &&
-        error.code === "WORKFLOW_CONTINUE"
-      )
-        throw error;
-      // The connector and guest bridge can take time to join after boot.
-    }
-    await heartbeat();
-    await ArmWorkflowIO.sleep(5_000);
+  for (let attempt = 0; Date.now() < deadline; attempt++) {
+    if (await guestReady(workspaceId, generation, diskUuid, routeHost)) return;
+    await schedule.onAttempt(attempt);
+    await ArmWorkflowIO.sleep(schedule.intervalMs(attempt));
   }
   fail("GUEST_READINESS_TIMEOUT");
 }
+
+// Guest services come up 40-50 s after submission; Azure reports the extension
+// 10-20 s later. Poll the guest often and read the deployment only to surface
+// failures, every tenth attempt.
+const bakedHealthSchedule = (
+  deployment: string,
+  heartbeat: () => Promise<void>,
+): HealthSchedule => ({
+  intervalMs: (attempt) => (attempt < 20 ? 3_000 : 5_000),
+  onAttempt: async (attempt) => {
+    if (attempt % 10 !== 0) return;
+    await requireDeploymentProgress(deployment);
+    await heartbeat();
+  },
+});
 
 async function deleteResource(id: string, version: string) {
   await armRequest(id, version, "DELETE", undefined, true);
@@ -1166,7 +1244,10 @@ async function connectRuntime(
     input.generation,
     resources.diskUuid,
     route.routeHost,
-    () => progress("checking_readiness", ready),
+    {
+      intervalMs: () => 5_000,
+      onAttempt: () => progress("checking_readiness", ready),
+    },
   );
   return ready;
 }
@@ -1219,6 +1300,8 @@ async function deployBakedVm(
           await tunnelToken(route.tunnelId),
         ),
     );
+    // The guest cannot answer before it boots; skip polls that would fail.
+    await ArmWorkflowIO.sleep(30_000);
   }
   return virtualMachineId;
 }
@@ -1278,8 +1361,14 @@ async function startBakedRuntime(
     routeHost: route.routeHost,
   };
   await progress("checking_readiness", resources);
-  await waitForHealth(workspaceId, generation, diskUuid, route.routeHost, () =>
-    progress("checking_readiness", resources),
+  await waitForHealth(
+    workspaceId,
+    generation,
+    diskUuid,
+    route.routeHost,
+    bakedHealthSchedule(await deploymentPath(workspaceId, generation), () =>
+      progress("checking_readiness", resources),
+    ),
   );
   return resources;
 }
@@ -1349,21 +1438,14 @@ export class ArmWorkspaceProvider {
   ) {
     if (!diskUuid || !routeHost) return false;
     try {
-      const response = await fetch(`https://${routeHost}/v1/health`, {
-        headers: {
-          authorization: `Bearer ${await capabilityToken(routeHost, workspaceId, generation)}`,
-        },
-        redirect: "manual",
-        signal: AbortSignal.timeout(5_000),
-      });
-      const value = (await response.json().catch(() => null)) as {
-        ready?: boolean;
-        workspaceId?: string;
-        generation?: number;
-        diskUuid?: string;
-      } | null;
+      const { ok, value } = await fetchHealth(
+        workspaceId,
+        generation,
+        routeHost,
+        5_000,
+      );
       return Boolean(
-        response.ok &&
+        ok &&
         value?.ready &&
         value.workspaceId === workspaceId &&
         value.generation === generation &&
