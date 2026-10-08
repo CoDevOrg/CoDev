@@ -1,6 +1,6 @@
 # Superset agent coordination
 
-**Status:** Implemented behind a per-workspace flag and unreleased. Guest pieces need a signed ARM runtime release; nothing has run on a Linux ARM64 guest yet. Proposed and built 2026-10-08.
+**Status:** Released in ARM image `1.0.16` (2026-10-08) and off everywhere: no workspace is in `CODEV_AGENT_COORDINATION_WORKSPACES` yet. Proposed and built 2026-10-08.
 **Depends on:** [SUPERSET_MULTI_AGENT_HANDOFF.md](./SUPERSET_MULTI_AGENT_HANDOFF.md) (one worktree per independent agent, per-launch hook identity) and [SUPERSET_WORKSPACE_OWNERSHIP.md](./SUPERSET_WORKSPACE_OWNERSHIP.md) (CoDev authorizes every operation).
 
 ## Problem
@@ -145,13 +145,25 @@ A notice places data influenced by another member's agent into this agent's cont
 
 ## Release and verification
 
-Shipping requires a signed ARM runtime release with the new host service and `codev-guestd`, image promotion, and an update for existing VMs, plus a web deploy. Before enabling the flags for an internal workspace, verify on a Linux ARM64 guest:
+Shipped through CoDevOrg/CoDev#119, #125 (security fixes it depends on), and #127 (the rollout variable), then image `1.0.16`, built from `main` and promoted through `ARM_WORKSPACE_IMAGE_VERSION_ID`. First boot reached agent readiness in 37 s.
 
-1. `codev-shell` can read agent worktrees and their Git metadata; otherwise those worktrees report `unavailable`.
-2. A real Claude, Codex, and Cursor agent each receive a notice through `PostToolUse`, on both the Superset and native paths. In particular, confirm that Superset-launched Claude loads the profile hooks passed with `--settings` under `--setting-sources ""` (verified against Claude Code 2.1.272; guests pin 2.1.236), that Codex loads `hooks.json` with `--ignore-user-config`, and that the Cursor CLI runs hooks on Linux.
-3. Hook latency stays under the budget, and notice tokens per run match the budget above.
+Verified on 2026-10-08:
 
-Then add one internal workspace to `CODEV_AGENT_COORDINATION_WORKSPACES`, watch overlap counts, false positives, and duplicate warnings, and widen. Removing a workspace restores current behavior for its next agent starts.
+| Check                                                          | Where                        | Result                                                                                           |
+| -------------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------ |
+| Standard lifecycle canary                                      | Staging, `1.0.16`            | Fresh start, guest command, stop, saved-disk reopen, stale-generation rejection all passed       |
+| Host creates worktrees and reads change sets as `codev-shell`  | Staging, `1.0.16`            | Passed; the overlap report found a function-level overlap across two agent worktrees             |
+| Repository `core.fsmonitor` never runs as root                 | Staging, `1.0.16`            | Host `/codev/git` and guestd `/v1/git/status` ran it only as uid 2000                            |
+| Native registration and the real hook command deliver a notice | Staging, `1.0.16`            | `additional_context` arrived within the hook's 300 ms limit; a forged token got nothing          |
+| guestd refuses Cursor turns with repository hooks              | Staging, `1.0.16`            | 400 naming `.cursor/hooks.json`; 200 once removed                                                |
+| Codex runs the profile hook and the model sees the notice      | Local, pinned Codex 0.148.0  | Passed on the native and Superset paths; repository `.codex/hooks.json` and `notify` did not run |
+| Claude accepts the hook settings                               | Local, pinned Claude 2.1.236 | Inline and file `--settings` are accepted under `--setting-sources ""`                           |
+
+Not yet verified, because no Claude or Cursor login was available: that pinned Claude and Cursor actually fire the hook and show its notice to the model. Verify both with real turns in the first enabled workspace.
+
+Production runs Superset agent sessions off, and native turns run one at a time per VM, so two agents never run at once there today. Until Superset sessions are enabled, an enabled workspace gets the duplicate check and hook setup but no overlap notices or UI overlaps.
+
+To enable, add one internal workspace to `CODEV_AGENT_COORDINATION_WORKSPACES` and start a new CI run from `main`. Watch overlap counts, false positives, and duplicate warnings, then widen. Removing a workspace restores current behavior for its next agent starts.
 
 ## Follow-ups
 
