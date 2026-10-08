@@ -61,7 +61,9 @@ chmod 00700 "${metadata}"
 install -d -o root -g root -m 0700 "${metadata}/superset"
 chmod 00700 "${metadata}/superset"
 recover_git_state() {
-  [[ -d /workspace/.git ]] || return
+  # A new disk has no checkout yet; a bare return would pass the failed test's
+  # status to set -e and abort every first boot.
+  [[ -d /workspace/.git ]] || return 0
   git -C /workspace worktree prune
   local git_dir
   git_dir=$(git -C /workspace rev-parse --path-format=absolute --git-common-dir)
