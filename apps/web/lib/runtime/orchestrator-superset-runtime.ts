@@ -4,6 +4,7 @@ import { gen2CoordinationReportSchema } from "@codev/contracts";
 import { z } from "zod";
 
 import { orchestratorRequest } from "./orchestrator-request";
+import type { WorkspaceRuntimeTarget } from "./workspace-runtime-target";
 
 const terminalPollSchema = z.object({
   chunks: z.array(
@@ -24,11 +25,14 @@ async function requestSupersetRuntime(
   method: "GET" | "POST" | "DELETE",
   operation: string,
   body?: unknown,
+  target?: WorkspaceRuntimeTarget,
 ) {
   return orchestratorRequest(
     method,
     `/v1/sandboxes/${workspaceId}/superset/runtime/${operation}`,
     body,
+    undefined,
+    target,
   );
 }
 
@@ -86,8 +90,15 @@ export async function startSupersetTerminal(
 export async function sendSupersetTerminalInput(
   workspaceId: string,
   input: { worktreeId: string; sessionId: string; data: string },
+  target?: WorkspaceRuntimeTarget,
 ) {
-  await requestSupersetRuntime(workspaceId, "POST", "terminal/input", input);
+  await requestSupersetRuntime(
+    workspaceId,
+    "POST",
+    "terminal/input",
+    input,
+    target,
+  );
 }
 
 export async function resizeSupersetTerminal(
@@ -98,19 +109,28 @@ export async function resizeSupersetTerminal(
     rows: number;
     columns: number;
   },
+  target?: WorkspaceRuntimeTarget,
 ) {
-  await requestSupersetRuntime(workspaceId, "POST", "terminal/resize", input);
+  await requestSupersetRuntime(
+    workspaceId,
+    "POST",
+    "terminal/resize",
+    input,
+    target,
+  );
 }
 
 export async function pollSupersetTerminal(
   workspaceId: string,
   input: { worktreeId: string; sessionId: string; after: number },
+  target?: WorkspaceRuntimeTarget,
 ) {
   const response = await requestSupersetRuntime(
     workspaceId,
     "POST",
     "terminal/poll",
     { ...input, waitMilliseconds: 20_000 },
+    target,
   );
   return terminalPollSchema.parse(await response.json());
 }

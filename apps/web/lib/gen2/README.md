@@ -73,7 +73,7 @@ authorization of its own — a route reaching those clients directly would be an
 IDOR across every gen 2 workspace. Keeping the guard in this layer means a new
 route cannot forget it. Terminal operations and socket membership rechecks require
 an editor or owner role; viewers cannot access the shared shell. Terminal access
-is never cached; socket input, resize, and output delivery recheck current membership. Collaboration
+is never cached; socket input, resize, and output delivery recheck current membership. `terminal-access.ts` reads that membership with the guest route in one query, so each keystroke batch and output poll costs one database round trip. Collaboration
 updates recheck the current member role rather than trusting handshake permissions.
 Broadcasts and replay verify live membership before delivering workspace data;
 removed members are disconnected. Native file writes/uploads and agent starts

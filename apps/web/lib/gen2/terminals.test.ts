@@ -42,7 +42,7 @@ vi.mock("../runtime/orchestrator-superset-runtime", () => ({
 
 const {
   authorizeGen2TerminalStream,
-  recheckGen2TerminalMember,
+  gen2TerminalBackend,
   resizeGen2Terminal,
   closeGen2Terminal,
   pollGen2Terminal,
@@ -86,7 +86,6 @@ describe("gen2 terminals", () => {
         () => pollGen2Terminal(workspaceId, userId, sessionId, 0),
         () => closeGen2Terminal(workspaceId, userId, sessionId),
         () => authorizeGen2TerminalStream(workspaceId, userId),
-        () => recheckGen2TerminalMember(workspaceId, userId),
       ];
       for (const operation of operations) {
         await expect(operation()).rejects.toMatchObject({ status: 403 });
@@ -108,16 +107,32 @@ describe("gen2 terminals", () => {
     },
   );
 
-  it("rejects a demoted member when a terminal socket rechecks access", async () => {
-    await authorizeGen2TerminalStream(workspaceId, userId);
-    mocks.requireMember.mockResolvedValue({
-      id: workspaceId,
-      status: "ready",
-      role: "viewer",
-    });
+  it("routes socket calls with the access they were given", async () => {
+    process.env.CODEV_SUPERSET_RUNTIME_ENABLED = "true";
+    const { createHash } = await import("node:crypto");
+    const hash = createHash("sha256").update(workspaceId).digest("hex");
+    const host = `codev-${hash.slice(0, 20)}-g3.trycodev.com`;
+    const access = {
+      provider: "azure_arm" as const,
+      status: "ready" as const,
+      generation: 3,
+      host,
+    };
+    mocks.supersetPoll.mockResolvedValue({ chunks: [] });
+    await gen2TerminalBackend(workspaceId).poll(sessionId, 7, access);
+    expect(mocks.supersetPoll).toHaveBeenCalledWith(
+      workspaceId,
+      { worktreeId: "main", sessionId, after: 7 },
+      { workspaceId, generation: 3, host },
+    );
     await expect(
-      recheckGen2TerminalMember(workspaceId, userId),
-    ).rejects.toMatchObject({ status: 403 });
+      gen2TerminalBackend(workspaceId).input(sessionId, "ls", {
+        ...access,
+        status: "stopping" as const,
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(mocks.supersetInput).not.toHaveBeenCalled();
+    expect(mocks.requireMember).not.toHaveBeenCalled();
   });
 
   it("allows editors to start and use a terminal", async () => {
