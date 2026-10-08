@@ -77,6 +77,20 @@ test("CoDev installs provider hooks beside the private credential profile", () =
 	assert.ok(!uncoordinated.files?.[0]?.contents.includes(COORDINATION_HOOK_COMMAND));
 });
 
+test("Cursor gets only the coordination hook, in its private HOME", () => {
+	const profile = { env: { HOME: "{{profileDir}}" } };
+	assert.deepEqual(buildCoDevAgentProfile(profile, "cursor"), profile);
+
+	const coordinated = buildCoDevAgentProfile(profile, "cursor", true);
+	assert.equal(coordinated.files?.length, 1);
+	assert.equal(coordinated.files?.[0]?.path, ".cursor/hooks.json");
+	assert.deepEqual(JSON.parse(coordinated.files?.[0]?.contents ?? "{}"), {
+		version: 1,
+		hooks: { postToolUse: [{ command: COORDINATION_HOOK_COMMAND }] },
+	});
+	assert.equal(coordinated.env?.CLAUDE_CONFIG_DIR, undefined);
+});
+
 const canExerciseLinuxPermissions =
 	process.platform === "linux" && process.getuid?.() === 0 && existsSync("/usr/bin/setpriv");
 

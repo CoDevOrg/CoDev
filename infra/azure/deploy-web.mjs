@@ -38,6 +38,10 @@ const values = {
   CODEV_AGENT_COORDINATION_WORKSPACES:
     process.env.CODEV_AGENT_COORDINATION_WORKSPACES ??
     base.CODEV_AGENT_COORDINATION_WORKSPACES,
+  // Cursor joins Superset agent sessions only after every guest can host it.
+  CODEV_SUPERSET_CURSOR_AGENTS_ENABLED:
+    process.env.CODEV_SUPERSET_CURSOR_AGENTS_ENABLED ??
+    base.CODEV_SUPERSET_CURSOR_AGENTS_ENABLED,
   // A non-secret repository variable promotes images without rewriting the
   // write-only ARM credential bundle; the bundle's pin is the fallback.
   ...(process.env.ARM_WORKSPACE_IMAGE_VERSION_ID && {

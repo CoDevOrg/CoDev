@@ -32,7 +32,12 @@ export function listSupersetAgents(db: HostDb): CoordinatedAgent[] {
 			agentKey: run.codevRunId,
 			hookId: run.terminalId,
 			worktreeId: run.worktreeId,
-			harness: run.provider === "openai" ? "codex" : "claude",
+			harness:
+				run.provider === "openai"
+					? "codex"
+					: run.provider === "cursor"
+						? "cursor"
+						: "claude",
 			hookTokenHash: run.hookTokenHash,
 		}));
 }

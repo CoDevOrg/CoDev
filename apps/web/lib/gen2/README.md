@@ -139,9 +139,11 @@ Cursor subscriptions resolve through the provider registry and use a private
 file credential store under each turn profile. The ARM image must include the
 pinned Linux ARM64 Cursor CLI before the workspace picker is deployed.
 
-Cursor currently uses native guest exec even when Superset agent sessions are
-enabled. Start, poll, cancel, and background draining must keep that routing
-consistent. Refreshed auth belongs to the turn’s initiating member.
+Cursor uses native guest exec unless `CODEV_SUPERSET_CURSOR_AGENTS_ENABLED` is
+also on; then it runs as a Superset agent like Codex and Claude. Poll and cancel
+route by the turn's session ID (a Superset run UUID or a guest session ID), so a
+turn stays on the path that started it. Refreshed auth belongs to the turn’s
+initiating member on both paths.
 
 Guest turn polls use `withDatabaseOperation` for all routing, transaction, and
 auth-refresh queries across the long guest wait. They must not rely on an HTTP

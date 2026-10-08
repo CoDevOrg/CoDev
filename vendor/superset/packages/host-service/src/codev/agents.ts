@@ -22,6 +22,7 @@ import {
 	prepareAgentLaunch,
 	removeAgentLaunch,
 } from "./agent-isolation";
+import { findCursorProjectHookFile } from "./cursor-project-hooks";
 import { resolveCoDevWorktreeRoot } from "./files";
 
 const worktreeIdSchema = z
@@ -47,7 +48,7 @@ const agentStartSchema = z.object({
 	codevRunId: z.string().uuid(),
 	codevWorkspaceId: z.string().uuid(),
 	worktreeId: worktreeIdSchema,
-	provider: z.enum(["openai", "anthropic"]),
+	provider: z.enum(["openai", "anthropic", "cursor"]),
 	launchProfile: launchProfileSchema.optional(),
 	codexAuthCacheJson: z
 		.string()
@@ -284,6 +285,18 @@ export function registerCoDevAgentBridge({
 		let agentId: string | undefined;
 		try {
 			const workspace = await ensureAgentWorkspace({ db, git, workspaceRoot, worktreeId });
+			const projectHook =
+				provider === "cursor"
+					? await findCursorProjectHookFile(workspace.worktreePath)
+					: undefined;
+			if (projectHook) {
+				return context.json(
+					{
+						error: `Cursor would run hooks from ${projectHook} in this branch with your credentials. Remove that file or use Codex or Claude.`,
+					},
+					400,
+				);
+			}
 			const profileRoot = process.env.CODEV_AGENT_PROFILE_ROOT;
 			if (!profileRoot) {
 				return context.json({ error: "Isolated agent profiles are not configured." }, 503);
@@ -434,10 +447,16 @@ export function registerCoDevAgentBridge({
 		const agentId = context.req.param("agentId");
 		const agent = persistedAgentFor(db, agentId);
 		const launch = agentSessions.get(agentId)?.launch;
-		if (!agent || !launch || agent.provider !== "openai") {
+		const authPaths =
+			agent?.provider === "openai"
+				? [".codex/auth.json", "auth.json"]
+				: agent?.provider === "cursor"
+					? [".config/cursor/auth.json"]
+					: [];
+		if (!agent || !launch || authPaths.length === 0) {
 			return context.json({ authCacheJson: null });
 		}
-		for (const relativePath of [".codex/auth.json", "auth.json"]) {
+		for (const relativePath of authPaths) {
 			try {
 				const path = join(launch.directory, relativePath);
 				if ((await stat(path)).size > 128 * 1024) continue;

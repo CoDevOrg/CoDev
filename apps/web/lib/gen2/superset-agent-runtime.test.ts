@@ -115,6 +115,11 @@ vi.mock("./superset-agent-orchestrator-client", () => ({
     mocks.checkRecovery(...args),
 }));
 
+const cursorAuth = vi.hoisted(() => ({ update: vi.fn() }));
+vi.mock("../providers/cursor-auth-refresh", () => ({
+  updateCursorAuthCache: (...args: unknown[]) => cursorAuth.update(...args),
+}));
+
 vi.mock("../providers/hosted-codex-subscription-credentials", () => ({
   updateHostedCodexAuthCacheIfCurrent: (...args: unknown[]) =>
     mocks.updateAuthCacheIfCurrent(...args),
@@ -553,6 +558,42 @@ describe("gen2 Superset agent runtime adapter", () => {
       workspaceId,
       "agent-1",
     );
+  });
+
+  it("returns a Cursor run's refreshed login only to its creator", async () => {
+    mocks.getRunById.mockResolvedValue({
+      ...RUN,
+      provider: "cursor",
+      connectionId: null,
+      credentialRevision: null,
+    });
+    mocks.poll.mockResolvedValue({
+      chunks: [],
+      nextSequence: 5,
+      exited: true,
+      exitCode: 0,
+      refreshReady: true,
+    });
+    mocks.captureCredential.mockResolvedValue({
+      authCacheJson: '{"token":"t"}',
+    });
+
+    await pollGen2SupersetAgentSession({
+      workspaceId,
+      userId,
+      runId,
+      after: 0,
+    });
+
+    expect(mocks.captureCredential).toHaveBeenCalledWith(
+      workspaceId,
+      "agent-1",
+    );
+    expect(cursorAuth.update).toHaveBeenCalledWith(
+      RUN.createdBy,
+      '{"token":"t"}',
+    );
+    expect(mocks.updateAuthCacheIfCurrent).not.toHaveBeenCalled();
   });
 
   it("does not finish the run while it is still running", async () => {

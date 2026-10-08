@@ -1,6 +1,7 @@
 import { randomInt } from "node:crypto";
 import { chown, chmod, lstat, mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import type { CoDevAgentProvider } from "./agent-command-policy.ts";
 
 // Reserved for CoDev agent processes. Ordinary terminals always use uid 2000.
 const MIN_AGENT_UID = 100_000;
@@ -147,7 +148,7 @@ export async function prepareAgentLaunch(input: {
 	root: string;
 	command: string[];
 	profile?: AgentLaunchProfile;
-	provider: "openai" | "anthropic";
+	provider: CoDevAgentProvider;
 	hookToken: string;
 	coordination?: boolean;
 }): Promise<AgentLaunch> {
@@ -203,9 +204,10 @@ export async function prepareAgentLaunch(input: {
  */
 export function buildCoDevAgentProfile(
 	profile: AgentLaunchProfile,
-	provider: "openai" | "anthropic",
+	provider: CoDevAgentProvider,
 	coordination = false,
 ): AgentLaunchProfile {
+	if (provider === "cursor") return withCursorCoordinationHook(profile, coordination);
 	if ((profile.files?.length ?? 0) >= MAX_PROFILE_FILES) {
 		throw new Error("Launch profile must leave room for the CoDev hook configuration.");
 	}
@@ -254,6 +256,27 @@ export function withProfileClaudeSettings(command: string[], directory: string):
 		join(directory, ".claude", "settings.json"),
 		...command.slice(-1),
 	];
+}
+
+/**
+ * Cursor reads hooks from `$HOME/.cursor/hooks.json`, and an agent's HOME is
+ * its private profile. Superset's Cursor lifecycle script is not provisioned
+ * on CoDev guests and does not carry the launch token, so only coordination is
+ * installed; terminal exit still determines the run's liveness.
+ */
+function withCursorCoordinationHook(
+	profile: AgentLaunchProfile,
+	coordination: boolean,
+): AgentLaunchProfile {
+	if (!coordination) return profile;
+	if ((profile.files?.length ?? 0) >= MAX_PROFILE_FILES) {
+		throw new Error("Launch profile must leave room for the CoDev hook configuration.");
+	}
+	const contents = JSON.stringify({
+		version: 1,
+		hooks: { postToolUse: [{ command: COORDINATION_HOOK_COMMAND }] },
+	});
+	return { ...profile, files: [...(profile.files ?? []), { path: ".cursor/hooks.json", contents }] };
 }
 
 export async function removeAgentLaunch(launch: AgentLaunch | undefined): Promise<void> {

@@ -23,6 +23,7 @@ import { logEvent } from "../platform/observability";
 import { resolveGen2Credential, type Gen2AgentProvider } from "./providers";
 import { providerVendor } from "../providers/registry";
 import { updateHostedCodexAuthCacheIfCurrent } from "../providers/hosted-codex-subscription-credentials";
+import { updateCursorAuthCache } from "../providers/cursor-auth-refresh";
 import {
   captureSupersetAgentCredential,
   checkSupersetAgentRecovery,
@@ -285,6 +286,16 @@ async function persistSupersetAgentCredential(
   run: SupersetRun,
   workspaceId: string,
 ) {
+  if (run.provider === "cursor" && run.hostAgentSessionId) {
+    const { authCacheJson } = await captureSupersetAgentCredential(
+      workspaceId,
+      run.hostAgentSessionId,
+    );
+    // Like a native turn, a refreshed Cursor login returns to its creator.
+    if (authCacheJson)
+      await updateCursorAuthCache(run.createdBy, authCacheJson);
+    return;
+  }
   if (
     run.provider !== "openai" ||
     !run.connectionId ||
@@ -469,7 +480,9 @@ export async function restartGen2AgentSession(input: {
       ? "codex"
       : session.provider === "anthropic"
         ? "claude"
-        : null;
+        : session.provider === "cursor"
+          ? "cursor"
+          : null;
   if (!provider) {
     throw new Gen2LifecycleError(
       "This agent provider cannot be restarted.",

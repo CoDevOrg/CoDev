@@ -49,7 +49,7 @@ Two worktrees **overlap** when their change sets share a path, and at **function
 The host coordinates two kinds of live agent ([coordination-agents.ts](../vendor/superset/packages/host-service/src/codev/coordination-agents.ts)):
 
 - **Superset-launched runs** (Codex and Claude while `CODEV_SUPERSET_AGENT_SESSIONS_ENABLED` is on): rows in `codev_agent_runs` whose terminal has not ended. They already carry a SHA-256 of their private per-launch hook token.
-- **Native guest-exec turns** (every Cursor turn, and Codex or Claude while that flag is off): `codev-guestd` ([guest_coordination.rs](../services/orchestrator/src/guest_coordination.rs)) generates a per-turn ID and a 32-byte token, registers the token's hash, worktree, and CLI with the host over the bridge secret, and releases the registration when the turn exits. A missed release expires after 20 minutes (the native turn timeout is 15); the registry holds at most 32 turns.
+- **Native guest-exec turns** (Cursor unless `CODEV_SUPERSET_CURSOR_AGENTS_ENABLED` is on, and Codex or Claude while Superset sessions are off): `codev-guestd` ([guest_coordination.rs](../services/orchestrator/src/guest_coordination.rs)) generates a per-turn ID and a 32-byte token, registers the token's hash, worktree, and CLI with the host over the bridge secret, and releases the registration when the turn exits. A missed release expires after 20 minutes (the native turn timeout is 15); the registry holds at most 32 turns.
 
 ### 3. Notices (agent-facing)
 
@@ -74,7 +74,7 @@ Rules ([coordination-notices.ts](../vendor/superset/packages/host-service/src/co
 | ----------- | -------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------- |
 | Claude Code | `hookSpecificOutput.additionalContext` | Profile `.claude/settings.json` via `--settings` | `--settings` JSON, because Gen 2 passes `--setting-sources ""` |
 | Codex       | `hookSpecificOutput.additionalContext` | Private profile `.codex/hooks.json`              | Profile `CODEX_HOME/hooks.json`                                |
-| Cursor      | `additional_context`                   | —                                                | Profile `HOME/.cursor/hooks.json`                              |
+| Cursor      | `additional_context`                   | Profile `HOME/.cursor/hooks.json`                | Profile `HOME/.cursor/hooks.json`                              |
 
 Codex supports the reply field since about 0.117.0 (guests pin 0.148.0). The pinned Cursor CLI `2026.10.01-e373342` supports it according to its code. Native hook config is added by [agent-coordination-hooks.ts](../apps/web/lib/gen2/agent-coordination-hooks.ts).
 
@@ -161,7 +161,7 @@ Verified on 2026-10-08:
 
 Not yet verified, because no Claude or Cursor login was available: that pinned Claude and Cursor actually fire the hook and show its notice to the model. Verify both with real turns in the first enabled workspace.
 
-Production runs with `CODEV_SUPERSET_RUNTIME_ENABLED`, `CODEV_SUPERSET_AGENT_SESSIONS_ENABLED`, and `CODEV_SUPERSET_FILE_PANE_ENABLED` on (checked on the live Azure app, 2026-10-08). Codex and Claude run as concurrent Superset agents in their own worktrees, so an enabled workspace gets notices, UI overlaps, and the duplicate check. Cursor runs as native turns, one at a time per VM.
+Production runs with `CODEV_SUPERSET_RUNTIME_ENABLED`, `CODEV_SUPERSET_AGENT_SESSIONS_ENABLED`, and `CODEV_SUPERSET_FILE_PANE_ENABLED` on (checked on the live Azure app, 2026-10-08). Codex and Claude run as concurrent Superset agents in their own worktrees, so an enabled workspace gets notices, UI overlaps, and the duplicate check. Cursor runs as native turns, one at a time per VM, until `CODEV_SUPERSET_CURSOR_AGENTS_ENABLED` moves it to Superset agent sessions; there it gets UI overlaps and the duplicate check like Codex and Claude, and the host refuses to launch it beside repository hook files.
 
 To enable, add one internal workspace to `CODEV_AGENT_COORDINATION_WORKSPACES` and start a new CI run from `main`. Watch overlap counts, false positives, and duplicate warnings, then widen. Removing a workspace restores current behavior for its next agent starts.
 
