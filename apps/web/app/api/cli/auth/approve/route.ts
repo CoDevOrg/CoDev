@@ -4,9 +4,25 @@ import {
 } from "@/lib/auth/cli-auth";
 import { getCurrentAppUser } from "@/lib/auth/identity";
 
+import { forwardedRequest } from "@/lib/http/forwarded-request";
+import { hasSameOrigin } from "@/lib/http/same-origin";
+
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  request = forwardedRequest(request);
+  if (!hasSameOrigin(request)) {
+    return Response.json({ error: "Invalid request origin." }, { status: 403 });
+  }
+  if (
+    request.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() !==
+    "application/json"
+  ) {
+    return Response.json(
+      { error: "JSON content type is required." },
+      { status: 415 },
+    );
+  }
   try {
     const user = await getCurrentAppUser();
     if (!user)

@@ -41,6 +41,9 @@ vi.mock("../runtime/orchestrator-superset-runtime", () => ({
 }));
 
 const {
+  authorizeGen2TerminalStream,
+  recheckGen2TerminalMember,
+  resizeGen2Terminal,
   clearGen2TerminalMemberCache,
   closeGen2Terminal,
   pollGen2Terminal,
@@ -63,6 +66,72 @@ describe("gen2 terminals", () => {
       status: "ready",
       role: "owner",
     });
+  });
+
+  it.each([false, true])(
+    "rejects viewers for every terminal operation (Superset: %s)",
+    async (superset) => {
+      process.env.CODEV_SUPERSET_RUNTIME_ENABLED = String(superset);
+      mocks.requireMember.mockResolvedValue({
+        id: workspaceId,
+        status: "ready",
+        role: "viewer",
+      });
+      const operations = [
+        () => startGen2Terminal(workspaceId, userId, { rows: 24, columns: 80 }),
+        () => sendGen2TerminalInput(workspaceId, userId, sessionId, "ls\n"),
+        () =>
+          resizeGen2Terminal(workspaceId, userId, sessionId, {
+            rows: 24,
+            columns: 80,
+          }),
+        () => pollGen2Terminal(workspaceId, userId, sessionId, 0),
+        () => closeGen2Terminal(workspaceId, userId, sessionId),
+        () => authorizeGen2TerminalStream(workspaceId, userId),
+        () => recheckGen2TerminalMember(workspaceId, userId),
+      ];
+      for (const operation of operations) {
+        await expect(operation()).rejects.toMatchObject({ status: 403 });
+      }
+      for (const runtime of [
+        mocks.start,
+        mocks.input,
+        mocks.resize,
+        mocks.poll,
+        mocks.close,
+        mocks.supersetStart,
+        mocks.supersetInput,
+        mocks.supersetResize,
+        mocks.supersetPoll,
+        mocks.supersetClose,
+      ]) {
+        expect(runtime).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it("rejects a demoted member when a terminal socket rechecks access", async () => {
+    await authorizeGen2TerminalStream(workspaceId, userId);
+    mocks.requireMember.mockResolvedValue({
+      id: workspaceId,
+      status: "ready",
+      role: "viewer",
+    });
+    await expect(
+      recheckGen2TerminalMember(workspaceId, userId),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("allows editors to start and use a terminal", async () => {
+    mocks.requireMember.mockResolvedValue({
+      id: workspaceId,
+      status: "ready",
+      role: "editor",
+    });
+    await startGen2Terminal(workspaceId, userId, { rows: 24, columns: 80 });
+    await sendGen2TerminalInput(workspaceId, userId, sessionId, "ls\n");
+    expect(mocks.start).toHaveBeenCalled();
+    expect(mocks.input).toHaveBeenCalled();
   });
 
   it("checks membership before it reaches the orchestrator", async () => {

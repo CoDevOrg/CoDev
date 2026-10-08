@@ -15,7 +15,7 @@ import {
   startSupersetTerminal,
 } from "../runtime/orchestrator-superset-runtime";
 import { canRunGen2Agent } from "./agent-policy";
-import { Gen2LifecycleError } from "./errors";
+import { Gen2AccessError, Gen2LifecycleError } from "./errors";
 import { requireWorkspaceOwnerPlan } from "../billing/gate";
 import { requireGen2Member } from "./workspaces";
 import { isGen2SupersetRuntimeEnabled } from "./superset-runtime-feature";
@@ -41,14 +41,28 @@ export function invalidateGen2TerminalMemberCache(
   memberCache.delete(`${workspaceId}:${userId}`);
 }
 
+function requireTerminalPermission(
+  membership: Awaited<ReturnType<typeof requireGen2Member>>,
+) {
+  if (membership.role === "viewer") {
+    throw new Gen2AccessError(
+      "Edit permission is required to access terminals.",
+      403,
+    );
+  }
+  return membership;
+}
+
 async function getCachedGen2Member(workspaceId: string, userId: string) {
   const cacheKey = `${workspaceId}:${userId}`;
   const now = Date.now();
   const cached = memberCache.get(cacheKey);
   if (cached && cached.expiresAt > now) {
-    return cached.data;
+    return requireTerminalPermission(cached.data);
   }
-  const membership = await requireGen2Member(workspaceId, userId);
+  const membership = requireTerminalPermission(
+    await requireGen2Member(workspaceId, userId),
+  );
   memberCache.set(cacheKey, {
     expiresAt: now + TERMINAL_MEMBER_CACHE_TTL_MS,
     data: membership,
@@ -63,12 +77,14 @@ async function getCachedGen2Member(workspaceId: string, userId: string) {
  * lock to spawn a PTY and waits for any running Codex turn first. Input,
  * resize, poll, and close skip that wait entirely, which is why a terminal
  * opened before a turn keeps streaming straight through it. Those four are
- * member-only so a poll racing a Stop returns `exited` rather than a
+ * editor/owner-only so a poll racing a Stop returns `exited` rather than a
  * confusing 409.
  */
 
 async function requireReadyMember(workspaceId: string, userId: string) {
-  const membership = await requireGen2Member(workspaceId, userId);
+  const membership = requireTerminalPermission(
+    await requireGen2Member(workspaceId, userId),
+  );
   if (!canRunGen2Agent(membership.status)) {
     throw new Gen2LifecycleError(
       membership.status === "pending" || membership.status === "provisioning"
@@ -156,7 +172,7 @@ export async function recheckGen2TerminalMember(
   workspaceId: string,
   userId: string,
 ) {
-  await requireGen2Member(workspaceId, userId);
+  requireTerminalPermission(await requireGen2Member(workspaceId, userId));
 }
 
 export async function sendGen2TerminalInput(
