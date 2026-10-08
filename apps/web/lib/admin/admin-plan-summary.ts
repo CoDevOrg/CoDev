@@ -58,24 +58,24 @@ export function buildAdminPlanSummary(
       computeHours,
       savedDisks: plan.workspaceLimit,
       costPerAccountUsd,
-      totalCostUsd: costPerAccountUsd * members.length,
+      totalCostUsd:
+        costPerAccountUsd *
+        members.filter((account) => !account.isAdmin).length,
     };
   });
 }
 
 function effectiveAccounts(accounts: AdminAccountAccessData, now: Date) {
-  return accounts
-    .filter((account) => !account.isAdmin)
-    .map((account) => {
-      const access = resolveBillingAccess({
-        isAdmin: false,
-        row: { ...account, status: account.subscriptionStatus },
-        now,
-      });
-      return {
-        ...account,
-        source: access.source,
-        effectivePlan: access.hasAccess ? account.planId : "free",
-      };
+  return accounts.map((account) => {
+    const access = resolveBillingAccess({
+      isAdmin: false,
+      row: { ...account, status: account.subscriptionStatus },
+      now,
     });
+    return {
+      ...account,
+      source: access.source,
+      effectivePlan: access.hasAccess ? account.planId : "free",
+    };
+  });
 }

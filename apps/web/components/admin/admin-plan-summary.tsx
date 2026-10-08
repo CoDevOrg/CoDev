@@ -24,9 +24,10 @@ export function AdminPlanSummary({ plans }: { plans: AdminPlanSummaryRow[] }) {
         addresses, disk operations, network, shared services, taxes and
         discounts; AI subscriptions are supplied by users. Assumes full
         allowances and saved workspace capacity, including granted access. Admin
-        accounts are excluded; expired subscriptions count as Free. Active
-        subscribers are active Stripe subscriptions; trials and grants are shown
-        separately. Enterprise uses catalog base limits.{" "}
+        accounts are included in plan counts but excluded from cost estimates;
+        expired subscriptions count as Free. Active subscribers are active
+        Stripe subscriptions; trials and grants are shown separately. Enterprise
+        uses catalog base limits.{" "}
         <a
           href="https://learn.microsoft.com/en-us/rest/api/cost-management/retail-prices/azure-retail-prices"
           target="_blank"
