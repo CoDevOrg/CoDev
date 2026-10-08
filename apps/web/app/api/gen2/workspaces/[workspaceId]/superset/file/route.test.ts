@@ -30,7 +30,10 @@ const url = `https://codev.test/api/gen2/workspaces/${workspaceId}/superset/file
 function put(body: unknown) {
   return new Request(url, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      origin: "https://codev.test",
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify(body),
   });
 }

@@ -72,7 +72,12 @@ export async function startGen2AgentTurn(input: {
   worktreeId?: string | undefined;
   model?: string | undefined;
 }) {
-  await requireReadyMember(input.workspaceId, input.userId);
+  const membership = await requireReadyMember(input.workspaceId, input.userId);
+  if (membership.role === "viewer")
+    throw new Gen2AccessError(
+      "Edit permission is required to run agents.",
+      403,
+    );
   await requireWorkspaceOwnerPlan(input.workspaceId);
   await requireGen2Chat(input.workspaceId, input.chatId);
 

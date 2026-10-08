@@ -82,7 +82,10 @@ describe("gen2 members route", () => {
     const response = await POST(
       new Request(url, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          origin: "https://codev.test",
+          "content-type": "application/json",
+        },
         body: JSON.stringify({
           emailOrLogin: "newuser@example.com",
           role: "viewer",

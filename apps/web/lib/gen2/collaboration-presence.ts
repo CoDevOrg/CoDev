@@ -69,5 +69,5 @@ async function broadcastPresence(workspaceId: string) {
       }
     })
     .slice(0, 100);
-  broadcastLocal(workspaceId, { type: "presence", members });
+  await broadcastLocal(workspaceId, { type: "presence", members });
 }

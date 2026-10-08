@@ -50,7 +50,10 @@ describe("Superset worktrees route", () => {
     const response = await POST(
       new Request(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          origin: "https://codev.test",
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ worktreeId: "../escape", branch: "codev/a" }),
       }),
       { params },
@@ -65,7 +68,10 @@ describe("Superset worktrees route", () => {
     const response = await POST(
       new Request(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          origin: "https://codev.test",
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ ...worktree, baseRef: "HEAD" }),
       }),
       { params },

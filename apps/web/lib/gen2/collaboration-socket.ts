@@ -233,7 +233,7 @@ async function applyUpdate(
       streamId: "pending",
     }),
   );
-  broadcastLocal(
+  await broadcastLocal(
     roomKey,
     {
       type: "update",
@@ -324,7 +324,7 @@ async function publishAwareness(
       streamId: "pending",
     }),
   );
-  broadcastLocal(
+  await broadcastLocal(
     roomKey,
     {
       type: "awareness",

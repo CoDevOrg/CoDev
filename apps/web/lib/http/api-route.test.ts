@@ -86,6 +86,61 @@ describe("withUser", () => {
     mocks.getApiUserAnyAuth.mockResolvedValue(user);
   });
 
+  it.each([null, "https://runtime.test", "https://evil.example", "null"])(
+    "rejects cookie-authenticated mutations from origin %s",
+    async (origin) => {
+      const handler = vi.fn(() => Response.json({ ok: true }));
+      const response = await withUser(handler)(
+        new Request("https://app.test/path", {
+          method: "POST",
+          headers: origin ? { origin } : {},
+        }),
+        context({}),
+      );
+      expect(response.status).toBe(403);
+      expect(handler).not.toHaveBeenCalled();
+    },
+  );
+
+  it("allows same-origin browser mutations", async () => {
+    const handler = vi.fn(() => Response.json({ ok: true }));
+    const response = await withUser(handler)(
+      new Request("https://app.test/path", {
+        method: "POST",
+        headers: { origin: "https://app.test" },
+      }),
+      context({}),
+    );
+    expect(response.status).toBe(200);
+    expect(handler).toHaveBeenCalled();
+  });
+
+  it("allows authenticated CLI mutations without an Origin", async () => {
+    const handler = vi.fn(() => Response.json({ ok: true }));
+    const response = await withUser(handler, { anyAuth: true })(
+      new Request("https://app.test/path", {
+        method: "POST",
+        headers: { authorization: "Bearer codev_cli_valid" },
+      }),
+      context({}),
+    );
+    expect(response.status).toBe(200);
+    expect(mocks.getApiUserAnyAuth).toHaveBeenCalled();
+  });
+
+  it("does not let an arbitrary Authorization header bypass browser-only checks", async () => {
+    const handler = vi.fn();
+    const response = await withUser(handler)(
+      new Request("https://app.test/path", {
+        method: "POST",
+        headers: { authorization: "Bearer fake" },
+      }),
+      context({}),
+    );
+    expect(response.status).toBe(403);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
   it("returns 401 without calling the handler when signed out", async () => {
     mocks.getApiUser.mockResolvedValue(null);
     const handler = vi.fn();

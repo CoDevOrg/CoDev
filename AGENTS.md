@@ -53,6 +53,7 @@
 - No speculative abstractions. Add a pattern (factory, strategy, registry) only when there are two or more concrete consumers today. Remove abstractions that serve a single caller.
 - Every new file must belong to an existing directory. If none fits, justify the new directory in the commit message.
 - Prefer early returns over nested conditionals. Prefer `map`/`filter` over manual loops. Prefer computed values over mutable state.
+- Cookie-authenticated API mutations must validate the exact Origin; viewers must be rejected before file writes, shell access, or agent execution. Revalidate membership before delivering collaboration data.
 - API route handlers must be thin: validate input → call a `lib/` function → return a response. Business logic lives in `lib/`, never in `app/api/`.
 - Shared types and request/response shapes go in `packages/contracts` or `packages/shared-types`. Never duplicate a type definition across packages.
 - Each `lib/` subdirectory has a README describing what it owns and what it does not. Check the README before adding files; update it when the boundary shifts.

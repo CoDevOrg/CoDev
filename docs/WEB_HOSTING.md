@@ -286,3 +286,11 @@ sockets within fifteen seconds. No database migration is required.
 The Azure edge replaces `x-forwarded-for` with Cloudflare’s client IP and strips
 caller-supplied `x-vercel-forwarded-for`. CLI device login throttling uses the
 trusted `x-forwarded-for` header on both hosting paths.
+
+Browser API mutations using session cookies require an exact matching Origin,
+including for handlers outside the shared route wrapper. Auth.js token-validated
+flows and signed Stripe webhooks keep their existing authentication. CLI bearer
+requests remain supported on explicitly enabled routes.
+
+Password-reset links default to `https://trycodev.com` in production when no
+explicit Auth.js or Vercel URL is available; development retains localhost.

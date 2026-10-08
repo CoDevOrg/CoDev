@@ -62,6 +62,9 @@ IDOR across every gen 2 workspace. Keeping the guard in this layer means a new
 route cannot forget it. Terminal operations and socket membership rechecks require
 an editor or owner role; viewers cannot access the shared shell. Collaboration
 updates recheck the current member role rather than trusting handshake permissions.
+Broadcasts and replay verify live membership before delivering workspace data;
+removed members are disconnected. Native file writes/uploads and agent starts
+also require an editor or owner role.
 
 Only some guest handlers wait for Codex to go idle (`write_file`, `/pty/exec`,
 `start_terminal`); `read_file`, `git/*`, and terminal poll/input do not. The

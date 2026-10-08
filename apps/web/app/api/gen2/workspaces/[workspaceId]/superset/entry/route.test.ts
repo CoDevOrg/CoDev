@@ -32,7 +32,10 @@ const url = `https://codev.test/api/gen2/workspaces/${workspaceId}/superset/entr
 function post(body: unknown) {
   return new Request(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      origin: "https://codev.test",
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify(body),
   });
 }
@@ -40,7 +43,10 @@ function post(body: unknown) {
 function request(method: "PATCH" | "DELETE", body: unknown) {
   return new Request(url, {
     method,
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      origin: "https://codev.test",
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify(body),
   });
 }
