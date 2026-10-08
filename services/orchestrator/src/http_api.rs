@@ -506,6 +506,7 @@ fn valid_superset_runtime_operation(method: &str, operation: &str) -> bool {
             | ("POST", "terminal/resize")
             | ("POST", "terminal/poll")
             | ("DELETE", "terminal")
+            | ("POST", "coordination/overlaps")
     )
 }
 

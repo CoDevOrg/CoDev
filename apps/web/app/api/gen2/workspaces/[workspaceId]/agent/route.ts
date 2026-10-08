@@ -22,6 +22,7 @@ export const POST = withUser<Params>(
         idempotencyKey: input.idempotencyKey,
         worktreeId: input.worktreeId,
         model: input.model,
+        acknowledgedDuplicateOf: input.acknowledgedDuplicateOf,
       }),
     );
   },

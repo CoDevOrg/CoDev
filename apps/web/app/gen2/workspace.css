@@ -1442,6 +1442,88 @@
   margin-left: auto;
 }
 
+.gen2-ide-agent-overlap-trigger {
+  flex: none;
+  font-size: 12px;
+  gap: 6px;
+}
+
+.gen2-ide-agent-overlap-dot {
+  background: var(--ws-status-working);
+  border-radius: 999px;
+  flex: none;
+  height: 6px;
+  width: 6px;
+}
+
+.gen2-ide-agent-overlap-menu {
+  max-width: min(360px, calc(100vw - 32px));
+  min-width: 260px;
+}
+
+.gen2-ide-agent-overlap-agent {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.gen2-ide-agent-overlap-branch,
+.gen2-ide-agent-overlap-path {
+  font-family: var(--font-geist-mono, ui-monospace, monospace);
+}
+
+.gen2-ide-agent-overlap-path {
+  color: var(--ws-text-secondary);
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  font-weight: 400;
+  min-width: 0;
+}
+
+.gen2-ide-agent-overlap-path span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gen2-ide-agent-overlap-path span + span,
+.gen2-ide-agent-overlap-more {
+  color: var(--ws-text-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.gen2-board-overlap,
+.gen2-superset-change-overlap {
+  align-items: center;
+  color: var(--ws-status-working);
+  display: inline-flex;
+  gap: 4px;
+}
+
+.gen2-board-overlap {
+  font-size: 12px;
+  margin: 4px 0 0;
+}
+
+.gen2-board-overlap svg,
+.gen2-superset-change-overlap svg {
+  flex: none;
+  height: 14px;
+  width: 14px;
+}
+
+.gen2-superset-change-overlap {
+  flex: none;
+  margin-left: auto;
+}
+
+@media (max-width: 768px) {
+  .gen2-ide-agent-overlap-count {
+    display: none;
+  }
+}
+
 .gen2-ide-stage {
   display: flex;
   flex-direction: column;
@@ -3159,6 +3241,51 @@
   );
   pointer-events: none;
   z-index: 0;
+}
+
+.gen2-chat-duplicate {
+  align-items: center;
+  background: var(--ws-surface-3, var(--color-secondary));
+  border: 1px solid var(--ws-border-subtle, var(--color-border));
+  border-left: 3px solid var(--ws-status-working);
+  border-radius: 8px;
+  color: var(--ws-text-primary);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  gap: 8px;
+  line-height: 16px;
+  margin: 0 0 8px;
+  padding: 8px 12px;
+}
+
+.gen2-chat-duplicate-body {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.gen2-chat-duplicate-body p {
+  margin: 0;
+}
+
+.gen2-chat-duplicate-branch {
+  font-family: var(--font-geist-mono, ui-monospace, monospace);
+}
+
+.gen2-chat-duplicate-task {
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--ws-text-secondary);
+  display: -webkit-box;
+  margin-top: 4px;
+  overflow: hidden;
+}
+
+.gen2-chat-duplicate-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
 }
 
 .gen2-chat-alert {

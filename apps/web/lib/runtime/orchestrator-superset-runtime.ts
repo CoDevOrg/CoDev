@@ -1,5 +1,6 @@
 import "server-only";
 
+import { gen2CoordinationReportSchema } from "@codev/contracts";
 import { z } from "zod";
 
 import { orchestratorRequest } from "./orchestrator-request";
@@ -119,4 +120,17 @@ export async function closeSupersetTerminal(
   input: { sessionId: string; worktreeId: string },
 ) {
   await requestSupersetRuntime(workspaceId, "DELETE", "terminal", input);
+}
+
+export async function readSupersetCoordinationOverlaps(
+  workspaceId: string,
+  worktreeIds: string[],
+) {
+  const response = await requestSupersetRuntime(
+    workspaceId,
+    "POST",
+    "coordination/overlaps",
+    { worktreeIds },
+  );
+  return gen2CoordinationReportSchema.parse(await response.json());
 }

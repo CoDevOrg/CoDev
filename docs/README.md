@@ -26,6 +26,7 @@ intent that may have drifted; confirm details against the code.
 | [SUPERSET_WORKSPACE_OWNERSHIP.md](./SUPERSET_WORKSPACE_OWNERSHIP.md)             | Design  | Phase 1 ownership contract for a first-party Superset-powered workspace         |
 | [SUPERSET_AGENT_SESSION_PLAN.md](./SUPERSET_AGENT_SESSION_PLAN.md)               | Design  | Superset agent sessions, CoDev provider ownership, and rollout gates            |
 | [SUPERSET_MULTI_AGENT_HANDOFF.md](./SUPERSET_MULTI_AGENT_HANDOFF.md)             | Design  | Stepwise multi-agent integration plan and implementation handoff                |
+| [SUPERSET_AGENT_COORDINATION.md](./SUPERSET_AGENT_COORDINATION.md)               | Design  | Agent overlap detection, notices, UI, and duplicate check (flagged, unreleased) |
 | [GIT_PROXY.md](./GIT_PROXY.md)                                                   | Design  | Git over the control plane without credentials in the guest (unbuilt)           |
 | [ARM_SUPERSET_ISOLATION_INTEGRATION.md](./ARM_SUPERSET_ISOLATION_INTEGRATION.md) | Planned | Safe Superset isolation migration into the disposable ARM VM lifecycle          |
 | [arm-workspace-free-tier-phase-0.md](./arm-workspace-free-tier-phase-0.md)       | Review  | ARM free-tier Phase 0 decisions, evidence, costs, and open gates                |

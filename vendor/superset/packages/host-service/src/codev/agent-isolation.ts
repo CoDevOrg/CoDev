@@ -15,6 +15,21 @@ const reservedUids = new Set<number>();
 
 type HookEvent = { name: string; matcher?: string };
 
+/**
+ * PostToolUse hook command for CoDev agent profiles. The token is piped to
+ * curl as a header so it never appears in a process argument list. The hook
+ * always exits 0 and prints only the host's reply, so an unreachable or slow
+ * host leaves the agent untouched.
+ */
+export const COORDINATION_HOOK_COMMAND = [
+	'[ -n "$SUPERSET_HOST_AGENT_HOOK_URL" ] && [ -n "$SUPERSET_TERMINAL_ID" ] && [ -n "$SUPERSET_ACCOUNT_ATTRIBUTION_TOKEN" ] &&',
+	`printf 'x-codev-hook-token: %s\\n' "$SUPERSET_ACCOUNT_ATTRIBUTION_TOKEN" |`,
+	"curl -sf --connect-timeout 0.2 --max-time 0.3 -H @- -H 'content-type: application/json'",
+	'--data "{\\"agentId\\":\\"$SUPERSET_TERMINAL_ID\\"}"',
+	`"\${SUPERSET_HOST_AGENT_HOOK_URL%/trpc/notifications.hook}/codev/coordination/notices";`,
+	"exit 0",
+].join(" ");
+
 const CODEX_HOOK_EVENTS: HookEvent[] = [
 	{ name: "SessionStart" },
 	{ name: "SessionEnd" },
@@ -134,8 +149,9 @@ export async function prepareAgentLaunch(input: {
 	profile?: AgentLaunchProfile;
 	provider: "openai" | "anthropic";
 	hookToken: string;
+	coordination?: boolean;
 }): Promise<AgentLaunch> {
-	const profile = buildCoDevAgentProfile(input.profile ?? {}, input.provider);
+	const profile = buildCoDevAgentProfile(input.profile ?? {}, input.provider, input.coordination === true);
 	validateAgentLaunchProfile(profile);
 	const root = await lstat(input.root);
 	if (
@@ -158,7 +174,11 @@ export async function prepareAgentLaunch(input: {
 			await chown(path, uid, WORKSPACE_GID);
 		}
 		const scriptPath = join(directory, "launch.sh");
-		await writeFile(scriptPath, agentLaunchScript(directory, input.command, {
+		const command =
+			input.provider === "anthropic"
+				? withProfileClaudeSettings(input.command, directory)
+				: input.command;
+		await writeFile(scriptPath, agentLaunchScript(directory, command, {
 			...profile.env,
 			SUPERSET_ACCOUNT_ATTRIBUTION_TOKEN: input.hookToken,
 		}), {
@@ -184,6 +204,7 @@ export async function prepareAgentLaunch(input: {
 export function buildCoDevAgentProfile(
 	profile: AgentLaunchProfile,
 	provider: "openai" | "anthropic",
+	coordination = false,
 ): AgentLaunchProfile {
 	if ((profile.files?.length ?? 0) >= MAX_PROFILE_FILES) {
 		throw new Error("Launch profile must leave room for the CoDev hook configuration.");
@@ -197,7 +218,12 @@ export function buildCoDevAgentProfile(
 			[
 				{
 					...(matcher ? { matcher } : {}),
-					hooks: [{ type: "command", command }],
+					hooks: [
+						{ type: "command", command },
+						...(coordination && name === "PostToolUse"
+							? [{ type: "command", command: COORDINATION_HOOK_COMMAND }]
+							: []),
+					],
 				},
 			],
 		]),
@@ -214,6 +240,20 @@ export function buildCoDevAgentProfile(
 				: {}),
 		},
 	};
+}
+
+/**
+ * Gen 2 starts Claude with `--setting-sources ""` so repository settings never
+ * load, which also skips the profile's own settings file. Command-line
+ * settings always load, so CoDev's hook settings are passed before the prompt.
+ */
+export function withProfileClaudeSettings(command: string[], directory: string): string[] {
+	return [
+		...command.slice(0, -1),
+		"--settings",
+		join(directory, ".claude", "settings.json"),
+		...command.slice(-1),
+	];
 }
 
 export async function removeAgentLaunch(launch: AgentLaunch | undefined): Promise<void> {

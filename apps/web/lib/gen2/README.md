@@ -53,6 +53,18 @@ polls has to keep it. The poll route appends to `gen2_agent_turns` and writes
 the assistant message when the process exits, which is why a reply survives a
 closed tab and why the other members of a shared workspace can see the turn.
 
+## Agent coordination
+
+Coordination warns members and agents when active agents overlap
+(docs/SUPERSET_AGENT_COORDINATION.md). `agent-coordination-feature.ts` owns
+the per-workspace rollout flag. `agent-overlaps.ts` asks the guest host to
+compare the worktrees of active Superset runs and never wakes a machine.
+`duplicate-task-check.ts` is the lexical, CoDev-only launch check used by
+`startGen2AgentTurn`. `agent-coordination-hooks.ts` adds the `PostToolUse`
+hook to native turn profiles; the guest supplies the turn's token. Change sets,
+overlap detection, and agent notices belong to the guest host, not this
+directory.
+
 ## Files, Git, and terminals
 
 `workbench.ts` and `terminals.ts` wrap the orchestrator clients. A checkout with more than 5,000 files is listed from the cloned GitHub commit so the guest walk does not hide the tree. Both check

@@ -14,3 +14,4 @@ export * from "./workspace-brain";
 export * from "@codev/shared-types";
 export * from "./github";
 export * from "./account-deletion";
+export * from "./agent-coordination";

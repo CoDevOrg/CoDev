@@ -15,6 +15,7 @@ import { cors } from "hono/cors";
 import { createApiClient } from "./api";
 import { createChatV3Mount, registerChatV3Routes } from "./chat-v3";
 import { registerCoDevAgentBridge } from "./codev/agents";
+import { registerCoDevCoordinationBridge } from "./codev/coordination";
 import { registerCoDevFileBridge } from "./codev/files";
 import { registerCoDevRuntimeBridge } from "./codev/runtime";
 import { createDb, type HostDb } from "./db";
@@ -413,6 +414,12 @@ export function createApp(options: CreateAppOptions): CreateAppResult {
 			db,
 			eventBus,
 			git,
+			workspaceRoot: codevWorkspaceRoot,
+			bridgeSecret: codevBridgeSecret,
+		});
+		registerCoDevCoordinationBridge({
+			app,
+			db,
 			workspaceRoot: codevWorkspaceRoot,
 			bridgeSecret: codevBridgeSecret,
 		});

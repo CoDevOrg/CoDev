@@ -37,6 +37,9 @@ import {
   recordGen2TurnChunks,
 } from "./turns";
 import { withDatabaseOperation } from "../platform/database-operation";
+import { isGen2AgentCoordinationEnabled } from "./agent-coordination-feature";
+import { withNativeCoordinationHooks } from "./agent-coordination-hooks";
+import { findPossibleDuplicateTask } from "./duplicate-task-check";
 import { refreshCursorTurnAuth } from "./cursor-auth-refresh";
 import { isGen2SupersetAgentSessionsEnabled } from "./superset-agent-sessions-feature";
 import {
@@ -71,6 +74,7 @@ export async function startGen2AgentTurn(input: {
   provider: Gen2AgentProvider;
   worktreeId?: string | undefined;
   model?: string | undefined;
+  acknowledgedDuplicateOf?: string | undefined;
 }) {
   const membership = await requireReadyMember(input.workspaceId, input.userId);
   if (membership.role === "viewer")
@@ -80,6 +84,13 @@ export async function startGen2AgentTurn(input: {
     );
   await requireWorkspaceOwnerPlan(input.workspaceId);
   await requireGen2Chat(input.workspaceId, input.chatId);
+  const possibleDuplicate = await findPossibleDuplicateTask(input);
+  if (
+    possibleDuplicate &&
+    possibleDuplicate.runId !== input.acknowledgedDuplicateOf
+  ) {
+    return { possibleDuplicate };
+  }
 
   const models = await getDynamicModelsForProvider(
     input.provider,
@@ -126,9 +137,18 @@ export async function startGen2AgentTurn(input: {
       throw new Gen2LifecycleError(describeSeatHolder(claim.holder), 409);
     }
   }
+  const command = buildGen2AgentCommand(provider, input.prompt, history, model);
   const execInput = {
-    command: buildGen2AgentCommand(provider, input.prompt, history, model),
-    launchProfile: credential.launchProfile,
+    ...(isGen2AgentCoordinationEnabled(input.workspaceId)
+      ? {
+          ...withNativeCoordinationHooks(
+            provider,
+            command,
+            credential.launchProfile,
+          ),
+          coordination: true,
+        }
+      : { command, launchProfile: credential.launchProfile }),
     idempotencyKey: input.idempotencyKey,
     ...(input.worktreeId && input.worktreeId !== "main"
       ? { worktreeId: input.worktreeId }

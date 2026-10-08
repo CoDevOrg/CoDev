@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Clock,
   GitBranch,
+  GitCompareArrows,
   Kanban,
   Plus,
   Search,
@@ -55,6 +56,8 @@ export interface BoardWorktreeItem {
   agentError?: string | null | undefined;
   agentProvider?: string | null | undefined;
   lastActivity?: string | undefined;
+  /** Other branches whose active agents change the same files. */
+  overlap?: { branches: string[]; files: number } | undefined;
 }
 
 export interface SupersetWorkspacesBoardProps {
@@ -261,6 +264,18 @@ export function SupersetWorkspacesBoard({
                               ) : null}
                               {detail.text}
                             </p>
+                            {item.overlap ? (
+                              <p className="gen2-board-overlap">
+                                <GitCompareArrows aria-hidden="true" />
+                                <span>
+                                  Overlaps {item.overlap.branches[0]}
+                                  {item.overlap.branches.length > 1
+                                    ? ` +${item.overlap.branches.length - 1} more`
+                                    : ""}
+                                  {` · ${item.overlap.files} ${item.overlap.files === 1 ? "file" : "files"}`}
+                                </span>
+                              </p>
+                            ) : null}
                           </CardContent>
 
                           <CardFooter className="gen2-board-card-actions">

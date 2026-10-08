@@ -12,6 +12,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { useWorkspaceConnection } from "./use-workspace-connection";
+import { useAgentOverlaps } from "./use-agent-overlaps";
 import {
   ArrowLeft,
   Check,
@@ -57,6 +58,7 @@ import {
   type BoardWorktreeItem,
 } from "./superset-workspaces-board";
 import { SupersetAgentSessionsPanel } from "./superset-agent-sessions-panel";
+import { SupersetAgentOverlapMenu } from "./superset-agent-overlap-menu";
 import {
   ProviderLogo,
   SUPPORTED_AI_PROVIDERS,
@@ -525,6 +527,22 @@ export function SupersetWorkspaceShell({
       setNotice("");
     },
   );
+  const overlaps = useAgentOverlaps(
+    workspaceId,
+    runtimeEnabled && connection.state === "connected",
+  );
+  const branchFor = (id: string) =>
+    worktrees.find((wt) => wt.worktreeId === id)?.branch ?? id;
+  const memberLabel = (userId: string) => {
+    const member = activeWorkspace.members.find((m) => m.userId === userId);
+    return member?.name ?? member?.login ?? "a member";
+  };
+  const overlapsInWorktree = (id: string) =>
+    overlaps.filter((overlap) =>
+      activeRuns.some(
+        (run) => run.id === overlap.runId && run.worktreeId === id,
+      ),
+    );
   const [showSwitchDialog, setShowSwitchDialog] = useState(false);
   const ensureRunning = connection.reconnect;
   const currentWorkspace = {
@@ -593,6 +611,7 @@ export function SupersetWorkspaceShell({
 
   const boardItems: BoardWorktreeItem[] = worktrees.map((wt) => {
     const run = activeRuns.find((r) => r.worktreeId === wt.worktreeId);
+    const shared = overlapsInWorktree(wt.worktreeId);
     const count = fileCounts[wt.worktreeId];
     const changesKnown = count !== undefined;
     let agentStatus: BoardWorktreeItem["agentStatus"] = "idle";
@@ -618,6 +637,15 @@ export function SupersetWorkspaceShell({
       agentError: run?.lastError ?? null,
       agentProvider: run?.provider ?? null,
       lastActivity: run?.updatedAt,
+      overlap:
+        shared.length > 0
+          ? {
+              branches: [
+                ...new Set(shared.map((o) => branchFor(o.otherWorktreeId))),
+              ],
+              files: new Set(shared.map((o) => o.path)).size,
+            }
+          : undefined,
     };
   });
 
@@ -1787,6 +1815,18 @@ export function SupersetWorkspaceShell({
                     onSelect={setWorktreeId}
                     onStop={stopRun}
                     stoppingRunId={stoppingRunId}
+                    renderOverlaps={(runId) => (
+                      <SupersetAgentOverlapMenu
+                        overlaps={overlaps.filter((o) => o.runId === runId)}
+                        branchFor={branchFor}
+                        memberLabel={memberLabel}
+                        onOpenWorktree={(id) => {
+                          setWorktreeId(id);
+                          setTab("changes");
+                          setInspectorCollapsed(false);
+                        }}
+                      />
+                    )}
                   />
 
                   {/* Middle part is ALWAYS the agent chat */}
@@ -1821,6 +1861,11 @@ export function SupersetWorkspaceShell({
                           setTab("files");
                         }}
                         onNeedsMachine={ensureRunning}
+                        onOpenWorktree={(id) => {
+                          setWorktreeId(id);
+                          setTab("changes");
+                          setInspectorCollapsed(false);
+                        }}
                       />
                     </div>
                     {connection.state === "connected" ? null : (
@@ -2136,6 +2181,14 @@ export function SupersetWorkspaceShell({
                         worktreeId={worktreeId}
                         visible={tab === "changes"}
                         mode="changes"
+                        overlapFor={(path) => {
+                          const match = overlapsInWorktree(worktreeId).find(
+                            (o) => o.path === path,
+                          );
+                          return match
+                            ? `Also changed by ${branchFor(match.otherWorktreeId)} (${match.otherProvider}, ${memberLabel(match.otherCreatedBy)})`
+                            : undefined;
+                        }}
                         onOpenFile={(path) => {
                           setRequestedFilePath(path);
                           setTab("files");

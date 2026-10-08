@@ -108,6 +108,7 @@ export default defineConfig({
       CODEV_SUPERSET_FILE_PANE_ENABLED: bindings.secret(),
       CODEV_SUPERSET_RUNTIME_ENABLED: bindings.secret(),
       CODEV_SUPERSET_AGENT_SESSIONS_ENABLED: bindings.secret(),
+      CODEV_AGENT_COORDINATION_WORKSPACES: bindings.secret(),
       CRON_SECRET: bindings.secret(),
       CLOUDFLARE_API_TOKEN: bindings.secret(),
       GEN2_ARM_WORKSPACE_LIFECYCLE: bindings.workflow({

@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { LoaderCircle, SquareTerminal } from "lucide-react";
 
 import { WorkspaceButton } from "./workspace-button";
@@ -19,12 +20,14 @@ export function SupersetAgentSessionsPanel({
   onSelect,
   onStop,
   stoppingRunId,
+  renderOverlaps,
 }: {
   runs: SupersetAgentSession[];
   canEdit: boolean;
   onSelect: (worktreeId: string) => void;
   onStop: (runId: string) => void;
   stoppingRunId: string | null;
+  renderOverlaps?: (runId: string) => ReactNode;
 }) {
   return (
     <section className="gen2-ide-agent-sessions" aria-label="Agent sessions">
@@ -47,6 +50,7 @@ export function SupersetAgentSessionsPanel({
                   {run.provider} · {run.status}
                 </span>
               </WorkspaceButton>
+              {renderOverlaps?.(run.id)}
               {canEdit &&
               ["creating", "running", "stopping"].includes(run.status) ? (
                 <WorkspaceButton

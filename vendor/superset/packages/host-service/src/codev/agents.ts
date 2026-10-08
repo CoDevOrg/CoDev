@@ -55,6 +55,7 @@ const agentStartSchema = z.object({
 		.optional(),
 	command: z.array(z.string().max(64 * 1024)).min(1).max(32),
 	idempotencyKey: z.string().min(1).max(128),
+	coordination: z.boolean().optional(),
 });
 const agentInputSchema = z.object({ data: z.string().max(64 * 1024) });
 const agentPollSchema = z.object({ after: z.number().int().nonnegative() });
@@ -242,6 +243,7 @@ export function registerCoDevAgentBridge({
 			launchProfile,
 			command,
 			idempotencyKey,
+			coordination,
 		} = parsed.data;
 		if (!isApprovedAgentCommand(provider, command)) {
 			return context.json({ error: "Unsupported Superset agent launch command." }, 400);
@@ -292,6 +294,7 @@ export function registerCoDevAgentBridge({
 				command,
 				provider,
 				hookToken,
+				coordination: coordination === true,
 				// A new control plane sends the provider-neutral profile. Keep the
 				// Codex cache only as a compatibility fallback for a rolling deploy.
 				profile: launchProfile ?? legacyCodexProfile(codexAuthCacheJson),

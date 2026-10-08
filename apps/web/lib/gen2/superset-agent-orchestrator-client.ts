@@ -91,6 +91,8 @@ export type SupersetAgentStartInput = {
   };
   command: string[];
   idempotencyKey: string;
+  /** Set only for workspaces in the agent coordination rollout. */
+  coordination?: boolean;
 };
 
 export async function startSupersetAgent(

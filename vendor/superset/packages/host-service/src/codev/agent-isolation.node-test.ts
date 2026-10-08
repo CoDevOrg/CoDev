@@ -8,6 +8,8 @@ import { test } from "node:test";
 import {
 	agentLaunchScript,
 	buildCoDevAgentProfile,
+	COORDINATION_HOOK_COMMAND,
+	withProfileClaudeSettings,
 	prepareAgentLaunch,
 	removeAgentLaunch,
 	validateAgentLaunchProfile,
@@ -22,6 +24,13 @@ test("launch script quotes every argument and exports profile environment", () =
 	assert.match(script, /export CLAUDE_CODE_OAUTH_TOKEN='test-only-token'/);
 	assert.match(script, /'a'\\''\$\(id\)`b'/);
 	assert.match(script, /umask 0002/);
+});
+
+test("Claude receives its private hook settings on the command line", () => {
+	assert.deepEqual(
+		withProfileClaudeSettings(["claude", "-p", "--setting-sources", "", "the prompt"], "/profiles/agent-1"),
+		["claude", "-p", "--setting-sources", "", "--settings", "/profiles/agent-1/.claude/settings.json", "the prompt"],
+	);
 });
 
 test("launch profiles cannot escape the private directory or inject shell environment names", () => {
@@ -43,8 +52,9 @@ test("CoDev installs provider hooks beside the private credential profile", () =
 	const codex = buildCoDevAgentProfile(
 		{ env: { CODEX_HOME: "{{profileDir}}/.codex" } },
 		"openai",
+		true,
 	);
-	const claude = buildCoDevAgentProfile({}, "anthropic");
+	const claude = buildCoDevAgentProfile({}, "anthropic", true);
 	const codexHooks = JSON.parse(codex.files?.[0]?.contents ?? "{}") as {
 		hooks?: Record<string, unknown>;
 	};
@@ -54,6 +64,17 @@ test("CoDev installs provider hooks beside the private credential profile", () =
 	assert.ok(codexHooks.hooks?.SubagentStart);
 	assert.equal(claude.files?.[0]?.path, ".claude/settings.json");
 	assert.equal(claude.env?.CLAUDE_CONFIG_DIR, "{{profileDir}}/.claude");
+	for (const profile of [codex, claude]) {
+		const { hooks } = JSON.parse(profile.files?.[0]?.contents ?? "{}") as {
+			hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
+		};
+		const commands = (name: string) =>
+			(hooks[name] ?? []).flatMap((entry) => entry.hooks.map((hook) => hook.command));
+		assert.ok(commands("PostToolUse").includes(COORDINATION_HOOK_COMMAND));
+		assert.ok(!commands("Stop").includes(COORDINATION_HOOK_COMMAND));
+	}
+	const uncoordinated = buildCoDevAgentProfile({}, "anthropic");
+	assert.ok(!uncoordinated.files?.[0]?.contents.includes(COORDINATION_HOOK_COMMAND));
 });
 
 const canExerciseLinuxPermissions =
