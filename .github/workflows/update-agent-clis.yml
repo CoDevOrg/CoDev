@@ -44,9 +44,20 @@ jobs:
         with:
           node-version: 24
 
+      # Models members could not run on the live CLI: ship a satisfying release
+      # now instead of waiting out the release delay.
+      - id: requirements
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          requirements="$(curl -fsS --max-time 20 -H "authorization: Bearer $CRON_SECRET" \
+            https://trycodev.com/api/gen2/agent-cli-requirements | jq -r '.requirements | join(" ")' || true)"
+          echo "Requirements from failed turns: ${requirements:-none}"
+          echo "value=${requirements}" >>"$GITHUB_OUTPUT"
+
       - id: update
         env:
-          REQUIRE: ${{ inputs.require }}
+          REQUIRE: ${{ inputs.require }} ${{ steps.requirements.outputs.value }}
         # Word splitting is intended; the script validates every requirement.
         run: node infra/runtime/scripts/update-agent-clis.mjs $REQUIRE
 

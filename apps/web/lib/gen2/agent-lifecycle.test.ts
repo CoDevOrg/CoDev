@@ -9,6 +9,18 @@ vi.mock("../providers/dynamic-models", () => ({
 }));
 
 vi.mock("./cursor-auth-refresh", () => ({ refreshCursorTurnAuth: vi.fn() }));
+const fallback = vi.hoisted(() => ({
+  avoid: vi.fn(),
+  continueOn: vi.fn(),
+  continued: vi.fn(),
+}));
+vi.mock("./agent-cli-fallback", () => ({
+  avoidBlockedCliModel: fallback.avoid,
+}));
+vi.mock("./agent-cli-continuation", () => ({
+  continueOnFallbackModel: fallback.continueOn,
+  continuedSessionId: fallback.continued,
+}));
 
 vi.mock("../billing/gate", () => ({
   requireWorkspaceOwnerPlan: async () => undefined,
@@ -122,6 +134,11 @@ const turn = {
 describe("gen2 Codex agent", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    fallback.avoid.mockImplementation(
+      async (_provider: string, model: string) => ({ model, note: null }),
+    );
+    fallback.continueOn.mockResolvedValue(null);
+    fallback.continued.mockResolvedValue(null);
     mocks.getAgentModel.mockReturnValue("gpt-5.4");
     mocks.requireMember.mockResolvedValue({
       id: workspaceId,
@@ -356,6 +373,7 @@ describe("gen2 Codex agent", () => {
       exitCode: 0,
       reply: null,
       persistedMessageId: null,
+      continuedAs: null,
     });
     expect(result).not.toHaveProperty("codexAuthCacheJson");
     expect(mocks.updateCache).toHaveBeenCalledWith(credentialId, AUTH_CACHE);
@@ -380,6 +398,8 @@ describe("gen2 Codex agent", () => {
       workspaceId,
       chatId,
       userId,
+      model: "gpt-5.6-luna",
+      worktreeId: null,
     });
   });
 
@@ -428,6 +448,70 @@ describe("gen2 Codex agent", () => {
     expect(result.persistedMessageId).toBe(
       "66666666-6666-4666-8666-666666666666",
     );
+  });
+
+  it("starts a model the live CLI cannot run on its fallback, with a note", async () => {
+    fallback.avoid.mockResolvedValue({
+      model: "sonnet",
+      note: "gpt-5.6-luna needs a newer CLI. Answering with sonnet.",
+    });
+    const result = await startGen2AgentTurn(turn);
+    const launched = mocks.start.mock.calls[0]?.[1] as { command: string[] };
+    expect(launched.command).toContain("sonnet");
+    expect(mocks.appendMessage.mock.calls.map((call) => call[0])).toEqual([
+      expect.objectContaining({ role: "user", body: "List the files" }),
+      expect.objectContaining({
+        role: "assistant",
+        body: "gpt-5.6-luna needs a newer CLI. Answering with sonnet.",
+      }),
+    ]);
+    expect(result).toMatchObject({
+      sessionId: "session-1",
+      fallback: { from: "gpt-5.6-luna", to: "sonnet" },
+    });
+  });
+
+  it("explains instead of launching when no model on the account can run", async () => {
+    fallback.avoid.mockResolvedValue({
+      model: null,
+      note: "No other model on your account can run here yet.",
+    });
+    await expect(startGen2AgentTurn(turn)).rejects.toThrow(
+      "No other model on your account can run here yet.",
+    );
+    expect(mocks.start).not.toHaveBeenCalled();
+  });
+
+  it("re-runs a prompt without repeating it, from the history before it", async () => {
+    await startGen2AgentTurn({
+      ...turn,
+      model: "sonnet",
+      continuation: { history: [{ role: "user", body: "earlier" }] },
+    });
+    expect(fallback.avoid).not.toHaveBeenCalled();
+    expect(mocks.listMessages).not.toHaveBeenCalled();
+    expect(mocks.appendMessage).not.toHaveBeenCalled();
+    const launched = mocks.start.mock.calls[0]?.[1] as { command: string[] };
+    expect(launched.command.at(-1)).toMatch(/earlier/);
+  });
+
+  it("hands a turn that ended on a too-old CLI to its fallback re-run", async () => {
+    const requirement = { observedVersion: "2.1.236", minVersion: "2.1.280" };
+    mocks.recordChunks.mockResolvedValue({
+      reply: "",
+      messageId: null,
+      cliRequirement: requirement,
+    });
+    fallback.continueOn.mockResolvedValue("session-2");
+    const result = await pollGen2AgentTurn({
+      workspaceId,
+      userId,
+      chatId,
+      sessionId: "session-1",
+      after: 0,
+    });
+    expect(fallback.continueOn).toHaveBeenCalledWith("session-1", requirement);
+    expect(result).toMatchObject({ continuedAs: "session-2" });
   });
 
   it("releases the seat when the turn is gone", async () => {

@@ -92,6 +92,8 @@ export async function createGen2Turn(input: {
   workspaceId: string;
   chatId: string;
   userId: string;
+  model?: string | null;
+  worktreeId?: string | null;
 }) {
   await getDatabase()
     .insert(schema.gen2AgentTurns)

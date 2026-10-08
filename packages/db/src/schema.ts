@@ -2375,11 +2375,35 @@ export const gen2AgentTurns = pgTable(
       () => gen2ChatMessages.id,
       { onDelete: "set null" },
     ),
+    /** The model the turn ran on; a fallback re-run starts from it. */
+    model: text("model"),
+    /** The worktree the turn ran in; null for the main checkout. */
+    worktreeId: text("worktree_id"),
+    /** The turn that re-ran this one on a fallback model, for the browser. */
+    continuedAsSessionId: text("continued_as_session_id"),
     ...timestamps,
   },
   (table) => [
     index("gen2_agent_turns_chat_idx").on(table.chatId, table.createdAt),
   ],
+);
+
+/**
+ * The minimum CLI version an agent CLI reported a model needs. Turns on that
+ * model fall back while the promoted image is the one it was observed on, and
+ * the CLI updater ships a satisfying version without its usual release delay.
+ */
+export const agentCliModelRequirements = pgTable(
+  "agent_cli_model_requirements",
+  {
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    minVersion: text("min_version").notNull(),
+    observedVersion: text("observed_version").notNull(),
+    imageVersionId: text("image_version_id"),
+    ...timestamps,
+  },
+  (table) => [primaryKey({ columns: [table.provider, table.model] })],
 );
 
 /**

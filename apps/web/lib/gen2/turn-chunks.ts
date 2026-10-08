@@ -12,6 +12,10 @@ import {
   type AgentExecChunk,
 } from "./agent-output";
 import { capTurnOutput, settleTurn } from "./turns";
+import {
+  cliModelRequirement,
+  type CliModelRequirement,
+} from "./agent-cli-fallback";
 import { reconcileGen2CollaborationPaths } from "./collaboration-events";
 
 type Database = ReturnType<typeof getDatabase>;
@@ -80,6 +84,12 @@ async function persistReply(
 ) {
   const state = settleTurn(turn, output, input.exitCode);
   await reconcilePaths(turn, state);
+  // A CLI too old for the model is not the member's failure: after this commits,
+  // the poller re-runs the turn on a fallback model and writes the note.
+  const cliRequirement = turn.model
+    ? cliModelRequirement(turn.provider, state.error)
+    : null;
+  if (cliRequirement) return { reply: "", messageId: null, cliRequirement };
   const body = state.reply || state.error || "";
   const message = body
     ? await appendGen2ChatMessage(
@@ -99,7 +109,11 @@ async function persistReply(
 export async function recordGen2TurnChunks(
   input: Input,
   transaction?: Transaction,
-): Promise<{ reply: string; messageId: string } | null> {
+): Promise<{
+  reply: string;
+  messageId: string | null;
+  cliRequirement?: CliModelRequirement;
+} | null> {
   try {
     const database = transaction ?? getDatabase();
     const [turn] = await database

@@ -519,6 +519,13 @@
       "when": 1791262840190,
       "tag": "0073_expand_compute_claims",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1791483565422,
+      "tag": "0074_agent_cli_model_fallback",
+      "breakpoints": true
     }
   ]
 }

@@ -203,7 +203,8 @@ without a human step:
 
 1. `update-agent-clis.yml` runs hourly. It picks the newest release at least
    two days old (Claude Code capped at its `stable` tag), or the oldest release
-   that satisfies a model's stated minimum. It then opens an
+   that satisfies a model's stated minimum. Those minimums come from turns that
+   hit them, via `/api/gen2/agent-cli-requirements`. It then opens an
    `automation/agent-clis` PR that auto-merges once CI passes. Pins never
    move backward.
 2. CI's required `agent-clis` job installs exactly those pins on ARM64 and runs
