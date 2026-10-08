@@ -99,7 +99,7 @@ Deviations from the original design: the overlap details use the existing `Dropd
 
 ## Rollout flag
 
-`CODEV_AGENT_COORDINATION_WORKSPACES` on the web (Cloudflare and Azure) takes comma-separated workspace IDs, or `*`. It is the only switch, and it works per workspace:
+`CODEV_AGENT_COORDINATION_WORKSPACES` is a GitHub repository variable that CI overlays onto the Azure web origin (see [WEB_HOSTING.md](./WEB_HOSTING.md)). It takes comma-separated workspace IDs, or `*`. It is the only switch, and it works per workspace:
 
 - It enables the overlap UI and API and the duplicate check for listed workspaces.
 - Agent starts in a listed workspace carry `coordination: true` to the guest. Only those Superset launches get the coordination hook in their private profile, and only those native turns get hook config and a guestd registration.

@@ -34,6 +34,10 @@ const values = {
     process.env.GEN2_FREE_ARM_OWNER_IDS ?? base.GEN2_FREE_ARM_OWNER_IDS,
   ARM_WORKSPACE_BOOT_ENABLED:
     process.env.ARM_WORKSPACE_BOOT_ENABLED || base.ARM_WORKSPACE_BOOT_ENABLED,
+  // Agent coordination rolls out per workspace; an empty variable turns it off.
+  CODEV_AGENT_COORDINATION_WORKSPACES:
+    process.env.CODEV_AGENT_COORDINATION_WORKSPACES ??
+    base.CODEV_AGENT_COORDINATION_WORKSPACES,
   // A non-secret repository variable promotes images without rewriting the
   // write-only ARM credential bundle; the bundle's pin is the fallback.
   ...(process.env.ARM_WORKSPACE_IMAGE_VERSION_ID && {

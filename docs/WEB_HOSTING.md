@@ -148,6 +148,14 @@ project environment. Both default to disabled/empty. No production flag was
 changed by Phase 5. Enable an owner allowlist only after migration `0069`, Phase 6
 controls, and release gates are ready.
 
+## Agent coordination rollout
+
+`CODEV_AGENT_COORDINATION_WORKSPACES` is a non-secret GitHub repository
+variable: comma-separated workspace IDs, or `*`. CI overlays it onto the Azure
+origin's runtime values, so changing it needs only a CI deploy from `main`, not
+a rewrite of `AZURE_WEB_RUNTIME_SECRETS`. Unset or empty means off. See
+[SUPERSET_AGENT_COORDINATION.md](./SUPERSET_AGENT_COORDINATION.md).
+
 A trusted cost collector can POST complete cumulative USD owner/month snapshots
 to `/api/gen2/compute/reconcile` using the platform's existing `CRON_SECRET` bearer
 credential. The schema requires compute, storage, networking, operations, and
