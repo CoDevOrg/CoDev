@@ -1,0 +1,167 @@
+.lp-hero {
+  position: relative;
+  isolation: isolate;
+  width: calc(100% - 48px);
+  max-width: none;
+  min-height: calc(100svh - 104px);
+  margin: 0 auto;
+  padding: clamp(100px, 16vh, 180px) 24px;
+  border: 1px solid #ffffff0a;
+  border-radius: 24px;
+  overflow: hidden;
+  background: var(--lp-bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.lp-hero .lp-backdrop,
+.lp-hero .lp-canvas-layer {
+  position: absolute;
+  z-index: -1;
+}
+.lp-hero .lp-canvas,
+.lp-hero .lp-canvas-still {
+  filter: sepia(1) saturate(3) hue-rotate(175deg) brightness(0.6);
+}
+.lp-hero .lp-canvas-layer::before {
+  background-image: radial-gradient(circle, #17458055 0.8px, transparent 1.2px);
+}
+.lp-hero .lp-canvas-layer::after,
+.lp-hero .lp-canvas-still::after {
+  background: radial-gradient(ellipse at center, #060a1799, #060a1722 75%);
+}
+.lp-hero .lp-grid,
+.lp-hero .lp-aurora,
+.lp-hero .lp-mark,
+.lp-hero .lp-grain {
+  display: none;
+}
+.lp-pill {
+  background: #0d152df2;
+  border: 1px solid #00bde866;
+  color: #d7f6ff;
+  font-size: 14px;
+  font-weight: 650;
+  padding: 10px 18px;
+  box-shadow: 0 0 28px #00bde818;
+  backdrop-filter: blur(12px);
+}
+.lp-pill i {
+  background: var(--lp-lime);
+  box-shadow: 0 0 12px #00bde8;
+}
+.lp-hero h1 {
+  margin: 16px 0 24px;
+  font-family: var(--lp-font-sans), sans-serif;
+  font-size: clamp(44px, 5.6vw, 80px);
+  font-weight: 400;
+  line-height: 1.04;
+  letter-spacing: -0.055em;
+}
+.lp-hero h1 em {
+  font-family: inherit;
+  font-style: normal;
+  font-weight: 400;
+  color: var(--lp-ink);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  animation: none;
+}
+.lp-platform {
+  margin: 0 0 20px;
+  color: #75deff;
+  font-size: clamp(22px, 2.4vw, 32px);
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+  text-align: center;
+  text-shadow: 0 2px 16px #060a17;
+}
+.lp-lede {
+  max-width: 760px;
+  margin-top: 0;
+  color: var(--lp-ink);
+  font-size: clamp(18px, 1.7vw, 22px);
+  font-weight: 500;
+  line-height: 1.55;
+  text-shadow: 0 2px 12px #060a17;
+}
+.lp-hero-actions {
+  margin-top: 28px;
+}
+.lp-hero-actions .lp-cta {
+  min-height: 48px;
+  padding: 0 24px;
+  font-size: 14px;
+}
+.lp-companies {
+  width: min(1280px, calc(100% - 48px));
+  margin: 64px auto 16px;
+  text-align: center;
+}
+.lp-companies p {
+  color: #c5d3ea;
+  font-size: 13px;
+  font-weight: 550;
+  margin: 0 0 32px;
+}
+.lp-companies > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 24px 40px;
+}
+.lp-company-logo {
+  width: 100px;
+  height: 40px;
+  object-fit: contain;
+  filter: none;
+  opacity: 1;
+}
+.lp-company-logo:hover {
+  opacity: 1;
+}
+.lp-company-logo[alt="Google"],
+.lp-company-logo[alt="MongoDB"],
+.lp-company-logo[alt="University of Toronto"] {
+  width: 120px;
+}
+.lp-company-logo[alt="Salesforce"] {
+  width: 76px;
+  height: 48px;
+}
+.lp-company-logo[alt="Autodesk"],
+.lp-company-logo[alt="University of Toronto"] {
+  filter: grayscale(1) brightness(0) invert(0.75);
+}
+.lp-how {
+  --lp-ink: #f4f6fb;
+  --lp-muted: #8ea3c7;
+  padding-top: 96px;
+}
+.lp-how::before {
+  background: var(--lp-bg);
+}
+.lp-how .lp-how-title,
+.lp-how .lp-how-subtitle {
+  font-size: clamp(25px, 3vw, 36px);
+  font-weight: 400;
+}
+.lp-how .lp-how-subtitle {
+  color: var(--lp-muted);
+}
+.lp-feature-preview {
+  background: var(--lp-bg);
+}
+.lp-feature-dots {
+  background-image: radial-gradient(circle, #34649399 1.2px, transparent 1.4px);
+}
+.lp-feature-preview::after {
+  background-image: radial-gradient(circle, #4284b899 1.1px, transparent 1.3px);
+  opacity: 0.3;
+}
+.lp-terminal-preview .lp-feature-dots {
+  background-image: radial-gradient(circle, #34649366 1.2px, transparent 1.4px);
+}

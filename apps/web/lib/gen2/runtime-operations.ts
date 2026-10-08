@@ -328,13 +328,23 @@ export async function queueAzureWorkspaceStart(
     const joined = await joinExistingOperation(row, "start");
     if (joined) return { accepted: true as const, ...joined };
     if (row.runtimeStatus === "ready") {
-      const healthy = await new ArmWorkspaceProvider().healthy(
+      const provider = new ArmWorkspaceProvider();
+      const healthy = await provider.healthy(
         row.id,
         row.runtimeGeneration,
         row.runtimeDiskUuid ?? "",
         row.runtimeRouteHost,
       );
-      if (healthy) return { accepted: false as const, operationId: null };
+      // A tunnel outage must not replace a VM that Azure still reports running.
+      if (
+        healthy ||
+        (await provider.running(
+          row.id,
+          row.runtimeGeneration,
+          row.runtimeVmResourceId,
+        ))
+      )
+        return { accepted: false as const, operationId: null };
     }
     const claimed = await claimOperation(row, "start", idempotencyKey);
     if (!claimed) continue;
@@ -407,8 +417,9 @@ export async function checkAzureWorkspaceConnection(workspaceId: string) {
 }
 
 export async function touchAzureWorkspaceActivity(workspaceId: string) {
-  const connected = await checkAzureWorkspaceConnection(workspaceId);
-  if (!connected) return false;
+  const row = await loadRuntimeRow(workspaceId);
+  if (row.runtimeStatus !== "ready") return false;
+  // Member input keeps the VM awake even if its tunnel health probe briefly fails.
   await getDatabase()
     .update(schema.gen2ComputeSessions)
     .set({ lastActivityAt: new Date() })
@@ -418,7 +429,12 @@ export async function touchAzureWorkspaceActivity(workspaceId: string) {
         isNull(schema.gen2ComputeSessions.endedAt),
       ),
     );
-  return true;
+  return new ArmWorkspaceProvider().healthy(
+    row.id,
+    row.runtimeGeneration,
+    row.runtimeDiskUuid ?? "",
+    row.runtimeRouteHost,
+  );
 }
 
 function runtimeConnectionString(env: WorkflowEnvironment) {

@@ -1,3 +1,5 @@
+import { guardSessionSocket } from "@/lib/auth/session-socket";
+import { hasSameOrigin } from "@/lib/http/same-origin";
 import { eq } from "drizzle-orm";
 
 import { schema } from "@codev/db";
@@ -8,7 +10,7 @@ import {
 } from "@/lib/gen2/collaboration-socket";
 import { requireGen2Member } from "@/lib/gen2/workspaces";
 import { apiError } from "@/lib/http/api";
-import { withUser } from "@/lib/http/api-route";
+import { ApiError, withUser } from "@/lib/http/api-route";
 import { getDatabase } from "@/lib/platform/database";
 import { upgradeWebSocket } from "@/lib/platform/websocket";
 
@@ -20,6 +22,12 @@ export const maxDuration = 300;
 /** Authenticated browser-only transport for a Gen 2 shared document. */
 export const GET = withUser<Params>(
   async ({ request, user: sessionUser, params: { workspaceId } }) => {
+    if (!hasSameOrigin(request)) {
+      throw new ApiError(
+        "Cross-origin collaboration streams are not allowed.",
+        403,
+      );
+    }
     const [membership, user] = await Promise.all([
       requireGen2Member(workspaceId, sessionUser.id),
       getDatabase()
@@ -38,10 +46,13 @@ export const GET = withUser<Params>(
     try {
       return await upgradeWebSocket(
         request,
-        (socket) =>
-          handleGen2CollaborationSocket(workspaceId, socket, user, {
-            canEdit: membership.role !== "viewer",
-          }),
+        async (socket) => {
+          const guarded = await guardSessionSocket(socket, sessionUser);
+          if (guarded)
+            await handleGen2CollaborationSocket(workspaceId, guarded, user, {
+              canEdit: membership.role !== "viewer",
+            });
+        },
         { maxPayload: gen2CollaborationSocketMaxPayload },
       );
     } catch {

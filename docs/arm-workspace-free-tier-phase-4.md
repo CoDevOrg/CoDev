@@ -95,7 +95,12 @@ configured secrets/permissions, migration `0068`, and a newly built ARM image:
 6. Measure cold-open/reconnect timing and run the separate recovery, cost, and
    production release gates. No live latency or cost result is claimed here.
 
-Phase 4 was merged through PR #78 and deployed to the Worker. Candidate ARM
-image `1.0.11` was built from the merged main revision and remains excluded from
-`latest`. Runtime secrets and scoped staging Azure permissions are configured;
-see [web hosting](./WEB_HOSTING.md). Full live acceptance remains pending.
+Phase 4 was merged through PR #78 and deployed to `codev-cloudflare-preview`,
+which serves the production domains. Candidate ARM image `1.0.11` was built from
+the merged main revision and remains excluded from `latest`. The scoped staging
+Azure identity and Cloudflare runtime token are configured, and the opt-in
+lifecycle canary passed, including signed readiness and saved-disk reopen. The
+production database has no ARM workspaces; the ARM runtime secrets were removed
+from its Worker. Provision an isolated staging Worker and database before
+member enablement. Full live acceptance remains pending; see
+[web hosting](./WEB_HOSTING.md).

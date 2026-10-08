@@ -26,6 +26,9 @@ test("VM attaches exactly one existing disk with explicit retention and outbound
 test("disk initialization refuses unidentified or already initialized saved data", () => {
   const script = read("./scripts/prepare-arm-workspace-disk.sh");
   assert.match(script, /17179869184/);
+  assert.match(script, /CODEV_DISK_MODE/);
+  assert.match(script, /CODEV_DISK_EXPECTED_UUID/);
+  assert.doesNotMatch(script, /readonly mode=\$\{1:/);
   assert.match(script, /wipefs --no-act/);
   assert.match(script, /DISK_ALREADY_INITIALIZED/);
   assert.match(script, /DISK_IDENTITY_MISMATCH/);

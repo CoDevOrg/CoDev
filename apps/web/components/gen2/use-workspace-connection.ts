@@ -8,6 +8,7 @@ import { boundedJsonRequest } from "@/lib/gen2/bounded-request";
 
 export const CONNECTION_TIMEOUT_MS = 10_000;
 export const CONNECTION_CHECK_MS = 30_000;
+export const CONNECTION_RETRY_MS = 2_000;
 export const RECENT_ACTIVITY_MS = 60_000;
 
 export function useWorkspaceConnection(
@@ -30,6 +31,7 @@ export function useWorkspaceConnection(
   const mounted = useRef(true);
   const revision = useRef(0);
   const activityAt = useRef(0);
+  const failedChecks = useRef(0);
   /** The open that brought the member here starts one wake. Later checks do not. */
   const wakeOnOpen = useRef(true);
   useEffect(() => {
@@ -59,6 +61,7 @@ export function useWorkspaceConnection(
           return false;
         if (result.workspace) {
           onConnectedRef.current(result.workspace);
+          failedChecks.current = 0;
           setState("connected");
           return true;
         }
@@ -81,10 +84,25 @@ export function useWorkspaceConnection(
   useEffect(() => {
     mounted.current = true;
     activityAt.current = 0;
+    failedChecks.current = 0;
     wakeOnOpen.current = true;
     if (!enabled) return;
     const abort = new AbortController();
     let checking = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    const failed = (initial: boolean) => {
+      if (initial && wakeOnOpen.current) {
+        wakeOnOpen.current = false;
+        void reconnect();
+      } else if (
+        stateRef.current === "connected" &&
+        ++failedChecks.current < 2
+      ) {
+        retryTimer = setTimeout(() => void check(), CONNECTION_RETRY_MS);
+      } else {
+        setState("disconnected");
+      }
+    };
     async function check(initial = false) {
       if (
         checking ||
@@ -116,14 +134,13 @@ export function useWorkspaceConnection(
         ) {
           const connected = response.ok && payload.connected === true;
           if (connected) {
+            failedChecks.current = 0;
+            clearTimeout(retryTimer);
             wakeOnOpen.current = false;
             setState("connected");
             setError("");
-          } else if (initial && wakeOnOpen.current) {
-            wakeOnOpen.current = false;
-            void reconnect();
           } else {
-            setState("disconnected");
+            failed(initial);
           }
         }
       } catch {
@@ -132,12 +149,7 @@ export function useWorkspaceConnection(
           !connectRef.current &&
           checkRevision === revision.current
         ) {
-          if (initial && wakeOnOpen.current) {
-            wakeOnOpen.current = false;
-            void reconnect();
-          } else {
-            setState("disconnected");
-          }
+          failed(initial);
         }
       } finally {
         checking = false;
@@ -150,7 +162,10 @@ export function useWorkspaceConnection(
       if (document.visibilityState === "visible") void check();
     };
     for (const event of ["keydown", "pointerdown", "wheel", "input"])
-      window.addEventListener(event, activity, { passive: true });
+      window.addEventListener(event, activity, {
+        capture: true,
+        passive: true,
+      });
     document.addEventListener("visibilitychange", visible);
     window.addEventListener("online", visible);
     const offline = () => setState("disconnected");
@@ -164,8 +179,9 @@ export function useWorkspaceConnection(
       startupAbort.current?.abort();
       connectRef.current = null;
       clearInterval(timer);
+      clearTimeout(retryTimer);
       for (const event of ["keydown", "pointerdown", "wheel", "input"])
-        window.removeEventListener(event, activity);
+        window.removeEventListener(event, activity, true);
       document.removeEventListener("visibilitychange", visible);
       window.removeEventListener("online", visible);
       window.removeEventListener("offline", offline);

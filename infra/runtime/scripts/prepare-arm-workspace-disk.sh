@@ -5,8 +5,8 @@
 set -euo pipefail
 [[ ${EUID} -eq 0 ]] || { echo 'Root required' >&2; exit 1; }
 readonly disk=/dev/disk/azure/scsi1/lun0
-readonly mode=${1:?Use new or existing}
-readonly expected_uuid=${2:-}
+readonly mode=${CODEV_DISK_MODE:?Use new or existing}
+readonly expected_uuid=${CODEV_DISK_EXPECTED_UUID:-}
 [[ ${mode} == new || ${mode} == existing ]] || exit 1
 [[ ${mode} == new || -n ${expected_uuid} ]] || exit 1
 

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-
 import type { FeatureKey } from "@codev/contracts";
 
 import {
@@ -33,13 +32,18 @@ export function AdminFeatureFields({
       : "Removes this member rule so the organization policy applies.";
 
   return (
-    <FieldGroup>
+    <FieldGroup className="space-y-3">
       <input type="hidden" name="feature" value={FEATURE} />
       <Field>
-        <FieldLabel htmlFor={`${idPrefix}-state`}>Access override</FieldLabel>
+        <FieldLabel
+          htmlFor={`${idPrefix}-state`}
+          className="text-xs font-medium"
+        >
+          Access override
+        </FieldLabel>
         <select
           id={`${idPrefix}-state`}
-          className="admin-control-select"
+          className="w-full rounded-md border border-input bg-card px-3 py-2 text-xs text-foreground shadow-xs outline-none transition-colors focus-visible:ring-1 focus-visible:ring-ring"
           name="state"
           value={state}
           onChange={(event) => setState(event.target.value as OverrideState)}
@@ -48,10 +52,15 @@ export function AdminFeatureFields({
           <option value="enabled">Allow</option>
           <option value="disabled">Block</option>
         </select>
-        <FieldDescription>{inheritDescription}</FieldDescription>
+        <FieldDescription className="text-[11px] text-muted-foreground mt-1">
+          {inheritDescription}
+        </FieldDescription>
       </Field>
       <Field>
-        <FieldLabel htmlFor={`${idPrefix}-expires`}>
+        <FieldLabel
+          htmlFor={`${idPrefix}-expires`}
+          className="text-xs font-medium"
+        >
           Expiry (optional)
         </FieldLabel>
         <Input
@@ -59,8 +68,9 @@ export function AdminFeatureFields({
           name="expiresAt"
           type="datetime-local"
           disabled={state === "inherit"}
+          className="h-9 text-xs"
         />
-        <FieldDescription>
+        <FieldDescription className="text-[11px] text-muted-foreground mt-1">
           Leave blank for no expiry. The time is interpreted in your local
           timezone.
         </FieldDescription>

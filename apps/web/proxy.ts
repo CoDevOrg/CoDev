@@ -1,11 +1,13 @@
 import {
   type NextFetchEvent,
   type NextMiddleware,
-  type NextRequest,
+  NextRequest,
   NextResponse,
 } from "next/server";
 
 import { auth as nextAuth } from "@/auth";
+import { clearLegacySessionCookies } from "@/lib/auth/clear-legacy-session-cookies";
+import { securityHeaders } from "@/lib/platform/security-headers";
 import {
   apiEdgeLimiter,
   retryAfterSeconds,
@@ -36,15 +38,57 @@ function shouldAuthenticate(pathname: string): boolean {
 }
 
 function clientIdentifier(request: NextRequest) {
-  const forwarded = request.headers.get("x-forwarded-for");
-  return `ip:${forwarded?.split(",")[0]?.trim() || "unknown"}`;
+  const address =
+    typeof WebSocketPair === "function"
+      ? request.headers.get("cf-connecting-ip")
+      : request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  return `ip:${address || "unknown"}`;
+}
+
+async function rateLimitRequest(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  const edgeLimited =
+    pathname === "/api/gen2/workspaces" || pathname.startsWith("/api/auth/");
+  if (edgeLimited && !apiEdgeLimiter && process.env.NODE_ENV === "production") {
+    return NextResponse.json(
+      { error: "Rate limiting is temporarily unavailable." },
+      { status: 503 },
+    );
+  }
+  if (edgeLimited && apiEdgeLimiter) {
+    let result;
+    try {
+      result = await apiEdgeLimiter.limit(clientIdentifier(request));
+    } catch {
+      return NextResponse.json(
+        { error: "Rate limiting is temporarily unavailable." },
+        { status: 503 },
+      );
+    }
+    if (result.reason === "timeout") {
+      return NextResponse.json(
+        { error: "Rate limiting is temporarily unavailable." },
+        { status: 503 },
+      );
+    }
+    if (!result.success) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again shortly." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(retryAfterSeconds(result.reset)) },
+        },
+      );
+    }
+  }
+  return null;
 }
 
 /**
  * Next.js 16 renamed middleware to proxy. This remains the edge middleware
  * boundary and must run before authentication handlers on sensitive routes.
  */
-export async function proxy(request: NextRequest, event: NextFetchEvent) {
+async function routeRequest(request: NextRequest, event: NextFetchEvent) {
   const pathname = request.nextUrl.pathname;
   const adminHost = isAdminHostname(request.nextUrl.hostname);
 
@@ -69,37 +113,43 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     return new NextResponse("Not Found", { status: 404 });
   }
 
-  const edgeLimited =
-    pathname === "/api/gen2/workspaces" || pathname.startsWith("/api/auth/");
-  if (edgeLimited && !apiEdgeLimiter && process.env.NODE_ENV === "production") {
-    return NextResponse.json(
-      { error: "Rate limiting is temporarily unavailable." },
-      { status: 503 },
-    );
-  }
-  if (edgeLimited && apiEdgeLimiter) {
-    let result;
-    try {
-      result = await apiEdgeLimiter.limit(clientIdentifier(request));
-    } catch {
-      return NextResponse.json(
-        { error: "Rate limiting is temporarily unavailable." },
-        { status: 503 },
-      );
-    }
-    if (!result.success) {
-      return NextResponse.json(
-        { error: "Too many requests. Please try again shortly." },
-        {
-          status: 429,
-          headers: { "Retry-After": String(retryAfterSeconds(result.reset)) },
-        },
-      );
-    }
-  }
+  const limited = await rateLimitRequest(request);
+  if (limited) return limited;
   return shouldAuthenticate(pathname)
     ? authenticationProxy(request, event)
     : NextResponse.next();
+}
+
+export async function proxy(request: NextRequest, event: NextFetchEvent) {
+  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+  const protections = securityHeaders(
+    nonce,
+    process.env.NODE_ENV === "production",
+    request.nextUrl.origin,
+  );
+  const headers = new Headers(request.headers);
+  headers.set("x-nonce", nonce);
+  headers.set(
+    "content-security-policy",
+    protections.find((header) => header.key === "Content-Security-Policy")!
+      .value,
+  );
+  const securedRequest = new NextRequest(request, { headers });
+  const response =
+    (await routeRequest(securedRequest, event)) ?? NextResponse.next();
+  // Forward the trusted nonce to SSR, including responses produced by Auth.js.
+  const forwarded = NextResponse.next({ request: { headers } });
+  forwarded.headers.forEach((value, key) => {
+    if (
+      key.startsWith("x-middleware-request-") ||
+      key === "x-middleware-override-headers"
+    ) {
+      response.headers.set(key, value);
+    }
+  });
+  protections.forEach(({ key, value }) => response.headers.set(key, value));
+  clearLegacySessionCookies(request, response);
+  return response;
 }
 
 export const config = {

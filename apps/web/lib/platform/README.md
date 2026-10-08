@@ -11,6 +11,7 @@ This module owns foundational infrastructure integrations and platform-level cro
 - `websocket.ts`: WebSocket upgrade and message adapter for Cloudflare Workers and Vercel.
 - `observability.ts`: Application logging and metrics.
 - `rate-limit.ts`, `upstash-rate-limit.ts`: API and action rate limiting.
+- `security-headers.ts`: Browser protections shared by Next.js configuration and the request proxy, including nonce-based script policies and production HSTS.
 - `kms.ts`, `crypto.ts`: Key management and encryption utilities.
 
 - `privacy-preferences.ts`: analytics consent interpretation and URL minimization shared by browser and server ingestion.

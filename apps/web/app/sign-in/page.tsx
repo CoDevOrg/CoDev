@@ -10,14 +10,10 @@ import { auth, signIn } from "@/auth";
 import { Brand } from "@/components/shell/app-chrome";
 import { ThemeToggle } from "@/components/shell/theme-toggle";
 import { CredentialsSignInForm } from "@/components/auth/credentials-sign-in-form";
-import {
-  assertCanRegister,
-  readInviteGrant,
-  RegistrationError,
-} from "@/lib/auth/registration";
+import { assertCanRegister, RegistrationError } from "@/lib/auth/registration";
 
 const INVITE_ONLY_MESSAGE =
-  "CoDev is invite-only right now. Join the waitlist and we'll email you a link when you're in.";
+  "New accounts are paused while CoDev is on the waitlist. Existing members can sign in below; join the waitlist to hear when registration opens.";
 
 function inviteErrorMessage(error: string | undefined): string | null {
   switch (error) {
@@ -84,12 +80,11 @@ export default async function SignInPage({
   searchParams: Promise<{
     callbackUrl?: string;
     error?: string;
-    mode?: string;
     reset?: string;
     deleted?: string;
   }>;
 }) {
-  const { callbackUrl, error, mode, reset, deleted } = await searchParams;
+  const { callbackUrl, error, reset, deleted } = await searchParams;
   const safeCallback =
     callbackUrl?.startsWith("/") && !callbackUrl.startsWith("//")
       ? callbackUrl
@@ -109,9 +104,7 @@ export default async function SignInPage({
   const githubConfigured = isGitHubAuthConfigured();
   const googleConfigured = isGoogleAuthConfigured();
 
-  const inviteGrant = await readInviteGrant();
   const inviteMessage = inviteErrorMessage(error);
-  const startInSignUp = mode === "sign-up" || Boolean(inviteGrant);
 
   return (
     <main className="auth-page">
@@ -126,9 +119,8 @@ export default async function SignInPage({
         <p className="eyebrow">Sign in</p>
         <h1>Welcome to CoDev.</h1>
         <p>
-          {inviteGrant
-            ? "Your invitation checks out. Create your account with Google, GitHub, or an email and password."
-            : "Continue with Google or GitHub, or sign in with the email you already use. CoDev is invite-only — request access from the home page."}
+          Sign in with Google, GitHub, or the email you already use. New
+          accounts are paused while CoDev is on the waitlist.
         </p>
 
         {deleted === "1" ? (
@@ -143,16 +135,10 @@ export default async function SignInPage({
           </div>
         ) : null}
 
-        {inviteGrant ? (
-          <div className="inline-alert" role="status">
-            Invited as <strong>{inviteGrant.email}</strong>.
-          </div>
-        ) : null}
-
         {sessionCheckUnavailable ? (
           <div className="inline-alert error" role="alert">
-            We could not check your existing session. You can still sign in or
-            create an account below.
+            We could not check your existing session. You can still sign in
+            below.
           </div>
         ) : null}
 
@@ -218,8 +204,6 @@ export default async function SignInPage({
           </div>
 
           <CredentialsSignInForm
-            initialMode={startInSignUp ? "sign-up" : "sign-in"}
-            defaultEmail={inviteGrant?.email}
             action={async (formData) => {
               "use server";
               const intent = String(formData.get("intent") ?? "sign-in");

@@ -6,6 +6,11 @@ Vercel retains its own production and preview deployments. Check the hostname
 and deployment job before changing a setting; the deployments have separate
 runtime secrets.
 
+Cloudflare's zone-level **Always Use HTTPS** setting is enabled for
+`trycodev.com`. HTTP requests to proxied hostnames receive a permanent redirect
+to HTTPS with their path and query preserved; this is managed at the edge and
+does not require an app deployment.
+
 |                       | Cloudflare                                                                                             | Vercel                                                                                                                       |
 | --------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
 | Serves                | The production Worker on `trycodev.com` and `www.trycodev.com`, plus the `admins.trycodev.com/*` route | The `codev` web project on Vercel deployment URLs; `main` gets a production deployment and other branches get previews       |
@@ -42,6 +47,32 @@ Update a runtime variable on the platform serving the affected URL. A change
 to one platform's secrets does not update the other. For deployment steps and
 credential requirements, see [`OPERATIONS.md`](./OPERATIONS.md).
 
+## Browser security and session rollout
+
+Both web deployments generate a fresh CSP script nonce in `apps/web/proxy.ts`
+and forward it to SSR. The root layout reads that nonce for the theme script;
+framework bootstrap scripts inherit it from the request CSP. All pages must
+remain dynamically rendered so a cached page cannot reuse another request's
+nonce. The shared Next.js headers add framing protection, MIME sniffing
+protection, referrer and permissions policies, and production HSTS. HSTS is
+host-only: runtime subdomains do not inherit the application's policy.
+
+Production sessions use `__Host-codev.session-token` with no `Domain` attribute.
+Public, admin, preview, and runtime hosts cannot share this cookie. Visiting an
+application host expires the previous domain-wide session cookies; this rollout
+requires members to sign in again. Admin sign-in is independent of public-site
+sign-in. OAuth callbacks must return to the host starting that sign-in; register
+each supported callback with the provider and avoid forcing admin callbacks to
+the public host through `AUTH_URL`/`NEXTAUTH_URL`.
+
+Password login allows ten attempts per normalized account per fifteen minutes,
+including server-action requests. It uses the existing REST Redis settings
+(`KV_REST_API_URL`/`KV_REST_API_TOKEN`, or the Upstash equivalents), with
+`REDIS_URL` as a fallback. Missing or failing production rate-limit storage
+rejects password login. Password changes invalidate browser sessions, retire
+CLI tokens and approved device flows atomically, and close existing workspace
+sockets within fifteen seconds. No database migration is required.
+
 ## Keep this map current
 
 Update this document in the same change whenever a hostname, deployment job,
@@ -65,13 +96,38 @@ connector token through protected Azure settings. Private GitHub credentials
 stay in the control plane; new guest checkouts receive bounded file snapshots.
 The scheduled compute reconciliation route also drains abandoned ARM turns
 before idle VM release, using the durable cursor added by migration `0068`.
-A candidate image containing `/v1/runtime-activity` and a successful staging
-canary are required before ARM member enablement. See the [Phase 4 review](./arm-workspace-free-tier-phase-4.md).
+Candidate image `1.0.11` contains `/v1/runtime-activity`. The opt-in Azure
+staging lifecycle canary passed on 2026-10-05, including signed readiness and
+saved-disk reopen. Full member acceptance still requires an isolated staging
+web deployment. See the [Phase 4 review](./arm-workspace-free-tier-phase-4.md).
 
-The Worker now has the ARM image, SSH public key, and Ed25519 signing key
-bindings. The image is pinned to gallery version `1.0.11` in
-`codev-arm-workspace-phase1`. Operator copies of the signing and SSH keys are
-stored outside the repository in a private configuration directory.
+The ARM lifecycle code is deployed on `codev-cloudflare-preview`, the only
+Worker currently serving `trycodev.com` and `www.trycodev.com`. Its image is
+pinned to gallery version `1.0.11` in `codev-arm-workspace-phase1`. ARM runtime
+secrets and the Cloudflare runtime token were removed from this production
+Worker after confirming it has no active ARM workspaces. Operator copies of the
+signing and SSH keys remain outside the repository in a private configuration
+directory.
+
+The current Cloudflare account has no staging Worker, no
+`staging.trycodev.com` DNS record, and no isolated staging Hyperdrive binding.
+`codev-supabase` is the only Hyperdrive, and its origin matches the database
+configured in `.env.local`. Vercel provisions the production Supabase database
+through its Marketplace integration `codev-db`; that is the only CoDev
+Supabase resource currently configured there. A second isolated Supabase
+resource must be provisioned through Vercel before creating staging
+Hyperdrive. The production Worker still uses the production database, so do not
+enable ARM workspaces for members until a separate staging Worker is bound to
+the isolated database.
+
+Provisioning that environment needs a Cloudflare identity with [Workers
+Admin](https://developers.cloudflare.com/workers/authorization/workers/) to
+create the Worker, Workers Routes Write on the `trycodev.com` zone to attach
+the hostname, and [Hyperdrive
+Write](https://developers.cloudflare.com/api/resources/hyperdrive/subresources/configs/methods/create/)
+at account scope to create its database binding. Keep the runtime
+`codev-arm-runtime` token separate and limited to Cloudflare Tunnel Write at
+account scope and DNS Write on `trycodev.com`.
 
 ARM provisioning requires `ARM_WORKSPACE_AZURE_CLIENT_ID`,
 `ARM_WORKSPACE_AZURE_CLIENT_SECRET`, and `ARM_WORKSPACE_RESOURCE_GROUP`.
@@ -82,4 +138,5 @@ The staging identity `codev-arm-workspace-staging-worker` has the custom
 and Reader only on the ARM gallery image definition in the build group.
 It has no IAM permissions. Its appended client credential expires on
 2027-01-03 and must be rotated in the Worker secret store before that date.
-A successful staging lifecycle canary is still required before member enablement.
+The lifecycle canary passed, but the isolated staging Worker and database are
+still required before member enablement.

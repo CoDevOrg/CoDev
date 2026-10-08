@@ -48,10 +48,13 @@ export async function consumeRateLimit(
     // Redis outages should fail closed for the same reason as missing config.
     return { allowed: false, remaining: 0, retryAfterSeconds: windowSeconds };
   }
-  if (results?.some(([error]) => error)) {
+  if (!results || results.length !== 2 || results.some(([error]) => error)) {
     return { allowed: false, remaining: 0, retryAfterSeconds: windowSeconds };
   }
-  const count = Number(results?.[0]?.[1] ?? 1);
+  const count = Number(results[0]?.[1]);
+  if (!Number.isSafeInteger(count) || count < 1) {
+    return { allowed: false, remaining: 0, retryAfterSeconds: windowSeconds };
+  }
   return {
     allowed: count <= limit,
     remaining: Math.max(0, limit - count),

@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 
 import { schema } from "@codev/db";
 
-import { hashPassword } from "@/lib/platform/crypto";
+import { updateAccountPassword } from "@/lib/auth/update-account-password";
 import { getDatabase } from "@/lib/platform/database";
 import { getNewAccountPasswordError } from "@/lib/auth/password-policy";
 import {
@@ -109,13 +109,11 @@ export async function completePasswordReset(formData: FormData) {
     redirect("/reset-password?error=invalid");
   }
 
-  await getDatabase()
-    .update(schema.users)
-    .set({
-      passwordHash: await hashPassword(password),
-      updatedAt: new Date(),
-    })
-    .where(eq(schema.users.id, state.userId));
+  if (
+    !(await updateAccountPassword(state.userId, user!.passwordHash, password))
+  ) {
+    redirect("/reset-password?error=invalid");
+  }
 
   redirect("/sign-in?reset=1");
 }

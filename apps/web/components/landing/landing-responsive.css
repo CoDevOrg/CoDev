@@ -1,0 +1,155 @@
+@media (max-width: 720px) {
+  .lp-nav-shell {
+    height: 76px;
+  }
+  .lp-nav {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 8px;
+    width: 100%;
+    padding: 0 12px;
+    height: 64px;
+  }
+  .lp-nav[data-compact="true"] {
+    width: calc(100% - 24px);
+    height: 56px;
+    padding: 0 12px;
+  }
+  .lp-nav .lp-brand {
+    font-size: 16px;
+    gap: 6px;
+    --lp-logo-size: 24px;
+  }
+  .lp-nav nav {
+    gap: 12px;
+  }
+  .lp-nav nav a:not(.lp-cta) {
+    display: inline;
+    font-size: 12px;
+  }
+  .lp-page .lp-nav .lp-cta-small {
+    white-space: nowrap;
+    font-size: 11px;
+    padding: 0 10px;
+    height: 34px;
+    min-height: 34px;
+  }
+  .lp-hero {
+    width: calc(100% - 24px);
+    border-radius: 16px;
+    padding: 80px 20px;
+    min-height: max(540px, calc(100svh - 112px));
+  }
+  .lp-hero h1 {
+    max-width: 100%;
+    font-size: clamp(36px, 9vw, 52px);
+    line-height: 1.08;
+  }
+  .lp-request-heading h2 {
+    font-size: clamp(36px, 9vw, 56px);
+  }
+  .lp-companies {
+    margin-top: 44px;
+  }
+  .lp-companies > div {
+    gap: 20px 26px;
+  }
+  .lp-how {
+    padding-top: 64px;
+  }
+  .lp-request {
+    grid-template-columns: 1fr;
+    gap: 28px;
+    padding: 64px 0;
+  }
+  .lp-waitlist-card {
+    max-width: none;
+    padding: 24px;
+  }
+  .lp-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+@media (max-width: 360px) {
+  .lp-nav nav {
+    gap: 8px;
+  }
+  .lp-nav nav a:not(.lp-cta) {
+    font-size: 11px;
+  }
+  .lp-nav .lp-brand {
+    font-size: 15px;
+    gap: 5px;
+  }
+}
+
+/* Logo uses a mask so the accent matches Miami blue exactly. */
+.lp-nav .lp-brand,
+.lp-footer .lp-brand {
+  position: relative;
+}
+.lp-nav .lp-brand > span,
+.lp-footer .lp-brand > span {
+  color: #d06d52;
+}
+.lp-nav .lp-brand::before,
+.lp-footer .lp-brand::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  width: 32px;
+  height: 32px;
+  background: var(--lp-lime);
+  mask: url("/brand/codev-mark-v3.png") center / contain no-repeat;
+}
+.lp-footer .lp-brand::before {
+  width: 26px;
+  height: 26px;
+}
+.lp-nav .lp-brand::before {
+  width: var(--lp-logo-size);
+  height: var(--lp-logo-size);
+  transition:
+    width 350ms ease,
+    height 350ms ease;
+}
+.lp-how .lp-triple-stage {
+  background: linear-gradient(145deg, #131f42, #0d152d);
+}
+.lp-how .lp-doc-topbar,
+.lp-how .lp-coord-topbar,
+.lp-how .lp-merge-topbar,
+.lp-how .lp-terminal-bar,
+.lp-how .lp-invite-toolbar {
+  background: #131f42;
+  color: #8ea3c7;
+}
+.lp-how .lp-invite-dialog,
+.lp-how .lp-invite-joined,
+.lp-how .lp-terminal-browser {
+  background: #0d152d;
+}
+.lp-how .lp-invite-link {
+  background: #060a17;
+}
+.lp-how .lp-invite-preview {
+  --color-secondary: #182854;
+  --color-secondary-foreground: #f4f6fb;
+  --color-accent: #131f42;
+}
+.lp-how .lp-live-apply-btn {
+  animation-name: lp-brand-apply;
+}
+@keyframes lp-brand-apply {
+  0%,
+  58%,
+  100% {
+    background: #00bde8;
+    color: #060a17;
+  }
+  64%,
+  94% {
+    background: #2dd4bf;
+    color: #060a17;
+  }
+}

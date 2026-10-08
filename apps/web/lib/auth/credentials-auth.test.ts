@@ -1,12 +1,28 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({ allow: vi.fn(), database: vi.fn() }));
+vi.mock("./password-login-limit", () => ({ allowPasswordLogin: mocks.allow }));
+vi.mock("../platform/database", () => ({ getDatabase: mocks.database }));
 
 import {
   parseCredentialsFields,
   parseCredentialsIntent,
   resolveCredentialsAuthorizeStep,
+  resolveCredentialsSignIn,
 } from "./credentials-auth";
 
 describe("credentials email auth", () => {
+  it("throttles normalized accounts before any password lookup or hashing", async () => {
+    mocks.allow.mockResolvedValue(false);
+    expect(
+      await resolveCredentialsSignIn({
+        email: " Ada@Example.com ",
+        password: "password",
+      }),
+    ).toBeNull();
+    expect(mocks.allow).toHaveBeenCalledWith("ada@example.com");
+    expect(mocks.database).not.toHaveBeenCalled();
+  });
   it("defaults unknown intents to sign-in", () => {
     expect(parseCredentialsIntent(undefined)).toBe("sign-in");
     expect(parseCredentialsIntent("sign-up")).toBe("sign-up");

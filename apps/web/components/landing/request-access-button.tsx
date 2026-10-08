@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { LinkButton } from "@/components/ui/button";
 
 /** Fired when any "Get early access" control is pressed. */
 export const REQUEST_ACCESS_EVENT = "codev:request-access";
@@ -9,9 +10,8 @@ export const REQUEST_ACCESS_EVENT = "codev:request-access";
 export const REQUEST_ACCESS_TARGET_ID = "get-access";
 
 /**
- * The hero and nav call-to-action. Rather than opening a modal it points at the
- * inline waitlist form near the foot of the page: the anchor scrolls there on
- * its own, and the event tells the form to open and take focus.
+ * The hero and nav call-to-action. The event opens the inline form, centers it
+ * in the viewport, and focuses the email field.
  */
 export function RequestAccessButton({
   children,
@@ -21,7 +21,7 @@ export function RequestAccessButton({
   className: string;
 }) {
   return (
-    <a
+    <LinkButton
       className={className}
       href={`#${REQUEST_ACCESS_TARGET_ID}`}
       onClick={(event) => {
@@ -33,6 +33,6 @@ export function RequestAccessButton({
       }}
     >
       {children}
-    </a>
+    </LinkButton>
   );
 }

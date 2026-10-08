@@ -395,7 +395,7 @@ export function Gen2TerminalPane({
         <div className="gen2-term-start is-loading">
           <WorkspaceLoading
             busy={false}
-            title="This workspace is asleep"
+            title="Can't connect to this workspace"
             description="Reconnect to open the shell. Your files are still saved."
             action={
               onResumeWorkspace ? (

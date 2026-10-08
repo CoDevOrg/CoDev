@@ -22,21 +22,21 @@ function mockMatchMedia(matches: boolean) {
 
 describe("WaitlistInline", () => {
   beforeEach(() => {
-    // No fine pointer / no reduced motion: keeps the ghost-cursor overlay and
-    // its IntersectionObserver out of the jsdom run.
     mockMatchMedia(false);
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: vi.fn(),
+    });
   });
 
-  it("shows the signup form directly, with no toggle button", () => {
-    const { container } = render(<WaitlistInline />);
-
+  it("reveals the signup form when entering the waitlist", () => {
+    render(<WaitlistInline />);
+    expect(screen.getByLabelText("Email")).not.toBeVisible();
+    const trigger = screen.getByRole("button", { name: /Enter the waitlist/ });
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(trigger);
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByLabelText("Email")).toBeVisible();
-    // The only button is the form's own submit; nothing expands/collapses.
-    const buttons = screen.getAllByRole("button");
-    expect(buttons).toHaveLength(1);
-    expect(buttons[0]).toHaveAttribute("type", "submit");
-    expect(buttons[0]).not.toHaveAttribute("aria-expanded");
-    expect(container.querySelector("[inert]")).not.toBeInTheDocument();
   });
 
   it("scrolls to the form and focuses email when a CTA fires", () => {
@@ -53,6 +53,7 @@ describe("WaitlistInline", () => {
     });
 
     expect(scrollIntoView).toHaveBeenCalled();
+    expect(screen.getByLabelText("Email")).toBeVisible();
   });
 
   it("keeps the ghost cursors off when a fine pointer is absent", () => {
@@ -70,6 +71,7 @@ describe("WaitlistInline", () => {
 
     const { container } = render(<WaitlistInline />);
     const card = container.querySelector<HTMLElement>(".lp-waitlist-card")!;
+    fireEvent.click(screen.getByRole("button", { name: /Enter the waitlist/ }));
 
     fireEvent.change(within(card).getByLabelText("Email"), {
       target: { value: "builder@example.com" },

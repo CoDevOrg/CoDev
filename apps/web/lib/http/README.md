@@ -8,3 +8,4 @@ This module owns HTTP layer abstractions and server-side utilities. It provides 
 
 - `api.ts`, `api-route.ts`: Core abstractions for building robust API handlers.
 - `database-error.ts`: Mapping database exceptions to HTTP error responses.
+- `same-origin.ts`: Exact origin checks for browser-only WebSocket handshakes; missing origins are rejected.
