@@ -22,25 +22,6 @@ import { isGen2SupersetRuntimeEnabled } from "./superset-runtime-feature";
 
 const PRIMARY_WORKTREE_ID = "main";
 
-interface MemberCacheEntry {
-  expiresAt: number;
-  data: Awaited<ReturnType<typeof requireGen2Member>>;
-}
-
-const memberCache = new Map<string, MemberCacheEntry>();
-const TERMINAL_MEMBER_CACHE_TTL_MS = 60_000;
-
-export function clearGen2TerminalMemberCache() {
-  memberCache.clear();
-}
-
-export function invalidateGen2TerminalMemberCache(
-  workspaceId: string,
-  userId: string,
-) {
-  memberCache.delete(`${workspaceId}:${userId}`);
-}
-
 function requireTerminalPermission(
   membership: Awaited<ReturnType<typeof requireGen2Member>>,
 ) {
@@ -53,21 +34,10 @@ function requireTerminalPermission(
   return membership;
 }
 
-async function getCachedGen2Member(workspaceId: string, userId: string) {
-  const cacheKey = `${workspaceId}:${userId}`;
-  const now = Date.now();
-  const cached = memberCache.get(cacheKey);
-  if (cached && cached.expiresAt > now) {
-    return requireTerminalPermission(cached.data);
-  }
-  const membership = requireTerminalPermission(
+async function requireTerminalMember(workspaceId: string, userId: string) {
+  return requireTerminalPermission(
     await requireGen2Member(workspaceId, userId),
   );
-  memberCache.set(cacheKey, {
-    expiresAt: now + TERMINAL_MEMBER_CACHE_TTL_MS,
-    data: membership,
-  });
-  return membership;
 }
 
 /**
@@ -92,10 +62,6 @@ async function requireReadyMember(workspaceId: string, userId: string) {
         : "Start the instance first.",
     );
   }
-  memberCache.set(`${workspaceId}:${userId}`, {
-    expiresAt: Date.now() + TERMINAL_MEMBER_CACHE_TTL_MS,
-    data: membership,
-  });
   return membership;
 }
 
@@ -167,7 +133,7 @@ export async function authorizeGen2TerminalStream(
   await requireReadyMember(workspaceId, userId);
 }
 
-/** Cheaper recheck a long-lived socket repeats while it stays open. */
+/** Live permission check before socket input, resize, polling, or output delivery. */
 export async function recheckGen2TerminalMember(
   workspaceId: string,
   userId: string,
@@ -182,7 +148,7 @@ export async function sendGen2TerminalInput(
   data: string,
   worktreeId = PRIMARY_WORKTREE_ID,
 ) {
-  await getCachedGen2Member(workspaceId, userId);
+  await requireTerminalMember(workspaceId, userId);
   await requireWorkspaceOwnerPlan(workspaceId);
   if (isGen2SupersetRuntimeEnabled()) {
     await sendSupersetTerminalInput(workspaceId, {
@@ -202,7 +168,7 @@ export async function resizeGen2Terminal(
   size: { rows: number; columns: number },
   worktreeId = PRIMARY_WORKTREE_ID,
 ) {
-  await getCachedGen2Member(workspaceId, userId);
+  await requireTerminalMember(workspaceId, userId);
   if (isGen2SupersetRuntimeEnabled()) {
     await resizeSupersetTerminal(workspaceId, {
       worktreeId,
@@ -221,15 +187,12 @@ export async function pollGen2Terminal(
   after: number,
   worktreeId = PRIMARY_WORKTREE_ID,
 ) {
-  await getCachedGen2Member(workspaceId, userId);
-  if (isGen2SupersetRuntimeEnabled()) {
-    return pollSupersetTerminal(workspaceId, {
-      worktreeId,
-      sessionId,
-      after,
-    });
-  }
-  return pollSandboxTerminal(workspaceId, sessionId, after);
+  await requireTerminalMember(workspaceId, userId);
+  const result = isGen2SupersetRuntimeEnabled()
+    ? await pollSupersetTerminal(workspaceId, { worktreeId, sessionId, after })
+    : await pollSandboxTerminal(workspaceId, sessionId, after);
+  await requireTerminalMember(workspaceId, userId);
+  return result;
 }
 
 export async function closeGen2Terminal(
@@ -238,14 +201,10 @@ export async function closeGen2Terminal(
   sessionId: string,
   worktreeId = PRIMARY_WORKTREE_ID,
 ) {
-  try {
-    await getCachedGen2Member(workspaceId, userId);
-    if (isGen2SupersetRuntimeEnabled()) {
-      await closeSupersetTerminal(workspaceId, { sessionId, worktreeId });
-      return;
-    }
-    await closeSandboxTerminal(workspaceId, sessionId);
-  } finally {
-    invalidateGen2TerminalMemberCache(workspaceId, userId);
+  await requireTerminalMember(workspaceId, userId);
+  if (isGen2SupersetRuntimeEnabled()) {
+    await closeSupersetTerminal(workspaceId, { sessionId, worktreeId });
+    return;
   }
+  await closeSandboxTerminal(workspaceId, sessionId);
 }

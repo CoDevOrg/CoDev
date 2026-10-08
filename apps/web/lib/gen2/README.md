@@ -60,7 +60,8 @@ membership **before** touching `lib/runtime/orchestrator-*`, which performs no
 authorization of its own — a route reaching those clients directly would be an
 IDOR across every gen 2 workspace. Keeping the guard in this layer means a new
 route cannot forget it. Terminal operations and socket membership rechecks require
-an editor or owner role; viewers cannot access the shared shell. Collaboration
+an editor or owner role; viewers cannot access the shared shell. Terminal access
+is never cached; socket input, resize, and output delivery recheck current membership. Collaboration
 updates recheck the current member role rather than trusting handshake permissions.
 Broadcasts and replay verify live membership before delivering workspace data;
 removed members are disconnected. Native file writes/uploads and agent starts
@@ -138,3 +139,8 @@ Agent starts validate the selected model against the initiating member’s live
 provider catalog before either native or Superset execution. The composer keeps
 catalogs and model preferences separate for each provider; Cursor chats must
 reach the composer as Cursor. No model choices are bundled into the client.
+
+Existing member role changes require the owner, including through add-member.
+Removing a member clears the active shared invitation in the same transaction.
+`workspace-invite-access.ts` locks and revalidates invitations before admission,
+using the workspace row shared with removal; owner admission retains owner-lock ordering.

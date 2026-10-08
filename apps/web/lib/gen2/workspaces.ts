@@ -31,6 +31,7 @@ import {
   transferActiveComputeSession,
 } from "./compute-quota";
 import { Gen2AccessError, Gen2LifecycleError } from "./errors";
+import { requireActiveWorkspaceInvite } from "./workspace-invite-access";
 import { queueAzureWorkspaceDelete } from "./runtime-operations";
 
 const DEFAULT_WORKSPACE_NAME = "Workspace";
@@ -452,6 +453,7 @@ export async function joinGen2Workspace(token: string, userId: string) {
         userId,
         workspace.ownerId,
       );
+      await requireActiveWorkspaceInvite(tx, workspace.id, tokenHash, role);
       await tx
         .update(schema.gen2WorkspaceMembers)
         .set({ role: "editor" })
@@ -500,14 +502,17 @@ export async function joinGen2Workspace(token: string, userId: string) {
       }
     });
   } else {
-    await getDatabase()
-      .insert(schema.gen2WorkspaceMembers)
-      .values({
-        workspaceId: workspace.id,
-        userId,
-        role,
-      })
-      .onConflictDoNothing();
+    await getDatabase().transaction(async (tx) => {
+      await requireActiveWorkspaceInvite(tx, workspace.id, tokenHash, role);
+      await tx
+        .insert(schema.gen2WorkspaceMembers)
+        .values({
+          workspaceId: workspace.id,
+          userId,
+          role,
+        })
+        .onConflictDoNothing();
+    });
   }
 
   return requireGen2Member(workspace.id, userId);
@@ -668,6 +673,12 @@ export async function addGen2WorkspaceMember(
       .limit(1);
 
     if (existing) {
+      if (caller.role !== "owner" && existing.role !== role) {
+        throw new Gen2AccessError(
+          "Only the workspace owner can change member roles.",
+          403,
+        );
+      }
       if (existing.role === "owner") {
         throw new Gen2AccessError(
           "Cannot change role of the owner. Transfer ownership first.",
@@ -803,38 +814,65 @@ export async function removeGen2WorkspaceMember(
   }
 
   const database = getDatabase();
-  const [targetMember] = await database
-    .select({
-      role: schema.gen2WorkspaceMembers.role,
-    })
-    .from(schema.gen2WorkspaceMembers)
-    .where(
-      and(
-        eq(schema.gen2WorkspaceMembers.workspaceId, workspaceId),
-        eq(schema.gen2WorkspaceMembers.userId, targetUserId),
-      ),
-    )
-    .limit(1);
+  await database.transaction(async (tx) => {
+    const [workspace] = await tx
+      .select({ ownerId: schema.gen2Workspaces.ownerId })
+      .from(schema.gen2Workspaces)
+      .where(eq(schema.gen2Workspaces.id, workspaceId))
+      .for("update");
+    if (
+      !workspace ||
+      (currentUserId !== targetUserId && workspace.ownerId !== currentUserId)
+    ) {
+      throw new Gen2AccessError(
+        "Only the workspace owner can remove other members.",
+        403,
+      );
+    }
+    const [targetMember] = await tx
+      .select({
+        role: schema.gen2WorkspaceMembers.role,
+      })
+      .from(schema.gen2WorkspaceMembers)
+      .where(
+        and(
+          eq(schema.gen2WorkspaceMembers.workspaceId, workspaceId),
+          eq(schema.gen2WorkspaceMembers.userId, targetUserId),
+        ),
+      )
+      .limit(1);
 
-  if (!targetMember) {
-    throw new Gen2AccessError("Member not found in this workspace.", 404);
-  }
+    if (!targetMember) {
+      throw new Gen2AccessError("Member not found in this workspace.", 404);
+    }
 
-  if (targetMember.role === "owner") {
-    throw new Gen2AccessError(
-      "Cannot remove the workspace owner. Transfer ownership first.",
-      400,
-    );
-  }
+    if (targetMember.role === "owner") {
+      throw new Gen2AccessError(
+        "Cannot remove the workspace owner. Transfer ownership first.",
+        400,
+      );
+    }
 
-  await database
-    .delete(schema.gen2WorkspaceMembers)
-    .where(
-      and(
-        eq(schema.gen2WorkspaceMembers.workspaceId, workspaceId),
-        eq(schema.gen2WorkspaceMembers.userId, targetUserId),
-      ),
-    );
+    await tx
+      .update(schema.gen2Workspaces)
+      .set({
+        activeInviteTokenHash: null,
+        activeInviteExpiresAt: null,
+        activeInviteCreatedByUserId: null,
+        activeInviteRole: null,
+        activeInviteCreatedAt: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.gen2Workspaces.id, workspaceId));
+    await tx
+      .delete(schema.gen2WorkspaceMembers)
+      .where(
+        and(
+          eq(schema.gen2WorkspaceMembers.workspaceId, workspaceId),
+          eq(schema.gen2WorkspaceMembers.userId, targetUserId),
+        ),
+      );
+  });
 
   const { members } = await getGen2WorkspaceMembers(
     workspaceId,

@@ -44,7 +44,6 @@ const {
   authorizeGen2TerminalStream,
   recheckGen2TerminalMember,
   resizeGen2Terminal,
-  clearGen2TerminalMemberCache,
   closeGen2Terminal,
   pollGen2Terminal,
   sendGen2TerminalInput,
@@ -59,7 +58,6 @@ const originalSupersetRuntime = process.env.CODEV_SUPERSET_RUNTIME_ENABLED;
 describe("gen2 terminals", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    clearGen2TerminalMemberCache();
     delete process.env.CODEV_SUPERSET_RUNTIME_ENABLED;
     mocks.requireMember.mockResolvedValue({
       id: workspaceId,
@@ -132,6 +130,34 @@ describe("gen2 terminals", () => {
     await sendGen2TerminalInput(workspaceId, userId, sessionId, "ls\n");
     expect(mocks.start).toHaveBeenCalled();
     expect(mocks.input).toHaveBeenCalled();
+  });
+
+  it("does not reuse membership granted before demotion or removal", async () => {
+    await startGen2Terminal(workspaceId, userId, { rows: 24, columns: 80 });
+    mocks.requireMember.mockResolvedValue({ status: "ready", role: "viewer" });
+    await expect(
+      sendGen2TerminalInput(workspaceId, userId, sessionId, "ls\n"),
+    ).rejects.toMatchObject({ status: 403 });
+    mocks.requireMember.mockRejectedValue(new Error("Not a member"));
+    await expect(
+      pollGen2Terminal(workspaceId, userId, sessionId, 0),
+    ).rejects.toThrow("Not a member");
+    expect(mocks.input).not.toHaveBeenCalled();
+    expect(mocks.poll).not.toHaveBeenCalled();
+  });
+
+  it("rejects HTTP poll output if membership was removed during the guest wait", async () => {
+    mocks.poll.mockImplementationOnce(async () => {
+      mocks.requireMember.mockRejectedValue(new Error("Not a member"));
+      return {
+        chunks: [{ sequence: 1, data: "private output" }],
+        nextSequence: 2,
+        exited: false,
+      };
+    });
+    await expect(
+      pollGen2Terminal(workspaceId, userId, sessionId, 0),
+    ).rejects.toThrow("Not a member");
   });
 
   it("checks membership before it reaches the orchestrator", async () => {
