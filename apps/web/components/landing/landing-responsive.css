@@ -100,7 +100,7 @@
   width: 32px;
   height: 32px;
   background: var(--lp-lime);
-  mask: url("/brand/codev-mark-v3.png") center / contain no-repeat;
+  mask: url("/brand/codev-mark.svg") center / contain no-repeat;
 }
 .lp-footer .lp-brand::before {
   width: 26px;
@@ -124,18 +124,11 @@
   background: #131f42;
   color: #8ea3c7;
 }
-.lp-how .lp-invite-dialog,
-.lp-how .lp-invite-joined,
 .lp-how .lp-terminal-browser {
   background: #0d152d;
 }
 .lp-how .lp-invite-link {
   background: #060a17;
-}
-.lp-how .lp-invite-preview {
-  --color-secondary: #182854;
-  --color-secondary-foreground: #f4f6fb;
-  --color-accent: #131f42;
 }
 .lp-how .lp-live-apply-btn {
   animation-name: lp-brand-apply;

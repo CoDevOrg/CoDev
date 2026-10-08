@@ -18,6 +18,12 @@ zero outages: database, Redis, runtime tunnels, and Azure can still fail.
 | `codev-cloudflare-preview` Worker | Retained ARM lifecycle Workflows and authenticated workflow bridge on its `admins-84a.workers.dev` URL; no public domains or cron when `AZURE_WEB_ORIGIN` is set | `apps/web/wrangler.arm-lifecycle.jsonc`                            |
 | Vercel `codev` project            | Existing Vercel deployment URLs and previews; no public production traffic depends on its hosting allocation                                                     | `.github/workflows/deploy-web.yml`                                 |
 
+`https://www.trycodev.com` is the canonical public origin; generated links,
+metadata, and default service URLs use it. A zone Redirect Rule (phase
+`http_request_dynamic_redirect`) sends apex `GET`/`HEAD` requests outside
+`/api/` to `www` with a 301, preserving path and query. Apex API calls are not
+redirected, because authenticated runtime fetches reject redirects.
+
 Azure hosting uses `codev-web-production` in West US 2, the
 `codev-web-environment` Consumption environment, Basic registry
 `codevwebprod8ad43`, and `codev-web-logs` (30 day Log Analytics retention).
@@ -174,11 +180,12 @@ signing/tunnel configuration. The Cloudflare deployment combines it with
 settings and keep the Tunnel/DNS token distinct from the CI deployment token.
 Cloudflare now verifies production database schema before building/deploying.
 
-GitHub secret `STRIPE_BILLING_SECRETS` contains the six production Worker
-bindings documented in [`BILLING.md`](./BILLING.md): the restricted API key,
-webhook signing secret, three live price IDs, and portal configuration ID.
-Vercel stores the same values as separate production environment variables;
-updating one host does not update the other.
+GitHub secret `STRIPE_BILLING_SECRETS` contains the six production billing
+values documented in [`BILLING.md`](./BILLING.md): the restricted API key,
+webhook signing secret, three live price IDs, and portal configuration ID. It
+is deployed to Cloudflare as one JSON binding to stay below the Worker variable
+limit. Vercel stores the same values as separate production environment
+variables; updating one host does not update the other.
 
 `Collect ARM owner costs` runs hourly and by manual dispatch. It pulls the
 production DB configuration using the existing Vercel deployment credential,
@@ -221,11 +228,17 @@ or a new UUID before VM deployment. One protected extension configuration starts
 local initialization; no guest disk inspection or preparation Run Commands run.
 The guest reports signed readiness after the exact disk and bridge are ready.
 Disk and tunnel preparation run concurrently with independent replay checkpoints
-and a shared Free-plan request budget. Azure operation polling has a five-second
-minimum and honors `Retry-After`; provisioning status includes this setup time.
+and a shared Free-plan request budget: each run spends at most 36 of the 50
+external subrequests, counting Azure calls twice for a possible sign-in. Azure
+operation polling has a five-second minimum and honors `Retry-After`. A baked
+start submits the VM deployment without polling it: guest services answer
+signed health checks 10-20 seconds before Azure reports the extension. The
+controller waits 30 seconds, polls health every 3 seconds (5 after a minute),
+and reads the deployment every tenth attempt to surface failures. Legacy starts
+still poll the deployment to completion. Provisioning status includes this setup time.
 
-Roll back new starts by disabling the flag and restoring the previous immutable
-image pin in both secret stores. Existing VMs keep their current image and disk.
+Roll back new starts by disabling the flag and setting the previous immutable
+image as the pin. Existing VMs keep their current image and disk.
 
 Cloudflare collaboration WebSockets retain initialization through `waitUntil`.
 Each socket has its own Redis connection and room reader; each document message
@@ -239,8 +252,11 @@ The ARM image includes pinned `cursor-agent` for Linux ARM64; auth and config
 directories are isolated per turn under private agent profiles.
 
 ARM image `1.0.13` adds Cursor CLI `2026.10.01-e373342`. The production image
-pin is carried in `ARM_WORKSPACE_RUNTIME_SECRETS` and synchronized to Vercel
-by the web deployment workflow. Saved workspace disks survive image upgrades.
+pin is the `ARM_WORKSPACE_IMAGE_VERSION_ID` repository variable when it is set,
+otherwise the value in `ARM_WORKSPACE_RUNTIME_SECRETS`. Promote or roll back with
+`gh variable set ARM_WORKSPACE_IMAGE_VERSION_ID`, then run the CI and Deploy web
+workflows on `main`; the Azure deploy rejects an ID outside a lowercase
+`codev-arm-workspace-*` gallery. Saved workspace disks survive image upgrades.
 
 Workspace model discovery uses connected member credentials and account catalogs;
 caching is scoped to the member and credential. Cursor and Claude discovery runs
@@ -282,3 +298,19 @@ including server-action requests. It uses the existing REST Redis settings
 rejects password login. Password changes invalidate browser sessions, retire
 CLI tokens and approved device flows atomically, and close existing workspace
 sockets within fifteen seconds. No database migration is required.
+
+The Azure edge replaces `x-forwarded-for` with Cloudflare’s client IP and strips
+caller-supplied `x-vercel-forwarded-for`. CLI device login throttling uses the
+trusted `x-forwarded-for` header on both hosting paths.
+
+Browser API mutations using session cookies require an exact matching Origin,
+including for handlers outside the shared route wrapper. Auth.js token-validated
+flows and signed Stripe webhooks keep their existing authentication. CLI bearer
+requests remain supported on explicitly enabled routes.
+
+Password-reset links default to `https://www.trycodev.com` in production when no
+explicit Auth.js or Vercel URL is available; development retains localhost.
+
+`AUTH_SECRET` also signs reusable workspace invitation capabilities on each web
+host. Keep it consistent across hosts. Invitation hashes remain in the database;
+opening sharing does not rotate active links or extend their seven-day expiry.

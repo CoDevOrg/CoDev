@@ -25,7 +25,10 @@ const call = () =>
   POST(
     new Request("https://codev.test/api/billing/checkout", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        origin: "https://codev.test",
+        "content-type": "application/json",
+      },
       body: JSON.stringify({ planId: "power" }),
     }),
     { params: Promise.resolve({}) },

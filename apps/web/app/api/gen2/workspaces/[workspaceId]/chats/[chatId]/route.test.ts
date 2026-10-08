@@ -47,7 +47,10 @@ describe("gen2 chat route", () => {
     const response = await PATCH(
       new Request(url, {
         method: "PATCH",
-        headers: { "content-type": "application/json" },
+        headers: {
+          origin: "https://codev.test",
+          "content-type": "application/json",
+        },
         body: JSON.stringify({ title: "  Auth notes  " }),
       }),
       { params },
@@ -67,7 +70,10 @@ describe("gen2 chat route", () => {
     const response = await PATCH(
       new Request(url, {
         method: "PATCH",
-        headers: { "content-type": "application/json" },
+        headers: {
+          origin: "https://codev.test",
+          "content-type": "application/json",
+        },
         body: JSON.stringify({ title: "   " }),
       }),
       { params },

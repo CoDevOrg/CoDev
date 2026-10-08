@@ -2,6 +2,8 @@ import { gunzipSync } from "node:zlib";
 import { createHash, generateKeyPairSync } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { WorkflowStep } from "cloudflare:workers";
+import { ArmWorkflowIO } from "./arm-workflow-io";
 import { ArmWorkspaceProvider } from "./arm-workspace-provider";
 
 const workspaceId = "a61dc667-3fc5-451f-9f45-9308c8f50376";
@@ -44,6 +46,7 @@ describe("ARM workspace provider stop", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
   });
@@ -369,8 +372,13 @@ describe("ARM workspace provider stop", () => {
     expect(progress).not.toHaveBeenCalled();
   });
 
-  it("delivers boot identity in protected deployment settings without sequential guest commands", async () => {
+  function stubBakedStart(gateDiskOnTunnel = true) {
     vi.stubEnv("ARM_WORKSPACE_BOOT_ENABLED", "true");
+    // Outside a workflow, the post-submit boot wait is a real timer.
+    vi.stubGlobal("setTimeout", ((callback: () => void) => {
+      queueMicrotask(callback);
+      return 0;
+    }) as typeof setTimeout);
     const keys = generateKeyPairSync("ed25519");
     vi.stubEnv(
       "ARM_WORKSPACE_SIGNING_PRIVATE_KEY",
@@ -379,7 +387,10 @@ describe("ARM workspace provider stop", () => {
         .toString("base64"),
     );
     const requests: string[] = [];
-    let identity: { diskUuid: string; diskMode: string } | undefined;
+    const state: {
+      identity?: { diskUuid: string; diskMode: string; tunnelToken: string };
+      requests: string[];
+    } = { requests };
     let vmReads = 0;
     let releaseDisk!: () => void;
     const tunnelConfigured = new Promise<void>((resolve) => {
@@ -396,16 +407,25 @@ describe("ARM workspace provider stop", () => {
             expires_in: 3600,
           });
         if (url.includes("api.cloudflare.com")) {
-          if (url.endsWith("/token")) releaseDisk();
+          if (url.endsWith("/dns_records") && init?.method === "POST")
+            releaseDisk();
           const result = url.includes("?name=")
             ? []
             : url.endsWith("/token")
               ? "connector-token"
-              : { id: tunnel.id };
+              : url.endsWith("/cfd_tunnel")
+                ? {
+                    id: tunnel.id,
+                    name: tunnel.name,
+                    token: "create-token",
+                    credentials_file: { TunnelSecret: "tunnel-secret" },
+                  }
+                : { id: tunnel.id };
           return jsonResponse({ success: true, result });
         }
         if (url.includes("/disks/")) {
-          if (init?.method === "PUT") await tunnelConfigured;
+          if (init?.method === "PUT" && gateDiskOnTunnel)
+            await tunnelConfigured;
           return init?.method === "PUT"
             ? jsonResponse({
                 id: "disk-id",
@@ -418,6 +438,28 @@ describe("ARM workspace provider stop", () => {
           expect(
             deployment.properties.template.parameters.bootScript.type,
           ).toBe("secureString");
+          const resources: Array<{
+            type: string;
+            properties: {
+              ipConfigurations?: Array<{
+                properties: { subnet: { id: string } };
+              }>;
+            };
+          }> = deployment.properties.template.resources;
+          // Starts reuse the resource group's network instead of creating one.
+          expect(resources.map((resource) => resource.type)).toEqual([
+            "Microsoft.Network/publicIPAddresses",
+            "Microsoft.Network/networkInterfaces",
+            "Microsoft.Compute/virtualMachines",
+            "Microsoft.Compute/virtualMachines/extensions",
+          ]);
+          expect(deployment.properties.template.variables.subnetId).toBe(
+            "[resourceId('Microsoft.Network/virtualNetworks/subnets', 'codev-arm-workspace-vnet', 'workspace')]",
+          );
+          expect(
+            resources[1]?.properties.ipConfigurations?.[0]?.properties.subnet
+              .id,
+          ).toBe("[variables('subnetId')]");
           const extension = deployment.properties.template.resources.find(
             (r: { type: string }) => r.type.endsWith("/extensions"),
           );
@@ -431,7 +473,7 @@ describe("ARM workspace provider stop", () => {
             ),
           ).toString();
           expect(script).not.toMatch(/curl|apt|dpkg|mkfs/);
-          identity = JSON.parse(
+          state.identity = JSON.parse(
             Buffer.from(script.split("\n")[4] ?? "", "base64").toString(),
           );
           return jsonResponse({});
@@ -452,30 +494,172 @@ describe("ARM workspace provider stop", () => {
             ready: true,
             workspaceId,
             generation,
-            diskUuid: identity?.diskUuid,
+            diskUuid: state.identity?.diskUuid,
           });
         throw new Error(`Unexpected ${url}`);
       },
     );
-    const resources = await new ArmWorkspaceProvider().start(
-      {
-        workspaceId,
-        generation,
-        diskId: null,
-        diskUuid: null,
-        resume: {
-          status: "queued",
-          vmId: "old-generation-vm",
-          tunnelId: "old-tunnel",
-          routeHost: "old.trycodev.com",
-        },
-      },
-      vi.fn(async () => undefined),
-    );
+    return state;
+  }
+
+  const freshStart = {
+    workspaceId,
+    generation,
+    diskId: null,
+    diskUuid: null,
+    resume: {
+      status: "queued" as const,
+      vmId: "old-generation-vm",
+      tunnelId: "old-tunnel",
+      routeHost: "old.trycodev.com",
+    },
+  };
+
+  it("delivers boot identity in protected deployment settings without sequential guest commands", async () => {
+    const { identity, requests } = await (async () => {
+      const state = stubBakedStart();
+      const resources = await new ArmWorkspaceProvider().start(
+        freshStart,
+        vi.fn(async () => undefined),
+      );
+      expect(resources.diskUuid).toBe(state.identity?.diskUuid);
+      return state;
+    })();
     expect(identity?.diskMode).toBe("new");
-    expect(resources.diskUuid).toBe(identity?.diskUuid);
+    expect(identity?.tunnelToken).toBe("connector-token");
     expect(requests.some((url) => url.includes("/runCommands/"))).toBe(false);
     expect(requests.some((url) => url.includes("/extensions/"))).toBe(false);
+  });
+
+  it("never journals tunnel credentials in workflow outputs or handoffs", async () => {
+    // Handoffs can split the parallel tunnel branch, so the disk is not gated.
+    const state = stubBakedStart(false);
+    const outputs: unknown[] = [];
+    const step = {
+      do: vi.fn(async (_name, _options, action) => {
+        const value = await action();
+        outputs.push(value);
+        return value;
+      }),
+      sleep: vi.fn(async () => undefined),
+    } as unknown as WorkflowStep;
+    let checkpoints: Record<string, unknown> = {};
+    let complete = false;
+    for (let runs = 0; !complete; runs++) {
+      expect(runs).toBeLessThan(10);
+      await ArmWorkflowIO.run(step, "arm-start-2", checkpoints, async () => {
+        try {
+          await new ArmWorkspaceProvider().start(
+            freshStart,
+            vi.fn(async () => undefined),
+          );
+          complete = true;
+        } catch (error) {
+          expect(error).toMatchObject({ code: "WORKFLOW_CONTINUE" });
+          checkpoints = JSON.parse(JSON.stringify(ArmWorkflowIO.saved()));
+        }
+      });
+    }
+    expect(state.identity?.tunnelToken).toBe("connector-token");
+    const journal = JSON.stringify({ outputs, checkpoints });
+    for (const secret of ["connector-token", "create-token", "tunnel-secret"])
+      expect(journal).not.toContain(secret);
+  });
+
+  function stubWake(deploymentState: () => unknown) {
+    const state = stubBakedStart(false);
+    const fallback = fetch;
+    const savedDisk = `/subscriptions/subscription/resourceGroups/codev-arm-workspace-phase1/providers/Microsoft.Compute/disks/saved-data`;
+    const clock = { now: 1_000_000, readyAt: Number.POSITIVE_INFINITY };
+    vi.spyOn(Date, "now").mockImplementation(() => clock.now);
+    const own = (url: string, init?: RequestInit) => {
+      if (url.includes("/deployments/") && init?.method === "PUT") {
+        clock.readyAt = clock.now + 45_000;
+        return new Response("{}", {
+          status: 201,
+          headers: {
+            "azure-asyncoperation": "https://management.azure.com/deploy-op",
+          },
+        });
+      }
+      if (url.includes("/deployments/")) return jsonResponse(deploymentState());
+      if (url.endsWith("/v1/health") && clock.now < clock.readyAt)
+        return jsonResponse({ ready: false });
+      if (url.includes("/disks/"))
+        return jsonResponse({
+          id: savedDisk,
+          tags: { Runtime: "arm-workspace", WorkspaceId: workspaceId },
+          sku: { name: "StandardSSD_LRS" },
+          properties: { diskSizeGB: 16, diskState: "Unattached" },
+        });
+      return null;
+    };
+    vi.stubGlobal(
+      "fetch",
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        // The shared stub records the PUT and reads its boot script.
+        const submit = url.includes("/deployments/") && init?.method === "PUT";
+        if (submit) await fallback(input, init);
+        const response = own(url, init);
+        if (!response) return fallback(input, init);
+        if (!submit) state.requests.push(url);
+        return response;
+      },
+    );
+    const sleeps: number[] = [];
+    const step = {
+      do: async (_name: string, _options: unknown, action: () => unknown) =>
+        action(),
+      sleep: async (_name: string, milliseconds: number) => {
+        sleeps.push(milliseconds);
+        clock.now += milliseconds;
+      },
+    } as unknown as WorkflowStep;
+    const start = () =>
+      ArmWorkflowIO.run(step, "arm-start-2", {}, () =>
+        new ArmWorkspaceProvider().start(
+          { ...freshStart, diskId: savedDisk, diskUuid: "saved-uuid" },
+          vi.fn(async () => undefined),
+        ),
+      );
+    return { state, sleeps, start };
+  }
+
+  it("polls guest health directly after submitting the deployment, within one run", async () => {
+    const { state, sleeps, start } = stubWake(() => ({
+      properties: { provisioningState: "Running" },
+    }));
+    await start();
+    expect(state.identity?.diskMode).toBe("existing");
+    // Ready 45 s after submission: one boot wait, then 3 s polls.
+    expect(sleeps).toEqual([30_000, 3_000, 3_000, 3_000, 3_000, 3_000]);
+    expect(state.requests.some((url) => url.includes("deploy-op"))).toBe(false);
+    // One PUT, plus one failure check at the first health miss.
+    expect(
+      state.requests.filter((url) => url.includes("/deployments/")),
+    ).toHaveLength(2);
+  });
+
+  it("surfaces a failed deployment at the first health miss instead of the readiness deadline", async () => {
+    const { sleeps, start } = stubWake(() => ({
+      properties: {
+        provisioningState: "Failed",
+        error: {
+          code: "DeploymentFailed",
+          details: [
+            {
+              code: "ResourceDeploymentFailure",
+              details: [{ code: "VMExtensionProvisioningError" }],
+            },
+          ],
+        },
+      },
+    }));
+    await expect(start()).rejects.toMatchObject({
+      code: "VMExtensionProvisioningError",
+    });
+    expect(sleeps).toEqual([30_000]);
   });
 
   it("does not replace a missing saved disk with a fresh disk", async () => {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -44,6 +44,42 @@ test("disk initialization refuses unidentified or already initialized saved data
     image,
     /ExecStartPre=.*(?:chgrp -R|chmod -R|find \/workspace)/,
   );
+});
+
+test("saved Git recovery is a no-op on a new disk and clears stale locks on a saved one", async (t) => {
+  const script = read("./scripts/prepare-arm-workspace-disk.sh");
+  const body = script.match(/^recover_git_state\(\) \{\n[\s\S]*?\n\}\n/m)?.[0];
+  assert.ok(body, "recover_git_state must stay a top-level function");
+  // Resolve symlinked temp roots so Git's absolute path matches, as /workspace does.
+  const root = await realpath(await mkdtemp(join(tmpdir(), "codev-recover-")));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  // Stub fuser as Linux psmisc reports an unheld lock; macOS rejects -s.
+  await promisify(execFile)("mkdir", ["-p", join(root, "bin")]);
+  await writeFile(join(root, "bin", "fuser"), "#!/bin/sh\nexit 1\n", {
+    mode: 0o755,
+  });
+  const run = (workspace) =>
+    promisify(execFile)(
+      "bash",
+      [
+        "-c",
+        `set -euo pipefail\n${body.replaceAll("/workspace", workspace)}recover_git_state\necho recovered`,
+      ],
+      {
+        env: {
+          ...process.env,
+          PATH: `${join(root, "bin")}:${process.env.PATH}`,
+        },
+      },
+    );
+  const fresh = join(root, "fresh");
+  await promisify(execFile)("mkdir", ["-p", fresh]);
+  assert.equal((await run(fresh)).stdout.trim(), "recovered");
+  const saved = join(root, "saved");
+  await promisify(execFile)("git", ["init", "-q", saved]);
+  await writeFile(join(saved, ".git", "index.lock"), "");
+  assert.equal((await run(saved)).stdout.trim(), "recovered");
+  await assert.rejects(readFile(join(saved, ".git", "index.lock")));
 });
 
 test("connection setup waits for dpkg and keeps connector credentials out of process arguments", () => {

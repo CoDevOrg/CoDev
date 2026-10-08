@@ -50,10 +50,6 @@
   color: #d06d52;
   letter-spacing: -0.04em;
 }
-.docs-brand img {
-  filter: brightness(0) saturate(100%) invert(64%) sepia(75%) saturate(2290%)
-    hue-rotate(145deg);
-}
 .docs-brand span {
   color: var(--color-muted-foreground);
 }

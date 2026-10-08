@@ -3,7 +3,7 @@ use std::{
     fs::{self, OpenOptions},
     io::{BufRead, BufReader, Read, Write},
     net::{SocketAddr, TcpStream},
-    os::unix::fs::PermissionsExt,
+    os::unix::{fs::PermissionsExt, process::CommandExt},
     path::{Component, Path, PathBuf},
     process::{Command, Stdio},
     sync::{
@@ -22,6 +22,7 @@ use sha2::{Digest, Sha256};
 use wait_timeout::ChildExt;
 
 use crate::guest_coordination::{COORDINATION_AGENTS_PATH, CoordinationAgent};
+use crate::guest_cursor_hooks::cursor_project_hook_file;
 use crate::guest_executable_architecture::guest_executable_architecture_error;
 use crate::guest_spawn_error::guest_spawn_error;
 use crate::model::{
@@ -1417,6 +1418,14 @@ impl GuestService {
                 "working directory is not a directory".into(),
             ));
         }
+        if let Some(path) =
+            cursor_project_hook_file(&request.command[0], &[&root, &working_directory])
+        {
+            let shown = path.strip_prefix(&root).unwrap_or(&path).display();
+            return Err(RuntimeError::BadRequest(format!(
+                "Cursor would run hooks from {shown} in this branch with your credentials. Remove that file or use Codex or Claude."
+            )));
+        }
 
         let codex_home_path = std::env::temp_dir().join(format!(
             "codev-codex-{}-{}",
@@ -2010,16 +2019,21 @@ impl GuestService {
         root: &Path,
         arguments: &[&str],
     ) -> crate::model::Result<std::process::Output> {
-        let mut child = Command::new("git")
+        let mut command = Command::new("git");
+        command
             .arg("-c")
             .arg("safe.directory=*")
             .arg("-C")
             .arg(root)
             .args(arguments)
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(RuntimeError::internal)?;
+            .stderr(Stdio::piped());
+        // Workspace users can write the repository's Git config, which can
+        // name commands Git runs. Run it as the shell account, never as root.
+        if let Some(user) = self.terminal_user {
+            command.uid(user.uid).gid(user.gid);
+        }
+        let mut child = command.spawn().map_err(RuntimeError::internal)?;
         let status = child
             .wait_timeout(Duration::from_secs(30))
             .map_err(RuntimeError::internal)?;

@@ -23,12 +23,7 @@ export default function DocsPage() {
       <header className="docs-header">
         <div className="docs-header-inner">
           <Link href="/" className="docs-brand" aria-label="CoDev home">
-            <Image
-              src="/brand/codev-mark-v3.png"
-              alt=""
-              width={28}
-              height={28}
-            />
+            <Image src="/brand/codev-mark.svg" alt="" width={28} height={28} />
             <strong>CoDev</strong>
             <span>/</span>
             <span>Docs</span>

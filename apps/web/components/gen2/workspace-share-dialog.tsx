@@ -99,7 +99,6 @@ export function WorkspaceShareDialog({
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const wasOpenRef = useRef(false);
   const membersListRef = useRef<HTMLDivElement | null>(null);
-  const linkRoleRef = useRef(linkRole);
   const [wasOpen, setWasOpen] = useState(open);
   if (wasOpen !== open) {
     setWasOpen(open);
@@ -142,7 +141,6 @@ export function WorkspaceShareDialog({
 
   const refreshShareLink = useCallback(
     async (targetRole?: Gen2WorkspaceRole) => {
-      const role = targetRole ?? linkRoleRef.current;
       setLinkLoading(true);
       setLinkError("");
       try {
@@ -151,7 +149,7 @@ export function WorkspaceShareDialog({
           {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ role }),
+            body: JSON.stringify(targetRole ? { role: targetRole } : {}),
           },
         );
         const data = (await res.json().catch(() => ({}))) as {
@@ -175,10 +173,6 @@ export function WorkspaceShareDialog({
     },
     [workspaceId],
   );
-
-  useEffect(() => {
-    linkRoleRef.current = linkRole;
-  }, [linkRole]);
 
   useEffect(() => {
     if (open && !wasOpenRef.current) {
@@ -623,8 +617,10 @@ export function WorkspaceShareDialog({
               <h3 id="share-link">Anyone with the link</h3>
             </div>
             <p className="gen2-share-section-copy">
-              Anyone who opens this link can join as the role below. Copying it
-              does not change people who already have access.
+              Send this link to a group: everyone can join as the role below. It
+              expires seven days after creation. Joining and copying do not
+              expire it. Changing the role or removing a member replaces or
+              revokes the link.
             </p>
             {canInvite ? (
               <FieldGroup>

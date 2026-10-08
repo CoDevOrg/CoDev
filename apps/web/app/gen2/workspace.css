@@ -1626,7 +1626,6 @@
   height: 22px;
   object-fit: contain;
   flex-shrink: 0;
-  filter: var(--brand-logo-filter);
 }
 
 .gen2-workspace-breadcrumb {

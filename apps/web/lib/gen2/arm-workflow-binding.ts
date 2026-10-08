@@ -36,7 +36,7 @@ async function bridgeRequest(
     );
   const url = new URL(
     runtimeEnvironment().ARM_WORKSPACE_WORKFLOW_URL ??
-      "https://trycodev.com/api/gen2/compute/workflow",
+      "https://www.trycodev.com/api/gen2/compute/workflow",
   );
   url.searchParams.set("id", operationId);
   const response = await fetch(url, {

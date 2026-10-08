@@ -31,6 +31,7 @@ const worker = {
     target.search = incoming.search;
     const headers = new Headers(request.headers);
     headers.delete("host");
+    headers.delete("x-vercel-forwarded-for");
     headers.set("x-codev-origin-secret", env.AZURE_WEB_ORIGIN_SECRET);
     headers.set("x-forwarded-host", incoming.host);
     headers.set("x-codev-public-host", incoming.host);

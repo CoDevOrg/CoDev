@@ -152,10 +152,61 @@ describe("handleGen2TerminalSocket", () => {
       rows: 30,
       columns: 100,
     });
-    expect(mocks.recheck).not.toHaveBeenCalled();
+    expect(mocks.recheck).toHaveBeenCalled();
 
+    await vi.waitFor(() => expect(releasePoll).toBeTypeOf("function"));
     releasePoll();
     await done;
+  });
+
+  it.each(["input", "resize"])(
+    "blocks %s immediately after membership is revoked",
+    async (type) => {
+      let releasePoll!: () => void;
+      mocks.poll.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            releasePoll = () =>
+              resolve({
+                chunks: [],
+                nextSequence: 4,
+                exited: true,
+                exitCode: 0,
+              });
+          }),
+      );
+      const { socket, done } = open();
+      await vi.waitFor(() => expect(releasePoll).toBeTypeOf("function"));
+      mocks.recheck.mockRejectedValue(new Error("Edit permission required"));
+      socket.emitMessage(
+        JSON.stringify(
+          type === "input"
+            ? { type, data: "rm -rf files" }
+            : { type, rows: 24, columns: 80 },
+        ),
+      );
+      await vi.waitFor(() => expect(socket.closed).toBe(true));
+      expect(mocks.input).not.toHaveBeenCalled();
+      expect(mocks.resize).not.toHaveBeenCalled();
+      releasePoll();
+      await done;
+    },
+  );
+
+  it("does not deliver output fetched while membership was revoked", async () => {
+    mocks.poll.mockImplementationOnce(async () => {
+      mocks.recheck.mockRejectedValue(new Error("No longer a member"));
+      return {
+        chunks: [{ sequence: 4, data: "private output" }],
+        nextSequence: 5,
+        exited: false,
+        exitCode: null,
+      };
+    });
+    const { socket, done } = open();
+    await done;
+    expect(socket.sent.some((message) => message.type === "data")).toBe(false);
+    expect(socket.closed).toBe(true);
   });
 
   it("reports an upstream failure and closes without ending the shell", async () => {
@@ -185,6 +236,7 @@ describe("handleGen2TerminalSocket", () => {
       message: "Invalid terminal message.",
     });
     expect(mocks.input).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(releasePoll).toBeTypeOf("function"));
     releasePoll();
     await done;
   });

@@ -1,0 +1,294 @@
+/* Invite preview loop (12s). It starts when LandingMotion reveals the card,
+   so reduced-motion visitors keep the static joined frame. Beats: click Share
+   (~2.2s), copy the link (~4.1s), popover closes, Sarah joins (~6.2s), types
+   her edit (~7.2–9.4s), then the scene fades back to the start. */
+.lp-triple-card.is-revealed
+  :is(
+    .lp-invite-pointer,
+    .lp-invite-share,
+    .lp-invite-popover,
+    .lp-invite-copy,
+    .lp-invite-copy > svg,
+    .lp-invite-swap > span,
+    .lp-invite-sarah,
+    .lp-invite-caret,
+    .lp-invite-old,
+    .lp-invite-typed
+  ),
+.lp-triple-card.is-revealed .lp-invite-edit-line::before {
+  animation-duration: 12s;
+  animation-iteration-count: infinite;
+  animation-fill-mode: both;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+.lp-triple-card.is-revealed .lp-invite-pointer {
+  animation-name: lp-invite-pointer;
+}
+.lp-triple-card.is-revealed .lp-invite-share {
+  animation-name: lp-invite-share;
+}
+.lp-triple-card.is-revealed .lp-invite-popover {
+  animation-name: lp-invite-popover;
+}
+.lp-triple-card.is-revealed .lp-invite-copy {
+  animation-name: lp-invite-copy;
+}
+.lp-triple-card.is-revealed .lp-invite-before {
+  animation-name: lp-invite-joined-out;
+}
+.lp-triple-card.is-revealed .lp-invite-after {
+  animation-name: lp-invite-joined-in;
+}
+.lp-triple-card.is-revealed .lp-invite-copy > svg:first-child,
+.lp-triple-card.is-revealed .lp-invite-popover .lp-invite-before {
+  animation-name: lp-invite-copied-out;
+}
+.lp-triple-card.is-revealed .lp-invite-copy > svg:last-child,
+.lp-triple-card.is-revealed .lp-invite-popover .lp-invite-after {
+  animation-name: lp-invite-copied-in;
+}
+.lp-triple-card.is-revealed .lp-invite-sarah {
+  animation-name: lp-invite-sarah;
+}
+.lp-triple-card.is-revealed .lp-invite-edit-line::before,
+.lp-triple-card.is-revealed .lp-invite-caret {
+  animation-name: lp-invite-fade-in-joined;
+}
+.lp-triple-card.is-revealed .lp-invite-old {
+  animation-name: lp-invite-old;
+}
+.lp-triple-card.is-revealed .lp-invite-typed {
+  animation-name: lp-invite-typed;
+}
+@keyframes lp-invite-pointer {
+  0%,
+  4% {
+    opacity: 0;
+    transform: translate(-80px, 120px) scale(1);
+  }
+  8% {
+    opacity: 1;
+    transform: translate(-80px, 120px) scale(1);
+  }
+  17% {
+    transform: translate(0, 0) scale(1);
+  }
+  18.5% {
+    transform: translate(0, 0) scale(0.82);
+  }
+  20%,
+  25% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(var(--lp-copy-x), var(--lp-copy-y)) scale(1);
+  }
+  34.5% {
+    transform: translate(var(--lp-copy-x), var(--lp-copy-y)) scale(0.82);
+  }
+  36%,
+  42% {
+    opacity: 1;
+    transform: translate(var(--lp-copy-x), var(--lp-copy-y)) scale(1);
+  }
+  48%,
+  100% {
+    opacity: 0;
+    transform: translate(
+        calc(var(--lp-copy-x) + 14px),
+        calc(var(--lp-copy-y) + 24px)
+      )
+      scale(1);
+  }
+}
+@keyframes lp-invite-share {
+  0%,
+  17%,
+  50%,
+  100% {
+    background-color: rgba(0, 189, 232, 0.08);
+    transform: scale(1);
+  }
+  18.5% {
+    background-color: rgba(0, 189, 232, 0.32);
+    transform: scale(0.94);
+  }
+  20%,
+  46% {
+    background-color: rgba(0, 189, 232, 0.2);
+    transform: scale(1);
+  }
+}
+@keyframes lp-invite-popover {
+  0%,
+  18.5% {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.97);
+  }
+  21.5%,
+  45% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  49%,
+  100% {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+@keyframes lp-invite-copy {
+  0%,
+  34% {
+    background-color: #182854;
+    color: #c5d3ea;
+  }
+  35.5%,
+  100% {
+    background-color: rgba(45, 212, 191, 0.18);
+    color: #2dd4bf;
+  }
+}
+@keyframes lp-invite-copied-out {
+  0%,
+  34% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  35.5%,
+  100% {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+@keyframes lp-invite-copied-in {
+  0%,
+  34% {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  35.5%,
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes lp-invite-joined-out {
+  0%,
+  50%,
+  97%,
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  53%,
+  94% {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+@keyframes lp-invite-joined-in {
+  0%,
+  50%,
+  97%,
+  100% {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  53%,
+  94% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes lp-invite-sarah {
+  0%,
+  50%,
+  100% {
+    opacity: 0;
+    transform: scale(0.4);
+    box-shadow:
+      0 0 0 2px #0f1a38,
+      0 0 0 2px rgba(245, 158, 11, 0.7);
+  }
+  53% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+  56% {
+    transform: scale(1);
+  }
+  62%,
+  94% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow:
+      0 0 0 2px #0f1a38,
+      0 0 0 9px rgba(245, 158, 11, 0);
+  }
+  97% {
+    opacity: 0;
+    transform: scale(0.4);
+    box-shadow:
+      0 0 0 2px #0f1a38,
+      0 0 0 9px rgba(245, 158, 11, 0);
+  }
+}
+@keyframes lp-invite-fade-in-joined {
+  0%,
+  54%,
+  97%,
+  100% {
+    opacity: 0;
+  }
+  57%,
+  94% {
+    opacity: 1;
+  }
+}
+@keyframes lp-invite-old {
+  0%,
+  57% {
+    max-width: 5ch;
+    opacity: 1;
+    animation-timing-function: steps(5, end);
+  }
+  60%,
+  96% {
+    max-width: 0;
+    opacity: 1;
+  }
+  97% {
+    max-width: 0;
+    opacity: 0;
+  }
+  98% {
+    max-width: 5ch;
+    opacity: 0;
+  }
+  100% {
+    max-width: 5ch;
+    opacity: 1;
+  }
+}
+@keyframes lp-invite-typed {
+  0%,
+  60% {
+    max-width: 0;
+    opacity: 1;
+    animation-timing-function: steps(21, end);
+  }
+  78%,
+  94% {
+    max-width: 21ch;
+    opacity: 1;
+  }
+  97% {
+    max-width: 21ch;
+    opacity: 0;
+  }
+  98%,
+  100% {
+    max-width: 0;
+    opacity: 0;
+  }
+}

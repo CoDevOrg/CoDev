@@ -819,7 +819,7 @@ export function SupersetWorkspaceShell({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Link
-                  href="/"
+                  href="/gen2"
                   className="gen2-workspace-button gen2-ide-icon-button"
                   data-slot="button"
                   data-tone="ghost"

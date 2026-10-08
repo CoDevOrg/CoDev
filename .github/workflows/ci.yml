@@ -126,6 +126,7 @@ jobs:
       GEN2_FREE_ARM_ENABLED: ${{ vars.GEN2_FREE_ARM_ENABLED || 'false' }}
       GEN2_FREE_ARM_OWNER_IDS: ${{ vars.GEN2_FREE_ARM_OWNER_IDS }}
       ARM_WORKSPACE_BOOT_ENABLED: ${{ vars.ARM_WORKSPACE_BOOT_ENABLED || 'false' }}
+      ARM_WORKSPACE_IMAGE_VERSION_ID: ${{ vars.ARM_WORKSPACE_IMAGE_VERSION_ID }}
     steps:
       - name: Check Cloudflare credentials
         shell: bash
@@ -201,7 +202,12 @@ jobs:
           secrets_file="$RUNNER_TEMP/cloudflare-secrets.env"
           SECRETS_FILE="$secrets_file" node --input-type=module <<'JS'
           import { writeFileSync } from "node:fs";
-          const arm = JSON.parse(process.env.ARM_WORKSPACE_RUNTIME_SECRETS || "{}");
+          const arm = {
+            ...JSON.parse(process.env.ARM_WORKSPACE_RUNTIME_SECRETS || "{}"),
+            ...(process.env.ARM_WORKSPACE_IMAGE_VERSION_ID && {
+              ARM_WORKSPACE_IMAGE_VERSION_ID: process.env.ARM_WORKSPACE_IMAGE_VERSION_ID,
+            }),
+          };
           const billing = JSON.parse(process.env.STRIPE_BILLING_SECRETS || "{}");
           if (Object.keys(arm).length < 8) throw new Error("ARM runtime secret configuration is missing");
           const billingKeys = [
@@ -213,7 +219,11 @@ jobs:
             "STRIPE_PORTAL_CONFIGURATION_ID",
           ];
           if (billingKeys.some((key) => !billing[key])) throw new Error("Stripe billing secret configuration is missing");
-          const values = { ...arm, ...billing, CRON_SECRET: process.env.CRON_SECRET };
+          const values = {
+            ...arm,
+            STRIPE_BILLING_SECRETS: process.env.STRIPE_BILLING_SECRETS,
+            CRON_SECRET: process.env.CRON_SECRET,
+          };
           writeFileSync(process.env.SECRETS_FILE, Object.entries(values).map(([key, value]) => `${key}=${JSON.stringify(value)}`).join("\n"), { mode: 0o600 });
           JS
           if [[ -n "$AZURE_WEB_ORIGIN" ]]; then

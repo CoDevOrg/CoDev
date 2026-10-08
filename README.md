@@ -1,11 +1,11 @@
 <div align="center">
-  <img src="apps/web/public/brand/codev-mark-v3.png" alt="CoDev" width="96" />
+  <img src="apps/web/public/brand/codev-mark.svg" alt="CoDev" width="96" />
 
 # CoDev
 
 **People and AI agents, building in the same room.**
 
-[Visit CoDev](https://trycodev.com)
+[Visit CoDev](https://www.trycodev.com)
 
 </div>
 
@@ -61,4 +61,4 @@ The long-term goal is a permission-aware intelligence layer across tasks, reposi
 
 Read the full [enterprise feature vision](./docs/product/ENTERPRISE_FEATURES.md).
 
-CoDev is hosted on the web at **[trycodev.com](https://trycodev.com)**. Domain email setup (Resend sending and ImprovMX receiving) is documented in [docs/EMAIL.md](./docs/EMAIL.md).
+CoDev is hosted on the web at **[trycodev.com](https://www.trycodev.com)**. Domain email setup (Resend sending and ImprovMX receiving) is documented in [docs/EMAIL.md](./docs/EMAIL.md).

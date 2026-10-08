@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { workspaceGitSpawnOptions } from "./workspace-git-identity.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -39,7 +40,11 @@ export async function listGitIgnoredDirs(rootPath: string): Promise<string[]> {
 				"--directory",
 				"-z",
 			],
-			{ timeout: TIMEOUT_MS, maxBuffer: MAX_BUFFER_BYTES },
+			{
+				timeout: TIMEOUT_MS,
+				maxBuffer: MAX_BUFFER_BYTES,
+				...workspaceGitSpawnOptions(),
+			},
 		);
 		const dirs: string[] = [];
 		for (const entry of stdout.split("\0")) {

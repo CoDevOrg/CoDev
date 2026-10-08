@@ -37,6 +37,7 @@ fi
 readonly build_dir="$(mktemp -d)"
 readonly builder_name="${name_prefix}-build-${image_version//./-}"
 cleanup() {
+  az vm delete -g "${resource_group}" -n "${builder_name}-warm" --yes --only-show-errors >/dev/null 2>&1 || true
   az vm delete -g "${resource_group}" -n "${builder_name}" --yes --only-show-errors >/dev/null 2>&1 || true
   az network nic delete -g "${resource_group}" -n "${builder_name}-nic" --only-show-errors >/dev/null 2>&1 || true
   az network public-ip delete -g "${resource_group}" -n "${builder_name}-ip" --only-show-errors >/dev/null 2>&1 || true
@@ -147,6 +148,20 @@ az sig image-version create -g "${resource_group}" --gallery-name codevarmworksp
     Architecture=arm64 Runtime=standalone-workspace-vm SourceImageVersion="${source_image_version}" \
     SourceCommit="${GITHUB_SHA:-$(git -C "${repo_root}" rev-parse HEAD)}" \
   --query '{id:id,state:provisioningState,osDiskSize:storageProfile.osDiskImage.sizeInGB}' -o json
+
+# The first VM created from a new gallery version boots several times slower
+# (119 s versus ~25 s for 1.0.14). Take that first boot here, in the builder's
+# subnet with no public IP, so no member's workspace start pays for it. It also
+# proves the published image boots with production's VM shape before promotion.
+warm_started=${SECONDS}
+az vm create -g "${resource_group}" -n "${builder_name}-warm" --location "${location}" \
+  --image "${image_version_id}" --size Standard_D2ps_v6 --security-type Standard \
+  --storage-sku StandardSSD_LRS --os-disk-delete-option Delete --nic-delete-option Delete \
+  --subnet "$(az network vnet subnet show -g "${resource_group}" --vnet-name "${builder_name}-vnet" -n builder --query id -o tsv)" \
+  --public-ip-address "" --nsg "" --admin-username codevwarm \
+  --ssh-key-values "${build_dir}/builder-key.pub" --only-show-errors --output none
+echo "First boot from ${image_version} reached agent readiness in $((SECONDS - warm_started)) s."
+az vm delete -g "${resource_group}" -n "${builder_name}-warm" --yes --only-show-errors
 
 echo "Published isolated ARM workspace candidate image: ${image_version_id}"
 echo "Do not promote it through infra/azure/deploy.sh; that deploys the x86 Firecracker host."

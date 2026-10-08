@@ -60,13 +60,13 @@ const DESCRIPTION =
   "Build software with your team and AI agents in one live cloud workspace. Share code, a terminal, and localhost. Join the private beta waitlist.";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://trycodev.com"),
+  metadataBase: new URL("https://www.trycodev.com"),
   title: "One cloud workspace for your team and AI agents",
   description: DESCRIPTION,
   openGraph: {
     type: "website",
     siteName: "CoDev",
-    url: "https://trycodev.com",
+    url: "https://www.trycodev.com",
     title: "One cloud workspace for your team and AI agents",
     description: DESCRIPTION,
     images: [
@@ -160,7 +160,7 @@ export default async function HomePage() {
 
       <footer className="lp-footer">
         <Link className="lp-brand" href="/" aria-label="CoDev home">
-          <Image src="/brand/codev-mark-v3.png" alt="" width={26} height={26} />
+          <Image src="/brand/codev-mark.svg" alt="" width={26} height={26} />
           <span>CoDev</span>
         </Link>
         <p>People and agents, building in the same room.</p>

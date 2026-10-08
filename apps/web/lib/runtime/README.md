@@ -13,6 +13,9 @@ This module owns the communication and integration with external execution envir
 - `arm-workflow-io.ts`: Bounded workflow I/O checkpoints and continuation replay;
   parallel branches use independent step numbering with a shared request budget
   and journal. Both settle before handoff so replay never loses a mutation.
+  Cloudflare persists every checkpoint output and copies it into continuation
+  parameters, so checkpoints must never return secrets. Fetch tunnel tokens
+  inside the Azure request step that delivers them as protected settings.
   Normal web requests and staging canaries execute directly without a workflow.
 - `readiness.ts`: Web service database and realtime readiness. Guest readiness
   belongs to each workspace lifecycle; the retired Firecracker host is not a

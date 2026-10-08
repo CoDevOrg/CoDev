@@ -5,6 +5,7 @@ import {
   NextResponse,
 } from "next/server";
 
+import { hasSafeBrowserMutationOrigin } from "@/lib/http/browser-mutation-origin";
 import { forwardedRequest } from "@/lib/http/forwarded-request";
 
 import { auth as nextAuth } from "@/auth";
@@ -91,6 +92,12 @@ async function rateLimitRequest(request: NextRequest) {
  * boundary and must run before authentication handlers on sensitive routes.
  */
 async function routeRequest(request: NextRequest, event: NextFetchEvent) {
+  if (!hasSafeBrowserMutationOrigin(request)) {
+    return NextResponse.json(
+      { error: "Invalid request origin." },
+      { status: 403 },
+    );
+  }
   const pathname = request.nextUrl.pathname;
   const publicUrl = new URL(request.url);
   const adminHost = isAdminHostname(publicUrl.hostname);

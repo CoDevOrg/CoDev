@@ -73,7 +73,14 @@
 }
 
 .gen2-status-deleting .gen2-status-dot {
-  background: #ef4444;
+  background: #f87171;
+  animation: gen2-status-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes gen2-status-pulse {
+  50% {
+    opacity: 0.35;
+  }
 }
 
 .gen2-note {
@@ -270,6 +277,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .gen2-status-deleting .gen2-status-dot,
+  .gen2-delete-spinner {
+    animation: none;
+  }
+
   .gen2-card,
   .gen2-delete-button,
   .primary-button,
@@ -807,4 +819,36 @@
 .gen2-grid-delete-button:disabled {
   cursor: wait;
   opacity: 0.6;
+}
+
+.gen2-card-pending {
+  border-style: dashed;
+  opacity: 0.72;
+  cursor: default;
+}
+
+.gen2-card-pending:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.gen2-card-note {
+  margin: 4px 0 0;
+  color: var(--muted, #5a73a8);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.gen2-card-note-error {
+  color: #f87171;
+}
+
+.gen2-delete-spinner {
+  animation: gen2-spin 0.9s linear infinite;
+}
+
+@keyframes gen2-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

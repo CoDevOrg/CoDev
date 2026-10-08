@@ -100,6 +100,8 @@ it("keeps POST bodies available to the route after middleware", async () => {
   const request = new NextRequest("http://0.0.0.0:3000/api/gen2/workspaces", {
     method: "POST",
     headers: {
+      cookie: "__Host-codev.session-token=test",
+      origin: "https://www.trycodev.com",
       "x-codev-origin-secret": "trusted-edge",
       "x-codev-public-host": "www.trycodev.com",
     },
@@ -120,3 +122,22 @@ it("leaves Auth.js CSRF and OAuth cookies to the auth route handler", async () =
   expect(mocks.auth).not.toHaveBeenCalled();
   expect(response.headers.getSetCookie()).toEqual([]);
 });
+
+it.each([undefined, "https://runtime.trycodev.com"])(
+  "blocks cookie mutations from Origin %s at the proxy",
+  async (origin) => {
+    const response = await proxy(
+      new NextRequest("https://www.trycodev.com/api/personal/connections", {
+        method: "POST",
+        headers: {
+          cookie: "__Host-codev.session-token=test",
+          ...(origin ? { origin } : {}),
+        },
+      }),
+      event,
+    );
+    expect(response.status).toBe(403);
+    expect(mocks.auth).not.toHaveBeenCalled();
+    expect(response.headers.get("x-frame-options")).toBe("DENY");
+  },
+);

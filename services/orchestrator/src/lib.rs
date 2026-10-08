@@ -2,6 +2,7 @@ pub mod backend;
 pub mod guest;
 pub mod guest_client;
 mod guest_coordination;
+mod guest_cursor_hooks;
 mod guest_executable_architecture;
 mod guest_spawn_error;
 pub mod http_api;

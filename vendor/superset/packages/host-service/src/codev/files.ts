@@ -2,6 +2,7 @@ import { realpath } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { parseCoDevWorktrees } from "./worktree-paths";
+import { workspaceGitSpawnOptions } from "../runtime/git/workspace-git-identity";
 import { relative, resolve, sep } from "node:path";
 import { timingSafeEqual } from "node:crypto";
 import type { Hono } from "hono";
@@ -116,6 +117,7 @@ export async function resolveCoDevWorktreeRoot(
 	const { stdout } = await promisify(execFile)("git", ["-C", root, "worktree", "list", "--porcelain"], {
 		timeout: 10_000,
 		maxBuffer: 1024 * 1024,
+		...workspaceGitSpawnOptions(),
 	});
 	const entry = parseCoDevWorktrees(stdout, root).find((worktree) => worktree.worktreeId === checkedId);
 	if (!entry) throw new Error("Worktree is not registered with this repository.");

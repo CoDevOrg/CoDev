@@ -7,9 +7,7 @@ export const runtime = "nodejs";
 export async function POST(request: Request) {
   request = forwardedRequest(request);
   const clientAddress =
-    request.headers.get("x-vercel-forwarded-for") ??
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    "unknown";
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   const limit = await consumeRateLimit(
     clientAddress,
     "cli-device-auth",

@@ -1,10 +1,10 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { workspaceGitSpawnOptions } from "../runtime/git/workspace-git-identity";
 
 export const MAX_CHANGED_FILES = 500;
 const MAX_DIFF_BYTES = 5 * 1024 * 1024;
 const GIT_TIMEOUT_MS = 10_000;
-const CODEV_SHELL_ID = 2000;
 const SYMBOL_PATTERN = /^[A-Za-z_$][\w$.:-]{0,79}$/;
 const NON_SYMBOLS = new Set([
 	"if",
@@ -26,16 +26,8 @@ export type ChangeSet =
 	| { state: "known"; files: ChangedFile[]; symbolsKnown: boolean }
 	| { state: "large" };
 
-/**
- * The host service runs as root, while the repository's config and attributes
- * are writable by workspace users. Git runs as codev-shell so config-driven
- * commands (fsmonitor, filters) cannot gain more than a terminal already has.
- */
+/** Repository Git with config-named commands disabled, as codev-shell on a guest. */
 function runGit(cwd: string, args: string[], maxBuffer = 1024 * 1024) {
-	const identity =
-		process.getuid?.() === 0
-			? { uid: CODEV_SHELL_ID, gid: CODEV_SHELL_ID }
-			: {};
 	return promisify(execFile)(
 		"git",
 		[
@@ -48,7 +40,7 @@ function runGit(cwd: string, args: string[], maxBuffer = 1024 * 1024) {
 			...args,
 		],
 		{
-			...identity,
+			...workspaceGitSpawnOptions(),
 			timeout: GIT_TIMEOUT_MS,
 			maxBuffer,
 			env: {

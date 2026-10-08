@@ -23,13 +23,18 @@
 - In guest systemd units, set agent-profile parent permissions inside the final `ExecStart` wrapper; systemd reapplies `StateDirectoryMode` after `ExecStartPre`. Individual profiles and credential files must remain private.
 - ARM guest units must not recursively change permissions on saved workspace disks; they also carry protected Superset metadata.
 - Guest RPC changes require a signed ARM runtime release, image promotion, and an update for existing VMs; a web deployment alone does not update guestd or the Superset host bundle.
-- The guest Superset host service runs as root, but workspace users can write the repository's Git config and attributes. New host Git calls must run as `codev-shell` (uid/gid 2000) with `core.fsmonitor=false`; see `codev/change-set.ts`.
+- Root guest services must never run Git in the shared repository: workspace users can write its config, which can name commands Git runs. Host Git goes through `workspaceGitSpawnOptions` or `createUserSimpleGit`; `codev-guestd` uses the shell account.
+- The Cursor CLI always loads hooks from the repository (`.cursor/hooks.json`, `.claude/settings*.json`) and has no switch to stop it; `codev-guestd` refuses Cursor turns while those files exist. Codex and Claude ignore repository hooks under Gen 2's flags; keep it that way.
 - Loopback alone does not isolate privileged workspace RPC from terminal processes. ARM VM images require the local caller firewall before guestd starts; generalized VM administrators use sudo for maintenance RPC.
 
 - Azure web releases must pass origin readiness before Cloudflare traffic switches; keep the ARM workflow bridge on its separate workers.dev URL to avoid proxy loops.
 - Worker WebSocket messages need operation-scoped database pools; Redis clients and stream readers belong to the socket request, never the shared isolate.
 - Worker fetches support `redirect: "manual"`, not `"error"`; reject redirect responses explicitly for authenticated runtime requests.
 - ARM lifecycle polling must honor Azure `Retry-After` while staying within Cloudflare Workflows' per-invocation subrequest budget.
+- ARM workflow checkpoints are persisted and copied into continuations; never return secrets from one. Build secret-bearing request bodies inside the step that sends them.
+- Promote ARM images with the `ARM_WORKSPACE_IMAGE_VERSION_ID` repository variable (lowercase resource group), not by rewriting the write-only `ARM_WORKSPACE_RUNTIME_SECRETS` bundle.
+- Baked ARM starts poll signed guest health instead of waiting for the deployment. Workflow loops must branch on the attempt count, never the clock, so a continuation replays the same step names.
+- ARM VMs join their resource group's shared network from `infra/azure/arm-workspace-network.bicep`; deploy it to a group before web releases start VMs there.
 - ARM connection setup must retry package installation safely while cloud-init or apt holds the dpkg lock.
 
 - Before starting or deploying the web app, run `pnpm db:check`. A newer migration ledger entry does not prove older tables exist; repair skipped schema with a forward migration instead of editing applied history.
@@ -45,6 +50,7 @@
 - Preserve durable guest disks across stops/restarts; never treat missing saved workspace data as permission to initialize a fresh checkout.
 - Superset worktree discovery uses Git’s registered worktrees. Guest agents may create direct-child worktrees under `/workspace`; the bridge must resolve them safely as well as CoDev-managed worktrees under `.git/codev-agent-worktrees/`.
 
+- Viewer/editor workspace invite links are reusable for groups; opening sharing must preserve the active token, role, and expiry.
 - GitHub account choices show the authenticated member and organizations only; shared personal repositories belong under the member and must retain their original installation ID for workspace creation.
 
 ## Code standards
@@ -54,6 +60,7 @@
 - No speculative abstractions. Add a pattern (factory, strategy, registry) only when there are two or more concrete consumers today. Remove abstractions that serve a single caller.
 - Every new file must belong to an existing directory. If none fits, justify the new directory in the commit message.
 - Prefer early returns over nested conditionals. Prefer `map`/`filter` over manual loops. Prefer computed values over mutable state.
+- Cookie-authenticated API mutations must validate the exact Origin; viewers must be rejected before file writes, shell access, or agent execution. Revalidate membership before delivering collaboration or terminal data; never cache terminal mutation permissions.
 - API route handlers must be thin: validate input → call a `lib/` function → return a response. Business logic lives in `lib/`, never in `app/api/`.
 - Shared types and request/response shapes go in `packages/contracts` or `packages/shared-types`. Never duplicate a type definition across packages.
 - Each `lib/` subdirectory has a README describing what it owns and what it does not. Check the README before adding files; update it when the boundary shifts.
@@ -68,6 +75,8 @@ For any UI work, use shadcn/ui and the `shadcn` skill. If the skill is unavailab
 - `npx skills add shadcn/ui`
 - `yarn dlx skills add shadcn/ui`
 - `bun x skills add shadcn/ui`
+
+The public landing page (`app/page.tsx`) does not load Tailwind utilities (only `app/product-theme.css` imports them), so shadcn components render unstyled there; style landing previews with the CSS files in `components/landing/`. The CoDev mark is `/brand/codev-mark.svg` in ice blue `#00bde8`; do not recolor it with filters.
 
 For Gen 2 Superset workspace visual direction and tokens, follow [`docs/design/superset-workspace-ui.md`](docs/design/superset-workspace-ui.md). Chat, composer, and tool activity follow section 8.1 of that contract. Files, editor, terminal, and review follow section 8.2. For workspace controls, follow [`docs/design/workspace-controls.md`](docs/design/workspace-controls.md) and reuse `WorkspaceButton` for actions, including portaled dialogs; keep visual variants centralized and call-site styling limited to layout.
 

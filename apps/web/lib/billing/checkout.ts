@@ -9,7 +9,7 @@ import { ApiError } from "../http/api-route";
 import { getDatabase } from "../platform/database";
 import { logEvent } from "../platform/observability";
 import { getSubscriptionRow, resolveBillingAccess } from "./access";
-import { stripePriceIdForPlan } from "./config";
+import { billingEnvValue, stripePriceIdForPlan } from "./config";
 import { getSelfServePlan } from "./plans";
 import { getStripe } from "./stripe";
 import { stripeId, syncStripeSubscription } from "./subscriptions";
@@ -120,11 +120,11 @@ export async function createCheckoutSession(
     custom_text: {
       terms_of_service_acceptance: {
         message:
-          "I agree to the [CoDev Terms](https://trycodev.com/legal/terms) and [refund and cancellation policy](https://trycodev.com/legal/refunds).",
+          "I agree to the [CoDev Terms](https://www.trycodev.com/legal/terms) and [refund and cancellation policy](https://www.trycodev.com/legal/refunds).",
       },
       submit: {
         message:
-          "Renews monthly until canceled. Cancel in Settings → Billing → Manage billing. Refunds are reviewed individually; statutory rights apply. Privacy: https://trycodev.com/legal/privacy",
+          "Renews monthly until canceled. Cancel in Settings → Billing → Manage billing. Refunds are reviewed individually; statutory rights apply. Privacy: https://www.trycodev.com/legal/privacy",
       },
     },
     allow_promotion_codes: true,
@@ -147,7 +147,7 @@ export async function createPortalSession(memberId: string, origin: string) {
   if (row?.provider !== "stripe" || !row.providerCustomerId) {
     throw new ApiError("There is no billing account to manage yet.", 409);
   }
-  const configuration = process.env.STRIPE_PORTAL_CONFIGURATION_ID?.trim();
+  const configuration = billingEnvValue("STRIPE_PORTAL_CONFIGURATION_ID");
   const session = await getStripe().billingPortal.sessions.create({
     customer: row.providerCustomerId,
     return_url: `${origin}${BILLING_PATH}`,

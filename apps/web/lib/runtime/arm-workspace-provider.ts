@@ -29,6 +29,8 @@ const CLOUDFLARE_ACCOUNT_ID = "84a1d01866de04e04320feddfb199b83";
 const CLOUDFLARE_ZONE_ID = "c474dbc7af01ea073573a250fbd1d5ec";
 const CLOUDFLARE_ZONE_NAME = "trycodev.com";
 const PHASE2_SIGNING_ISSUER = "codev-control-plane";
+const SHARED_NSG = "codev-arm-workspace-nsg";
+const SHARED_VNET = "codev-arm-workspace-vnet";
 
 export type ArmWorkspaceOperation = {
   workspaceId: string;
@@ -162,25 +164,48 @@ async function armFetchDirect(
   return { response, payload };
 }
 
+/** A function body is built inside the checkpoint, so secrets it carries are never journaled. */
 async function armFetch(url: string, method = "GET", body?: unknown) {
-  return ArmWorkflowIO.request("azure", () =>
-    armFetchDirect(url, method, body),
+  return ArmWorkflowIO.request("azure", async () =>
+    armFetchDirect(
+      url,
+      method,
+      typeof body === "function" ? await body() : body,
+    ),
   );
 }
 
-async function pollArmOperation(response: Response, payload: unknown) {
+type PollInterval = (elapsedMs: number) => number;
+
+const steadyPoll: PollInterval = () => ARM_OPERATION_POLL_INTERVAL_MS;
+
+// Production VM deployments finish 35-60 s after submission and send no
+// Retry-After. Skip early polls, then check often around the usual finish.
+const deploymentPoll: PollInterval = (elapsed) =>
+  elapsed < 30_000
+    ? 30_000 - elapsed
+    : elapsed >= 40_000 && elapsed < 70_000
+      ? 2_000
+      : ARM_OPERATION_POLL_INTERVAL_MS;
+
+async function pollArmOperation(
+  response: Response,
+  payload: unknown,
+  interval: PollInterval,
+) {
   let operationUrl =
     response.headers.get("azure-asyncoperation") ??
     response.headers.get("location");
   if (!operationUrl) fail("AZURE_OPERATION_URL_MISSING");
-  const deadline = await ArmWorkflowIO.deadline(10 * 60_000);
+  const started = await ArmWorkflowIO.deadline(0);
+  const deadline = started + 10 * 60_000;
   let result = payload;
-  let retryAfter = response.headers.get("retry-after") ?? "5";
+  let retryAfter = response.headers.get("retry-after");
   while (Date.now() < deadline) {
-    const retryAfterSeconds = Number(retryAfter);
+    const retryAfterSeconds = Number(retryAfter ?? 0);
     await ArmWorkflowIO.sleep(
       Math.max(
-        ARM_OPERATION_POLL_INTERVAL_MS,
+        interval(Date.now() - started),
         (Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : 5) * 1000,
       ),
     );
@@ -201,7 +226,8 @@ async function pollArmOperation(response: Response, payload: unknown) {
     }
     operationUrl =
       poll.response.headers.get("azure-asyncoperation") ?? operationUrl;
-    retryAfter = poll.response.headers.get("retry-after") ?? retryAfter;
+    // Each response's Retry-After governs only the next poll.
+    retryAfter = poll.response.headers.get("retry-after");
   }
   fail("AZURE_OPERATION_TIMEOUT");
 }
@@ -212,6 +238,7 @@ async function armRequest(
   method = "GET",
   body?: unknown,
   allowNotFound = false,
+  interval = steadyPoll,
 ): Promise<unknown> {
   const result = await armFetch(apiUrl(path, version), method, body);
   if (allowNotFound && result.response.status === 404) return null;
@@ -220,7 +247,11 @@ async function armRequest(
     result.response.headers.has("azure-asyncoperation") ||
     (result.response.status === 201 && result.response.headers.has("location"))
   ) {
-    const completed = await pollArmOperation(result.response, result.payload);
+    const completed = await pollArmOperation(
+      result.response,
+      result.payload,
+      interval,
+    );
     // Azure operation endpoints return status, not the created resource.
     return method === "PUT" ? armRequest(path, version) : completed;
   }
@@ -233,7 +264,7 @@ function deploymentTemplate(
   workspaceId: string,
   generation: number,
   diskId: string,
-  bootScript?: string,
+  boot: boolean,
 ) {
   const config = readArmWorkspaceConfig();
   const tags = {
@@ -253,62 +284,18 @@ function deploymentTemplate(
       imageVersionId: { type: "string" },
       dataDiskResourceId: { type: "string" },
       adminSshPublicKey: { type: "string" },
-      ...(bootScript ? { bootScript: { type: "secureString" } } : {}),
+      ...(boot ? { bootScript: { type: "secureString" } } : {}),
     },
     variables: {
       resourceTags: tags,
-      nsgId:
-        "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-nsg', parameters('instanceName')))]",
-      vnetId:
-        "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-vnet', parameters('instanceName')))]",
+      // Shared per resource group by infra/azure/arm-workspace-network.bicep.
+      nsgId: `[resourceId('Microsoft.Network/networkSecurityGroups', '${SHARED_NSG}')]`,
+      subnetId: `[resourceId('Microsoft.Network/virtualNetworks/subnets', '${SHARED_VNET}', 'workspace')]`,
       ipId: "[resourceId('Microsoft.Network/publicIPAddresses', format('{0}-ip', parameters('instanceName')))]",
       nicId:
         "[resourceId('Microsoft.Network/networkInterfaces', format('{0}-nic', parameters('instanceName')))]",
     },
     resources: [
-      {
-        type: "Microsoft.Network/networkSecurityGroups",
-        apiVersion: NETWORK_API,
-        name: "[format('{0}-nsg', parameters('instanceName'))]",
-        location: WORKSPACE_LOCATION,
-        tags: "[variables('resourceTags')]",
-        properties: {
-          securityRules: [
-            {
-              name: "DenyAllInbound",
-              properties: {
-                priority: 100,
-                direction: "Inbound",
-                access: "Deny",
-                protocol: "*",
-                sourcePortRange: "*",
-                destinationPortRange: "*",
-                sourceAddressPrefix: "*",
-                destinationAddressPrefix: "*",
-              },
-            },
-          ],
-        },
-      },
-      {
-        type: "Microsoft.Network/virtualNetworks",
-        apiVersion: NETWORK_API,
-        name: "[format('{0}-vnet', parameters('instanceName'))]",
-        location: WORKSPACE_LOCATION,
-        tags: "[variables('resourceTags')]",
-        properties: {
-          addressSpace: { addressPrefixes: ["10.242.0.0/16"] },
-          subnets: [
-            {
-              name: "workspace",
-              properties: {
-                addressPrefix: "10.242.0.0/24",
-                defaultOutboundAccess: false,
-              },
-            },
-          ],
-        },
-      },
       {
         type: "Microsoft.Network/publicIPAddresses",
         apiVersion: NETWORK_API,
@@ -324,11 +311,7 @@ function deploymentTemplate(
         name: "[format('{0}-nic', parameters('instanceName'))]",
         location: WORKSPACE_LOCATION,
         tags: "[variables('resourceTags')]",
-        dependsOn: [
-          "[variables('nsgId')]",
-          "[variables('vnetId')]",
-          "[variables('ipId')]",
-        ],
+        dependsOn: ["[variables('ipId')]"],
         properties: {
           enableAcceleratedNetworking: true,
           networkSecurityGroup: { id: "[variables('nsgId')]" },
@@ -337,9 +320,7 @@ function deploymentTemplate(
               name: "primary",
               properties: {
                 privateIPAllocationMethod: "Dynamic",
-                subnet: {
-                  id: "[format('{0}/subnets/workspace', variables('vnetId'))]",
-                },
+                subnet: { id: "[variables('subnetId')]" },
                 publicIPAddress: { id: "[variables('ipId')]" },
               },
             },
@@ -398,7 +379,7 @@ function deploymentTemplate(
           },
         },
       },
-      ...(bootScript
+      ...(boot
         ? [
             {
               type: "Microsoft.Compute/virtualMachines/extensions",
@@ -456,6 +437,8 @@ async function resourceIds(
   const config = readArmWorkspaceConfig();
   const name = `${await resourceName(workspaceId)}-g${generation}`;
   const root = `/subscriptions/${config.subscriptionId}/resourceGroups/${config.resourceGroup}/providers/Microsoft.Network`;
+  // Generations deployed before the shared network also own a VNet and NSG;
+  // deleting them is a no-op once those generations are gone.
   return [
     await vmId(workspaceId, generation),
     `${root}/networkInterfaces/${name}-nic`,
@@ -576,32 +559,51 @@ async function cloudflareRequestDirect<T>(
   return payload.result as T;
 }
 
-async function cloudflareRequest<T>(
+/** `select` runs inside the checkpoint, so only its result is journaled. */
+async function cloudflareRequest<T, R = T>(
   path: string,
   method = "GET",
   body?: unknown,
-): Promise<T> {
-  return ArmWorkflowIO.checkpoint("azure", () =>
-    cloudflareRequestDirect<T>(path, method, body),
+  select: (result: T) => R = (result) => result as unknown as R,
+): Promise<R> {
+  return ArmWorkflowIO.checkpoint("azure", async () =>
+    select(await cloudflareRequestDirect<T>(path, method, body)),
   );
 }
 
+type TunnelIdentity = { id: string; name: string };
+
+// Tunnel responses carry connector credentials; journal only the identity.
+const tunnelIdentity = ({ id, name }: TunnelIdentity) => ({ id, name });
+const discard = () => null;
+
 async function findTunnel(workspaceId: string, generation: number) {
   const name = await workspaceTunnelName(workspaceId, generation);
-  const tunnels = await cloudflareRequest<Array<{ id: string; name: string }>>(
+  const tunnels = await cloudflareRequest(
     `/accounts/${CLOUDFLARE_ACCOUNT_ID}/cfd_tunnel?name=${encodeURIComponent(name)}&is_deleted=false`,
+    "GET",
+    undefined,
+    (result: TunnelIdentity[]) => result.map(tunnelIdentity),
   );
   return tunnels.find((tunnel) => tunnel.name === name) ?? null;
+}
+
+/** Call only inside a checkpoint whose output excludes the token. */
+function tunnelToken(tunnelId: string) {
+  return cloudflareRequestDirect<string>(
+    `/accounts/${CLOUDFLARE_ACCOUNT_ID}/cfd_tunnel/${tunnelId}/token`,
+  );
 }
 
 async function ensureTunnel(workspaceId: string, generation: number) {
   const name = await workspaceTunnelName(workspaceId, generation);
   const tunnel =
     (await findTunnel(workspaceId, generation)) ??
-    (await cloudflareRequest<{ id: string; name: string }>(
+    (await cloudflareRequest(
       `/accounts/${CLOUDFLARE_ACCOUNT_ID}/cfd_tunnel`,
       "POST",
       { name, config_src: "cloudflare" },
+      tunnelIdentity,
     ));
   const host = `${name}.${CLOUDFLARE_ZONE_NAME}`;
   await cloudflareRequest(
@@ -637,10 +639,7 @@ async function ensureTunnel(workspaceId: string, generation: number) {
       },
     );
   }
-  const token = await cloudflareRequest<string>(
-    `/accounts/${CLOUDFLARE_ACCOUNT_ID}/cfd_tunnel/${tunnel.id}/token`,
-  );
-  return { id: tunnel.id, host, token };
+  return { id: tunnel.id, host };
 }
 
 async function revokeTunnelRoute(workspaceId: string, generation: number) {
@@ -670,10 +669,14 @@ async function deleteTunnel(workspaceId: string, generation: number) {
   await cloudflareRequest(
     `/accounts/${CLOUDFLARE_ACCOUNT_ID}/cfd_tunnel/${tunnel.id}/connections`,
     "DELETE",
+    undefined,
+    discard,
   );
   await cloudflareRequest(
     `/accounts/${CLOUDFLARE_ACCOUNT_ID}/cfd_tunnel/${tunnel.id}`,
     "DELETE",
+    undefined,
+    discard,
   );
 }
 
@@ -748,18 +751,19 @@ async function requireDisk(
   return disk.id;
 }
 
-async function deployVm(
+async function deploymentPath(workspaceId: string, generation: number) {
+  const config = readArmWorkspaceConfig();
+  return `/subscriptions/${config.subscriptionId}/resourceGroups/${config.resourceGroup}/providers/Microsoft.Resources/deployments/${await resourceName(workspaceId)}-g${generation}`;
+}
+
+/** A VM left by an earlier attempt is reused only if it is ours and holds the disk. */
+async function existingVm(
   workspaceId: string,
   generation: number,
   diskId: string,
-  bootScript?: string,
 ) {
-  const config = readArmWorkspaceConfig();
-  const name = `${await resourceName(workspaceId)}-g${generation}`;
-  const path = `/subscriptions/${config.subscriptionId}/resourceGroups/${config.resourceGroup}/providers/Microsoft.Resources/deployments/${name}`;
-  const virtualMachineId = await vmId(workspaceId, generation);
   const existing = (await armRequest(
-    `${virtualMachineId}?%24expand=instanceView`,
+    `${await vmId(workspaceId, generation)}?%24expand=instanceView`,
     COMPUTE_API,
     "GET",
     undefined,
@@ -774,22 +778,40 @@ async function deployVm(
       };
     };
   } | null;
-  if (existing?.id) {
-    checkTags(existing, workspaceId, generation);
-    if (
-      existing.properties?.hardwareProfile?.vmSize !== "Standard_D2ps_v6" ||
-      existing.properties.storageProfile?.dataDisks?.length !== 1 ||
-      existing.properties.storageProfile.dataDisks[0]?.managedDisk?.id?.toLowerCase() !==
-        diskId.toLowerCase()
-    ) {
-      fail("DISK_ATTACH_CONFLICT");
-    }
-    return existing.id;
+  if (!existing?.id) return null;
+  checkTags(existing, workspaceId, generation);
+  if (
+    existing.properties?.hardwareProfile?.vmSize !== "Standard_D2ps_v6" ||
+    existing.properties.storageProfile?.dataDisks?.length !== 1 ||
+    existing.properties.storageProfile.dataDisks[0]?.managedDisk?.id?.toLowerCase() !==
+      diskId.toLowerCase()
+  ) {
+    fail("DISK_ATTACH_CONFLICT");
   }
-  const deployment = {
+  return existing.id;
+}
+
+async function deployVm(
+  workspaceId: string,
+  generation: number,
+  diskId: string,
+  bootScript?: () => Promise<string>,
+) {
+  const config = readArmWorkspaceConfig();
+  const name = `${await resourceName(workspaceId)}-g${generation}`;
+  const path = await deploymentPath(workspaceId, generation);
+  const virtualMachineId = await vmId(workspaceId, generation);
+  const existing = await existingVm(workspaceId, generation, diskId);
+  if (existing) return existing;
+  const deployment = async () => ({
     properties: {
       mode: "Incremental",
-      template: deploymentTemplate(workspaceId, generation, diskId, bootScript),
+      template: deploymentTemplate(
+        workspaceId,
+        generation,
+        diskId,
+        Boolean(bootScript),
+      ),
       parameters: {
         instanceName: { value: name },
         workspaceId: { value: workspaceId },
@@ -797,18 +819,53 @@ async function deployVm(
         imageVersionId: { value: config.imageVersionId },
         dataDiskResourceId: { value: diskId },
         adminSshPublicKey: { value: config.sshPublicKey },
-        ...(bootScript ? { bootScript: { value: bootScript } } : {}),
+        ...(bootScript ? { bootScript: { value: await bootScript() } } : {}),
       },
     },
+  });
+  if (!bootScript) {
+    await armRequest(
+      path,
+      DEPLOYMENT_API,
+      "PUT",
+      deployment,
+      false,
+      deploymentPoll,
+    );
+    const vm = (await armRequest(
+      `${virtualMachineId}?%24expand=instanceView`,
+      COMPUTE_API,
+    )) as { id?: string; tags?: Record<string, string> };
+    if (!vm.id) fail("VM_CREATE_FAILED");
+    checkTags(vm, workspaceId, generation);
+    return vm.id;
+  }
+  // A baked guest reports signed readiness through its tunnel 10-20 s before
+  // Azure finishes reporting the extension, so the caller polls health instead
+  // of this deployment. Failures surface through requireDeploymentProgress.
+  const { response, payload } = await armFetch(
+    apiUrl(path, DEPLOYMENT_API),
+    "PUT",
+    deployment,
+  );
+  if (!response.ok) fail(errorCode(payload, response.status));
+  return virtualMachineId;
+}
+
+type DeploymentError = { code?: string; details?: DeploymentError[] };
+
+const innermostCode = (error?: DeploymentError): string | undefined =>
+  error?.details?.[0]
+    ? (innermostCode(error.details[0]) ?? error.code)
+    : error?.code;
+
+async function requireDeploymentProgress(path: string) {
+  const deployment = (await armRequest(path, DEPLOYMENT_API)) as {
+    properties?: { provisioningState?: string; error?: DeploymentError };
   };
-  await armRequest(path, DEPLOYMENT_API, "PUT", deployment);
-  const vm = (await armRequest(
-    `${virtualMachineId}?%24expand=instanceView`,
-    COMPUTE_API,
-  )) as { id?: string; tags?: Record<string, string> };
-  if (!vm.id) fail("VM_CREATE_FAILED");
-  checkTags(vm, workspaceId, generation);
-  return vm.id;
+  const state = deployment.properties?.provisioningState;
+  if (state === "Failed" || state === "Canceled")
+    fail(innermostCode(deployment.properties?.error) ?? "VM_CREATE_FAILED");
 }
 
 async function waitForVmReady(
@@ -944,6 +1001,19 @@ async function installConnection(
   diskUuid: string,
 ) {
   const tunnel = await ensureTunnel(workspaceId, generation);
+  const ext = `${await vmId(workspaceId, generation)}/extensions/CustomScript`;
+  await armRequest(ext, COMPUTE_API, "PUT", async () =>
+    connectionExtension(workspaceId, generation, diskUuid, tunnel),
+  );
+  return { tunnelId: tunnel.id, routeHost: tunnel.host };
+}
+
+async function connectionExtension(
+  workspaceId: string,
+  generation: number,
+  diskUuid: string,
+  tunnel: { id: string; host: string },
+) {
   const config = readArmWorkspaceConfig();
   const identity = {
     workspaceId,
@@ -951,7 +1021,7 @@ async function installConnection(
     audience: tunnel.host,
     diskUuid,
     verificationKey: config.signingPublicKey,
-    tunnelToken: tunnel.token,
+    tunnelToken: await tunnelToken(tunnel.id),
   };
   let script =
     "#!/bin/bash\nset -euo pipefail\numask 077\ninstall -d -m 0755 /usr/local/lib/codev\n";
@@ -966,7 +1036,7 @@ async function installConnection(
   }
   script += `base64 -d > /root/codev-install-connection.sh <<'DATA'\n${bytesToBase64(new TextEncoder().encode(armConnectionInstaller))}\nDATA\n`;
   script += `base64 -d <<'CONFIG' | bash /root/codev-install-connection.sh\n${bytesToBase64(new TextEncoder().encode(JSON.stringify(identity)))}\nCONFIG\nrm -f /root/codev-install-connection.sh\n`;
-  const body = {
+  return {
     location: WORKSPACE_LOCATION,
     properties: {
       publisher: "Microsoft.Azure.Extensions",
@@ -976,57 +1046,96 @@ async function installConnection(
       protectedSettings: { script: await gzipBase64(script) },
     },
   };
-  const ext = `${await vmId(workspaceId, generation)}/extensions/CustomScript`;
-  await armRequest(ext, COMPUTE_API, "PUT", body);
-  return { tunnelId: tunnel.id, routeHost: tunnel.host };
 }
+
+async function fetchHealth(
+  workspaceId: string,
+  generation: number,
+  routeHost: string,
+  timeoutMs: number,
+) {
+  const authorization = `Bearer ${await capabilityToken(routeHost, workspaceId, generation)}`;
+  const response = await fetch(`https://${routeHost}/v1/health`, {
+    headers: { authorization },
+    redirect: "manual",
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  const value = (await response.json().catch(() => null)) as {
+    ready?: boolean;
+    workspaceId?: string;
+    generation?: number;
+    diskUuid?: string;
+  } | null;
+  return { ok: response.ok, value };
+}
+
+async function guestReady(
+  workspaceId: string,
+  generation: number,
+  diskUuid: string,
+  routeHost: string,
+) {
+  try {
+    const { ok, value } = await ArmWorkflowIO.checkpoint("health", () =>
+      fetchHealth(workspaceId, generation, routeHost, 10_000),
+    );
+    return Boolean(
+      ok &&
+      value?.ready &&
+      value.workspaceId === workspaceId &&
+      value.generation === generation &&
+      value.diskUuid === diskUuid,
+    );
+  } catch (error) {
+    // A handoff must not spin in place until the readiness deadline.
+    if (
+      error instanceof ArmWorkspaceRuntimeError &&
+      error.code === "WORKFLOW_CONTINUE"
+    )
+      throw error;
+    // The connector and guest bridge can take time to join after boot.
+    return false;
+  }
+}
+
+/** Decisions depend on the attempt count, never the clock, so replays align. */
+type HealthSchedule = {
+  intervalMs: (attempt: number) => number;
+  onAttempt: (attempt: number) => Promise<void>;
+};
 
 async function waitForHealth(
   workspaceId: string,
   generation: number,
   diskUuid: string,
   routeHost: string,
-  heartbeat: () => Promise<void>,
+  schedule: HealthSchedule,
 ) {
   const deadline = await ArmWorkflowIO.deadline(
     readArmWorkspaceConfig().bootEnabled ? 10 * 60_000 : 3 * 60_000,
   );
-  while (Date.now() < deadline) {
-    try {
-      const authorization = `Bearer ${await capabilityToken(routeHost, workspaceId, generation)}`;
-      const { ok, value } = await ArmWorkflowIO.checkpoint(
-        "health",
-        async () => {
-          const response = await fetch(`https://${routeHost}/v1/health`, {
-            headers: { authorization },
-            redirect: "manual",
-            signal: AbortSignal.timeout(10_000),
-          });
-          const value = (await response.json().catch(() => null)) as {
-            ready?: boolean;
-            workspaceId?: string;
-            generation?: number;
-            diskUuid?: string;
-          } | null;
-          return { ok: response.ok, value };
-        },
-      );
-      if (
-        ok &&
-        value?.ready &&
-        value.workspaceId === workspaceId &&
-        value.generation === generation &&
-        value.diskUuid === diskUuid
-      )
-        return;
-    } catch {
-      // The connector and guest bridge can take time to join after boot.
-    }
-    await heartbeat();
-    await ArmWorkflowIO.sleep(5_000);
+  for (let attempt = 0; Date.now() < deadline; attempt++) {
+    if (await guestReady(workspaceId, generation, diskUuid, routeHost)) return;
+    await schedule.onAttempt(attempt);
+    await ArmWorkflowIO.sleep(schedule.intervalMs(attempt));
   }
   fail("GUEST_READINESS_TIMEOUT");
 }
+
+// Guest services come up 40-50 s after submission; Azure reports the extension
+// 10-20 s later. Poll the guest often and read the deployment only to surface
+// failures, every tenth attempt.
+const bakedHealthSchedule = (
+  deployment: string,
+  heartbeat: () => Promise<void>,
+): HealthSchedule => ({
+  intervalMs: (attempt) => (attempt < 20 ? 3_000 : 5_000),
+  onAttempt: async (attempt) => {
+    if (attempt % 10 !== 0) return;
+    await requireDeploymentProgress(deployment);
+    await heartbeat();
+  },
+});
 
 async function deleteResource(id: string, version: string) {
   await armRequest(id, version, "DELETE", undefined, true);
@@ -1135,7 +1244,10 @@ async function connectRuntime(
     input.generation,
     resources.diskUuid,
     route.routeHost,
-    () => progress("checking_readiness", ready),
+    {
+      intervalMs: () => 5_000,
+      onAttempt: () => progress("checking_readiness", ready),
+    },
   );
   return ready;
 }
@@ -1170,27 +1282,26 @@ async function deployBakedVm(
   progress: ArmWorkspaceProgress,
   diskId: string,
   diskUuid: string,
-  route: { tunnelId: string; routeHost: string; token?: string },
+  route: { tunnelId: string; routeHost: string },
 ) {
   const { workspaceId, generation } = input;
   let virtualMachineId = resumePhase(input) > 0 ? input.resume?.vmId : null;
   if (!virtualMachineId) {
-    await progress("provisioning", {
+    await progress("provisioning", { diskId, diskUuid, ...route });
+    virtualMachineId = await deployVm(
+      workspaceId,
+      generation,
       diskId,
-      diskUuid,
-      tunnelId: route.tunnelId,
-      routeHost: route.routeHost,
-    });
-    const token = route.token
-      ? route.token
-      : (await ensureTunnel(workspaceId, generation)).token;
-    const script = await bakedBootScript(
-      input,
-      diskUuid,
-      route.routeHost,
-      token,
+      async () =>
+        bakedBootScript(
+          input,
+          diskUuid,
+          route.routeHost,
+          await tunnelToken(route.tunnelId),
+        ),
     );
-    virtualMachineId = await deployVm(workspaceId, generation, diskId, script);
+    // The guest cannot answer before it boots; skip polls that would fail.
+    await ArmWorkflowIO.sleep(30_000);
   }
   return virtualMachineId;
 }
@@ -1221,7 +1332,6 @@ async function prepareBakedResources(
         : ensureTunnel(workspaceId, generation).then((tunnel) => ({
             tunnelId: tunnel.id,
             routeHost: tunnel.host,
-            token: tunnel.token,
           })),
   ]);
   return { diskId, diskUuid, route };
@@ -1251,8 +1361,14 @@ async function startBakedRuntime(
     routeHost: route.routeHost,
   };
   await progress("checking_readiness", resources);
-  await waitForHealth(workspaceId, generation, diskUuid, route.routeHost, () =>
-    progress("checking_readiness", resources),
+  await waitForHealth(
+    workspaceId,
+    generation,
+    diskUuid,
+    route.routeHost,
+    bakedHealthSchedule(await deploymentPath(workspaceId, generation), () =>
+      progress("checking_readiness", resources),
+    ),
   );
   return resources;
 }
@@ -1322,21 +1438,14 @@ export class ArmWorkspaceProvider {
   ) {
     if (!diskUuid || !routeHost) return false;
     try {
-      const response = await fetch(`https://${routeHost}/v1/health`, {
-        headers: {
-          authorization: `Bearer ${await capabilityToken(routeHost, workspaceId, generation)}`,
-        },
-        redirect: "manual",
-        signal: AbortSignal.timeout(5_000),
-      });
-      const value = (await response.json().catch(() => null)) as {
-        ready?: boolean;
-        workspaceId?: string;
-        generation?: number;
-        diskUuid?: string;
-      } | null;
+      const { ok, value } = await fetchHealth(
+        workspaceId,
+        generation,
+        routeHost,
+        5_000,
+      );
       return Boolean(
-        response.ok &&
+        ok &&
         value?.ready &&
         value.workspaceId === workspaceId &&
         value.generation === generation &&
