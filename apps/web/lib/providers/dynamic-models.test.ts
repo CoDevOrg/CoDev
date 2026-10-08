@@ -1,4 +1,4 @@
-import { beforeEach, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   resolve: vi.fn(),
   codex: vi.fn(),
@@ -25,6 +25,7 @@ import {
   clearDynamicModelCache,
   getDynamicModelsForProvider,
 } from "./dynamic-models";
+import { ModelCatalogRequestError } from "./model-catalog-request";
 beforeEach(() => {
   vi.unstubAllGlobals();
   vi.resetAllMocks();
@@ -100,4 +101,63 @@ it("only refreshes Codex credentials", async () => {
   mocks.claude.mockResolvedValue([{ id: "claude-model", label: "Claude" }]);
   await getDynamicModelsForProvider("claude", "member-a");
   expect(mocks.fresh).not.toHaveBeenCalled();
+});
+describe("a ChatGPT 401 before token expiry", () => {
+  const stored = { kind: "codex_auth_cache", authCacheJson: "stored" };
+  const renewed = { kind: "codex_auth_cache", authCacheJson: "renewed" };
+  const record = {
+    credentialId: "credential-1",
+    credentialRevision: "revision-1",
+    secret: stored,
+  };
+  beforeEach(() => mocks.resolve.mockResolvedValue(record));
+
+  it("refreshes the sign-in once and retries the catalog once", async () => {
+    mocks.codex
+      .mockRejectedValueOnce(new ModelCatalogRequestError(401))
+      .mockResolvedValueOnce([{ id: "fresh", label: "Fresh" }]);
+    mocks.fresh
+      .mockImplementationOnce(async ({ secret }) => secret)
+      .mockResolvedValueOnce(renewed);
+    expect(await getDynamicModelsForProvider("codex", "member-a")).toEqual([
+      { id: "fresh", label: "Fresh" },
+    ]);
+    expect(mocks.fresh).toHaveBeenLastCalledWith(record, { force: true });
+    expect(mocks.codex).toHaveBeenNthCalledWith(2, renewed);
+  });
+
+  it("does not refresh for other failures such as a 403", async () => {
+    mocks.codex.mockRejectedValueOnce(new ModelCatalogRequestError(403));
+    await expect(
+      getDynamicModelsForProvider("codex", "member-a"),
+    ).rejects.toBeInstanceOf(ModelCatalogRequestError);
+    expect(mocks.fresh).toHaveBeenCalledTimes(1);
+    expect(mocks.codex).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns the original failure when a running turn blocks the refresh", async () => {
+    const rejected = new ModelCatalogRequestError(401);
+    mocks.codex.mockRejectedValueOnce(rejected);
+    await expect(getDynamicModelsForProvider("codex", "member-a")).rejects.toBe(
+      rejected,
+    );
+    expect(mocks.codex).toHaveBeenCalledTimes(1);
+  });
+
+  it("never refreshes twice in one request", async () => {
+    mocks.fresh.mockResolvedValueOnce(renewed);
+    mocks.codex.mockRejectedValueOnce(new ModelCatalogRequestError(401));
+    await expect(
+      getDynamicModelsForProvider("codex", "member-a"),
+    ).rejects.toBeInstanceOf(ModelCatalogRequestError);
+    expect(mocks.fresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves other providers' 401s alone", async () => {
+    mocks.claude.mockRejectedValueOnce(new ModelCatalogRequestError(401));
+    await expect(
+      getDynamicModelsForProvider("claude", "member-a"),
+    ).rejects.toBeInstanceOf(ModelCatalogRequestError);
+    expect(mocks.fresh).not.toHaveBeenCalled();
+  });
 });
