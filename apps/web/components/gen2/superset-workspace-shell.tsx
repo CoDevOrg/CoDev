@@ -922,13 +922,8 @@ export function SupersetWorkspaceShell({
                 <div className="gen2-sidebar-section">
                   <div className="gen2-sidebar-section-header">
                     <span className="gen2-sidebar-section-title">
-                      ACTIVE WORKTREE
+                      Active worktree
                     </span>
-                    {worktrees.length > 1 ? (
-                      <span className="gen2-sidebar-section-count">
-                        {worktrees.length} BRANCHES
-                      </span>
-                    ) : null}
                   </div>
                   <div className="gen2-worktree-dropdown-wrapper">
                     <button
@@ -1122,17 +1117,12 @@ export function SupersetWorkspaceShell({
                       className="h-full w-full overflow-hidden flex flex-col"
                       aria-label="Branches"
                     >
-                      {/* Section 1: ACTIVE WORKTREE */}
+                      {/* Section 1: Active worktree */}
                       <div className="gen2-sidebar-section">
                         <div className="gen2-sidebar-section-header">
                           <span className="gen2-sidebar-section-title">
-                            ACTIVE WORKTREE
+                            Active worktree
                           </span>
-                          {worktrees.length > 1 ? (
-                            <span className="gen2-sidebar-section-count">
-                              {worktrees.length} BRANCHES
-                            </span>
-                          ) : null}
                         </div>
 
                         {/* Worktree Switcher Trigger */}
@@ -1329,17 +1319,12 @@ export function SupersetWorkspaceShell({
                         </div>
                       </WorkspaceButton>
 
-                      {/* Section 2: RECENT CHATS */}
+                      {/* Section 2: Recent chats */}
                       <div className="gen2-sidebar-section gen2-sidebar-recent-chats">
                         <div className="gen2-sidebar-section-header">
                           <span className="gen2-sidebar-section-title">
-                            RECENT CHATS
+                            Recent chats
                           </span>
-                          {chats.length > 0 ? (
-                            <span className="gen2-sidebar-section-count">
-                              {chats.length}
-                            </span>
-                          ) : null}
                         </div>
 
                         {connectedProviders.length === 0 ? (
@@ -1388,9 +1373,6 @@ export function SupersetWorkspaceShell({
                                         {provider.name}
                                       </span>
                                     </div>
-                                    <span className="gen2-sidebar-provider-count">
-                                      {providerChats.length}
-                                    </span>
                                   </div>
 
                                   <ul className="gen2-sidebar-chat-list">

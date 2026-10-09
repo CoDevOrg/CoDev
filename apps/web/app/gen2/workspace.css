@@ -1143,7 +1143,7 @@
   justify-content: space-between;
   height: 48px;
   min-height: 48px;
-  padding: 0 14px;
+  padding: 0 12px;
   border-bottom: 1px solid var(--ws-border-medium);
   background: var(--ss-card);
   box-shadow: 0 1px 16px -4px rgba(var(--brand-redwood-rgb, 224, 72, 72), 0.08);
@@ -1158,7 +1158,7 @@
 .gen2-ide-top-navbar-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .gen2-ide-top-navbar-left {
@@ -1202,10 +1202,10 @@
   align-items: center;
   gap: 6px;
   height: 32px;
-  padding: 0 10px;
+  padding: 0 12px;
   border-radius: 6px;
   background: var(--ws-surface-3);
-  border: 1px solid var(--ws-border-subtle);
+  border: 1px solid transparent;
   color: var(--ws-text-primary);
   font-size: 0.75rem;
   white-space: nowrap;
@@ -1453,7 +1453,7 @@
 @media (max-width: 480px) {
   .gen2-ide-top-navbar {
     padding: 0 8px;
-    gap: 6px;
+    gap: 4px;
   }
 
   .gen2-ide-top-navbar-left,
@@ -1557,7 +1557,7 @@
 
 /* Sidebar Sections (Expanded Mode) */
 .gen2-sidebar-section {
-  padding: 10px 12px 6px;
+  padding: 12px 12px 8px;
 }
 
 .gen2-sidebar-section-header {
@@ -1569,22 +1569,9 @@
 }
 
 .gen2-sidebar-section-title {
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
   color: var(--ws-text-muted);
-}
-
-.gen2-sidebar-section-count {
-  font-size: 0.625rem;
-  font-family: var(--font-mono, monospace);
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--ws-text-primary) 8%, transparent);
-  color: var(--ws-text-muted);
-  border: 1px solid var(--ws-border-subtle);
-  line-height: 1.3;
 }
 
 /* Worktree Dropdown Trigger */
@@ -1599,10 +1586,10 @@
   justify-content: space-between;
   width: 100%;
   height: 36px;
-  padding: 0 10px;
+  padding: 0 12px;
   border-radius: 6px;
   background: var(--ws-surface-3);
-  border: 1px solid var(--ws-border-subtle);
+  border: 1px solid transparent;
   color: var(--ws-text-primary);
   cursor: pointer;
   box-shadow: none;
@@ -1612,7 +1599,6 @@
 }
 
 .gen2-worktree-trigger-btn:hover {
-  border-color: var(--ws-border-medium);
   background: var(--ws-surface-hover);
 }
 
@@ -1659,7 +1645,7 @@
 
 .gen2-worktree-branch-name {
   font-family: var(--font-mono, monospace);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: var(--ws-text-primary);
   overflow: hidden;
@@ -1824,7 +1810,7 @@
 
 .gen2-worktree-dropdown-item-branch {
   font-family: var(--font-mono, monospace);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1986,24 +1972,10 @@
 }
 
 .gen2-sidebar-provider-name {
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
+  font-size: 0.75rem;
+  font-weight: 600;
   color: var(--ss-muted-foreground);
-  text-transform: uppercase;
   white-space: nowrap;
-}
-
-.gen2-sidebar-provider-count {
-  font-size: 0.625rem;
-  font-family: var(--font-mono, monospace);
-  color: var(--ss-muted-foreground);
-  padding: 1.5px 6px;
-  border-radius: 9999px;
-  background: color-mix(in srgb, var(--ss-foreground) 5%, transparent);
-  border: 1px solid color-mix(in srgb, var(--ss-border) 60%, transparent);
-  line-height: 1.3;
-  flex-shrink: 0;
 }
 
 .gen2-sidebar-chat-list {
@@ -2023,7 +1995,7 @@
   width: 100%;
   height: 36px;
   min-height: 36px;
-  padding: 0 10px;
+  padding: 0 12px;
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -2125,8 +2097,8 @@
   align-items: center;
   flex-shrink: 0;
   gap: 4px;
-  font-size: 11px;
-  line-height: 14px;
+  font-size: 12px;
+  line-height: 16px;
   font-family: var(--font-mono, monospace);
   color: var(--ws-text-secondary);
 }
@@ -2151,6 +2123,7 @@
 }
 
 .gen2-sidebar-chat-empty [data-slot="empty-title"] {
+  font-size: 0.8125rem;
   color: var(--ws-text-secondary);
   font-weight: 500;
 }
@@ -3634,7 +3607,7 @@ aside:has(> .gen2-ide-files:not([hidden])) .gen2-ide-tabs {
   border: 1px solid transparent;
   border-radius: 6px;
   color: var(--ws-text-secondary);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   font-weight: 500;
   cursor: pointer;
   background: transparent;
@@ -3652,7 +3625,6 @@ aside:has(> .gen2-ide-files:not([hidden])) .gen2-ide-tabs {
 .gen2-ide-tabs button[aria-selected="true"] {
   color: var(--ws-text-primary);
   background: var(--ws-surface-3);
-  border-color: var(--ws-border-subtle);
 }
 
 .gen2-ide-tabs button:focus-visible {
@@ -4926,7 +4898,7 @@ aside:has(> .gen2-ide-files:not([hidden])) .gen2-ide-tabs {
 }
 .gen2-workspace-button[data-slot="button"][data-tone="secondary"] {
   background: var(--ws-surface-3);
-  border-color: var(--ws-border-subtle);
+  border-color: transparent;
   color: var(--ws-text-primary) !important;
 }
 .gen2-workspace-button[data-slot="button"]:hover,

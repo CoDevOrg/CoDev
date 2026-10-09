@@ -376,11 +376,11 @@ describe("SupersetWorkspaceShell", () => {
         runtimeEnabled
       />,
     );
-    expect(await screen.findByText("ACTIVE WORKTREE")).toBeInTheDocument();
+    expect(await screen.findByText("Active worktree")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "New Chat" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("RECENT CHATS")).toBeInTheDocument();
+    expect(screen.getByText("Recent chats")).toBeInTheDocument();
   });
 
   it("shows only connected AI providers (e.g. Codex) with their recent chats and real logo", async () => {
@@ -538,15 +538,15 @@ describe("SupersetWorkspaceShell", () => {
         runtimeEnabled
       />,
     );
-    expect(await screen.findByText("ACTIVE WORKTREE")).toBeInTheDocument();
-    expect(screen.getByText("RECENT CHATS")).toBeInTheDocument();
+    expect(await screen.findByText("Active worktree")).toBeInTheDocument();
+    expect(screen.getByText("Recent chats")).toBeInTheDocument();
 
     // Minimize sidebar
     fireEvent.click(screen.getByRole("button", { name: "Minimize sidebar" }));
 
     // In compact/minimized rail:
-    expect(screen.queryByText("ACTIVE WORKTREE")).not.toBeInTheDocument();
-    expect(screen.queryByText("RECENT CHATS")).not.toBeInTheDocument();
+    expect(screen.queryByText("Active worktree")).not.toBeInTheDocument();
+    expect(screen.queryByText("Recent chats")).not.toBeInTheDocument();
     // New chat button is still available
     expect(
       screen.getByRole("button", { name: "New Chat" }),
@@ -562,8 +562,8 @@ describe("SupersetWorkspaceShell", () => {
 
     // Expand sidebar back
     fireEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
-    expect(await screen.findByText("ACTIVE WORKTREE")).toBeInTheDocument();
-    expect(screen.getByText("RECENT CHATS")).toBeInTheDocument();
+    expect(await screen.findByText("Active worktree")).toBeInTheDocument();
+    expect(screen.getByText("Recent chats")).toBeInTheDocument();
   });
 
   it("shows an AlertDialog when switching worktrees with unsaved changes", async () => {
@@ -635,7 +635,7 @@ describe("SupersetWorkspaceShell", () => {
     expect(
       screen.getByRole("button", { name: "Expand inspector" }),
     ).toBeInTheDocument();
-    expect(screen.queryByText("ACTIVE WORKTREE")).not.toBeInTheDocument();
+    expect(screen.queryByText("Active worktree")).not.toBeInTheDocument();
   });
 
   it("lets the user expand auto-collapsed panels", async () => {
@@ -655,7 +655,7 @@ describe("SupersetWorkspaceShell", () => {
 
     await screen.findByRole("button", { name: "Expand sidebar" });
     fireEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
-    expect(await screen.findByText("ACTIVE WORKTREE")).toBeInTheDocument();
+    expect(await screen.findByText("Active worktree")).toBeInTheDocument();
     expect(container.querySelector(".gen2-ide-container")).toHaveAttribute(
       "data-sidebar-collapsed",
       "false",

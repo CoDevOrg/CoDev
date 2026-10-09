@@ -30,7 +30,7 @@ Do not change the global Button to solve a workspace-specific styling issue.
 ## Hierarchy and geometry
 
 - Primary: solid semantic accent; reserve for the main action in a region. In the workspace shell the composer and connection state lead, so the sidebar's New Chat is secondary.
-- Secondary: neutral surface and subtle border; use for actions such as Share.
+- Secondary: neutral fill with a transparent border (no outline); use for actions such as Share.
 - Destructive: semantic destructive fill for confirmed destructive actions.
 - Ghost (default): transparent at rest; use for secondary toolbar actions.
 - Informational status is text and an indicator, not a button-shaped box.

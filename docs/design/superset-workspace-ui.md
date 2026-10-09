@@ -187,19 +187,20 @@ Bridge Tailwind/shadcn on the same subtree: `--color-background` → surface-1, 
 **Sans:** Geist Sans, system UI fallback.  
 **Mono:** Geist Mono, `ui-monospace` fallback.
 
-| Element                   | Size            | Line height | Weight               | Family       |
-| ------------------------- | --------------- | ----------- | -------------------- | ------------ |
-| Session / workspace title | 14px            | 20px        | 600                  | Sans         |
-| Section label (uppercase) | 11px            | 16px        | 600, tracking 0.05em | Sans         |
-| Chat body                 | 14.5px          | 24px        | 400                  | Sans         |
-| Composer                  | 14px            | 22px        | 400                  | Sans         |
-| Empty hero                | 18px            | 24px        | 600                  | Sans         |
-| Sidebar row title         | 13px            | 18px        | 500                  | Sans         |
-| Meta / tabs / dock        | 12px            | 16px        | 400                  | Sans         |
-| Suggestion supporting     | 12px (not 11px) | 16px        | 400                  | Sans         |
-| Code / diff               | 13px            | 20px        | 400                  | Mono         |
-| Terminal                  | 12px            | 18px        | 400                  | Mono         |
-| Status chips              | 11px            | 14px        | 500                  | Mono or sans |
+| Element                           | Size            | Line height | Weight | Family       |
+| --------------------------------- | --------------- | ----------- | ------ | ------------ |
+| Session / workspace title         | 14px            | 20px        | 600    | Sans         |
+| Section label (sentence case)     | 12px            | 16px        | 600    | Sans         |
+| Chat body                         | 14.5px          | 24px        | 400    | Sans         |
+| Composer                          | 14px            | 22px        | 400    | Sans         |
+| Empty hero                        | 18px            | 24px        | 600    | Sans         |
+| Sidebar row title                 | 13px            | 18px        | 500    | Sans         |
+| Tabs / rail rows                  | 13px            | 18px        | 500    | Sans         |
+| Meta / dock                       | 12px            | 16px        | 400    | Sans         |
+| Suggestion supporting             | 12px (not 11px) | 16px        | 400    | Sans         |
+| Code / diff                       | 13px            | 20px        | 400    | Mono         |
+| Terminal                          | 12px            | 18px        | 400    | Mono         |
+| Status chips (the only 11px text) | 11px            | 14px        | 500    | Mono or sans |
 
 **Spacing (4px grid):** 4, 8, 12, 16, 24, 32.
 
@@ -216,18 +217,20 @@ Bridge Tailwind/shadcn on the same subtree: `--color-background` → surface-1, 
 
 Follow `docs/design/workspace-controls.md`. Ordinary actions use `WorkspaceButton`. Call sites own layout classes only.
 
-| Control                                  | Height | Padding  | Radius                                                                                      |
-| ---------------------------------------- | ------ | -------- | ------------------------------------------------------------------------------------------- |
-| Toolbar (Share, Board, theme, inspector) | 32px   | 0 10px   | 6px                                                                                         |
-| Icon button                              | 32×32  | 0        | 6px                                                                                         |
-| New Chat                                 | 36px   | 0 12px   | 6px, outline (secondary); the composer and connection state lead, not this button           |
-| Worktree trigger                         | 36px   | 0 10px   | 6px                                                                                         |
-| Chat / branch row                        | 36px   | 6px 10px | 6px — **single line**; meta may sit inline, not a second wrapped block that grows past 36px |
-| Inspector tabs (shadcn `Tabs`)           | 32px   | 0 12px   | 6px                                                                                         |
-| Inputs                                   | 32px   | 0 10px   | 6px                                                                                         |
-| Status chip                              | 20px   | 0 6px    | 4px                                                                                         |
-| Dialog / composer                        | —      | —        | 12px                                                                                        |
-| Cards / menus                            | —      | —        | 8px                                                                                         |
+| Control                                  | Height | Padding | Radius                                                                                      |
+| ---------------------------------------- | ------ | ------- | ------------------------------------------------------------------------------------------- |
+| Toolbar (Share, Board, theme, inspector) | 32px   | 0 10px  | 6px                                                                                         |
+| Icon button                              | 32×32  | 0       | 6px                                                                                         |
+| New Chat                                 | 36px   | 0 12px  | 6px, outline (secondary); the composer and connection state lead, not this button           |
+| Worktree trigger                         | 36px   | 0 12px  | 6px                                                                                         |
+| Chat / branch row                        | 36px   | 0 12px  | 6px — **single line**; meta may sit inline, not a second wrapped block that grows past 36px |
+| Inspector tabs (shadcn `Tabs`)           | 32px   | 0 12px  | 6px                                                                                         |
+| Inputs                                   | 32px   | 0 10px  | 6px                                                                                         |
+| Status chip                              | 20px   | 0 6px   | 4px                                                                                         |
+| Dialog / composer                        | —      | —       | 12px                                                                                        |
+| Cards / menus                            | —      | —       | 8px                                                                                         |
+
+**Borders are for panel dividers, inputs, and focus.** Interactive chips and secondary buttons (branch pill, worktree trigger, selected tab, New Chat, Share) use a quiet `--ws-surface-3` fill and a transparent border, so they keep their size without an outline. Section labels are sentence case with no count chips; counts that restate what is visible (one branch, a chat total) are omitted.
 
 Focus: 2px `--ws-accent` outline, 1px offset, `:focus-visible` only. Hover: 120ms color, no scale. Disabled: 45% opacity.
 
@@ -237,7 +240,7 @@ Focus: 2px `--ws-accent` outline, 1px offset, `:focus-visible` only. Hover: 120m
 
 ### Top bar (48px)
 
-Implemented in `workspace-top-bar.tsx` and `workspace-branch-menu.tsx`. Three zones. Right zone `flex-shrink: 0`. Center truncates first. Left truncates next.
+Implemented in `workspace-top-bar.tsx` and `workspace-branch-menu.tsx`. 12px side padding, 8px gaps. Three zones. Right zone `flex-shrink: 0`. Center truncates first. Left truncates next.
 
 1. **Left:** one home link to `/gen2` that is the 22×22 CoDev mark (`/brand/codev-mark.svg`, ice blue `#00bde8` in both themes; no separate back arrow), the sidebar toggle, then a shadcn `Breadcrumb`: workspace name / repository / branch menu. No trailing separator. The branch menu is the last crumb and the only branch control in the bar.
    - 1024–1279px: hide the repository crumb.
