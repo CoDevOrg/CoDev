@@ -109,7 +109,7 @@ apt-get install -y nodejs
 corepack enable
 corepack prepare pnpm@11.5.0 --activate
 npm install -g --allow-scripts=@anthropic-ai/claude-code \
-  @openai/codex@0.160.1 @anthropic-ai/claude-code@2.1.286
+  @openai/codex@0.161.0 @anthropic-ai/claude-code@2.1.287
 
 # Pin and checksum the Linux ARM64 CLI; it must never self-update the base image.
 readonly cursor_version="2026.10.01-e373342"
