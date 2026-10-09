@@ -29,6 +29,7 @@ import type {
 import { parseGitStatus } from "@/lib/runtime/ide";
 
 import { WorkspaceButton } from "./workspace-button";
+import { BranchStatusPill } from "./branch-status-pill";
 import { WorkspaceTopBar } from "./workspace-top-bar";
 import { cn } from "@/lib/platform/utils";
 import { WorkspaceShareDialog } from "./workspace-share-dialog";
@@ -921,10 +922,11 @@ export function SupersetWorkspaceShell({
                     <span className="gen2-sidebar-section-title">
                       ACTIVE WORKTREE
                     </span>
-                    <span className="gen2-sidebar-section-count">
-                      {worktrees.length}{" "}
-                      {worktrees.length === 1 ? "BRANCH" : "BRANCHES"}
-                    </span>
+                    {worktrees.length > 1 ? (
+                      <span className="gen2-sidebar-section-count">
+                        {worktrees.length} BRANCHES
+                      </span>
+                    ) : null}
                   </div>
                   <div className="gen2-worktree-dropdown-wrapper">
                     <button
@@ -944,16 +946,10 @@ export function SupersetWorkspaceShell({
                         </span>
                       </div>
                       <div className="gen2-worktree-trigger-right">
-                        {selectedStatus ? (
-                          <span
-                            className={cn(
-                              "gen2-worktree-status-pill",
-                              selectedStatus.tone,
-                            )}
-                          >
-                            {selectedStatus.label}
-                          </span>
-                        ) : null}
+                        <BranchStatusPill
+                          status={selectedStatus}
+                          className="gen2-worktree-status-pill"
+                        />
                       </div>
                     </button>
                   </div>
@@ -1038,14 +1034,10 @@ export function SupersetWorkspaceShell({
                                 <span className="gen2-worktree-dropdown-item-branch">
                                   {wt.branch}
                                 </span>
-                                <span
-                                  className={cn(
-                                    "gen2-worktree-status-pill",
-                                    st.tone,
-                                  )}
-                                >
-                                  {st.label}
-                                </span>
+                                <BranchStatusPill
+                                  status={st}
+                                  className="gen2-worktree-status-pill"
+                                />
                               </button>
                             </li>
                           );
@@ -1134,10 +1126,11 @@ export function SupersetWorkspaceShell({
                           <span className="gen2-sidebar-section-title">
                             ACTIVE WORKTREE
                           </span>
-                          <span className="gen2-sidebar-section-count">
-                            {worktrees.length}{" "}
-                            {worktrees.length === 1 ? "BRANCH" : "BRANCHES"}
-                          </span>
+                          {worktrees.length > 1 ? (
+                            <span className="gen2-sidebar-section-count">
+                              {worktrees.length} BRANCHES
+                            </span>
+                          ) : null}
                         </div>
 
                         {/* Worktree Switcher Trigger */}
@@ -1164,16 +1157,10 @@ export function SupersetWorkspaceShell({
                               </span>
                             </div>
                             <div className="gen2-worktree-trigger-right">
-                              {selectedStatus ? (
-                                <span
-                                  className={cn(
-                                    "gen2-worktree-status-pill",
-                                    selectedStatus.tone,
-                                  )}
-                                >
-                                  {selectedStatus.label}
-                                </span>
-                              ) : null}
+                              <BranchStatusPill
+                                status={selectedStatus}
+                                className="gen2-worktree-status-pill"
+                              />
                               <ChevronDown
                                 size={14}
                                 className={cn(
@@ -1225,14 +1212,10 @@ export function SupersetWorkspaceShell({
                                         </span>
                                       </div>
                                       <div className="gen2-worktree-dropdown-item-right">
-                                        <span
-                                          className={cn(
-                                            "gen2-worktree-status-pill",
-                                            st.tone,
-                                          )}
-                                        >
-                                          {st.label}
-                                        </span>
+                                        <BranchStatusPill
+                                          status={st}
+                                          className="gen2-worktree-status-pill"
+                                        />
                                         {isSelected ? (
                                           <Check
                                             size={13}

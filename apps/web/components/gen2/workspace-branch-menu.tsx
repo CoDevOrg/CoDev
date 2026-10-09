@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/platform/utils";
+import { BranchStatusPill } from "./branch-status-pill";
 
 export type BranchStatus = {
   label: string;
@@ -49,11 +50,10 @@ export function WorkspaceBranchMenu({
         >
           <GitBranch size={13} className="gen2-topbar-branch-icon" />
           <span className="gen2-topbar-branch-name">{branch}</span>
-          {status ? (
-            <span className={cn("gen2-topbar-branch-status", status.tone)}>
-              {status.label}
-            </span>
-          ) : null}
+          <BranchStatusPill
+            status={status}
+            className="gen2-topbar-branch-status"
+          />
           <ChevronDown
             size={11}
             className="text-muted-foreground ml-0.5 shrink-0 opacity-70"
@@ -106,9 +106,10 @@ export function WorkspaceBranchMenu({
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                  <span className={cn("gen2-worktree-status-pill", st.tone)}>
-                    {st.label}
-                  </span>
+                  <BranchStatusPill
+                    status={st}
+                    className="gen2-worktree-status-pill"
+                  />
                   {isSelected ? (
                     <Check size={13} className="text-primary" />
                   ) : null}
