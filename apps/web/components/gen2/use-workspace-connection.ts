@@ -10,6 +10,7 @@ import { boundedJsonRequest } from "@/lib/gen2/bounded-request";
 export const CONNECTION_TIMEOUT_MS = 10_000;
 export const CONNECTION_CHECK_MS = 30_000;
 export const CONNECTION_RETRY_MS = 2_000;
+export const CONNECTION_PROBE_MS = 5_000;
 export const RECENT_ACTIVITY_MS = 60_000;
 
 export function useWorkspaceConnection(
@@ -204,11 +205,58 @@ export function useWorkspaceConnection(
         checking = false;
       }
     }
+    /**
+     * The startup loop waits for the database to say ready, and can lag a
+     * workspace the activity check already reports connected, which is what a
+     * page refresh would find. While it runs, trust the same cheap check.
+     */
+    async function probeStartup() {
+      if (!connectRef.current || document.visibilityState === "hidden") return;
+      const probeRevision = revision.current;
+      try {
+        const { response, payload } = await boundedJsonRequest<{
+          connected?: boolean;
+        }>(
+          `/api/gen2/workspaces/${workspaceId}/activity`,
+          { method: "GET", cache: "no-store", signal: abort.signal },
+          CONNECTION_TIMEOUT_MS,
+        );
+        if (
+          abort.signal.aborted ||
+          !connectRef.current ||
+          revision.current !== probeRevision ||
+          !response.ok ||
+          payload.connected !== true
+        )
+          return;
+        revision.current += 1;
+        startupAbort.current?.abort();
+        connectRef.current = null;
+        failedChecks.current = 0;
+        wakeOnOpen.current = false;
+        setProgress(null);
+        setError("");
+        setState("connected");
+        const detail = await boundedJsonRequest<{
+          workspace?: Gen2WorkspaceDetail;
+        }>(
+          `/api/gen2/workspaces/${workspaceId}`,
+          { cache: "no-store", signal: abort.signal },
+          CONNECTION_TIMEOUT_MS,
+        );
+        if (!abort.signal.aborted && detail.payload.workspace)
+          onConnectedRef.current(detail.payload.workspace);
+      } catch {
+        // The startup loop is still running; try again on the next probe.
+      }
+    }
     const activity = () => {
       activityAt.current = Date.now();
     };
     const visible = () => {
-      if (document.visibilityState === "visible") void check();
+      if (document.visibilityState !== "visible") return;
+      void check();
+      void probeStartup();
     };
     for (const event of ["keydown", "pointerdown", "wheel", "input"])
       window.addEventListener(event, activity, {
@@ -221,6 +269,10 @@ export function useWorkspaceConnection(
     window.addEventListener("offline", offline);
     void check(true);
     const timer = setInterval(() => void check(), CONNECTION_CHECK_MS);
+    const probeTimer = setInterval(
+      () => void probeStartup(),
+      CONNECTION_PROBE_MS,
+    );
     return () => {
       mounted.current = false;
       revision.current += 1;
@@ -228,6 +280,7 @@ export function useWorkspaceConnection(
       startupAbort.current?.abort();
       connectRef.current = null;
       clearInterval(timer);
+      clearInterval(probeTimer);
       clearTimeout(retryTimer);
       for (const event of ["keydown", "pointerdown", "wheel", "input"])
         window.removeEventListener(event, activity, true);
