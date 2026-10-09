@@ -1498,7 +1498,7 @@ export function SupersetWorkspaceShell({
                       </div>
                     </aside>
                   </ResizablePanel>
-                  <ResizableHandle withHandle className="gen2-ide-resizer" />
+                  <ResizableHandle className="gen2-ide-resizer" />
                 </>
               ) : null}
 
@@ -1834,7 +1834,7 @@ export function SupersetWorkspaceShell({
               {/* Right Inspector: Files, Changes, Review */}
               {!inspectorCollapsed ? (
                 <>
-                  <ResizableHandle withHandle className="gen2-ide-resizer" />
+                  <ResizableHandle className="gen2-ide-resizer" />
                   <ResizablePanel
                     defaultSize="400px"
                     minSize="280px"
