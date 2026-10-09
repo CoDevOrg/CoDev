@@ -188,6 +188,8 @@ export function Gen2ChatPanel({
   const [chats, setChats] = useState<Gen2Chat[]>([]);
   const [chatId, setChatId] = useState<string | null>(activeChatId ?? null);
   const [thread, setThread] = useState<Thread>({ messages: [] });
+  const [importedFrom, setImportedFrom] =
+    useState<Gen2ChatDetail["importedFrom"]>(null);
   const [prompt, setPrompt] = useState("");
   const [attachments, setAttachments] = useState<PendingFile[]>([]);
   const [items, setItems] = useState<Gen2TurnItem[]>([]);
@@ -349,6 +351,7 @@ export function Gen2ChatPanel({
       );
       if (!response.ok) return;
       const payload = (await response.json()) as { chat?: Gen2ChatDetail };
+      setImportedFrom(payload.chat?.importedFrom ?? null);
       setThread((current) => {
         const messages = payload.chat?.messages ?? [];
         const pending = current.messages.filter(
@@ -1171,6 +1174,18 @@ export function Gen2ChatPanel({
                 onScroll={onScroll}
               >
                 <ol className="gen2-chat-thread">
+                  {importedFrom ? (
+                    <li className="gen2-chat-import-marker">
+                      Imported from{" "}
+                      {importedFrom.provider === "codex"
+                        ? "Codex"
+                        : "Claude Code"}
+                      {importedFrom.startedAt
+                        ? ` · started ${new Date(importedFrom.startedAt).toLocaleDateString()}`
+                        : ""}
+                      . New turns use the recent messages as context.
+                    </li>
+                  ) : null}
                   {thread.messages.map((message) => {
                     const isUser = message.role === "user";
                     return (

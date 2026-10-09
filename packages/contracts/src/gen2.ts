@@ -307,8 +307,55 @@ export const gen2RenameChatRequestSchema = z.object({
   title: z.string().trim().min(1).max(80),
 });
 
+/** The local agents whose saved sessions a member can import into a chat. */
+export const gen2SessionImportProviderSchema = z.enum(["codex", "claude"]);
+
+export const gen2ChatImportSourceSchema = z.object({
+  provider: gen2SessionImportProviderSchema,
+  startedAt: timestampSchema.nullable(),
+});
+
 export const gen2ChatDetailSchema = gen2ChatSchema.extend({
   messages: z.array(gen2ChatMessageSchema),
+  /** Set when the chat was imported from a member's local agent session. */
+  importedFrom: gen2ChatImportSourceSchema.nullable().optional(),
+});
+
+/** One message of an imported session, before it is saved to a chat. */
+export const gen2SessionImportMessageSchema = z.object({
+  role: gen2ChatRoleSchema,
+  body: z.string().min(1),
+  items: z.array(gen2TurnItemSchema).nullable(),
+  createdAt: timestampSchema.nullable(),
+});
+
+/**
+ * What a member reviews before an uploaded session becomes a chat. The saved
+ * draft already has its secrets redacted; `redactions` says what was hidden.
+ */
+export const gen2SessionImportPreviewSchema = z.object({
+  importId: identifierSchema,
+  provider: gen2SessionImportProviderSchema,
+  title: z.string().min(1).max(80),
+  startedAt: timestampSchema.nullable(),
+  messageCount: z.number().int().nonnegative(),
+  itemCount: z.number().int().nonnegative(),
+  repo: z.object({
+    remote: z.string().nullable(),
+    branch: z.string().nullable(),
+    commit: z.string().nullable(),
+  }),
+  /** Files the session changed, which may not be committed anywhere yet. */
+  editedFiles: z.array(z.string()),
+  redactions: z.array(
+    z.object({ kind: z.string(), count: z.number().int().positive() }),
+  ),
+  /** The first and last few messages, for the preview. */
+  sample: z.array(gen2SessionImportMessageSchema),
+});
+
+export const gen2SessionImportConfirmRequestSchema = z.object({
+  title: z.string().trim().min(1).max(80).optional(),
 });
 
 /* ------------------------------------------------------------------ *
@@ -677,6 +724,15 @@ export type Gen2AgentPollResponse = z.infer<typeof gen2AgentPollResponseSchema>;
 export type Gen2Chat = z.infer<typeof gen2ChatSchema>;
 export type Gen2ChatMessage = z.infer<typeof gen2ChatMessageSchema>;
 export type Gen2ChatDetail = z.infer<typeof gen2ChatDetailSchema>;
+export type Gen2SessionImportProvider = z.infer<
+  typeof gen2SessionImportProviderSchema
+>;
+export type Gen2SessionImportMessage = z.infer<
+  typeof gen2SessionImportMessageSchema
+>;
+export type Gen2SessionImportPreview = z.infer<
+  typeof gen2SessionImportPreviewSchema
+>;
 export type Gen2TurnItem = z.infer<typeof gen2TurnItemSchema>;
 export type Gen2TurnItemStatus = z.infer<typeof gen2TurnItemStatusSchema>;
 export type Gen2TurnState = z.infer<typeof gen2TurnStateSchema>;

@@ -5268,3 +5268,85 @@ aside:has(> .gen2-ide-files:not([hidden])) .gen2-ide-tabs {
   font-family: var(--font-geist-mono), ui-monospace, monospace;
   font-size: 0.75rem;
 }
+
+/* ------------------------------------------------ session import */
+
+.gen2-sidebar-section-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.gen2-session-import-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 120px;
+  border: 1px dashed var(--ss-border);
+  border-radius: 6px;
+  color: var(--ss-muted-foreground);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+.gen2-session-import-drop:hover,
+.gen2-session-import-drop[data-dragging] {
+  background: var(--ss-accent);
+}
+.gen2-session-import-drop svg {
+  width: 20px;
+  height: 20px;
+}
+.gen2-session-import code {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 0.75rem;
+}
+.gen2-session-import-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.gen2-session-import-stats {
+  margin: 0;
+  color: var(--ss-muted-foreground);
+  font-size: 0.75rem;
+}
+.gen2-session-import-sample {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 280px;
+  margin: 0;
+  padding: 8px;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--ss-border);
+  border-radius: 6px;
+  font-size: 0.8125rem;
+}
+.gen2-session-import-sample li {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.gen2-session-import-role {
+  display: block;
+  color: var(--ss-muted-foreground);
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+.gen2-chat-import-marker {
+  margin: 0 0 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--ss-border);
+  border-radius: 6px;
+  color: var(--ss-muted-foreground);
+  font-size: 0.75rem;
+  list-style: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gen2-session-import-drop {
+    transition: none;
+  }
+}

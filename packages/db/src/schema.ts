@@ -2337,6 +2337,47 @@ export const gen2ChatMessages = pgTable(
 );
 
 /**
+ * A local Codex or Claude Code session a member uploaded. It is a `draft`
+ * while the member reviews the preview and `imported` once it became
+ * `chatId`. The payload is the uploaded file with its secrets redacted,
+ * encrypted at rest; native resume replays it on the guest.
+ */
+export const gen2SessionImports = pgTable(
+  "gen2_session_imports",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .references(() => gen2Workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    importedByUserId: uuid("imported_by_user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    provider: text("provider").notNull(),
+    nativeSessionId: text("native_session_id").notNull(),
+    status: text("status").default("draft").notNull(),
+    chatId: uuid("chat_id").references(() => gen2Chats.id, {
+      onDelete: "cascade",
+    }),
+    encryptedPayload: text("encrypted_payload").notNull(),
+    payloadSha256: text("payload_sha256").notNull(),
+    payloadBytes: integer("payload_bytes").notNull(),
+    /** The parsed preview: title, repository, redaction counts. */
+    meta: jsonb("meta").notNull(),
+    /** The runtime generation the payload was last copied to, if any. */
+    guestSyncedGeneration: integer("guest_synced_generation"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("gen2_session_imports_chat_idx").on(table.chatId),
+    index("gen2_session_imports_user_status_idx").on(
+      table.importedByUserId,
+      table.status,
+      table.createdAt,
+    ),
+  ],
+);
+
+/**
  * The server's copy of a running Codex turn.
  *
  * The guest drops every output chunk once the client acknowledges it

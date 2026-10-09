@@ -53,6 +53,20 @@ polls has to keep it. The poll route appends to `gen2_agent_turns` and writes
 the assistant message when the process exits, which is why a reply survives a
 closed tab and why the other members of a shared workspace can see the turn.
 
+## Imported sessions
+
+Editors can import a local Codex rollout or Claude Code transcript as a chat
+(`session-import.ts`). An upload is redacted first (`session-import-redact.ts`):
+only the redacted file is stored, gzipped and encrypted, in
+`gen2_session_imports`, because every member sees the chat and native resume
+will hand the file to whoever continues it. `session-import-parse.ts` then
+parses it with the provider's reader (`session-import-codex.ts`,
+`session-import-claude.ts`) into messages with the same activity cards live
+turns use; Claude tool blocks share `claude-tool-items.ts` with the live
+reducer. The upload is a draft only its importer can see until they confirm
+the preview. Imported chats continue like any other chat today; native
+resume is not wired yet.
+
 ## Agent coordination
 
 Coordination warns members and agents when active agents overlap
