@@ -82,6 +82,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { Separator } from "@/components/ui/separator";
 import {
   AlertDialog,
@@ -1625,7 +1631,7 @@ export function SupersetWorkspaceShell({
 
                       {/* Primary Action: + New Chat */}
                       <WorkspaceButton
-                        tone="primary"
+                        tone="secondary"
                         size="action"
                         type="button"
                         className="gen2-sidebar-new-chat-btn"
@@ -1648,9 +1654,11 @@ export function SupersetWorkspaceShell({
                           <span className="gen2-sidebar-section-title">
                             RECENT CHATS
                           </span>
-                          <span className="gen2-sidebar-section-count">
-                            {chats.length}
-                          </span>
+                          {chats.length > 0 ? (
+                            <span className="gen2-sidebar-section-count">
+                              {chats.length}
+                            </span>
+                          ) : null}
                         </div>
 
                         {connectedProviders.length === 0 ? (
@@ -1666,12 +1674,22 @@ export function SupersetWorkspaceShell({
                               Connect an account
                             </WorkspaceButton>
                           </div>
+                        ) : chats.length === 0 ? (
+                          <Empty className="gen2-sidebar-chat-empty">
+                            <EmptyHeader>
+                              <EmptyTitle>No chats yet</EmptyTitle>
+                              <EmptyDescription>
+                                Start one with New Chat.
+                              </EmptyDescription>
+                            </EmptyHeader>
+                          </Empty>
                         ) : (
                           <div className="gen2-sidebar-providers-list">
                             {connectedProviders.map((provider) => {
                               const providerChats = chats.filter(
                                 (c) => chatProviderOf(c) === provider.id,
                               );
+                              if (providerChats.length === 0) return null;
 
                               return (
                                 <div
@@ -1694,109 +1712,103 @@ export function SupersetWorkspaceShell({
                                     </span>
                                   </div>
 
-                                  {providerChats.length === 0 ? (
-                                    <p className="gen2-sidebar-chat-empty">
-                                      No {provider.name} chats yet
-                                    </p>
-                                  ) : (
-                                    <ul className="gen2-sidebar-chat-list">
-                                      {providerChats.map((chat) => {
-                                        const isSelected =
-                                          chat.id ===
-                                          (selectedChatId ?? chats[0]?.id);
-                                        return (
-                                          <li
-                                            key={chat.id}
-                                            className="gen2-sidebar-chat-item"
-                                          >
-                                            {renamingChatId === chat.id ? (
-                                              <form
-                                                className="gen2-sidebar-chat-rename-form"
-                                                onSubmit={(event) =>
-                                                  void submitRename(event)
+                                  <ul className="gen2-sidebar-chat-list">
+                                    {providerChats.map((chat) => {
+                                      const isSelected =
+                                        chat.id ===
+                                        (selectedChatId ?? chats[0]?.id);
+                                      return (
+                                        <li
+                                          key={chat.id}
+                                          className="gen2-sidebar-chat-item"
+                                        >
+                                          {renamingChatId === chat.id ? (
+                                            <form
+                                              className="gen2-sidebar-chat-rename-form"
+                                              onSubmit={(event) =>
+                                                void submitRename(event)
+                                              }
+                                            >
+                                              <input
+                                                aria-label="Chat title"
+                                                value={renameDraft}
+                                                maxLength={80}
+                                                autoFocus
+                                                disabled={renamePending}
+                                                onChange={(event) =>
+                                                  setRenameDraft(
+                                                    event.target.value,
+                                                  )
+                                                }
+                                                onKeyDown={(event) => {
+                                                  if (
+                                                    event.key === "Escape" &&
+                                                    !renamePending
+                                                  ) {
+                                                    event.preventDefault();
+                                                    setRenamingChatId(null);
+                                                  }
+                                                }}
+                                              />
+                                            </form>
+                                          ) : (
+                                            <>
+                                              <button
+                                                type="button"
+                                                aria-current={
+                                                  isSelected
+                                                    ? "page"
+                                                    : undefined
+                                                }
+                                                className={cn(
+                                                  "gen2-sidebar-chat-card",
+                                                  isSelected && "selected",
+                                                )}
+                                                onClick={() => {
+                                                  setSelectedChatId(chat.id);
+                                                  setActiveProvider(
+                                                    provider.id,
+                                                  );
+                                                }}
+                                                onDoubleClick={() =>
+                                                  beginRename(chat)
                                                 }
                                               >
-                                                <input
-                                                  aria-label="Chat title"
-                                                  value={renameDraft}
-                                                  maxLength={80}
-                                                  autoFocus
-                                                  disabled={renamePending}
-                                                  onChange={(event) =>
-                                                    setRenameDraft(
-                                                      event.target.value,
-                                                    )
-                                                  }
-                                                  onKeyDown={(event) => {
-                                                    if (
-                                                      event.key === "Escape" &&
-                                                      !renamePending
-                                                    ) {
-                                                      event.preventDefault();
-                                                      setRenamingChatId(null);
-                                                    }
-                                                  }}
-                                                />
-                                              </form>
-                                            ) : (
-                                              <>
-                                                <button
-                                                  type="button"
-                                                  aria-current={
-                                                    isSelected
-                                                      ? "page"
-                                                      : undefined
-                                                  }
-                                                  className={cn(
-                                                    "gen2-sidebar-chat-card",
-                                                    isSelected && "selected",
-                                                  )}
-                                                  onClick={() => {
-                                                    setSelectedChatId(chat.id);
-                                                    setActiveProvider(
-                                                      provider.id,
-                                                    );
-                                                  }}
-                                                  onDoubleClick={() =>
-                                                    beginRename(chat)
-                                                  }
-                                                >
-                                                  <span className="gen2-sidebar-chat-title">
-                                                    {chat.title}
+                                                <span className="gen2-sidebar-chat-title">
+                                                  {chat.title}
+                                                </span>
+                                                <div className="gen2-sidebar-chat-meta">
+                                                  <span>
+                                                    {chat.messageCount ?? 1}{" "}
+                                                    msgs
                                                   </span>
-                                                  <div className="gen2-sidebar-chat-meta">
-                                                    <span>
-                                                      {chat.messageCount ?? 1}{" "}
-                                                      msgs
-                                                    </span>
-                                                    <span className="gen2-sidebar-chat-dot">
-                                                      •
-                                                    </span>
-                                                    <span>
-                                                      {formatRelativeTime(
-                                                        chat.updatedAt,
-                                                      )}
-                                                    </span>
-                                                  </div>
-                                                </button>
-                                                <WorkspaceButton
-                                                  tone="ghost"
-                                                  size="icon"
-                                                  className="gen2-sidebar-chat-rename"
-                                                  aria-label={`Rename ${chat.title}`}
-                                                  onClick={() =>
-                                                    beginRename(chat)
-                                                  }
-                                                >
-                                                  <Pencil aria-hidden="true" />
-                                                </WorkspaceButton>
-                                              </>
-                                            )}
-                                          </li>
-                                        );
-                                      })}
-                                    </ul>
-                                  )}
+                                                  <span className="gen2-sidebar-chat-dot">
+                                                    •
+                                                  </span>
+                                                  <span>
+                                                    {formatRelativeTime(
+                                                      chat.updatedAt,
+                                                    )}
+                                                  </span>
+                                                </div>
+                                              </button>
+                                              <WorkspaceButton
+                                                tone="ghost"
+                                                size="icon"
+                                                className="gen2-sidebar-chat-rename"
+                                                aria-label={`Rename ${chat.title}`}
+                                                onClick={() =>
+                                                  beginRename(chat)
+                                                }
+                                              >
+                                                <Pencil aria-hidden="true" />
+                                              </WorkspaceButton>
+                                            </>
+                                          )}
+                                        </li>
+                                      );
+                                    })}
+                                  </ul>
                                 </div>
                               );
                             })}

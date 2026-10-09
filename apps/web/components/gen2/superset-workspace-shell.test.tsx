@@ -412,8 +412,9 @@ describe("SupersetWorkspaceShell", () => {
         runtimeEnabled
       />,
     );
-    const cursor = await screen.findAllByText("Cursor");
-    expect(cursor.length).toBeGreaterThan(0);
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "New Chat" })).toBeEnabled(),
+    );
     fireEvent.click(screen.getByRole("button", { name: "New Chat" }));
     fireEvent.click(await screen.findByRole("button", { name: "Cursor" }));
     await waitFor(() =>
