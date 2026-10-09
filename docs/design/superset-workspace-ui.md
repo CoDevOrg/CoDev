@@ -265,7 +265,7 @@ Do not add extra badges. The branch status pill appears only once the file count
 ### Inspector
 
 - Tabs: Files, Changes, Review, built from shadcn `Tabs` (`components/ui/tabs.tsx`, Radix; it activates on mousedown, so tests use `fireEvent.mouseDown`). The `superset-tab-*` / `superset-panel-*` ids stay so the panels keep their aria wiring. Selected = surface-3 + 6px radius (no underline).
-- Files: tree + editor, `min-width: 0`, shared guest paths. The editor bar (path, Save, copy) renders only while a file is open. Offline, the tree says "Files load when the workspace is connected." once; the editor shows nothing extra. Online with no file open, the editor says "Select a file to open it."
+- Files: tree + editor, `min-width: 0`, shared guest paths. The editor bar (path, Save, copy) renders only while a file is open. Offline, the tree says "Files load when the workspace is connected." once; the editor shows nothing extra. Online with no file open, the editor says "Select a file to open it." With no file open the tree takes the full inspector height and the editor section shrinks to that hint; opening a file splits it (tree 160px, editor the rest). While the Files panel is showing, the tab row drops its bottom divider so the tabs and the search row read as one header.
 - Changes / Review: empty copy already exists; diffs use teal/destructive, not extra badges.
 
 ### Board

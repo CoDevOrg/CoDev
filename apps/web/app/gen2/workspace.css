@@ -3550,6 +3550,12 @@
   border-bottom: 1px solid var(--ss-border);
 }
 
+/* No file open: the tree gets the height; the editor keeps only its hint and notices. */
+.gen2-superset-file-pane:not([data-portaled="true"])[data-has-open-file="false"]
+  .gen2-superset-editor {
+  flex: 0 0 auto;
+}
+
 .gen2-superset-file-pane:not([data-portaled="true"]) .gen2-superset-editor {
   flex: 1;
   width: 100%;
@@ -3612,6 +3618,11 @@
   padding: 0 8px;
   border-bottom: 1px solid var(--ws-border-subtle);
   background: var(--ws-surface-2);
+}
+
+/* The Files panel's search row sits right under the tabs; one divider is enough. */
+aside:has(> .gen2-ide-files:not([hidden])) .gen2-ide-tabs {
+  border-bottom-color: transparent;
 }
 
 .gen2-ide-tabs button {
