@@ -6,7 +6,6 @@ import {
   Kanban,
   LoaderCircle,
   PanelLeft,
-  PanelLeftClose,
   PanelRight,
   Settings,
   UserPlus,
@@ -150,12 +149,12 @@ export function WorkspaceTopBar({
           <TooltipContent side="bottom">All workspaces</TooltipContent>
         </Tooltip>
 
-        <IconAction label={sidebarLabel} onClick={onToggleSidebar}>
-          {sidebarCollapsed ? (
-            <PanelLeft size={16} />
-          ) : (
-            <PanelLeftClose size={16} />
-          )}
+        <IconAction
+          label={sidebarLabel}
+          active={sidebarCollapsed}
+          onClick={onToggleSidebar}
+        >
+          <PanelLeft size={16} />
         </IconAction>
 
         <Breadcrumb className="min-w-0 gen2-topbar-breadcrumb">
