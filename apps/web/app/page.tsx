@@ -56,18 +56,47 @@ const LANDING_FONTS = [
 /** The headline, split so each word can carry its own parallax depth. */
 const HEADLINE = ["Your team.", "Your agents."];
 
+const TITLE = "CoDev · Multiplayer IDE for your team and AI agents";
+
 const DESCRIPTION =
-  "Build software with your team and AI agents in one live cloud workspace. Share code, a terminal, and localhost. Join the private beta waitlist.";
+  "CoDev is a multiplayer cloud IDE. Code with others and AI agents in one live workspace: share a repo, terminal, and localhost in real time. Join the private beta.";
+
+/** Structured data so search engines know CoDev is the product and the brand. */
+const STRUCTURED_DATA = JSON.stringify([
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "CoDev",
+    alternateName: "trycodev",
+    url: "https://www.trycodev.com/",
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: "CoDev",
+    applicationCategory: "DeveloperApplication",
+    operatingSystem: "Web browser",
+    url: "https://www.trycodev.com/",
+    description: DESCRIPTION,
+    publisher: {
+      "@type": "Organization",
+      name: "CoDev",
+      url: "https://www.trycodev.com/",
+      logo: "https://www.trycodev.com/icon.png",
+    },
+  },
+]).replace(/</g, "\\u003c");
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.trycodev.com"),
-  title: "One cloud workspace for your team and AI agents",
+  title: { absolute: TITLE },
   description: DESCRIPTION,
+  alternates: { canonical: "/" },
   openGraph: {
     type: "website",
     siteName: "CoDev",
     url: "https://www.trycodev.com",
-    title: "One cloud workspace for your team and AI agents",
+    title: TITLE,
     description: DESCRIPTION,
     images: [
       {
@@ -80,7 +109,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "CoDev · One cloud workspace for your team and AI agents",
+    title: TITLE,
     description: DESCRIPTION,
     images: ["/brand/landing/workspace-share.png"],
   },
@@ -93,6 +122,10 @@ export default async function HomePage() {
 
   return (
     <main className={`lp-page ${LANDING_FONTS}`}>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: STRUCTURED_DATA }}
+      />
       <LandingMotion />
 
       <LandingNavigation />
@@ -135,9 +168,9 @@ export default async function HomePage() {
           The world&apos;s first multiplayer AI platform.
         </p>
         <p className="lp-lede">
-          Bring your team and AI agents into the same cloud development
-          workspace. Share a repo, write code, run commands, and review changes
-          together in real time.
+          CoDev is a multiplayer IDE in the cloud. Bring your team and AI agents
+          into the same workspace to code together: share a repo, run commands,
+          and review changes in real time.
         </p>
         <div className="lp-hero-actions">
           <RequestAccessButton className="lp-cta lp-cta-primary">

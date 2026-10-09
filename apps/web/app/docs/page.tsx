@@ -9,9 +9,10 @@ import "./docs.css";
 import "./docs-responsive.css";
 
 export const metadata: Metadata = {
-  title: "Documentation · CoDev",
+  title: "Documentation",
   description:
-    "Get started with CoDev: invite your team, connect your AI subscriptions, and build together in a shared cloud workspace.",
+    "Get started with CoDev: invite your team, connect your AI subscriptions, and code together in a shared multiplayer cloud workspace.",
+  alternates: { canonical: "/docs" },
 };
 
 export default function DocsPage() {
