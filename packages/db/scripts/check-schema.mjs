@@ -36,6 +36,10 @@ try {
   await pool.query(`SELECT session_id, next_sequence, model, worktree_id,
     continued_as_session_id FROM public.gen2_agent_turns LIMIT 0`);
   await pool.query(`SELECT id, provider FROM public.gen2_chats LIMIT 0`);
+  await pool.query(`SELECT id, workspace_id, imported_by_user_id, provider,
+    native_session_id, status, chat_id, encrypted_payload, payload_sha256,
+    payload_bytes, meta, guest_synced_generation
+    FROM public.gen2_session_imports LIMIT 0`);
   await pool.query(`SELECT provider, model, min_version, observed_version,
     image_version_id FROM public.agent_cli_model_requirements LIMIT 0`);
   await pool.query(`SELECT id, runtime_provider, runtime_status, runtime_generation,

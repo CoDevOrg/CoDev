@@ -13,6 +13,7 @@ import {
 import Link from "next/link";
 import { useWorkspaceConnection } from "./use-workspace-connection";
 import { useAgentOverlaps } from "./use-agent-overlaps";
+import { SessionImportDialog } from "./session-import-dialog";
 import {
   ArrowLeft,
   Check,
@@ -29,6 +30,7 @@ import {
   Plus,
   Settings,
   SquareTerminal,
+  Upload,
   UserPlus,
 } from "lucide-react";
 import type {
@@ -189,6 +191,7 @@ export function SupersetWorkspaceShell({
   const [terminalExpanded, setTerminalExpanded] = useState(false);
   const [viewMode, setViewMode] = useState<"ide" | "board">("ide");
   const [shareOpen, setShareOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [providersRevision, setProvidersRevision] = useState(0);
   const [activeRuns, setActiveRuns] = useState<
@@ -1648,8 +1651,26 @@ export function SupersetWorkspaceShell({
                           <span className="gen2-sidebar-section-title">
                             RECENT CHATS
                           </span>
-                          <span className="gen2-sidebar-section-count">
-                            {chats.length}
+                          <span className="gen2-sidebar-section-actions">
+                            {activeWorkspace.role !== "viewer" ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <WorkspaceButton
+                                    size="icon"
+                                    aria-label="Import a local session"
+                                    onClick={() => setImportOpen(true)}
+                                  >
+                                    <Upload aria-hidden="true" />
+                                  </WorkspaceButton>
+                                </TooltipTrigger>
+                                <TooltipContent side="right">
+                                  Import a Codex or Claude Code session
+                                </TooltipContent>
+                              </Tooltip>
+                            ) : null}
+                            <span className="gen2-sidebar-section-count">
+                              {chats.length}
+                            </span>
                           </span>
                         </div>
 
@@ -2236,6 +2257,18 @@ export function SupersetWorkspaceShell({
           workspaceName={activeWorkspace.name}
           currentUserRole={activeWorkspace.role}
           initialMembers={activeWorkspace.members}
+        />
+
+        <SessionImportDialog
+          open={importOpen}
+          onOpenChange={setImportOpen}
+          workspaceId={workspaceId}
+          onImported={(chatId, provider) => {
+            recordChatProvider(chatId, provider);
+            setActiveProvider(provider);
+            setSelectedChatId(chatId);
+            void refreshChats();
+          }}
         />
 
         <WorkspaceSettingsDialog
