@@ -178,6 +178,13 @@ export function Gen2TerminalPane({
             setStatus("idle");
             return;
           }
+          // A running workspace that refuses a shell has a reason; showing
+          // "inactive" instead hides it.
+          if (workspaceConnection === "ready" && payload.error) {
+            setError(payload.error);
+            setStatus("idle");
+            return;
+          }
           markWorkspacePaused();
           return;
         }

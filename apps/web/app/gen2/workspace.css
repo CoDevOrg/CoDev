@@ -3586,9 +3586,10 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  height: 32px;
-  min-height: 32px;
-  padding: 0 8px;
+  height: 40px;
+  min-height: 40px;
+  padding: 6px 8px;
+  box-sizing: border-box;
   border-bottom: 1px solid var(--ws-border-subtle);
   background: var(--ws-surface-2);
 }
@@ -3602,7 +3603,7 @@ aside:has(> .gen2-ide-files:not([hidden])) .gen2-ide-tabs {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 32px;
+  height: 28px;
   padding: 0 12px;
   border: 1px solid transparent;
   border-radius: 6px;
