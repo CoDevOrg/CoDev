@@ -1,6 +1,6 @@
 # Gen 2 Superset Workspace UI Design Contract
 
-> **Status:** Design contract (audit of the current working tree)  
+> **Status:** Design contract (audit of the current working tree). Top bar, rail empty states, and inspector tabs updated 2026-10-08.  
 > **Target:** `/gen2/[workspaceId]/superset`  
 > **Governing standards:** `AGENTS.md`, `docs/design/workspace-controls.md`, shadcn/ui  
 > **Do not change product behavior.** Branch selection, worktree selection, sharing, Git, and agent runs keep their current meaning.
@@ -73,7 +73,7 @@ Remaining gaps:
 1. **Two workspace palettes.** `globals.css` still defines `--workspace-surface: #121417` and comments that the IDE is “permanently dark.” The live shell binds `--ws-*` to `--brand-paper` / `--brand-ink` (two-theme). Do **not** remap the Superset shell back to `#121417`; that fights `ThemeToggle` and the rest of the app.
 2. **Auto-collapse may miss emulation / some resizes.** Layout effect listens to `matchMedia` `change` and `window` `resize`, then re-queries matches. Device emulation in this environment did not collapse rails. Implementation must keep a resize path and be verified with a real window drag.
 3. **Bespoke controls remain.** `.gen2-worktree-trigger-btn`, `.gen2-sidebar-chat-card`, and `.gen2-ide-tabs button` are not `WorkspaceButton` / shadcn `Tabs`. `docs/design/workspace-controls.md` already allows specialized tabs/tree rows; still unify height (36px rows, 32px tabs) and hover/selected tokens.
-4. **Inspector tabs are raw `role="tab"` buttons.** Hover/selected styles exist in CSS (32px, 6px radius, surface-3 selected). They are not shadcn `TabsList` / `TabsTrigger`. Keep tab semantics; restyle only.
+4. **Inspector tabs** are now shadcn `Tabs` (see section 7). Resolved 2026-10-08.
 5. **Board columns** are `flex` + `min-w-[260px]` + `overflow-x-auto`, not a 5-column CSS grid. Horizontal scroll is the intended compact behavior; add a visible overflow cue if columns clip without a scrollbar affordance.
 6. **Editor theme** uses `var(--ss-background)` / `--brand-*` syntax colors, not a hardcoded `{ dark: true }` canvas. Light-theme editor contrast must be checked after a theme toggle, not assumed from the old cream-vs-dark-syntax report.
 
@@ -220,10 +220,10 @@ Follow `docs/design/workspace-controls.md`. Ordinary actions use `WorkspaceButto
 | ---------------------------------------- | ------ | -------- | ------------------------------------------------------------------------------------------- |
 | Toolbar (Share, Board, theme, inspector) | 32px   | 0 10px   | 6px                                                                                         |
 | Icon button                              | 32×32  | 0        | 6px                                                                                         |
-| New Chat                                 | 36px   | 0 12px   | 6px, accent fill                                                                            |
+| New Chat                                 | 36px   | 0 12px   | 6px, outline (secondary); the composer and connection state lead, not this button           |
 | Worktree trigger                         | 36px   | 0 10px   | 6px                                                                                         |
 | Chat / branch row                        | 36px   | 6px 10px | 6px — **single line**; meta may sit inline, not a second wrapped block that grows past 36px |
-| Inspector tabs                           | 32px   | 0 12px   | 6px                                                                                         |
+| Inspector tabs (shadcn `Tabs`)           | 32px   | 0 12px   | 6px                                                                                         |
 | Inputs                                   | 32px   | 0 10px   | 6px                                                                                         |
 | Status chip                              | 20px   | 0 6px    | 4px                                                                                         |
 | Dialog / composer                        | —      | —        | 12px                                                                                        |
@@ -237,30 +237,35 @@ Focus: 2px `--ws-accent` outline, 1px offset, `:focus-visible` only. Hover: 120m
 
 ### Top bar (48px)
 
-Three zones. Right zone `flex-shrink: 0`. Center truncates first. Left truncates next.
+Implemented in `workspace-top-bar.tsx` and `workspace-branch-menu.tsx`. Three zones. Right zone `flex-shrink: 0`. Center truncates first. Left truncates next.
 
-1. **Left:** back link to `/` (signed-in visitors land on the workspace list), 22×22 CoDev mark (`/brand/codev-mark.svg`, ice blue `#00bde8` in both themes), rail toggle, workspace name (13px semibold), branch pill (mono 12px).
-   - ≤1023px: hide breadcrumb.
-   - ≤768px: hide branch name/status; keep the pill as an icon button.
-2. **Center:** session card (surface-3, 32px): provider mark, title max 240px (180px below 1440), working chip only while a turn is actually running. Hide the whole center at ≤1279px.
-3. **Right:** Share (secondary), Board (`aria-pressed`), machine as **text + dot**, settings icon, theme, inspector icon. Settings opens the member's own settings in a `.gen2-workspace-surface` dialog (AI provider accounts today), so connecting an agent never leaves the workspace. The label is Checking…, Starting…, Ready, or Offline. Ready means the activity check returned connected. Offline keeps the dot and adds Reconnect.
-   - ≤1279px: hide the session card.
-   - ≤1023px: hide the breadcrumb and the machine word; keep the dot.
-   - ≤768px: hide Share/Board labels, keep icons. Hide the branch name; keep the branch button.
+1. **Left:** one home link to `/gen2` that is the 22×22 CoDev mark (`/brand/codev-mark.svg`, ice blue `#00bde8` in both themes; no separate back arrow), the sidebar toggle, then a shadcn `Breadcrumb`: workspace name / repository / branch menu. No trailing separator. The branch menu is the last crumb and the only branch control in the bar.
+   - 1024–1279px: hide the repository crumb.
+   - ≤1023px: hide the workspace and repository crumbs and every separator; only the branch remains.
+   - ≤768px: hide the branch name and status; keep the pill as an icon button.
+2. **Center:** the session title as plain text (provider mark, title max 240px, 180px below 1440, working indicator only while a turn is running). No button-looking pill or border. Hide the whole center at ≤1279px.
+3. **Right:** connection status, Share (secondary), Board (`aria-pressed`), a separator, settings, theme, then the inspector toggle. Settings opens the member's own settings in a `.gen2-workspace-surface` dialog (AI provider accounts today), so connecting an agent never leaves the workspace.
+   - **Connection status** is a borderless shadcn `Badge`: text and a dot, not a button-shaped box. It mirrors the checked connection: Ready (`connected`), Connecting… / Reconnecting…, or Offline. Ready means the activity check returned connected, never a persisted `ready`. In the IDE view Offline shows no button, because the connection panel over the chat carries the cause and the action. In the Board view an Offline status adds a Reconnect button.
+   - **Panel toggles:** the sidebar and inspector toggles use the same plain `PanelLeft` / `PanelRight` icons (no arrows) and both show `active` while collapsed.
+   - ≤1279px: hide the session title.
+   - ≤1023px: status is the dot only; the text is visually hidden, not removed, so screen readers still read it.
+   - ≤768px: hide Share/Board labels, keep icons.
+   - ≤480px: 8px bar padding, 4px gaps, hide the vertical separator.
 
-Do not add extra badges. Do not duplicate the sidebar worktree status in the top bar if the pill already shows the branch.
+Do not add extra badges. The branch status pill appears only once the file count is known.
 
 ### Left rail (288 / 56)
 
 - Worktree trigger is the only branch control in the rail.
-- New Chat is the only primary in the rail.
+- New Chat is a secondary (outline) button. Nothing in the rail is a filled primary.
 - Recent chats: transparent rows, hover = surface-hover, current = surface-active **or** accent-soft, not both. `aria-current` on the current chat. Rename sits at the row’s right edge (visible on hover, focus, or touch) and on double-click. The row pads so the time stays clear of the control. Enter saves only after the server accepts the title; Escape cancels. A rejected rename keeps the previous title.
+- Empty and zero states are quiet. With no chats, show one shadcn `Empty` ("No chats yet. Start one with New Chat.") instead of a heading and dashed box per provider. A provider group appears only once it has chats. Count badges show only above zero, and the branch count shows only with more than one branch. The branch status pill renders nothing while the file count is unknown; never a placeholder dash.
 - Compact 56px: icon buttons + tooltips; New Chat stays available.
 
 ### Inspector
 
-- Tabs: Files, Changes, Review. Selected = surface-3 + 6px radius (no underline).
-- Files: tree + editor, `min-width: 0`, shared guest paths.
+- Tabs: Files, Changes, Review, built from shadcn `Tabs` (`components/ui/tabs.tsx`, Radix; it activates on mousedown, so tests use `fireEvent.mouseDown`). The `superset-tab-*` / `superset-panel-*` ids stay so the panels keep their aria wiring. Selected = surface-3 + 6px radius (no underline).
+- Files: tree + editor, `min-width: 0`, shared guest paths. The editor bar (path, Save, copy) renders only while a file is open. Offline, the tree says "Files load when the workspace is connected." once; the editor shows nothing extra. Online with no file open, the editor says "Select a file to open it."
 - Changes / Review: empty copy already exists; diffs use teal/destructive, not extra badges.
 
 ### Board
@@ -275,21 +280,22 @@ Five columns, `min-width: 260px`, horizontal scroll with a visible scrollbar. Br
 
 ## 8. States
 
-| State                | Spec                                                                                                                                                                                             |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Rest                 | Flat surfaces, no shadow.                                                                                                                                                                        |
-| Hover                | `--ws-surface-hover`, 120ms.                                                                                                                                                                     |
-| Pressed              | `--ws-surface-active`.                                                                                                                                                                           |
-| Selected (lists)     | One fill. No outline + stripe + shadow.                                                                                                                                                          |
-| Focus-visible        | 2px accent, 1px offset.                                                                                                                                                                          |
-| Disabled             | 45% opacity, `pointer-events: none`.                                                                                                                                                             |
-| Pending              | Spinner inside the same 32/36px control; width stable.                                                                                                                                           |
-| Agent working        | Amber pulse **only** while `running`. Duration text: “Working for 14s”.                                                                                                                          |
-| Empty chat           | 18px “What should we build?”, 13px muted explanation, composer, three suggestion cards (8px radius, 12px supporting type). Stack to one column below 640px of the **chat pane**, not the window. |
-| Empty files          | Keep “Select a file to open it.” Do not fake a buffer.                                                                                                                                           |
-| Empty changes/review | Keep truthful clean copy. Do not show “0 files” as a success badge unless git status was read.                                                                                                   |
-| Error                | Surface-3 + 3px error stripe. Terminal failure: `Failed · exit 1` in `--ws-status-error`.                                                                                                        |
-| Share dialog         | See the Share section above.                                                                                                                                                                     |
+| State                | Spec                                                                                                                                                                                                   |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Rest                 | Flat surfaces, no shadow.                                                                                                                                                                              |
+| Hover                | `--ws-surface-hover`, 120ms.                                                                                                                                                                           |
+| Pressed              | `--ws-surface-active`.                                                                                                                                                                                 |
+| Selected (lists)     | One fill. No outline + stripe + shadow.                                                                                                                                                                |
+| Focus-visible        | 2px accent, 1px offset.                                                                                                                                                                                |
+| Disabled             | 45% opacity, `pointer-events: none`.                                                                                                                                                                   |
+| Pending              | Spinner inside the same 32/36px control; width stable.                                                                                                                                                 |
+| Agent working        | Amber pulse **only** while `running`. Duration text: “Working for 14s”.                                                                                                                                |
+| Empty chat           | 18px “What should we build?”, 13px muted explanation, composer, three suggestion cards (8px radius, 12px supporting type). Stack to one column below 640px of the **chat pane**, not the window.       |
+| Workspace offline    | The connection panel (`.gen2-ide-loading`, `z-index: 2` so it sits above the composer) covers the chat with the cause and one action. The chat body is `inert`. Do not leave the composer interactive. |
+| Empty files          | Keep “Select a file to open it.” Do not fake a buffer.                                                                                                                                                 |
+| Empty changes/review | Keep truthful clean copy. Do not show “0 files” as a success badge unless git status was read.                                                                                                         |
+| Error                | Surface-3 + 3px error stripe. Terminal failure: `Failed · exit 1` in `--ws-status-error`.                                                                                                              |
+| Share dialog         | See the Share section above.                                                                                                                                                                           |
 
 ### 8.1 Chat transcript
 
@@ -347,10 +353,10 @@ Do not change APIs, git/worktree behavior, or provider flows. Restyle and collap
    When collapsed, do not clip “New Chat” into “+ No”. Icon-only + tooltip.
 
 3. **Finish top-bar density**  
-   Keep the overflow fix. Drop redundant labels (machine word, repo breadcrumb) at the breakpoints above. Session card remains the only running-agent surface in the bar.
+   Done 2026-10-08: see section 7. The session title remains the only running-agent surface in the bar.
 
 4. **Unify controls to WorkspaceButton geometry**  
-   Worktree trigger already 36×6 — keep it, stop adding new raw buttons. Chat rows → 36px single-line. Inspector tabs stay `role="tab"` at 32px pills. Share dialog already uses `WorkspaceButton`; do not restyle the global `Button`.
+   Worktree trigger already 36×6 — keep it, stop adding new raw buttons. Chat rows → 36px single-line. Inspector tabs are shadcn `Tabs` at 32px pills. Share dialog already uses `WorkspaceButton`; do not restyle the global `Button`.
 
 5. **Replace raw status colors**  
    Done for the shell: machine, branch, and working indicators use `--ws-status-*`. Pulse animation is skipped under `prefers-reduced-motion`.
@@ -369,7 +375,17 @@ Do not change APIs, git/worktree behavior, or provider flows. Restyle and collap
 
 ---
 
-## 11. Non-goals
+## 11. Gotchas
+
+- **No Tailwind reset on this page.** Browser defaults still apply: lists keep 40px padding, paragraphs keep margins. Reset them where a component needs it (the `Breadcrumb` list does), and check spacing on a real page, not in a unit test.
+- **Utility classes lose to unlayered CSS.** Set size, margin, and colour for shadcn parts that must differ with explicit `[data-slot]` selectors in `workspace.css`, as `.gen2-ide-loading` and `.gen2-sidebar-chat-empty` do.
+- **Stacking.** The composer is `z-index: 1`; anything meant to cover it (the connection panel) needs a higher index.
+- **Root-level fixed controls add page height unless fixed.** The privacy reopen button is `position: fixed`; the full-viewport IDE hides it because it has no free corner.
+- **Local dev origin.** Mutations need the browser `Origin` to equal the server origin. Browse on `http://localhost:3000`; `127.0.0.1` loads pages but its POSTs fail with "Invalid request origin."
+
+---
+
+## 12. Non-goals
 
 - New fonts or icon packs
 - Decorative gradients, glass, glow, large shadows

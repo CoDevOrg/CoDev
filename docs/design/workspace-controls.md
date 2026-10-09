@@ -16,7 +16,7 @@ Outside the workspace, use the shared shadcn Button and the surface's own theme.
 Do not change the global Button to solve a workspace-specific styling issue.
 
 ```tsx
-<WorkspaceButton tone="primary" size="action" onClick={createChat}>
+<WorkspaceButton tone="secondary" size="action" onClick={createChat}>
   <Plus data-icon="inline-start" aria-hidden="true" />
   New Chat
 </WorkspaceButton>
@@ -29,7 +29,7 @@ Do not change the global Button to solve a workspace-specific styling issue.
 
 ## Hierarchy and geometry
 
-- Primary: solid semantic accent; reserve for the main action in a region.
+- Primary: solid semantic accent; reserve for the main action in a region. In the workspace shell the composer and connection state lead, so the sidebar's New Chat is secondary.
 - Secondary: neutral surface and subtle border; use for actions such as Share.
 - Destructive: semantic destructive fill for confirmed destructive actions.
 - Ghost (default): transparent at rest; use for secondary toolbar actions.

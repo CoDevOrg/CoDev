@@ -33,23 +33,26 @@ import { WorkspaceButton } from "./workspace-button";
 
 type ConnectionState = "checking" | "connecting" | "connected" | "disconnected";
 
+/** Status is text and a dot, not a button-shaped box. */
+const STATUS_BADGE = "border-transparent px-1.5 font-medium";
+
 function ConnectionBadge({ state }: { state: ConnectionState }) {
   if (state === "connected")
     return (
-      <Badge variant="outline" role="status">
+      <Badge variant="outline" role="status" className={STATUS_BADGE}>
         <span className="gen2-status-dot ready" aria-hidden="true" />
         <span className="gen2-topbar-machine-text">Ready</span>
       </Badge>
     );
   if (state === "disconnected")
     return (
-      <Badge variant="outline" role="status">
+      <Badge variant="outline" role="status" className={STATUS_BADGE}>
         <span className="gen2-status-dot error" aria-hidden="true" />
         <span className="gen2-topbar-machine-text">Offline</span>
       </Badge>
     );
   return (
-    <Badge variant="outline" role="status">
+    <Badge variant="outline" role="status" className={STATUS_BADGE}>
       <LoaderCircle className="size-3 animate-spin" aria-hidden="true" />
       <span className="gen2-topbar-machine-text">
         {state === "connecting" ? "Reconnecting…" : "Connecting…"}
