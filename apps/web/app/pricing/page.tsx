@@ -17,7 +17,8 @@ import {
 export const metadata: Metadata = {
   title: "Pricing",
   description:
-    "Cloud development workspaces from $20/month. Bring your own AI provider and invite collaborators for free.",
+    "Multiplayer cloud development workspaces from $20/month. Bring your own AI provider and invite collaborators for free.",
+  alternates: { canonical: "/pricing" },
 };
 
 const FAQ = [

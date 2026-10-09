@@ -9,6 +9,7 @@ import "./privacy-controls.css";
 
 import { PrivacyChoices } from "@/components/landing/privacy-choices";
 import { THEME_INIT_SCRIPT } from "@/components/shell/theme-toggle";
+import { PUBLIC_APP_ORIGIN } from "@/lib/platform/site-hosts";
 
 const sans = Inter_Tight({
   variable: "--font-geist-sans",
@@ -23,28 +24,28 @@ const mono = JetBrains_Mono({
 });
 
 /**
- * Base for resolving the relative social image on the landing page. Without
- * it Next falls back to the opaque per-deployment vercel.app host, so a shared
- * link from production would not point at trycodev.com.
+ * Base for canonical URLs and social images. Production runs on both Azure
+ * (no VERCEL_ENV) and Vercel, so only previews and local dev use another host.
  */
 function metadataBase(): URL {
-  if (process.env.VERCEL_ENV === "production") {
-    return new URL("https://www.trycodev.com");
-  }
-  if (process.env.VERCEL_URL) {
+  if (process.env.VERCEL_ENV === "preview" && process.env.VERCEL_URL) {
     return new URL(`https://${process.env.VERCEL_URL}`);
+  }
+  if (process.env.NODE_ENV === "production") {
+    return new URL(PUBLIC_APP_ORIGIN);
   }
   return new URL("http://localhost:3000");
 }
 
 export const metadata: Metadata = {
   metadataBase: metadataBase(),
+  applicationName: "CoDev",
   title: {
     default: "CoDev",
     template: "%s · CoDev",
   },
   description:
-    "A hosted browser workspace where people and AI agents build together.",
+    "CoDev is a multiplayer cloud IDE where your team and AI agents code together in one live workspace.",
 };
 
 export default async function RootLayout({
