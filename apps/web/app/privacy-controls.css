@@ -54,7 +54,11 @@
   opacity: 0.5;
   cursor: default;
 }
-.privacy-controls .privacy-reopen {
+/* The full-viewport IDE has no free corner for the reopen button. */
+body:has(.gen2-ide-container) .privacy-reopen {
+  display: none;
+}
+.privacy-reopen {
   position: fixed;
   z-index: 90;
   bottom: 8px;
