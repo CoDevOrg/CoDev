@@ -128,6 +128,15 @@ export function parseClaudeSession(records: unknown[]): ParsedAgentSession {
       "This doesn't look like a Claude Code transcript. Choose a <session id>.jsonl file from ~/.claude/projects.",
     );
   }
+  // Sub-agents get their own file under `<session id>/subagents/`.
+  const turns = entries.filter(
+    (entry) => entry.type === "user" || entry.type === "assistant",
+  );
+  if (turns.length && turns.every((entry) => entry.isSidechain)) {
+    throw new SessionImportError(
+      "This transcript is a Claude Code sub-agent, not your conversation. Choose the <session id>.jsonl file one folder up.",
+    );
+  }
   const cwd = asString(first?.cwd) || null;
   const roots = [...new Set(entries.map((entry) => asString(entry.cwd)))];
   const transcript = new SessionTranscript();

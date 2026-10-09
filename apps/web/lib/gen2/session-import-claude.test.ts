@@ -129,4 +129,16 @@ describe("Claude Code transcript import", () => {
       /doesn't look like a Claude Code transcript/,
     );
   });
+
+  it("rejects sub-agent transcripts", () => {
+    expect(() =>
+      parseClaudeSession([
+        { ...user("u1", null, "Search the repo"), isSidechain: true },
+        {
+          ...assistant("a1", "u1", { type: "text", text: "Found it" }),
+          isSidechain: true,
+        },
+      ]),
+    ).toThrow(/sub-agent/);
+  });
 });

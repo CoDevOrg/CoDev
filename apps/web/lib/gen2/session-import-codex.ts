@@ -99,6 +99,13 @@ function readHeader(lines: CodexLine[]) {
       "This doesn't look like a Codex rollout. Choose a rollout-*.jsonl file from ~/.codex/sessions.",
     );
   }
+  // Codex writes a rollout for each sub-agent too, such as the guardian
+  // that reviews approval requests; it is a fragment, not the conversation.
+  if (asRecord(meta.source)?.subagent || asString(meta.parent_thread_id)) {
+    throw new SessionImportError(
+      "This rollout is a Codex sub-agent (such as an approval review), not your conversation. Choose the main session's rollout from the same day.",
+    );
+  }
   const git = asRecord(meta.git);
   return {
     nativeSessionId: id,

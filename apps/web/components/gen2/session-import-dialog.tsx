@@ -190,7 +190,7 @@ export function SessionImportDialog({
     >
       <DialogContent
         showCloseButton={false}
-        className="gen2-workspace-surface gen2-session-import sm:max-w-[600px]"
+        className="gen2-workspace-surface gen2-session-import grid-cols-[minmax(0,1fr)] sm:max-w-[600px]"
       >
         <DialogClose asChild>
           <WorkspaceButton

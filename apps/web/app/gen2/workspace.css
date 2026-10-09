@@ -5269,6 +5269,12 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.gen2-session-import-sample pre,
+.gen2-session-import-sample table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
 .gen2-session-import-role {
   display: block;
   color: var(--ss-muted-foreground);
