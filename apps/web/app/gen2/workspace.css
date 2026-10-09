@@ -753,7 +753,8 @@
 
   --ws-text-primary: var(--brand-ink);
   --ws-text-secondary: var(--brand-ink-muted);
-  --ws-text-muted: var(--brand-ink-faint);
+  /* Workspace-only: the shared brand faint ink fell below 4.5:1 on these surfaces. */
+  --ws-text-muted: #7d90b3;
   --ws-text-inverse: var(--brand-on-accent);
 
   --ws-border-subtle: rgba(var(--brand-ink-rgb), 0.18);
@@ -836,6 +837,7 @@
       .gen2-chat-panel
     ) {
     --ws-text-secondary: #465c91;
+    --ws-text-muted: #58688d;
     --muted: var(--ws-text-secondary);
     --color-muted-foreground: var(--ws-text-secondary);
     --ss-muted-foreground: var(--ws-text-secondary);
@@ -853,6 +855,7 @@
     .gen2-chat-panel
   ) {
   --ws-text-secondary: #465c91;
+  --ws-text-muted: #58688d;
   --muted: var(--ws-text-secondary);
   --color-muted-foreground: var(--ws-text-secondary);
   --ss-muted-foreground: var(--ws-text-secondary);
