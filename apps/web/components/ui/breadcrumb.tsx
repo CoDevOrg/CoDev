@@ -15,7 +15,7 @@ export function BreadcrumbList({
     <ol
       data-slot="breadcrumb-list"
       className={cn(
-        "flex min-w-0 flex-nowrap items-center gap-1.5 text-xs text-muted-foreground",
+        "m-0 flex min-w-0 list-none flex-nowrap items-center gap-1.5 p-0 text-xs text-muted-foreground",
         className,
       )}
       {...props}

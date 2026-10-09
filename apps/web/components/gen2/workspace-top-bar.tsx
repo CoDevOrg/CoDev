@@ -38,20 +38,22 @@ function ConnectionBadge({ state }: { state: ConnectionState }) {
     return (
       <Badge variant="outline" role="status">
         <span className="gen2-status-dot ready" aria-hidden="true" />
-        Ready
+        <span className="gen2-topbar-machine-text">Ready</span>
       </Badge>
     );
   if (state === "disconnected")
     return (
       <Badge variant="outline" role="status">
         <span className="gen2-status-dot error" aria-hidden="true" />
-        Offline
+        <span className="gen2-topbar-machine-text">Offline</span>
       </Badge>
     );
   return (
     <Badge variant="outline" role="status">
       <LoaderCircle className="size-3 animate-spin" aria-hidden="true" />
-      {state === "connecting" ? "Reconnecting…" : "Connecting…"}
+      <span className="gen2-topbar-machine-text">
+        {state === "connecting" ? "Reconnecting…" : "Connecting…"}
+      </span>
     </Badge>
   );
 }

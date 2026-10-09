@@ -1419,15 +1419,20 @@
 }
 
 @media (max-width: 1023px) {
+  /* Only the branch remains, so no separators. */
   .gen2-topbar-breadcrumb [data-slot="breadcrumb-item"]:first-child,
-  .gen2-topbar-breadcrumb
-    [data-slot="breadcrumb-item"]:first-child
-    + [data-slot="breadcrumb-separator"] {
+  .gen2-topbar-breadcrumb [data-slot="breadcrumb-separator"] {
     display: none;
   }
 
+  /* Dot-only status; the text stays available to screen readers. */
   .gen2-topbar-machine-text {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }
 
@@ -1438,6 +1443,22 @@
   }
 
   .gen2-topbar-action-label {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .gen2-ide-top-navbar {
+    padding: 0 8px;
+    gap: 6px;
+  }
+
+  .gen2-ide-top-navbar-left,
+  .gen2-ide-top-navbar-right {
+    gap: 4px;
+  }
+
+  .gen2-ide-top-navbar-right [data-slot="separator"] {
     display: none;
   }
 }
