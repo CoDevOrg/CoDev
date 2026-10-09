@@ -753,7 +753,8 @@
 
   --ws-text-primary: var(--brand-ink);
   --ws-text-secondary: var(--brand-ink-muted);
-  --ws-text-muted: var(--brand-ink-faint);
+  /* Workspace-only: the shared brand faint ink fell below 4.5:1 on these surfaces. */
+  --ws-text-muted: #7d90b3;
   --ws-text-inverse: var(--brand-on-accent);
 
   --ws-border-subtle: rgba(var(--brand-ink-rgb), 0.18);
@@ -836,6 +837,7 @@
       .gen2-chat-panel
     ) {
     --ws-text-secondary: #465c91;
+    --ws-text-muted: #58688d;
     --muted: var(--ws-text-secondary);
     --color-muted-foreground: var(--ws-text-secondary);
     --ss-muted-foreground: var(--ws-text-secondary);
@@ -853,6 +855,7 @@
     .gen2-chat-panel
   ) {
   --ws-text-secondary: #465c91;
+  --ws-text-muted: #58688d;
   --muted: var(--ws-text-secondary);
   --color-muted-foreground: var(--ws-text-secondary);
   --ss-muted-foreground: var(--ws-text-secondary);
@@ -1140,7 +1143,7 @@
   justify-content: space-between;
   height: 48px;
   min-height: 48px;
-  padding: 0 14px;
+  padding: 0 12px;
   border-bottom: 1px solid var(--ws-border-medium);
   background: var(--ss-card);
   box-shadow: 0 1px 16px -4px rgba(var(--brand-redwood-rgb, 224, 72, 72), 0.08);
@@ -1155,7 +1158,7 @@
 .gen2-ide-top-navbar-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .gen2-ide-top-navbar-left {
@@ -1186,36 +1189,6 @@
   flex-shrink: 0;
 }
 
-.gen2-workspace-breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.75rem;
-  color: var(--ss-muted-foreground);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-
-.gen2-workspace-breadcrumb-name {
-  color: var(--ss-foreground);
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.gen2-workspace-breadcrumb-sep {
-  color: var(--ss-muted-foreground);
-  opacity: 0.5;
-}
-
-.gen2-workspace-breadcrumb-repo {
-  color: var(--ss-muted-foreground);
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .gen2-topbar-divider {
   color: var(--ws-border-medium);
   font-size: 0.8125rem;
@@ -1229,10 +1202,10 @@
   align-items: center;
   gap: 6px;
   height: 32px;
-  padding: 0 10px;
+  padding: 0 12px;
   border-radius: 6px;
   background: var(--ws-surface-3);
-  border: 1px solid var(--ws-border-subtle);
+  border: 1px solid transparent;
   color: var(--ws-text-primary);
   font-size: 0.75rem;
   white-space: nowrap;
@@ -1314,8 +1287,8 @@
   height: 32px;
   padding: 0 10px;
   border-radius: 6px;
-  background: var(--ws-surface-3);
-  border: 1px solid var(--ws-border-subtle);
+  background: transparent;
+  border: 1px solid transparent;
   max-width: 520px;
   min-width: 0;
   overflow: hidden;
@@ -1438,7 +1411,8 @@
 }
 
 @media (max-width: 1279px) {
-  .gen2-workspace-breadcrumb-repo {
+  .gen2-topbar-breadcrumb-repo,
+  .gen2-topbar-breadcrumb-repo + [data-slot="breadcrumb-separator"] {
     display: none;
   }
 
@@ -1448,12 +1422,20 @@
 }
 
 @media (max-width: 1023px) {
-  .gen2-workspace-breadcrumb {
+  /* Only the branch remains, so no separators. */
+  .gen2-topbar-breadcrumb [data-slot="breadcrumb-item"]:first-child,
+  .gen2-topbar-breadcrumb [data-slot="breadcrumb-separator"] {
     display: none;
   }
 
+  /* Dot-only status; the text stays available to screen readers. */
   .gen2-topbar-machine-text {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }
 
@@ -1464,6 +1446,22 @@
   }
 
   .gen2-topbar-action-label {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .gen2-ide-top-navbar {
+    padding: 0 8px;
+    gap: 4px;
+  }
+
+  .gen2-ide-top-navbar-left,
+  .gen2-ide-top-navbar-right {
+    gap: 4px;
+  }
+
+  .gen2-ide-top-navbar-right [data-slot="separator"] {
     display: none;
   }
 }
@@ -1559,7 +1557,7 @@
 
 /* Sidebar Sections (Expanded Mode) */
 .gen2-sidebar-section {
-  padding: 10px 12px 6px;
+  padding: 12px 12px 8px;
 }
 
 .gen2-sidebar-section-header {
@@ -1571,22 +1569,9 @@
 }
 
 .gen2-sidebar-section-title {
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
   color: var(--ws-text-muted);
-}
-
-.gen2-sidebar-section-count {
-  font-size: 0.625rem;
-  font-family: var(--font-mono, monospace);
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--ws-text-primary) 8%, transparent);
-  color: var(--ws-text-muted);
-  border: 1px solid var(--ws-border-subtle);
-  line-height: 1.3;
 }
 
 /* Worktree Dropdown Trigger */
@@ -1601,10 +1586,10 @@
   justify-content: space-between;
   width: 100%;
   height: 36px;
-  padding: 0 10px;
+  padding: 0 12px;
   border-radius: 6px;
   background: var(--ws-surface-3);
-  border: 1px solid var(--ws-border-subtle);
+  border: 1px solid transparent;
   color: var(--ws-text-primary);
   cursor: pointer;
   box-shadow: none;
@@ -1614,7 +1599,6 @@
 }
 
 .gen2-worktree-trigger-btn:hover {
-  border-color: var(--ws-border-medium);
   background: var(--ws-surface-hover);
 }
 
@@ -1661,7 +1645,7 @@
 
 .gen2-worktree-branch-name {
   font-family: var(--font-mono, monospace);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: var(--ws-text-primary);
   overflow: hidden;
@@ -1826,7 +1810,7 @@
 
 .gen2-worktree-dropdown-item-branch {
   font-family: var(--font-mono, monospace);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1988,24 +1972,10 @@
 }
 
 .gen2-sidebar-provider-name {
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
+  font-size: 0.75rem;
+  font-weight: 600;
   color: var(--ss-muted-foreground);
-  text-transform: uppercase;
   white-space: nowrap;
-}
-
-.gen2-sidebar-provider-count {
-  font-size: 0.625rem;
-  font-family: var(--font-mono, monospace);
-  color: var(--ss-muted-foreground);
-  padding: 1.5px 6px;
-  border-radius: 9999px;
-  background: color-mix(in srgb, var(--ss-foreground) 5%, transparent);
-  border: 1px solid color-mix(in srgb, var(--ss-border) 60%, transparent);
-  line-height: 1.3;
-  flex-shrink: 0;
 }
 
 .gen2-sidebar-chat-list {
@@ -2025,7 +1995,7 @@
   width: 100%;
   height: 36px;
   min-height: 36px;
-  padding: 0 10px;
+  padding: 0 12px;
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -2127,8 +2097,8 @@
   align-items: center;
   flex-shrink: 0;
   gap: 4px;
-  font-size: 11px;
-  line-height: 14px;
+  font-size: 12px;
+  line-height: 16px;
   font-family: var(--font-mono, monospace);
   color: var(--ws-text-secondary);
 }
@@ -2138,14 +2108,28 @@
 }
 
 .gen2-sidebar-chat-empty {
-  font-size: 0.6875rem;
-  color: var(--ss-muted-foreground);
-  padding: 8px 10px;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--ss-foreground) 2%, transparent);
-  border: 1px dashed color-mix(in srgb, var(--ss-border) 60%, transparent);
-  text-align: center;
-  font-style: italic;
+  padding: 12px 8px;
+}
+
+.gen2-sidebar-chat-empty [data-slot="empty-header"] {
+  gap: 2px;
+}
+
+.gen2-sidebar-chat-empty [data-slot="empty-title"],
+.gen2-sidebar-chat-empty [data-slot="empty-description"] {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+}
+
+.gen2-sidebar-chat-empty [data-slot="empty-title"] {
+  font-size: 0.8125rem;
+  color: var(--ws-text-secondary);
+  font-weight: 500;
+}
+
+.gen2-sidebar-chat-empty [data-slot="empty-description"] {
+  color: var(--ws-text-muted);
 }
 
 .gen2-sidebar-no-providers {
@@ -2430,6 +2414,7 @@
 .gen2-ide-loading {
   position: absolute;
   inset: 0;
+  z-index: 2;
   gap: 24px;
   background: var(--ws-surface-1);
 }
@@ -2460,6 +2445,72 @@
   width: 28px;
   height: 28px;
   color: var(--ws-text-secondary);
+}
+
+.gen2-startup-steps {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.gen2-startup-steps ol {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gen2-startup-steps li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--ws-text-muted);
+}
+
+.gen2-startup-steps li svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.gen2-startup-steps li.is-done {
+  color: var(--ws-text-secondary);
+}
+
+.gen2-startup-steps li.is-done svg {
+  color: var(--ws-status-ready);
+}
+
+.gen2-startup-steps li.is-current {
+  color: var(--ws-text-primary);
+  font-weight: 500;
+}
+
+.gen2-startup-dot {
+  width: 5px;
+  height: 5px;
+  margin: 0 4.5px;
+  border-radius: 999px;
+  background: var(--ws-text-muted);
+  flex-shrink: 0;
+}
+
+.gen2-startup-steps p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--ws-text-muted);
+}
+
+.gen2-ide-offline-notice {
+  flex-shrink: 0;
+  margin: 8px;
+  width: auto;
 }
 
 /* --------------------------------------------------- Chat transcript (design contract) */
@@ -3472,6 +3523,12 @@
   border-bottom: 1px solid var(--ss-border);
 }
 
+/* No file open: the tree gets the height; the editor keeps only its hint and notices. */
+.gen2-superset-file-pane:not([data-portaled="true"])[data-has-open-file="false"]
+  .gen2-superset-editor {
+  flex: 0 0 auto;
+}
+
 .gen2-superset-file-pane:not([data-portaled="true"]) .gen2-superset-editor {
   flex: 1;
   width: 100%;
@@ -3536,6 +3593,11 @@
   background: var(--ws-surface-2);
 }
 
+/* The Files panel's search row sits right under the tabs; one divider is enough. */
+aside:has(> .gen2-ide-files:not([hidden])) .gen2-ide-tabs {
+  border-bottom-color: transparent;
+}
+
 .gen2-ide-tabs button {
   display: inline-flex;
   align-items: center;
@@ -3545,7 +3607,7 @@
   border: 1px solid transparent;
   border-radius: 6px;
   color: var(--ws-text-secondary);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   font-weight: 500;
   cursor: pointer;
   background: transparent;
@@ -3563,7 +3625,6 @@
 .gen2-ide-tabs button[aria-selected="true"] {
   color: var(--ws-text-primary);
   background: var(--ws-surface-3);
-  border-color: var(--ws-border-subtle);
 }
 
 .gen2-ide-tabs button:focus-visible {
@@ -4837,7 +4898,7 @@
 }
 .gen2-workspace-button[data-slot="button"][data-tone="secondary"] {
   background: var(--ws-surface-3);
-  border-color: var(--ws-border-subtle);
+  border-color: transparent;
   color: var(--ws-text-primary) !important;
 }
 .gen2-workspace-button[data-slot="button"]:hover,

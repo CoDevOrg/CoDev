@@ -85,7 +85,7 @@ Settings and the workspace load Tailwind utilities without its preflight, so bro
 
 The public landing page (`app/page.tsx`) does not load Tailwind utilities (only `app/product-theme.css` imports them), so shadcn components render unstyled there; style landing previews with the CSS files in `components/landing/`. The CoDev mark is `/brand/codev-mark.svg` in ice blue `#00bde8`; do not recolor it with filters.
 
-For Gen 2 Superset workspace visual direction and tokens, follow [`docs/design/superset-workspace-ui.md`](docs/design/superset-workspace-ui.md). Chat, composer, and tool activity follow section 8.1 of that contract. Files, editor, terminal, and review follow section 8.2. For workspace controls, follow [`docs/design/workspace-controls.md`](docs/design/workspace-controls.md) and reuse `WorkspaceButton` for actions, including portaled dialogs; keep visual variants centralized and call-site styling limited to layout.
+For Gen 2 Superset workspace visual direction and tokens, follow [`docs/design/superset-workspace-ui.md`](docs/design/superset-workspace-ui.md). Chat, composer, and tool activity follow section 8.1 of that contract. Files, editor, terminal, and review follow section 8.2. For workspace controls, follow [`docs/design/workspace-controls.md`](docs/design/workspace-controls.md) and reuse `WorkspaceButton` for actions, including portaled dialogs; keep visual variants centralized and call-site styling limited to layout. The workspace shell loads no Tailwind reset and its utility classes lose to unlayered CSS; read the gotchas in section 11 of the Superset contract before styling shadcn parts there.
 
 ## Maintain this guidance
 

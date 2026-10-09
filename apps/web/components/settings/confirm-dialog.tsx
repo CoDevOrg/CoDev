@@ -12,6 +12,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { HoldToConfirmButton } from "@/components/ui/hold-to-confirm-button";
 import { cn } from "@/lib/platform/utils";
 
 /**
@@ -25,6 +26,7 @@ export function ConfirmDialog({
   children,
   confirmLabel,
   busy = false,
+  holdToConfirm = false,
   onConfirm,
   onCancel,
   className,
@@ -33,6 +35,8 @@ export function ConfirmDialog({
   children: ReactNode;
   confirmLabel: string;
   busy?: boolean;
+  /** Require press-and-hold on the confirm button, for irreversible deletion. */
+  holdToConfirm?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
   /** A surface class for content portaled outside its caller's theme. */
@@ -57,16 +61,29 @@ export function ConfirmDialog({
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction
-            className="bg-destructive text-white hover:bg-destructive/90"
-            disabled={busy}
-            onClick={() => {
-              confirmed.current = true;
-              onConfirm();
-            }}
-          >
-            {confirmLabel}
-          </AlertDialogAction>
+          {holdToConfirm ? (
+            <HoldToConfirmButton
+              disabled={busy}
+              confirmedContent="Deleting…"
+              onConfirm={() => {
+                confirmed.current = true;
+                onConfirm();
+              }}
+            >
+              {confirmLabel}
+            </HoldToConfirmButton>
+          ) : (
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              disabled={busy}
+              onClick={() => {
+                confirmed.current = true;
+                onConfirm();
+              }}
+            >
+              {confirmLabel}
+            </AlertDialogAction>
+          )}
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

@@ -15,12 +15,15 @@ export function WorkspaceLoading({
   description,
   className,
   busy = true,
+  detail,
   action,
 }: {
   title: string;
   description: string;
   className?: string;
   busy?: boolean;
+  /** Replaces the placeholder bars while busy, e.g. real progress. */
+  detail?: ReactNode;
   action?: ReactNode;
 }) {
   const Mark = busy ? LoaderCircle : Cloud;
@@ -36,7 +39,9 @@ export function WorkspaceLoading({
         <EmptyTitle>{title}</EmptyTitle>
         <EmptyDescription>{description}</EmptyDescription>
       </EmptyHeader>
-      {busy ? (
+      {busy && detail ? (
+        detail
+      ) : busy ? (
         <div className="flex w-full max-w-xs flex-col gap-2" aria-hidden="true">
           <Skeleton className="h-3 w-full" />
           <Skeleton className="h-3 w-4/5" />

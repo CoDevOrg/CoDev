@@ -164,6 +164,25 @@ describe("SupersetFilePane", () => {
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
 
+  it("keeps an open file read-only and unsavable while the workspace is offline", async () => {
+    const { rerender } = render(
+      <SupersetFilePane workspaceId={workspaceId} canEdit workspaceReady />,
+    );
+    const editor = await screen.findByLabelText("Code");
+    expect(editor).not.toHaveAttribute("readonly");
+
+    rerender(
+      <SupersetFilePane
+        workspaceId={workspaceId}
+        canEdit
+        workspaceReady={false}
+      />,
+    );
+    expect(screen.getByLabelText("Code")).toHaveAttribute("readonly");
+    expect(screen.getByText("Offline · read only")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+
   it("scopes file requests and the shared document to the selected worktree", async () => {
     render(
       <SupersetFilePane

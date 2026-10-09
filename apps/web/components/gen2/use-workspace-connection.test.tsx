@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   useWorkspaceConnection,
   CONNECTION_CHECK_MS,
+  CONNECTION_PROBE_MS,
   CONNECTION_RETRY_MS,
   CONNECTION_TIMEOUT_MS,
 } from "./use-workspace-connection";
@@ -84,6 +85,39 @@ describe("workspace connection", () => {
       finishCheck(Response.json({ connected: false }));
     });
     expect(result.current.state).toBe("connected");
+  });
+
+  it("settles as soon as the activity check reports connected, without waiting for startup", async () => {
+    let startupSignal: AbortSignal | undefined;
+    mocks.connect.mockImplementation(
+      (_id: string, options: { signal: AbortSignal }) => {
+        startupSignal = options.signal;
+        return new Promise(() => {});
+      },
+    );
+    let activityCalls = 0;
+    vi.mocked(fetch).mockImplementation((input) => {
+      const url = String(input);
+      if (url.endsWith("/activity"))
+        return Promise.resolve(
+          Response.json({ connected: ++activityCalls > 1 }),
+        );
+      return Promise.resolve(
+        Response.json({ workspace: { id: "w", status: "ready" } }),
+      );
+    });
+    const onConnected = vi.fn();
+    const { result } = renderHook(() =>
+      useWorkspaceConnection("w", true, onConnected),
+    );
+    await flush();
+    expect(result.current.state).toBe("connecting");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(CONNECTION_PROBE_MS);
+    });
+    expect(result.current.state).toBe("connected");
+    expect(startupSignal?.aborted).toBe(true);
+    expect(onConnected).toHaveBeenCalledWith({ id: "w", status: "ready" });
   });
 
   it("checks without waking; only recent user activity sends a keepalive", async () => {

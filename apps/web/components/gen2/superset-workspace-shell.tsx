@@ -10,28 +10,18 @@ import {
   useRef,
   useState,
 } from "react";
-import Link from "next/link";
 import { useWorkspaceConnection } from "./use-workspace-connection";
 import { useAgentOverlaps } from "./use-agent-overlaps";
 import { SessionImportDialog } from "./session-import-dialog";
 import {
-  ArrowLeft,
   Check,
   ChevronDown,
   ChevronUp,
   GitBranch,
-  Kanban,
-  LoaderCircle,
-  Cloud,
-  PanelLeft,
-  PanelLeftClose,
-  PanelRight,
   Pencil,
   Plus,
-  Settings,
   SquareTerminal,
   Upload,
-  UserPlus,
 } from "lucide-react";
 import type {
   Gen2AgentProviderName,
@@ -41,13 +31,15 @@ import type {
 import { parseGitStatus } from "@/lib/runtime/ide";
 
 import { WorkspaceButton } from "./workspace-button";
+import { BranchStatusPill } from "./branch-status-pill";
+import { WorkspaceTopBar } from "./workspace-top-bar";
 import { cn } from "@/lib/platform/utils";
 import { WorkspaceShareDialog } from "./workspace-share-dialog";
 import { WorkspaceSettingsDialog } from "./workspace-settings-dialog";
-import { ThemeToggle } from "@/components/shell/theme-toggle";
 import { Gen2ChatPanel } from "./chat-panel";
 import { Gen2TerminalPane } from "./terminal-pane";
 import { WorkspaceLoading } from "./workspace-loading";
+import { WorkspaceStartupSteps } from "./workspace-startup-steps";
 import { WorkspaceSwitchDialog } from "./workspace-switch-dialog";
 import {
   createSupersetWorktree,
@@ -69,22 +61,20 @@ import {
   type SupportedAiProvider,
 } from "./provider-logos";
 
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Separator } from "@/components/ui/separator";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -834,330 +824,45 @@ export function SupersetWorkspaceShell({
         data-sidebar-collapsed={sidebarCollapsed ? "true" : "false"}
         data-inspector-collapsed={inspectorCollapsed ? "true" : "false"}
       >
-        {/* Top navigation bar: quiet, unified, non-repeating context */}
-        <header className="gen2-ide-top-navbar" aria-label="Top navigation">
-          {/* Left section: sidebar toggle, brand badge, workspace & branch context grouped together */}
-          <div className="gen2-ide-top-navbar-left">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Link
-                  href="/gen2"
-                  className="gen2-workspace-button gen2-ide-icon-button"
-                  data-slot="button"
-                  data-tone="ghost"
-                  data-size="icon"
-                  aria-label="Back to home"
-                >
-                  <ArrowLeft aria-hidden="true" />
-                </Link>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Home</TooltipContent>
-            </Tooltip>
-
-            <img
-              className="gen2-brand-mark"
-              src="/brand/codev-mark.svg"
-              alt="CoDev"
-              width={22}
-              height={22}
-            />
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <WorkspaceButton
-                  size="icon"
-                  type="button"
-                  className="gen2-ide-icon-button"
-                  onClick={toggleSidebarByUser}
-                  aria-label={
-                    sidebarCollapsed ? "Expand sidebar" : "Minimize sidebar"
-                  }
-                >
-                  {sidebarCollapsed ? (
-                    <PanelLeft size={16} />
-                  ) : (
-                    <PanelLeftClose size={16} />
-                  )}
-                </WorkspaceButton>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {sidebarCollapsed ? "Expand sidebar" : "Minimize sidebar"}
-              </TooltipContent>
-            </Tooltip>
-
-            {/* Grouped workspace and repository breadcrumb */}
-            <div className="gen2-workspace-breadcrumb">
-              <span className="gen2-workspace-breadcrumb-name">
-                {activeWorkspace.name}
-              </span>
-              <span className="gen2-workspace-breadcrumb-sep">/</span>
-              {activeWorkspace.repository ? (
-                <>
-                  <span className="gen2-workspace-breadcrumb-repo">
-                    {activeWorkspace.repository.fullName}
-                  </span>
-                  <span className="gen2-workspace-breadcrumb-sep gen2-workspace-breadcrumb-repo">
-                    /
-                  </span>
-                </>
-              ) : null}
-            </div>
-
-            {/* Header Branch Dropdown: unified context with keyboard accessibility */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="gen2-topbar-branch-pill"
-                  aria-label={`Active branch: ${selected?.branch ?? "main"}`}
-                >
-                  <GitBranch size={13} className="gen2-topbar-branch-icon" />
-                  <span className="gen2-topbar-branch-name">
-                    {selected?.branch ?? "main"}
-                  </span>
-                  {selectedStatus ? (
-                    <span
-                      className={cn(
-                        "gen2-topbar-branch-status",
-                        selectedStatus.tone,
-                      )}
-                    >
-                      {selectedStatus.label}
-                    </span>
-                  ) : null}
-                  <ChevronDown
-                    size={11}
-                    className="text-muted-foreground ml-0.5 shrink-0 opacity-70"
-                  />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="start"
-                className="w-60 gen2-workspace-surface"
-              >
-                <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground">
-                  Switch branch
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {branchLoadError ? (
-                  <DropdownMenuItem
-                    onSelect={() => void refreshWorktrees()}
-                    className="cursor-pointer py-1.5 px-2 text-xs text-muted-foreground"
-                  >
-                    Branch details unavailable · Retry
-                  </DropdownMenuItem>
-                ) : null}
-                <DropdownMenuGroup>
-                  {worktrees.map((wt) => {
-                    const isSelected = wt.worktreeId === worktreeId;
-                    const st = getBranchStatus(wt.worktreeId);
-                    return (
-                      <DropdownMenuItem
-                        key={wt.worktreeId}
-                        onClick={() => selectWorktree(wt.worktreeId)}
-                        className="flex items-center justify-between cursor-pointer py-1.5 px-2 text-xs"
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <GitBranch
-                            size={13}
-                            className={cn(
-                              "shrink-0",
-                              isSelected
-                                ? "text-primary font-medium"
-                                : "text-muted-foreground",
-                            )}
-                          />
-                          <span
-                            className={cn(
-                              "truncate font-mono",
-                              isSelected && "font-semibold text-primary",
-                            )}
-                          >
-                            {wt.branch}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                          <span
-                            className={cn("gen2-worktree-status-pill", st.tone)}
-                          >
-                            {st.label}
-                          </span>
-                          {isSelected ? (
-                            <Check size={13} className="text-primary" />
-                          ) : null}
-                        </div>
-                      </DropdownMenuItem>
-                    );
-                  })}
-                </DropdownMenuGroup>
-                {canEdit ? (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={() => {
-                        collapseSidebarByUser(false);
-                        setShowCreate(true);
-                      }}
-                      className="cursor-pointer py-1.5 px-2 text-xs"
-                    >
-                      <Plus size={13} className="mr-2 shrink-0" />
-                      <span>New branch…</span>
-                    </DropdownMenuItem>
-                  </>
-                ) : null}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-
-          {/* Center section: quiet active session context, gracefully hides on narrow screens */}
-          <div className="gen2-ide-top-navbar-center">
-            <div className="gen2-topbar-session-card">
-              {connectedProviders.some(
-                (provider) => provider.id === activeProvider,
-              ) ? (
-                <div className="gen2-topbar-provider-avatar">
-                  <ProviderLogo provider={activeProvider} size={14} />
-                </div>
-              ) : null}
-              <span className="gen2-topbar-session-title">
-                {activeChat?.title ?? "Initial Workspace Session"}
-              </span>
-              {agentRunning ? (
-                <span className="gen2-topbar-session-status running">
-                  <span
-                    className="gen2-status-dot working"
-                    aria-hidden="true"
-                  />
-                  Working…
-                </span>
-              ) : null}
-            </div>
-          </div>
-
-          {/* Right section: share, board view toggle, truthful machine status, theme, inspector */}
-          <div className="gen2-ide-top-navbar-right">
-            <WorkspaceButton
-              tone="secondary"
-              onClick={() => setShareOpen(true)}
-              aria-label="Share workspace"
-            >
-              <UserPlus data-icon="inline-start" aria-hidden="true" />
-              <span className="gen2-topbar-action-label">Share</span>
-            </WorkspaceButton>
-
-            <WorkspaceButton
-              tone="ghost"
-              type="button"
-              className={cn(
-                "gen2-topbar-nav-button",
-                viewMode === "board" && "active",
-              )}
-              aria-pressed={viewMode === "board"}
-              onClick={() =>
-                setViewMode((m) => (m === "board" ? "ide" : "board"))
-              }
-              aria-label={
-                viewMode === "board" ? "Switch to IDE Stage" : "Switch to Board"
-              }
-            >
-              <Kanban data-icon="inline-start" aria-hidden="true" />
-              <span className="gen2-topbar-action-label">
-                {viewMode === "board" ? "IDE Stage" : "Board"}
-              </span>
-            </WorkspaceButton>
-
-            {connection.state === "connecting" ||
-            connection.state === "checking" ? (
-              <WorkspaceButton
-                tone="secondary"
-                size="toolbar"
-                disabled
-                aria-label={
-                  connection.state === "connecting"
-                    ? "Reconnecting workspace"
-                    : "Checking workspace connection"
+        <WorkspaceTopBar
+          workspaceName={activeWorkspace.name}
+          repositoryName={activeWorkspace.repository?.fullName}
+          branchMenu={{
+            branches: worktrees,
+            selected,
+            getStatus: getBranchStatus,
+            loadError: Boolean(branchLoadError),
+            onRetry: () => void refreshWorktrees(),
+            onSelect: selectWorktree,
+            onCreate: canEdit
+              ? () => {
+                  collapseSidebarByUser(false);
+                  setShowCreate(true);
                 }
-              >
-                <LoaderCircle
-                  data-icon="inline-start"
-                  className="animate-spin"
-                  aria-hidden="true"
-                />
-                <span className="gen2-topbar-action-label">
-                  {connection.state === "connecting"
-                    ? "Reconnecting…"
-                    : "Connecting…"}
-                </span>
-              </WorkspaceButton>
-            ) : connection.state === "disconnected" && viewMode === "board" ? (
-              <WorkspaceButton
-                tone="secondary"
-                size="toolbar"
-                onClick={() => void ensureRunning()}
-                aria-label="Reconnect workspace"
-              >
-                <Cloud data-icon="inline-start" aria-hidden="true" />
-                <span className="gen2-topbar-action-label">Reconnect</span>
-              </WorkspaceButton>
-            ) : null}
-
-            <Separator
-              orientation="vertical"
-              className="h-4 my-auto opacity-40"
-            />
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <WorkspaceButton
-                  size="icon"
-                  type="button"
-                  className="gen2-ide-icon-button"
-                  onClick={() => setSettingsOpen(true)}
-                  aria-label="Settings"
-                >
-                  <Settings size={16} />
-                </WorkspaceButton>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Settings</TooltipContent>
-            </Tooltip>
-
-            <ThemeToggle compact />
-
-            {viewMode === "ide" ? (
-              <>
-                <Separator
-                  orientation="vertical"
-                  className="h-4 my-auto opacity-40"
-                />
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <WorkspaceButton
-                      size="icon"
-                      type="button"
-                      className={cn(
-                        "gen2-ide-icon-button",
-                        inspectorCollapsed && "active",
-                      )}
-                      onClick={toggleInspectorByUser}
-                      aria-label={
-                        inspectorCollapsed
-                          ? "Expand inspector"
-                          : "Collapse inspector"
-                      }
-                    >
-                      <PanelRight size={16} />
-                    </WorkspaceButton>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    {inspectorCollapsed
-                      ? "Expand inspector"
-                      : "Collapse inspector"}
-                  </TooltipContent>
-                </Tooltip>
-              </>
-            ) : null}
-          </div>
-        </header>
+              : undefined,
+          }}
+          sessionTitle={activeChat?.title ?? null}
+          sessionProvider={
+            connectedProviders.some(
+              (provider) => provider.id === activeProvider,
+            )
+              ? activeProvider
+              : null
+          }
+          agentRunning={agentRunning}
+          connectionState={connection.state}
+          viewMode={viewMode}
+          sidebarCollapsed={sidebarCollapsed}
+          inspectorCollapsed={inspectorCollapsed}
+          onReconnect={() => void ensureRunning()}
+          onShare={() => setShareOpen(true)}
+          onOpenSettings={() => setSettingsOpen(true)}
+          onToggleViewMode={() =>
+            setViewMode((m) => (m === "board" ? "ide" : "board"))
+          }
+          onToggleSidebar={toggleSidebarByUser}
+          onToggleInspector={toggleInspectorByUser}
+        />
 
         {viewMode === "board" ? (
           <main
@@ -1220,11 +925,7 @@ export function SupersetWorkspaceShell({
                 <div className="gen2-sidebar-section">
                   <div className="gen2-sidebar-section-header">
                     <span className="gen2-sidebar-section-title">
-                      ACTIVE WORKTREE
-                    </span>
-                    <span className="gen2-sidebar-section-count">
-                      {worktrees.length}{" "}
-                      {worktrees.length === 1 ? "BRANCH" : "BRANCHES"}
+                      Active worktree
                     </span>
                   </div>
                   <div className="gen2-worktree-dropdown-wrapper">
@@ -1245,16 +946,10 @@ export function SupersetWorkspaceShell({
                         </span>
                       </div>
                       <div className="gen2-worktree-trigger-right">
-                        {selectedStatus ? (
-                          <span
-                            className={cn(
-                              "gen2-worktree-status-pill",
-                              selectedStatus.tone,
-                            )}
-                          >
-                            {selectedStatus.label}
-                          </span>
-                        ) : null}
+                        <BranchStatusPill
+                          status={selectedStatus}
+                          className="gen2-worktree-status-pill"
+                        />
                       </div>
                     </button>
                   </div>
@@ -1339,14 +1034,10 @@ export function SupersetWorkspaceShell({
                                 <span className="gen2-worktree-dropdown-item-branch">
                                   {wt.branch}
                                 </span>
-                                <span
-                                  className={cn(
-                                    "gen2-worktree-status-pill",
-                                    st.tone,
-                                  )}
-                                >
-                                  {st.label}
-                                </span>
+                                <BranchStatusPill
+                                  status={st}
+                                  className="gen2-worktree-status-pill"
+                                />
                               </button>
                             </li>
                           );
@@ -1429,15 +1120,11 @@ export function SupersetWorkspaceShell({
                       className="h-full w-full overflow-hidden flex flex-col"
                       aria-label="Branches"
                     >
-                      {/* Section 1: ACTIVE WORKTREE */}
+                      {/* Section 1: Active worktree */}
                       <div className="gen2-sidebar-section">
                         <div className="gen2-sidebar-section-header">
                           <span className="gen2-sidebar-section-title">
-                            ACTIVE WORKTREE
-                          </span>
-                          <span className="gen2-sidebar-section-count">
-                            {worktrees.length}{" "}
-                            {worktrees.length === 1 ? "BRANCH" : "BRANCHES"}
+                            Active worktree
                           </span>
                         </div>
 
@@ -1465,16 +1152,10 @@ export function SupersetWorkspaceShell({
                               </span>
                             </div>
                             <div className="gen2-worktree-trigger-right">
-                              {selectedStatus ? (
-                                <span
-                                  className={cn(
-                                    "gen2-worktree-status-pill",
-                                    selectedStatus.tone,
-                                  )}
-                                >
-                                  {selectedStatus.label}
-                                </span>
-                              ) : null}
+                              <BranchStatusPill
+                                status={selectedStatus}
+                                className="gen2-worktree-status-pill"
+                              />
                               <ChevronDown
                                 size={14}
                                 className={cn(
@@ -1526,14 +1207,10 @@ export function SupersetWorkspaceShell({
                                         </span>
                                       </div>
                                       <div className="gen2-worktree-dropdown-item-right">
-                                        <span
-                                          className={cn(
-                                            "gen2-worktree-status-pill",
-                                            st.tone,
-                                          )}
-                                        >
-                                          {st.label}
-                                        </span>
+                                        <BranchStatusPill
+                                          status={st}
+                                          className="gen2-worktree-status-pill"
+                                        />
                                         {isSelected ? (
                                           <Check
                                             size={13}
@@ -1628,7 +1305,7 @@ export function SupersetWorkspaceShell({
 
                       {/* Primary Action: + New Chat */}
                       <WorkspaceButton
-                        tone="primary"
+                        tone="secondary"
                         size="action"
                         type="button"
                         className="gen2-sidebar-new-chat-btn"
@@ -1645,11 +1322,11 @@ export function SupersetWorkspaceShell({
                         </div>
                       </WorkspaceButton>
 
-                      {/* Section 2: RECENT CHATS */}
+                      {/* Section 2: Recent chats */}
                       <div className="gen2-sidebar-section gen2-sidebar-recent-chats">
                         <div className="gen2-sidebar-section-header">
                           <span className="gen2-sidebar-section-title">
-                            RECENT CHATS
+                            Recent chats
                           </span>
                           <span className="gen2-sidebar-section-actions">
                             {activeWorkspace.role !== "viewer" ? (
@@ -1668,9 +1345,6 @@ export function SupersetWorkspaceShell({
                                 </TooltipContent>
                               </Tooltip>
                             ) : null}
-                            <span className="gen2-sidebar-section-count">
-                              {chats.length}
-                            </span>
                           </span>
                         </div>
 
@@ -1687,12 +1361,22 @@ export function SupersetWorkspaceShell({
                               Connect an account
                             </WorkspaceButton>
                           </div>
+                        ) : chats.length === 0 ? (
+                          <Empty className="gen2-sidebar-chat-empty">
+                            <EmptyHeader>
+                              <EmptyTitle>No chats yet</EmptyTitle>
+                              <EmptyDescription>
+                                Start one with New Chat.
+                              </EmptyDescription>
+                            </EmptyHeader>
+                          </Empty>
                         ) : (
                           <div className="gen2-sidebar-providers-list">
                             {connectedProviders.map((provider) => {
                               const providerChats = chats.filter(
                                 (c) => chatProviderOf(c) === provider.id,
                               );
+                              if (providerChats.length === 0) return null;
 
                               return (
                                 <div
@@ -1710,114 +1394,105 @@ export function SupersetWorkspaceShell({
                                         {provider.name}
                                       </span>
                                     </div>
-                                    <span className="gen2-sidebar-provider-count">
-                                      {providerChats.length}
-                                    </span>
                                   </div>
 
-                                  {providerChats.length === 0 ? (
-                                    <p className="gen2-sidebar-chat-empty">
-                                      No {provider.name} chats yet
-                                    </p>
-                                  ) : (
-                                    <ul className="gen2-sidebar-chat-list">
-                                      {providerChats.map((chat) => {
-                                        const isSelected =
-                                          chat.id ===
-                                          (selectedChatId ?? chats[0]?.id);
-                                        return (
-                                          <li
-                                            key={chat.id}
-                                            className="gen2-sidebar-chat-item"
-                                          >
-                                            {renamingChatId === chat.id ? (
-                                              <form
-                                                className="gen2-sidebar-chat-rename-form"
-                                                onSubmit={(event) =>
-                                                  void submitRename(event)
+                                  <ul className="gen2-sidebar-chat-list">
+                                    {providerChats.map((chat) => {
+                                      const isSelected =
+                                        chat.id ===
+                                        (selectedChatId ?? chats[0]?.id);
+                                      return (
+                                        <li
+                                          key={chat.id}
+                                          className="gen2-sidebar-chat-item"
+                                        >
+                                          {renamingChatId === chat.id ? (
+                                            <form
+                                              className="gen2-sidebar-chat-rename-form"
+                                              onSubmit={(event) =>
+                                                void submitRename(event)
+                                              }
+                                            >
+                                              <input
+                                                aria-label="Chat title"
+                                                value={renameDraft}
+                                                maxLength={80}
+                                                autoFocus
+                                                disabled={renamePending}
+                                                onChange={(event) =>
+                                                  setRenameDraft(
+                                                    event.target.value,
+                                                  )
+                                                }
+                                                onKeyDown={(event) => {
+                                                  if (
+                                                    event.key === "Escape" &&
+                                                    !renamePending
+                                                  ) {
+                                                    event.preventDefault();
+                                                    setRenamingChatId(null);
+                                                  }
+                                                }}
+                                              />
+                                            </form>
+                                          ) : (
+                                            <>
+                                              <button
+                                                type="button"
+                                                aria-current={
+                                                  isSelected
+                                                    ? "page"
+                                                    : undefined
+                                                }
+                                                className={cn(
+                                                  "gen2-sidebar-chat-card",
+                                                  isSelected && "selected",
+                                                )}
+                                                onClick={() => {
+                                                  setSelectedChatId(chat.id);
+                                                  setActiveProvider(
+                                                    provider.id,
+                                                  );
+                                                }}
+                                                onDoubleClick={() =>
+                                                  beginRename(chat)
                                                 }
                                               >
-                                                <input
-                                                  aria-label="Chat title"
-                                                  value={renameDraft}
-                                                  maxLength={80}
-                                                  autoFocus
-                                                  disabled={renamePending}
-                                                  onChange={(event) =>
-                                                    setRenameDraft(
-                                                      event.target.value,
-                                                    )
-                                                  }
-                                                  onKeyDown={(event) => {
-                                                    if (
-                                                      event.key === "Escape" &&
-                                                      !renamePending
-                                                    ) {
-                                                      event.preventDefault();
-                                                      setRenamingChatId(null);
-                                                    }
-                                                  }}
-                                                />
-                                              </form>
-                                            ) : (
-                                              <>
-                                                <button
-                                                  type="button"
-                                                  aria-current={
-                                                    isSelected
-                                                      ? "page"
-                                                      : undefined
-                                                  }
-                                                  className={cn(
-                                                    "gen2-sidebar-chat-card",
-                                                    isSelected && "selected",
-                                                  )}
-                                                  onClick={() => {
-                                                    setSelectedChatId(chat.id);
-                                                    setActiveProvider(
-                                                      provider.id,
-                                                    );
-                                                  }}
-                                                  onDoubleClick={() =>
-                                                    beginRename(chat)
-                                                  }
-                                                >
-                                                  <span className="gen2-sidebar-chat-title">
-                                                    {chat.title}
+                                                <span className="gen2-sidebar-chat-title">
+                                                  {chat.title}
+                                                </span>
+                                                <div className="gen2-sidebar-chat-meta">
+                                                  <span>
+                                                    {chat.messageCount ?? 1}{" "}
+                                                    msgs
                                                   </span>
-                                                  <div className="gen2-sidebar-chat-meta">
-                                                    <span>
-                                                      {chat.messageCount ?? 1}{" "}
-                                                      msgs
-                                                    </span>
-                                                    <span className="gen2-sidebar-chat-dot">
-                                                      •
-                                                    </span>
-                                                    <span>
-                                                      {formatRelativeTime(
-                                                        chat.updatedAt,
-                                                      )}
-                                                    </span>
-                                                  </div>
-                                                </button>
-                                                <WorkspaceButton
-                                                  tone="ghost"
-                                                  size="icon"
-                                                  className="gen2-sidebar-chat-rename"
-                                                  aria-label={`Rename ${chat.title}`}
-                                                  onClick={() =>
-                                                    beginRename(chat)
-                                                  }
-                                                >
-                                                  <Pencil aria-hidden="true" />
-                                                </WorkspaceButton>
-                                              </>
-                                            )}
-                                          </li>
-                                        );
-                                      })}
-                                    </ul>
-                                  )}
+                                                  <span className="gen2-sidebar-chat-dot">
+                                                    •
+                                                  </span>
+                                                  <span>
+                                                    {formatRelativeTime(
+                                                      chat.updatedAt,
+                                                    )}
+                                                  </span>
+                                                </div>
+                                              </button>
+                                              <WorkspaceButton
+                                                tone="ghost"
+                                                size="icon"
+                                                className="gen2-sidebar-chat-rename"
+                                                aria-label={`Rename ${chat.title}`}
+                                                onClick={() =>
+                                                  beginRename(chat)
+                                                }
+                                              >
+                                                <Pencil aria-hidden="true" />
+                                              </WorkspaceButton>
+                                            </>
+                                          )}
+                                        </li>
+                                      );
+                                    })}
+                                  </ul>
                                 </div>
                               );
                             })}
@@ -1826,7 +1501,7 @@ export function SupersetWorkspaceShell({
                       </div>
                     </aside>
                   </ResizablePanel>
-                  <ResizableHandle withHandle className="gen2-ide-resizer" />
+                  <ResizableHandle className="gen2-ide-resizer" />
                 </>
               ) : null}
 
@@ -1909,6 +1584,13 @@ export function SupersetWorkspaceShell({
                       <>
                         <WorkspaceLoading
                           className="gen2-ide-loading"
+                          detail={
+                            connection.switching ? undefined : (
+                              <WorkspaceStartupSteps
+                                progress={connection.progress}
+                              />
+                            )
+                          }
                           busy={
                             connection.switching ||
                             (!connection.subscriptionRequired &&
@@ -2155,7 +1837,7 @@ export function SupersetWorkspaceShell({
               {/* Right Inspector: Files, Changes, Review */}
               {!inspectorCollapsed ? (
                 <>
-                  <ResizableHandle withHandle className="gen2-ide-resizer" />
+                  <ResizableHandle className="gen2-ide-resizer" />
                   <ResizablePanel
                     defaultSize="400px"
                     minSize="280px"
@@ -2167,31 +1849,41 @@ export function SupersetWorkspaceShell({
                       className="h-full w-full overflow-hidden flex flex-col"
                       aria-label="Branch files"
                     >
-                      <div
-                        role="tablist"
-                        aria-label="Branch files"
-                        className="gen2-ide-tabs"
+                      <Tabs
+                        value={tab}
+                        onValueChange={(next) => setTab(next as Tab)}
+                        className="contents"
                       >
-                        {(
-                          [
-                            ["files", "Files"],
-                            ["changes", "Changes"],
-                            ["review", "Review"],
-                          ] as const
-                        ).map(([id, label]) => (
-                          <button
-                            key={id}
-                            id={`superset-tab-${id}`}
-                            type="button"
-                            role="tab"
-                            aria-selected={tab === id}
-                            aria-controls={`superset-panel-${id}`}
-                            onClick={() => setTab(id)}
-                          >
-                            {label}
-                          </button>
-                        ))}
-                      </div>
+                        <TabsList
+                          aria-label="Branch files"
+                          className="gen2-ide-tabs"
+                        >
+                          {(
+                            [
+                              ["files", "Files"],
+                              ["changes", "Changes"],
+                              ["review", "Review"],
+                            ] as const
+                          ).map(([id, label]) => (
+                            <TabsTrigger
+                              key={id}
+                              value={id}
+                              id={`superset-tab-${id}`}
+                              aria-controls={`superset-panel-${id}`}
+                            >
+                              {label}
+                            </TabsTrigger>
+                          ))}
+                        </TabsList>
+                      </Tabs>
+                      {connection.state === "disconnected" ? (
+                        <Alert className="gen2-ide-offline-notice">
+                          <AlertDescription>
+                            Workspace offline. These are the files from your
+                            last session, read-only.
+                          </AlertDescription>
+                        </Alert>
+                      ) : null}
                       <div
                         id="superset-panel-files"
                         role="tabpanel"

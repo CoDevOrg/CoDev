@@ -40,6 +40,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useScrambleText } from "./use-scramble-text";
 import { WorkspaceButton } from "./workspace-button";
 
 export interface WorkspaceShareDialogProps {
@@ -81,6 +82,8 @@ export function WorkspaceShareDialog({
   const [inviteRole, setInviteRole] = useState<Gen2WorkspaceRole>("editor");
   const [linkRole, setLinkRole] = useState<Gen2WorkspaceRole>("editor");
   const [inviteUrl, setInviteUrl] = useState("");
+  // A regenerated link resolves from scrambled characters; copying uses the real one.
+  const shownInviteUrl = useScrambleText(inviteUrl);
   const [linkLoading, setLinkLoading] = useState(false);
   const [linkError, setLinkError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -669,7 +672,7 @@ export function WorkspaceShareDialog({
             {inviteUrl ? (
               <Input
                 readOnly
-                value={inviteUrl}
+                value={shownInviteUrl}
                 aria-label="Share link"
                 onFocus={(event) => event.currentTarget.select()}
               />

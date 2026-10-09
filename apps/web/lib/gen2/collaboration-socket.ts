@@ -292,16 +292,9 @@ async function publishAwareness(
   path: string,
   update: string,
 ) {
-  if (!connection.worktreeId || !connection.subscriptions.has(path)) {
-    sendError(
-      connection,
-      "not_subscribed",
-      "Subscribe before sharing your cursor.",
-      false,
-      path,
-    );
-    return;
-  }
+  // A cursor can arrive before its subscription finishes. Presence is
+  // ephemeral, so drop it quietly instead of showing members a protocol error.
+  if (!connection.worktreeId || !connection.subscriptions.has(path)) return;
   const roomKey = gen2CollaborationRoom(workspaceId);
   connection.activePath = path;
   const sanitized = sanitizeAwareness(update, connection.user);
