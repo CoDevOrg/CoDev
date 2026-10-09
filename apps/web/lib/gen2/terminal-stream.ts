@@ -9,6 +9,7 @@ import {
 
 import { gen2TerminalAccess } from "./terminal-access";
 import { gen2TerminalBackend } from "./terminals";
+import { logEvent } from "../platform/observability";
 import type { ServerWebSocket } from "../platform/websocket";
 
 /**
@@ -88,6 +89,11 @@ export async function handleGen2TerminalSocket(
 
   const fail = (error: unknown) => {
     if (closed) return;
+    logEvent("warn", "gen2.terminal.stream_failed", {
+      workspaceId: input.workspaceId,
+      worktreeId: input.worktreeId,
+      detail: errorMessage(error),
+    });
     send(socket, { type: "error", message: errorMessage(error) });
     stop(1011, "terminal stream error");
   };

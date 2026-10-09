@@ -336,6 +336,118 @@ describe("Gen2ChatPanel", () => {
     expect(screen.getByText("Listed files")).toBeInTheDocument();
   });
 
+  it("hands a finished reply to the saved thread without showing it twice", async () => {
+    let exited = false;
+    stubFetch({
+      poll: () => {
+        exited = true;
+        return {
+          chunks: ndjson(
+            `{"type":"item.completed","item":{"id":"m1","type":"agent_message","text":"All done."}}`,
+            `{"type":"turn.completed"}`,
+          ),
+          nextSequence: 1,
+          exited: true,
+        };
+      },
+      messages: [
+        {
+          id: "msg-1",
+          role: "assistant",
+          body: "All done.",
+          createdAt: "2026-09-20T20:01:00.000Z",
+        },
+      ],
+    });
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    let releaseThread!: () => void;
+    const threadHeld = new Promise<void>((resolve) => {
+      releaseThread = resolve;
+    });
+    vi.mocked(fetch).mockImplementation(async (url, init) => {
+      if (exited && String(url).includes("/chats/")) await threadHeld;
+      return original(url, init);
+    });
+    render(
+      <Gen2ChatPanel
+        workspace={workspace}
+        onRunningChange={vi.fn()}
+        onFilesChanged={vi.fn()}
+        onOpenFile={vi.fn()}
+        onNeedsMachine={async () => true}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Prompt"), {
+      target: { value: "finish up" },
+    });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Send" })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    // While the saved thread reloads, the streamed reply stays in place.
+    expect(await screen.findByText("All done.")).toBeInTheDocument();
+    expect(screen.queryByText("Thinking…")).toBeNull();
+    expect(screen.queryByText("Starting the agent…")).toBeNull();
+
+    releaseThread();
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /Stop/ })).toBeNull(),
+    );
+    expect(screen.getAllByText("All done.")).toHaveLength(1);
+    expect(screen.queryByText("Thinking…")).toBeNull();
+  });
+
+  it("clears the previous chat while the next one loads", async () => {
+    stubFetch({});
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    const other = "66666666-6666-4666-8666-666666666666";
+    let releaseOther!: () => void;
+    const otherHeld = new Promise<void>((resolve) => {
+      releaseOther = resolve;
+    });
+    const message = (id: string, body: string) => ({
+      id,
+      role: "user",
+      body,
+      createdAt: "2026-09-20T20:00:00.000Z",
+    });
+    vi.mocked(fetch).mockImplementation(async (url, init) => {
+      const path = String(url);
+      if (path.endsWith(`/chats/${CHAT.id}`))
+        return Response.json({
+          chat: { ...CHAT, messages: [message("a-1", "From the first chat")] },
+        });
+      if (path.endsWith(`/chats/${other}`)) {
+        await otherHeld;
+        return Response.json({
+          chat: {
+            id: other,
+            title: "Other",
+            messages: [message("b-1", "From the second chat")],
+          },
+        });
+      }
+      return original(url, init);
+    });
+    const props = {
+      workspace,
+      onRunningChange: vi.fn(),
+      onFilesChanged: vi.fn(),
+      onOpenFile: vi.fn(),
+      onNeedsMachine: async () => true,
+    };
+    const view = render(<Gen2ChatPanel {...props} activeChatId={CHAT.id} />);
+    expect(await screen.findByText("From the first chat")).toBeInTheDocument();
+
+    view.rerender(<Gen2ChatPanel {...props} activeChatId={other} />);
+    expect(screen.queryByText("From the first chat")).toBeNull();
+    expect(screen.queryByText("What should we build?")).toBeNull();
+
+    releaseOther();
+    expect(await screen.findByText("From the second chat")).toBeInTheDocument();
+  });
+
   it("tells the workbench when the agent touched the filesystem", async () => {
     const onFilesChanged = vi.fn();
     stubFetch({

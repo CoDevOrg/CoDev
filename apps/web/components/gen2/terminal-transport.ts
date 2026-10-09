@@ -212,16 +212,17 @@ function connect(session: Session, failures: number) {
     return;
   }
   session.socket = socket;
-  let opened = false;
+  // A socket counts only once the server says the stream is ready: proxies and
+  // a failed session check can accept the upgrade and close it right away.
+  let ready = false;
   let ended = false;
-  socket.onopen = () => {
-    opened = true;
-    session.everOpened = true;
-    flush(session);
-  };
+  socket.onopen = () => flush(session);
   socket.onmessage = (event) => {
     const action = applySocketMessage(session, event.data);
-    if (action === "exit") {
+    if (action === "ready") {
+      ready = true;
+      session.everOpened = true;
+    } else if (action === "exit") {
       ended = true;
       socket.close();
     } else if (action === "fallback") {
@@ -233,7 +234,7 @@ function connect(session: Session, failures: number) {
   socket.onclose = () => {
     if (session.socket === socket) session.socket = null;
     if (session.stopped || ended || session.usingHttp) return;
-    if (!opened) {
+    if (!ready) {
       const next = failures + 1;
       if (!session.everOpened || next >= 3) {
         startHttp(session);
@@ -242,7 +243,7 @@ function connect(session: Session, failures: number) {
       window.setTimeout(() => connect(session, next), 300 * next);
       return;
     }
-    window.setTimeout(() => connect(session, 0), 0);
+    window.setTimeout(() => connect(session, 1), 300);
   };
 }
 
@@ -269,6 +270,7 @@ function applySocketMessage(session: Session, data: unknown) {
       session.onExit();
       return "exit";
     }
+    if (message.type === "ready") return "ready";
     if (message.type === "error") return "fallback";
     return "ignore";
   } catch {

@@ -188,6 +188,10 @@ export function Gen2ChatPanel({
   const [chats, setChats] = useState<Gen2Chat[]>([]);
   const [chatId, setChatId] = useState<string | null>(activeChatId ?? null);
   const [thread, setThread] = useState<Thread>({ messages: [] });
+  // The chat whose saved messages `thread` holds, so a switch never shows the
+  // previous chat while the next one loads.
+  const [threadChatId, setThreadChatId] = useState<string | null>(null);
+  const [switchingChat, setSwitchingChat] = useState(false);
   const [importedFrom, setImportedFrom] =
     useState<Gen2ChatDetail["importedFrom"]>(null);
   const [prompt, setPrompt] = useState("");
@@ -219,6 +223,12 @@ export function Gen2ChatPanel({
   if (activeChatId && activeChatId !== chatId) setChatId(activeChatId);
   if (activeProvider && activeProvider !== agent) setAgent(activeProvider);
   if (!chatId && thread.messages.length > 0) setThread({ messages: [] });
+  if (threadChatId && chatId !== threadChatId) {
+    setThreadChatId(null);
+    setSwitchingChat(true);
+    setThread({ messages: [] });
+    setImportedFrom(null);
+  }
   const [modelsByProvider, setModelsByProvider] = useState<
     Record<string, Gen2ModelInfo[]>
   >({});
@@ -296,7 +306,7 @@ export function Gen2ChatPanel({
     Boolean(prompt.trim() || attachments.length > 0) &&
     !busy &&
     Boolean(currentModelItem);
-  const empty = thread.messages.length === 0 && !busy;
+  const empty = thread.messages.length === 0 && !busy && !switchingChat;
   // Every turn launches the CLI, but only a chat's first one reads as a start.
   const replied = thread.messages.some(
     (message) => message.role === "assistant",
@@ -323,6 +333,13 @@ export function Gen2ChatPanel({
     [running, starting, onRunningChange],
   );
 
+  const chatIdRef = useRef(chatId);
+  const activeChatIdRef = useRef(activeChatId);
+  useEffect(() => {
+    chatIdRef.current = chatId;
+    activeChatIdRef.current = activeChatId;
+  }, [chatId, activeChatId]);
+
   const loadChats = useCallback(async () => {
     const response = await fetch(`/api/gen2/workspaces/${workspace.id}/chats`);
     if (!response.ok) return;
@@ -330,12 +347,13 @@ export function Gen2ChatPanel({
     const fetchedChats = payload.chats ?? [];
     setChats(fetchedChats);
     onChatsChange?.(fetchedChats);
-    const targetId = activeChatId ?? fetchedChats[0]?.id ?? null;
+    const selectedId = activeChatIdRef.current;
+    const targetId = selectedId ?? fetchedChats[0]?.id ?? null;
     setChatId((current) => current ?? targetId);
-    if (targetId && !activeChatId) {
+    if (targetId && !selectedId) {
       onSelectChatId?.(targetId);
     }
-  }, [workspace.id, activeChatId, onChatsChange, onSelectChatId]);
+  }, [workspace.id, onChatsChange, onSelectChatId]);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -349,8 +367,14 @@ export function Gen2ChatPanel({
       const response = await fetch(
         `/api/gen2/workspaces/${workspace.id}/chats/${id}`,
       );
-      if (!response.ok) return;
-      const payload = (await response.json()) as { chat?: Gen2ChatDetail };
+      const payload = response.ok
+        ? ((await response.json()) as { chat?: Gen2ChatDetail })
+        : null;
+      // The member switched chats while this one was loading.
+      if (id !== chatIdRef.current) return;
+      setThreadChatId(id);
+      setSwitchingChat(false);
+      if (!payload) return;
       setImportedFrom(payload.chat?.importedFrom ?? null);
       setThread((current) => {
         const messages = payload.chat?.messages ?? [];
@@ -469,10 +493,12 @@ export function Gen2ChatPanel({
         abortRef.current = null;
         sessionRef.current = null;
         rememberTurn(workspace.id, null);
+        // Swap the live bubble for the saved reply in one render; clearing it
+        // first flashes "Thinking…" and then shows the reply a second time.
+        await loadThread(chat).catch(() => undefined);
         setRunning(false);
         setItems([]);
         setLiveReply("");
-        await loadThread(chat);
         await loadChats();
         if (sawFileChange) onFilesChanged();
       }
@@ -698,6 +724,9 @@ export function Gen2ChatPanel({
       accepted = true;
       // Show the fallback note right away, before the reply streams in.
       if (payload.fallback) await loadThread(target);
+      // The turn owns the busy state from here, so finishing it doesn't fall
+      // back to the "Starting…" bubble while the thread reloads.
+      setStarting(false);
       await follow(payload.sessionId, target, 0, agent);
     } catch {
       setError("Couldn't reach CoDev. Try again.");
@@ -739,6 +768,8 @@ export function Gen2ChatPanel({
     const next = [chat, ...chats];
     setChats(next);
     setChatId(chat.id);
+    setThread({ messages: [] });
+    setThreadChatId(chat.id);
     onChatsChange?.(next);
     onSelectChatId?.(chat.id);
     pinToLatest();
