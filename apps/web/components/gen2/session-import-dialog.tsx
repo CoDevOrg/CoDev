@@ -30,21 +30,52 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ProviderLogo } from "./provider-logos";
 import { WorkspaceButton } from "./workspace-button";
 
+type Platform = "windows" | "unix";
+
 const SOURCES: Record<
   Gen2SessionImportProvider,
-  { label: string; folder: string; file: string }
+  {
+    label: string;
+    folder: Record<Platform, string>;
+    file: Record<Platform, string>;
+  }
 > = {
   codex: {
     label: "Codex",
-    folder: "~/.codex/sessions",
-    file: "YYYY/MM/DD/rollout-….jsonl",
+    folder: {
+      windows: "%USERPROFILE%\\.codex\\sessions",
+      unix: "~/.codex/sessions",
+    },
+    file: {
+      windows: "YYYY\\MM\\DD\\rollout-….jsonl",
+      unix: "YYYY/MM/DD/rollout-….jsonl",
+    },
   },
   claude: {
     label: "Claude Code",
-    folder: "~/.claude/projects",
-    file: "<project>/<session id>.jsonl",
+    folder: {
+      windows: "%USERPROFILE%\\.claude\\projects",
+      unix: "~/.claude/projects",
+    },
+    file: {
+      windows: "<project>\\<session id>.jsonl",
+      unix: "<project>/<session id>.jsonl",
+    },
   },
 };
+
+// How to reach a hidden dot-folder from the browser's file picker.
+const PICKER_TIP: Record<Platform, string> = {
+  windows:
+    "Paste the folder into the file picker's File name box and press Enter.",
+  unix: "On macOS, press ⌘⇧G in the file picker and paste the folder.",
+};
+
+function currentPlatform(): Platform {
+  return typeof navigator !== "undefined" && /Windows/.test(navigator.userAgent)
+    ? "windows"
+    : "unix";
+}
 
 function SessionPreview({ preview }: { preview: Gen2SessionImportPreview }) {
   const hidden = preview.redactions.reduce((sum, r) => sum + r.count, 0);
@@ -180,6 +211,7 @@ export function SessionImportDialog({
   }
 
   const source = SOURCES[provider];
+  const platform = currentPlatform();
   return (
     <Dialog
       open={open}
@@ -190,7 +222,7 @@ export function SessionImportDialog({
     >
       <DialogContent
         showCloseButton={false}
-        className="gen2-workspace-surface gen2-session-import sm:max-w-[600px]"
+        className="gen2-workspace-surface gen2-session-import grid-cols-[minmax(0,1fr)] sm:max-w-[600px]"
       >
         <DialogClose asChild>
           <WorkspaceButton
@@ -250,8 +282,12 @@ export function SessionImportDialog({
                 Session file
               </FieldLabel>
               <FieldDescription>
-                Find it in <code>{source.folder}</code> as{" "}
-                <code>{source.file}</code>. Up to 64 MB.
+                Find it in <code>{source.folder[platform]}</code> as{" "}
+                <code>{source.file[platform]}</code>.
+                {provider === "claude"
+                  ? " Skip files in subagents folders."
+                  : ""}{" "}
+                {PICKER_TIP[platform]} Up to 64 MB.
               </FieldDescription>
               <label
                 htmlFor="session-import-file"

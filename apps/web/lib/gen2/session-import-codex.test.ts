@@ -249,4 +249,16 @@ describe("Codex rollout import", () => {
       ]),
     ).toThrow(/doesn't look like a Codex rollout/);
   });
+
+  it("rejects sub-agent rollouts such as approval reviews", () => {
+    const guardian = {
+      ...meta,
+      payload: {
+        ...meta.payload,
+        source: { subagent: { other: "guardian" } },
+        parent_thread_id: "01a0fb8e-0000-7000-8000-000000000000",
+      },
+    };
+    expect(() => parseCodexSession([guardian])).toThrow(/sub-agent/);
+  });
 });
