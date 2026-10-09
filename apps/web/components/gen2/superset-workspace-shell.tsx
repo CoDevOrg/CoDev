@@ -57,6 +57,7 @@ import {
   type SupportedAiProvider,
 } from "./provider-logos";
 
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Tooltip,
   TooltipContent,
@@ -1853,31 +1854,33 @@ export function SupersetWorkspaceShell({
                       className="h-full w-full overflow-hidden flex flex-col"
                       aria-label="Branch files"
                     >
-                      <div
-                        role="tablist"
-                        aria-label="Branch files"
-                        className="gen2-ide-tabs"
+                      <Tabs
+                        value={tab}
+                        onValueChange={(next) => setTab(next as Tab)}
+                        className="contents"
                       >
-                        {(
-                          [
-                            ["files", "Files"],
-                            ["changes", "Changes"],
-                            ["review", "Review"],
-                          ] as const
-                        ).map(([id, label]) => (
-                          <button
-                            key={id}
-                            id={`superset-tab-${id}`}
-                            type="button"
-                            role="tab"
-                            aria-selected={tab === id}
-                            aria-controls={`superset-panel-${id}`}
-                            onClick={() => setTab(id)}
-                          >
-                            {label}
-                          </button>
-                        ))}
-                      </div>
+                        <TabsList
+                          aria-label="Branch files"
+                          className="gen2-ide-tabs"
+                        >
+                          {(
+                            [
+                              ["files", "Files"],
+                              ["changes", "Changes"],
+                              ["review", "Review"],
+                            ] as const
+                          ).map(([id, label]) => (
+                            <TabsTrigger
+                              key={id}
+                              value={id}
+                              id={`superset-tab-${id}`}
+                              aria-controls={`superset-panel-${id}`}
+                            >
+                              {label}
+                            </TabsTrigger>
+                          ))}
+                        </TabsList>
+                      </Tabs>
                       <div
                         id="superset-panel-files"
                         role="tabpanel"

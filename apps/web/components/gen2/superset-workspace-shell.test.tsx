@@ -247,7 +247,8 @@ describe("SupersetWorkspaceShell", () => {
       "feature-auth",
     );
 
-    fireEvent.click(screen.getByRole("tab", { name: "Changes" }));
+    // Radix tabs activate on mousedown, as a real click does before it clicks.
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Changes" }));
     expect(await screen.findByText("src/login.ts")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Changes" })).toHaveAttribute(
       "aria-selected",
