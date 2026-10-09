@@ -40,7 +40,7 @@ describe("credential-bound sessions", () => {
       await jwt(
         { githubLogin: "ada" },
         {
-          account: { provider: "credentials" },
+          account: { provider: "credentials", type: "credentials" },
           user: { id: "u", credentialRevision: sessionRevision("old-hash") },
         },
       ),
@@ -54,7 +54,7 @@ describe("credential-bound sessions", () => {
       await jwt(
         { githubLogin: "ada" },
         {
-          account: { provider: "credentials" },
+          account: { provider: "credentials", type: "credentials" },
           user: { id: "u", credentialRevision: sessionRevision("stale-hash") },
         },
       ),

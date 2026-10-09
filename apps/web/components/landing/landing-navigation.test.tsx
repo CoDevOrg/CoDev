@@ -18,3 +18,12 @@ it("contracts on scroll and expands when returning to the top", () => {
   fireEvent.scroll(window);
   expect(navigation).toHaveAttribute("data-compact", "false");
 });
+
+it("points signed-in members to the dashboard instead of the waitlist", () => {
+  render(<LandingNavigation signedIn />);
+  expect(screen.getByRole("link", { name: /open dashboard/i })).toHaveAttribute(
+    "href",
+    "/gen2",
+  );
+  expect(screen.queryByText(/join the waitlist/i)).not.toBeInTheDocument();
+});

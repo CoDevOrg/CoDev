@@ -1,5 +1,7 @@
 export const ADMIN_HOSTNAME = "admins.trycodev.com";
 export const PUBLIC_APP_ORIGIN = "https://www.trycodev.com";
+/** Public-site route that carries an admin's session to the admin host. */
+export const ADMIN_HANDOFF_PATH = "/api/auth/admin-handoff";
 
 export function isAdminHostname(hostname: string | null | undefined): boolean {
   return hostname?.split(":")[0]?.toLowerCase() === ADMIN_HOSTNAME;

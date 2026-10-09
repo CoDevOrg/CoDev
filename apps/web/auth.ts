@@ -8,6 +8,7 @@ import Google from "next-auth/providers/google";
 import { schema } from "@codev/db";
 
 import { resolveSignInProviderGate } from "@/lib/auth/auth-sign-in-gate";
+import { redeemAdminHandoffTicket } from "@/lib/auth/admin-handoff";
 import { resolveCredentialsSignIn } from "@/lib/auth/credentials-auth";
 import { sessionRevision } from "@/lib/auth/session-revision";
 import { encryptSecret } from "@/lib/platform/crypto";
@@ -149,6 +150,12 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
             }
           : null;
       },
+    }),
+    Credentials({
+      // Redeems the one-minute ticket the public site mints for administrators.
+      id: "admin-handoff",
+      credentials: { ticket: { type: "text" } },
+      authorize: (credentials) => redeemAdminHandoffTicket(credentials?.ticket),
     }),
     GitHub({
       clientId: githubClientId,
@@ -402,7 +409,7 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
           ?.user?.name;
         if (typeof name === "string" && name.trim()) token.name = name.trim();
       }
-      if (account?.provider === "credentials" && user?.id) {
+      if (account?.type === "credentials" && user?.id) {
         if (!user.credentialRevision) return null;
         token.localUserId = user.id;
         token.credentialRevision = user.credentialRevision;
@@ -475,7 +482,7 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
           .limit(1);
         if (!current) return null;
         const revision = sessionRevision(current.passwordHash);
-        if (account && account.provider !== "credentials")
+        if (account && account.type !== "credentials")
           token.credentialRevision = revision;
         if (token.credentialRevision !== revision) return null;
       }
