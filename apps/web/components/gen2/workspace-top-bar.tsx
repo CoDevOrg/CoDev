@@ -217,7 +217,7 @@ export function WorkspaceTopBar({
         ) : null}
 
         <WorkspaceButton
-          tone="secondary"
+          tone="primary"
           onClick={onShare}
           aria-label="Share workspace"
         >
