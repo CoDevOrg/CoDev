@@ -221,9 +221,27 @@ export async function getGen2ChatDetail(
 ): Promise<Gen2ChatDetail> {
   await requireGen2Member(workspaceId, userId);
   const chat = await requireGen2Chat(workspaceId, chatId);
+  const [messages, [imported]] = await Promise.all([
+    listGen2ChatMessages(chat.id),
+    getDatabase()
+      .select({
+        provider: schema.gen2SessionImports.provider,
+        meta: schema.gen2SessionImports.meta,
+      })
+      .from(schema.gen2SessionImports)
+      .where(eq(schema.gen2SessionImports.chatId, chat.id))
+      .limit(1),
+  ]);
   return gen2ChatDetailSchema.parse({
     ...chat,
-    messages: await listGen2ChatMessages(chat.id),
+    messages,
+    importedFrom: imported
+      ? {
+          provider: imported.provider,
+          startedAt:
+            (imported.meta as { startedAt?: string | null }).startedAt ?? null,
+        }
+      : null,
   });
 }
 
