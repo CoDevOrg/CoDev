@@ -10,26 +10,16 @@ import {
   useRef,
   useState,
 } from "react";
-import Link from "next/link";
 import { useWorkspaceConnection } from "./use-workspace-connection";
 import { useAgentOverlaps } from "./use-agent-overlaps";
 import {
-  ArrowLeft,
   Check,
   ChevronDown,
   ChevronUp,
   GitBranch,
-  Kanban,
-  LoaderCircle,
-  Cloud,
-  PanelLeft,
-  PanelLeftClose,
-  PanelRight,
   Pencil,
   Plus,
-  Settings,
   SquareTerminal,
-  UserPlus,
 } from "lucide-react";
 import type {
   Gen2AgentProviderName,
@@ -39,10 +29,10 @@ import type {
 import { parseGitStatus } from "@/lib/runtime/ide";
 
 import { WorkspaceButton } from "./workspace-button";
+import { WorkspaceTopBar } from "./workspace-top-bar";
 import { cn } from "@/lib/platform/utils";
 import { WorkspaceShareDialog } from "./workspace-share-dialog";
 import { WorkspaceSettingsDialog } from "./workspace-settings-dialog";
-import { ThemeToggle } from "@/components/shell/theme-toggle";
 import { Gen2ChatPanel } from "./chat-panel";
 import { Gen2TerminalPane } from "./terminal-pane";
 import { WorkspaceLoading } from "./workspace-loading";
@@ -68,15 +58,6 @@ import {
 } from "./provider-logos";
 
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -88,7 +69,6 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { Separator } from "@/components/ui/separator";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -837,330 +817,45 @@ export function SupersetWorkspaceShell({
         data-sidebar-collapsed={sidebarCollapsed ? "true" : "false"}
         data-inspector-collapsed={inspectorCollapsed ? "true" : "false"}
       >
-        {/* Top navigation bar: quiet, unified, non-repeating context */}
-        <header className="gen2-ide-top-navbar" aria-label="Top navigation">
-          {/* Left section: sidebar toggle, brand badge, workspace & branch context grouped together */}
-          <div className="gen2-ide-top-navbar-left">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Link
-                  href="/gen2"
-                  className="gen2-workspace-button gen2-ide-icon-button"
-                  data-slot="button"
-                  data-tone="ghost"
-                  data-size="icon"
-                  aria-label="Back to home"
-                >
-                  <ArrowLeft aria-hidden="true" />
-                </Link>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Home</TooltipContent>
-            </Tooltip>
-
-            <img
-              className="gen2-brand-mark"
-              src="/brand/codev-mark.svg"
-              alt="CoDev"
-              width={22}
-              height={22}
-            />
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <WorkspaceButton
-                  size="icon"
-                  type="button"
-                  className="gen2-ide-icon-button"
-                  onClick={toggleSidebarByUser}
-                  aria-label={
-                    sidebarCollapsed ? "Expand sidebar" : "Minimize sidebar"
-                  }
-                >
-                  {sidebarCollapsed ? (
-                    <PanelLeft size={16} />
-                  ) : (
-                    <PanelLeftClose size={16} />
-                  )}
-                </WorkspaceButton>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {sidebarCollapsed ? "Expand sidebar" : "Minimize sidebar"}
-              </TooltipContent>
-            </Tooltip>
-
-            {/* Grouped workspace and repository breadcrumb */}
-            <div className="gen2-workspace-breadcrumb">
-              <span className="gen2-workspace-breadcrumb-name">
-                {activeWorkspace.name}
-              </span>
-              <span className="gen2-workspace-breadcrumb-sep">/</span>
-              {activeWorkspace.repository ? (
-                <>
-                  <span className="gen2-workspace-breadcrumb-repo">
-                    {activeWorkspace.repository.fullName}
-                  </span>
-                  <span className="gen2-workspace-breadcrumb-sep gen2-workspace-breadcrumb-repo">
-                    /
-                  </span>
-                </>
-              ) : null}
-            </div>
-
-            {/* Header Branch Dropdown: unified context with keyboard accessibility */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="gen2-topbar-branch-pill"
-                  aria-label={`Active branch: ${selected?.branch ?? "main"}`}
-                >
-                  <GitBranch size={13} className="gen2-topbar-branch-icon" />
-                  <span className="gen2-topbar-branch-name">
-                    {selected?.branch ?? "main"}
-                  </span>
-                  {selectedStatus ? (
-                    <span
-                      className={cn(
-                        "gen2-topbar-branch-status",
-                        selectedStatus.tone,
-                      )}
-                    >
-                      {selectedStatus.label}
-                    </span>
-                  ) : null}
-                  <ChevronDown
-                    size={11}
-                    className="text-muted-foreground ml-0.5 shrink-0 opacity-70"
-                  />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="start"
-                className="w-60 gen2-workspace-surface"
-              >
-                <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground">
-                  Switch branch
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {branchLoadError ? (
-                  <DropdownMenuItem
-                    onSelect={() => void refreshWorktrees()}
-                    className="cursor-pointer py-1.5 px-2 text-xs text-muted-foreground"
-                  >
-                    Branch details unavailable · Retry
-                  </DropdownMenuItem>
-                ) : null}
-                <DropdownMenuGroup>
-                  {worktrees.map((wt) => {
-                    const isSelected = wt.worktreeId === worktreeId;
-                    const st = getBranchStatus(wt.worktreeId);
-                    return (
-                      <DropdownMenuItem
-                        key={wt.worktreeId}
-                        onClick={() => selectWorktree(wt.worktreeId)}
-                        className="flex items-center justify-between cursor-pointer py-1.5 px-2 text-xs"
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <GitBranch
-                            size={13}
-                            className={cn(
-                              "shrink-0",
-                              isSelected
-                                ? "text-primary font-medium"
-                                : "text-muted-foreground",
-                            )}
-                          />
-                          <span
-                            className={cn(
-                              "truncate font-mono",
-                              isSelected && "font-semibold text-primary",
-                            )}
-                          >
-                            {wt.branch}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                          <span
-                            className={cn("gen2-worktree-status-pill", st.tone)}
-                          >
-                            {st.label}
-                          </span>
-                          {isSelected ? (
-                            <Check size={13} className="text-primary" />
-                          ) : null}
-                        </div>
-                      </DropdownMenuItem>
-                    );
-                  })}
-                </DropdownMenuGroup>
-                {canEdit ? (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={() => {
-                        collapseSidebarByUser(false);
-                        setShowCreate(true);
-                      }}
-                      className="cursor-pointer py-1.5 px-2 text-xs"
-                    >
-                      <Plus size={13} className="mr-2 shrink-0" />
-                      <span>New branch…</span>
-                    </DropdownMenuItem>
-                  </>
-                ) : null}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-
-          {/* Center section: quiet active session context, gracefully hides on narrow screens */}
-          <div className="gen2-ide-top-navbar-center">
-            <div className="gen2-topbar-session-card">
-              {connectedProviders.some(
-                (provider) => provider.id === activeProvider,
-              ) ? (
-                <div className="gen2-topbar-provider-avatar">
-                  <ProviderLogo provider={activeProvider} size={14} />
-                </div>
-              ) : null}
-              <span className="gen2-topbar-session-title">
-                {activeChat?.title ?? "Initial Workspace Session"}
-              </span>
-              {agentRunning ? (
-                <span className="gen2-topbar-session-status running">
-                  <span
-                    className="gen2-status-dot working"
-                    aria-hidden="true"
-                  />
-                  Working…
-                </span>
-              ) : null}
-            </div>
-          </div>
-
-          {/* Right section: share, board view toggle, truthful machine status, theme, inspector */}
-          <div className="gen2-ide-top-navbar-right">
-            <WorkspaceButton
-              tone="secondary"
-              onClick={() => setShareOpen(true)}
-              aria-label="Share workspace"
-            >
-              <UserPlus data-icon="inline-start" aria-hidden="true" />
-              <span className="gen2-topbar-action-label">Share</span>
-            </WorkspaceButton>
-
-            <WorkspaceButton
-              tone="ghost"
-              type="button"
-              className={cn(
-                "gen2-topbar-nav-button",
-                viewMode === "board" && "active",
-              )}
-              aria-pressed={viewMode === "board"}
-              onClick={() =>
-                setViewMode((m) => (m === "board" ? "ide" : "board"))
-              }
-              aria-label={
-                viewMode === "board" ? "Switch to IDE Stage" : "Switch to Board"
-              }
-            >
-              <Kanban data-icon="inline-start" aria-hidden="true" />
-              <span className="gen2-topbar-action-label">
-                {viewMode === "board" ? "IDE Stage" : "Board"}
-              </span>
-            </WorkspaceButton>
-
-            {connection.state === "connecting" ||
-            connection.state === "checking" ? (
-              <WorkspaceButton
-                tone="secondary"
-                size="toolbar"
-                disabled
-                aria-label={
-                  connection.state === "connecting"
-                    ? "Reconnecting workspace"
-                    : "Checking workspace connection"
+        <WorkspaceTopBar
+          workspaceName={activeWorkspace.name}
+          repositoryName={activeWorkspace.repository?.fullName}
+          branchMenu={{
+            branches: worktrees,
+            selected,
+            getStatus: getBranchStatus,
+            loadError: Boolean(branchLoadError),
+            onRetry: () => void refreshWorktrees(),
+            onSelect: selectWorktree,
+            onCreate: canEdit
+              ? () => {
+                  collapseSidebarByUser(false);
+                  setShowCreate(true);
                 }
-              >
-                <LoaderCircle
-                  data-icon="inline-start"
-                  className="animate-spin"
-                  aria-hidden="true"
-                />
-                <span className="gen2-topbar-action-label">
-                  {connection.state === "connecting"
-                    ? "Reconnecting…"
-                    : "Connecting…"}
-                </span>
-              </WorkspaceButton>
-            ) : connection.state === "disconnected" && viewMode === "board" ? (
-              <WorkspaceButton
-                tone="secondary"
-                size="toolbar"
-                onClick={() => void ensureRunning()}
-                aria-label="Reconnect workspace"
-              >
-                <Cloud data-icon="inline-start" aria-hidden="true" />
-                <span className="gen2-topbar-action-label">Reconnect</span>
-              </WorkspaceButton>
-            ) : null}
-
-            <Separator
-              orientation="vertical"
-              className="h-4 my-auto opacity-40"
-            />
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <WorkspaceButton
-                  size="icon"
-                  type="button"
-                  className="gen2-ide-icon-button"
-                  onClick={() => setSettingsOpen(true)}
-                  aria-label="Settings"
-                >
-                  <Settings size={16} />
-                </WorkspaceButton>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Settings</TooltipContent>
-            </Tooltip>
-
-            <ThemeToggle compact />
-
-            {viewMode === "ide" ? (
-              <>
-                <Separator
-                  orientation="vertical"
-                  className="h-4 my-auto opacity-40"
-                />
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <WorkspaceButton
-                      size="icon"
-                      type="button"
-                      className={cn(
-                        "gen2-ide-icon-button",
-                        inspectorCollapsed && "active",
-                      )}
-                      onClick={toggleInspectorByUser}
-                      aria-label={
-                        inspectorCollapsed
-                          ? "Expand inspector"
-                          : "Collapse inspector"
-                      }
-                    >
-                      <PanelRight size={16} />
-                    </WorkspaceButton>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    {inspectorCollapsed
-                      ? "Expand inspector"
-                      : "Collapse inspector"}
-                  </TooltipContent>
-                </Tooltip>
-              </>
-            ) : null}
-          </div>
-        </header>
+              : undefined,
+          }}
+          sessionTitle={activeChat?.title ?? "Initial Workspace Session"}
+          sessionProvider={
+            connectedProviders.some(
+              (provider) => provider.id === activeProvider,
+            )
+              ? activeProvider
+              : null
+          }
+          agentRunning={agentRunning}
+          connectionState={connection.state}
+          viewMode={viewMode}
+          sidebarCollapsed={sidebarCollapsed}
+          inspectorCollapsed={inspectorCollapsed}
+          onReconnect={() => void ensureRunning()}
+          onShare={() => setShareOpen(true)}
+          onOpenSettings={() => setSettingsOpen(true)}
+          onToggleViewMode={() =>
+            setViewMode((m) => (m === "board" ? "ide" : "board"))
+          }
+          onToggleSidebar={toggleSidebarByUser}
+          onToggleInspector={toggleInspectorByUser}
+        />
 
         {viewMode === "board" ? (
           <main

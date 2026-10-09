@@ -689,6 +689,8 @@ describe("SupersetWorkspaceShell", () => {
     expect(
       screen.queryByRole("button", { name: "Reconnect workspace" }),
     ).not.toBeInTheDocument();
-    expect(screen.queryByText(/Machine:|^Ready$/)).not.toBeInTheDocument();
+    // The top bar reports the checked connection, never a stale persisted state.
+    expect(await screen.findByText("Ready")).toBeInTheDocument();
+    expect(screen.queryByText("Offline")).not.toBeInTheDocument();
   });
 });
