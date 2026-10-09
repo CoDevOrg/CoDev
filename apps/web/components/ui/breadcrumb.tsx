@@ -60,7 +60,10 @@ export function BreadcrumbSeparator({
       data-slot="breadcrumb-separator"
       role="presentation"
       aria-hidden="true"
-      className={cn("shrink-0 opacity-60 [&>svg]:size-3.5", className)}
+      className={cn(
+        "flex shrink-0 items-center opacity-60 [&>svg]:size-3.5",
+        className,
+      )}
       {...props}
     >
       {children ?? <ChevronRight />}

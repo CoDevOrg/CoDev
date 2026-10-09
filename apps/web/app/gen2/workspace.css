@@ -2113,7 +2113,26 @@
 
 .gen2-sidebar-chat-empty {
   padding: 12px 8px;
-  color: var(--ss-muted-foreground);
+}
+
+.gen2-sidebar-chat-empty [data-slot="empty-header"] {
+  gap: 2px;
+}
+
+.gen2-sidebar-chat-empty [data-slot="empty-title"],
+.gen2-sidebar-chat-empty [data-slot="empty-description"] {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+}
+
+.gen2-sidebar-chat-empty [data-slot="empty-title"] {
+  color: var(--ws-text-secondary);
+  font-weight: 500;
+}
+
+.gen2-sidebar-chat-empty [data-slot="empty-description"] {
+  color: var(--ws-text-muted);
 }
 
 .gen2-sidebar-no-providers {
