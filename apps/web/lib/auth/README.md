@@ -11,6 +11,7 @@ This module owns user authentication, identity, and session management. It provi
 - `read-session-revision.ts`: Socket revalidation uses short-lived Hyperdrive pools because the handshake's HTTP pool is already closed.
 - `password-login-limit.ts`: Account-wide password throttling for both Auth.js HTTP handlers and server actions, using the existing Redis configuration and failing closed in production.
 - `update-account-password.ts`: Conditional password changes and atomic CLI-token/device-approval revocation.
+- `admin-handoff.ts`: Single-use, one-minute tickets that let a public-site administrator open the admin host without signing in again; admin status and credential revision are rechecked on redemption.
 - `identity.ts`, `registration.ts`: Core user identity and signup flows.
 - `password-reset.ts`, `password-reset-mail.ts`: Password recovery mechanisms. Production reset links default to the canonical HTTPS site when Auth.js URL overrides are omitted.
 

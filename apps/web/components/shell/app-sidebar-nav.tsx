@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Cloud, MessagesSquare, Settings, ShieldCheck } from "lucide-react";
 
-import { publicAppHref } from "@/lib/platform/site-hosts";
+import { ADMIN_HANDOFF_PATH, publicAppHref } from "@/lib/platform/site-hosts";
 
 const ADMIN_CONSOLE_URL = "https://admins.trycodev.com";
 
@@ -25,20 +25,24 @@ export function AppSidebarNav({
   const items = showAdmin
     ? [
         ...navItems,
-        { href: ADMIN_CONSOLE_URL, icon: ShieldCheck, label: "Admin" },
+        {
+          // The admin host has its own session; the public site hands it over.
+          href: isAdminHost ? ADMIN_CONSOLE_URL : ADMIN_HANDOFF_PATH,
+          icon: ShieldCheck,
+          label: "Admin",
+        },
       ]
     : navItems;
   return (
     <nav className="app-sidebar-nav" aria-label="Application navigation">
       {items.map(({ href, icon: Icon, label }) => {
-        const active = href.startsWith("http")
+        const external = href.startsWith("http") || href === ADMIN_HANDOFF_PATH;
+        const active = external
           ? false
           : pathname === href || pathname.startsWith(href + "/");
-        const resolved = href.startsWith("http")
-          ? href
-          : publicAppHref(href, isAdminHost);
+        const resolved = external ? href : publicAppHref(href, isAdminHost);
         const className = `app-sidebar-link${active ? " is-active" : ""}`;
-        if (resolved.startsWith("http")) {
+        if (external || resolved.startsWith("http")) {
           return (
             <a key={href} href={resolved} className={className}>
               <Icon className="app-sidebar-link-icon" aria-hidden="true" />

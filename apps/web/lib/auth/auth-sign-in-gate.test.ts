@@ -5,6 +5,9 @@ import { resolveSignInProviderGate } from "./auth-sign-in-gate";
 describe("resolveSignInProviderGate", () => {
   it("allows credentials so email/password sign-in is not AccessDenied", () => {
     expect(resolveSignInProviderGate("credentials")).toBe("allow-credentials");
+    expect(resolveSignInProviderGate("admin-handoff")).toBe(
+      "allow-credentials",
+    );
   });
 
   it("routes google and github to their handlers", () => {

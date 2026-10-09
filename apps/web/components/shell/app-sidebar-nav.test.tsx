@@ -40,4 +40,13 @@ describe("AppSidebarNav", () => {
       "https://admins.trycodev.com",
     );
   });
+
+  it("hands the public-site session to the admin host", () => {
+    render(<AppSidebarNav showAdmin />);
+
+    expect(screen.getByRole("link", { name: "Admin" })).toHaveAttribute(
+      "href",
+      "/api/auth/admin-handoff",
+    );
+  });
 });

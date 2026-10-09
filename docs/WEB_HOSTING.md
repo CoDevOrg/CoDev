@@ -301,8 +301,11 @@ OAuth form returns; runtime and arbitrary sibling origins remain excluded.
 Production sessions use `__Host-codev.session-token` with no `Domain` attribute.
 Public, admin, preview, and runtime hosts cannot share this cookie. Visiting an
 application host expires the previous domain-wide session cookies; this rollout
-requires members to sign in again. Admin sign-in is independent of public-site
-sign-in. Azure releases omit `AUTH_URL`/`NEXTAUTH_URL` from the runtime so
+requires members to sign in again. The admin host keeps its own session; the
+public sidebar's Admin link goes through `/api/auth/admin-handoff`, which signs
+a one-minute, single-use ticket for current administrators. The admin host
+redeems it (through REST Redis `SET NX`, or the `REDIS_URL` limiter) after rechecking admin status and credential
+revision, then sets its own host-only cookie. Azure releases omit `AUTH_URL`/`NEXTAUTH_URL` from the runtime so
 Auth.js retains the authenticated public host. The existing
 `AUTH_REDIRECT_PROXY_URL` on `www.trycodev.com/api/auth` keeps the registered
 provider callback canonical and forwards signed OAuth state back to the host
