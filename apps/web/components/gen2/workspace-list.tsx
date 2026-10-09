@@ -166,7 +166,8 @@ export function Gen2WorkspaceList({
   const confirmDialog = confirming ? (
     <ConfirmDialog
       title={`Delete “${confirming.name}”?`}
-      confirmLabel="Delete workspace"
+      confirmLabel="Hold to delete workspace"
+      holdToConfirm
       onConfirm={() => void deleteWorkspace(confirming)}
       onCancel={() => setConfirming(null)}
     >

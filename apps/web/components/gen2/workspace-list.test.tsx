@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ refresh: vi.fn() }));
@@ -41,7 +47,18 @@ describe("Gen2WorkspaceList", () => {
     expect(screen.getByRole("alertdialog")).toHaveTextContent(
       "permanently deletes the workspace",
     );
-    fireEvent.click(screen.getByRole("button", { name: "Delete workspace" }));
+    // Deleting needs a full press-and-hold, not a click.
+    const hold = screen.getByRole("button", {
+      name: "Hold to delete workspace",
+    });
+    fireEvent.click(hold);
+    expect(fetch).not.toHaveBeenCalled();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    fireEvent.keyDown(hold, { key: "Enter" });
+    act(() => {
+      vi.advanceTimersByTime(1_600);
+    });
+    vi.useRealTimers();
 
     await waitFor(() =>
       expect(fetch).toHaveBeenCalledWith(
