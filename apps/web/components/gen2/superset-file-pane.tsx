@@ -848,70 +848,74 @@ export function SupersetFilePane({
       aria-label="Code editor"
       aria-busy={Boolean(openingPath)}
     >
-      <header className="gen2-superset-editor-bar">
-        <span className="gen2-superset-path" title={openFile?.path}>
-          {openFile?.path ?? "No file open"}
-        </span>
-        <div className="gen2-superset-editor-actions">
-          {openFile && !canEdit ? (
-            <span className="gen2-superset-read-only">Read only</span>
-          ) : null}
-          {openFile ? (
-            <span
-              className="gen2-superset-collaboration-state"
-              role="status"
-              aria-live="polite"
-            >
-              {sharedDocument.state === "connected"
-                ? sharedDocument.members.length > 1
-                  ? `${sharedDocument.members.length - 1} collaborator${sharedDocument.members.length === 2 ? "" : "s"} editing`
-                  : "Shared editing"
-                : sharedDocument.state === "conflict"
-                  ? "Resolve conflict"
-                  : "Syncing collaboration…"}
-            </span>
-          ) : null}
-          <WorkspaceButton
-            tone="secondary"
-            type="button"
-            className="gen2-superset-save"
-            disabled={
-              !canEdit ||
-              !dirty ||
-              saving ||
-              Boolean(openingPath) ||
-              stale ||
-              sharedDocument.readOnly ||
-              sharedDocument.state === "conflict"
-            }
-            onClick={() => void save()}
-          >
-            {saving ? "Saving…" : "Save"}
-          </WorkspaceButton>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <WorkspaceButton
-                tone="ghost"
-                size="icon"
-                type="button"
-                className="gen2-superset-icon-button"
-                onClick={() => openFile && void copyText(openFile.path, "Path")}
-                aria-label="Copy path"
-                disabled={!openFile}
+      {openFile ? (
+        <header className="gen2-superset-editor-bar">
+          <span className="gen2-superset-path" title={openFile?.path}>
+            {openFile?.path ?? "No file open"}
+          </span>
+          <div className="gen2-superset-editor-actions">
+            {openFile && !canEdit ? (
+              <span className="gen2-superset-read-only">Read only</span>
+            ) : null}
+            {openFile ? (
+              <span
+                className="gen2-superset-collaboration-state"
+                role="status"
+                aria-live="polite"
               >
-                {copied ? (
-                  <Check aria-hidden="true" />
-                ) : (
-                  <Copy aria-hidden="true" />
-                )}
-              </WorkspaceButton>
-            </TooltipTrigger>
-            <TooltipContent className="gen2-workspace-surface">
-              {copied ? "Copied" : "Copy path"}
-            </TooltipContent>
-          </Tooltip>
-        </div>
-      </header>
+                {sharedDocument.state === "connected"
+                  ? sharedDocument.members.length > 1
+                    ? `${sharedDocument.members.length - 1} collaborator${sharedDocument.members.length === 2 ? "" : "s"} editing`
+                    : "Shared editing"
+                  : sharedDocument.state === "conflict"
+                    ? "Resolve conflict"
+                    : "Syncing collaboration…"}
+              </span>
+            ) : null}
+            <WorkspaceButton
+              tone="secondary"
+              type="button"
+              className="gen2-superset-save"
+              disabled={
+                !canEdit ||
+                !dirty ||
+                saving ||
+                Boolean(openingPath) ||
+                stale ||
+                sharedDocument.readOnly ||
+                sharedDocument.state === "conflict"
+              }
+              onClick={() => void save()}
+            >
+              {saving ? "Saving…" : "Save"}
+            </WorkspaceButton>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <WorkspaceButton
+                  tone="ghost"
+                  size="icon"
+                  type="button"
+                  className="gen2-superset-icon-button"
+                  onClick={() =>
+                    openFile && void copyText(openFile.path, "Path")
+                  }
+                  aria-label="Copy path"
+                  disabled={!openFile}
+                >
+                  {copied ? (
+                    <Check aria-hidden="true" />
+                  ) : (
+                    <Copy aria-hidden="true" />
+                  )}
+                </WorkspaceButton>
+              </TooltipTrigger>
+              <TooltipContent className="gen2-workspace-surface">
+                {copied ? "Copied" : "Copy path"}
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        </header>
+      ) : null}
       {notice ? (
         <div
           className={`gen2-superset-notice gen2-superset-notice-${notice.kind}`}
@@ -981,16 +985,9 @@ export function SupersetFilePane({
           onSelectionChange={sharedDocument.updateCursor}
           onSave={() => void save()}
         />
-      ) : (
-        <p
-          className="gen2-superset-empty-state"
-          role={!workspaceReady ? "status" : undefined}
-        >
-          {workspaceReady
-            ? "Select a file to open it."
-            : "Files load when the workspace is connected."}
-        </p>
-      )}
+      ) : workspaceReady ? (
+        <p className="gen2-superset-empty-state">Select a file to open it.</p>
+      ) : null}
     </section>
   );
 
@@ -1179,11 +1176,13 @@ export function SupersetFilePane({
               </p>
             ) : visibleFiles.length === 0 ? (
               <p className="gen2-superset-list-state">
-                {query
-                  ? "No files match your search."
-                  : notice?.kind === "error"
-                    ? notice.text
-                    : "No files found. Refresh to try again."}
+                {!workspaceReady
+                  ? "Files load when the workspace is connected."
+                  : query
+                    ? "No files match your search."
+                    : notice?.kind === "error"
+                      ? notice.text
+                      : "No files found. Refresh to try again."}
               </p>
             ) : (
               <ul role="tree" aria-label="Workspace files">
