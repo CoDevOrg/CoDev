@@ -854,8 +854,10 @@ export function SupersetFilePane({
             {openFile?.path ?? "No file open"}
           </span>
           <div className="gen2-superset-editor-actions">
-            {openFile && !canEdit ? (
-              <span className="gen2-superset-read-only">Read only</span>
+            {openFile && (!canEdit || !workspaceReady) ? (
+              <span className="gen2-superset-read-only">
+                {workspaceReady ? "Read only" : "Offline · read only"}
+              </span>
             ) : null}
             {openFile ? (
               <span
@@ -878,6 +880,7 @@ export function SupersetFilePane({
               className="gen2-superset-save"
               disabled={
                 !canEdit ||
+                !workspaceReady ||
                 !dirty ||
                 saving ||
                 Boolean(openingPath) ||
@@ -976,7 +979,7 @@ export function SupersetFilePane({
           sharedText={
             sharedDocument.state === "connected" ? sharedDocument.text : null
           }
-          readOnly={!canEdit || sharedDocument.readOnly}
+          readOnly={!canEdit || !workspaceReady || sharedDocument.readOnly}
           onChange={(next) => {
             contentsRef.current = next;
             setContents(next);

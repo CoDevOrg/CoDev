@@ -37,6 +37,7 @@ import { WorkspaceSettingsDialog } from "./workspace-settings-dialog";
 import { Gen2ChatPanel } from "./chat-panel";
 import { Gen2TerminalPane } from "./terminal-pane";
 import { WorkspaceLoading } from "./workspace-loading";
+import { WorkspaceStartupSteps } from "./workspace-startup-steps";
 import { WorkspaceSwitchDialog } from "./workspace-switch-dialog";
 import {
   createSupersetWorktree,
@@ -58,6 +59,7 @@ import {
   type SupportedAiProvider,
 } from "./provider-logos";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Tooltip,
@@ -836,7 +838,7 @@ export function SupersetWorkspaceShell({
                 }
               : undefined,
           }}
-          sessionTitle={activeChat?.title ?? "Initial Workspace Session"}
+          sessionTitle={activeChat?.title ?? null}
           sessionProvider={
             connectedProviders.some(
               (provider) => provider.id === activeProvider,
@@ -1579,6 +1581,13 @@ export function SupersetWorkspaceShell({
                       <>
                         <WorkspaceLoading
                           className="gen2-ide-loading"
+                          detail={
+                            connection.switching ? undefined : (
+                              <WorkspaceStartupSteps
+                                progress={connection.progress}
+                              />
+                            )
+                          }
                           busy={
                             connection.switching ||
                             (!connection.subscriptionRequired &&
@@ -1864,6 +1873,14 @@ export function SupersetWorkspaceShell({
                           ))}
                         </TabsList>
                       </Tabs>
+                      {connection.state === "disconnected" ? (
+                        <Alert className="gen2-ide-offline-notice">
+                          <AlertDescription>
+                            Workspace offline. These are the files from your
+                            last session, read-only.
+                          </AlertDescription>
+                        </Alert>
+                      ) : null}
                       <div
                         id="superset-panel-files"
                         role="tabpanel"

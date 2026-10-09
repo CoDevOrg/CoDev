@@ -2471,6 +2471,72 @@
   color: var(--ws-text-secondary);
 }
 
+.gen2-startup-steps {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.gen2-startup-steps ol {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gen2-startup-steps li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--ws-text-muted);
+}
+
+.gen2-startup-steps li svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.gen2-startup-steps li.is-done {
+  color: var(--ws-text-secondary);
+}
+
+.gen2-startup-steps li.is-done svg {
+  color: var(--ws-status-ready);
+}
+
+.gen2-startup-steps li.is-current {
+  color: var(--ws-text-primary);
+  font-weight: 500;
+}
+
+.gen2-startup-dot {
+  width: 5px;
+  height: 5px;
+  margin: 0 4.5px;
+  border-radius: 999px;
+  background: var(--ws-text-muted);
+  flex-shrink: 0;
+}
+
+.gen2-startup-steps p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--ws-text-muted);
+}
+
+.gen2-ide-offline-notice {
+  flex-shrink: 0;
+  margin: 8px;
+  width: auto;
+}
+
 /* --------------------------------------------------- Chat transcript (design contract) */
 
 .gen2-chat-panel {

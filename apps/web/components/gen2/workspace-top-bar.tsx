@@ -110,7 +110,8 @@ export function WorkspaceTopBar({
   workspaceName: string;
   repositoryName?: string | undefined;
   branchMenu: React.ComponentProps<typeof WorkspaceBranchMenu>;
-  sessionTitle: string;
+  /** Null until there is a chat; no placeholder name. */
+  sessionTitle: string | null;
   /** Set only while the active agent is connected. */
   sessionProvider: SupportedAiProvider | null;
   agentRunning: boolean;
@@ -184,20 +185,22 @@ export function WorkspaceTopBar({
       </div>
 
       <div className="gen2-ide-top-navbar-center">
-        <div className="gen2-topbar-session-card">
-          {sessionProvider ? (
-            <div className="gen2-topbar-provider-avatar">
-              <ProviderLogo provider={sessionProvider} size={14} />
-            </div>
-          ) : null}
-          <span className="gen2-topbar-session-title">{sessionTitle}</span>
-          {agentRunning ? (
-            <span className="gen2-topbar-session-status running">
-              <span className="gen2-status-dot working" aria-hidden="true" />
-              Working…
-            </span>
-          ) : null}
-        </div>
+        {sessionTitle ? (
+          <div className="gen2-topbar-session-card">
+            {sessionProvider ? (
+              <div className="gen2-topbar-provider-avatar">
+                <ProviderLogo provider={sessionProvider} size={14} />
+              </div>
+            ) : null}
+            <span className="gen2-topbar-session-title">{sessionTitle}</span>
+            {agentRunning ? (
+              <span className="gen2-topbar-session-status running">
+                <span className="gen2-status-dot working" aria-hidden="true" />
+                Working…
+              </span>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <div className="gen2-ide-top-navbar-right">
