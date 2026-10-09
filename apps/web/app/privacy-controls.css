@@ -54,7 +54,7 @@
   opacity: 0.5;
   cursor: default;
 }
-.privacy-controls .privacy-reopen {
+.privacy-reopen {
   position: fixed;
   z-index: 90;
   bottom: 8px;

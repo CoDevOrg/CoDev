@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Analytics } from "@vercel/analytics/next";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,7 +19,11 @@ function hasPrivacySignal() {
   );
 }
 
+// Full-screen workspaces keep their bottom edge clear; consent stays reachable elsewhere.
+const WORKSPACE_PATH = /^\/(gen2\/(?!join\/)[^/]+|rooms\/[^/]+)/;
+
 export function PrivacyChoices() {
+  const inWorkspace = WORKSPACE_PATH.test(usePathname() ?? "");
   const [allowed, setAllowed] = useState(false);
   const [show, setShow] = useState(false);
   const [signal, setSignal] = useState(false);
@@ -94,7 +99,7 @@ export function PrivacyChoices() {
             </Button>
           </div>
         </section>
-      ) : (
+      ) : inWorkspace ? null : (
         <Button
           className="privacy-reopen"
           variant="outline"
