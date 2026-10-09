@@ -8,7 +8,6 @@ import {
 } from "next/font/google";
 import Image from "next/image";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { buttonClassName } from "@/components/ui/button";
 import { LandingNavigation } from "@/components/landing/landing-navigation";
 import { CompanyLogos } from "@/components/landing/company-logos";
@@ -116,9 +115,7 @@ export const metadata: Metadata = {
 };
 
 export default async function HomePage() {
-  if (await getCurrentAppUser()) {
-    redirect("/gen2");
-  }
+  const signedIn = Boolean(await getCurrentAppUser());
 
   return (
     <main className={`lp-page ${LANDING_FONTS}`}>
@@ -128,7 +125,7 @@ export default async function HomePage() {
       />
       <LandingMotion />
 
-      <LandingNavigation />
+      <LandingNavigation signedIn={signedIn} />
 
       <section className="lp-hero">
         <div className="lp-backdrop" aria-hidden="true">
@@ -173,9 +170,15 @@ export default async function HomePage() {
           and review changes in real time.
         </p>
         <div className="lp-hero-actions">
-          <RequestAccessButton className="lp-cta lp-cta-primary">
-            Join the waitlist
-          </RequestAccessButton>
+          {signedIn ? (
+            <Link className="lp-cta lp-cta-primary" href="/gen2">
+              Open dashboard
+            </Link>
+          ) : (
+            <RequestAccessButton className="lp-cta lp-cta-primary">
+              Join the waitlist
+            </RequestAccessButton>
+          )}
         </div>
       </section>
 
@@ -183,13 +186,15 @@ export default async function HomePage() {
 
       <HowItWorks />
 
-      <section className="lp-request" data-reveal>
-        <div className="lp-request-heading">
-          <h2>Deploy your first workspace.</h2>
-          <p>Your team. Your agents. One place to build.</p>
-        </div>
-        <WaitlistInline />
-      </section>
+      {signedIn ? null : (
+        <section className="lp-request" data-reveal>
+          <div className="lp-request-heading">
+            <h2>Deploy your first workspace.</h2>
+            <p>Your team. Your agents. One place to build.</p>
+          </div>
+          <WaitlistInline />
+        </section>
+      )}
 
       <footer className="lp-footer">
         <Link className="lp-brand" href="/" aria-label="CoDev home">
@@ -210,9 +215,9 @@ export default async function HomePage() {
               size: "sm",
               className: "lp-footer-sign-in",
             })}
-            href="/sign-in"
+            href={signedIn ? "/gen2" : "/sign-in"}
           >
-            Sign in
+            {signedIn ? "Dashboard" : "Sign in"}
           </Link>
         </nav>
       </footer>

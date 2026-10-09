@@ -5,7 +5,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { RequestAccessButton } from "./request-access-button";
 
-export function LandingNavigation() {
+export function LandingNavigation({
+  signedIn = false,
+}: {
+  signedIn?: boolean;
+}) {
   const [compact, setCompact] = useState(false);
 
   useEffect(() => {
@@ -32,9 +36,15 @@ export function LandingNavigation() {
           <Link href="/pricing">Pricing</Link>
           <Link href="/docs">Docs</Link>
         </nav>
-        <RequestAccessButton className="lp-cta lp-cta-small">
-          Join the waitlist <span aria-hidden="true">→</span>
-        </RequestAccessButton>
+        {signedIn ? (
+          <Link className="lp-cta lp-cta-small" href="/gen2">
+            Open dashboard <span aria-hidden="true">→</span>
+          </Link>
+        ) : (
+          <RequestAccessButton className="lp-cta lp-cta-small">
+            Join the waitlist <span aria-hidden="true">→</span>
+          </RequestAccessButton>
+        )}
       </header>
     </div>
   );
