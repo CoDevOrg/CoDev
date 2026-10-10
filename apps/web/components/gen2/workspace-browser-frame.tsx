@@ -62,6 +62,7 @@ function usePreviewKeepalive(
 export function WorkspaceBrowserFrame({
   url,
   port,
+  hidden,
   active,
   refreshUrl,
   onLoad,
@@ -69,6 +70,7 @@ export function WorkspaceBrowserFrame({
 }: {
   url: string;
   port: number;
+  hidden: boolean;
   active: boolean;
   refreshUrl: string | null;
   onLoad(): void;
@@ -83,6 +85,7 @@ export function WorkspaceBrowserFrame({
         src={url}
         title="Workspace preview"
         className="gen2-browser-frame"
+        hidden={hidden}
         sandbox={SANDBOX}
         referrerPolicy="no-referrer"
         allow=""

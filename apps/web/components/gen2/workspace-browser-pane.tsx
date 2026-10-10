@@ -153,7 +153,10 @@ function BrowserStage({
 }) {
   const { target, url } = preview;
   const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
-  const framed = view.kind === "frame" && url !== null && target !== null;
+  // A session URL is single-use, so a minted frame stays mounted (hidden)
+  // while another state shows: remounting it would replay a spent token.
+  const minted = url !== null && target !== null;
+  const framed = minted && view.kind === "frame";
   const refresh = usePreviewSessionRefresh(
     workspaceId,
     framed ? target.port : null,
@@ -162,12 +165,13 @@ function BrowserStage({
   );
   return (
     <div className="gen2-browser-stage">
-      {framed ? (
+      {minted ? (
         <WorkspaceBrowserFrame
           key={url}
           url={url}
           port={target.port}
-          active={visible}
+          hidden={!framed}
+          active={visible && framed}
           refreshUrl={refresh.refreshUrl}
           onLoad={() => setLoadedUrl(url)}
           onRefreshed={refresh.refreshed}

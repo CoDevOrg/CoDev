@@ -177,6 +177,31 @@ describe("WorkspaceBrowserPane", () => {
     );
   });
 
+  it("keeps a loaded preview mounted through a passing state instead of replaying its single-use session", async () => {
+    let reply = listening(3000);
+    serve(() => reply);
+    const { rerender, props } = renderPane({
+      request: { id: "r1", port: 3000, path: "/" },
+    });
+    await settle();
+    const frame = screen.getByTitle("Workspace preview");
+    fireEvent.load(frame);
+    const refreshPorts = async () => {
+      rerender(<WorkspaceBrowserPane {...props} visible={false} />);
+      rerender(<WorkspaceBrowserPane {...props} visible />);
+      await settle();
+    };
+    reply = { available: false, reason: "not_ready", ports: [] };
+    await refreshPorts();
+    expect(frame).not.toBeVisible();
+    reply = listening(3000);
+    await refreshPorts();
+    // The same frame comes back: the guest refuses a replayed session URL.
+    expect(screen.getByTitle("Workspace preview")).toBe(frame);
+    expect(frame).toBeVisible();
+    expect(mints()).toBe(1);
+  });
+
   it("opens a requested port in a sandboxed, referrer-free frame and reports it", async () => {
     serve(() => listening(3000, 5173));
     const { props } = renderPane({

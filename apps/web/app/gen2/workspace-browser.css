@@ -80,6 +80,10 @@
   background: #ffffff;
 }
 
+.gen2-browser-frame[hidden] {
+  display: none;
+}
+
 .gen2-browser-refresh {
   position: absolute;
   width: 0;
