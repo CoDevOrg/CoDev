@@ -394,4 +394,36 @@ describe("WorkspaceShareDialog", () => {
     );
     expect(urls().some((url) => url.endsWith("/share"))).toBe(false);
   });
+
+  it("opens prefilled for an agent's suggestion, without inviting anyone", async () => {
+    const props = {
+      onOpenChange: vi.fn(),
+      workspaceId: "ws-123",
+      workspaceName: "Frontend Redesign",
+      currentUserRole: "owner" as const,
+      currentUserId: "user-1",
+      initialMembers,
+    };
+    const invite = { id: 1, emailOrLogin: "dave@example.com" };
+    const { rerender } = render(
+      <WorkspaceShareDialog {...props} open={false} initialInvite={invite} />,
+    );
+    rerender(<WorkspaceShareDialog {...props} open initialInvite={invite} />);
+    expect(
+      screen.getByLabelText("Add people by email or username"),
+    ).toHaveValue("dave@example.com");
+    expect(fetch).not.toHaveBeenCalledWith(
+      expect.stringContaining("/members"),
+      expect.objectContaining({ method: "POST" }),
+    );
+
+    // Reopened later by the member, the same suggestion is not filled again.
+    rerender(
+      <WorkspaceShareDialog {...props} open={false} initialInvite={invite} />,
+    );
+    rerender(<WorkspaceShareDialog {...props} open initialInvite={invite} />);
+    expect(
+      screen.getByLabelText("Add people by email or username"),
+    ).toHaveValue("");
+  });
 });

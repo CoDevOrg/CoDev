@@ -33,17 +33,34 @@ vi.mock("./superset-code-editor", () => ({
     value,
     onChange,
     readOnly,
+    revealRange,
+    onSelectionText,
   }: {
     value: string;
     onChange: (value: string) => void;
     readOnly: boolean;
+    revealRange?: { line: number } | null;
+    onSelectionText?: (
+      selection: { startLine: number; endLine: number; text: string } | null,
+    ) => void;
   }) => (
-    <textarea
-      aria-label="Code"
-      value={value}
-      readOnly={readOnly}
-      onChange={(event) => onChange(event.target.value)}
-    />
+    <>
+      <textarea
+        aria-label="Code"
+        value={value}
+        readOnly={readOnly}
+        data-reveal-line={revealRange?.line}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <button
+        type="button"
+        onClick={() =>
+          onSelectionText?.({ startLine: 1, endLine: 1, text: "# Read" })
+        }
+      >
+        Select text
+      </button>
+    </>
   ),
 }));
 
@@ -356,5 +373,67 @@ describe("SupersetFilePane", () => {
     expect(
       await screen.findByRole("menuitem", { name: /Rename/ }),
     ).toBeInTheDocument();
+  });
+
+  it("opens a request before picking a file itself, and reveals its lines", async () => {
+    const onConsumed = vi.fn();
+    const onSelectionText = vi.fn();
+    render(
+      <SupersetFilePane
+        workspaceId={workspaceId}
+        canEdit
+        requestedPath={secondFile.path}
+        onRequestedPathConsumed={onConsumed}
+        requestedRange={{ id: 1, path: secondFile.path, line: 1 }}
+        onSelectionText={onSelectionText}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText("Code")).toHaveValue(secondFile.contents),
+    );
+    expect(onConsumed).toHaveBeenCalledWith("opened");
+    expect(mocks.read).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText("Code")).toHaveAttribute(
+      "data-reveal-line",
+      "1",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Select text" }));
+    expect(onSelectionText).toHaveBeenCalledWith({
+      path: secondFile.path,
+      startLine: 1,
+      endLine: 1,
+      text: "# Read",
+    });
+  });
+
+  it("says when a request was dropped while busy or declined", async () => {
+    let finishRead: (file: typeof firstFile) => void = () => undefined;
+    const onConsumed = vi.fn();
+    const props = {
+      workspaceId,
+      canEdit: true,
+      onRequestedPathConsumed: onConsumed,
+    };
+    const { rerender } = render(<SupersetFilePane {...props} />);
+    await screen.findByLabelText("Code");
+    mocks.read.mockImplementationOnce(
+      () => new Promise((resolve) => (finishRead = resolve)),
+    );
+    rerender(<SupersetFilePane {...props} requestedPath={secondFile.path} />);
+    rerender(<SupersetFilePane {...props} requestedPath={null} />);
+    rerender(<SupersetFilePane {...props} requestedPath="src/other.ts" />);
+    expect(onConsumed.mock.calls).toEqual([["opened"], ["busy"]]);
+    finishRead(secondFile);
+    await waitFor(() =>
+      expect(screen.getByLabelText("Code")).toHaveValue(secondFile.contents),
+    );
+
+    fireEvent.change(screen.getByLabelText("Code"), {
+      target: { value: "draft" },
+    });
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    rerender(<SupersetFilePane {...props} requestedPath={firstFile.path} />);
+    expect(onConsumed).toHaveBeenLastCalledWith("declined");
+    expect(screen.getByLabelText("Code")).toHaveValue("draft");
   });
 });

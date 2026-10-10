@@ -36,6 +36,44 @@ import {
 } from "./superset-editor-theme";
 import { buildFoldChevron } from "../../../../vendor/superset/apps/desktop/src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/hooks/usePaneRegistry/components/FilePane/registry/views/CodeView/components/CodeEditor/extensions/foldChevron/foldChevron";
 
+export type EditorRevealRange = {
+  id: number;
+  line: number;
+  endLine?: number | undefined;
+};
+
+export type EditorSelectionText = {
+  startLine: number;
+  endLine: number;
+  text: string;
+};
+
+const MAX_SELECTION_CHARS = 2_000;
+/** A view rebuilt soon after a reveal (the shared document connecting) gets it again. */
+const REVEAL_CARRY_MS = 3_000;
+
+function selectionText(state: EditorState): EditorSelectionText | null {
+  const { from, to, empty } = state.selection.main;
+  if (empty) return null;
+  return {
+    startLine: state.doc.lineAt(from).number,
+    endLine: state.doc.lineAt(to).number,
+    text: state.sliceDoc(from, to).slice(0, MAX_SELECTION_CHARS),
+  };
+}
+
+/** Selects the lines and scrolls them into view; never takes focus. */
+function revealLines(view: EditorView, range: EditorRevealRange) {
+  const { doc } = view.state;
+  const first = Math.min(range.line, doc.lines);
+  const last = Math.min(Math.max(range.endLine ?? first, first), doc.lines);
+  const from = doc.line(first).from;
+  view.dispatch({
+    selection: { anchor: from, head: doc.line(last).to },
+    effects: EditorView.scrollIntoView(from, { y: "center" }),
+  });
+}
+
 /**
  * Browser-safe adaptation of Superset's CodeEditor. Desktop font settings,
  * Electron tRPC, and desktop theme stores are intentionally replaced by the
@@ -49,6 +87,8 @@ export function SupersetCodeEditor({
   onSave,
   sharedText,
   onSelectionChange,
+  onSelectionText,
+  revealRange,
 }: {
   path: string;
   value: string;
@@ -58,6 +98,12 @@ export function SupersetCodeEditor({
   /** A CoDev Y.Text makes this CodeMirror view a collaborative editor. */
   sharedText?: Y.Text | null;
   onSelectionChange?: (selection: { anchor: number; head: number }) => void;
+  /** The selected lines and text, or null when nothing is selected. */
+  onSelectionText?:
+    | ((selection: EditorSelectionText | null) => void)
+    | undefined;
+  /** Lines to select and scroll to, once per `id`. */
+  revealRange?: EditorRevealRange | null | undefined;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -65,12 +111,17 @@ export function SupersetCodeEditor({
   const onChangeRef = useRef(onChange);
   const onSaveRef = useRef(onSave);
   const onSelectionChangeRef = useRef(onSelectionChange);
+  const onSelectionTextRef = useRef(onSelectionText);
+  const revealedRef = useRef<{ id: number; view: EditorView; at: number }>(
+    null,
+  );
   const syncingValueRef = useRef(false);
 
   useEffect(() => {
     onChangeRef.current = onChange;
     onSaveRef.current = onSave;
     onSelectionChangeRef.current = onSelectionChange;
+    onSelectionTextRef.current = onSelectionText;
   });
 
   useEffect(() => {
@@ -125,6 +176,7 @@ export function SupersetCodeEditor({
                 anchor: selection.anchor,
                 head: selection.head,
               });
+              onSelectionTextRef.current?.(selectionText(update.state));
             }
             if (!update.docChanged || syncingValueRef.current) return;
             if (!sharedText) {
@@ -193,6 +245,18 @@ export function SupersetCodeEditor({
     // history between files just as the Superset pane does.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path, sharedText]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    const last = revealedRef.current;
+    if (!view || !revealRange) return;
+    if (last?.id === revealRange.id) {
+      if (last.view === view || Date.now() - last.at > REVEAL_CARRY_MS) return;
+    }
+    revealLines(view, revealRange);
+    const at = last?.id === revealRange.id ? last.at : Date.now();
+    revealedRef.current = { id: revealRange.id, view, at };
+  }, [revealRange, path, sharedText]);
 
   useEffect(() => {
     const view = viewRef.current;
