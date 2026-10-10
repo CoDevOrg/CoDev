@@ -12,7 +12,7 @@ import {
   retagCredentialSeat,
   waitForCredentialSeat,
 } from "../providers/credential-seat";
-import { resolveGen2Credential, type Gen2AgentProvider } from "./providers";
+import { resolveGen2Credential } from "./providers";
 import { OrchestratorError } from "../runtime/orchestrator-request";
 import { ensureHostReady } from "../runtime/orchestrator-health";
 import {
@@ -23,14 +23,12 @@ import {
 import { pollPersistedArmTurn } from "./arm-workspace-turn-poll";
 import { Gen2AccessError, Gen2LifecycleError } from "./errors";
 import { describeGen2RuntimeFailure } from "./instance";
-import { canRunGen2Agent } from "./agent-policy";
-import {
-  appendGen2ChatMessage,
-  claimGen2ChatProvider,
-  listGen2ChatMessages,
-  requireGen2Chat,
-} from "./chats";
+import { appendGen2ChatMessage } from "./chats";
 import { buildGen2AgentCommand } from "./agent-command";
+import {
+  prepareGen2AgentTurn,
+  type Gen2AgentTurnInput,
+} from "./agent-turn-preflight";
 import {
   createGen2Turn,
   getGen2TurnProvider,
@@ -39,9 +37,6 @@ import {
 import { withDatabaseOperation } from "../platform/database-operation";
 import { isGen2AgentCoordinationEnabled } from "./agent-coordination-feature";
 import { withNativeCoordinationHooks } from "./agent-coordination-hooks";
-import { findPossibleDuplicateTask } from "./duplicate-task-check";
-import { avoidBlockedCliModel } from "./agent-cli-fallback";
-import { loadGen2AgentModels, requireGen2AgentModel } from "./agent-model";
 import { refreshCursorTurnAuth } from "./cursor-auth-refresh";
 import {
   isGen2SupersetAgentSessionsEnabled,
@@ -53,79 +48,31 @@ import {
   pollGen2SupersetAgentTurn,
   startGen2SupersetAgentTurn,
 } from "./superset-agent-runtime";
-import { requireWorkspaceOwnerPlan } from "../billing/gate";
 import { requireGen2Member } from "./workspaces";
 
 export { canRunGen2Agent } from "./agent-policy";
 export { buildGen2CodexCommand } from "./codex-command";
 
-async function requireReadyMember(workspaceId: string, userId: string) {
-  const membership = await requireGen2Member(workspaceId, userId);
-  if (!canRunGen2Agent(membership.status)) {
-    throw new Gen2LifecycleError(
-      membership.status === "provisioning"
-        ? "The instance is still starting."
-        : "Start the instance before asking Codex to work.",
-    );
-  }
-  return membership;
-}
-
-export async function startGen2AgentTurn(input: {
-  workspaceId: string;
-  userId: string;
-  chatId: string;
-  prompt: string;
-  idempotencyKey: string;
-  provider: Gen2AgentProvider;
-  worktreeId?: string | undefined;
-  model?: string | undefined;
-  acknowledgedDuplicateOf?: string | undefined;
-  /** A re-run of the latest prompt on a fallback model, with its history. */
-  continuation?: {
-    history: Array<{ role: "user" | "assistant"; body: string }>;
-  };
-}) {
-  const membership = await requireReadyMember(input.workspaceId, input.userId);
-  if (membership.role === "viewer")
-    throw new Gen2AccessError(
-      "Edit permission is required to run agents.",
-      403,
-    );
-  // Every database trip crosses the country, so independent checks run
-  // together instead of one after another.
-  const [, possibleDuplicate, models] = await Promise.all([
-    requireWorkspaceOwnerPlan(input.workspaceId),
-    requireGen2Chat(input.workspaceId, input.chatId).then(async () => {
-      await claimGen2ChatProvider(input.chatId, input.provider);
-      return input.continuation ? null : findPossibleDuplicateTask(input);
-    }),
-    loadGen2AgentModels(input.provider, input.userId),
-  ]);
-  if (
-    possibleDuplicate &&
-    possibleDuplicate.runId !== input.acknowledgedDuplicateOf
-  ) {
-    return { possibleDuplicate };
-  }
-
-  const requested = requireGen2AgentModel(models, input.model);
-  // A model the live workspace CLI is known not to support runs on the
-  // closest one it does, with a note, until the CLI update ships.
-  const { model, note: fallbackNote } = input.continuation
-    ? { model: requested, note: null }
-    : await avoidBlockedCliModel(input.provider, requested, models);
-  if (!model) throw new Gen2LifecycleError(fallbackNote!, 409);
+export async function startGen2AgentTurn(input: Gen2AgentTurnInput) {
+  const prepared = await prepareGen2AgentTurn(input);
+  if ("response" in prepared) return prepared.response;
+  const { requested, model, fallbackNote, history, context, actionNonce } =
+    prepared.turn;
 
   if (
     isGen2SupersetAgentSessionsEnabled() &&
     (input.provider !== "cursor" || isGen2SupersetCursorAgentsEnabled())
   ) {
-    return startGen2AgentTurnViaSuperset({ ...input, model, verified: true });
+    return startGen2AgentTurnViaSuperset({
+      ...input,
+      model,
+      verified: true,
+      history,
+      context,
+      actionNonce,
+    });
   }
 
-  const history =
-    input.continuation?.history ?? (await listGen2ChatMessages(input.chatId));
   const provider = input.provider;
   const credential = await resolveGen2Credential(input.userId, provider);
 
@@ -149,7 +96,13 @@ export async function startGen2AgentTurn(input: {
       throw new Gen2LifecycleError(describeSeatHolder(claim.holder), 409);
     }
   }
-  const command = buildGen2AgentCommand(provider, input.prompt, history, model);
+  const command = buildGen2AgentCommand(
+    provider,
+    input.prompt,
+    history,
+    model,
+    context,
+  );
   const execInput = {
     ...(isGen2AgentCoordinationEnabled(input.workspaceId)
       ? {
@@ -224,6 +177,7 @@ export async function startGen2AgentTurn(input: {
     }
     return {
       sessionId,
+      ...(actionNonce ? { actionNonce } : {}),
       ...(fallbackNote ? { fallback: { from: requested, to: model } } : {}),
     };
   } catch (error) {
@@ -258,17 +212,9 @@ export async function startGen2AgentTurn(input: {
  * credential claim, worktree selection, durable run row, and chat/turn
  * persistence -- see superset-agent-runtime.ts).
  */
-async function startGen2AgentTurnViaSuperset(input: {
-  workspaceId: string;
-  userId: string;
-  chatId: string;
-  prompt: string;
-  idempotencyKey: string;
-  provider: Gen2AgentProvider;
-  worktreeId?: string | undefined;
-  model?: string | undefined;
-  verified?: boolean;
-}) {
+async function startGen2AgentTurnViaSuperset(
+  input: Parameters<typeof startGen2SupersetAgentTurn>[0],
+) {
   try {
     return await startGen2SupersetAgentTurn(input);
   } catch (error) {
