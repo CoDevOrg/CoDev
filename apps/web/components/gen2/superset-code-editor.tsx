@@ -89,6 +89,7 @@ export function SupersetCodeEditor({
   onSelectionChange,
   onSelectionText,
   revealRange,
+  onRangeRevealed,
 }: {
   path: string;
   value: string;
@@ -104,6 +105,8 @@ export function SupersetCodeEditor({
     | undefined;
   /** Lines to select and scroll to, once per `id`. */
   revealRange?: EditorRevealRange | null | undefined;
+  /** Called once a range is shown, so its request can be cleared. */
+  onRangeRevealed?: ((id: number) => void) | undefined;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -112,9 +115,12 @@ export function SupersetCodeEditor({
   const onSaveRef = useRef(onSave);
   const onSelectionChangeRef = useRef(onSelectionChange);
   const onSelectionTextRef = useRef(onSelectionText);
-  const revealedRef = useRef<{ id: number; view: EditorView; at: number }>(
-    null,
-  );
+  const onRangeRevealedRef = useRef(onRangeRevealed);
+  const revealedRef = useRef<{
+    range: EditorRevealRange;
+    view: EditorView;
+    at: number;
+  }>(null);
   const syncingValueRef = useRef(false);
 
   useEffect(() => {
@@ -122,6 +128,7 @@ export function SupersetCodeEditor({
     onSaveRef.current = onSave;
     onSelectionChangeRef.current = onSelectionChange;
     onSelectionTextRef.current = onSelectionText;
+    onRangeRevealedRef.current = onRangeRevealed;
   });
 
   useEffect(() => {
@@ -249,13 +256,19 @@ export function SupersetCodeEditor({
   useEffect(() => {
     const view = viewRef.current;
     const last = revealedRef.current;
-    if (!view || !revealRange) return;
-    if (last?.id === revealRange.id) {
-      if (last.view === view || Date.now() - last.at > REVEAL_CARRY_MS) return;
+    if (!view) return;
+    if (revealRange && revealRange.id !== last?.range.id) {
+      revealLines(view, revealRange);
+      revealedRef.current = { range: revealRange, view, at: Date.now() };
+      onRangeRevealedRef.current?.(revealRange.id);
+      return;
     }
-    revealLines(view, revealRange);
-    const at = last?.id === revealRange.id ? last.at : Date.now();
-    revealedRef.current = { id: revealRange.id, view, at };
+    // The request is cleared once shown; a view rebuilt soon after (the
+    // shared document connecting) still gets the same lines from here.
+    if (!last || last.view === view || Date.now() - last.at > REVEAL_CARRY_MS)
+      return;
+    revealLines(view, last.range);
+    revealedRef.current = { ...last, view };
   }, [revealRange, path, sharedText]);
 
   useEffect(() => {

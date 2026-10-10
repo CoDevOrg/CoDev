@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   read: vi.fn(),
   save: vi.fn(),
   create: vi.fn(),
+  revealed: vi.fn(),
 }));
 
 vi.mock("./superset-file-client", async (importOriginal) => ({
@@ -28,44 +29,59 @@ vi.mock("./use-gen2-shared-file-document", () => ({
   }),
 }));
 
-vi.mock("./superset-code-editor", () => ({
-  SupersetCodeEditor: ({
-    value,
-    onChange,
-    readOnly,
-    revealRange,
-    onSelectionText,
-  }: {
-    value: string;
-    onChange: (value: string) => void;
-    readOnly: boolean;
-    revealRange?: { line: number } | null;
-    onSelectionText?: (
-      selection: { startLine: number; endLine: number; text: string } | null,
-    ) => void;
-  }) => (
-    <>
-      <textarea
-        aria-label="Code"
-        value={value}
-        readOnly={readOnly}
-        data-reveal-line={revealRange?.line}
-        onChange={(event) => onChange(event.target.value)}
-      />
-      <button
-        type="button"
-        onClick={() =>
-          onSelectionText?.({ startLine: 1, endLine: 1, text: "# Read" })
-        }
-      >
-        Select text
-      </button>
-    </>
-  ),
-}));
+vi.mock("./superset-code-editor", async () => {
+  const { useEffect } = await import("react");
+  return {
+    SupersetCodeEditor: function MockEditor({
+      path,
+      value,
+      onChange,
+      readOnly,
+      revealRange,
+      onRangeRevealed,
+      onSelectionText,
+    }: {
+      path: string;
+      value: string;
+      onChange: (value: string) => void;
+      readOnly: boolean;
+      revealRange?: { id: number; line: number } | null;
+      onRangeRevealed?: (id: number) => void;
+      onSelectionText?: (
+        selection: { startLine: number; endLine: number; text: string } | null,
+      ) => void;
+    }) {
+      useEffect(() => {
+        if (!revealRange) return;
+        mocks.revealed(path, revealRange.line);
+        onRangeRevealed?.(revealRange.id);
+      }, [path, revealRange, onRangeRevealed]);
+      return (
+        <>
+          <textarea
+            aria-label="Code"
+            value={value}
+            readOnly={readOnly}
+            data-reveal-line={revealRange?.line}
+            onChange={(event) => onChange(event.target.value)}
+          />
+          <button
+            type="button"
+            onClick={() =>
+              onSelectionText?.({ startLine: 1, endLine: 1, text: "# Read" })
+            }
+          >
+            Select text
+          </button>
+        </>
+      );
+    },
+  };
+});
 
 import { SupersetFileApiError } from "./superset-file-client";
 import { SupersetFilePane } from "./superset-file-pane";
+import { useWorkspaceFileRequest } from "./use-workspace-file-request";
 
 const workspaceId = "e010bd2c-a3c1-438f-acef-166287a3b1cb";
 const firstFile = {
@@ -435,5 +451,47 @@ describe("SupersetFilePane", () => {
     rerender(<SupersetFilePane {...props} requestedPath={firstFile.path} />);
     expect(onConsumed).toHaveBeenLastCalledWith("declined");
     expect(screen.getByLabelText("Code")).toHaveValue("draft");
+  });
+  it("reveals requested lines once, not again when the file is reopened", async () => {
+    function RequestedPane() {
+      const files = useWorkspaceFileRequest();
+      return (
+        <>
+          <button
+            type="button"
+            onClick={() => files.open(secondFile.path, { line: 1 })}
+          >
+            Agent opens README
+          </button>
+          <SupersetFilePane
+            workspaceId={workspaceId}
+            canEdit
+            requestedPath={files.path}
+            onRequestedPathConsumed={files.consumed}
+            requestedRange={files.range}
+            onRangeRevealed={files.revealed}
+          />
+        </>
+      );
+    }
+    render(<RequestedPane />);
+    await waitFor(() =>
+      expect(screen.getByLabelText("Code")).toHaveValue(firstFile.contents),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Agent opens README" }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Code")).toHaveValue(secondFile.contents),
+    );
+    expect(mocks.revealed.mock.calls).toEqual([[secondFile.path, 1]]);
+
+    fireEvent.click(screen.getByRole("treeitem", { name: /greeting\.ts/ }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Code")).toHaveValue(firstFile.contents),
+    );
+    fireEvent.click(screen.getByRole("treeitem", { name: /README\.md/ }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Code")).toHaveValue(secondFile.contents),
+    );
+    expect(mocks.revealed).toHaveBeenCalledTimes(1);
   });
 });

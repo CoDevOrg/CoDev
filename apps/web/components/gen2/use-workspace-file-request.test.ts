@@ -35,4 +35,14 @@ describe("useWorkspaceFileRequest", () => {
     act(() => result.current.open("src/b.ts"));
     expect(result.current.range).toBeNull();
   });
+
+  it("drops the range once the editor has shown it", () => {
+    const { result } = renderHook(() => useWorkspaceFileRequest());
+    act(() => result.current.open("src/a.ts", { line: 3 }));
+    const id = result.current.range?.id ?? -1;
+    act(() => result.current.revealed(id + 1));
+    expect(result.current.range).not.toBeNull();
+    act(() => result.current.revealed(id));
+    expect(result.current.range).toBeNull();
+  });
 });

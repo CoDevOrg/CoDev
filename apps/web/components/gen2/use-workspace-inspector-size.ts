@@ -9,18 +9,20 @@ const EXPANDED = "65%";
  * The inspector's width while the Browser tab shows a preview. A preview
  * gets room to grow (up to 75%, the chat keeping 420px), and "Expand
  * preview" resizes the panel rather than moving the frame, so the previewed
- * app keeps its state. Leaving the tab or collapsing again restores the
- * width the member had.
+ * app keeps its state. Other tabs get the width the member had; coming back
+ * to an expanded preview widens the panel again, so the pane's Expand
+ * button always tells the truth.
  */
 export function useWorkspaceInspectorSize(browserActive: boolean) {
   const panelRef = usePanelRef();
   const restoreTo = useRef<number | null>(null);
+  const expanded = useRef(false);
 
-  const onExpandChange = useCallback(
-    (expanded: boolean) => {
+  const apply = useCallback(
+    (wide: boolean) => {
       const panel = panelRef.current;
       if (!panel) return;
-      if (expanded) {
+      if (wide) {
         restoreTo.current ??= panel.getSize().inPixels;
         panel.resize(EXPANDED);
         return;
@@ -32,9 +34,17 @@ export function useWorkspaceInspectorSize(browserActive: boolean) {
     [panelRef],
   );
 
+  const onExpandChange = useCallback(
+    (next: boolean) => {
+      expanded.current = next;
+      apply(next);
+    },
+    [apply],
+  );
+
   useEffect(() => {
-    if (!browserActive) onExpandChange(false);
-  }, [browserActive, onExpandChange]);
+    apply(browserActive && expanded.current);
+  }, [browserActive, apply]);
 
   return {
     panelRef,

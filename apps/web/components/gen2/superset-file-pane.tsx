@@ -200,6 +200,7 @@ export function SupersetFilePane({
   requestedPath,
   onRequestedPathConsumed,
   requestedRange,
+  onRangeRevealed,
   onSelectionText,
 }: {
   workspaceId: string;
@@ -215,6 +216,8 @@ export function SupersetFilePane({
   onRequestedPathConsumed?: ((outcome: FileRequestOutcome) => void) | undefined;
   /** Lines to reveal once their file is open. */
   requestedRange?: FileRevealRange | null | undefined;
+  /** The range was shown; it is never applied again, even on reopening. */
+  onRangeRevealed?: ((id: number) => void) | undefined;
   onSelectionText?:
     | ((selection: (EditorSelectionText & { path: string }) | null) => void)
     | undefined;
@@ -1013,6 +1016,7 @@ export function SupersetFilePane({
           revealRange={
             requestedRange?.path === openFile.path ? requestedRange : null
           }
+          onRangeRevealed={onRangeRevealed}
           onSave={() => void save()}
         />
       ) : workspaceReady ? (

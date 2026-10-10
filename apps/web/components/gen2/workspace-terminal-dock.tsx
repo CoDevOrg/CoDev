@@ -2,6 +2,7 @@
 
 import { ChevronDown, ChevronUp, SquareTerminal, X } from "lucide-react";
 
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/platform/utils";
 import { Gen2TerminalPane } from "./terminal-pane";
 import type { TerminalTailReader } from "./use-workspace-terminal-io";
@@ -173,41 +174,42 @@ function TerminalTabList({
   onSelect(id: string): void;
   onClose(id: string): void;
 }) {
+  // The panels stay mounted outside Radix (their processes keep running),
+  // so each trigger names its own panel.
   const tab = (id: string, label: string) => (
-    <button
-      type="button"
-      role="tab"
+    <TabsTrigger
+      value={id}
       id={`gen2-terminal-tab-${id}`}
       aria-controls={`gen2-terminal-panel-${id}`}
-      aria-selected={activeId === id}
       className="gen2-terminal-tab-button"
-      onClick={() => onSelect(id)}
     >
       {label}
-    </button>
+    </TabsTrigger>
   );
   return (
-    <div role="tablist" aria-label="Terminals" className="gen2-terminal-tabs">
-      <span className="gen2-terminal-tab">
-        {tab(MAIN_TERMINAL_TAB, "Shell")}
-      </span>
-      {tabs.map((entry) => (
-        <span
-          key={entry.id}
-          className="gen2-terminal-tab"
-          title={entry.input.text.trim()}
-        >
-          {tab(entry.id, entry.label)}
-          <WorkspaceButton
-            size="icon"
-            className="gen2-terminal-tab-close"
-            aria-label={`Close ${entry.label}`}
-            onClick={() => onClose(entry.id)}
-          >
-            <X aria-hidden="true" />
-          </WorkspaceButton>
+    <Tabs value={activeId} onValueChange={onSelect} className="contents">
+      <TabsList aria-label="Terminals" className="gen2-terminal-tabs">
+        <span className="gen2-terminal-tab">
+          {tab(MAIN_TERMINAL_TAB, "Shell")}
         </span>
-      ))}
-    </div>
+        {tabs.map((entry) => (
+          <span
+            key={entry.id}
+            className="gen2-terminal-tab"
+            title={entry.input.text.trim()}
+          >
+            {tab(entry.id, entry.label)}
+            <WorkspaceButton
+              size="icon"
+              className="gen2-terminal-tab-close"
+              aria-label={`Close ${entry.label}`}
+              onClick={() => onClose(entry.id)}
+            >
+              <X aria-hidden="true" />
+            </WorkspaceButton>
+          </span>
+        ))}
+      </TabsList>
+    </Tabs>
   );
 }

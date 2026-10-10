@@ -53,7 +53,7 @@ export type WorkspaceShellBindings = {
   worktreeId: string;
   worktrees: Gen2SupersetWorktree[];
   addWorktree(worktree: Gen2SupersetWorktree): void;
-  /** The shell's switch, guarded by the unsaved-changes dialog. */
+  /** Switches worktree; false, with nothing switched, while edits are unsaved. */
   selectWorktree(worktreeId: string): boolean;
   fileCounts: Record<string, number>;
   dirty: boolean;

@@ -4,6 +4,7 @@ import { workspaceStartupProgress } from "@/lib/gen2/startup-progress";
 
 import {
   type FormEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -40,7 +41,10 @@ import { useWorkspaceController } from "./use-workspace-controller";
 import { useWorkspaceInspectorSize } from "./use-workspace-inspector-size";
 import type { WorkspaceInspectorTab } from "./workspace-action-run";
 import { WorkspaceBrowserPane } from "./workspace-browser-pane";
-import { WorkspaceAgentContext } from "./workspace-controller";
+import {
+  WorkspaceAgentContext,
+  type WorkspaceAgentContextValue,
+} from "./workspace-controller";
 import { WorkspaceTerminalDock } from "./workspace-terminal-dock";
 import { WorkspaceLoading } from "./workspace-loading";
 import { WorkspaceStartupSteps } from "./workspace-startup-steps";
@@ -152,6 +156,21 @@ async function readGit(
     throw new Error(payload.error ?? "Couldn’t read Git.");
   }
   return payload.output ?? "";
+}
+
+/** The agent context reaches the chat, the terminal dock and the inspector. */
+function ShellProviders({
+  agent,
+  children,
+}: {
+  agent: WorkspaceAgentContextValue;
+  children: ReactNode;
+}) {
+  return (
+    <WorkspaceAgentContext.Provider value={agent}>
+      <TooltipProvider delayDuration={300}>{children}</TooltipProvider>
+    </WorkspaceAgentContext.Provider>
+  );
 }
 
 /**
@@ -851,7 +870,8 @@ export function SupersetWorkspaceShell({
     worktreeId,
     worktrees,
     addWorktree: (created) => setWorktrees((current) => [...current, created]),
-    selectWorktree,
+    // An agent's request never opens the discard dialog; it reports instead.
+    selectWorktree: (id) => !dirty && selectWorktree(id),
     fileCounts,
     dirty,
     chats,
@@ -890,7 +910,7 @@ export function SupersetWorkspaceShell({
   }
 
   return (
-    <TooltipProvider delayDuration={300}>
+    <ShellProviders agent={agent.value}>
       <div
         className="gen2-ide-container"
         data-sidebar-collapsed={sidebarCollapsed ? "true" : "false"}
@@ -1626,36 +1646,38 @@ export function SupersetWorkspaceShell({
                         connection.state === "connected" ? undefined : true
                       }
                     >
-                      <WorkspaceAgentContext.Provider value={agent.value}>
-                        <Gen2ChatPanel
-                          workspace={currentWorkspace}
-                          worktreeId={worktreeId}
-                          activeChatId={selectedChatId}
-                          onSelectChatId={setSelectedChatId}
-                          onChatsChange={setChats}
-                          connectedProviders={connectedChatProviders.map(
-                            (provider) => provider.id,
-                          )}
-                          activeProvider={activeProvider}
-                          onActiveProviderChange={setActiveProvider}
-                          hideChatBar={true}
-                          onRunningChange={setAgentRunning}
-                          onFilesChanged={() => {
-                            agent.value.sources.invalidateFiles();
+                      <Gen2ChatPanel
+                        workspace={currentWorkspace}
+                        worktreeId={worktreeId}
+                        activeChatId={selectedChatId}
+                        onSelectChatId={setSelectedChatId}
+                        onChatsChange={setChats}
+                        connectedProviders={connectedChatProviders.map(
+                          (provider) => provider.id,
+                        )}
+                        activeProvider={activeProvider}
+                        onActiveProviderChange={setActiveProvider}
+                        hideChatBar={true}
+                        onRunningChange={setAgentRunning}
+                        onFilesChanged={() => {
+                          agent.value.sources.invalidateFiles();
+                          void refreshWorktrees();
+                        }}
+                        onOpenFile={openFile}
+                        onNeedsMachine={ensureRunning}
+                        onOpenWorktree={(id) => {
+                          // Another member's run may have made it since
+                          // the list was last read.
+                          if (!worktrees.some((wt) => wt.worktreeId === id))
                             void refreshWorktrees();
-                          }}
-                          onOpenFile={openFile}
-                          onNeedsMachine={ensureRunning}
-                          onOpenWorktree={(id) =>
-                            void agent.value.controller.run({
-                              type: "show_changes",
-                              worktreeId: id,
-                            })
-                          }
-                          onOpenSettings={() => setSettingsOpen(true)}
-                          providersRevision={providersRevision}
-                        />
-                      </WorkspaceAgentContext.Provider>
+                          selectWorktree(id);
+                          void agent.value.controller.run({
+                            type: "show_changes",
+                          });
+                        }}
+                        onOpenSettings={() => setSettingsOpen(true)}
+                        providersRevision={providersRevision}
+                      />
                     </div>
                     {connection.state === "connected" ? null : (
                       <>
@@ -1933,6 +1955,7 @@ export function SupersetWorkspaceShell({
                           requestedPath={files.path}
                           onRequestedPathConsumed={files.consumed}
                           requestedRange={files.range}
+                          onRangeRevealed={files.revealed}
                           onOpenFile={inspector.onOpenFile}
                           onSelectionText={
                             agent.requests.readers.onSelectionText
@@ -2087,6 +2110,6 @@ export function SupersetWorkspaceShell({
           </AlertDialogContent>
         </AlertDialog>
       </div>
-    </TooltipProvider>
+    </ShellProviders>
   );
 }

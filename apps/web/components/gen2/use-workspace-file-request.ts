@@ -21,7 +21,8 @@ const MAX_RETRIES = 10;
  * A file to open in the Files pane, and the lines to reveal once it is open.
  * The pane drops a request while it is opening or saving another file; the
  * request is then issued again a few times. A request the member declined
- * (the unsaved-changes prompt) is never repeated.
+ * (the unsaved-changes prompt) is never repeated. The lines are revealed
+ * once: reopening the file later shows it as the member left it.
  */
 export function useWorkspaceFileRequest() {
   const [request, setRequestState] = useState<PathRequest | null>(null);
@@ -63,5 +64,11 @@ export function useWorkspaceFileRequest() {
     [setRequest],
   );
 
-  return { path: request?.path ?? null, range, open, consumed };
+  const revealed = useCallback(
+    (id: number) =>
+      setRange((current) => (current?.id === id ? null : current)),
+    [],
+  );
+
+  return { path: request?.path ?? null, range, open, consumed, revealed };
 }
