@@ -1,14 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { FileUp, Loader2, X } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 
 import type {
   Gen2SessionImportPreview,
   Gen2SessionImportProvider,
 } from "@codev/contracts";
-import { MarkdownContent } from "@/components/markdown/markdown-content";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Dialog,
   DialogClose,
@@ -18,121 +17,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
-import { ProviderLogo } from "./provider-logos";
+import { SessionImportPicker } from "./session-import-picker";
+import { SessionImportPreview } from "./session-import-preview";
 import { WorkspaceButton } from "./workspace-button";
-
-type Platform = "windows" | "unix";
-
-const SOURCES: Record<
-  Gen2SessionImportProvider,
-  {
-    label: string;
-    folder: Record<Platform, string>;
-    file: Record<Platform, string>;
-  }
-> = {
-  codex: {
-    label: "Codex",
-    folder: {
-      windows: "%USERPROFILE%\\.codex\\sessions",
-      unix: "~/.codex/sessions",
-    },
-    file: {
-      windows: "YYYY\\MM\\DD\\rollout-….jsonl",
-      unix: "YYYY/MM/DD/rollout-….jsonl",
-    },
-  },
-  claude: {
-    label: "Claude Code",
-    folder: {
-      windows: "%USERPROFILE%\\.claude\\projects",
-      unix: "~/.claude/projects",
-    },
-    file: {
-      windows: "<project>\\<session id>.jsonl",
-      unix: "<project>/<session id>.jsonl",
-    },
-  },
-};
-
-// How to reach a hidden dot-folder from the browser's file picker.
-const PICKER_TIP: Record<Platform, string> = {
-  windows:
-    "Paste the folder into the file picker's File name box and press Enter.",
-  unix: "On macOS, press ⌘⇧G in the file picker and paste the folder.",
-};
-
-function currentPlatform(): Platform {
-  return typeof navigator !== "undefined" && /Windows/.test(navigator.userAgent)
-    ? "windows"
-    : "unix";
-}
-
-function SessionPreview({ preview }: { preview: Gen2SessionImportPreview }) {
-  const hidden = preview.redactions.reduce((sum, r) => sum + r.count, 0);
-  const repo = [preview.repo.branch, preview.repo.commit?.slice(0, 7)]
-    .filter(Boolean)
-    .join(" @ ");
-  return (
-    <div className="gen2-session-import-preview">
-      <p className="gen2-session-import-stats">
-        {preview.messageCount} messages · {preview.itemCount} tool steps
-        {preview.startedAt
-          ? ` · started ${new Date(preview.startedAt).toLocaleString()}`
-          : ""}
-        {repo ? ` · ${repo}` : ""}
-      </p>
-      {hidden > 0 ? (
-        <Alert>
-          <AlertTitle>{hidden} secrets hidden</AlertTitle>
-          <AlertDescription>
-            {preview.redactions.map((r) => `${r.count} ${r.kind}`).join(", ")}{" "}
-            were replaced with [REDACTED] before saving.
-          </AlertDescription>
-        </Alert>
-      ) : null}
-      {preview.editedFiles.length > 0 ? (
-        <Alert>
-          <AlertTitle>
-            The session changed {preview.editedFiles.length} files
-          </AlertTitle>
-          <AlertDescription>
-            Only the conversation is imported. Push any uncommitted local
-            changes so this workspace can see them.
-          </AlertDescription>
-        </Alert>
-      ) : null}
-      <ol className="gen2-session-import-sample" aria-label="Sample messages">
-        {preview.sample.map((message, index) => (
-          <li key={index} data-role={message.role}>
-            <span className="gen2-session-import-role">
-              {message.role === "user"
-                ? "You"
-                : SOURCES[preview.provider].label}
-            </span>
-            <MarkdownContent
-              className="gen2-chat-markdown"
-              text={
-                message.body.length > 600
-                  ? `${message.body.slice(0, 600)}…`
-                  : message.body
-              }
-            />
-          </li>
-        ))}
-      </ol>
-    </div>
-  );
-}
 
 /**
  * Uploads a local Codex or Claude Code session, shows what will be imported
@@ -153,7 +43,6 @@ export function SessionImportDialog({
   const [preview, setPreview] = useState<Gen2SessionImportPreview | null>(null);
   const [title, setTitle] = useState("");
   const [pending, setPending] = useState(false);
-  const [dragging, setDragging] = useState(false);
   const [error, setError] = useState("");
   const base = `/api/gen2/workspaces/${encodeURIComponent(workspaceId)}/session-imports`;
 
@@ -210,8 +99,6 @@ export function SessionImportDialog({
     onOpenChange(false);
   }
 
-  const source = SOURCES[provider];
-  const platform = currentPlatform();
   return (
     <Dialog
       open={open}
@@ -256,78 +143,15 @@ export function SessionImportDialog({
                 onChange={(event) => setTitle(event.target.value)}
               />
             </Field>
-            <SessionPreview preview={preview} />
+            <SessionImportPreview preview={preview} />
           </FieldGroup>
         ) : (
-          <FieldGroup>
-            <Field>
-              <FieldLabel>Agent</FieldLabel>
-              <ToggleGroup
-                type="single"
-                value={provider}
-                onValueChange={(value) =>
-                  value && setProvider(value as Gen2SessionImportProvider)
-                }
-              >
-                {(["codex", "claude"] as const).map((id) => (
-                  <ToggleGroupItem key={id} value={id}>
-                    <ProviderLogo provider={id} size={14} />
-                    {SOURCES[id].label}
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="session-import-file">
-                Session file
-              </FieldLabel>
-              <FieldDescription>
-                Find it in <code>{source.folder[platform]}</code> as{" "}
-                <code>{source.file[platform]}</code>.
-                {provider === "claude"
-                  ? " Skip files in subagents folders."
-                  : ""}{" "}
-                {PICKER_TIP[platform]} Up to 64 MB.
-              </FieldDescription>
-              <label
-                htmlFor="session-import-file"
-                className="gen2-session-import-drop"
-                data-dragging={dragging || undefined}
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  setDragging(true);
-                }}
-                onDragLeave={() => setDragging(false)}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  setDragging(false);
-                  void upload(event.dataTransfer.files[0]);
-                }}
-              >
-                {pending ? (
-                  <Loader2 aria-hidden="true" className="animate-spin" />
-                ) : (
-                  <FileUp aria-hidden="true" />
-                )}
-                <span>
-                  {pending
-                    ? "Reading and redacting…"
-                    : "Drop a .jsonl file here, or click to choose"}
-                </span>
-              </label>
-              <input
-                id="session-import-file"
-                type="file"
-                accept=".jsonl,application/x-ndjson,application/json"
-                className="sr-only"
-                disabled={pending}
-                onChange={(event) => {
-                  void upload(event.target.files?.[0]);
-                  event.target.value = "";
-                }}
-              />
-            </Field>
-          </FieldGroup>
+          <SessionImportPicker
+            provider={provider}
+            onProviderChange={setProvider}
+            pending={pending}
+            onFile={(file) => void upload(file)}
+          />
         )}
 
         {error ? (

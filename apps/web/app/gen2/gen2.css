@@ -1134,6 +1134,33 @@
   }
 }
 
+/* Loading skeleton: the dashboard's own layout, inert. */
+
+.gen2-home-skeleton .gen2-new-card,
+.gen2-home-skeleton .gen2-ws {
+  cursor: default;
+  pointer-events: none;
+}
+
+.gen2-skeleton-profile {
+  display: flex;
+  min-height: 46px;
+  padding: 8px 6px;
+  align-items: center;
+  gap: 10px;
+}
+
+@media (max-width: 640px) {
+  .gen2-skeleton-profile {
+    min-height: 0;
+    padding: 4px;
+  }
+
+  .gen2-skeleton-profile [data-slot="skeleton"] + [data-slot="skeleton"] {
+    display: none;
+  }
+}
+
 .gen2-delete-spinner {
   animation: gen2-spin 0.9s linear infinite;
 }
