@@ -38,6 +38,7 @@ const mocks = vi.hoisted(() => ({
   getAgentSession: vi.fn(),
   models: vi.fn(),
   avoidBlocked: vi.fn(),
+  sessionModel: vi.fn(),
 }));
 
 vi.mock("../providers/dynamic-models", () => ({
@@ -91,6 +92,7 @@ vi.mock("./agent-sessions", () => ({
   updateGen2AgentSessionStatus: (...args: unknown[]) =>
     mocks.updateAgentSession(...args),
   getGen2AgentSession: (...args: unknown[]) => mocks.getAgentSession(...args),
+  getGen2AgentSessionModel: (...args: unknown[]) => mocks.sessionModel(...args),
 }));
 
 vi.mock("./superset-runs", () => ({
@@ -193,6 +195,14 @@ describe("gen2 Superset agent runtime adapter", () => {
     mocks.createAgentSession.mockResolvedValue({ id: "session-1" });
     mocks.captureCredential.mockResolvedValue({ authCacheJson: null });
     mocks.updateAuthCacheIfCurrent.mockResolvedValue(true);
+    mocks.models.mockResolvedValue([
+      { id: "gpt-5.6-luna", label: "Codex" },
+      { id: "gpt-5.6-mini", label: "Codex Mini" },
+    ]);
+    mocks.avoidBlocked.mockImplementation(
+      async (_provider: string, model: string) => ({ model, note: null }),
+    );
+    mocks.sessionModel.mockResolvedValue(null);
   });
 
   it("refuses every call while the flag is off", async () => {
@@ -230,7 +240,7 @@ describe("gen2 Superset agent runtime adapter", () => {
     expect(mocks.stop).toHaveBeenCalledWith(workspaceId, "agent-1");
   });
 
-  it("restarts a recovery-required session with a new process identity", async () => {
+  const restartableSession = () => {
     mocks.getAgentSession.mockResolvedValue({
       id: "session-1",
       workspaceId,
@@ -251,16 +261,50 @@ describe("gen2 Superset agent runtime adapter", () => {
       hostTerminalId: "term-1",
       hostAgentSessionId: "agent-1",
     });
+  };
+  const restart = () =>
+    restartGen2AgentSession({ workspaceId, userId, sessionId: "session-1" });
+  const restartedModel = () => {
+    const command = (mocks.start.mock.calls[0]?.[1] as { command: string[] })
+      .command;
+    return command[command.indexOf("--model") + 1];
+  };
 
-    await expect(
-      restartGen2AgentSession({ workspaceId, userId, sessionId: "session-1" }),
-    ).resolves.toEqual({ runId });
+  it("restarts a recovery-required session on the model it last ran on", async () => {
+    restartableSession();
+    mocks.sessionModel.mockResolvedValue("gpt-5.6-mini");
+
+    await expect(restart()).resolves.toEqual({ runId });
     expect(mocks.register).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: "session-1",
         worktreeId: "agent-1",
       }),
     );
+    expect(mocks.sessionModel).toHaveBeenCalledWith("session-1");
+    expect(mocks.models).toHaveBeenCalledWith("codex", userId);
+    expect(restartedModel()).toBe("gpt-5.6-mini");
+  });
+
+  it("restarts on the restarting member's default when the last model is unavailable", async () => {
+    restartableSession();
+    mocks.sessionModel.mockResolvedValue("retired-model");
+
+    await restart();
+
+    expect(restartedModel()).toBe("gpt-5.6-luna");
+  });
+
+  it("does not queue a restart the workspace CLI cannot run", async () => {
+    restartableSession();
+    mocks.avoidBlocked.mockResolvedValue({
+      model: null,
+      note: "Update the workspace to use this model.",
+    });
+
+    await expect(restart()).rejects.toMatchObject({ status: 409 });
+    expect(mocks.updateAgentSession).not.toHaveBeenCalled();
+    expect(mocks.start).not.toHaveBeenCalled();
   });
 
   it("monitors live runs and renews their seats without browser polling", async () => {
@@ -861,7 +905,14 @@ describe("gen2 Superset agent turn (Phase 4 browser-facing delegate)", () => {
       }),
     );
     expect(mocks.createTurn).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: runId, chatId, workspaceId }),
+      expect.objectContaining({
+        sessionId: runId,
+        chatId,
+        workspaceId,
+        // Recorded so a restart can rebuild the command on the same model.
+        model: "gpt-5.6-luna",
+        worktreeId: expect.stringMatching(/^agent-/),
+      }),
     );
   });
 

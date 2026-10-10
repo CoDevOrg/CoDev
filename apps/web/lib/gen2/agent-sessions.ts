@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 
@@ -95,6 +95,32 @@ export async function getGen2AgentSession(
     .limit(1);
   if (!session) throw new Gen2LifecycleError("Agent session not found.", 404);
   return session;
+}
+
+/**
+ * The model the session's latest recorded turn ran on. A Superset turn is
+ * keyed by its run id, so this follows the session's runs to their turns.
+ */
+export async function getGen2AgentSessionModel(sessionId: string) {
+  const [turn] = await getDatabase()
+    .select({ model: schema.gen2AgentTurns.model })
+    .from(schema.gen2SupersetRuns)
+    .innerJoin(
+      schema.gen2AgentTurns,
+      eq(
+        schema.gen2AgentTurns.sessionId,
+        sql`${schema.gen2SupersetRuns.id}::text`,
+      ),
+    )
+    .where(
+      and(
+        eq(schema.gen2SupersetRuns.sessionId, sessionId),
+        isNotNull(schema.gen2AgentTurns.model),
+      ),
+    )
+    .orderBy(desc(schema.gen2SupersetRuns.createdAt))
+    .limit(1);
+  return turn?.model ?? null;
 }
 
 export async function updateGen2AgentSessionStatus(input: {
