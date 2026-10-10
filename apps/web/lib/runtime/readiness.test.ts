@@ -32,6 +32,13 @@ describe("web service readiness", () => {
     expect(mocks.host).not.toHaveBeenCalled();
   });
 
+  it("reports the Azure deployment so a deploy can wait for its revision", async () => {
+    vi.stubEnv("CODEV_DEPLOYMENT_ID", "deploy-2");
+    expect((await getReadiness()).deployment).toBe("deploy-2");
+    vi.unstubAllEnvs();
+    expect((await getReadiness()).deployment).toBeNull();
+  });
+
   it.each(["database", "realtime"] as const)(
     "reports degraded when %s is unavailable",
     async (dependency) => {

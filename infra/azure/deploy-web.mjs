@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import {
   cpSync,
   mkdirSync,
@@ -17,6 +18,9 @@ const registry = "codevwebprod8ad43";
 const release =
   process.env.GITHUB_SHA ||
   execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+// Every deploy starts a new revision, so a redeploy of the same commit still
+// loads changed settings such as a promoted ARM image.
+const deployment = randomUUID();
 const { WORKFLOW_POSTGRES_ADMIN_URL, ...base } = JSON.parse(
   process.env.AZURE_WEB_RUNTIME_SECRETS ||
     readFileSync(".codev-local/azure-web-secrets.json", "utf8"),
@@ -103,7 +107,11 @@ function parameters(image) {
       $schema:
         "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
       contentVersion: "1.0.0.0",
-      parameters: { image: { value: image }, runtimeValues: { value: values } },
+      parameters: {
+        image: { value: image },
+        runtimeValues: { value: values },
+        deploymentId: { value: deployment },
+      },
     }),
     { mode: 0o600 },
   );
@@ -124,7 +132,11 @@ async function waitForRelease(hostname) {
       });
       if (response.ok) {
         const readiness = await response.json();
-        if (readiness.status === "ready" && readiness.release === release)
+        if (
+          readiness.status === "ready" &&
+          readiness.release === release &&
+          readiness.deployment === deployment
+        )
           return;
       } else {
         await response.body?.cancel();

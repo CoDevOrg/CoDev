@@ -25,6 +25,8 @@ export async function getReadiness() {
     status: ready ? ("ready" as const) : ("degraded" as const),
     service: "codev-web",
     release: process.env.VERCEL_GIT_COMMIT_SHA ?? "development",
+    // Azure deploys wait for this to know their new revision is serving.
+    deployment: process.env.CODEV_DEPLOYMENT_ID ?? null,
     components: { database, realtime },
   };
 }

@@ -5,6 +5,13 @@ param registryName string = 'codevwebprod8ad43'
 param identityName string = 'codev-web-origin'
 @secure()
 param runtimeValues object
+// Unique per deploy. Secret values change without changing the template, and
+// only a new revision makes replicas read them, so this plain value forces one.
+param deploymentId string
+
+var runtimeEnv = [for pair in items(runtimeValues): union({ name: pair.key }, empty(pair.value)
+  ? { value: '' }
+  : { secretRef: toLower(replace(pair.key, '_', '-')) })]
 
 resource environment 'Microsoft.App/managedEnvironments@2025-01-01' existing = {
   name: environmentName
@@ -42,9 +49,7 @@ resource app 'Microsoft.App/containerApps@2025-01-01' = {
         name: 'web'
         image: image
         resources: { cpu: 1, memory: '2Gi' }
-        env: [for pair in items(runtimeValues): union({ name: pair.key }, empty(pair.value)
-          ? { value: '' }
-          : { secretRef: toLower(replace(pair.key, '_', '-')) })]
+        env: concat(runtimeEnv, [{ name: 'CODEV_DEPLOYMENT_ID', value: deploymentId }])
         probes: [
           { type: 'Startup', httpGet: { path: '/__codev/live', port: 3000 }, periodSeconds: 5, failureThreshold: 60 }
           { type: 'Liveness', httpGet: { path: '/__codev/live', port: 3000 }, periodSeconds: 15, failureThreshold: 3 }
