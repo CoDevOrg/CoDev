@@ -118,10 +118,6 @@ export function useComposerTypeahead(text: string, enabled: boolean) {
   const key = trigger ? `${anchor}:${trigger.query}` : "";
   const index = active.key === key ? active.index : 0;
 
-  function move(step: number, count: number) {
-    setActive({ key, index: (index + step + count) % count });
-  }
-
   /** Handles a menu key; true when the event was the menu's. */
   function handleKey(
     event: KeyboardEvent<HTMLTextAreaElement>,
@@ -130,11 +126,13 @@ export function useComposerTypeahead(text: string, enabled: boolean) {
   ) {
     if (!trigger || items.length === 0 || event.nativeEvent.isComposing)
       return false;
+    const count = items.length;
+    const chosen = items[Math.min(index, count - 1)]!;
     const keys: Record<string, () => void> = {
-      ArrowDown: () => move(1, items.length),
-      ArrowUp: () => move(-1, items.length),
-      Enter: () => select(items[Math.min(index, items.length - 1)]!),
-      Tab: () => select(items[Math.min(index, items.length - 1)]!),
+      ArrowDown: () => setActive({ key, index: (index + 1) % count }),
+      ArrowUp: () => setActive({ key, index: (index - 1 + count) % count }),
+      Enter: () => select(chosen),
+      Tab: () => select(chosen),
       Escape: () => setDismissed(anchor),
     };
     const handler = keys[event.key];

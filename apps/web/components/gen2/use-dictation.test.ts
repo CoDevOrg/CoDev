@@ -92,6 +92,15 @@ describe("useDictation", () => {
     );
     expect(onFinal).toHaveBeenCalledWith("hello");
     expect(result.current.interim).toBe(" wor");
+    act(() =>
+      recognition.onresult?.({
+        resultIndex: 1,
+        results: results(["hello", true], ["world", true], [" again", true]),
+      }),
+    );
+    expect(onFinal).toHaveBeenLastCalledWith("world again");
+    expect(onFinal).toHaveBeenCalledTimes(2);
+    expect(result.current.interim).toBe("");
   });
 
   it("downloads the on-device model first, and can be cancelled", async () => {

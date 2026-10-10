@@ -93,56 +93,55 @@ function fileItems(value: string, context: SlashContext): ComposerMenuItem[] {
   }));
 }
 
+function workspaceItem(
+  id: "rename" | "share" | "preview",
+  label: string,
+  action: Gen2WorkspaceAction,
+): ComposerMenuItem[] {
+  return [{ id, group: "Workspace", label, icon: id, action: run(action) }];
+}
+
+/** The typed port, or the known one when nothing is typed; 0 when neither. */
+function previewPort(value: string, context: SlashContext) {
+  const port = value ? Number(value) : (context.knownPort ?? 0);
+  return /^\d{0,5}$/.test(value) && port >= 1 && port <= 65_535 ? port : 0;
+}
+
 /** The menu while a workspace command's argument is typed. */
 export function slashArgumentItems(
   command: string,
   value: string,
   context: SlashContext,
 ): ComposerMenuItem[] {
-  const port = /^\d{1,5}$/.test(value)
-    ? Number(value)
-    : (context.knownPort ?? 0);
+  const title = value.slice(0, 80);
+  const port = previewPort(value, context);
   switch (command) {
     case "open":
       return fileItems(value, context);
     case "branch":
       return branchItems(value, context);
     case "rename":
-      return value
-        ? [
-            {
-              id: "rename",
-              group: "Workspace",
-              label: `Rename this chat to “${value.slice(0, 80)}”`,
-              icon: "rename",
-              action: run({ type: "rename_chat", title: value.slice(0, 80) }),
-            },
-          ]
+      return title
+        ? workspaceItem("rename", `Rename this chat to “${title}”`, {
+            type: "rename_chat",
+            title,
+          })
         : [];
     case "share":
-      return [
+      return workspaceItem(
+        "share",
+        value ? `Share with ${value}` : "Open Share",
         {
-          id: "share",
-          group: "Workspace",
-          label: value ? `Share with ${value}` : "Open Share",
-          icon: "share",
-          action: run({
-            type: "open_share",
-            ...(value ? { emailOrLogin: value.slice(0, 256) } : {}),
-          }),
+          type: "open_share",
+          ...(value ? { emailOrLogin: value.slice(0, 256) } : {}),
         },
-      ];
+      );
     case "preview":
-      return port >= 1 && port <= 65_535 && (!value || port === Number(value))
-        ? [
-            {
-              id: "preview",
-              group: "Workspace",
-              label: `Preview :${port}`,
-              icon: "preview",
-              action: run({ type: "open_preview", port }),
-            },
-          ]
+      return port
+        ? workspaceItem("preview", `Preview :${port}`, {
+            type: "open_preview",
+            port,
+          })
         : [];
     default:
       return [];

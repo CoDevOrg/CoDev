@@ -119,7 +119,8 @@ export function ChatComposer(props: ChatComposerProps) {
   function insertTrigger(trigger: "/" | "@") {
     if (trigger === "@") insertText("@");
     else {
-      draft.setText(`/${draft.text}`);
+      // Commands only work at the start of the prompt.
+      if (!draft.text.startsWith("/")) draft.setText(`/${draft.text}`);
       menu.placeCaret(1);
     }
     textareaRef.current?.focus();

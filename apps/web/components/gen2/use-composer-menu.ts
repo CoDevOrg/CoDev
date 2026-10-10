@@ -37,13 +37,39 @@ export type ComposerMenuInput = {
   onOpenSettings?: (() => void) | undefined;
 };
 
+/** Does what a chosen menu entry (or a typed command) asks for. */
+async function performComposerAction(
+  action: ComposerMenuAction,
+  input: ComposerMenuInput,
+) {
+  const controller = input.agentContext?.controller;
+  if (action.type === "send") return input.onSendText(action.prompt);
+  if (action.type === "override") return input.onOverride(action.provider);
+  if (action.type === "notice") return input.onError(action.message);
+  if (action.type === "connect")
+    return (controller?.openSettings ?? input.onOpenSettings)?.();
+  try {
+    if (action.type === "run") {
+      const result = await controller?.run(action.action);
+      if (result && !result.ok) input.onError(result.message);
+    } else if (action.type === "workspace") {
+      if (action.command === "new") await controller?.newChat();
+      else if (action.command === "board") controller?.setViewMode("board");
+      else if (action.command === "import") controller?.openImport();
+      else controller?.openSettings();
+    }
+  } catch {
+    input.onError("That didn’t work. Try again.");
+  }
+}
+
 /**
  * The composer's `/` and `@` menu: what it lists for the text at the caret,
  * what choosing an entry does, and the submit-time workspace commands.
  * Workspace commands run at once and never start a turn.
  */
 export function useComposerMenu(input: ComposerMenuInput) {
-  const { draft, agentContext } = input;
+  const { draft } = input;
   const typeahead = useComposerTypeahead(draft.text, input.enabled);
   const { trigger } = typeahead;
   const slash = useChatSlashItems({ ...input, trigger });
@@ -63,23 +89,6 @@ export function useComposerMenu(input: ComposerMenuInput) {
     typeahead.setCaret(caret);
   }
 
-  async function perform(action: ComposerMenuAction) {
-    const controller = agentContext?.controller;
-    if (action.type === "run") {
-      const result = await controller?.run(action.action);
-      if (result && !result.ok) input.onError(result.message);
-    } else if (action.type === "workspace") {
-      if (action.command === "new") await controller?.newChat();
-      else if (action.command === "board") controller?.setViewMode("board");
-      else if (action.command === "import") controller?.openImport();
-      else controller?.openSettings();
-    } else if (action.type === "send") input.onSendText(action.prompt);
-    else if (action.type === "override") input.onOverride(action.provider);
-    else if (action.type === "connect")
-      (controller?.openSettings ?? input.onOpenSettings)?.();
-    else if (action.type === "notice") input.onError(action.message);
-  }
-
   function select(item: ComposerMenuItem) {
     if (!trigger) return;
     const { action } = item;
@@ -97,7 +106,7 @@ export function useComposerMenu(input: ComposerMenuInput) {
       // A slash command is the whole prompt; an @ choice leaves the rest.
       draft.setText(trigger.kind === "slash" ? "" : before + after);
       placeCaret(trigger.kind === "slash" ? 0 : before.length);
-      void perform(action);
+      void performComposerAction(action, input);
     }
     input.textareaRef.current?.focus();
   }
@@ -123,7 +132,7 @@ export function useComposerMenu(input: ComposerMenuInput) {
         draft.setText("");
         placeCaret(0);
       }
-      void perform(action);
+      void performComposerAction(action, input);
       return true;
     },
   };

@@ -135,18 +135,16 @@ export function useDictation({
     recognition.interimResults = true;
     if (local) recognition.processLocally = true;
     recognition.onresult = (event) => {
-      let pending = "";
-      for (
-        let index = event.resultIndex;
-        index < event.results.length;
-        index += 1
-      ) {
-        const result = event.results[index]!;
-        const text = result[0]?.transcript ?? "";
-        if (!result.isFinal) pending += text;
-        else if (text.trim()) handlers.current.onFinal(text.trim());
-      }
-      setInterim(pending);
+      const results = Array.from(event.results).slice(event.resultIndex);
+      const text = (final: boolean) =>
+        results
+          .filter((result) => result.isFinal === final)
+          .map((result) => result[0]?.transcript ?? "")
+          .join(final ? " " : "");
+      // One call per event, so phrases that land together insert together.
+      const heard = text(true).replace(/\s+/g, " ").trim();
+      if (heard) handlers.current.onFinal(heard);
+      setInterim(text(false));
     };
     recognition.onerror = (event) => {
       const message = ERRORS[event.error];
