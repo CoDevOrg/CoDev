@@ -435,10 +435,19 @@ other request needs:
 
 The proxy connects only to that row's loopback address. It rewrites `Host`,
 `Origin`, and `Referer` to `localhost:<port>`, and drops its own cookie and
-client forwarding headers. It streams bodies, pipes WebSocket upgrades raw,
-and rewrites localhost `Location` headers. Every response gets
+client forwarding headers. It streams bodies, re-chunking any chunked request
+body so `GET`, `DELETE`, and `OPTIONS` bodies stay framed. It rewrites
+localhost `Location` headers. Every response gets
 `Cloudflare-CDN-Cache-Control: no-store`, `Cache-Control: private`, and
-`frame-ancestors <appOrigin>`.
+`frame-ancestors <appOrigin>`. A WebSocket upgrade must have no body; the
+proxy pipes it raw only after the dev server answers 101, and turns any other
+answer into a no-store 502.
+
+The cookie renews on use, so a removed member keeps an open preview for up to
+30 minutes, or 5 minutes after it goes idle. Each new token checks membership
+again and starts a new cap. The verified boot treats previews as optional: if
+the preview socket or restart fails, it stops the proxy service and keeps
+booting the workspace. The socket keeps holding the port.
 
 The legacy CustomScript connection path does not install the proxy, so
 previews need baked boot. Proxy changes ship only in an image release. A change

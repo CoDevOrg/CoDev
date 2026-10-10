@@ -172,16 +172,21 @@ inert until an image built with it is released and promoted.
 - Requests reach only ports whose every LISTEN row is owned by uid 2000 or
   above, excluding the guest's reserved ports. Origin and `Sec-Fetch-*` checks
   run before the localhost rewrite. Every response is marked `private` and
-  `Cloudflare-CDN-Cache-Control: no-store`.
+  `Cloudflare-CDN-Cache-Control: no-store`. WebSocket bytes flow only after
+  the dev server answers 101; any other answer becomes a 502.
 - Tests live in `infra/runtime/arm-workspace-preview.test.mjs`. They cover the
   token matrix, the cookie flow and its cap, the check page, open redirects,
   Origin rules, owner and reserved-port rules, address families, header
-  rewrites, a real HTTP upstream, and a raw-socket WebSocket pipe. Image
-  validation verifies the units and smoke-tests the socket.
+  rewrites, chunked bodies, a real HTTP upstream, and a raw-socket WebSocket
+  pipe. Image validation verifies the units and smoke-tests the socket. A
+  preview start failure during the verified boot stops the proxy service and
+  lets the workspace boot continue.
 
-Membership changes take effect only when a session expires (at most 5 minutes
-without a fresh mint, 30 minutes in total) or when the generation ends. The
-legacy connection path does not install the proxy.
+A removed member keeps an open preview for up to 30 minutes while it stays in
+use, or 5 minutes after it goes idle, because each proxied request past half
+the TTL renews the cookie. A fresh mint checks membership again and starts a
+new 30-minute cap. Ending the generation ends every session. The legacy
+connection path does not install the proxy.
 
 ## References
 
