@@ -64,7 +64,10 @@ parses it with the provider's reader (`session-import-codex.ts`,
 `session-import-claude.ts`) into messages with the same activity cards live
 turns use; Claude tool blocks share `claude-tool-items.ts` with the live
 reducer. The upload is a draft only its importer can see until they confirm
-the preview. Imported chats continue like any other chat today; native
+the preview. In Chrome and Edge, `session-import-scan.ts` lists the sessions
+in a folder the member grants, summarizing each from its first 512 KB
+(`session-import-summary.ts`) in the browser; only the chosen file is
+uploaded. Imported chats continue like any other chat today; native
 resume is not wired yet.
 
 ## Agent coordination
