@@ -204,9 +204,14 @@
   gap: 16px;
 }
 .lp-footer nav .lp-footer-sign-in {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 34px;
   padding-inline: 14px;
-  border-color: var(--lp-line-strong);
+  border: 1px solid var(--lp-line-strong);
+  border-radius: 8px;
+  line-height: 1;
   background: var(--lp-panel);
   color: var(--lp-ink);
   font-size: 13px;

@@ -255,13 +255,15 @@ describe("SupersetFilePane", () => {
     expect(screen.getByLabelText("Code")).toHaveValue("my unsaved draft");
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
 
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     mocks.read.mockResolvedValueOnce({
       ...firstFile,
       contents: "external edit",
       revision: "rev-2",
     });
     fireEvent.click(screen.getByRole("button", { name: "Reload latest" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Discard and reload" }),
+    );
     await waitFor(() =>
       expect(screen.getByLabelText("Code")).toHaveValue("external edit"),
     );
@@ -447,8 +449,11 @@ describe("SupersetFilePane", () => {
     fireEvent.change(screen.getByLabelText("Code"), {
       target: { value: "draft" },
     });
-    vi.spyOn(window, "confirm").mockReturnValue(false);
     rerender(<SupersetFilePane {...props} requestedPath={firstFile.path} />);
+    expect(onConsumed).toHaveBeenLastCalledWith("confirming");
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Keep editing" }),
+    );
     expect(onConsumed).toHaveBeenLastCalledWith("declined");
     expect(screen.getByLabelText("Code")).toHaveValue("draft");
   });
