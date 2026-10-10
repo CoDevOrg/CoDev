@@ -125,6 +125,30 @@ describe("provider-aware workspace transport", () => {
       "/v1/superset/runtime/git",
     );
   });
+  it("runs a read-only exec on a checked route without counting it as activity", async () => {
+    mocks.fetch.mockResolvedValueOnce(
+      Response.json({ output: "sockets", exitCode: 0 }),
+    );
+    expect(
+      await executeInSandbox(
+        target.workspaceId,
+        { command: ["cat", "/proc/net/tcp"] },
+        { recordActivity: false, timeoutMs: 10_000, target },
+      ),
+    ).toEqual({ output: "sockets", exitCode: 0 });
+    expect(mocks.target).not.toHaveBeenCalled();
+    expect(mocks.activity).not.toHaveBeenCalled();
+    mocks.fetch.mockResolvedValueOnce(
+      Response.json({ output: "pwd", exitCode: 0 }),
+    );
+    await executeInSandbox(target.workspaceId, { command: ["pwd"] });
+    expect(mocks.activity).toHaveBeenCalledWith(
+      target.workspaceId,
+      target.generation,
+      "POST",
+      "/v1/pty/exec",
+    );
+  });
   it("preserves conflict errors instead of wrapping an ARM error as success", async () => {
     mocks.fetch.mockResolvedValueOnce(
       Response.json(

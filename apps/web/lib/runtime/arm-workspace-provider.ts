@@ -5,6 +5,7 @@ import { ArmWorkflowIO } from "./arm-workflow-io";
 
 import { createClientSecretCredential } from "./azure";
 import { readArmWorkspaceConfig } from "./arm-workspace-config";
+import { signArmControlPlaneToken } from "./arm-control-plane-token";
 import { logEvent } from "../platform/observability";
 import { ArmWorkspaceRuntimeError } from "./arm-workspace-error";
 export { ArmWorkspaceRuntimeError } from "./arm-workspace-error";
@@ -25,10 +26,9 @@ const WORKSPACE_LOCATION = "westus2";
 // Keep Azure polling under Cloudflare Workflows' subrequest budget.
 const VM_POLL_INTERVAL_MS = 10_000;
 const ARM_OPERATION_POLL_INTERVAL_MS = 5_000;
-const CLOUDFLARE_ACCOUNT_ID = "84a1d01866de04e04320feddfb199b83";
+export const CLOUDFLARE_ACCOUNT_ID = "84a1d01866de04e04320feddfb199b83";
 const CLOUDFLARE_ZONE_ID = "c474dbc7af01ea073573a250fbd1d5ec";
 const CLOUDFLARE_ZONE_NAME = "trycodev.com";
-const PHASE2_SIGNING_ISSUER = "codev-control-plane";
 const SHARED_NSG = "codev-arm-workspace-nsg";
 const SHARED_VNET = "codev-arm-workspace-vnet";
 
@@ -456,17 +456,6 @@ function bytesToBase64(bytes: Uint8Array) {
   return btoa(binary);
 }
 
-function base64ToBytes(value: string) {
-  return Uint8Array.from(atob(value), (character) => character.charCodeAt(0));
-}
-
-function base64Url(bytes: Uint8Array) {
-  return bytesToBase64(bytes)
-    .replaceAll("+", "-")
-    .replaceAll("/", "_")
-    .replace(/=+$/g, "");
-}
-
 async function gzipBase64(value: string) {
   const stream = new CompressionStream("gzip");
   const writer = stream.writable.getWriter();
@@ -497,20 +486,7 @@ export async function capabilityToken(
   generation: number,
   request = { method: "GET", path: "/v1/health", scope: "health", body: "" },
 ) {
-  const config = readArmWorkspaceConfig();
-  const key = await crypto.subtle.importKey(
-    "pkcs8",
-    base64ToBytes(config.signingPrivateKey),
-    { name: "Ed25519" },
-    false,
-    ["sign"],
-  );
-  const encodeJson = (value: unknown) =>
-    base64Url(new TextEncoder().encode(JSON.stringify(value)));
-  const issuedAt = Math.floor(Date.now() / 1000);
-  const header = encodeJson({ alg: "EdDSA", typ: "JWT" });
-  const claims = encodeJson({
-    iss: PHASE2_SIGNING_ISSUER,
+  return signArmControlPlaneToken({
     aud: host,
     workspaceId,
     generation,
@@ -518,19 +494,11 @@ export async function capabilityToken(
     path: request.path,
     scope: request.scope,
     bodySha256: await sha256Hex(request.body),
-    iat: issuedAt,
-    exp: issuedAt + 60,
   });
-  const message = `${header}.${claims}`;
-  const signature = await crypto.subtle.sign(
-    { name: "Ed25519" },
-    key,
-    new TextEncoder().encode(message),
-  );
-  return `${message}.${base64Url(new Uint8Array(signature))}`;
 }
 
-async function cloudflareRequestDirect<T>(
+/** One Cloudflare API call outside any workflow checkpoint. */
+export async function cloudflareRequestDirect<T>(
   path: string,
   method = "GET",
   body?: unknown,

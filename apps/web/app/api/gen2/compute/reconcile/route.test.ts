@@ -4,11 +4,15 @@ const reconcile = vi.hoisted(() =>
   vi.fn(async () => ({ checked: 2, stopped: 1 })),
 );
 const reconcileArmWorkspaceOperations = vi.hoisted(() => vi.fn());
+const sweepArmWorkspacePreviewRoutes = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/gen2/compute-reconcile", () => ({
   reconcileComputeQuota: reconcile,
 }));
 vi.mock("@/lib/gen2/runtime-operations", () => ({
   reconcileArmWorkspaceOperations,
+}));
+vi.mock("@/lib/runtime/arm-workspace-preview-sweep", () => ({
+  sweepArmWorkspacePreviewRoutes,
 }));
 
 import { GET } from "./route";
@@ -17,6 +21,7 @@ afterEach(() => {
   delete process.env.CRON_SECRET;
   reconcile.mockClear();
   reconcileArmWorkspaceOperations.mockClear();
+  sweepArmWorkspacePreviewRoutes.mockClear();
 });
 
 it("requires the scheduler secret before reconciling and stopping workspaces", async () => {
@@ -45,4 +50,5 @@ it("requires the scheduler secret before reconciling and stopping workspaces", a
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({ checked: 2, stopped: 1 });
   expect(reconcileArmWorkspaceOperations).toHaveBeenCalledOnce();
+  expect(sweepArmWorkspacePreviewRoutes).toHaveBeenCalledOnce();
 });

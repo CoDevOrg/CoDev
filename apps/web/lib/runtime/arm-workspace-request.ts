@@ -8,6 +8,11 @@ import { logEvent } from "../platform/observability";
 
 type Target = { workspaceId: string; generation: number; host: string };
 
+export type ArmWorkspaceRequestOptions = {
+  /** Off for reads that must not keep the guest awake, such as port checks. */
+  recordActivity?: boolean | undefined;
+};
+
 /** Guest replies omit the host API envelopes consumed by existing clients. */
 function envelope(path: string, payload: unknown) {
   if (path === "/v1/files/read") return { file: payload };
@@ -25,6 +30,7 @@ export async function armWorkspaceRequest(
   path: string,
   body: unknown,
   timeoutMs: number,
+  options: ArmWorkspaceRequestOptions = {},
 ) {
   const encodedBody = body === undefined ? "" : JSON.stringify(body);
   const token = await capabilityToken(
@@ -54,7 +60,7 @@ export async function armWorkspaceRequest(
       timeoutMs,
     ),
   );
-  if (response.ok)
+  if (response.ok && options.recordActivity !== false)
     await recordArmWorkspaceMemberActivity(
       target.workspaceId,
       target.generation,

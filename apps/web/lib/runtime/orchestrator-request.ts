@@ -11,6 +11,7 @@ import {
 } from "./workspace-runtime-target";
 
 import { fakeGuestEnabled, handleFakeGuestRequest } from "./fake-guest";
+import type { ArmWorkspaceRequestOptions } from "./arm-workspace-request";
 
 const errorSchema = z.object({
   error: z.string(),
@@ -35,6 +36,7 @@ export async function orchestratorRequest(
   body?: unknown,
   timeoutMs = 70_000,
   target?: WorkspaceRuntimeTarget,
+  options: ArmWorkspaceRequestOptions = {},
 ) {
   return orchestratorDirectRequest(
     method,
@@ -44,6 +46,7 @@ export async function orchestratorRequest(
     undefined,
     undefined,
     target,
+    options,
   );
 }
 
@@ -69,6 +72,7 @@ async function orchestratorDirectRequest(
   database?: Parameters<typeof workspaceRuntimeTarget>[1],
   /** A route the caller just read with its own checks, saving a lookup. */
   resolved?: WorkspaceRuntimeTarget,
+  options: ArmWorkspaceRequestOptions = {},
 ) {
   // A local stand-in for the Azure guest, so the workspace can be exercised
   // without infrastructure. Gated on an env var that is never set in
@@ -98,6 +102,7 @@ async function orchestratorDirectRequest(
           `/v1${workspaceRoute[2]}`,
           body,
           timeoutMs,
+          options,
         ),
       );
     }

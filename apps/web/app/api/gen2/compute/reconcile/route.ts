@@ -6,6 +6,7 @@ import { readJson, errorResponse } from "@/lib/http/api-route";
 
 import { reconcileComputeQuota } from "@/lib/gen2/compute-reconcile";
 import { reconcileArmWorkspaceOperations } from "@/lib/gen2/runtime-operations";
+import { sweepArmWorkspacePreviewRoutes } from "@/lib/runtime/arm-workspace-preview-sweep";
 
 export const maxDuration = 300;
 
@@ -31,6 +32,7 @@ export async function GET(request: Request) {
   const [compute] = await Promise.all([
     reconcileComputeQuota(),
     reconcileArmWorkspaceOperations(),
+    sweepArmWorkspacePreviewRoutes(),
   ]);
   return Response.json(compute);
 }
