@@ -7,9 +7,11 @@ const MAX_HISTORY_MESSAGES = 20;
 const MAX_HISTORY_CHARS = 12_000;
 
 /** Mention tokens read as `@label` and a leading command is dropped; a bare
- *  command (`/review`) titles the chat by its label. */
+ *  command (`/review`) titles the chat by its label. `/goal clear|done`
+ *  leaves "New chat", so the next prompt names the chat. */
 export function gen2ChatTitleFromPrompt(prompt: string) {
-  const { command } = parseGen2PromptCommand(prompt.trim());
+  const { command, goalControl } = parseGen2PromptCommand(prompt.trim());
+  if (goalControl) return GEN2_NEW_CHAT_TITLE;
   const text =
     humanizeGen2Prompt(prompt.trim()).trim() ||
     (GEN2_PROMPT_COMMANDS.find((entry) => entry.id === command)?.label ?? "");

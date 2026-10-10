@@ -10,10 +10,12 @@ const KEEPALIVE_LIMIT_MS = 30 * 60_000;
 /**
  * Previews are cross-site, so `allow-same-origin` grants them nothing of
  * the app's. They may not navigate the workspace itself (no top
- * navigation), and `allow=""` keeps camera and microphone off.
+ * navigation), and `allow=""` keeps camera and microphone off. The
+ * storage-access token lets the guest's check page ask for its session
+ * cookie where the browser blocks embedded cookies (Safari).
  */
 const SANDBOX =
-  "allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads";
+  "allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads allow-storage-access-by-user-activation";
 
 /**
  * Input inside a cross-origin frame never reaches this page, so while the

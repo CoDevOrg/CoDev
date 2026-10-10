@@ -4,6 +4,8 @@ import type { Gen2PossibleDuplicateTask } from "@codev/contracts";
 
 import { isGen2AgentCoordinationEnabled } from "./agent-coordination-feature";
 import { listGen2AgentSessions } from "./agent-sessions";
+import { parseGen2PromptCommand } from "./prompt-command";
+import { humanizeGen2Prompt, parseGen2MentionTokens } from "./prompt-mentions";
 import { listGen2SupersetRuns } from "./superset-runs";
 
 const ACTIVE_STATUSES = new Set(["creating", "running"]);
@@ -20,11 +22,25 @@ const STOP_WORDS = new Set(
   ).split(" "),
 );
 
+/**
+ * The member's own words: two tasks that mention the same chat or file, or
+ * start with the same command, are not alike for that.
+ */
+function memberText(prompt: string) {
+  const { text } = parseGen2PromptCommand(prompt);
+  return parseGen2MentionTokens(text).reduceRight(
+    (rest, token) => `${rest.slice(0, token.start)} ${rest.slice(token.end)}`,
+    text,
+  );
+}
+
 function taskWords(text: string) {
   return new Set(
-    (text.toLowerCase().match(/[a-z0-9]+/g) ?? []).filter(
-      (word) => word.length >= 3 && !STOP_WORDS.has(word),
-    ),
+    (
+      memberText(text)
+        .toLowerCase()
+        .match(/[a-z0-9]+/g) ?? []
+    ).filter((word) => word.length >= 3 && !STOP_WORDS.has(word)),
   );
 }
 
@@ -81,7 +97,7 @@ export async function findPossibleDuplicateTask(input: {
       provider: match.run.provider,
       createdBy: match.run.createdBy,
       status: match.run.status,
-      task: match.task.slice(0, MAX_TASK_CHARS),
+      task: humanizeGen2Prompt(match.task).slice(0, MAX_TASK_CHARS),
     };
   } catch {
     return undefined;

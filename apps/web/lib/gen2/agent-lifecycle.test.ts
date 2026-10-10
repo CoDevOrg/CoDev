@@ -724,18 +724,12 @@ describe("gen2 Codex agent", () => {
     expect(mocks.start).not.toHaveBeenCalled();
   });
 
-  it("checks for duplicates by the member's words, not mentions or the command", async () => {
-    await startGen2AgentTurn({
-      ...turn,
-      prompt:
-        "/plan Write tests for @[auth.ts](file:src%2Fauth.ts) like @[Fix login flow](chat:55555555-5555-4555-8555-555555555555) did",
-    });
+  it("checks the prompt as sent for duplicates; the check reads only the member's words", async () => {
+    const prompt =
+      "/plan Write tests for @[auth.ts](file:src%2Fauth.ts) like @[Fix login flow](chat:55555555-5555-4555-8555-555555555555) did";
+    await startGen2AgentTurn({ ...turn, prompt });
     expect(duplicates.find).toHaveBeenCalledWith(
-      expect.objectContaining({
-        workspaceId,
-        chatId,
-        prompt: "Write tests for   like   did",
-      }),
+      expect.objectContaining({ workspaceId, chatId, prompt }),
     );
     // The agent still gets the prompt as sent.
     expect(launchedPrompt()).toMatch(/@\[Fix login flow\]\(chat:5{8}-/);

@@ -17,7 +17,6 @@ import {
 import { findPossibleDuplicateTask } from "./duplicate-task-check";
 import { Gen2AccessError, Gen2LifecycleError } from "./errors";
 import { parseGen2PromptCommand } from "./prompt-command";
-import { parseGen2MentionTokens } from "./prompt-mentions";
 import type { Gen2AgentProvider } from "./providers";
 import { requireGen2Member } from "./workspaces";
 
@@ -55,18 +54,6 @@ async function requireAgentRunner(workspaceId: string, userId: string) {
 }
 
 /**
- * The member's own words: two tasks that mention the same chat or file, or
- * start with the same command, are not alike for that.
- */
-function taskText(prompt: string) {
-  const { text } = parseGen2PromptCommand(prompt);
-  return parseGen2MentionTokens(text).reduceRight(
-    (rest, token) => `${rest.slice(0, token.start)} ${rest.slice(token.end)}`,
-    text,
-  );
-}
-
-/**
  * Every database trip crosses the country, so independent checks run
  * together instead of one after another. The history is used only once the
  * chat is known to be in this workspace.
@@ -77,10 +64,7 @@ function checkTurn(input: Gen2AgentTurnInput) {
     requireGen2Chat(input.workspaceId, input.chatId).then(async () => {
       await claimGen2ChatProvider(input.chatId, input.provider);
       if (input.continuation) return null;
-      return findPossibleDuplicateTask({
-        ...input,
-        prompt: taskText(input.prompt),
-      });
+      return findPossibleDuplicateTask(input);
     }),
     loadGen2AgentModels(input.provider, input.userId),
     input.continuation?.history ?? listGen2ChatMessages(input.chatId),

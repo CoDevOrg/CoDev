@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { SupersetWorkspaceShell } from "@/components/gen2/superset-workspace-shell";
 import { requireUser } from "@/lib/auth/session";
 import { Gen2AccessError, Gen2LifecycleError } from "@/lib/gen2/errors";
+import { isGen2PreviewEnabled } from "@/lib/gen2/preview-config";
 import { isGen2SupersetRuntimeEnabled } from "@/lib/gen2/superset-runtime-feature";
 import { getGen2WorkspaceDetail } from "@/lib/gen2/workspaces";
 
@@ -34,6 +35,7 @@ export default async function Gen2WorkspacePage({
       currentUserId={user.id}
       canEdit={workspace.role !== "viewer"}
       runtimeEnabled={isGen2SupersetRuntimeEnabled()}
+      previewEnabled={isGen2PreviewEnabled()}
     />
   );
 }

@@ -233,19 +233,6 @@
   display: none;
 }
 
-/* The Browser tab: the preview fills the inspector below its tabs. */
-.gen2-ide-browser {
-  display: flex;
-  min-height: 0;
-  flex: 1;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.gen2-ide-browser[hidden] {
-  display: none;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .gen2-terminal-tab-button {
     transition: none;

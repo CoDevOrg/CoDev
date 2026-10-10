@@ -1988,23 +1988,15 @@ export function SupersetWorkspaceShell({
                         focusPath={inspector.reviewFocus}
                       />
                       {previewEnabled ? (
-                        <div
-                          id="superset-panel-browser"
-                          role="tabpanel"
-                          aria-labelledby="superset-tab-browser"
-                          hidden={tab !== "browser"}
-                          className="gen2-ide-browser"
-                        >
-                          <WorkspaceBrowserPane
-                            workspaceId={workspaceId}
-                            visible={tab === "browser"}
-                            canEdit={canEdit}
-                            connected={connection.state === "connected"}
-                            request={inspector.previewRequest}
-                            onExpandChange={inspectorSize.onExpandChange}
-                            onStateChange={inspector.onPreviewState}
-                          />
-                        </div>
+                        <WorkspaceBrowserPane
+                          workspaceId={workspaceId}
+                          visible={tab === "browser"}
+                          canEdit={canEdit}
+                          connected={connection.state === "connected"}
+                          request={inspector.previewRequest}
+                          onExpandChange={inspectorSize.onExpandChange}
+                          onStateChange={inspector.onPreviewState}
+                        />
                       ) : null}
                     </aside>
                   </ResizablePanel>

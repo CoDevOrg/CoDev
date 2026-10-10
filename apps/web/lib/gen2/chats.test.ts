@@ -21,6 +21,8 @@ describe("gen2 chat transcript", () => {
       ),
     ).toBe("Refactor @auth.ts to use hooks");
     expect(gen2ChatTitleFromPrompt("/review")).toBe("Review");
+    expect(gen2ChatTitleFromPrompt("/goal clear")).toBe(GEN2_NEW_CHAT_TITLE);
+    expect(gen2ChatTitleFromPrompt("/goal done")).toBe(GEN2_NEW_CHAT_TITLE);
   });
 
   it("sends prior turns with the next Codex exec instead of resuming a CLI thread", () => {

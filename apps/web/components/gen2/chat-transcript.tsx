@@ -64,8 +64,6 @@ function LiveTurn({
   chatId: string | null;
   onOpenFile: (path: string) => void;
 }) {
-  // Passed by spread: turn-activity gains these props with the actions work.
-  const actionProps = { chatId, actionToken: live.actionToken };
   return (
     <li data-role="assistant" className="gen2-chat-turn">
       <div className="gen2-chat-assistant">
@@ -73,7 +71,8 @@ function LiveTurn({
           items={live.items}
           onOpenFile={onOpenFile}
           live
-          {...actionProps}
+          chatId={chatId}
+          actionToken={live.actionToken}
         />
         {live.reply ? (
           <MarkdownContent className="gen2-chat-markdown" text={live.reply} />
@@ -128,7 +127,7 @@ export function ChatTranscript({
                       items={message.items}
                       settled
                       onOpenFile={onOpenFile}
-                      {...{ chatId }}
+                      chatId={chatId}
                     />
                   ) : null}
                   <MarkdownContent

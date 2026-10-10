@@ -187,7 +187,7 @@ describe("WorkspaceBrowserPane", () => {
     expect(frame).toHaveAttribute("src", sessionUrl(5173, "t1"));
     expect(frame).toHaveAttribute(
       "sandbox",
-      "allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads",
+      "allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads allow-storage-access-by-user-activation",
     );
     expect(frame).toHaveAttribute("referrerpolicy", "no-referrer");
     expect(frame).toHaveAttribute("allow", "");
