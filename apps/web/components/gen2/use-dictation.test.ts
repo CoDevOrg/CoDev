@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useDictation } from "./use-dictation";
 
@@ -42,6 +42,21 @@ function stubRecognition(availability?: string, installs = true) {
   return { instances, Recognition };
 }
 
+/** In-memory storage: Node's own localStorage global would shadow jsdom's. */
+function memoryStorage(): Storage {
+  const values = new Map<string, string>();
+  return {
+    get length() {
+      return values.size;
+    },
+    clear: () => values.clear(),
+    getItem: (key) => values.get(key) ?? null,
+    key: (index) => [...values.keys()][index] ?? null,
+    removeItem: (key) => void values.delete(key),
+    setItem: (key, value) => void values.set(key, String(value)),
+  };
+}
+
 function results(...entries: Array<[string, boolean]>) {
   return entries.map(([transcript, isFinal]) =>
     Object.assign([{ transcript }], { isFinal }),
@@ -56,13 +71,12 @@ function setup() {
 }
 
 describe("useDictation", () => {
+  beforeEach(() => {
+    vi.stubGlobal("localStorage", memoryStorage());
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
-    try {
-      window.localStorage.clear();
-    } catch {
-      /* No storage in this runtime. */
-    }
   });
 
   it("is unsupported without the Web Speech API", () => {
@@ -138,6 +152,16 @@ describe("useDictation", () => {
     expect(result.current.phase).toBe("listening");
     expect(result.current.mode).toBe("cloud");
     expect(instances[0]!.processLocally).toBe(false);
+  });
+
+  it("remembers the consent for later dictation", async () => {
+    stubRecognition("unavailable");
+    const { result } = setup();
+    await act(() => result.current.start());
+    act(() => result.current.acceptConsent());
+    act(() => result.current.stop());
+    await act(() => result.current.start());
+    expect(result.current.phase).toBe("listening");
   });
 
   it("maps recognition errors to what the member can do", async () => {

@@ -44,6 +44,21 @@ function ndjson(...lines: string[]) {
 
 const CHAT = { id: "33333333-3333-4333-8333-333333333333", title: "New chat" };
 
+/** In-memory storage: Node's own localStorage global would shadow jsdom's. */
+function memoryStorage(): Storage {
+  const values = new Map<string, string>();
+  return {
+    get length() {
+      return values.size;
+    },
+    clear: () => values.clear(),
+    getItem: (key) => values.get(key) ?? null,
+    key: (index) => [...values.keys()][index] ?? null,
+    removeItem: (key) => void values.delete(key),
+    setItem: (key, value) => void values.set(key, String(value)),
+  };
+}
+
 const SNAPSHOT: Gen2WorkspaceContext = {
   view: { mode: "ide", inspector: "files", terminalOpen: false, narrow: false },
   worktree: {
@@ -150,6 +165,7 @@ async function sendReady() {
 describe("Gen2ChatPanel", () => {
   beforeEach(() => {
     sessionStorage.clear();
+    vi.stubGlobal("localStorage", memoryStorage());
   });
 
   function stubFetch(handlers: {
@@ -994,6 +1010,26 @@ describe("Gen2ChatPanel", () => {
       screen.getByRole("button", { name: "Remove Ask mode" }),
     ).toBeInTheDocument();
     expect(agentPosts()).toHaveLength(0);
+  });
+
+  it("teaches / and @ until the member uses one", async () => {
+    stubFetch({});
+    renderPanel();
+    await screen.findByLabelText("Prompt");
+    fireEvent.click(screen.getByRole("button", { name: "@ Mention" }));
+    expect(screen.getByLabelText("Prompt")).toHaveValue("@");
+    fireEvent.change(screen.getByLabelText("Prompt"), {
+      target: { value: "" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "/ Commands" }));
+    expect(screen.getByLabelText("Prompt")).toHaveValue("/");
+    expect(
+      await screen.findByRole("listbox", { name: "Commands" }),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "/ Commands" })).toBeNull(),
+    );
+    expect(localStorage.getItem("codev-gen2-composer-hints-used")).toBe("1");
   });
 
   it("closes the menu on Escape until a new trigger starts", async () => {
