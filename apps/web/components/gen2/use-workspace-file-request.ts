@@ -2,8 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-/** How the Files pane handled a requested path. */
-export type FileRequestOutcome = "opened" | "same" | "busy" | "declined";
+/**
+ * How the Files pane handled a requested path. "confirming" means it asked
+ * about unsaved edits; it reports "declined" if the member keeps them.
+ */
+export type FileRequestOutcome =
+  | "opened"
+  | "same"
+  | "busy"
+  | "confirming"
+  | "declined";
 
 export type FileRevealRange = {
   id: number;

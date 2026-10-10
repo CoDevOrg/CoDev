@@ -1,6 +1,10 @@
 "use client";
 
 import { WorkspaceButton } from "./workspace-button";
+import {
+  DiscardChangesDialog,
+  type DiscardTarget,
+} from "./discard-changes-dialog";
 
 import {
   type FormEvent,
@@ -261,6 +265,9 @@ export function SupersetFilePane({
     null,
   );
   const [deleting, setDeleting] = useState(false);
+  const [discard, setDiscard] = useState<
+    (DiscardTarget & { requested: boolean }) | null
+  >(null);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
     new Set(),
   );
@@ -651,16 +658,14 @@ export function SupersetFilePane({
   }
 
   const selectFile = useCallback(
-    (path: string): FileRequestOutcome => {
+    (path: string, requested = false): FileRequestOutcome => {
       if (path === openFileRef.current?.path) return "same";
       if (savingRef.current || openingPath) return "busy";
       const current = openFileRef.current;
-      if (
-        current &&
-        contentsRef.current !== current.contents &&
-        !window.confirm("Discard your unsaved changes and open another file?")
-      )
-        return "declined";
+      if (current && contentsRef.current !== current.contents) {
+        setDiscard({ from: current.path, to: path, requested });
+        return "confirming";
+      }
       void openPath(path);
       return "opened";
     },
@@ -674,7 +679,7 @@ export function SupersetFilePane({
     answeredPath.current = requestedPath ?? null;
     if (!requestedPath) return;
     wasRequested.current = true;
-    onRequestedPathConsumed?.(selectFile(requestedPath));
+    onRequestedPathConsumed?.(selectFile(requestedPath, true));
   }, [requestedPath, selectFile, onRequestedPathConsumed]);
 
   async function copyText(value: string, label: string) {
@@ -702,12 +707,22 @@ export function SupersetFilePane({
   function reloadLatest() {
     const file = openFileRef.current;
     if (!file || openingPath || savingRef.current) return;
-    if (
-      contentsRef.current !== file.contents &&
-      !window.confirm("Discard your unsaved changes and load the latest file?")
-    )
+    if (contentsRef.current !== file.contents) {
+      setDiscard({ from: file.path, to: file.path, requested: false });
       return;
+    }
     void openPath(file.path);
+  }
+
+  function keepChanges() {
+    if (discard?.requested) onRequestedPathConsumed?.("declined");
+    setDiscard(null);
+  }
+
+  function discardChanges() {
+    if (!discard) return;
+    setDiscard(null);
+    void openPath(discard.to);
   }
 
   const visibleFiles = query.trim()
@@ -1313,6 +1328,11 @@ export function SupersetFilePane({
               </section>
             </div>
           ) : null}
+          <DiscardChangesDialog
+            target={discard}
+            onDiscard={discardChanges}
+            onKeep={keepChanges}
+          />
         </main>
         {portalTarget
           ? createPortal(

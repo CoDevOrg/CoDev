@@ -55,17 +55,35 @@ function useComposerReset(
   return () => stopRef.current(true);
 }
 
-/** Grows the field with its text; CSS caps it at 40vh. */
+function fitHeight(element: HTMLTextAreaElement) {
+  element.style.height = "auto";
+  element.style.height = `${element.scrollHeight}px`;
+}
+
+/**
+ * Grows the field with its text; CSS caps it at 40vh. It also re-measures
+ * when its width changes: after a client navigation the first measure can
+ * run before the column has its width, wrapping the placeholder tall.
+ */
 function useAutoGrow(
   textareaRef: RefObject<HTMLTextAreaElement | null>,
   text: string,
 ) {
   useLayoutEffect(() => {
+    if (textareaRef.current) fitHeight(textareaRef.current);
+  }, [text, textareaRef]);
+  useEffect(() => {
     const element = textareaRef.current;
     if (!element) return;
-    element.style.height = "auto";
-    element.style.height = `${element.scrollHeight}px`;
-  }, [text, textareaRef]);
+    let width = -1;
+    const observer = new ResizeObserver(() => {
+      if (element.offsetWidth === width) return;
+      width = element.offsetWidth;
+      fitHeight(element);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [textareaRef]);
 }
 
 /**
