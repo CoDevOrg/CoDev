@@ -2,6 +2,8 @@ import "server-only";
 
 import { createHash, randomUUID } from "node:crypto";
 
+import type { Gen2ModelInfo } from "@codev/contracts";
+
 import {
   createSupersetWorktree,
   listSupersetWorktrees,
@@ -58,6 +60,7 @@ import { requireGen2SupersetAgentAccess } from "./superset-agent-access";
 import {
   createGen2AgentSession,
   getGen2AgentSession,
+  getGen2AgentSessionModel,
   updateGen2AgentSessionStatus,
 } from "./agent-sessions";
 
@@ -497,8 +500,19 @@ export async function restartGen2AgentSession(input: {
       409,
     );
   }
-  await requireGen2Chat(input.workspaceId, session.chatId);
-  const history = await listGen2ChatMessages(session.chatId);
+  const [, history, models, lastModel] = await Promise.all([
+    requireGen2Chat(input.workspaceId, session.chatId),
+    listGen2ChatMessages(session.chatId),
+    loadGen2AgentModels(provider, input.userId),
+    getGen2AgentSessionModel(session.id),
+  ]);
+  // The restart runs on the restarting member's account, so the session's
+  // last model is kept only while their catalog still offers it.
+  const model = await runnableModel(
+    provider,
+    models.some((entry) => entry.id === lastModel) ? lastModel! : undefined,
+    models,
+  );
   await updateGen2AgentSessionStatus({
     sessionId: session.id,
     status: "queued",
@@ -511,7 +525,7 @@ export async function restartGen2AgentSession(input: {
       userId: input.userId,
       chatId: session.chatId,
       worktreeId: session.worktreeId,
-      command: buildGen2AgentCommand(provider, session.task, history),
+      command: buildGen2AgentCommand(provider, session.task, history, model),
       provider,
       idempotencyKey: `restart:${session.id}:${randomUUID()}`,
     },
@@ -760,10 +774,22 @@ async function verifyTurnStart(input: {
     requireGen2Chat(input.workspaceId, input.chatId),
     loadGen2AgentModels(input.provider, input.userId),
   ]);
-  const requested = requireGen2AgentModel(models, input.model);
+  return runnableModel(input.provider, input.model, models);
+}
+
+/**
+ * The requested model (or the catalog's default) when the member's catalog
+ * offers it, moved off a model the workspace CLI cannot run yet. The guest
+ * host accepts only commands that name a model.
+ */
+async function runnableModel(
+  provider: Gen2AgentProvider,
+  requested: string | undefined,
+  models: Gen2ModelInfo[],
+) {
   const { model, note } = await avoidBlockedCliModel(
-    input.provider,
-    requested,
+    provider,
+    requireGen2AgentModel(models, requested),
     models,
   );
   if (!model) throw new Gen2LifecycleError(note!, 409);
@@ -848,6 +874,9 @@ export async function startGen2SupersetAgentTurn(input: {
       workspaceId: input.workspaceId,
       chatId: input.chatId,
       userId: input.userId,
+      // A restart rebuilds the command from the session; it needs the model.
+      model: model ?? null,
+      worktreeId: worktreeId === "main" ? null : worktreeId,
     }),
   ]);
   return { sessionId: session.runId, agentSessionId: logicalSession.id };

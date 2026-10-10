@@ -188,7 +188,10 @@ React cache that can be unavailable inside nested asynchronous work.
 Agent starts validate the selected model against the initiating member’s live
 provider catalog before either native or Superset execution (`agent-model.ts`).
 Direct Superset starts (`POST /superset/sessions`) run the same viewer, plan,
-chat, and model checks as `startGen2AgentTurn`. The composer keeps
+chat, and model checks as `startGen2AgentTurn`. Superset turns record their
+model, and a session restart reuses it while the restarting member's catalog
+still offers it (otherwise that catalog's default); the guest host accepts
+only commands that name a model. The composer keeps
 catalogs and model preferences separate for each provider; Cursor chats must
 reach the composer as Cursor. No model choices are bundled into the client.
 
