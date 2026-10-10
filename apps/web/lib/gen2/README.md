@@ -105,6 +105,11 @@ Only some guest handlers wait for Codex to go idle (`write_file`, `/pty/exec`,
 ready-gate on each function follows that split, and
 [`docs/gen2-workspace.md`](../../../../docs/gen2-workspace.md) has the table.
 
+`/pty/exec` runs as root. Any Git the workbench sends through it (content
+search, HEAD reads) is wrapped in `setpriv` to the codev-shell account
+(uid/gid 2000) with that account's environment, because repository config can
+name commands Git runs. Add new exec-based Git calls through the same wrapper.
+
 The terminal stream and shared-document sockets use the platform WebSocket adapter in `lib/platform/websocket.ts`; Cloudflare Workers use native WebSocket pairs, and Vercel keeps its upgrade helper.
 
 `remote-branches.ts` lists the repository's branches from GitHub with the

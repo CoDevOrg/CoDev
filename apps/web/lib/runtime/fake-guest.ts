@@ -129,9 +129,23 @@ function unifiedDiff(sandbox: FakeSandbox) {
   return parts.length ? `${parts.join("\n")}\n` : "";
 }
 
+/**
+ * The workbench runs Git through setpriv as the shell account; the fake guest
+ * has no accounts, so it serves the Git command underneath.
+ */
+function withoutAccountDrop(command: string[]) {
+  const inner =
+    command[0] === "/usr/bin/setpriv"
+      ? command.slice(command.indexOf("--") + 1)
+      : command;
+  return inner[0] === "git" && inner[1] === "-c"
+    ? ["git", ...inner.slice(3)]
+    : inner;
+}
+
 /** Just enough shell to serve the commands the workbench actually runs. */
 function runCommand(sandbox: FakeSandbox, command: string[]) {
-  const [program, ...rest] = command;
+  const [program, ...rest] = withoutAccountDrop(command);
   if (program === "find") {
     const paths = [...sandbox.files.keys()].sort().map((path) => `./${path}`);
     return { output: `${paths.join("\n")}\n`, exitCode: 0 };
