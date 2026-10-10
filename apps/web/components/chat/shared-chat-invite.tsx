@@ -87,7 +87,7 @@ export function SharedChatInvite({ roomId }: { roomId: string }) {
                   {reused ? "Saved invite link" : "Invite link ready"}
                 </strong>
                 <span className="text-[11px] text-muted-foreground">
-                  It expires in 24 hours and works once.
+                  Anyone with this link can join for 24 hours.
                 </span>
               </div>
               <code className="overflow-hidden text-ellipsis whitespace-nowrap rounded-md border border-border bg-muted px-2 py-1.5 text-[10.5px]">

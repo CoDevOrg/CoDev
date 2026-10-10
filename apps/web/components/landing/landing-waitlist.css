@@ -200,6 +200,7 @@
 }
 .lp-footer nav {
   flex-wrap: wrap;
+  align-items: center;
   gap: 16px;
 }
 .lp-footer nav .lp-footer-sign-in {

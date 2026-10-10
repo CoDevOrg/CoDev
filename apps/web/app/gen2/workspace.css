@@ -768,7 +768,7 @@
   --ws-gold-soft: var(--brand-gold-soft, rgba(202, 162, 82, 0.16));
 
   --ws-status-ready: var(--brand-teal);
-  --ws-status-working: var(--brand-redwood, #e04848);
+  --ws-status-working: var(--brand-orange, #f59e0b);
   --ws-status-error: var(--brand-destructive);
   --ws-glow-redwood: rgba(var(--brand-redwood-rgb, 224, 72, 72), 0.18);
   --ws-glow-redwood-strong: rgba(var(--brand-redwood-rgb, 224, 72, 72), 0.38);
@@ -1248,7 +1248,7 @@
 
 .gen2-status-dot.working {
   background: var(--ws-status-working);
-  box-shadow: 0 0 10px 1px rgba(var(--brand-redwood-rgb, 224, 72, 72), 0.65);
+  box-shadow: 0 0 10px 1px rgba(var(--brand-orange-rgb, 245, 158, 11), 0.65);
 }
 
 .gen2-status-dot.error {
@@ -1265,11 +1265,11 @@
   0%,
   100% {
     opacity: 1;
-    box-shadow: 0 0 8px 1px rgba(var(--brand-redwood-rgb, 224, 72, 72), 0.5);
+    box-shadow: 0 0 8px 1px rgba(var(--brand-orange-rgb, 245, 158, 11), 0.5);
   }
   50% {
     opacity: 0.6;
-    box-shadow: 0 0 16px 3px rgba(var(--brand-redwood-rgb, 224, 72, 72), 0.95);
+    box-shadow: 0 0 16px 3px rgba(var(--brand-orange-rgb, 245, 158, 11), 0.95);
   }
 }
 
@@ -1316,7 +1316,7 @@
     var(--ws-status-working) 35%,
     var(--ws-border-subtle)
   );
-  box-shadow: 0 0 20px -4px rgba(var(--brand-redwood-rgb, 224, 72, 72), 0.22);
+  box-shadow: 0 0 20px -4px rgba(var(--brand-orange-rgb, 245, 158, 11), 0.22);
 }
 
 .gen2-topbar-provider-avatar {
@@ -1358,7 +1358,7 @@
   color: var(--ws-status-working);
   border: 1px solid
     color-mix(in srgb, var(--ws-status-working) 35%, transparent);
-  box-shadow: 0 0 12px -2px rgba(var(--brand-redwood-rgb, 224, 72, 72), 0.45);
+  box-shadow: 0 0 12px -2px rgba(var(--brand-orange-rgb, 245, 158, 11), 0.45);
 }
 
 .gen2-topbar-session-status.idle {
@@ -2847,7 +2847,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: var(--ws-status-working, var(--brand-redwood, #e04848));
+  color: var(--ws-status-working);
   font-size: 12px;
   font-style: italic;
   line-height: 16px;
@@ -2859,8 +2859,8 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--ws-status-working, var(--brand-redwood, #e04848));
-  box-shadow: 0 0 8px var(--ws-status-working, var(--brand-redwood, #e04848));
+  background: var(--ws-status-working);
+  box-shadow: 0 0 8px var(--ws-status-working);
   animation: gen2-working-glow 1.4s ease-in-out infinite;
 }
 
@@ -4996,9 +4996,19 @@ aside:has(> .gen2-ide-files:not([hidden])) .gen2-ide-tabs {
   height: 32px;
   border: 1px solid var(--ss-border);
   border-radius: 6px;
-  background: var(--ss-secondary);
+  /* The native arrow ignores padding and hugs the border; draw our own. */
+  appearance: none;
+  background-color: var(--ss-secondary);
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position:
+    calc(100% - 15px) 50%,
+    calc(100% - 10px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
   color: var(--ss-foreground);
-  padding: 0 10px;
+  padding: 0 30px 0 10px;
   font-size: 0.8125rem;
   font-weight: 500;
   cursor: pointer;

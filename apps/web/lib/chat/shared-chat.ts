@@ -97,7 +97,6 @@ export async function createSharedChatInvite(roomId: string, userId: string) {
         and(
           eq(schema.sharedChatInvites.sharedChatId, roomId),
           isNull(schema.sharedChatInvites.revokedAt),
-          isNull(schema.sharedChatInvites.acceptedAt),
           gt(schema.sharedChatInvites.expiresAt, now),
         ),
       )
@@ -125,7 +124,6 @@ export async function createSharedChatInvite(roomId: string, userId: string) {
           and(
             eq(schema.sharedChatInvites.sharedChatId, roomId),
             isNull(schema.sharedChatInvites.revokedAt),
-            isNull(schema.sharedChatInvites.acceptedAt),
             gt(schema.sharedChatInvites.expiresAt, now),
           ),
         );
@@ -153,6 +151,7 @@ export async function createSharedChatInvite(roomId: string, userId: string) {
   });
 }
 
+/** Invite links are reusable until they expire or are revoked, so one link admits a whole group. */
 export async function acceptSharedChatInvite(token: string, userId: string) {
   const tokenHash = hashInviteToken(token);
 
@@ -163,14 +162,9 @@ export async function acceptSharedChatInvite(token: string, userId: string) {
       .where(eq(schema.sharedChatInvites.tokenHash, tokenHash))
       .limit(1)
       .for("update");
-    if (
-      !invite ||
-      invite.revokedAt ||
-      invite.acceptedAt ||
-      invite.expiresAt <= new Date()
-    ) {
+    if (!invite || invite.revokedAt || invite.expiresAt <= new Date()) {
       throw new SharedChatError(
-        "This room invitation is invalid, expired, or already used.",
+        "This room invitation is invalid or expired.",
         400,
       );
     }
@@ -183,10 +177,6 @@ export async function acceptSharedChatInvite(token: string, userId: string) {
         role: "member",
       })
       .onConflictDoNothing();
-    await transaction
-      .update(schema.sharedChatInvites)
-      .set({ acceptedAt: new Date(), acceptedBy: userId })
-      .where(eq(schema.sharedChatInvites.id, invite.id));
 
     return invite.sharedChatId;
   });

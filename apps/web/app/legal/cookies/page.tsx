@@ -13,7 +13,7 @@ const content = (
         requested account features. Browser storage remembers choices such as
         your interface theme. The codev_analytics cookie remembers your
         analytics preference for up to six months; you can change it sooner
-        using Privacy choices.
+        using the Privacy choices button on this page.
       </p>
     </section>
     <section>
