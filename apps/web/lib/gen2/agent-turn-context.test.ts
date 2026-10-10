@@ -206,6 +206,21 @@ describe("agent turn context", () => {
     expect(without.blocks).not.toContain("update_goal");
   });
 
+  it("takes a replayed task's goal from the history alone", async () => {
+    const history = [
+      { role: "user" as const, body: "/goal Ship the parser" },
+      { role: "assistant" as const, body: "Working." },
+      { role: "user" as const, body: "/goal clear" },
+    ];
+    const prompt = "/goal Ship the parser";
+    const replay = await build({ prompt, history, promptInHistory: true });
+    expect(replay.blocks).toBe("");
+    // A new turn with the same words sets the goal again.
+    const fresh = await build({ prompt, history });
+    expect(fresh.blocks).toContain("> Ship the parser");
+    expect(fresh.blocks).toContain("Mode: goal.");
+  });
+
   it("shows an achieved goal without asking for more work", async () => {
     const { blocks } = await build({
       history: [

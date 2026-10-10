@@ -517,7 +517,8 @@ export async function restartGen2AgentSession(input: {
     models.some((entry) => entry.id === lastModel) ? lastModel! : undefined,
     models,
   );
-  // The task keeps its command and mentions; the protocol needs a live view.
+  // The task keeps its command and mentions; the protocol needs a live view,
+  // and the goal is the chat's current one, not the task's.
   const context = await buildGen2TurnContext({
     workspaceId: input.workspaceId,
     chatId: session.chatId,
@@ -525,6 +526,7 @@ export async function restartGen2AgentSession(input: {
     role: member.role,
     history,
     includeProtocol: false,
+    promptInHistory: true,
   });
   await updateGen2AgentSessionStatus({
     sessionId: session.id,

@@ -199,6 +199,8 @@ export async function buildGen2TurnContext(input: {
   history: Gen2TurnHistory;
   workspaceContext?: unknown;
   includeProtocol: boolean;
+  /** A restart replays a task its history already holds. */
+  promptInHistory?: boolean | undefined;
 }) {
   const view = parseWorkspaceContext(input.workspaceContext);
   const { command } = parseGen2PromptCommand(input.prompt);
@@ -208,11 +210,13 @@ export async function buildGen2TurnContext(input: {
     view,
     nonce: actionNonce,
     role: input.role,
-    // A `/goal <text>` turn's own text sets the goal it is pursuing.
-    goal: deriveGen2ChatGoal([
-      ...input.history,
-      { role: "user", body: input.prompt },
-    ]),
+    // A `/goal <text>` turn's own text sets the goal it is pursuing; a
+    // replayed task must not revive a goal the chat cleared after it.
+    goal: deriveGen2ChatGoal(
+      input.promptInHistory
+        ? input.history
+        : [...input.history, { role: "user", body: input.prompt }],
+    ),
     command,
   });
   const mentions = await resolveGen2PromptMentions({

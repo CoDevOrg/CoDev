@@ -330,6 +330,42 @@ describe("gen2 Superset agent runtime adapter", () => {
     );
   });
 
+  it("restarts on the chat's current goal, not the one its task set", async () => {
+    restartableSession();
+    const goalSession = {
+      id: "session-1",
+      workspaceId,
+      chatId,
+      createdBy: userId,
+      task: "/goal Ship the parser",
+      worktreeId: "agent-1",
+      provider: "openai",
+    };
+    mocks.getAgentSession.mockResolvedValue(goalSession);
+    const started = [
+      { role: "user", body: "/goal Ship the parser" },
+      { role: "assistant", body: "Working." },
+    ];
+    mocks.listMessages.mockResolvedValue(started);
+    await restart();
+    const active = (mocks.start.mock.calls[0]?.[1] as { command: string[] })
+      .command;
+    expect(active.at(-1)).toContain("Chat goal (set by a member");
+    expect(active.at(-1)).toContain("Mode: goal.");
+
+    mocks.start.mockClear();
+    mocks.listMessages.mockResolvedValue([
+      ...started,
+      { role: "user", body: "/goal clear" },
+    ]);
+    await restart();
+    const cleared = (mocks.start.mock.calls[0]?.[1] as { command: string[] })
+      .command;
+    expect(cleared.at(-1)).not.toContain("Chat goal");
+    expect(cleared.at(-1)).not.toContain("Mode: goal.");
+    expect(cleared.at(-1)).toMatch(/Current request:\n\/goal Ship the parser$/);
+  });
+
   it("monitors live runs and renews their seats without browser polling", async () => {
     mocks.listMonitorable.mockResolvedValue([RUN]);
     mocks.checkRecovery.mockResolvedValue({
