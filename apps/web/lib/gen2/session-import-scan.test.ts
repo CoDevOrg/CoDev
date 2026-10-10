@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { scanLocalSessions } from "./session-import-scan";
+import { scanLocalSessions, scanSelectedFolder } from "./session-import-scan";
 import { summarizeLocalSession } from "./session-import-summary";
 
 const MAIN = "01a0fb8e-879a-7a12-8eeb-e52297ff6ffa";
@@ -148,5 +148,57 @@ describe("local session browser", () => {
     expect(
       summarizeLocalSession("claude", claudeTranscript("Sub", true)),
     ).toBeNull();
+  });
+
+  it("lists sessions from a folder input, preferring the sessions folder", async () => {
+    // A folder input hands over every file with its path below the folder.
+    const at = (path: string, text: string, modified: number) =>
+      Object.defineProperty(
+        file(path.split("/").at(-1)!, text, modified),
+        "webkitRelativePath",
+        { value: path },
+      );
+    const sessions = await scanSelectedFolder(
+      [
+        at(".codex/config.toml", "", 1),
+        at(
+          ".codex/history.jsonl",
+          codexRollout(MAIN, "Not a session folder"),
+          900,
+        ),
+        at(
+          ".codex/sessions/2026/10/08/rollout-b.jsonl",
+          codexRollout(MAIN, "Newer work"),
+          300,
+        ),
+        at(
+          ".codex/sessions/2026/10/07/rollout-a.jsonl",
+          codexRollout(MAIN, "Older work"),
+          100,
+        ),
+        at(
+          ".codex/sessions/2026/10/08/rollout-c.jsonl",
+          codexRollout(GUARDIAN, "review", {
+            source: { subagent: { other: "guardian" } },
+          }),
+          400,
+        ),
+      ],
+      "codex",
+    );
+    expect(sessions.map((s) => s.title)).toEqual(["Newer work", "Older work"]);
+
+    const claude = await scanSelectedFolder(
+      [
+        at(`projects/c--repo/${CLAUDE}.jsonl`, claudeTranscript("Fix it"), 200),
+        at(
+          `projects/c--repo/${CLAUDE}/subagents/agent-1.jsonl`,
+          claudeTranscript("Sub", true),
+          500,
+        ),
+      ],
+      "claude",
+    );
+    expect(claude.map((s) => s.title)).toEqual(["Renamed session"]);
   });
 });
