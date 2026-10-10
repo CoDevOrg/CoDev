@@ -44,12 +44,15 @@ describe("chat excerpt", () => {
     expect(database.queries).toHaveLength(1);
     const [query] = database.queries;
     expect(query!.text).toMatch(
-      /"gen2_chats"\."id" = \$1 and "gen2_chats"\."workspace_id" = \$2/,
+      /"gen2_chats"\."id" = \$2 and "gen2_chats"\."workspace_id" = \$3/,
     );
     expect(query!.text).toMatch(
-      /order by "gen2_chat_messages"\."created_at" desc limit \$3/,
+      /order by "gen2_chat_messages"\."created_at" desc limit \$4/,
     );
-    expect(query!.values).toEqual([chatId, workspaceId, 12]);
+    // Bodies are cut in the database, one character past the shown cap, and
+    // one row past the shown count says whether older messages exist.
+    expect(query!.text).toMatch(/left\("gen2_chat_messages"\."body", \$1\)/);
+    expect(query!.values).toEqual([1_201, chatId, workspaceId, 13]);
   });
 
   it("returns nothing for a chat outside the workspace", async () => {
@@ -62,6 +65,28 @@ describe("chat excerpt", () => {
       title: "Empty chat",
       text: "",
     });
+  });
+
+  it("marks older messages only when a row past the shown count exists", async () => {
+    const rows = (count: number) =>
+      Array.from({ length: count }, (_, index) => [
+        "Chat",
+        "user",
+        `message ${count - 1 - index}`,
+      ]);
+    database.rows = rows(12);
+    const whole = await readGen2ChatExcerpt(workspaceId, chatId);
+    expect(whole!.text.split("\n")).toHaveLength(12);
+    expect(whole!.text).not.toContain("[Older messages omitted.]");
+
+    database.rows = rows(13);
+    const lines = (await readGen2ChatExcerpt(workspaceId, chatId))!.text.split(
+      "\n",
+    );
+    expect(lines).toHaveLength(13);
+    expect(lines[0]).toBe("[Older messages omitted.]");
+    expect(lines[1]).toBe("User: message 1");
+    expect(lines.at(-1)).toBe("User: message 12");
   });
 
   it("packs the newest messages last and marks what it left out", async () => {
@@ -78,10 +103,16 @@ describe("chat excerpt", () => {
     expect(excerpt!.text).not.toContain("message 0 ");
   });
 
-  it("clips one long message and strips control characters", async () => {
-    database.rows = [["Chat", "user", `start\u0007${"y".repeat(3_000)}`]];
-    const excerpt = await readGen2ChatExcerpt(workspaceId, chatId);
-    expect(excerpt!.text).toMatch(/^User: start y+\.\.\.$/);
-    expect(excerpt!.text.length).toBeLessThan(1_300);
+  it("marks a body the database cut short", async () => {
+    database.rows = [
+      ["Chat", "user", `start ${"y".repeat(1_195)}`],
+      ["Chat", "assistant", `done ${"z".repeat(1_195)}`],
+    ];
+    const [assistant, user] = (await readGen2ChatExcerpt(
+      workspaceId,
+      chatId,
+    ))!.text.split("\n");
+    expect(user).toBe(`User: start ${"y".repeat(1_194)}...`);
+    expect(assistant).toBe(`Assistant: done ${"z".repeat(1_195)}`);
   });
 });
