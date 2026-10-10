@@ -93,6 +93,28 @@ async function listGuestFiles(workspaceId: string) {
   return result.output;
 }
 
+/**
+ * Guest exec runs as root, but workspace users can write the repository's
+ * Git config, which can name commands Git runs. Run Git as the codev-shell
+ * account (uid/gid 2000), the same drop codev-guestd and the Superset host
+ * make. `--reset-env` gives it that account's HOME, so root's Git config is
+ * never read and no permission warning reaches the parsed output.
+ */
+function shellAccountGit(args: string[]) {
+  return [
+    "/usr/bin/setpriv",
+    "--reuid=2000",
+    "--regid=2000",
+    "--clear-groups",
+    "--reset-env",
+    "--",
+    "git",
+    "-c",
+    "safe.directory=*",
+    ...args,
+  ];
+}
+
 export async function searchGen2Files(
   workspaceId: string,
   userId: string,
@@ -103,8 +125,7 @@ export async function searchGen2Files(
     // `--untracked` is the difference that matters here: without it, a file
     // the agent created moments ago is invisible to search until someone
     // stages it.
-    command: [
-      "git",
+    command: shellAccountGit([
       "grep",
       "--line-number",
       "--color=never",
@@ -114,7 +135,7 @@ export async function searchGen2Files(
       "100",
       "--",
       query,
-    ],
+    ]),
     timeoutSeconds: 30,
   });
   // git grep exits 1 when it simply found nothing.
@@ -226,7 +247,7 @@ export async function showGen2HeadFile(
 ) {
   await requireReadyMember(workspaceId, userId);
   const result = await executeInSandbox(workspaceId, {
-    command: ["git", "show", `HEAD:./${path}`],
+    command: shellAccountGit(["show", `HEAD:./${path}`]),
     timeoutSeconds: 30,
   });
   // A file the agent just created has no HEAD version; that is not an error.
