@@ -4,6 +4,8 @@ const mocks = vi.hoisted(() => ({
   locked: true,
   poll: vi.fn(),
   record: vi.fn(),
+  broadcast: vi.fn(),
+  inTransaction: false,
 }));
 const transaction = {
   execute: async () => ({ rows: [{ locked: mocks.locked }] }),
@@ -18,14 +20,25 @@ const transaction = {
 };
 vi.mock("../platform/database", () => ({
   getDatabase: () => ({
-    transaction: async (action: (db: typeof transaction) => Promise<unknown>) =>
-      action(transaction),
+    transaction: async (
+      action: (db: typeof transaction) => Promise<unknown>,
+    ) => {
+      mocks.inTransaction = true;
+      try {
+        return await action(transaction);
+      } finally {
+        mocks.inTransaction = false;
+      }
+    },
   }),
 }));
 vi.mock("../runtime/orchestrator-codex-exec", () => ({
   pollCodexExecInSandbox: mocks.poll,
 }));
 vi.mock("./turns", () => ({ recordGen2TurnChunks: mocks.record }));
+vi.mock("./turn-broadcast", () => ({
+  broadcastGen2TurnPolls: mocks.broadcast,
+}));
 import { pollPersistedArmTurn } from "./arm-workspace-turn-poll";
 const input = { workspaceId: "workspace-a", sessionId: "session-a", after: 2 };
 beforeEach(() => {
@@ -69,6 +82,7 @@ it("acknowledges only chunks persisted, including the guest's 128-chunk limit", 
       exitCode: 0,
     },
     transaction,
+    expect.any(Array),
   );
   expect(result.nextSequence).toBe(130);
   expect(result.exited).toBe(false);
@@ -110,4 +124,22 @@ it("an absent turn never reaches the guest", async () => {
     status: 404,
   });
   expect(mocks.poll).not.toHaveBeenCalled();
+});
+
+it("tells members about a poll only after its transaction commits", async () => {
+  mocks.poll.mockResolvedValue({
+    chunks: [{ sequence: 2, dataBase64: "YQ==" }],
+    nextSequence: 3,
+    exited: false,
+    exitCode: null,
+  });
+  mocks.record.mockImplementation(async (_input, _tx, sink: unknown[]) => {
+    sink.push({ poll: 1 });
+    return null;
+  });
+  mocks.broadcast.mockImplementation(async () => {
+    expect(mocks.inTransaction).toBe(false);
+  });
+  await pollPersistedArmTurn(input);
+  expect(mocks.broadcast).toHaveBeenCalledWith([{ poll: 1 }]);
 });

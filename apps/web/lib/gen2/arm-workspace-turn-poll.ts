@@ -6,6 +6,7 @@ import { getDatabase } from "../platform/database";
 import { pollCodexExecInSandbox } from "../runtime/orchestrator-codex-exec";
 import { recordGen2TurnChunks } from "./turns";
 import { Gen2LifecycleError } from "./errors";
+import { broadcastGen2TurnPolls, type Gen2TurnPoll } from "./turn-broadcast";
 
 type Turn = typeof schema.gen2AgentTurns.$inferSelect;
 type Transaction = Parameters<
@@ -57,6 +58,7 @@ async function drain(
   transaction: Transaction,
   turn: Turn,
   after: number,
+  sink: Gen2TurnPoll[],
 ): Promise<Poll> {
   const result = await pollCodexExecInSandbox(
     turn.workspaceId,
@@ -82,6 +84,7 @@ async function drain(
       nextSequence,
     },
     transaction,
+    sink,
   );
   return {
     ...result,
@@ -92,13 +95,17 @@ async function drain(
   };
 }
 
-/** Browser and cron pollers share a durable cursor and a nonblocking claim. */
+/**
+ * Browser and cron pollers share a durable cursor and a nonblocking claim.
+ * Members hear about the poll only after it commits.
+ */
 export async function pollPersistedArmTurn(input: {
   workspaceId: string;
   sessionId: string;
   after: number;
 }): Promise<Poll> {
-  return getDatabase().transaction(async (transaction) => {
+  const sink: Gen2TurnPoll[] = [];
+  const poll = await getDatabase().transaction(async (transaction) => {
     const claim = await transaction.execute(
       sql`select pg_try_advisory_xact_lock(hashtext(${`codev-arm-turn:${input.sessionId}`})) as locked`,
     );
@@ -116,6 +123,8 @@ export async function pollPersistedArmTurn(input: {
       throw new Gen2LifecycleError("This turn could not be found.", 404);
     if (turn.exited || claim.rows[0]?.locked !== true)
       return savedPoll(transaction, turn, input.after);
-    return drain(transaction, turn, input.after);
+    return drain(transaction, turn, input.after, sink);
   });
+  await broadcastGen2TurnPolls(sink);
+  return poll;
 }

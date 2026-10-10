@@ -177,6 +177,7 @@ async function startTurn(
     role: "user" as const,
     body: prompt,
     items: null,
+    authorUserId: null,
     createdAt: new Date().toISOString(),
   };
   input.setThread((current) => ({ messages: [...current.messages, message] }));

@@ -43,10 +43,12 @@ vi.mock("./collaboration-rooms", () => ({
   broadcastLocal: vi.fn(),
   closeRoomIfEmpty: vi.fn(),
   publish: vi.fn(),
+  publishStamped: vi.fn(),
   replay: vi.fn(),
 }));
 vi.mock("./collaboration-presence", () => ({
   refreshPresence: vi.fn(),
+  broadcastPresence: vi.fn(),
   removePresence: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("../platform/observability", () => ({ logEvent: vi.fn() }));
@@ -117,3 +119,74 @@ it.each(["viewer", "removed", "editor", "owner"])(
     }
   },
 );
+
+async function openSocket() {
+  let message!: (message: WebSocketMessage) => unknown;
+  const send = vi.fn();
+  const socket = {
+    readyState: 1,
+    openState: 1,
+    send,
+    onMessage: (callback: typeof message) => {
+      message = callback;
+    },
+    onceClose: vi.fn(),
+    onceError: vi.fn(),
+    terminate: vi.fn(),
+    close: vi.fn(),
+  } as unknown as ServerWebSocket;
+  await handleGen2CollaborationSocket(
+    "workspace",
+    socket,
+    { id: "member", name: "Member", login: "member", avatarUrl: null },
+    { canEdit: true },
+  );
+  const connection = [...mocks.connections][0]! as unknown as {
+    joined: boolean;
+    worktreeId: string;
+    subscriptions: Set<string>;
+    activePath: string | null;
+    view: string | null;
+  };
+  connection.joined = true;
+  connection.worktreeId = "main";
+  connection.subscriptions.add("README.md");
+  const deliver = (payload: unknown) =>
+    message({ data: JSON.stringify(payload), isBinary: false });
+  return { connection, deliver, send };
+}
+
+it("drops document subscriptions when focus moves to another worktree", async () => {
+  const { connection, deliver } = await openSocket();
+  await deliver({
+    type: "focus",
+    worktreeId: "feature-x",
+    path: "src/a.ts",
+    view: "files",
+    chatId: null,
+    away: false,
+  });
+  expect(connection.worktreeId).toBe("feature-x");
+  expect(connection.subscriptions.size).toBe(0);
+  expect(connection.activePath).toBe("src/a.ts");
+  expect(connection.view).toBe("files");
+});
+
+it("ignores an edit addressed to a worktree the socket has left", async () => {
+  const { deliver } = await openSocket();
+  mocks.member.mockResolvedValue({ role: "editor" });
+  await deliver({
+    type: "update",
+    worktreeId: "feature-x",
+    path: "README.md",
+    update: "AAA=",
+  });
+  expect(mocks.member).not.toHaveBeenCalled();
+  expect(mocks.load).not.toHaveBeenCalled();
+});
+
+it("stops fan-out for a closed file", async () => {
+  const { connection, deliver } = await openSocket();
+  await deliver({ type: "unsubscribe", path: "README.md" });
+  expect(connection.subscriptions.has("README.md")).toBe(false);
+});

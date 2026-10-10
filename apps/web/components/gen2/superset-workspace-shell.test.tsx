@@ -11,6 +11,9 @@ const mocks = vi.hoisted(() => ({
   expandPreview: vi.fn(),
 }));
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
 vi.mock("./superset-file-client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./superset-file-client")>()),
   listSupersetWorktrees: mocks.listWorktrees,

@@ -62,8 +62,9 @@
 - Preserve durable guest disks across stops/restarts; never treat missing saved workspace data as permission to initialize a fresh checkout.
 - Superset worktree discovery uses Git’s registered worktrees. Guest agents may create direct-child worktrees under `/workspace`; the bridge must resolve them safely as well as CoDev-managed worktrees under `.git/codev-agent-worktrees/`.
 
-- Viewer/editor workspace invite links are reusable for groups; opening sharing must preserve the active token, role, and expiry.
+- Viewer/editor workspace invite links and shared-chat room invite links are reusable for groups until they expire or are revoked; opening sharing must preserve the active token, role, and expiry.
 - GitHub account choices show the authenticated member and organizations only; shared personal repositories belong under the member and must retain their original installation ID for workspace creation.
+- Live multiplayer rides each tab's single collaboration socket. Publish workspace events (`lib/gen2/workspace-events.ts`) only after the change commits — inside a transaction, hand polls to a sink and broadcast after it — and never let a publish fail the operation. Collaboration delivery revalidates membership in one batched query per broadcast.
 
 ## Code standards
 

@@ -7,6 +7,12 @@ import type {
   Gen2ChatMessage,
 } from "@codev/contracts";
 
+import {
+  upsertChat,
+  useChatThreadEvents,
+  withSavedMessage,
+} from "./use-chat-thread-events";
+
 export type ChatThread = { messages: Gen2ChatMessage[] };
 
 /** Keeps optimistic messages the server has not written back yet. */
@@ -58,10 +64,12 @@ export function useChatThread({
 
   const chatIdRef = useRef(chatId);
   const activeChatIdRef = useRef(activeChatId);
+  const chatsRef = useRef(chats);
   useEffect(() => {
     chatIdRef.current = chatId;
     activeChatIdRef.current = activeChatId;
-  }, [chatId, activeChatId]);
+    chatsRef.current = chats;
+  }, [chatId, activeChatId, chats]);
 
   const loadChats = useCallback(async () => {
     const response = await fetch(`/api/gen2/workspaces/${workspaceId}/chats`);
@@ -108,9 +116,31 @@ export function useChatThread({
     return () => clearTimeout(timeout);
   }, [chatId, loadThread]);
 
+  useChatThreadEvents({
+    chatId,
+    updateChats: (update) => {
+      const next = update(chatsRef.current);
+      if (next === chatsRef.current) return;
+      chatsRef.current = next;
+      setChats(next);
+      onChatsChange?.(next);
+    },
+    addMessage: (id, message) => {
+      if (!message) return void loadThread(id);
+      setThread((current) => {
+        const saved = withSavedMessage(current.messages, message);
+        return saved ? mergeThread(current, saved) : current;
+      });
+    },
+    reload: () => {
+      void loadChats();
+      if (chatIdRef.current) void loadThread(chatIdRef.current);
+    },
+  });
+
   /** Selects a chat this panel just created, with nothing to load. */
   function addChat(chat: Gen2Chat) {
-    const next = [chat, ...chats];
+    const next = upsertChat(chats, chat);
     setChats(next);
     setChatId(chat.id);
     setThread({ messages: [] });

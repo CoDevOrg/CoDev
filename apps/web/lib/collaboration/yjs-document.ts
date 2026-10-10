@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 
 import * as Y from "yjs";
 
+import { diffTextHunks } from "./text-diff";
+
 /** Browser- and runtime-agnostic Yjs document primitives shared by workspace adapters. */
 export function classifyFilesystemReconciliation(input: {
   snapshotContents: string;
@@ -35,12 +37,25 @@ export function docFromUpdate(update: string) {
   return doc;
 }
 
+/**
+ * Applies only the changed lines as one filesystem-origin transaction and
+ * returns the changed spans in the new text, first to last.
+ */
 export function replaceDocumentContents(doc: Y.Doc, contents: string) {
   const text = doc.getText("content");
+  const hunks = diffTextHunks(text.toString(), contents);
   doc.transact(() => {
-    text.delete(0, text.length);
-    text.insert(0, contents);
+    for (const hunk of [...hunks].reverse()) {
+      if (hunk.to > hunk.from) text.delete(hunk.from, hunk.to - hunk.from);
+      if (hunk.insert) text.insert(hunk.from, hunk.insert);
+    }
   }, "filesystem");
+  let shift = 0;
+  return hunks.map((hunk) => {
+    const from = hunk.from + shift;
+    shift += hunk.insert.length - (hunk.to - hunk.from);
+    return { from, to: from + hunk.insert.length };
+  });
 }
 
 export function encodedDocument(doc: Y.Doc) {

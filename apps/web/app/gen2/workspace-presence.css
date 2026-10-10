@@ -1,0 +1,324 @@
+/* Live presence: top-bar stack, member avatars and agent marks.
+   Colours come from `member-color.ts` through --member-color / --member-ink. */
+
+.gen2-presence-stack {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  padding-inline: 4px 2px;
+}
+
+.gen2-presence-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 0 0 -6px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.gen2-presence-item:first-child {
+  margin-left: 0;
+}
+
+.gen2-presence-item:hover,
+.gen2-presence-item:focus-visible {
+  z-index: 1;
+}
+
+.gen2-presence-item:focus-visible {
+  outline: 2px solid var(--ws-accent);
+  outline-offset: 1px;
+}
+
+.gen2-member-avatar[data-slot="avatar"] {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--ws-surface-2);
+  box-shadow: 0 0 0 1.5px var(--member-color);
+}
+
+.gen2-member-avatar[data-away="true"] {
+  opacity: 0.45;
+}
+
+.gen2-member-avatar [data-slot="avatar-fallback"] {
+  background: var(--member-color);
+  color: var(--member-ink);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.gen2-presence-agent {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1.5px dashed var(--member-color);
+  border-radius: 999px;
+  background: var(--ws-surface-3);
+  color: var(--ws-text-primary);
+}
+
+.gen2-presence-more {
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  background: var(--ws-surface-3);
+  color: var(--ws-text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  border: 2px solid var(--ws-surface-2);
+}
+
+.gen2-presence-tooltip[data-slot="tooltip-content"] {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.gen2-presence-tooltip strong {
+  font-weight: 600;
+}
+
+.gen2-presence-menu [role="menuitem"] {
+  gap: 8px;
+  font-size: 13px;
+}
+
+.gen2-presence-menu-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.gen2-presence-menu-text > span:last-child {
+  color: var(--ws-text-secondary);
+  font-size: 12px;
+}
+
+@media (max-width: 480px) {
+  .gen2-presence-stack {
+    padding-inline: 0;
+  }
+}
+
+/* Another member's live turn names whose it is (chat contract §8.1). */
+.gen2-chat-live-owner {
+  margin: 0 0 4px;
+  color: var(--ws-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+/* Activity toasts sit outside the shell, so they bind workspace tokens. */
+.gen2-toast[data-sonner-toast] {
+  border: 1px solid var(--ws-border-medium);
+  background: var(--ws-surface-3);
+  color: var(--ws-text-primary);
+  font-size: 13px;
+}
+
+.gen2-toast[data-sonner-toast] [data-description] {
+  color: var(--ws-text-secondary);
+  font-size: 12px;
+}
+
+.gen2-toast[data-sonner-toast] [data-button] {
+  background: var(--ws-accent);
+  color: var(--ws-text-inverse);
+}
+
+/* Remote carets in the editor: people solid, agents dashed. The name shows
+   after a move and on hover; an agent typing keeps its name visible. */
+.cm-remote-caret {
+  position: relative;
+  display: inline-block;
+  width: 0;
+  height: 1.25em;
+  margin: 0 -1px;
+  border-left: 2px solid var(--member-color);
+  vertical-align: text-bottom;
+}
+
+.cm-remote-caret[data-kind="agent"] {
+  border-left-style: dashed;
+}
+
+.cm-remote-caret-label {
+  position: absolute;
+  bottom: 100%;
+  left: -2px;
+  z-index: 2;
+  padding: 0 4px;
+  border-radius: 3px 3px 3px 0;
+  background: var(--member-color);
+  color: #ffffff;
+  font: 600 10px/14px var(--font-geist-sans, system-ui, sans-serif);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  animation: cm-remote-label 2.4s ease-out;
+}
+
+.cm-remote-caret:hover .cm-remote-caret-label,
+.cm-agent-typing-caret .cm-remote-caret-label {
+  opacity: 1;
+  animation: none;
+}
+
+.cm-remote-selection {
+  background: color-mix(in srgb, var(--member-color) 22%, transparent);
+}
+
+.cm-agent-typed {
+  background: color-mix(in srgb, var(--ws-accent) 10%, transparent);
+}
+
+.cm-agent-flash {
+  animation: cm-agent-flash 1.5s ease-out;
+}
+
+@keyframes cm-remote-label {
+  0%,
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes cm-agent-flash {
+  from {
+    background: color-mix(in srgb, var(--ws-accent) 28%, transparent);
+  }
+  to {
+    background: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cm-remote-caret-label {
+    animation: none;
+  }
+
+  .cm-agent-flash {
+    animation: none;
+    background: color-mix(in srgb, var(--ws-accent) 14%, transparent);
+  }
+}
+
+/* Another member's prompt is named once above their run of messages. */
+.gen2-chat-author {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin: 0 0 4px;
+  color: var(--ws-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.gen2-chat-author-avatar[data-slot="avatar"] {
+  width: 16px;
+  height: 16px;
+  border-width: 0;
+  box-shadow: none;
+}
+
+.gen2-chat-author-avatar [data-slot="avatar-fallback"] {
+  font-size: 7px;
+}
+
+/* The live region stays mounted (for screen readers) but takes no space
+   until someone is typing. */
+.gen2-chat-typing {
+  margin: 0 0 4px;
+  padding-inline: 4px;
+  color: var(--ws-text-secondary);
+  font-size: 12px;
+  font-style: italic;
+  line-height: 16px;
+}
+
+.gen2-chat-typing:empty {
+  margin: 0;
+}
+
+/* Who is in a file: dots in tree rows and the editor tab. */
+.gen2-file-presence {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  padding-left: 4px;
+}
+
+.gen2-file-presence-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--member-color);
+}
+
+.gen2-file-presence-dot[data-kind="agent"] {
+  border: 1.5px dashed var(--member-color);
+  background: transparent;
+}
+
+.gen2-superset-tree-row[data-agent-pulse] {
+  animation: gen2-agent-pulse 1.4s ease-out 2;
+}
+
+@keyframes gen2-agent-pulse {
+  from {
+    background: color-mix(in srgb, var(--ws-accent) 22%, transparent);
+  }
+  to {
+    background: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gen2-superset-tree-row[data-agent-pulse] {
+    animation: none;
+    background: color-mix(in srgb, var(--ws-accent) 12%, transparent);
+  }
+}
+
+/* Follow mode: a frame in the followed member's colour around the shell. */
+.gen2-follow-frame {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  border: 2px solid var(--member-color);
+  pointer-events: none;
+}
+
+.gen2-follow-chip {
+  position: absolute;
+  top: 52px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px 2px 10px;
+  border-radius: 6px;
+  background: var(--member-color);
+  color: #ffffff;
+  font-size: 12px;
+  line-height: 16px;
+  pointer-events: auto;
+  transform: translateX(-50%);
+}

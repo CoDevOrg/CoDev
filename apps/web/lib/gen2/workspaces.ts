@@ -14,6 +14,7 @@ import { schema } from "@codev/db";
 
 import { getWorkspaceOwnerEntitlement } from "../billing/workspace-entitlement";
 import { requireIndividualPlan } from "../billing/access";
+import { publishGen2MembersChanged } from "./workspace-events";
 import { lockComputeOwners } from "./compute-database";
 import { workspaceCreationPolicy } from "./workspace-create-policy";
 import { prepareWorkspaceOwnerTransfer } from "./workspace-owner-transfer";
@@ -508,6 +509,7 @@ export async function joinGen2Workspace(token: string, userId: string) {
     });
   }
 
+  await announceGen2Members(workspace.id);
   return requireGen2Member(workspace.id, userId);
 }
 
@@ -522,7 +524,16 @@ export async function getGen2WorkspaceMembers(
     .where(eq(schema.gen2Workspaces.id, workspaceId))
     .limit(1);
   if (!workspace) throw new Gen2AccessError();
+  return {
+    ownerId: workspace.ownerId,
+    members: await listGen2MemberRows(workspaceId),
+  };
+}
 
+/** Members with their profiles; callers check access first. */
+async function listGen2MemberRows(
+  workspaceId: string,
+): Promise<Gen2WorkspaceMember[]> {
   const members = await getDatabase()
     .select({
       userId: schema.gen2WorkspaceMembers.userId,
@@ -541,18 +552,23 @@ export async function getGen2WorkspaceMembers(
     .where(eq(schema.gen2WorkspaceMembers.workspaceId, workspaceId))
     .orderBy(asc(schema.gen2WorkspaceMembers.joinedAt));
 
-  return {
-    ownerId: workspace.ownerId,
-    members: members.map((m) => ({
-      userId: m.userId,
-      login: m.login,
-      name: m.name,
-      email: m.email,
-      avatarUrl: m.avatarUrl,
-      role: m.role,
-      joinedAt: m.joinedAt ? m.joinedAt.toISOString() : undefined,
-    })),
-  };
+  return members.map((m) => ({
+    userId: m.userId,
+    login: m.login,
+    name: m.name,
+    email: m.email,
+    avatarUrl: m.avatarUrl,
+    role: m.role,
+    joinedAt: m.joinedAt ? m.joinedAt.toISOString() : undefined,
+  }));
+}
+
+/** Pushes the member list to open tabs; a removed member's socket closes. */
+async function announceGen2Members(workspaceId: string) {
+  await publishGen2MembersChanged(
+    workspaceId,
+    await listGen2MemberRows(workspaceId).catch(() => null),
+  );
 }
 
 export async function addGen2WorkspaceMember(
@@ -697,6 +713,7 @@ export async function addGen2WorkspaceMember(
   }
 
   const { members } = await getGen2WorkspaceMembers(workspaceId, currentUserId);
+  await publishGen2MembersChanged(workspaceId, members);
   return members;
 }
 
@@ -790,6 +807,7 @@ export async function updateGen2WorkspaceMemberRole(
   }
 
   const { members } = await getGen2WorkspaceMembers(workspaceId, currentUserId);
+  await publishGen2MembersChanged(workspaceId, members);
   return members;
 }
 
@@ -867,6 +885,7 @@ export async function removeGen2WorkspaceMember(
       );
   });
 
+  await announceGen2Members(workspaceId);
   const { members } = await getGen2WorkspaceMembers(
     workspaceId,
     currentUserId === targetUserId ? targetUserId : currentUserId,

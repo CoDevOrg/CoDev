@@ -7,9 +7,10 @@ import {
 import type Redis from "ioredis";
 import { collaborationContext } from "./collaboration-context";
 
-import { requireGen2Member } from "./workspaces";
+import { listGen2LiveMemberIds } from "./collaboration-access";
+import { Gen2AccessError } from "./errors";
 import { withDatabaseOperation } from "../platform/database-operation";
-import { send, type Connection } from "./collaboration-connection";
+import { sendSerialized, type Connection } from "./collaboration-connection";
 import {
   REPLAY_LIMIT,
   STREAM_MAX_LENGTH,
@@ -20,14 +21,19 @@ import {
 
 export type StreamEvent = Extract<
   CollaborationServerMessage,
-  { type: "update" | "awareness" | "reconciled" | "conflict" }
+  { type: "update" | "awareness" | "reconciled" | "conflict" | "event" }
 >;
+
+/** Internal stream entries that never reach a browser. */
+const PRESENCE_SYNC = "presence.sync";
 
 export interface LocalRoom {
   connections: Set<Connection>;
   cursor: string;
   reader: Redis;
   polling: boolean;
+  /** Another instance changed presence; re-read and fan it out locally. */
+  onPresenceSync?: (() => unknown) | undefined;
 }
 
 const localRooms = new Map<string, LocalRoom>();
@@ -35,6 +41,10 @@ function rooms() {
   return collaborationContext.getStore()?.rooms ?? localRooms;
 }
 
+/**
+ * Delivers to this instance's sockets after revalidating every recipient's
+ * membership in one query. Removed members are disconnected, never served.
+ */
 export async function broadcastLocal(
   workspaceId: string,
   message: CollaborationServerMessage,
@@ -42,25 +52,27 @@ export async function broadcastLocal(
 ) {
   const room = rooms().get(workspaceId);
   if (!room) return;
-  await withDatabaseOperation(async () => {
-    await Promise.all(
-      [...room.connections].map(async (connection) => {
-        if (connection === except || !shouldReceive(connection, message))
-          return;
-        try {
-          await requireGen2Member(
-            workspaceId.replace(/^gen2:/, ""),
-            connection.user.id,
-          );
-        } catch {
-          room.connections.delete(connection);
-          connection.socket.close(1008, "Workspace access unavailable.");
-          return;
-        }
-        if (room.connections.has(connection)) send(connection, message);
-      }),
-    );
-  });
+  const recipients = [...room.connections].filter(
+    (connection) => connection !== except && shouldReceive(connection, message),
+  );
+  if (!recipients.length) return;
+  const payload = JSON.stringify(
+    collaborationServerMessageSchema.parse(message),
+  );
+  const live = await withDatabaseOperation(() =>
+    listGen2LiveMemberIds(
+      workspaceId.replace(/^gen2:/, ""),
+      recipients.map((connection) => connection.user.id),
+    ),
+  );
+  for (const connection of recipients) {
+    if (!live.has(connection.user.id)) {
+      room.connections.delete(connection);
+      connection.socket.close(1008, "Workspace access unavailable.");
+    } else if (room.connections.has(connection)) {
+      sendSerialized(connection, payload);
+    }
+  }
 }
 
 function shouldReceive(
@@ -76,57 +88,61 @@ function shouldReceive(
   );
 }
 
-function parseStreamResult(result: unknown) {
-  if (!Array.isArray(result)) return [];
-  const events: Array<{
-    id: string;
-    instance: string | null;
-    message: StreamEvent;
-  }> = [];
-  for (const stream of result) {
-    if (!Array.isArray(stream) || !Array.isArray(stream[1])) continue;
-    for (const entry of stream[1]) {
-      if (!Array.isArray(entry) || typeof entry[0] !== "string") continue;
-      const fields = entry[1];
-      if (!Array.isArray(fields)) continue;
-      const payloadIndex = fields.indexOf("payload");
-      const instanceIndex = fields.indexOf("instance");
-      if (payloadIndex < 0 || typeof fields[payloadIndex + 1] !== "string") {
-        continue;
-      }
-      try {
-        const parsed = collaborationServerMessageSchema.parse(
-          JSON.parse(fields[payloadIndex + 1]),
-        );
-        if (
-          parsed.type === "update" ||
-          parsed.type === "awareness" ||
-          parsed.type === "reconciled" ||
-          parsed.type === "conflict"
-        ) {
-          const message =
-            parsed.type === "update" || parsed.type === "awareness"
-              ? { ...parsed, streamId: entry[0] }
-              : parsed;
-          events.push({
-            id: entry[0],
-            instance:
-              instanceIndex >= 0 &&
-              typeof fields[instanceIndex + 1] === "string"
-                ? fields[instanceIndex + 1]
-                : null,
-            message,
-          });
-        }
-      } catch {
-        // Ignore malformed stream entries; clients must never receive them.
-      }
-    }
+type ParsedEntry = {
+  id: string;
+  instance: string | null;
+  message: StreamEvent | typeof PRESENCE_SYNC;
+};
+
+function parseEntry(id: string, fields: unknown[]): ParsedEntry | null {
+  const field = (name: string) => {
+    const index = fields.indexOf(name);
+    const value = index >= 0 ? fields[index + 1] : null;
+    return typeof value === "string" ? value : null;
+  };
+  const raw = field("payload");
+  if (!raw) return null;
+  const instance = field("instance");
+  try {
+    const json = JSON.parse(raw);
+    if (json?.type === PRESENCE_SYNC)
+      return { id, instance, message: PRESENCE_SYNC };
+    const parsed = collaborationServerMessageSchema.parse(json);
+    if (
+      parsed.type !== "update" &&
+      parsed.type !== "awareness" &&
+      parsed.type !== "reconciled" &&
+      parsed.type !== "conflict" &&
+      parsed.type !== "event"
+    )
+      return null;
+    const message = "streamId" in parsed ? { ...parsed, streamId: id } : parsed;
+    return { id, instance, message };
+  } catch {
+    // Ignore malformed stream entries; clients must never receive them.
+    return null;
   }
-  return events;
 }
 
-export async function startRoom(workspaceId: string) {
+function parseStreamResult(result: unknown) {
+  if (!Array.isArray(result)) return [];
+  return result.flatMap((stream) =>
+    Array.isArray(stream) && Array.isArray(stream[1])
+      ? stream[1].flatMap((entry: unknown) =>
+          Array.isArray(entry) &&
+          typeof entry[0] === "string" &&
+          Array.isArray(entry[1])
+            ? (parseEntry(entry[0], entry[1]) ?? [])
+            : [],
+        )
+      : [],
+  );
+}
+
+export async function startRoom(
+  workspaceId: string,
+  options: { onPresenceSync?: () => unknown } = {},
+) {
   const existing = rooms().get(workspaceId);
   if (existing) return existing;
 
@@ -144,6 +160,7 @@ export async function startRoom(workspaceId: string) {
     cursor: latest[0]?.[0] ?? "0-0",
     reader: client.duplicate(),
     polling: true,
+    onPresenceSync: options.onPresenceSync,
   };
   rooms().set(workspaceId, room);
   void pollRoom(workspaceId, room);
@@ -166,9 +183,9 @@ async function pollRoom(workspaceId: string, room: LocalRoom) {
       );
       for (const event of parseStreamResult(result)) {
         room.cursor = event.id;
-        if (event.instance !== getInstanceId()) {
-          await broadcastLocal(workspaceId, event.message);
-        }
+        if (event.instance === getInstanceId()) continue;
+        if (event.message === PRESENCE_SYNC) await room.onPresenceSync?.();
+        else await broadcastLocal(workspaceId, event.message);
       }
     }
   } catch {
@@ -190,9 +207,8 @@ export function closeRoomIfEmpty(workspaceId: string, room: LocalRoom) {
   }
 }
 
-export async function publish(workspaceId: string, message: StreamEvent) {
-  const client = redisClient();
-  const streamId = await client.xadd(
+async function appendToStream(workspaceId: string, payload: unknown) {
+  const streamId = await redisClient().xadd(
     streamKey(workspaceId),
     "MAXLEN",
     "~",
@@ -201,10 +217,34 @@ export async function publish(workspaceId: string, message: StreamEvent) {
     "instance",
     getInstanceId(),
     "payload",
-    JSON.stringify(message),
+    JSON.stringify(payload),
   );
-  await broadcastLocal(workspaceId, message);
   return streamId ?? "0-0";
+}
+
+export async function publish(workspaceId: string, message: StreamEvent) {
+  const streamId = await appendToStream(workspaceId, message);
+  await broadcastLocal(workspaceId, message);
+  return streamId;
+}
+
+/**
+ * Publishes a message that carries its own stream id. Other instances read
+ * the id from the stream entry; local sockets get it from the append.
+ */
+export async function publishStamped(
+  workspaceId: string,
+  build: (streamId: string) => StreamEvent,
+  except?: Connection,
+) {
+  const streamId = await appendToStream(workspaceId, build("pending"));
+  await broadcastLocal(workspaceId, build(streamId), except);
+  return streamId;
+}
+
+/** Tells other instances to re-read presence; nothing is sent to browsers. */
+export async function signalPresenceSync(workspaceId: string) {
+  await appendToStream(workspaceId, { type: PRESENCE_SYNC });
 }
 
 export async function replay(
@@ -213,10 +253,10 @@ export async function replay(
   resumeFrom: string,
   path: string,
 ) {
-  await requireGen2Member(
-    workspaceId.replace(/^gen2:/, ""),
+  const live = await listGen2LiveMemberIds(workspaceId.replace(/^gen2:/, ""), [
     connection.user.id,
-  );
+  ]);
+  if (!live.has(connection.user.id)) throw new Gen2AccessError();
   const entries = await redisClient().xrange(
     streamKey(workspaceId),
     `(${resumeFrom}`,
@@ -224,14 +264,15 @@ export async function replay(
     "COUNT",
     REPLAY_LIMIT,
   );
-  const events = parseStreamResult([[streamKey(workspaceId), entries]]);
-  for (const event of events) {
+  for (const event of parseStreamResult([[streamKey(workspaceId), entries]])) {
+    const message = event.message;
     if (
-      "path" in event.message &&
-      event.message.path === path &&
-      (!("worktreeId" in event.message) ||
-        event.message.worktreeId === connection.worktreeId)
+      message !== PRESENCE_SYNC &&
+      "path" in message &&
+      message.path === path &&
+      (!("worktreeId" in message) ||
+        message.worktreeId === connection.worktreeId)
     )
-      send(connection, event.message);
+      sendSerialized(connection, JSON.stringify(message));
   }
 }

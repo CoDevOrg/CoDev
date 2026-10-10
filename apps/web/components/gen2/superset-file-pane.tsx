@@ -58,6 +58,11 @@ import {
   DEFAULT_SUPERSET_WORKTREE_ID,
 } from "./superset-file-client";
 import { useGen2SharedFileDocument } from "./use-gen2-shared-file-document";
+import { useFilesChanged } from "./use-files-changed";
+import { useRemoteCursors } from "./use-remote-cursors";
+import { useWorkspacePresence } from "./use-workspace-presence";
+import { useAgentFilePulses } from "./use-agent-file-pulses";
+import { FilePresenceDots, presenceUnder } from "./file-presence-dots";
 import type {
   FileRequestOutcome,
   FileRevealRange,
@@ -202,6 +207,7 @@ export function SupersetFilePane({
   requestedRange,
   onRangeRevealed,
   onSelectionText,
+  followCursorId,
 }: {
   workspaceId: string;
   canEdit: boolean;
@@ -221,6 +227,8 @@ export function SupersetFilePane({
   onSelectionText?:
     | ((selection: (EditorSelectionText & { path: string }) | null) => void)
     | undefined;
+  /** In follow mode, the followed member's cursor to keep in view. */
+  followCursorId?: string | null | undefined;
 }) {
   const [files, setFiles] = useState<Gen2SupersetEntry[]>([]);
   const [openFile, setOpenFile] = useState<Gen2SupersetFile | null>(null);
@@ -272,6 +280,14 @@ export function SupersetFilePane({
       contentsRef.current = next;
       setContents(next);
     },
+  });
+
+  const { byPath } = useWorkspacePresence(worktreeId);
+  const agentPulses = useAgentFilePulses(worktreeId);
+  const remoteCursors = useRemoteCursors({
+    awareness: sharedDocument.awareness,
+    worktreeId,
+    path: openFile?.path ?? null,
   });
 
   useEffect(() => {
@@ -405,6 +421,11 @@ export function SupersetFilePane({
     },
     [workspaceId, worktreeId, openPath],
   );
+
+  // Another member or an agent changed this worktree: refresh in place.
+  useFilesChanged(worktreeId, 400, () => {
+    if (workspaceReady) void refreshFiles(false, true);
+  });
 
   useEffect(() => {
     if (!workspaceReady) return;
@@ -738,6 +759,11 @@ export function SupersetFilePane({
                   />
                   <Folder aria-hidden="true" />
                   <span className="gen2-superset-tree-label">{child.name}</span>
+                  {expanded ? null : (
+                    <FilePresenceDots
+                      entries={presenceUnder(byPath, child.path)}
+                    />
+                  )}
                 </button>
                 {canEdit ? (
                   <TreeEntryMenu
@@ -792,6 +818,7 @@ export function SupersetFilePane({
               <div
                 className="gen2-superset-tree-row"
                 data-menu-open={menuPath === file.path || undefined}
+                data-agent-pulse={agentPulses.has(file.path) || undefined}
               >
                 <button
                   type="button"
@@ -809,6 +836,7 @@ export function SupersetFilePane({
                   <span className="gen2-superset-tree-label">
                     {fileName(file.path)}
                   </span>
+                  <FilePresenceDots entries={byPath.get(file.path)} />
                   {selected && dirty ? (
                     <span
                       className="gen2-superset-dirty"
@@ -857,6 +885,7 @@ export function SupersetFilePane({
         <span className="gen2-superset-tab-name">
           {fileName(openFile.path)}
         </span>
+        <FilePresenceDots entries={byPath.get(openFile.path)} />
         {dirty ? (
           <span className="gen2-superset-dirty" aria-label="Unsaved changes" />
         ) : null}
@@ -1008,6 +1037,16 @@ export function SupersetFilePane({
             if (!stale) setNotice(null);
           }}
           onSelectionChange={sharedDocument.updateCursor}
+          remoteCursors={remoteCursors}
+          followPosition={
+            followCursorId
+              ? (remoteCursors.find(
+                  (cursor) =>
+                    cursor.id === followCursorId ||
+                    cursor.id.startsWith(`${followCursorId}:`),
+                )?.head ?? null)
+              : null
+          }
           onSelectionText={(selection) =>
             onSelectionText?.(
               selection && { path: openFile.path, ...selection },

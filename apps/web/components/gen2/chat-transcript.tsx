@@ -15,6 +15,8 @@ import { ChatMessageBody } from "./chat-message-body";
 import { ChatNextSteps } from "./chat-next-steps";
 import { Gen2TurnActivity } from "./turn-activity";
 import { WorkspaceButton } from "./workspace-button";
+import { LiveTurnOwner } from "./chat-live-turn-owner";
+import { ChatMessageAuthor } from "./chat-message-author";
 
 export type ChatLiveTurn = {
   items: Gen2TurnItem[];
@@ -23,6 +25,8 @@ export type ChatLiveTurn = {
   starting: boolean;
   /** This turn's action token, so its workspace actions can run. */
   actionToken: string | null;
+  /** Set when another member's tab runs the turn. */
+  ownerId?: string;
 };
 
 type TranscriptProps = {
@@ -67,6 +71,7 @@ function LiveTurn({
   return (
     <li data-role="assistant" className="gen2-chat-turn">
       <div className="gen2-chat-assistant">
+        {live.ownerId ? <LiveTurnOwner userId={live.ownerId} /> : null}
         <Gen2TurnActivity
           items={live.items}
           onOpenFile={onOpenFile}
@@ -117,9 +122,15 @@ export function ChatTranscript({
               )}
             >
               {message.role === "user" ? (
-                <div className="gen2-chat-user">
-                  <ChatMessageBody body={message.body} />
-                </div>
+                <>
+                  <ChatMessageAuthor
+                    message={message}
+                    previous={messages[index - 1]}
+                  />
+                  <div className="gen2-chat-user">
+                    <ChatMessageBody body={message.body} />
+                  </div>
+                </>
               ) : (
                 <div className="gen2-chat-assistant">
                   {message.items?.length ? (

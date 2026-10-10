@@ -16,6 +16,7 @@ import {
  */
 export async function applyGen2GoalControl(input: {
   workspaceId: string;
+  userId?: string;
   chatId: string;
   prompt: string;
 }): Promise<{ goal: Gen2ChatGoal | null }> {
@@ -25,6 +26,8 @@ export async function applyGen2GoalControl(input: {
     listGen2ChatMessages(input.chatId),
   ]);
   await appendGen2ChatMessage({
+    workspaceId: input.workspaceId,
+    ...(input.userId ? { authorUserId: input.userId } : {}),
     chatId: input.chatId,
     role: "user",
     body: input.prompt,

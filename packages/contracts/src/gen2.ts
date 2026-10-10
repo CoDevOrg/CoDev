@@ -197,6 +197,11 @@ export const gen2AgentPollRequestSchema = z.object({
   after: z.number().int().nonnegative(),
 });
 
+/** Another member's tab keeps a turn whose own tab went away moving. */
+export const gen2AgentDriveRequestSchema = z.object({
+  sessionId: z.string().min(1).max(80),
+});
+
 export const gen2AgentChunkSchema = z.object({
   sequence: z.number().int().nonnegative(),
   dataBase64: z.string(),
@@ -318,6 +323,8 @@ export const gen2ChatMessageSchema = z.object({
   body: z.string().min(1),
   /** Activity cards for an assistant message; null for user messages. */
   items: z.array(gen2TurnItemSchema).nullable().default(null),
+  /** Who sent a user message; null for replies and older messages. */
+  authorUserId: identifierSchema.nullable().default(null),
   createdAt: timestampSchema,
 });
 

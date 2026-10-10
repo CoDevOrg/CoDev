@@ -152,7 +152,8 @@ route cannot forget it. Terminal operations and socket membership rechecks requi
 an editor or owner role; viewers cannot access the shared shell. Terminal access
 is never cached; socket input, resize, and output delivery recheck current membership. `terminal-access.ts` reads that membership with the guest route in one query, so each keystroke batch and output poll costs one database round trip. Collaboration
 updates recheck the current member role rather than trusting handshake permissions.
-Broadcasts and replay verify live membership before delivering workspace data;
+Broadcasts and replay verify live membership before delivering workspace data
+(`collaboration-access.ts`, one query per broadcast however many sockets);
 removed members are disconnected. Native file writes/uploads and agent starts
 also require an editor or owner role.
 
@@ -167,6 +168,29 @@ search, HEAD reads) is wrapped in `setpriv` to the codev-shell account
 name commands Git runs. Add new exec-based Git calls through the same wrapper.
 
 The terminal stream and shared-document sockets use the platform WebSocket adapter in `lib/platform/websocket.ts`; Cloudflare Workers use native WebSocket pairs, and Vercel keeps its upgrade helper.
+
+## Live multiplayer
+
+Each workspace tab keeps one collaboration socket (`collaboration-socket.ts`
+lifecycle, `collaboration-messages.ts` dispatch). Over it, `focus`
+(`collaboration-focus.ts`) reports where the member is, `subscribe` /
+`unsubscribe` (`collaboration-subscribe.ts`) open and close shared documents,
+and `update` / `awareness` carry edits and cursors. Presence
+(`collaboration-presence.ts`) lives in Redis; a `presence.sync` stream entry
+tells other instances to re-read it, and running agents get entries of their
+own until their turn settles.
+
+Everything else members see live is a workspace event
+(`workspace-events.ts`), published through the same Redis stream **after** the
+change commits and never allowed to fail the operation: chats and messages
+(`chat-append.ts`, `chats.ts`), file and worktree changes (`superset.ts`),
+members (`workspaces.ts`) and turns (`turn-broadcast.ts`). Turn polls are
+broadcast after their transaction commits; the ARM poller passes a sink so
+nothing is published inside its advisory-lock transaction. On each poll,
+`turn-file-sync.ts` reconciles files the agent just changed in the turn's own
+worktree, so open editors update mid-turn, and moves the agent's presence to its
+latest edit. `agent-turn-drive.ts` lets another editor's tab poll a turn whose
+own tab went away, as the turn's owner.
 
 `remote-branches.ts` lists the repository's branches from GitHub with the
 caller's own GitHub authorization, never the owner's, so a member who cannot see

@@ -36,6 +36,9 @@ try {
   await pool.query(`SELECT session_id, next_sequence, model, worktree_id,
     continued_as_session_id FROM public.gen2_agent_turns LIMIT 0`);
   await pool.query(`SELECT id, provider FROM public.gen2_chats LIMIT 0`);
+  await pool.query(
+    `SELECT id, author_user_id FROM public.gen2_chat_messages LIMIT 0`,
+  );
   await pool.query(`SELECT id, workspace_id, imported_by_user_id, provider,
     native_session_id, status, chat_id, encrypted_payload, payload_sha256,
     payload_bytes, meta, guest_synced_generation
