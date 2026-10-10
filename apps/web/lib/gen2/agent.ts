@@ -1,4 +1,3 @@
-import { getDynamicModelsForProvider } from "../providers/dynamic-models";
 import "server-only";
 
 import { logEvent } from "../platform/observability";
@@ -42,6 +41,7 @@ import { isGen2AgentCoordinationEnabled } from "./agent-coordination-feature";
 import { withNativeCoordinationHooks } from "./agent-coordination-hooks";
 import { findPossibleDuplicateTask } from "./duplicate-task-check";
 import { avoidBlockedCliModel } from "./agent-cli-fallback";
+import { loadGen2AgentModels, requireGen2AgentModel } from "./agent-model";
 import { refreshCursorTurnAuth } from "./cursor-auth-refresh";
 import {
   isGen2SupersetAgentSessionsEnabled,
@@ -100,12 +100,7 @@ export async function startGen2AgentTurn(input: {
       await claimGen2ChatProvider(input.chatId, input.provider);
       return input.continuation ? null : findPossibleDuplicateTask(input);
     }),
-    getDynamicModelsForProvider(input.provider, input.userId).catch(() => {
-      throw new Gen2LifecycleError(
-        "Couldn't load your account's models. Please refresh and try again.",
-        503,
-      );
-    }),
+    loadGen2AgentModels(input.provider, input.userId),
   ]);
   if (
     possibleDuplicate &&
@@ -114,12 +109,7 @@ export async function startGen2AgentTurn(input: {
     return { possibleDuplicate };
   }
 
-  const requested = input.model ?? models[0]?.id;
-  if (!requested || !models.some((entry) => entry.id === requested))
-    throw new Gen2LifecycleError(
-      "This model isn't available for your connected account. Refresh the model picker and choose an available model.",
-      400,
-    );
+  const requested = requireGen2AgentModel(models, input.model);
   // A model the live workspace CLI is known not to support runs on the
   // closest one it does, with a note, until the CLI update ships.
   const { model, note: fallbackNote } = input.continuation

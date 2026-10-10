@@ -18,7 +18,9 @@ import {
   requireGen2Chat,
 } from "./chats";
 import { buildGen2AgentCommand } from "./agent-command";
-import { Gen2LifecycleError } from "./errors";
+import { avoidBlockedCliModel } from "./agent-cli-fallback";
+import { loadGen2AgentModels, requireGen2AgentModel } from "./agent-model";
+import { Gen2AccessError, Gen2LifecycleError } from "./errors";
 import { logEvent } from "../platform/observability";
 import { resolveGen2Credential, type Gen2AgentProvider } from "./providers";
 import { providerVendor } from "../providers/registry";
@@ -736,6 +738,39 @@ async function ensureGen2SupersetAgentWorktree(
 }
 
 /**
+ * The checks `startGen2AgentTurn` runs before it delegates here, for callers
+ * that reach this path directly: only owners and editors start agents, and
+ * only on a model the member's live catalog offers. Returns that model.
+ */
+async function verifyTurnStart(input: {
+  workspaceId: string;
+  userId: string;
+  chatId: string;
+  provider: Gen2AgentProvider;
+  model?: string | undefined;
+}) {
+  const membership = await requireGen2Member(input.workspaceId, input.userId);
+  if (membership.role === "viewer")
+    throw new Gen2AccessError(
+      "Edit permission is required to run agents.",
+      403,
+    );
+  const [, , models] = await Promise.all([
+    requireWorkspaceOwnerPlan(input.workspaceId),
+    requireGen2Chat(input.workspaceId, input.chatId),
+    loadGen2AgentModels(input.provider, input.userId),
+  ]);
+  const requested = requireGen2AgentModel(models, input.model);
+  const { model, note } = await avoidBlockedCliModel(
+    input.provider,
+    requested,
+    models,
+  );
+  if (!model) throw new Gen2LifecycleError(note!, 409);
+  return model;
+}
+
+/**
  * Phase 4: what `startGen2AgentTurn` in `agent.ts` delegates to when
  * `CODEV_SUPERSET_AGENT_SESSIONS_ENABLED` is set, in place of
  * `startCodexExecInSandbox`. Same browser contract (`{ sessionId }`) -- the
@@ -756,25 +791,14 @@ export async function startGen2SupersetAgentTurn(input: {
   verified?: boolean;
 }) {
   requireEnabled();
-  if (!input.verified) {
-    await requireGen2Member(input.workspaceId, input.userId);
-    await Promise.all([
-      requireWorkspaceOwnerPlan(input.workspaceId),
-      requireGen2Chat(input.workspaceId, input.chatId),
-    ]);
-  }
+  const model = input.verified ? input.model : await verifyTurnStart(input);
   const [history, worktreeId] = await Promise.all([
     listGen2ChatMessages(input.chatId),
     input.worktreeId ??
       ensureGen2SupersetAgentWorktree(input.workspaceId, input.idempotencyKey),
   ]);
   const provider = input.provider;
-  const command = buildGen2AgentCommand(
-    provider,
-    input.prompt,
-    history,
-    input.model,
-  );
+  const command = buildGen2AgentCommand(provider, input.prompt, history, model);
 
   const logicalSession = await createGen2AgentSession({
     workspaceId: input.workspaceId,

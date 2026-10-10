@@ -36,6 +36,16 @@ const mocks = vi.hoisted(() => ({
   createAgentSession: vi.fn(),
   updateAgentSession: vi.fn(),
   getAgentSession: vi.fn(),
+  models: vi.fn(),
+  avoidBlocked: vi.fn(),
+}));
+
+vi.mock("../providers/dynamic-models", () => ({
+  getDynamicModelsForProvider: (...args: unknown[]) => mocks.models(...args),
+}));
+
+vi.mock("./agent-cli-fallback", () => ({
+  avoidBlockedCliModel: (...args: unknown[]) => mocks.avoidBlocked(...args),
 }));
 
 vi.mock("../billing/gate", () => ({
@@ -700,6 +710,79 @@ describe("gen2 Superset agent turn (Phase 4 browser-facing delegate)", () => {
       connectionId: credentialId,
       leaseClaimed: true,
     });
+    mocks.models.mockResolvedValue([
+      { id: "gpt-5.6-luna", label: "Codex" },
+      { id: "gpt-5.6-mini", label: "Codex Mini" },
+    ]);
+    mocks.avoidBlocked.mockImplementation(
+      async (_provider: string, model: string) => ({ model, note: null }),
+    );
+  });
+
+  const sessionTask = (overrides: { model?: string } = {}) =>
+    createGen2AgentSessionTask({
+      workspaceId,
+      userId,
+      chatId,
+      task: "Update the tests.",
+      provider: "codex",
+      idempotencyKey: "key-1",
+      ...overrides,
+    });
+
+  it("rejects a viewer's agent task before models, credentials, or the host", async () => {
+    mocks.requireMember.mockResolvedValue({ status: "ready", role: "viewer" });
+
+    await expect(sessionTask()).rejects.toMatchObject({ status: 403 });
+    expect(mocks.models).not.toHaveBeenCalled();
+    expect(mocks.createWorktree).not.toHaveBeenCalled();
+    expect(mocks.createAgentSession).not.toHaveBeenCalled();
+    expect(mocks.resolveCredential).not.toHaveBeenCalled();
+    expect(mocks.register).not.toHaveBeenCalled();
+    expect(mocks.start).not.toHaveBeenCalled();
+  });
+
+  it("rejects an agent task on a model the member's catalog does not offer", async () => {
+    await expect(sessionTask({ model: "made-up-model" })).rejects.toMatchObject(
+      { status: 400 },
+    );
+    expect(mocks.models).toHaveBeenCalledWith("codex", userId);
+    expect(mocks.createAgentSession).not.toHaveBeenCalled();
+    expect(mocks.resolveCredential).not.toHaveBeenCalled();
+    expect(mocks.start).not.toHaveBeenCalled();
+  });
+
+  it("runs an agent task on the catalog's default model when none is named", async () => {
+    mocks.register.mockResolvedValue({
+      runId,
+      status: "creating",
+      created: true,
+    });
+    mocks.start.mockResolvedValue({
+      hostWorkspaceId: "host-ws-1",
+      hostTerminalId: "term-1",
+      hostAgentSessionId: "agent-1",
+    });
+
+    await sessionTask();
+
+    const command = (mocks.start.mock.calls[0]?.[1] as { command: string[] })
+      .command;
+    expect(command[command.indexOf("--model") + 1]).toBe("gpt-5.6-luna");
+  });
+
+  it("refuses an agent task when the workspace CLI cannot run the model", async () => {
+    mocks.avoidBlocked.mockResolvedValue({
+      model: null,
+      note: "Update the workspace to use this model.",
+    });
+
+    await expect(sessionTask({ model: "gpt-5.6-mini" })).rejects.toMatchObject({
+      status: 409,
+      message: "Update the workspace to use this model.",
+    });
+    expect(mocks.resolveCredential).not.toHaveBeenCalled();
+    expect(mocks.start).not.toHaveBeenCalled();
   });
 
   it("checks the owner's plan once per turn", async () => {
