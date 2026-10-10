@@ -153,7 +153,10 @@ export function parseClaudeSession(records: unknown[]): ParsedAgentSession {
     cwd,
     repo: {
       remote: null,
-      branch: asString(first?.gitBranch) || null,
+      branch:
+        asString(
+          entries.find((entry) => asString(entry.gitBranch))?.gitBranch,
+        ) || null,
       commit: null,
     },
     title: asString(title?.customTitle) || null,
