@@ -154,6 +154,32 @@ describe("gen2 workbench", () => {
     expect(mocks.exec.mock.calls[0]?.[1].command).toContain("--untracked");
   });
 
+  it("runs search and HEAD reads as the shell account, never as root", async () => {
+    // Guest exec runs as root, and repository config can name commands Git
+    // runs, so Git must drop to codev-shell with that account's environment.
+    const shellGit = [
+      "/usr/bin/setpriv",
+      "--reuid=2000",
+      "--regid=2000",
+      "--clear-groups",
+      "--reset-env",
+      "--",
+      "git",
+      "-c",
+      "safe.directory=*",
+    ];
+    mocks.exec.mockResolvedValue({ output: "", exitCode: 1 });
+    await searchGen2Files(workspaceId, userId, "--output=/etc/passwd");
+    await showGen2HeadFile(workspaceId, userId, "src/a.ts");
+
+    const [search, show] = mocks.exec.mock.calls.map(
+      ([, input]) => (input as { command: string[] }).command,
+    );
+    expect(search?.slice(0, shellGit.length)).toEqual(shellGit);
+    expect(search?.slice(-2)).toEqual(["--", "--output=/etc/passwd"]);
+    expect(show).toEqual([...shellGit, "show", "HEAD:./src/a.ts"]);
+  });
+
   it("turns a stale write into a conflict carrying the current revision", async () => {
     mocks.write.mockRejectedValue(
       new OrchestratorError(
