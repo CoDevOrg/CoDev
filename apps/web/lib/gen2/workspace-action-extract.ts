@@ -21,6 +21,7 @@ import {
 
 const MAX_ACTIONS = 8;
 const TOO_MANY = "Too many workspace actions in one turn.";
+const UNUSABLE = "Requested a workspace action that could not be used.";
 const ACTION_OPEN = /^```codev-action ([a-z0-9]{1,20})\s*$/;
 // Cursor glues its stream segments, so prose can follow a closing fence.
 const ACTION_CLOSE = /^```+(.*)$/;
@@ -69,18 +70,32 @@ function insideFence(line: string, fence: Fence) {
   return quoted && !closes(rest, fence);
 }
 
+/** Drops whitespace-only lines at both ends; indentation inside stays. */
+function trimBlankLines(lines: string[]) {
+  const start = lines.findIndex((line) => line.trim());
+  const end = lines.findLastIndex((line) => line.trim());
+  return start < 0 ? [] : lines.slice(start, end + 1);
+}
+
 /**
  * Splits text into prose and complete action blocks. An unterminated block
  * at the end is still being streamed: it is dropped while the turn runs and
- * left as prose once the turn is over.
+ * left as prose once the turn is over. Only the block's own lines go, plus
+ * one blank line when blank lines surround it; the rest of the prose,
+ * including code the agent showed, keeps its spacing.
  */
-export function scanGen2ActionBlocks(text: string, running: boolean): Scan {
+function scanActionBlocks(text: string, running: boolean): Scan {
   const prose: string[] = [];
   const blocks: Block[] = [];
   let fence: Fence | null = null;
   let action: { token: string; open: string; lines: string[] } | null = null;
-  const lines = text.split(/\r?\n/);
-  for (const line of lines) {
+  let lifted = false;
+  const keep = (line: string) => {
+    const doubled = !line.trim() && !prose.at(-1)?.trim();
+    if (!(lifted && doubled)) prose.push(line);
+    lifted = false;
+  };
+  for (const line of text.split(/\r?\n/)) {
     if (action) {
       const close = ACTION_CLOSE.exec(line);
       if (!close) {
@@ -89,7 +104,8 @@ export function scanGen2ActionBlocks(text: string, running: boolean): Scan {
       }
       blocks.push({ token: action.token, body: action.lines.join("\n") });
       action = null;
-      if (close[1]!.trim()) prose.push(close[1]!);
+      lifted = true;
+      if (close[1]!.trim()) keep(close[1]!);
       continue;
     }
     if (fence) {
@@ -97,7 +113,7 @@ export function scanGen2ActionBlocks(text: string, running: boolean): Scan {
       const quoteEnded = fence.quoted && !unquote(line).quoted;
       if (stillInside || !quoteEnded) {
         if (!stillInside) fence = null;
-        prose.push(line);
+        keep(line);
         continue;
       }
       fence = null;
@@ -108,16 +124,12 @@ export function scanGen2ActionBlocks(text: string, running: boolean): Scan {
       continue;
     }
     fence = opened(line);
-    prose.push(line);
+    keep(line);
   }
   if (action && !running) prose.push(action.open, ...action.lines);
   const changed = blocks.length > 0 || (action !== null && running);
   if (!changed) return { prose: text, blocks, changed };
-  const joined = prose
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-  return { prose: joined, blocks, changed };
+  return { prose: trimBlankLines(prose).join("\n"), blocks, changed };
 }
 
 function parseBlock(body: string): {
@@ -220,19 +232,24 @@ function strippedReply(
   const stripped = messageTexts(items).filter((text) => text.trim());
   // Cursor's reply is every segment glued together; rebuild it from the
   // stripped segments, since a block can start or end at a seam.
-  const scan = scanGen2ActionBlocks(state.reply, running);
+  const scan = scanActionBlocks(state.reply, running);
   let reply =
     changed && original.length > 0 && state.reply === original.join("")
       ? stripped.join("\n\n")
       : scan.prose;
-  if (!reply.trim()) reply = stripped.at(-1)?.trim() ?? "";
+  if (!reply.trim())
+    reply = trimBlankLines((stripped.at(-1) ?? "").split("\n")).join("\n");
   if (reply || running || (state.status === "failed" && state.error)) {
     return reply;
   }
-  const actions = items.flatMap((item) =>
+  // The server saves nothing for an empty reply, which would also lose the
+  // turn's activity, so a reply that was only blocks always says something.
+  const requested = items.filter((item) => item.kind === "workspaceAction");
+  const actions = requested.flatMap((item) =>
     item.kind === "workspaceAction" && item.action ? [item.action] : [],
   );
-  return actions.map(sentenceFor).join(" ");
+  if (actions.length) return actions.map(sentenceFor).join(" ");
+  return requested.length ? UNUSABLE : "";
 }
 
 export function extractGen2WorkspaceActions(
@@ -250,7 +267,7 @@ export function extractGen2WorkspaceActions(
   const items: Gen2TurnItem[] = [];
   for (const item of state.items) {
     const scan =
-      item.kind === "message" ? scanGen2ActionBlocks(item.text, running) : null;
+      item.kind === "message" ? scanActionBlocks(item.text, running) : null;
     if (item.kind !== "message" || !scan?.changed) {
       items.push(item);
       continue;

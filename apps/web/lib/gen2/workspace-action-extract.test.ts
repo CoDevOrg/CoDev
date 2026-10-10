@@ -6,10 +6,7 @@ import {
 } from "@codev/contracts";
 
 import { reduceGen2Turn } from "./turn-reducer";
-import {
-  extractGen2WorkspaceActions,
-  scanGen2ActionBlocks,
-} from "./workspace-action-extract";
+import { extractGen2WorkspaceActions } from "./workspace-action-extract";
 
 const TOKEN = "abc123defg";
 const block = (json: string, token = TOKEN) =>
@@ -96,26 +93,42 @@ const CURSOR = ndjson(...CURSOR_SEGMENTS.map(cursorSegment), {
   result: CURSOR_SEGMENTS.join(""),
 });
 
-describe("scanGen2ActionBlocks", () => {
+/** One message whose text is also the reply, as most providers report it. */
+function scan(text: string, status: Gen2TurnState["status"] = "completed") {
+  const before = state([message(text)], text, status);
+  const after = extractGen2WorkspaceActions(before);
+  const first = after.items[0];
+  return {
+    prose: first?.kind === "message" ? first.text : null,
+    actions: actions(after).map((item) =>
+      item.kind === "workspaceAction" ? item.action : null,
+    ),
+    unchanged: after === before,
+  };
+}
+
+describe("action block scanning", () => {
   it("lifts a block out of the prose", () => {
-    expect(
-      scanGen2ActionBlocks(`Look.\n\n${OPEN_FILE}\n\nThen.`, false),
-    ).toEqual({
+    expect(scan(`Look.\n\n${OPEN_FILE}\n\nThen.`)).toEqual({
       prose: "Look.\n\nThen.",
-      blocks: [
-        {
-          token: TOKEN,
-          body: '{"type":"open_file","path":"src/app.ts","line":4}',
-        },
-      ],
-      changed: true,
+      actions: [{ type: "open_file", path: "src/app.ts", line: 4 }],
+      unchanged: false,
     });
   });
 
   it("keeps prose glued after a closing fence on its own line", () => {
-    const scan = scanGen2ActionBlocks(`${OPEN_FILE}Next step.`, false);
-    expect(scan.blocks).toHaveLength(1);
-    expect(scan.prose).toBe("Next step.");
+    const result = scan(`${OPEN_FILE}Next step.`);
+    expect(result.actions).toHaveLength(1);
+    expect(result.prose).toBe("Next step.");
+  });
+
+  it("leaves the rest of the prose, and code in it, as the agent wrote it", () => {
+    const code = "Text\n\n```py\ndef f():\n\n\n\n    pass\n```";
+    expect(scan(`${code}\n\n${OPEN_FILE}`).prose).toBe(code);
+    expect(scan(`    indented code\n\n${OPEN_FILE}\n`).prose).toBe(
+      "    indented code",
+    );
+    expect(scan(`One.\n${OPEN_FILE}\n\n\nTwo.`).prose).toBe("One.\n\n\nTwo.");
   });
 
   it("ignores blocks inside another fence or a blockquote", () => {
@@ -125,35 +138,36 @@ describe("scanGen2ActionBlocks", () => {
       .map((line) => `> ${line}`)
       .join("\n");
     for (const text of [nested, tilde, quoted]) {
-      expect(scanGen2ActionBlocks(text, false)).toEqual({
+      expect(scan(text)).toEqual({
         prose: text,
-        blocks: [],
-        changed: false,
+        actions: [],
+        unchanged: true,
       });
     }
   });
 
   it("requires the opening fence at the start of a line", () => {
     for (const text of [`  ${OPEN_FILE}`, `- ${OPEN_FILE}`]) {
-      expect(scanGen2ActionBlocks(text, false).blocks).toEqual([]);
+      expect(scan(text).actions).toEqual([]);
     }
   });
 
   it("starts a block once a quoted fence ends with its quote", () => {
     const text = `> \`\`\`js\n> code\n${OPEN_FILE}`;
-    expect(scanGen2ActionBlocks(text, false).blocks).toHaveLength(1);
+    expect(scan(text).actions).toHaveLength(1);
   });
 
   it("drops a block still streaming, and keeps it as text once the turn ends", () => {
     const partial = `Opening it.\n\n\`\`\`codev-action ${TOKEN}\n{"type":"open`;
-    expect(scanGen2ActionBlocks(partial, true)).toMatchObject({
+    expect(scan(partial, "running")).toEqual({
       prose: "Opening it.",
-      blocks: [],
-      changed: true,
+      actions: [],
+      unchanged: false,
     });
-    expect(scanGen2ActionBlocks(partial, false)).toMatchObject({
+    expect(scan(partial)).toEqual({
       prose: partial,
-      changed: false,
+      actions: [],
+      unchanged: true,
     });
   });
 });
@@ -229,6 +243,17 @@ describe("extractGen2WorkspaceActions", () => {
     expect(running.reply).toBe("");
   });
 
+  it("never leaves a finished reply empty when its only blocks were invalid", () => {
+    const invalid = block('{"type":"open_file","path":"src/app.ts",}');
+    const turn = extractGen2WorkspaceActions(
+      state([message(invalid)], invalid),
+    );
+    expect(turn.reply).toBe(
+      "Requested a workspace action that could not be used.",
+    );
+    expect(actions(turn)).toMatchObject([{ error: "Invalid JSON." }]);
+  });
+
   it("leaves a failed turn's error as its body", () => {
     const failed = extractGen2WorkspaceActions({
       ...state([message(OPEN_FILE)], OPEN_FILE, "failed"),
@@ -292,6 +317,41 @@ describe("workspace actions in provider streams", () => {
       "item_2:action:0",
     ]);
     expect(turn.reply).toBe("The bug is in the router.");
+  });
+
+  it("codex: saves a reply for a turn whose only prose was an invalid block", () => {
+    const stream = [
+      JSON.stringify({
+        type: "item.completed",
+        item: {
+          id: "item_0",
+          type: "command_execution",
+          command: "ls",
+          aggregated_output: "src",
+          exit_code: 0,
+          status: "completed",
+        },
+      }),
+      JSON.stringify({
+        type: "item.completed",
+        item: {
+          id: "item_1",
+          type: "agent_message",
+          text: block('{"type":"open_file","path":"src/app.ts",}'),
+        },
+      }),
+      `{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_tokens":0,"output_tokens":1}}`,
+    ].join("\n");
+    const turn = reduceGen2Turn("codex", stream);
+    expect(turn.status).toBe("completed");
+    expect(turn.reply).toBe(
+      "Requested a workspace action that could not be used.",
+    );
+    expect(turn.items.map((item) => item.kind)).toEqual([
+      "command",
+      "message",
+      "workspaceAction",
+    ]);
   });
 
   it("claude: handles CRLF text blocks", () => {
