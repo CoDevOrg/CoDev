@@ -5013,19 +5013,14 @@ aside:has(> .gen2-ide-files:not([hidden])) .gen2-ide-tabs {
 }
 
 .gen2-board-heading p,
-.gen2-board-meta,
-.gen2-share-section-copy,
-.gen2-share-you {
+.gen2-board-meta {
   margin: 0;
   color: var(--ws-text-secondary);
   font-size: 0.75rem;
 }
 
 .gen2-board-toolbar,
-.gen2-share-invite-row,
-.gen2-share-member-actions,
-.gen2-board-card-actions,
-.gen2-share-section-heading {
+.gen2-board-card-actions {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -5077,9 +5072,7 @@ aside:has(> .gen2-ide-files:not([hidden])) .gen2-ide-tabs {
 
 .gen2-board-column-header,
 .gen2-board-column-title,
-.gen2-board-branch,
-.gen2-share-member,
-.gen2-share-member-identity {
+.gen2-board-branch {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -5098,9 +5091,7 @@ aside:has(> .gen2-ide-files:not([hidden])) .gen2-ide-tabs {
   color: var(--ws-text-secondary);
 }
 
-.gen2-board-column-title h3,
-.gen2-share-section h3,
-.gen2-share-link h3 {
+.gen2-board-column-title h3 {
   margin: 0;
   font-size: 0.75rem;
   font-weight: 600;
@@ -5148,8 +5139,7 @@ aside:has(> .gen2-ide-files:not([hidden])) .gen2-ide-tabs {
 }
 
 .gen2-board-branch span,
-.gen2-board-meta span,
-.gen2-share-member-name span {
+.gen2-board-meta span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -5202,60 +5192,337 @@ aside:has(> .gen2-ide-files:not([hidden])) .gen2-ide-tabs {
   margin: 24px auto;
 }
 
-/* ------------------------------------------------ share dialog */
+/* ------------------------------------------------ branch menu */
 
-.gen2-share-invite-row {
-  align-items: stretch;
+.gen2-branch-menu[data-slot="dropdown-menu-content"] {
+  display: flex;
+  width: 320px;
+  max-width: calc(100vw - 24px);
+  max-height: min(
+    460px,
+    var(--radix-dropdown-menu-content-available-height, 460px)
+  );
+  padding: 4px;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.gen2-share-invite-row input {
+.gen2-branch-menu-scroll {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.gen2-branch-menu-filter {
+  display: flex;
+  height: 32px;
+  margin: 2px 2px 6px;
+  padding: 0 10px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--ws-border-medium);
+  border-radius: 6px;
+  background: var(--ws-surface-1);
+  color: var(--ws-text-muted);
+}
+
+.gen2-branch-menu-filter:focus-within {
+  border-color: var(--ws-border-focus);
+}
+
+.gen2-branch-menu-filter svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.gen2-branch-menu-filter input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--ws-text-primary);
+  font: inherit;
+  font-size: 0.8125rem;
+  outline: none;
+}
+
+.gen2-branch-menu [data-slot="dropdown-menu-label"] {
+  padding: 8px 8px 4px;
+  color: var(--ws-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.gen2-branch-menu [data-slot="dropdown-menu-item"] {
+  min-height: 32px;
+  padding: 0 8px;
+  gap: 8px;
+  color: var(--ws-text-primary);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.gen2-branch-menu [data-slot="dropdown-menu-item"] > svg {
+  color: var(--ws-text-muted);
+}
+
+.gen2-branch-menu [data-slot="dropdown-menu-item"][data-selected],
+.gen2-branch-menu [data-slot="dropdown-menu-item"][data-selected] > svg {
+  color: var(--ws-accent);
+}
+
+.gen2-branch-menu [data-slot="dropdown-menu-item"][data-disabled] {
+  cursor: default;
+}
+
+.gen2-branch-menu-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gen2-branch-menu-tag {
+  padding: 0 6px;
+  border: 1px solid var(--ws-border-subtle);
+  border-radius: 4px;
+  color: var(--ws-text-muted);
+  font-size: 0.6875rem;
+  line-height: 18px;
+}
+
+.gen2-branch-menu-hint {
+  color: var(--ws-text-muted);
+  font-size: 0.75rem;
+  opacity: 0;
+}
+
+.gen2-branch-menu [data-highlighted] .gen2-branch-menu-hint {
+  opacity: 1;
+}
+
+.gen2-branch-menu-note {
+  margin: 0;
+  padding: 4px 8px 8px;
+  color: var(--ws-text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+/* ------------------------------------------------ share dialog */
+
+.gen2-share-dialog[data-slot="dialog-content"] {
+  max-height: min(720px, calc(100dvh - 32px));
+  padding: 20px;
+  gap: 16px;
+  overflow-y: auto;
+}
+
+.gen2-share-dialog [data-slot="dialog-title"],
+.gen2-share-confirm [data-slot="alert-dialog-title"] {
+  margin: 0;
+  color: var(--ws-text-primary);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.gen2-share-dialog [data-slot="dialog-title"] {
+  padding-right: 40px;
+}
+
+.gen2-share-dialog [data-slot="dialog-description"],
+.gen2-share-confirm [data-slot="alert-dialog-description"] {
+  margin: 0;
+  color: var(--ws-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.gen2-share-invite-row,
+.gen2-share-link-row {
+  display: flex;
+  margin: 0;
+  gap: 8px;
+}
+
+.gen2-share-input,
+.gen2-share-link-url {
   min-width: 0;
   height: 32px;
+  flex: 1;
+  padding: 0 10px;
+  border: 1px solid var(--ws-border-medium);
+  border-radius: 6px;
+  background: var(--ws-surface-1);
+  color: var(--ws-text-primary);
+  font: inherit;
+  font-size: 0.8125rem;
+  outline: none;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.gen2-share-input::placeholder {
+  color: var(--ws-text-muted);
+}
+
+.gen2-share-input:focus-visible,
+.gen2-share-link-url:focus-visible {
+  border-color: var(--ws-border-focus);
+  box-shadow: 0 0 0 3px var(--ws-accent-soft);
+}
+
+.gen2-share-input:disabled {
+  opacity: 0.6;
+}
+
+.gen2-share-link-url {
+  color: var(--ws-text-secondary);
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+}
+
+.gen2-share-link-skeleton[data-slot="skeleton"] {
+  height: 32px;
+  flex: 1;
+  border-radius: 6px;
+}
+
+.gen2-share-notice {
+  display: flex;
+  margin: 0;
+  padding: 8px 10px;
+  align-items: center;
+  gap: 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ws-status-ready) 12%, transparent);
+  color: var(--ws-text-primary);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.gen2-share-notice[data-type="error"] {
+  background: color-mix(in srgb, var(--ws-status-error) 12%, transparent);
+}
+
+.gen2-share-notice svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--ws-status-ready);
+}
+
+.gen2-share-notice[data-type="error"] svg {
+  color: var(--ws-status-error);
+}
+
+.gen2-share-notice > span {
+  min-width: 0;
   flex: 1;
 }
 
 .gen2-share-section,
-.gen2-share-link,
-.gen2-share-members {
+.gen2-share-link {
   display: flex;
+  min-width: 0;
   flex-direction: column;
   gap: 8px;
-  min-width: 0;
 }
 
-.gen2-share-section-heading {
-  justify-content: space-between;
+.gen2-share-section h3 {
+  margin: 0;
+  color: var(--ws-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 16px;
 }
 
 .gen2-share-members {
-  max-height: 16rem;
-  overflow: auto;
+  display: flex;
+  max-height: 15rem;
+  margin: 0 -8px;
+  padding: 0;
+  flex-direction: column;
+  overflow-y: auto;
+  list-style: none;
   outline: none;
 }
 
 .gen2-share-member {
-  justify-content: space-between;
-  gap: 12px;
+  display: flex;
   min-width: 0;
+  min-height: 48px;
+  padding: 6px 8px;
+  align-items: center;
+  gap: 10px;
+  border-radius: 8px;
 }
 
-.gen2-share-member-identity {
-  min-width: 0;
+.gen2-share-avatar[data-slot="avatar"] {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  background: var(--ws-surface-3);
+}
+
+.gen2-share-avatar [data-slot="avatar-fallback"] {
+  color: var(--ws-text-secondary);
+  font-size: 0.6875rem;
+  font-weight: 600;
 }
 
 .gen2-share-member-name {
   display: flex;
   min-width: 0;
+  flex: 1;
   flex-direction: column;
+  gap: 2px;
 }
 
-.gen2-share-member-name span:first-child {
+.gen2-share-member-name > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gen2-share-member-name > span:first-child {
+  color: var(--ws-text-primary);
   font-size: 0.8125rem;
   font-weight: 500;
+  line-height: 18px;
+}
+
+.gen2-share-member-name > span:last-child {
+  color: var(--ws-text-secondary);
+  font-size: 0.75rem;
+  line-height: 16px;
+}
+
+.gen2-share-you {
+  color: var(--ws-text-muted);
+  font-weight: 400;
 }
 
 .gen2-share-member-actions {
-  flex: 0 0 auto;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.gen2-share-role {
+  padding: 0 10px;
+  color: var(--ws-text-secondary);
+  font-size: 0.8125rem;
 }
 
 .gen2-share-skeletons {
@@ -5264,10 +5531,79 @@ aside:has(> .gen2-ide-files:not([hidden])) .gen2-ide-tabs {
   gap: 8px;
 }
 
-.gen2-share-link input {
+.gen2-share-link {
+  padding: 12px;
+  gap: 12px;
+  border: 1px solid var(--ws-border-subtle);
+  border-radius: 8px;
+  background: var(--ws-surface-1);
+}
+
+.gen2-share-link-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.gen2-share-link-icon {
+  display: grid;
+  width: 32px;
   height: 32px;
-  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--ws-accent-soft);
+  color: var(--ws-accent);
+}
+
+.gen2-share-link-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.gen2-share-link-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.gen2-share-link-copy h3 {
+  margin: 0;
+  color: var(--ws-text-primary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.gen2-share-link-copy span {
+  color: var(--ws-text-secondary);
   font-size: 0.75rem;
+  line-height: 16px;
+}
+
+.gen2-share-menu [data-variant="destructive"] {
+  color: var(--ws-status-error);
+}
+
+@media (max-width: 480px) {
+  .gen2-share-invite-row,
+  .gen2-share-link-head {
+    flex-wrap: wrap;
+  }
+
+  .gen2-share-input {
+    flex-basis: 100%;
+  }
+
+  .gen2-share-invite-row .gen2-workspace-select {
+    flex: 1;
+  }
+
+  .gen2-share-link-head .gen2-workspace-select {
+    margin-left: 42px;
+  }
 }
 
 /* ------------------------------------------------ session import */

@@ -31,6 +31,7 @@ export default async function Gen2WorkspacePage({
     <SupersetWorkspaceShell
       workspace={workspace}
       workspaceId={workspaceId}
+      currentUserId={user.id}
       canEdit={workspace.role !== "viewer"}
       runtimeEnabled={isGen2SupersetRuntimeEnabled()}
     />

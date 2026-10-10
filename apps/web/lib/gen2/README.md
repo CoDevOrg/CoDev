@@ -107,6 +107,13 @@ ready-gate on each function follows that split, and
 
 The terminal stream and shared-document sockets use the platform WebSocket adapter in `lib/platform/websocket.ts`; Cloudflare Workers use native WebSocket pairs, and Vercel keeps its upgrade helper.
 
+`remote-branches.ts` lists the repository's branches from GitHub with the
+caller's own GitHub authorization, never the owner's, so a member who cannot see
+the repository on GitHub learns no branch names. Public repositories are cloned
+with every remote branch, so the top bar opens one as a worktree from
+`origin/<branch>`; private repositories arrive as a one-commit snapshot without
+a remote, so their other branches are listed but cannot be opened yet.
+
 ## Layout
 
 | Path                           | Role                                                                         |
