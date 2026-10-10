@@ -34,6 +34,11 @@ Workspace VMs and saved disks remain in their separate ARM infrastructure.
 The CI production deployment job verifies the DB schema, builds and deploys an
 immutable Azure image through ACR Tasks, waits up to five minutes for the new origin's release and
 secret gate, switches the proxy, then deploys the retained ARM Worker without public routes.
+Container Apps secrets reach the container as references, so a changed value
+alone does not restart replicas. Each deploy therefore sets a fresh plain
+`CODEV_DEPLOYMENT_ID`, which starts a new revision even for an unchanged commit
+(for example, the redeploy after an ARM image promotion). `/api/ready` reports
+it, and the deploy waits for that deployment as well as the commit.
 The native lifecycle bundle omits the web app and uses vinext API shims instead of bundling the Next.js server, so it fits Workers Free. Azure
 single-revision deployments retain the previous healthy revision until the new
 one is ready. Startup/liveness probes check the process; readiness checks DB and
