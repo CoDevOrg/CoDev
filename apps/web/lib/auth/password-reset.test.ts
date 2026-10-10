@@ -73,20 +73,36 @@ describe("password reset tokens", () => {
     ).toBe(true);
   });
 
-  it("only emails accounts that already have a local password", () => {
-    expect(
-      shouldSendPasswordReset({
+  it("emails any account with an address, including OAuth-only ones", () => {
+    expect(shouldSendPasswordReset({ email: "ada@example.com" })).toBe(true);
+    expect(shouldSendPasswordReset({ email: null })).toBe(false);
+    expect(shouldSendPasswordReset(null)).toBe(false);
+  });
+
+  it("lets an OAuth-only account create one password, once", () => {
+    vi.stubEnv("AUTH_SECRET", "a".repeat(40));
+    const state = openPasswordResetToken(
+      createPasswordResetToken({
+        userId: "user-1",
         email: "ada@example.com",
-        passwordHash: "salt.hash",
+        passwordHash: null,
       }),
+    );
+    const account = { id: "user-1", email: "ada@example.com" };
+    expect(
+      passwordResetTokenStillValid(state!, { ...account, passwordHash: null }),
     ).toBe(true);
     expect(
-      shouldSendPasswordReset({
+      passwordResetTokenStillValid(state!, { ...account, passwordHash: "set" }),
+    ).toBe(false);
+    // The empty-state binding is per account, not shared by all of them.
+    expect(
+      passwordResetTokenStillValid(state!, {
+        id: "user-2",
         email: "ada@example.com",
         passwordHash: null,
       }),
     ).toBe(false);
-    expect(shouldSendPasswordReset(null)).toBe(false);
   });
 
   it("uses the canonical HTTPS site in production without Auth.js URL overrides", () => {

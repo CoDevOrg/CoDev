@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import type { Session } from "next-auth";
-import { AuthError } from "next-auth";
+import { AuthError, type CredentialsSignin } from "next-auth";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -11,6 +11,10 @@ import { Brand } from "@/components/shell/app-chrome";
 import { ThemeToggle } from "@/components/shell/theme-toggle";
 import { CredentialsSignInForm } from "@/components/auth/credentials-sign-in-form";
 import { assertCanRegister, RegistrationError } from "@/lib/auth/registration";
+import {
+  safeCallbackPath,
+  twoFactorChallengePath,
+} from "@/lib/auth/two-factor-challenge";
 
 const INVITE_ONLY_MESSAGE =
   "New accounts are paused while CoDev is on the waitlist. Existing members can sign in below; join the waitlist to hear when registration opens.";
@@ -82,13 +86,14 @@ export default async function SignInPage({
     error?: string;
     reset?: string;
     deleted?: string;
+    code?: string;
   }>;
 }) {
-  const { callbackUrl, error, reset, deleted } = await searchParams;
-  const safeCallback =
-    callbackUrl?.startsWith("/") && !callbackUrl.startsWith("//")
-      ? callbackUrl
-      : "/gen2";
+  const { callbackUrl, error, reset, deleted, code } = await searchParams;
+  const safeCallback = safeCallbackPath(callbackUrl);
+  // A direct POST to the credentials callback lands here with this code.
+  if (code === "two_factor_required")
+    redirect(twoFactorChallengePath(safeCallback));
   let session: Session | null = null;
   let sessionCheckUnavailable = false;
   try {
@@ -142,7 +147,13 @@ export default async function SignInPage({
           </div>
         ) : null}
 
-        {inviteMessage ? (
+        {error === "TwoFactorLink" ? (
+          <div className="inline-alert error" role="alert">
+            That email belongs to a CoDev account with two-factor
+            authentication, so Google or GitHub cannot be attached to it by
+            email. Sign in the way you usually do.
+          </div>
+        ) : inviteMessage ? (
           <div className="inline-alert error" role="alert">
             {inviteMessage} <Link href="/">Join the waitlist</Link>.
           </div>
@@ -233,6 +244,13 @@ export default async function SignInPage({
                   signInError instanceof AuthError &&
                   signInError.type === "CredentialsSignin"
                 ) {
+                  // The password was right; the account also needs its
+                  // authenticator code before a session exists.
+                  if (
+                    (signInError as CredentialsSignin).code ===
+                    "two_factor_required"
+                  )
+                    redirect(twoFactorChallengePath(safeCallback));
                   const nextMode = intent === "sign-up" ? "sign-up" : "sign-in";
                   redirect(
                     `/sign-in?error=CredentialsSignin&mode=${nextMode}&callbackUrl=${encodeURIComponent(safeCallback)}`,

@@ -82,6 +82,13 @@
     list-style: none;
   }
 
+  /* Browser heading/paragraph margins stacked on top of flex gaps, which is
+     why card titles sat far from their descriptions. Spacing comes from the
+     layout utilities instead. */
+  .settings-scope :where(h1, h2, h3, h4, p) {
+    margin: 0;
+  }
+
   .settings-scope button {
     font: inherit;
     color: inherit;

@@ -6,6 +6,8 @@ import {
 import { loadProviderConnectionSnapshot } from "@/lib/providers/provider-connection-server";
 import { requireUser } from "@/lib/auth/session";
 
+export const metadata = { title: "AI Provider Accounts" };
+
 /**
  * One card per agent account, each stating where it runs.
  *

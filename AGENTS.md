@@ -50,8 +50,11 @@
 - In Gen 2, the agent, editor, terminal, and Git use the same guest filesystem.
 - Use Node.js 24+ and `pnpm` for this repository.
 - Keep production session cookies host-only; runtime subdomains must never receive app credentials. Treat Upstash rate-limit `reason: "timeout"` as a denial even when `success` is true.
+- Browser sessions are revocable `user_sessions` rows; the Auth.js jwt callback validates cookie and row in one joined query on every request, so keep it one query. Never accept credential or session changes from `update()` payloads without the signed rotation ticket (`lib/auth/session-token.ts`).
+- A server action that re-issues the session cookie (`unstable_update`) must `redirect()` afterwards: Next re-renders in the same request with the old cookie in `headers()`, which Auth.js reads, so the page looks signed out.
 - `/api/gen2/workspaces` shares one per-IP edge rate limit (10/min) with workspace creation; never poll it. The workspace home polls `/api/gen2/home`. Pass session users to client components as picked fields, never the whole object.
 - Use the web package’s `dev` script (Webpack, matching production); allow `127.0.0.1` development resources. Initial connection checks must run in background tabs and have a request/body timeout.
+- In a `.claude/worktrees/*` checkout, the browser preview tool starts the main checkout's server, whose `.env.local` targets production. Start the worktree's `next dev` yourself against a local database and open it by URL.
 - ARM baked boot must verify the saved disk UUID before mounting or starting guest services; deliver identity and tunnel tokens only through protected Azure settings.
 - Preserve durable guest disks across stops/restarts; never treat missing saved workspace data as permission to initialize a fresh checkout.
 - Superset worktree discovery uses Git’s registered worktrees. Guest agents may create direct-child worktrees under `/workspace`; the bridge must resolve them safely as well as CoDev-managed worktrees under `.git/codev-agent-worktrees/`.

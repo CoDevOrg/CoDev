@@ -33,7 +33,7 @@ function sessionCheck(socket: ServerWebSocket, user: AppUser) {
     if (!force && Date.now() - checkedAt < RECHECK_MS) return true;
     pending ??= (async () => {
       try {
-        const revision = await readSessionRevision(user.id);
+        const revision = await readSessionRevision(user.id, user.sessionId);
         if (revision && user.credentialRevision === revision) {
           checkedAt = Date.now();
           return true;

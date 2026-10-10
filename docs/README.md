@@ -15,6 +15,7 @@ intent that may have drifted; confirm details against the code.
 | [BILLING.md](./BILLING.md)                                                             | Current | Stripe tiers, runtime limits, checkout, portal, and rollout             |
 | [EMAIL.md](./EMAIL.md)                                                                 | Current | `trycodev.com` email: Resend sending, ImprovMX receiving                |
 | [security/openai-hosted-codex-approval.md](./security/openai-hosted-codex-approval.md) | Current | Approval record for the hosted Codex CLI remote-auth pattern            |
+| [security/account-security.md](./security/account-security.md)                         | Current | Sessions, passwords, reset links, two-factor authentication, alerts     |
 
 [Legal policies and account deletion](./LEGAL.md) — implementation, publication requirements and sources.
 

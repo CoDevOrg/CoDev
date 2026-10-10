@@ -13,6 +13,8 @@ import {
 import { listUserEnvironmentVariables } from "@/lib/providers/user-environment";
 import { requireUser } from "@/lib/auth/session";
 
+export const metadata = { title: "Environment Variables" };
+
 export default async function PersonalEnvironmentPage() {
   const user = await requireUser();
   const variables = await listUserEnvironmentVariables(user.id);

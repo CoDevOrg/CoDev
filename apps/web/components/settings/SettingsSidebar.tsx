@@ -8,7 +8,10 @@ import {
   Blocks,
   CreditCard,
   KeyRound,
+  MonitorSmartphone,
   Plug,
+  ShieldCheck,
+  SlidersHorizontal,
   User,
 } from "lucide-react";
 
@@ -30,6 +33,21 @@ const navGroups: SettingsNavGroup[] = [
     label: "Account",
     items: [
       { name: "Profile", href: "/settings/personal/profile", icon: User },
+      {
+        name: "Security",
+        href: "/settings/personal/security",
+        icon: ShieldCheck,
+      },
+      {
+        name: "Sessions",
+        href: "/settings/personal/sessions",
+        icon: MonitorSmartphone,
+      },
+      {
+        name: "Preferences",
+        href: "/settings/personal/preferences",
+        icon: SlidersHorizontal,
+      },
       {
         name: "Billing",
         href: "/settings/personal/billing",

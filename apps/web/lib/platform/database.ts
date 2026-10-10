@@ -56,7 +56,12 @@ function getDatabaseClient() {
     throw new Error("A PostgreSQL connection URL is not configured.");
   }
 
-  const database = createDatabase(connectionString);
+  // A warm process (the Azure origin) reuses connections across requests.
+  // Opening one to the database in another region costs several round trips
+  // (~70 ms each), which a 10 s idle timeout paid on most settings clicks.
+  const database = createDatabase(connectionString, {
+    idleTimeoutMillis: 60_000,
+  });
   database.pool.on("error", () => {
     if (databaseState.__codevDatabaseClient === database) {
       delete databaseState.__codevDatabaseClient;

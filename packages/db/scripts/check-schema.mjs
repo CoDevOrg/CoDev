@@ -44,6 +44,16 @@ try {
     image_version_id FROM public.agent_cli_model_requirements LIMIT 0`);
   await pool.query(`SELECT id, runtime_provider, runtime_status, runtime_generation,
     runtime_route_host FROM public.gen2_workspaces LIMIT 0`);
+  // Every authenticated request reads user_sessions; a missing table signs
+  // everyone out, so the deploy must stop before that.
+  await pool.query(`SELECT id, user_id, sign_in_method, user_agent, ip_address,
+    created_at, last_seen_at, revoked_at FROM public.user_sessions LIMIT 0`);
+  await pool.query(`SELECT user_id, encrypted_secret, enabled_at, last_used_step
+    FROM public.user_two_factor LIMIT 0`);
+  await pool.query(`SELECT id, user_id, code_hash, used_at
+    FROM public.user_recovery_codes LIMIT 0`);
+  await pool.query(`SELECT id, user_id, type, user_agent, ip_address, created_at
+    FROM public.user_security_events LIMIT 0`);
   const powerPlan = await pool.query(
     `SELECT id FROM public.plans
       WHERE id = 'power'::public.subscription_plan AND active = true`,

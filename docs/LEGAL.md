@@ -72,6 +72,13 @@ are generalized. CoDev referrers retain only the origin. Essential hosting
 logs are separate. Existing historical analytics rows are not retroactively
 sanitized by this patch.
 
+Account security records hold IP addresses and browser user agents. Pruning is
+per member and opportunistic: `user_sessions` rows idle or revoked for 30 days
+are deleted at that member's next sign-in, and their `user_security_events`
+older than 180 days when a new event is written. Both cascade on account
+deletion; there is no scheduled sweep for inactive members. See
+[`security/account-security.md`](./security/account-security.md).
+
 ## Deletion flow
 
 Settings → Profile exposes the existing limited account-details export and

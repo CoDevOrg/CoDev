@@ -8,6 +8,8 @@ export const GITHUB_LINK_COOKIE = "codev-github-link";
 
 export type GitHubLinkState = {
   userId: string;
+  /** The session the link replaces; revoked once the link succeeds. */
+  sessionId?: string;
   returnTo: string;
   expiresAt: number;
   nonce: string;
@@ -37,10 +39,15 @@ function isSafeReturnTo(value: string) {
   return value.startsWith("/") && !value.startsWith("//");
 }
 
-export function createGithubLinkState(userId: string, returnTo: string) {
+export function createGithubLinkState(
+  userId: string,
+  returnTo: string,
+  sessionId?: string,
+) {
   const safeReturnTo = isSafeReturnTo(returnTo) ? returnTo : "/gen2";
   const state: GitHubLinkState = {
     userId,
+    ...(sessionId ? { sessionId } : {}),
     returnTo: safeReturnTo,
     expiresAt: Date.now() + LINK_STATE_TTL_MS,
     nonce: randomBytes(16).toString("hex"),

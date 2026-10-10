@@ -291,17 +291,23 @@ export async function saveAnthropicCredential(userId: string, apiKey: string) {
   });
 }
 
-export async function getProviderCredentialStatus(
-  userId: string,
-  provider: AuthProvider,
-  credentialType?: CredentialType,
-) {
-  const credential = await findCredential(userId, provider, credentialType);
+type StatusColumns = Pick<
+  typeof schema.providerCredentials.$inferSelect,
+  | "provider"
+  | "credentialType"
+  | "lastFour"
+  | "endpointUrl"
+  | "awsRoleArn"
+  | "updatedAt"
+  | "connectedVia"
+>;
+
+function credentialStatus(credential: StatusColumns | null) {
   if (!credential) return null;
   // A browser-era Claude token is retired; only a CLI setup-token (stamped
   // `cli` by persistClaudeOAuthToken) counts as a live connection.
   if (
-    provider === "anthropic" &&
+    credential.provider === "anthropic" &&
     credential.credentialType === "OAUTH_TOKEN" &&
     credential.connectedVia !== "cli"
   ) {
@@ -315,6 +321,52 @@ export async function getProviderCredentialStatus(
     updatedAt: credential.updatedAt,
     connectedVia: credential.connectedVia ?? undefined,
   };
+}
+
+export async function getProviderCredentialStatus(
+  userId: string,
+  provider: AuthProvider,
+  credentialType?: CredentialType,
+) {
+  return credentialStatus(
+    await findCredential(userId, provider, credentialType),
+  );
+}
+
+/**
+ * Every connected credential of a member in one query, for pages that show
+ * several at once (Settings → AI Provider Accounts read seven, one round trip
+ * each, from a database ~70 ms away). The lookup keeps findCredential's rule:
+ * the lowest `priorityOrder` row of a provider and type wins.
+ */
+export async function listProviderCredentialStatuses(userId: string) {
+  const rows = await getDatabase()
+    .select({
+      provider: schema.providerCredentials.provider,
+      credentialType: schema.providerCredentials.credentialType,
+      lastFour: schema.providerCredentials.lastFour,
+      endpointUrl: schema.providerCredentials.endpointUrl,
+      awsRoleArn: schema.providerCredentials.awsRoleArn,
+      updatedAt: schema.providerCredentials.updatedAt,
+      connectedVia: schema.providerCredentials.connectedVia,
+    })
+    .from(schema.providerCredentials)
+    .where(
+      and(
+        eq(schema.providerCredentials.scopeType, "USER"),
+        eq(schema.providerCredentials.scopeId, userId),
+        eq(schema.providerCredentials.isConnected, true),
+      ),
+    )
+    .orderBy(asc(schema.providerCredentials.priorityOrder));
+  return (provider: AuthProvider, credentialType: CredentialType) =>
+    credentialStatus(
+      rows.find(
+        (row) =>
+          row.provider === parseProvider(provider) &&
+          row.credentialType === parseCredentialType(credentialType),
+      ) ?? null,
+    );
 }
 
 export async function deleteProviderCredential(

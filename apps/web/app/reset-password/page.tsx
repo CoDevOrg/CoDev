@@ -3,19 +3,15 @@ import Link from "next/link";
 
 import { Brand } from "@/components/shell/app-chrome";
 import { ResetPasswordForm } from "@/components/auth/reset-password-form";
-import { openPasswordResetToken } from "@/lib/auth/password-reset";
+import { describePasswordLink } from "@/lib/auth/password-link";
 
 export const metadata: Metadata = {
   title: "Reset password",
+  // The token is in this page's URL; never send it to another site.
+  referrer: "no-referrer",
 };
 
 export const dynamic = "force-dynamic";
-
-const errorCopy: Record<string, string> = {
-  invalid: "This reset link is invalid or has expired. Request a new one.",
-  match: "Those passwords did not match. Try again.",
-  policy: "Choose a stronger password that meets every requirement below.",
-};
 
 export default async function ResetPasswordPage({
   searchParams,
@@ -23,8 +19,8 @@ export default async function ResetPasswordPage({
   searchParams: Promise<{ token?: string; error?: string }>;
 }) {
   const { token, error } = await searchParams;
-  const state = token ? openPasswordResetToken(token) : null;
-  const usableToken = error === "invalid" ? null : state ? token : null;
+  const link =
+    token && error !== "invalid" ? await describePasswordLink(token) : null;
 
   return (
     <main className="auth-page">
@@ -33,27 +29,31 @@ export default async function ResetPasswordPage({
         <Link href="/sign-in">Sign in</Link>
       </div>
       <section className="auth-card">
-        <p className="eyebrow">Password reset</p>
-        {usableToken ? (
+        <p className="eyebrow">Password</p>
+        {token && link ? (
           <>
-            <h1>Choose a new password.</h1>
-            <p>Pick a new password for your CoDev account, then sign in.</p>
-            {error && errorCopy[error] ? (
-              <div className="inline-alert error" role="alert">
-                {errorCopy[error]}
-              </div>
-            ) : null}
-            <ResetPasswordForm token={usableToken} />
+            <h1>
+              {link.hasPassword
+                ? "Choose a new password."
+                : "Create a password."}
+            </h1>
+            <p>
+              {link.hasPassword
+                ? "Pick a new password for your CoDev account."
+                : "Add a password so you can also sign in with your email."}{" "}
+              Saving it signs you out on every device, then you sign in again.
+            </p>
+            <ResetPasswordForm requiresCode={link.requiresCode} token={token} />
           </>
         ) : (
           <>
-            <h1>This reset link is not valid.</h1>
+            <h1>This link is not valid.</h1>
             <p>
-              {errorCopy.invalid} You can request another link from the sign-in
-              page.
+              Password links expire after one hour and stop working once used or
+              once your password changes. Request a new one.
             </p>
             <Link className="auth-submit" href="/forgot-password">
-              Forgot password
+              Get a new link
             </Link>
           </>
         )}

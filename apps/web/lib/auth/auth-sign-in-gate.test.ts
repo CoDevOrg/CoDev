@@ -8,6 +8,7 @@ describe("resolveSignInProviderGate", () => {
     expect(resolveSignInProviderGate("admin-handoff")).toBe(
       "allow-credentials",
     );
+    expect(resolveSignInProviderGate("two-factor")).toBe("allow-credentials");
   });
 
   it("routes google and github to their handlers", () => {

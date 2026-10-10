@@ -29,8 +29,9 @@ export default async function ForgotPasswordPage({
           <>
             <h1>Check your email.</h1>
             <p>
-              If that address has a CoDev password, we sent a reset link. It
-              expires in one hour.
+              If that address belongs to a CoDev account, we sent a link to
+              reset or create its password. It expires in one hour. Check your
+              spam folder if it does not arrive in a few minutes.
             </p>
             <Link className="auth-submit" href="/sign-in">
               Back to sign in
@@ -41,7 +42,8 @@ export default async function ForgotPasswordPage({
             <h1>Forgot your password?</h1>
             <p>
               Enter the email you use to sign in. If an account exists, we will
-              send a reset link.
+              send a link to reset its password, or to create one if you sign in
+              with Google or GitHub.
             </p>
             <form
               className="auth-credentials-form"

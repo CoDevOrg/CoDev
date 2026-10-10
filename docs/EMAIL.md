@@ -12,7 +12,7 @@ forwarding. Sending product mail does not use ImprovMX.
 
 | Address                | Role                                                                                   |
 | ---------------------- | -------------------------------------------------------------------------------------- |
-| `noreply@trycodev.com` | Product From address (password resets, waitlist receipts, invites) via Resend          |
+| `noreply@trycodev.com` | Product From address (password links, security alerts, waitlist receipts, invites)     |
 | `yousef@trycodev.com`  | Operator inbox. ImprovMX forwards it to the Gmail configured in the ImprovMX dashboard |
 | `*@trycodev.com`       | Catch-all. Same ImprovMX destination as `yousef@`                                      |
 
@@ -24,7 +24,7 @@ to _send_ from `yousef@trycodev.com`. Receiving does not require it.
 The website sends mail with `RESEND_API_KEY` through `https://api.resend.com/emails`.
 
 - From: `AUTH_EMAIL_FROM`, defaulting to `CoDev <noreply@trycodev.com>`
-- Used by `apps/web/lib/auth/password-reset-mail.ts` and `apps/web/lib/admin/access-request-mail.ts`
+- Used by `apps/web/lib/auth/auth-mail.ts` (password links and security alerts), `apps/web/lib/auth/account-deletion-mail.ts`, and `apps/web/lib/admin/access-request-mail.ts`
 
 Resend is verified on `trycodev.com`. Its DNS lives on the `send` subdomain and
 `resend._domainkey`, so it does not conflict with apex MX used for receiving.
