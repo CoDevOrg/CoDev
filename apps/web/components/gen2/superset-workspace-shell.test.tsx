@@ -20,11 +20,17 @@ vi.mock("./superset-file-pane", () => ({
   SupersetFilePane: ({
     worktreeId,
     onDirtyChange,
+    requestedPath,
   }: {
     worktreeId?: string;
     onDirtyChange?: (dirty: boolean) => void;
+    requestedPath?: string | null;
   }) => (
-    <div data-testid="files" data-worktree-id={worktreeId}>
+    <div
+      data-testid="files"
+      data-worktree-id={worktreeId}
+      data-requested-path={requestedPath ?? undefined}
+    >
       <button
         type="button"
         data-testid="make-dirty"
@@ -48,21 +54,74 @@ vi.mock("./review-diff-viewer", () => ({
   ),
 }));
 
-vi.mock("./chat-panel", () => ({
-  Gen2ChatPanel: ({
-    worktreeId,
-    activeProvider,
+vi.mock("./workspace-browser-pane", () => ({
+  WorkspaceBrowserPane: ({
+    visible,
+    request,
+    onExpandChange,
   }: {
-    worktreeId?: string;
-    activeProvider?: string;
+    visible: boolean;
+    request: { port: number } | null;
+    onExpandChange: (expanded: boolean) => void;
   }) => (
     <div
-      data-testid="chat-panel"
-      data-worktree-id={worktreeId}
-      data-provider={activeProvider}
-    />
+      data-testid="browser-pane"
+      data-visible={visible}
+      data-port={request?.port}
+    >
+      <button type="button" onClick={() => onExpandChange(true)}>
+        Expand preview
+      </button>
+    </div>
   ),
 }));
+
+vi.mock("./chat-panel", async () => {
+  const { useWorkspaceAgent } = await import("./workspace-controller");
+  return {
+    Gen2ChatPanel: function MockChatPanel({
+      worktreeId,
+      activeProvider,
+      onOpenFile,
+    }: {
+      worktreeId?: string;
+      activeProvider?: string;
+      onOpenFile?: (path: string) => void;
+    }) {
+      const agent = useWorkspaceAgent();
+      return (
+        <div
+          data-testid="chat-panel"
+          data-worktree-id={worktreeId}
+          data-provider={activeProvider}
+        >
+          <button type="button" onClick={() => onOpenFile?.("src/login.ts")}>
+            Chat opens a file
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              void agent?.controller.run({
+                type: "run_in_terminal",
+                command: "npm test",
+              })
+            }
+          >
+            Agent runs a command
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              void agent?.controller.run({ type: "open_preview", port: 3000 })
+            }
+          >
+            Agent opens a preview
+          </button>
+        </div>
+      );
+    },
+  };
+});
 
 vi.mock("@/lib/gen2/startup-client", () => ({
   ensureGen2WorkspaceReady: vi.fn().mockResolvedValue({
@@ -693,5 +752,96 @@ describe("SupersetWorkspaceShell", () => {
     // The top bar reports the checked connection, never a stale persisted state.
     expect(await screen.findByText("Ready")).toBeInTheDocument();
     expect(screen.queryByText("Offline")).not.toBeInTheDocument();
+  });
+
+  it("shows the Browser tab only where previews are enabled", async () => {
+    const { unmount } = render(
+      <SupersetWorkspaceShell
+        workspaceId={workspaceId}
+        canEdit
+        runtimeEnabled
+      />,
+    );
+    expect(screen.queryByRole("tab", { name: "Browser" })).toBeNull();
+    expect(screen.queryByTestId("browser-pane")).toBeNull();
+    unmount();
+
+    render(
+      <SupersetWorkspaceShell
+        workspaceId={workspaceId}
+        canEdit
+        runtimeEnabled
+        previewEnabled
+      />,
+    );
+    expect(screen.getByTestId("browser-pane")).toHaveAttribute(
+      "data-visible",
+      "false",
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Agent opens a preview" }),
+    );
+    expect(await screen.findByRole("tab", { name: "Browser" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByTestId("browser-pane")).toHaveAttribute(
+      "data-visible",
+      "true",
+    );
+    expect(screen.getByTestId("browser-pane")).toHaveAttribute(
+      "data-port",
+      "3000",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Expand preview" }));
+  });
+
+  it("opens files the chat names through the workspace controller", async () => {
+    render(
+      <SupersetWorkspaceShell
+        workspaceId={workspaceId}
+        canEdit
+        runtimeEnabled
+      />,
+    );
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Changes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Chat opens a file" }));
+    await waitFor(() =>
+      expect(screen.getByRole("tab", { name: "Files" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      ),
+    );
+    expect(screen.getByTestId("files")).toHaveAttribute(
+      "data-requested-path",
+      "src/login.ts",
+    );
+  });
+
+  it("runs an accepted command in a terminal tab of its own", async () => {
+    render(
+      <SupersetWorkspaceShell
+        workspaceId={workspaceId}
+        canEdit
+        runtimeEnabled
+      />,
+    );
+    expect(screen.queryByRole("tablist", { name: "Terminals" })).toBeNull();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Agent runs a command" }),
+    );
+    expect(
+      await screen.findByRole("tablist", { name: "Terminals" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Collapse terminal")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "npm test" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getAllByTestId("terminal")).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole("button", { name: "Close npm test" }));
+    expect(screen.queryByRole("tablist", { name: "Terminals" })).toBeNull();
+    expect(screen.getAllByTestId("terminal")).toHaveLength(1);
   });
 });

@@ -16,11 +16,9 @@ import { SessionImportDialog } from "./session-import-dialog";
 import {
   Check,
   ChevronDown,
-  ChevronUp,
   GitBranch,
   Pencil,
   Plus,
-  SquareTerminal,
   Upload,
 } from "lucide-react";
 import type {
@@ -37,12 +35,17 @@ import { cn } from "@/lib/platform/utils";
 import { WorkspaceShareDialog } from "./workspace-share-dialog";
 import { WorkspaceSettingsDialog } from "./workspace-settings-dialog";
 import { Gen2ChatPanel } from "./chat-panel";
-import { Gen2TerminalPane } from "./terminal-pane";
+import { createWorktreeFrom } from "./create-worktree";
+import { useWorkspaceController } from "./use-workspace-controller";
+import { useWorkspaceInspectorSize } from "./use-workspace-inspector-size";
+import type { WorkspaceInspectorTab } from "./workspace-action-run";
+import { WorkspaceBrowserPane } from "./workspace-browser-pane";
+import { WorkspaceAgentContext } from "./workspace-controller";
+import { WorkspaceTerminalDock } from "./workspace-terminal-dock";
 import { WorkspaceLoading } from "./workspace-loading";
 import { WorkspaceStartupSteps } from "./workspace-startup-steps";
 import { WorkspaceSwitchDialog } from "./workspace-switch-dialog";
 import {
-  createSupersetWorktree,
   DEFAULT_SUPERSET_WORKTREE_ID,
   listSupersetWorktrees,
   SupersetFileApiError,
@@ -92,7 +95,7 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 
-type Tab = "files" | "changes" | "review";
+type Tab = WorkspaceInspectorTab;
 
 type Worktree = { worktreeId: string; branch: string };
 
@@ -100,6 +103,9 @@ type Worktree = { worktreeId: string; branch: string };
 export const GEN2_SIDEBAR_COLLAPSE_QUERY = "(max-width: 1279px)";
 /** Auto-collapse the inspector below this viewport. User toggles pin the choice. */
 export const GEN2_INSPECTOR_COLLAPSE_QUERY = "(max-width: 1023px)";
+
+const isInspectorNarrow = () =>
+  window.matchMedia(GEN2_INSPECTOR_COLLAPSE_QUERY).matches;
 
 function formatRelativeTime(dateString?: string) {
   if (!dateString) return "Just now";
@@ -160,17 +166,17 @@ export function SupersetWorkspaceShell({
   currentUserId,
   canEdit,
   runtimeEnabled,
+  previewEnabled = false,
 }: {
   workspace?: Gen2WorkspaceDetail | undefined;
   workspaceId: string;
   currentUserId?: string | undefined;
   canEdit: boolean;
   runtimeEnabled: boolean;
+  /** Shows the Browser tab; on only where a preview zone is configured. */
+  previewEnabled?: boolean | undefined;
 }) {
   const [tab, setTab] = useState<Tab>("files");
-  const [requestedFilePath, setRequestedFilePath] = useState<string | null>(
-    null,
-  );
   const [worktrees, setWorktrees] = useState<Worktree[]>([
     { worktreeId: DEFAULT_SUPERSET_WORKTREE_ID, branch: "main" },
   ]);
@@ -190,6 +196,7 @@ export function SupersetWorkspaceShell({
   const [activeRuns, setActiveRuns] = useState<
     Array<{
       id: string;
+      chatId?: string | null;
       createdBy: string;
       worktreeId: string;
       status: string;
@@ -337,14 +344,15 @@ export function SupersetWorkspaceShell({
             body: JSON.stringify({ provider }),
           },
         );
-        if (!response.ok) return;
+        if (!response.ok) return null;
         const { chat } = (await response.json()) as { chat: Gen2Chat };
         setChats((prev) => [chat, ...prev]);
         setSelectedChatId(chat.id);
         setActiveProvider(provider);
         recordChatProvider(chat.id, provider);
+        return chat;
       } catch {
-        /* Ignore error */
+        return null;
       }
     },
     [workspaceId, recordChatProvider],
@@ -763,11 +771,11 @@ export function SupersetWorkspaceShell({
     if (!newWorktreeId.trim() || !newBranch.trim() || creating) return;
     setCreating(true);
     try {
-      const created = await createSupersetWorktree(workspaceId, {
-        worktreeId: newWorktreeId.trim(),
-        branch: newBranch.trim(),
-        ...(baseRef.trim() ? { baseRef: baseRef.trim() } : {}),
-      });
+      const created = await createWorktreeFrom(
+        workspaceId,
+        { worktreeId: newWorktreeId, branch: newBranch, baseRef },
+        worktrees,
+      );
       setWorktrees((current) => [...current, created]);
       setShowCreate(false);
       setNewWorktreeId("");
@@ -825,6 +833,45 @@ export function SupersetWorkspaceShell({
   // whichever agent happens to be selected.
   const chatProviderOf = (chat: Gen2Chat) =>
     chat.provider ?? chatProviders[chat.id] ?? connectedProviders[0]?.id;
+
+  const agent = useWorkspaceController({
+    workspaceId,
+    canEdit,
+    previewEnabled,
+    connected: connection.state === "connected",
+    viewMode,
+    setViewMode,
+    tab,
+    setTab,
+    inspectorCollapsed,
+    setInspectorCollapsed,
+    isNarrow: isInspectorNarrow,
+    terminalExpanded,
+    setTerminalExpanded,
+    worktreeId,
+    worktrees,
+    addWorktree: (created) => setWorktrees((current) => [...current, created]),
+    selectWorktree,
+    fileCounts,
+    dirty,
+    chats,
+    setChats,
+    activeChat,
+    activeProvider,
+    connectedProviders: connectedChatProviders.map((provider) => provider.id),
+    createChat,
+    handleNewChat,
+    members: activeWorkspace.members,
+    runs: activeRuns,
+    refreshRuns: () => void refreshRuns(),
+    setShareOpen,
+    setSettingsOpen,
+    setImportOpen,
+  });
+  const { files, inspector, terminals } = agent.requests;
+  const inspectorSize = useWorkspaceInspectorSize(tab === "browser");
+  const openFile = (path: string) =>
+    void agent.value.controller.run({ type: "open_file", path });
 
   if (!runtimeEnabled) {
     return (
@@ -1536,7 +1583,7 @@ export function SupersetWorkspaceShell({
 
               {/* Center Main Stage: Agent Chat & Docked Terminal */}
               <ResizablePanel
-                minSize="240px"
+                minSize={inspectorSize.centerMinSize}
                 className="gen2-ide-session-panel"
               >
                 <section
@@ -1579,35 +1626,36 @@ export function SupersetWorkspaceShell({
                         connection.state === "connected" ? undefined : true
                       }
                     >
-                      <Gen2ChatPanel
-                        workspace={currentWorkspace}
-                        worktreeId={worktreeId}
-                        activeChatId={selectedChatId}
-                        onSelectChatId={setSelectedChatId}
-                        onChatsChange={setChats}
-                        connectedProviders={connectedChatProviders.map(
-                          (provider) => provider.id,
-                        )}
-                        activeProvider={activeProvider}
-                        onActiveProviderChange={setActiveProvider}
-                        hideChatBar={true}
-                        onRunningChange={setAgentRunning}
-                        onFilesChanged={() => {
-                          void refreshWorktrees();
-                        }}
-                        onOpenFile={(path) => {
-                          setRequestedFilePath(path);
-                          setTab("files");
-                        }}
-                        onNeedsMachine={ensureRunning}
-                        onOpenWorktree={(id) => {
-                          setWorktreeId(id);
-                          setTab("changes");
-                          setInspectorCollapsed(false);
-                        }}
-                        onOpenSettings={() => setSettingsOpen(true)}
-                        providersRevision={providersRevision}
-                      />
+                      <WorkspaceAgentContext.Provider value={agent.value}>
+                        <Gen2ChatPanel
+                          workspace={currentWorkspace}
+                          worktreeId={worktreeId}
+                          activeChatId={selectedChatId}
+                          onSelectChatId={setSelectedChatId}
+                          onChatsChange={setChats}
+                          connectedProviders={connectedChatProviders.map(
+                            (provider) => provider.id,
+                          )}
+                          activeProvider={activeProvider}
+                          onActiveProviderChange={setActiveProvider}
+                          hideChatBar={true}
+                          onRunningChange={setAgentRunning}
+                          onFilesChanged={() => {
+                            agent.value.sources.invalidateFiles();
+                            void refreshWorktrees();
+                          }}
+                          onOpenFile={openFile}
+                          onNeedsMachine={ensureRunning}
+                          onOpenWorktree={(id) =>
+                            void agent.value.controller.run({
+                              type: "show_changes",
+                              worktreeId: id,
+                            })
+                          }
+                          onOpenSettings={() => setSettingsOpen(true)}
+                          providersRevision={providersRevision}
+                        />
+                      </WorkspaceAgentContext.Provider>
                     </div>
                     {connection.state === "connected" ? null : (
                       <>
@@ -1788,89 +1836,40 @@ export function SupersetWorkspaceShell({
                     )}
                   </div>
 
-                  {/* Bottom terminal dock: click to expand / collapse */}
-                  <div
-                    className={cn(
-                      "gen2-ide-terminal-dock",
-                      terminalExpanded ? "expanded" : "collapsed",
-                    )}
-                    aria-label="Terminal dock"
-                  >
-                    <div
-                      className="gen2-ide-terminal-dock-bar"
-                      onClick={() =>
-                        setTerminalExpanded((expanded) => !expanded)
-                      }
-                      onKeyDown={(event) => {
-                        if (event.key !== "Enter" && event.key !== " ") return;
-                        event.preventDefault();
-                        setTerminalExpanded((expanded) => !expanded);
-                      }}
-                      role="button"
-                      tabIndex={0}
-                      aria-expanded={terminalExpanded}
-                      aria-label={
-                        terminalExpanded
-                          ? "Collapse terminal"
-                          : "Expand terminal"
-                      }
-                    >
-                      <div className="gen2-ide-terminal-dock-label">
-                        <SquareTerminal
-                          aria-hidden="true"
-                          className="gen2-ide-terminal-dock-icon"
-                        />
-                        <span className="gen2-ide-terminal-dock-title">
-                          Terminal
-                        </span>
-                        <span className="gen2-ide-terminal-dock-badge">
-                          {selected?.branch ?? "main"}
-                        </span>
-                      </div>
-                      <div
-                        className="gen2-ide-terminal-dock-action"
-                        aria-hidden="true"
-                      >
-                        {terminalExpanded ? <ChevronDown /> : <ChevronUp />}
-                      </div>
-                    </div>
-
-                    <div
-                      className="gen2-ide-terminal-dock-content"
-                      hidden={!terminalExpanded}
-                    >
-                      <Gen2TerminalPane
-                        key={worktreeId}
-                        workspaceId={workspaceId}
-                        worktreeId={worktreeId}
-                        visible={terminalExpanded}
-                        canStart
-                        autoStart
-                        workspaceConnection={
-                          connection.state === "connected"
-                            ? "ready"
-                            : connection.subscriptionRequired
-                              ? "blocked"
-                              : connection.state === "disconnected"
-                                ? "asleep"
-                                : "waking"
-                        }
-                        onResumeWorkspace={ensureRunning}
-                        onExit={() => undefined}
-                      />
-                    </div>
-                  </div>
+                  <WorkspaceTerminalDock
+                    workspaceId={workspaceId}
+                    worktreeId={worktreeId}
+                    branch={selected?.branch ?? "main"}
+                    expanded={terminalExpanded}
+                    onExpandedChange={setTerminalExpanded}
+                    connection={
+                      connection.state === "connected"
+                        ? "ready"
+                        : connection.subscriptionRequired
+                          ? "blocked"
+                          : connection.state === "disconnected"
+                            ? "asleep"
+                            : "waking"
+                    }
+                    onResumeWorkspace={ensureRunning}
+                    tabs={terminals.tabs}
+                    activeId={terminals.activeId}
+                    onSelectTab={terminals.select}
+                    onCloseTab={terminals.close}
+                    onTailReader={agent.requests.readers.onTailReader}
+                  />
                 </section>
               </ResizablePanel>
 
-              {/* Right Inspector: Files, Changes, Review */}
+              {/* Right Inspector: Files, Changes, Review, Browser */}
               {!inspectorCollapsed ? (
                 <>
                   <ResizableHandle className="gen2-ide-resizer" />
                   <ResizablePanel
+                    panelRef={inspectorSize.panelRef}
                     defaultSize="400px"
                     minSize="280px"
-                    maxSize="480px"
+                    maxSize={inspectorSize.maxSize}
                     groupResizeBehavior="preserve-pixel-size"
                     className="gen2-ide-inspector"
                   >
@@ -1892,6 +1891,9 @@ export function SupersetWorkspaceShell({
                               ["files", "Files"],
                               ["changes", "Changes"],
                               ["review", "Review"],
+                              ...(previewEnabled
+                                ? [["browser", "Browser"] as const]
+                                : []),
                             ] as const
                           ).map(([id, label]) => (
                             <TabsTrigger
@@ -1928,9 +1930,12 @@ export function SupersetWorkspaceShell({
                           worktreeId={worktreeId}
                           refreshToken={refreshToken}
                           onDirtyChange={setDirty}
-                          requestedPath={requestedFilePath}
-                          onRequestedPathConsumed={() =>
-                            setRequestedFilePath(null)
+                          requestedPath={files.path}
+                          onRequestedPathConsumed={files.consumed}
+                          requestedRange={files.range}
+                          onOpenFile={inspector.onOpenFile}
+                          onSelectionText={
+                            agent.requests.readers.onSelectionText
                           }
                         />
                       </div>
@@ -1947,21 +1952,37 @@ export function SupersetWorkspaceShell({
                             ? `Also changed by ${branchFor(match.otherWorktreeId)} (${match.otherProvider}, ${memberLabel(match.otherCreatedBy)})`
                             : undefined;
                         }}
-                        onOpenFile={(path) => {
-                          setRequestedFilePath(path);
-                          setTab("files");
-                        }}
+                        onOpenFile={openFile}
+                        refreshToken={inspector.changesToken}
                       />
                       <SupersetChangesPane
                         workspaceId={workspaceId}
                         worktreeId={worktreeId}
                         visible={tab === "review"}
                         mode="review"
-                        onOpenFile={(path) => {
-                          setRequestedFilePath(path);
-                          setTab("files");
-                        }}
+                        onOpenFile={openFile}
+                        refreshToken={inspector.changesToken}
+                        focusPath={inspector.reviewFocus}
                       />
+                      {previewEnabled ? (
+                        <div
+                          id="superset-panel-browser"
+                          role="tabpanel"
+                          aria-labelledby="superset-tab-browser"
+                          hidden={tab !== "browser"}
+                          className="gen2-ide-browser"
+                        >
+                          <WorkspaceBrowserPane
+                            workspaceId={workspaceId}
+                            visible={tab === "browser"}
+                            canEdit={canEdit}
+                            connected={connection.state === "connected"}
+                            request={inspector.previewRequest}
+                            onExpandChange={inspectorSize.onExpandChange}
+                            onStateChange={inspector.onPreviewState}
+                          />
+                        </div>
+                      ) : null}
                     </aside>
                   </ResizablePanel>
                 </>
@@ -1979,6 +2000,7 @@ export function SupersetWorkspaceShell({
           currentUserRole={activeWorkspace.role}
           currentUserId={currentUserId}
           initialMembers={activeWorkspace.members}
+          initialInvite={agent.requests.chat.shareInvite}
         />
 
         <SessionImportDialog
