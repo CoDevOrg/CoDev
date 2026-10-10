@@ -68,7 +68,9 @@ function AddressForm({
         defaultValue={address}
         aria-label="Preview address"
         aria-invalid={invalid || undefined}
-        title={invalid ? "Enter a port, like 3000 or localhost:3000/path" : ""}
+        title={
+          invalid ? "Enter a port, like 3000 or localhost:3000/path" : undefined
+        }
         placeholder="localhost:3000"
         autoComplete="off"
         spellCheck={false}
