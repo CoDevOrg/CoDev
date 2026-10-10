@@ -15,13 +15,8 @@ import {
   type Gen2SupersetEntry,
   type Gen2SupersetWorktree,
 } from "@codev/contracts";
-import { eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { schema } from "@codev/db";
-
-import { listRepositoryTree } from "../github/repository-tree";
-import { getDatabase } from "../platform/database";
 import {
   OrchestratorError,
   orchestratorRequest,
@@ -34,8 +29,8 @@ import { canRunGen2Agent } from "./agent-policy";
 import {
   GUEST_FILE_LIST_TOO_LARGE,
   repositoryTreeExceedsGuestList,
-  repositoryTreeToEntries,
 } from "./repository-file-list";
+import { listGen2RepositoryFiles } from "./repository-files";
 import {
   Gen2AccessError,
   Gen2FileConflictError,
@@ -87,50 +82,19 @@ async function requireReadySupersetMember(workspaceId: string, userId: string) {
   return membership;
 }
 
-async function readWorkspaceBaseSha(workspaceId: string) {
-  const [row] = await getDatabase()
-    .select({ baseSha: schema.gen2Workspaces.baseSha })
-    .from(schema.gen2Workspaces)
-    .where(eq(schema.gen2Workspaces.id, workspaceId))
-    .limit(1);
-  return row?.baseSha ?? null;
-}
-
-/**
- * The guest walks the whole checkout and hides every file once it passes
- * 5,000 entries. A connected repository can be listed from the commit that
- * was cloned, which keeps the machine from doing that walk.
- */
-async function listConnectedRepositoryFiles(
-  workspaceId: string,
-  userId: string,
-  fullName: string | undefined,
-) {
-  if (!fullName) return null;
-  const baseSha = await readWorkspaceBaseSha(workspaceId);
-  if (!baseSha) return null;
-  try {
-    return repositoryTreeToEntries(
-      await listRepositoryTree(userId, fullName, baseSha),
-    );
-  } catch {
-    return null;
-  }
-}
-
 export async function listGen2SupersetFiles(
   workspaceId: string,
   userId: string,
   worktreeId: string,
 ): Promise<Gen2SupersetEntry[]> {
   const membership = await requireReadySupersetMember(workspaceId, userId);
+  const repository = { workspaceId, userId, worktreeId };
   const repositoryFiles =
     worktreeId === "main"
-      ? await listConnectedRepositoryFiles(
-          workspaceId,
-          userId,
-          membership.repository?.fullName,
-        )
+      ? await listGen2RepositoryFiles({
+          ...repository,
+          repository: membership.repository?.fullName,
+        })
       : null;
   if (
     repositoryFiles &&
@@ -149,12 +113,19 @@ export async function listGen2SupersetFiles(
       .files;
   } catch (error) {
     if (
-      repositoryFiles &&
-      error instanceof OrchestratorError &&
-      error.message === GUEST_FILE_LIST_TOO_LARGE
-    ) {
-      return repositoryFiles;
-    }
+      !(error instanceof OrchestratorError) ||
+      error.message !== GUEST_FILE_LIST_TOO_LARGE
+    )
+      throw error;
+    // Too large for the guest: every worktree falls back to GitHub, not only
+    // the primary checkout.
+    const fallback =
+      repositoryFiles ??
+      (await listGen2RepositoryFiles({
+        ...repository,
+        repository: membership.repository?.fullName,
+      }));
+    if (fallback) return fallback;
     throw error;
   }
 }

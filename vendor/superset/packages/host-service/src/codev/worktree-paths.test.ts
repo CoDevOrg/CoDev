@@ -51,3 +51,25 @@ test("does not expose nested paths, unsafe names, or duplicate ids", () => {
 		),
 	).toBe(false);
 });
+
+test("keeps a detached checkout, reporting its branch as HEAD", () => {
+	const list = [
+		"worktree /workspace",
+		"HEAD beb6747804",
+		"detached",
+		"",
+		"worktree /workspace/.git/codev-agent-worktrees/yousefs",
+		"HEAD beb6747804",
+		"branch refs/heads/main",
+		"",
+		"worktree /workspace/bare-mirror",
+		"bare",
+		"",
+	].join("\n");
+	expect(
+		parseCoDevWorktrees(list, root).map(({ worktreeId, branch }) => ({ worktreeId, branch })),
+	).toEqual([
+		{ worktreeId: "main", branch: "HEAD" },
+		{ worktreeId: "yousefs", branch: "main" },
+	]);
+});

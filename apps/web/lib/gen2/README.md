@@ -144,7 +144,7 @@ directory.
 
 ## Files, Git, and terminals
 
-`workbench.ts` and `terminals.ts` wrap the orchestrator clients. A checkout with more than 5,000 files is listed from the cloned GitHub commit so the guest walk does not hide the tree. Both check
+`workbench.ts` and `terminals.ts` wrap the orchestrator clients. A checkout with more than 5,000 files is listed from GitHub (`repository-files.ts`) so the guest walk does not hide the tree: the primary checkout from its cloned commit, another worktree from its branch on GitHub, or the cloned commit when that branch exists only on the machine. The primary checkout is cloned at a commit (detached), so the shell always lists it even when an older guest image leaves it out of the worktree list. Both check
 membership **before** touching `lib/runtime/orchestrator-*`, which performs no
 authorization of its own — a route reaching those clients directly would be an
 IDOR across every gen 2 workspace. Keeping the guard in this layer means a new

@@ -36,7 +36,6 @@ import { cn } from "@/lib/platform/utils";
 import { WorkspaceShareDialog } from "./workspace-share-dialog";
 import { WorkspaceSettingsDialog } from "./workspace-settings-dialog";
 import { Gen2ChatPanel } from "./chat-panel";
-import { createWorktreeFrom } from "./create-worktree";
 import { useWorkspaceController } from "./use-workspace-controller";
 import { useWorkspaceInspectorSize } from "./use-workspace-inspector-size";
 import type { WorkspaceInspectorTab } from "./workspace-action-run";
@@ -62,6 +61,11 @@ import {
   type BoardWorktreeItem,
 } from "./superset-workspaces-board";
 import { SupersetAgentSessionsPanel } from "./superset-agent-sessions-panel";
+import { withPrimaryWorktree, worktreeDisplay } from "./worktree-display";
+import { WorktreeName } from "./worktree-name";
+import { WorkspaceWorktreeForm } from "./workspace-worktree-form";
+import { useWorkspaceViewUrl } from "./use-workspace-view-url";
+import type { WorkspaceView } from "./workspace-view-url";
 import { SupersetAgentOverlapMenu } from "./superset-agent-overlap-menu";
 import {
   ProviderLogo,
@@ -107,6 +111,8 @@ type Worktree = { worktreeId: string; branch: string };
 export const GEN2_SIDEBAR_COLLAPSE_QUERY = "(max-width: 1279px)";
 /** Auto-collapse the inspector below this viewport. User toggles pin the choice. */
 export const GEN2_INSPECTOR_COLLAPSE_QUERY = "(max-width: 1023px)";
+/** How often a working agent's status is reread while one is running. */
+const RUNS_REFRESH_MS = 30_000;
 
 const isInspectorNarrow = () =>
   window.matchMedia(GEN2_INSPECTOR_COLLAPSE_QUERY).matches;
@@ -186,6 +192,7 @@ export function SupersetWorkspaceShell({
   canEdit,
   runtimeEnabled,
   previewEnabled = false,
+  initialView,
 }: {
   workspace?: Gen2WorkspaceDetail | undefined;
   workspaceId: string;
@@ -194,20 +201,33 @@ export function SupersetWorkspaceShell({
   runtimeEnabled: boolean;
   /** Shows the Browser tab; on only where a preview zone is configured. */
   previewEnabled?: boolean | undefined;
+  /** Where the member was, from the page URL: kept across a refresh. */
+  initialView?: WorkspaceView | undefined;
 }) {
-  const [tab, setTab] = useState<Tab>("files");
+  const [tab, setTab] = useState<Tab>(() =>
+    initialView?.tab && (initialView.tab !== "browser" || previewEnabled)
+      ? initialView.tab
+      : "files",
+  );
   const [worktrees, setWorktrees] = useState<Worktree[]>([
     { worktreeId: DEFAULT_SUPERSET_WORKTREE_ID, branch: "main" },
   ]);
-  const [worktreeId, setWorktreeId] = useState(DEFAULT_SUPERSET_WORKTREE_ID);
+  const [worktreeId, setWorktreeId] = useState(
+    initialView?.worktreeId ?? DEFAULT_SUPERSET_WORKTREE_ID,
+  );
+  const [worktreesLoaded, setWorktreesLoaded] = useState(false);
   const [fileCounts, setFileCounts] = useState<Record<string, number>>({});
   const [dirty, setDirty] = useState(false);
   const [pendingWorktreeId, setPendingWorktreeId] = useState<string | null>(
     null,
   );
   const [showDiscardDialog, setShowDiscardDialog] = useState(false);
-  const [terminalExpanded, setTerminalExpanded] = useState(false);
-  const [viewMode, setViewMode] = useState<"ide" | "board">("ide");
+  const [terminalExpanded, setTerminalExpanded] = useState(
+    initialView?.terminal ?? false,
+  );
+  const [viewMode, setViewMode] = useState<"ide" | "board">(
+    initialView?.board ? "board" : "ide",
+  );
   const [shareOpen, setShareOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -228,18 +248,16 @@ export function SupersetWorkspaceShell({
   const [stoppingRunId, setStoppingRunId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const [branchLoadError, setBranchLoadError] = useState(false);
-  const [creating, setCreating] = useState(false);
   const [showProviderPicker, setShowProviderPicker] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
-  const [newWorktreeId, setNewWorktreeId] = useState("");
-  const [newBranch, setNewBranch] = useState("");
-  const [baseRef, setBaseRef] = useState("");
 
   const [chats, setChats] = useState<Gen2Chat[]>([]);
   const [renamingChatId, setRenamingChatId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [renamePending, setRenamePending] = useState(false);
-  const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
+  const [selectedChatId, setSelectedChatId] = useState<string | null>(
+    initialView?.chatId ?? null,
+  );
   const [activeProvider, setActiveProvider] =
     useState<SupportedAiProvider>("codex");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -567,8 +585,10 @@ export function SupersetWorkspaceShell({
     workspaceId,
     runtimeEnabled && connection.state === "connected",
   );
-  const branchFor = (id: string) =>
-    worktrees.find((wt) => wt.worktreeId === id)?.branch ?? id;
+  const branchFor = (id: string) => {
+    const worktree = worktrees.find((wt) => wt.worktreeId === id);
+    return worktree ? worktreeDisplay(worktree).text : id;
+  };
   const memberLabel = (userId: string) => {
     const member = activeWorkspace.members.find((m) => m.userId === userId);
     return member?.name ?? member?.login ?? "a member";
@@ -645,6 +665,17 @@ export function SupersetWorkspaceShell({
     return () => clearTimeout(timeout);
   }, [refreshRuns]);
 
+  // Runs are database rows, so rereading them never wakes the machine. Keep
+  // a working agent's status current until it finishes.
+  const runsActive = activeRuns.some((run) =>
+    ["creating", "running", "stopping"].includes(run.status),
+  );
+  useEffect(() => {
+    if (!runsActive) return;
+    const interval = setInterval(() => void refreshRuns(), RUNS_REFRESH_MS);
+    return () => clearInterval(interval);
+  }, [runsActive, refreshRuns]);
+
   const boardItems: BoardWorktreeItem[] = worktrees.map((wt) => {
     const run = activeRuns.find((r) => r.worktreeId === wt.worktreeId);
     const shared = overlapsInWorktree(wt.worktreeId);
@@ -712,10 +743,10 @@ export function SupersetWorkspaceShell({
     if (!runtimeEnabled) return;
     try {
       const next = await listSupersetWorktrees(workspaceId);
-      if (next.length) {
-        setWorktrees(next);
-        void refreshCounts(next);
-      }
+      const listed = withPrimaryWorktree(next);
+      setWorktrees(listed);
+      setWorktreesLoaded(true);
+      void refreshCounts(listed);
       setBranchLoadError(false);
     } catch {
       setBranchLoadError(true);
@@ -785,32 +816,15 @@ export function SupersetWorkspaceShell({
     setShowDiscardDialog(false);
   }, []);
 
-  async function createWorktree(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!newWorktreeId.trim() || !newBranch.trim() || creating) return;
-    setCreating(true);
-    try {
-      const created = await createWorktreeFrom(
-        workspaceId,
-        { worktreeId: newWorktreeId, branch: newBranch, baseRef },
-        worktrees,
-      );
-      setWorktrees((current) => [...current, created]);
-      setShowCreate(false);
-      setNewWorktreeId("");
-      setNewBranch("");
-      setBaseRef("");
-      const selected = selectWorktree(created.worktreeId);
-      setNotice(
-        selected
-          ? `Created and selected ${created.branch}.`
-          : `Created ${created.branch}. Your current unsaved changes were preserved.`,
-      );
-    } catch (error) {
-      setNotice(errorMessage(error, "Couldn’t create this worktree."));
-    } finally {
-      setCreating(false);
-    }
+  function handleWorktreeCreated(created: Worktree) {
+    setWorktrees((current) => [...current, created]);
+    setShowCreate(false);
+    const name = worktreeDisplay(created).text;
+    setNotice(
+      selectWorktree(created.worktreeId)
+        ? `Created and selected ${name}.`
+        : `Created ${name}. Your current unsaved changes were preserved.`,
+    );
   }
 
   // Opens a branch from the top bar: switch to its worktree if one exists,
@@ -838,6 +852,11 @@ export function SupersetWorkspaceShell({
   const selected =
     worktrees.find((worktree) => worktree.worktreeId === worktreeId) ??
     worktrees[0];
+  const selectedWorktree = selected ?? {
+    worktreeId: DEFAULT_SUPERSET_WORKTREE_ID,
+    branch: "main",
+  };
+  const selectedName = worktreeDisplay(selectedWorktree).text;
   const selectedStatus = selected ? getBranchStatus(selected.worktreeId) : null;
 
   const activeChat =
@@ -892,6 +911,32 @@ export function SupersetWorkspaceShell({
   const inspectorSize = useWorkspaceInspectorSize(tab === "browser");
   const openFile = (path: string) =>
     void agent.value.controller.run({ type: "open_file", path });
+
+  useWorkspaceViewUrl({
+    worktreeId,
+    chatId: selectedChatId ?? activeChat?.id ?? null,
+    tab,
+    file: inspector.openFilePath,
+    board: viewMode === "board",
+    terminal: terminalExpanded,
+  });
+  // A worktree named in the link that no longer exists falls back to main.
+  const worktreeMissing =
+    worktreesLoaded &&
+    !worktrees.some((worktree) => worktree.worktreeId === worktreeId);
+  useEffect(() => {
+    if (!worktreeMissing) return;
+    queueMicrotask(() => setWorktreeId(DEFAULT_SUPERSET_WORKTREE_ID));
+  }, [worktreeMissing]);
+  // The file named in the link reopens once the machine answers.
+  const linkedFile = useRef(initialView?.file ?? null);
+  const requestFile = files.open;
+  useEffect(() => {
+    const path = linkedFile.current;
+    if (!path || connection.state !== "connected") return;
+    linkedFile.current = null;
+    requestFile(path);
+  }, [connection.state, requestFile]);
 
   if (!runtimeEnabled) {
     return (
@@ -983,7 +1028,7 @@ export function SupersetWorkspaceShell({
                         type="button"
                         className="gen2-sidebar-compact-btn"
                         onClick={() => collapseSidebarByUser(false)}
-                        aria-label={`Active worktree: ${selected?.branch ?? "main"}`}
+                        aria-label={`Active worktree: ${selectedName}`}
                       >
                         <GitBranch className="size-4 text-foreground/80" />
                         {worktrees.length > 1 ? (
@@ -994,7 +1039,7 @@ export function SupersetWorkspaceShell({
                       </WorkspaceButton>
                     </TooltipTrigger>
                     <TooltipContent side="right">
-                      {`Active worktree: ${selected?.branch ?? "main"} (${worktrees.length} ${worktrees.length === 1 ? "worktree" : "worktrees"})`}
+                      {`Active worktree: ${selectedName} (${worktrees.length} ${worktrees.length === 1 ? "worktree" : "worktrees"})`}
                     </TooltipContent>
                   </Tooltip>
 
@@ -1031,7 +1076,7 @@ export function SupersetWorkspaceShell({
                       className="gen2-worktree-trigger-btn"
                       onClick={() => setWorktreeDropdownOpen((open) => !open)}
                       aria-expanded={worktreeDropdownOpen}
-                      aria-label={`Active worktree: ${selected?.branch ?? "main"}`}
+                      aria-label={`Active worktree: ${selectedName}`}
                     >
                       <div className="gen2-worktree-trigger-left">
                         <GitBranch
@@ -1039,7 +1084,7 @@ export function SupersetWorkspaceShell({
                           className="gen2-worktree-trigger-icon"
                         />
                         <span className="gen2-worktree-branch-name">
-                          {selected?.branch ?? "main"}
+                          <WorktreeName worktree={selectedWorktree} />
                         </span>
                       </div>
                       <div className="gen2-worktree-trigger-right">
@@ -1087,7 +1132,7 @@ export function SupersetWorkspaceShell({
                             setWorktreeDropdownOpen((open) => !open)
                           }
                           aria-expanded={worktreeDropdownOpen}
-                          aria-label={`Active worktree: ${selected?.branch ?? "main"}`}
+                          aria-label={`Active worktree: ${selectedName}`}
                         >
                           <GitBranch className="size-4 text-foreground/80" />
                           {worktrees.length > 1 ? (
@@ -1098,7 +1143,7 @@ export function SupersetWorkspaceShell({
                         </WorkspaceButton>
                       </TooltipTrigger>
                       <TooltipContent side="right">
-                        {`Active worktree: ${selected?.branch ?? "main"} (${worktrees.length} ${worktrees.length === 1 ? "worktree" : "worktrees"})`}
+                        {`Active worktree: ${selectedName} (${worktrees.length} ${worktrees.length === 1 ? "worktree" : "worktrees"})`}
                       </TooltipContent>
                     </Tooltip>
                     <div
@@ -1129,7 +1174,7 @@ export function SupersetWorkspaceShell({
                                 }}
                               >
                                 <span className="gen2-worktree-dropdown-item-branch">
-                                  {wt.branch}
+                                  <WorktreeName worktree={wt} />
                                 </span>
                                 <BranchStatusPill
                                   status={st}
@@ -1237,7 +1282,7 @@ export function SupersetWorkspaceShell({
                               setWorktreeDropdownOpen((open) => !open)
                             }
                             aria-expanded={worktreeDropdownOpen}
-                            aria-label={`Active worktree: ${selected?.branch ?? "main"}`}
+                            aria-label={`Active worktree: ${selectedName}`}
                           >
                             <div className="gen2-worktree-trigger-left">
                               <GitBranch
@@ -1245,7 +1290,7 @@ export function SupersetWorkspaceShell({
                                 className="gen2-worktree-trigger-icon"
                               />
                               <span className="gen2-worktree-branch-name">
-                                {selected?.branch ?? "main"}
+                                <WorktreeName worktree={selectedWorktree} />
                               </span>
                             </div>
                             <div className="gen2-worktree-trigger-right">
@@ -1300,7 +1345,7 @@ export function SupersetWorkspaceShell({
                                           )}
                                         />
                                         <span className="gen2-worktree-dropdown-item-branch">
-                                          {wt.branch}
+                                          <WorktreeName worktree={wt} />
                                         </span>
                                       </div>
                                       <div className="gen2-worktree-dropdown-item-right">
@@ -1341,61 +1386,16 @@ export function SupersetWorkspaceShell({
 
                         {/* Inline creation form if showCreate is open */}
                         {showCreate ? (
-                          <form
-                            className="gen2-ide-branch-form"
-                            onSubmit={(event) => void createWorktree(event)}
-                          >
-                            <label>
-                              Worktree ID
-                              <input
-                                value={newWorktreeId}
-                                onChange={(event) =>
-                                  setNewWorktreeId(event.target.value)
-                                }
-                                placeholder="feature-auth"
-                                required
-                              />
-                            </label>
-                            <label>
-                              Branch
-                              <input
-                                value={newBranch}
-                                onChange={(event) =>
-                                  setNewBranch(event.target.value)
-                                }
-                                placeholder="feature/auth"
-                                required
-                              />
-                            </label>
-                            <label>
-                              Base ref <span>(optional)</span>
-                              <input
-                                value={baseRef}
-                                onChange={(event) =>
-                                  setBaseRef(event.target.value)
-                                }
-                                placeholder="main"
-                              />
-                            </label>
-                            <div className="gen2-worktree-create-actions">
-                              <WorkspaceButton
-                                tone="primary"
-                                type="submit"
-                                disabled={creating}
-                                className="gen2-worktree-form-submit-btn"
-                              >
-                                {creating ? "Creating…" : "Create worktree"}
-                              </WorkspaceButton>
-                              <WorkspaceButton
-                                tone="ghost"
-                                type="button"
-                                onClick={() => setShowCreate(false)}
-                                className="gen2-worktree-form-cancel-btn"
-                              >
-                                Cancel
-                              </WorkspaceButton>
-                            </div>
-                          </form>
+                          <WorkspaceWorktreeForm
+                            workspaceId={workspaceId}
+                            worktrees={worktrees}
+                            currentWorktreeId={worktreeId}
+                            repositoryPrivate={
+                              activeWorkspace.repository?.private ?? false
+                            }
+                            onCreated={handleWorktreeCreated}
+                            onCancel={() => setShowCreate(false)}
+                          />
                         ) : null}
                       </div>
 
@@ -1617,8 +1617,16 @@ export function SupersetWorkspaceShell({
                   ) : null}
                   <SupersetAgentSessionsPanel
                     runs={activeRuns}
+                    chatTitle={(id) =>
+                      chats.find((chat) => chat.id === id)?.title ?? null
+                    }
+                    branchFor={branchFor}
+                    currentChatId={activeChat?.id ?? null}
                     canEdit={canEdit}
-                    onSelect={setWorktreeId}
+                    onOpen={(run) => {
+                      if (!selectWorktree(run.worktreeId)) return;
+                      if (run.chatId) setSelectedChatId(run.chatId);
+                    }}
                     onStop={stopRun}
                     stoppingRunId={stoppingRunId}
                     renderOverlaps={(runId) => (
@@ -1627,7 +1635,7 @@ export function SupersetWorkspaceShell({
                         branchFor={branchFor}
                         memberLabel={memberLabel}
                         onOpenWorktree={(id) => {
-                          setWorktreeId(id);
+                          if (!selectWorktree(id)) return;
                           setTab("changes");
                           setInspectorCollapsed(false);
                         }}
@@ -1861,7 +1869,7 @@ export function SupersetWorkspaceShell({
                   <WorkspaceTerminalDock
                     workspaceId={workspaceId}
                     worktreeId={worktreeId}
-                    branch={selected?.branch ?? "main"}
+                    branch={worktreeDisplay(selectedWorktree).label}
                     expanded={terminalExpanded}
                     onExpandedChange={setTerminalExpanded}
                     connection={

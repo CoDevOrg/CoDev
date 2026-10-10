@@ -423,11 +423,12 @@ describe("SupersetWorkspaceShell", () => {
     );
     await screen.findByRole("button", { name: "New worktree" });
     fireEvent.click(screen.getByRole("button", { name: "New worktree" }));
-    fireEvent.change(screen.getByLabelText("Worktree ID"), {
-      target: { value: "fix-login" },
-    });
-    fireEvent.change(screen.getByLabelText("Branch"), {
+    // A new branch is the default choice; the folder name is optional.
+    fireEvent.change(screen.getByLabelText("New branch name"), {
       target: { value: "fix/login" },
+    });
+    fireEvent.change(screen.getByLabelText(/Folder name/), {
+      target: { value: "Fix Login" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Create worktree" }));
 
@@ -441,6 +442,88 @@ describe("SupersetWorkspaceShell", () => {
       "data-worktree-id",
       "fix-login",
     );
+  });
+
+  it("restores the view a link names after a refresh, and keeps the URL on it", async () => {
+    window.history.replaceState(null, "", "/gen2/ws?ref=home");
+    render(
+      <SupersetWorkspaceShell
+        workspaceId={workspaceId}
+        canEdit
+        runtimeEnabled
+        initialView={{
+          worktreeId: "feature-auth",
+          chatId: null,
+          tab: "changes",
+          file: "src/auth.ts",
+          board: false,
+          terminal: false,
+        }}
+      />,
+    );
+    expect(screen.getByTestId("files")).toHaveAttribute(
+      "data-worktree-id",
+      "feature-auth",
+    );
+    expect(screen.getByRole("tab", { name: "Changes" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("files")).toHaveAttribute(
+        "data-requested-path",
+        "src/auth.ts",
+      ),
+    );
+    expect(window.location.search).toContain("worktree=feature-auth");
+    expect(window.location.search).toContain("tab=changes");
+    expect(window.location.search).toContain("ref=home");
+
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Review" }));
+    await waitFor(() => expect(window.location.search).toContain("tab=review"));
+  });
+
+  it("falls back to the primary checkout when a linked worktree is gone", async () => {
+    render(
+      <SupersetWorkspaceShell
+        workspaceId={workspaceId}
+        canEdit
+        runtimeEnabled
+        initialView={{
+          worktreeId: "deleted-worktree",
+          chatId: null,
+          tab: null,
+          file: null,
+          board: false,
+          terminal: false,
+        }}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("files")).toHaveAttribute(
+        "data-worktree-id",
+        "main",
+      ),
+    );
+  });
+
+  it("keeps a detached primary checkout in the switcher, named apart from a worktree on main", async () => {
+    mocks.listWorktrees.mockResolvedValue([
+      { worktreeId: "yousefs", branch: "main" },
+    ]);
+    render(
+      <SupersetWorkspaceShell
+        workspaceId={workspaceId}
+        canEdit
+        runtimeEnabled
+      />,
+    );
+    expect(
+      await screen.findByRole("button", {
+        name: "Active worktree: detached HEAD (primary)",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("· yousefs").length).toBeGreaterThan(0);
   });
 
   it("toggles between IDE stage and Workspaces Board", async () => {

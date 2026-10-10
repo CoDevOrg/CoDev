@@ -12,7 +12,7 @@ import {
  * id the worktree is named after the branch. A missing base ref means the
  * primary checkout's HEAD, which is what the guest uses by default.
  */
-export function createWorktreeFrom(
+export async function createWorktreeFrom(
   workspaceId: string,
   input: {
     branch: string;
@@ -29,11 +29,19 @@ export function createWorktreeFrom(
       worktrees.map((worktree) => worktree.worktreeId),
     );
   const baseRef = input.baseRef?.trim();
-  return createSupersetWorktree(workspaceId, {
-    worktreeId,
-    branch,
-    ...(baseRef ? { baseRef } : {}),
-  });
+  try {
+    return await createSupersetWorktree(workspaceId, {
+      worktreeId,
+      branch,
+      ...(baseRef ? { baseRef } : {}),
+    });
+  } catch (error) {
+    // The branch already exists on the machine: check it out as it is.
+    const message = error instanceof Error ? error.message : "";
+    if (!baseRef || !message.includes("baseRef can only be supplied"))
+      throw error;
+    return createSupersetWorktree(workspaceId, { worktreeId, branch });
+  }
 }
 
 /**

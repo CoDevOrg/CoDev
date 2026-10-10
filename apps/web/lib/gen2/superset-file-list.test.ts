@@ -5,6 +5,17 @@ const mocks = vi.hoisted(() => ({
   request: vi.fn(),
   tree: vi.fn(),
   baseSha: vi.fn(),
+  github: vi.fn(),
+  worktrees: vi.fn(),
+}));
+
+vi.mock("../github/github", () => ({
+  githubRequest: (...args: unknown[]) => mocks.github(...args),
+}));
+
+vi.mock("../runtime/orchestrator-superset-runtime", () => ({
+  listSupersetWorktrees: (...args: unknown[]) => mocks.worktrees(...args),
+  createSupersetWorktree: vi.fn(),
 }));
 
 vi.mock("./workspaces", () => ({
@@ -119,5 +130,67 @@ describe("listGen2SupersetFiles", () => {
 
     expect(mocks.tree).not.toHaveBeenCalled();
     expect(mocks.request).toHaveBeenCalled();
+  });
+
+  describe("a worktree too large for the guest", () => {
+    const tooLarge = () =>
+      mocks.request.mockRejectedValue(
+        new OrchestratorError(
+          "Workspace contains too many files to display.",
+          400,
+        ),
+      );
+    beforeEach(() => {
+      tooLarge();
+      mocks.worktrees.mockResolvedValue([
+        { worktreeId: "main", branch: "HEAD" },
+        { worktreeId: "auth-fix", branch: "feature/auth fix" },
+      ]);
+      mocks.tree.mockResolvedValue([
+        { path: "README.md", type: "blob", size: 8 },
+      ]);
+    });
+
+    it("lists its branch's commit from GitHub", async () => {
+      mocks.github.mockResolvedValue({ object: { sha: "b".repeat(40) } });
+
+      const files = await listGen2SupersetFiles(
+        workspaceId,
+        userId,
+        "auth-fix",
+      );
+
+      expect(files).toEqual([{ path: "README.md", kind: "file", size: 8 }]);
+      expect(mocks.github).toHaveBeenCalledWith(
+        userId,
+        "/repos/CoDevOrg/CoDev/git/ref/heads/feature/auth%20fix",
+      );
+      expect(mocks.tree).toHaveBeenCalledWith(
+        userId,
+        "CoDevOrg/CoDev",
+        "b".repeat(40),
+      );
+    });
+
+    it("falls back to the cloned commit for a branch only on the machine", async () => {
+      mocks.github.mockRejectedValue(new Error("Not Found"));
+
+      await listGen2SupersetFiles(workspaceId, userId, "auth-fix");
+
+      expect(mocks.tree).toHaveBeenCalledWith(
+        userId,
+        "CoDevOrg/CoDev",
+        "a".repeat(40),
+      );
+    });
+
+    it("still reports the guest's error without a connected repository", async () => {
+      mocks.member.mockResolvedValue(member());
+
+      await expect(
+        listGen2SupersetFiles(workspaceId, userId, "auth-fix"),
+      ).rejects.toThrow("Workspace contains too many files to display.");
+      expect(mocks.tree).not.toHaveBeenCalled();
+    });
   });
 });

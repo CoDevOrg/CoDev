@@ -30,11 +30,15 @@ export async function openRemoteBranch(
   workspaceId: string,
   branch: string,
   worktrees: Gen2SupersetWorktree[],
+  /** A folder name the member chose; derived from the branch otherwise. */
+  name?: string | undefined,
 ): Promise<Gen2SupersetWorktree> {
-  const worktreeId = worktreeIdForBranch(
-    branch,
-    worktrees.map((worktree) => worktree.worktreeId),
-  );
+  const worktreeId =
+    name ||
+    worktreeIdForBranch(
+      branch,
+      worktrees.map((worktree) => worktree.worktreeId),
+    );
   try {
     return await createSupersetWorktree(workspaceId, {
       worktreeId,

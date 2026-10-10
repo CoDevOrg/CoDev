@@ -14,6 +14,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { BranchStatusPill } from "./branch-status-pill";
+import { worktreeDisplay } from "./worktree-display";
+import { WorktreeName } from "./worktree-name";
 import { useRemoteBranches } from "./use-remote-branches";
 
 export type BranchStatus = {
@@ -74,12 +76,14 @@ export function WorkspaceBranchMenu({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const remote = useRemoteBranches(workspaceId, open);
-  const branch = selected?.branch ?? "main";
+  const branch = selected ? worktreeDisplay(selected).text : "main";
   const status = selected ? getStatus(selected.worktreeId) : null;
   const needle = query.trim().toLowerCase();
   const openNames = new Set(branches.map((option) => option.branch));
   const matchesQuery = (name: string) => name.toLowerCase().includes(needle);
-  const local = branches.filter((option) => matchesQuery(option.branch));
+  const local = branches.filter(
+    (option) => matchesQuery(option.branch) || matchesQuery(option.worktreeId),
+  );
   const list = remote.list;
   const remoteNames = (list?.branches ?? [])
     .map((item) => item.name)
@@ -152,7 +156,10 @@ export function WorkspaceBranchMenu({
                   data-selected={isSelected || undefined}
                 >
                   <GitBranch aria-hidden="true" />
-                  <span className="gen2-branch-menu-name">{option.branch}</span>
+                  <WorktreeName
+                    worktree={option}
+                    className="gen2-branch-menu-name"
+                  />
                   <BranchStatusPill
                     status={getStatus(option.worktreeId)}
                     className="gen2-worktree-status-pill"
