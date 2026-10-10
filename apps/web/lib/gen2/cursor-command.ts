@@ -6,6 +6,7 @@ export function buildGen2CursorCommand(
   prompt: string,
   history: Array<{ role: "user" | "assistant"; body: string }> = [],
   model?: string,
+  context?: string | undefined,
 ) {
   return [
     "cursor-agent",
@@ -18,6 +19,6 @@ export function buildGen2CursorCommand(
     // member's project CLI config steer another member's Cursor turn.
     "--disable-project-configs",
     ...(model?.trim() ? ["--model", model.trim()] : []),
-    formatGen2WorkspaceAgentPrompt(prompt, history),
+    formatGen2WorkspaceAgentPrompt(prompt, history, context),
   ];
 }

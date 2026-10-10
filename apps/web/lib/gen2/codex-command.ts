@@ -12,6 +12,7 @@ export function buildGen2CodexCommand(
   prompt: string,
   history: Array<{ role: "user" | "assistant"; body: string }> = [],
   model?: string,
+  context?: string | undefined,
 ) {
   return [
     "codex",
@@ -28,6 +29,6 @@ export function buildGen2CodexCommand(
     ...(model?.trim() ? ["--model", model.trim()] : []),
     "--cd",
     ".",
-    formatGen2WorkspaceAgentPrompt(prompt, history),
+    formatGen2WorkspaceAgentPrompt(prompt, history, context),
   ];
 }

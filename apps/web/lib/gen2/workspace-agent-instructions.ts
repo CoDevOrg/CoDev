@@ -11,9 +11,19 @@ const WORKSPACE_AGENT_INSTRUCTIONS = [
   "Answer the user directly. If they request code changes, implement them in the active project checkout.",
 ].join("\n");
 
+/**
+ * The prompt argument every provider receives: the workspace contract, the
+ * turn's context blocks (`agent-turn-context.ts`), then the conversation. The
+ * member's words always come last, after a "Current request:" marker whenever
+ * anything precedes them besides the contract.
+ */
 export function formatGen2WorkspaceAgentPrompt(
   prompt: string,
   history: Array<{ role: "user" | "assistant"; body: string }> = [],
+  context?: string | undefined,
 ) {
-  return `${WORKSPACE_AGENT_INSTRUCTIONS}\n\n${formatGen2TurnPrompt(prompt, history)}`;
+  const turn = formatGen2TurnPrompt(prompt, history);
+  if (!context?.trim()) return `${WORKSPACE_AGENT_INSTRUCTIONS}\n\n${turn}`;
+  const request = history.length ? turn : `Current request:\n${prompt}`;
+  return `${WORKSPACE_AGENT_INSTRUCTIONS}\n\n${context}\n\n${request}`;
 }

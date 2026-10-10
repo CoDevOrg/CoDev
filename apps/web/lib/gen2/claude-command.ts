@@ -16,6 +16,7 @@ export function buildGen2ClaudeCommand(
   prompt: string,
   history: Array<{ role: "user" | "assistant"; body: string }> = [],
   model?: string,
+  context?: string | undefined,
 ) {
   return [
     "claude",
@@ -32,6 +33,6 @@ export function buildGen2ClaudeCommand(
     "--permission-mode",
     "bypassPermissions",
     ...(model?.trim() ? ["--model", model.trim()] : []),
-    formatGen2WorkspaceAgentPrompt(prompt, history),
+    formatGen2WorkspaceAgentPrompt(prompt, history, context),
   ];
 }

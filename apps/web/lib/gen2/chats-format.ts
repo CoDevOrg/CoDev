@@ -1,10 +1,19 @@
+import { GEN2_PROMPT_COMMANDS, parseGen2PromptCommand } from "./prompt-command";
+import { humanizeGen2Prompt } from "./prompt-mentions";
+
 export const GEN2_NEW_CHAT_TITLE = "New chat";
 
 const MAX_HISTORY_MESSAGES = 20;
 const MAX_HISTORY_CHARS = 12_000;
 
+/** Mention tokens read as `@label` and a leading command is dropped; a bare
+ *  command (`/review`) titles the chat by its label. */
 export function gen2ChatTitleFromPrompt(prompt: string) {
-  const firstLine = prompt.trim().split(/\n/)[0] ?? "";
+  const { command } = parseGen2PromptCommand(prompt.trim());
+  const text =
+    humanizeGen2Prompt(prompt.trim()).trim() ||
+    (GEN2_PROMPT_COMMANDS.find((entry) => entry.id === command)?.label ?? "");
+  const firstLine = text.split(/\n/)[0] ?? "";
   const words = firstLine.split(/\s+/).filter(Boolean).slice(0, 8).join(" ");
   const title = words.slice(0, 80).trim();
   return title.length > 0 ? title : GEN2_NEW_CHAT_TITLE;
