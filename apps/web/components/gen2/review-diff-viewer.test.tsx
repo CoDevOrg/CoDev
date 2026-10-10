@@ -1,15 +1,26 @@
-import { render, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { forwardRef, useImperativeHandle } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-const scrollTo = vi.hoisted(() => vi.fn());
+const mocks = vi.hoisted(() => ({ malformed: false, scrollTo: vi.fn() }));
+
+vi.mock("@pierre/diffs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@pierre/diffs")>();
+  return {
+    ...actual,
+    parsePatchFiles: (...args: Parameters<typeof actual.parsePatchFiles>) => {
+      if (mocks.malformed) throw new Error("malformed patch");
+      return actual.parsePatchFiles(...args);
+    },
+  };
+});
 
 vi.mock("@pierre/diffs/react", () => ({
   CodeView: forwardRef(function CodeView(
     { items }: { items: Array<{ id: string }> },
     ref,
   ) {
-    useImperativeHandle(ref, () => ({ scrollTo }));
+    useImperativeHandle(ref, () => ({ scrollTo: mocks.scrollTo }));
     return (
       <ol>
         {items.map((item) => (
@@ -39,6 +50,26 @@ const PATCH = [
 ].join("\n");
 
 describe("ReviewDiffViewer", () => {
+  afterEach(() => {
+    mocks.malformed = false;
+  });
+
+  it("falls back to a readable patch when Pierre cannot parse it", () => {
+    mocks.malformed = true;
+    render(
+      <ReviewDiffViewer
+        layout="unified"
+        patch={"diff --git a/a.ts b/a.ts\n+added\n-removed\n"}
+      />,
+    );
+    const diff = screen.getByLabelText("Working tree diff");
+    expect(diff).toHaveTextContent("+added");
+    expect(diff.querySelector('[data-kind="add"]')).toHaveTextContent("+added");
+    expect(diff.querySelector('[data-kind="remove"]')).toHaveTextContent(
+      "-removed",
+    );
+  });
+
   it("scrolls to the requested file once per request", async () => {
     const { rerender } = render(
       <ReviewDiffViewer
@@ -48,7 +79,7 @@ describe("ReviewDiffViewer", () => {
       />,
     );
     await waitFor(() =>
-      expect(scrollTo).toHaveBeenCalledWith({
+      expect(mocks.scrollTo).toHaveBeenCalledWith({
         type: "item",
         id: expect.stringMatching(/^src\/b\.ts:/),
         align: "start",
@@ -62,6 +93,6 @@ describe("ReviewDiffViewer", () => {
       />,
     );
     await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(scrollTo).toHaveBeenCalledTimes(1);
+    expect(mocks.scrollTo).toHaveBeenCalledTimes(1);
   });
 });
