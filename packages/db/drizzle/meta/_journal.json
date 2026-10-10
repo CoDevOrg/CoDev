@@ -540,6 +540,13 @@
       "when": 1791514122810,
       "tag": "0076_gen2_session_imports",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1791589786801,
+      "tag": "0077_account_security",
+      "breakpoints": true
     }
   ]
 }

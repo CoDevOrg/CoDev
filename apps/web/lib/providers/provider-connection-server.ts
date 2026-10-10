@@ -3,7 +3,7 @@ import "server-only";
 import { saveCursorCredential } from "./cursor-api-key";
 import {
   deleteProviderCredential,
-  getProviderCredentialStatus,
+  listProviderCredentialStatuses,
   saveAnthropicCredential,
   saveOpenAICredential,
 } from "./credentials";
@@ -29,24 +29,15 @@ type ConnectionUser = {
 export async function loadProviderConnectionSnapshot(
   user: ConnectionUser,
 ): Promise<ProviderConnectionSnapshot> {
-  const [
-    openai,
-    anthropic,
-    cursor,
-    hostedCodex,
-    codexOAuth,
-    claudeCliToken,
-    cursorCli,
-  ] = await Promise.all([
-    getProviderCredentialStatus(user.id, "openai", "API_KEY"),
-    getProviderCredentialStatus(user.id, "anthropic", "API_KEY"),
-    getProviderCredentialStatus(user.id, "cursor", "API_KEY"),
-    getProviderCredentialStatus(user.id, "openai", "HOSTED_CODEX_SUBSCRIPTION"),
-    getProviderCredentialStatus(user.id, "openai", "OAUTH_TOKEN"),
-    // Only a CLI-stamped setup-token is reported; a browser-era token is not.
-    getProviderCredentialStatus(user.id, "anthropic", "OAUTH_TOKEN"),
-    getProviderCredentialStatus(user.id, "cursor", "OAUTH_TOKEN"),
-  ]);
+  const status = await listProviderCredentialStatuses(user.id);
+  const openai = status("openai", "API_KEY");
+  const anthropic = status("anthropic", "API_KEY");
+  const cursor = status("cursor", "API_KEY");
+  const hostedCodex = status("openai", "HOSTED_CODEX_SUBSCRIPTION");
+  const codexOAuth = status("openai", "OAUTH_TOKEN");
+  // Only a CLI-stamped setup-token is reported; a browser-era token is not.
+  const claudeCliToken = status("anthropic", "OAUTH_TOKEN");
+  const cursorCli = status("cursor", "OAUTH_TOKEN");
   return toProviderConnectionSnapshot({
     viewer: {
       id: user.id,

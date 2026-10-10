@@ -1,4 +1,6 @@
 export const NEW_ACCOUNT_PASSWORD_MIN_LENGTH = 10;
+// Bounds the work a single sign-in can make the password hash do.
+export const PASSWORD_MAX_LENGTH = 128;
 
 // Keep this deliberately small and actionable. A larger compromised-password
 // service can replace it without changing the account-creation contract.

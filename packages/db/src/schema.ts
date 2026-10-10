@@ -859,6 +859,89 @@ export const mobilePushTokens = pgTable(
   ],
 );
 
+/**
+ * One row per browser sign-in. The encrypted session cookie carries the row
+ * id, so a session can be listed and revoked server-side.
+ */
+export const userSessions = pgTable(
+  "user_sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    signInMethod: text("sign_in_method").notNull(),
+    userAgent: text("user_agent"),
+    ipAddress: text("ip_address"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("user_sessions_user_idx").on(table.userId, table.lastSeenAt),
+  ],
+);
+
+/** Authenticator-app (TOTP) secret; `enabledAt` is null until setup is confirmed. */
+export const userTwoFactor = pgTable("user_two_factor", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  encryptedSecret: text("encrypted_secret").notNull(),
+  enabledAt: timestamp("enabled_at", { withTimezone: true }),
+  // Highest accepted 30-second step; a code is never accepted twice.
+  lastUsedStep: bigint("last_used_step", { mode: "number" }),
+  ...timestamps,
+});
+
+export const userRecoveryCodes = pgTable(
+  "user_recovery_codes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    codeHash: text("code_hash").notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("user_recovery_codes_user_code_idx").on(
+      table.userId,
+      table.codeHash,
+    ),
+  ],
+);
+
+/** Account security history shown to the member in Settings → Security. */
+export const userSecurityEvents = pgTable(
+  "user_security_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    type: text("type").notNull(),
+    userAgent: text("user_agent"),
+    ipAddress: text("ip_address"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("user_security_events_user_created_idx").on(
+      table.userId,
+      table.createdAt,
+    ),
+  ],
+);
+
 export const providerCredentialEvents = pgTable(
   "provider_credential_events",
   {

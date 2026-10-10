@@ -8,7 +8,6 @@ import { schema } from "@codev/db";
 import { auth as nextAuth } from "@/auth";
 
 import { getDatabase } from "../platform/database";
-import { resolveGithubConnection } from "../github/github";
 
 export type AppUser = {
   id: string;
@@ -17,6 +16,7 @@ export type AppUser = {
   image?: string | null;
   githubLogin?: string;
   credentialRevision?: string;
+  sessionId?: string;
 };
 
 export type ConnectedAccounts = {
@@ -34,24 +34,36 @@ export type ConnectedAccounts = {
 export async function getConnectedAccounts(
   userId: string,
 ): Promise<ConnectedAccounts> {
-  const [[record], github] = await Promise.all([
-    getDatabase()
-      .select({
-        googleUserId: schema.users.googleUserId,
-        passwordHash: schema.users.passwordHash,
-      })
-      .from(schema.users)
-      .where(eq(schema.users.id, userId))
-      .limit(1),
-    resolveGithubConnection(userId),
-  ]);
+  // One round trip: the database is ~70 ms from the web origin.
+  const [record] = await getDatabase()
+    .select({
+      googleUserId: schema.users.googleUserId,
+      passwordHash: schema.users.passwordHash,
+      githubUserId: schema.users.githubUserId,
+      login: schema.users.login,
+      connectionUserId: schema.githubConnections.userId,
+    })
+    .from(schema.users)
+    .leftJoin(
+      schema.githubConnections,
+      eq(schema.githubConnections.userId, schema.users.id),
+    )
+    .where(eq(schema.users.id, userId))
+    .limit(1);
 
   const googleConnected = Boolean(record?.googleUserId);
+  // Same rule as resolveGithubConnection: a linked id and a stored token.
+  const githubConnected = Boolean(
+    record?.githubUserId != null && record.connectionUserId,
+  );
 
   return {
     google: { connected: googleConnected },
-    github,
-    sameCoDevUser: googleConnected && github.connected,
+    github: {
+      connected: githubConnected,
+      login: githubConnected ? (record?.login ?? null) : null,
+    },
+    sameCoDevUser: googleConnected && githubConnected,
     hasPassword: Boolean(record?.passwordHash),
   };
 }
@@ -67,6 +79,7 @@ export const getCurrentAppUser = cache(async (): Promise<AppUser | null> => {
         ...(session.credentialRevision
           ? { credentialRevision: session.credentialRevision }
           : {}),
+        ...(session.sessionId ? { sessionId: session.sessionId } : {}),
       }
     : null;
 });

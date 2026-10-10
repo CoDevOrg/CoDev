@@ -10,7 +10,18 @@ import { schema } from "@codev/db";
 import { resolveSignInProviderGate } from "@/lib/auth/auth-sign-in-gate";
 import { redeemAdminHandoffTicket } from "@/lib/auth/admin-handoff";
 import { resolveCredentialsSignIn } from "@/lib/auth/credentials-auth";
-import { sessionRevision } from "@/lib/auth/session-revision";
+import {
+  applySessionRotation,
+  sessionTokenIsCurrent,
+  signInMethodFor,
+} from "@/lib/auth/session-token";
+import {
+  beginTwoFactorChallenge,
+  completeTwoFactorSignIn,
+  twoFactorChallengePath,
+  TwoFactorRequired,
+} from "@/lib/auth/two-factor-challenge";
+import { createUserSession, revokeUserSession } from "@/lib/auth/user-sessions";
 import { encryptSecret } from "@/lib/platform/crypto";
 import { getDatabase } from "@/lib/platform/database";
 import {
@@ -97,6 +108,27 @@ async function clearGithubLinkCookie() {
   }
 }
 
+/** Where Auth.js would have sent the member, carried through the code step. */
+async function oauthCallbackPath() {
+  try {
+    const store = await cookies();
+    const value =
+      store.get("__Secure-authjs.callback-url")?.value ??
+      store.get("authjs.callback-url")?.value;
+    if (!value) return null;
+    const url = new URL(value, "https://codev.invalid");
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return null;
+  }
+}
+
+/** For an account with 2FA, swap a finished OAuth sign-in for the code step. */
+async function oauthSecondFactor(userId: string, method: "google" | "github") {
+  if (!(await beginTwoFactorChallenge(userId, method))) return true;
+  return twoFactorChallengePath(await oauthCallbackPath());
+}
+
 export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
   trustHost: true,
   session: { strategy: "jwt" },
@@ -140,6 +172,10 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
             },
           },
         );
+        // A correct password on a 2FA account starts the code step instead
+        // of a session.
+        if (user && (await beginTwoFactorChallenge(user.id, "password")))
+          throw new TwoFactorRequired();
         return user
           ? {
               id: user.id,
@@ -156,6 +192,14 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
       id: "admin-handoff",
       credentials: { ticket: { type: "text" } },
       authorize: (credentials) => redeemAdminHandoffTicket(credentials?.ticket),
+    }),
+    Credentials({
+      // The second step after a correct password, Google, or GitHub sign-in
+      // on an account with two-factor authentication. It needs the httpOnly
+      // challenge cookie the first step set, so a code alone signs in nobody.
+      id: "two-factor",
+      credentials: { code: { type: "text" } },
+      authorize: (credentials) => completeTwoFactorSignIn(credentials?.code),
     }),
     GitHub({
       clientId: githubClientId,
@@ -215,7 +259,8 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
             })
             .where(eq(schema.users.id, existingId))
             .returning({ id: schema.users.id });
-          return Boolean(localUser);
+          if (!localUser) return false;
+          return oauthSecondFactor(localUser.id, "google");
         }
 
         const gate = await gateNewAccount(googleProfile.email);
@@ -399,7 +444,13 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
 
       if (githubLinkState) await clearGithubLinkCookie();
 
-      return true;
+      // Linking GitHub to the signed-in account already passed 2FA; any
+      // other GitHub sign-in to a 2FA account needs its code.
+      const linkedSignedInAccount =
+        githubLinkState && localUser.id === githubLinkState.userId;
+      return linkedSignedInAccount
+        ? true
+        : oauthSecondFactor(localUser.id, "github");
     },
     async jwt({ token, account, profile, user, trigger, session }) {
       // Settings refreshes the shown display name after an edit. Only the name
@@ -408,6 +459,8 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
         const name = (session as { user?: { name?: unknown } } | undefined)
           ?.user?.name;
         if (typeof name === "string" && name.trim()) token.name = name.trim();
+        // Keeps this browser signed in across its own password change.
+        applySessionRotation(token, session);
       }
       if (account?.type === "credentials" && user?.id) {
         if (!user.credentialRevision) return null;
@@ -438,6 +491,15 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
 
           if (localUser) token.localUserId = localUser.id;
         }
+      }
+
+      // Every sign-in gets its own revocable session row (Settings →
+      // Sessions); the encrypted cookie carries only the row id.
+      if (account && token.localUserId) {
+        token.sid = await createUserSession(
+          token.localUserId,
+          signInMethodFor(account, user),
+        );
       }
 
       // Why: a GitHub account linked later via "Connect GitHub" (rather
@@ -471,26 +533,14 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
         }
       }
 
-      if (token.localUserId) {
-        const [current] = await getDatabase()
-          .select({
-            id: schema.users.id,
-            passwordHash: schema.users.passwordHash,
-          })
-          .from(schema.users)
-          .where(eq(schema.users.id, token.localUserId))
-          .limit(1);
-        if (!current) return null;
-        const revision = sessionRevision(current.passwordHash);
-        if (account && account.type !== "credentials")
-          token.credentialRevision = revision;
-        if (token.credentialRevision !== revision) return null;
-      }
+      const adoptRevision = Boolean(account && account.type !== "credentials");
+      if (!(await sessionTokenIsCurrent(token, adoptRevision))) return null;
       return token;
     },
     session({ session, token }) {
       if (token.credentialRevision)
         session.credentialRevision = token.credentialRevision;
+      if (token.sid) session.sessionId = token.sid;
       if (session.user && token.localUserId) {
         session.user.id = token.localUserId;
       }
@@ -498,6 +548,17 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
         session.user.githubLogin = token.githubLogin;
       }
       return session;
+    },
+  },
+  events: {
+    // Signing out ends the session server-side too, so a copied cookie
+    // stops working instead of living out its 30 days.
+    async signOut(message) {
+      const token = "token" in message ? message.token : null;
+      if (!token?.sid || !token.localUserId) return;
+      await revokeUserSession(token.localUserId, token.sid).catch(
+        () => undefined,
+      );
     },
   },
 });

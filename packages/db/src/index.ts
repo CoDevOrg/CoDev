@@ -6,13 +6,16 @@ import * as schema from "./schema";
 
 export function createDatabase(
   connectionString: string,
-  options?: { max?: number; maxUses?: number },
+  options?: { max?: number; maxUses?: number; idleTimeoutMillis?: number },
 ) {
   const pool = new Pool({
     connectionString: normalizePostgresConnectionString(connectionString),
     max: options?.max ?? 5,
     maxUses: options?.maxUses,
-    idleTimeoutMillis: 10_000,
+    idleTimeoutMillis: options?.idleTimeoutMillis ?? 10_000,
+    // Keeps idle sockets from being silently dropped by cloud NAT while the
+    // pool still considers them usable.
+    keepAlive: true,
     connectionTimeoutMillis: 5_000,
   });
   // An idle client failure is emitted as an event. Without a listener Node

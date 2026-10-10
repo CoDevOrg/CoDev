@@ -4,12 +4,18 @@ import { and, eq, isNull } from "drizzle-orm";
 import { schema } from "@codev/db";
 import { getDatabase } from "../platform/database";
 import { hashPassword } from "../platform/crypto";
+import { revokeOtherUserSessions } from "./user-sessions";
 
-/** Compare-and-swap the password and revoke CLI sessions in one transaction. */
+/**
+ * Compare-and-swap the password, then sign out every browser session except
+ * `keepSessionId` and revoke CLI sessions, all in one transaction. Returns
+ * the new hash, or null when the stored password changed underneath us.
+ */
 export async function updateAccountPassword(
   userId: string,
   previousHash: string | null,
   password: string,
+  keepSessionId: string | null = null,
 ) {
   const passwordHash = await hashPassword(password);
   return getDatabase().transaction(async (transaction) => {
@@ -26,7 +32,7 @@ export async function updateAccountPassword(
         ),
       )
       .returning({ id: schema.users.id });
-    if (!updated) return false;
+    if (!updated) return null;
     // Lock/remove device approvals before revoking tokens, so a concurrent
     // exchange must finish minting before the revocation statement runs.
     await transaction
@@ -36,6 +42,7 @@ export async function updateAccountPassword(
       .update(schema.cliAccessTokens)
       .set({ revokedAt: now, updatedAt: now })
       .where(eq(schema.cliAccessTokens.userId, userId));
-    return true;
+    await revokeOtherUserSessions(userId, keepSessionId, transaction);
+    return passwordHash;
   });
 }

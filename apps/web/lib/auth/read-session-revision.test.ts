@@ -21,18 +21,24 @@ beforeEach(() => {
       "postgres://local:local@127.0.0.1:5432/local?sslmode=require",
   };
   const db = {
-    select: () => ({ from: () => ({ where: () => ({ limit: mocks.query }) }) }),
+    select: () => ({
+      from: () => ({
+        leftJoin: () => ({ where: () => ({ limit: mocks.query }) }),
+      }),
+    }),
   };
   mocks.create.mockReturnValue({ db, pool: { end: mocks.end } });
   mocks.get.mockReturnValue(db);
-  mocks.query.mockResolvedValue([{ passwordHash: "hash" }]);
+  mocks.query.mockResolvedValue([
+    { passwordHash: "hash", sessionId: "s", revokedAt: null, lastSeenAt: null },
+  ]);
   mocks.end.mockResolvedValue(undefined);
 });
 afterEach(() => {
   delete mocks.env.HYPERDRIVE;
 });
 it("opens and closes a new socket-scoped Hyperdrive pool instead of reusing the HTTP pool", async () => {
-  expect(await readSessionRevision("u")).toBe(sessionRevision("hash"));
+  expect(await readSessionRevision("u", "s")).toBe(sessionRevision("hash"));
   expect(mocks.create).toHaveBeenCalledWith(
     "postgres://local:local@127.0.0.1:5432/local?sslmode=disable",
     { max: 1, maxUses: 1 },
@@ -51,4 +57,27 @@ it("uses the regular Node database on Vercel and detects deleted accounts", asyn
   expect(await readSessionRevision("u")).toBeNull();
   expect(mocks.get).toHaveBeenCalledOnce();
   expect(mocks.create).not.toHaveBeenCalled();
+});
+it("treats a revoked or missing session row as signed out", async () => {
+  delete mocks.env.HYPERDRIVE;
+  mocks.query.mockResolvedValue([
+    {
+      passwordHash: "hash",
+      sessionId: "s",
+      revokedAt: new Date(),
+      lastSeenAt: null,
+    },
+  ]);
+  expect(await readSessionRevision("u", "s")).toBeNull();
+  mocks.query.mockResolvedValue([
+    {
+      passwordHash: "hash",
+      sessionId: null,
+      revokedAt: null,
+      lastSeenAt: null,
+    },
+  ]);
+  expect(await readSessionRevision("u", "s")).toBeNull();
+  // A cookie from before session tracking stays valid until revoked.
+  expect(await readSessionRevision("u")).toBe(sessionRevision("hash"));
 });

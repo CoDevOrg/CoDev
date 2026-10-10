@@ -19,6 +19,7 @@ export default function robots(): MetadataRoute.Robots {
         "/verification",
         "/reset-password",
         "/forgot-password",
+        "/sign-in/two-factor",
       ],
     },
     sitemap: `${PUBLIC_APP_ORIGIN}/sitemap.xml`,

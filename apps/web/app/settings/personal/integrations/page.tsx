@@ -15,10 +15,12 @@ import {
 import { getConnectedAccounts } from "@/lib/auth/identity";
 import { requireUser } from "@/lib/auth/session";
 
+export const metadata = { title: "Integrations" };
+
 /**
- * GitHub is linked once, as a sign-in method on Profile. This page owns what
+ * GitHub is linked once, as a sign-in method on Security. This page owns what
  * happens after that (which repositories the CoDev GitHub App can reach), so it
- * links back to Profile instead of offering a second Connect button that did
+ * links back to Security instead of offering a second Connect button that did
  * the same thing.
  */
 export default async function PersonalIntegrationsPage() {
@@ -40,7 +42,7 @@ export default async function PersonalIntegrationsPage() {
         ? github.login
           ? `Connected · @${github.login}`
           : "Connected"
-        : "Not linked. Link your GitHub sign-in on Profile first.",
+        : "Not linked. Connect GitHub under Security first.",
       action: isGitHubAuthConfigured() ? (
         github.connected ? (
           <LinkButton
@@ -55,11 +57,11 @@ export default async function PersonalIntegrationsPage() {
           </LinkButton>
         ) : (
           <LinkButton
-            href="/settings/personal/profile"
+            href="/settings/personal/security"
             size="sm"
             variant="outline"
           >
-            Link on Profile
+            Connect on Security
           </LinkButton>
         )
       ) : null,

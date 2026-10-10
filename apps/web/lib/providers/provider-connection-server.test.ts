@@ -13,7 +13,25 @@ const hostedCodexMocks = vi.hoisted(() => ({
   disconnectHostedCodexSubscription: vi.fn(),
 }));
 
-vi.mock("./credentials", () => mocks);
+// The loader reads every status in one query; this adapter replays it as the
+// per-credential lookups the tests below script positionally.
+vi.mock("./credentials", () => ({
+  ...mocks,
+  listProviderCredentialStatuses: async (userId: string) => {
+    const statuses = new Map<string, unknown>();
+    for (const [provider, credentialType] of LOOKUPS)
+      statuses.set(
+        `${provider}:${credentialType}`,
+        await mocks.getProviderCredentialStatus(
+          userId,
+          provider,
+          credentialType,
+        ),
+      );
+    return (provider: string, credentialType: string) =>
+      statuses.get(`${provider}:${credentialType}`) ?? null;
+  },
+}));
 vi.mock("./claude-connection-session", () => mocks);
 vi.mock("./claude-connection-runner", () => ({
   isHostedClaudeConnectEnabled: () => true,

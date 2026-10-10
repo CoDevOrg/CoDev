@@ -37,20 +37,28 @@ function signatureFor(payload: string) {
     .digest("base64url");
 }
 
-export function passwordResetFingerprint(passwordHash: string) {
+/**
+ * Binds a link to the account's current password state, so using it (or any
+ * other password change) voids every outstanding link. An account without a
+ * password binds to that empty state instead: the link creates its first one.
+ */
+export function passwordResetFingerprint(
+  passwordHash: string | null,
+  userId = "",
+) {
   return createHash("sha256")
-    .update(passwordHash)
+    .update(passwordHash ?? `no-password:${userId}`)
     .digest("base64url")
     .slice(0, 24);
 }
 
+/** Any account with an email can get a link; OAuth-only ones create a password. */
 export function shouldSendPasswordReset(
   user: {
     email: string | null;
-    passwordHash: string | null;
   } | null,
 ) {
-  return Boolean(user?.email && user.passwordHash);
+  return Boolean(user?.email);
 }
 
 export function getPublicAppOrigin(
@@ -70,12 +78,12 @@ export function getPublicAppOrigin(
 export function createPasswordResetToken(input: {
   userId: string;
   email: string;
-  passwordHash: string;
+  passwordHash: string | null;
 }) {
   const state: PasswordResetState = {
     userId: input.userId,
     email: input.email.trim().toLowerCase(),
-    fingerprint: passwordResetFingerprint(input.passwordHash),
+    fingerprint: passwordResetFingerprint(input.passwordHash, input.userId),
     expiresAt: Date.now() + PASSWORD_RESET_TTL_MS,
     nonce: randomBytes(16).toString("hex"),
   };
@@ -136,10 +144,10 @@ export function passwordResetTokenStillValid(
     passwordHash: string | null;
   } | null,
 ) {
-  if (!user?.email || !user.passwordHash) return false;
+  if (!user?.email) return false;
   return (
     user.id === state.userId &&
     user.email.trim().toLowerCase() === state.email &&
-    passwordResetFingerprint(user.passwordHash) === state.fingerprint
+    passwordResetFingerprint(user.passwordHash, user.id) === state.fingerprint
   );
 }

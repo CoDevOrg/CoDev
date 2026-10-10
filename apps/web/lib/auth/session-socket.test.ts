@@ -9,7 +9,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../platform/database", () => ({
   getDatabase: () => ({
     select: () => ({
-      from: () => ({ where: () => ({ limit: mocks.lookup }) }),
+      from: () => ({
+        leftJoin: () => ({ where: () => ({ limit: mocks.lookup }) }),
+      }),
     }),
   }),
 }));
