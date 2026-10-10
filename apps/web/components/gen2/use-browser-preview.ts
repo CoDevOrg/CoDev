@@ -6,8 +6,8 @@ import {
   type Gen2PreviewPortsResponse,
 } from "@codev/contracts";
 
-import { usePreviewPorts } from "./use-preview-ports";
-import { mintPreviewSession, type PreviewTarget } from "./use-preview-session";
+import { mintPreviewSession, type PreviewTarget } from "./mint-preview-session";
+import { previewsUnavailable, usePreviewPorts } from "./use-preview-ports";
 
 export type PreviewPhase =
   | "idle"
@@ -154,13 +154,16 @@ export function useBrowserPreview(input: BrowserPreviewInput) {
   const live = usable && visible;
   const [state, dispatch] = useReducer(reducePreview, INITIAL);
   const attempts = useRef(0);
-  const ports = usePreviewPorts(
+  const ports = usePreviewPorts({
     workspaceId,
+    usable,
     live,
-    state.phase === "waiting" && visible,
-  );
+    poll: state.phase === "waiting" && visible,
+  });
+  const blocked = previewsUnavailable(ports.ports);
   const mint = useCallback(
     async (target: PreviewTarget) => {
+      if (blocked) return;
       const attempt = ++attempts.current;
       dispatch({ type: "minting", attempt });
       try {
@@ -174,7 +177,7 @@ export function useBrowserPreview(input: BrowserPreviewInput) {
         dispatch({ type: "failed", attempt, error });
       }
     },
-    [workspaceId],
+    [workspaceId, blocked],
   );
   const open = useCallback(
     (target: PreviewTarget) => {
@@ -187,7 +190,7 @@ export function useBrowserPreview(input: BrowserPreviewInput) {
   usePreviewTriggers({ ...input, usable, live, target: state.target, open });
   useWaitForPort({ state, usable, live, ports: ports.ports, mint, dispatch });
   const { target, phase, url, error } = state;
-  return { target, phase, url, error, ports, open, mint, cancel };
+  return { target, phase, url, error, ports, blocked, open, mint, cancel };
 }
 
 /** Opens what was asked for: a request, the last address, or after a reconnect. */

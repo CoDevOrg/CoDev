@@ -87,6 +87,27 @@ const EMPTY_PORTS = {
   ready: "No dev servers found",
 } as const;
 
+function PortMenuTrigger({ disabled }: { disabled: boolean }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <DropdownMenuTrigger asChild>
+          <WorkspaceButton
+            size="icon"
+            aria-label="Dev servers"
+            disabled={disabled}
+          >
+            <EthernetPort aria-hidden="true" />
+          </WorkspaceButton>
+        </DropdownMenuTrigger>
+      </TooltipTrigger>
+      <TooltipContent className="gen2-workspace-surface">
+        Dev servers
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 function PortMenu({
   ports,
   status,
@@ -102,22 +123,7 @@ function PortMenu({
 }) {
   return (
     <DropdownMenu onOpenChange={(open) => open && onOpen()}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <WorkspaceButton
-              size="icon"
-              aria-label="Dev servers"
-              disabled={disabled}
-            >
-              <EthernetPort aria-hidden="true" />
-            </WorkspaceButton>
-          </DropdownMenuTrigger>
-        </TooltipTrigger>
-        <TooltipContent className="gen2-workspace-surface">
-          Dev servers
-        </TooltipContent>
-      </Tooltip>
+      <PortMenuTrigger disabled={disabled} />
       <DropdownMenuContent
         align="end"
         className="gen2-workspace-surface gen2-browser-ports"
@@ -143,6 +149,8 @@ function PortMenu({
 export type WorkspaceBrowserToolbarProps = {
   address: string;
   disabled: boolean;
+  /** False while the guest cannot serve previews: nothing can be opened. */
+  canOpen: boolean;
   /** A port is chosen, so it can be reloaded or opened in a new tab. */
   hasTarget: boolean;
   ports: Ports | null;
@@ -158,11 +166,12 @@ export type WorkspaceBrowserToolbarProps = {
 
 /** Reload, address, dev servers, expand, and open in a new tab. */
 export function WorkspaceBrowserToolbar(props: WorkspaceBrowserToolbarProps) {
+  const closed = props.disabled || !props.canOpen;
   return (
     <header className="gen2-browser-toolbar">
       <ToolbarButton
         label="Reload preview"
-        disabled={props.disabled || !props.hasTarget}
+        disabled={closed || !props.hasTarget}
         onClick={props.onReload}
       >
         <RotateCw aria-hidden="true" />
@@ -170,7 +179,7 @@ export function WorkspaceBrowserToolbar(props: WorkspaceBrowserToolbarProps) {
       <AddressForm
         key={props.address}
         address={props.address}
-        disabled={props.disabled}
+        disabled={closed}
         onNavigate={props.onNavigate}
       />
       <PortMenu
@@ -193,7 +202,7 @@ export function WorkspaceBrowserToolbar(props: WorkspaceBrowserToolbarProps) {
       </ToolbarButton>
       <ToolbarButton
         label="Open in new tab"
-        disabled={props.disabled || !props.hasTarget}
+        disabled={closed || !props.hasTarget}
         onClick={props.onOpenTab}
       >
         <ExternalLink aria-hidden="true" />

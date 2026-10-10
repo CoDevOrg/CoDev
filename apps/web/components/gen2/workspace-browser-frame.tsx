@@ -5,6 +5,8 @@ import { useEffect, useRef, type RefObject } from "react";
 import { WORKSPACE_ACTIVITY_EVENT } from "./use-workspace-connection";
 
 const KEEPALIVE_MS = 60_000;
+/** Focus is not input: a frame left focused stops counting after this. */
+const KEEPALIVE_LIMIT_MS = 30 * 60_000;
 /**
  * Previews are cross-site, so `allow-same-origin` grants them nothing of
  * the app's. They may not navigate the workspace itself (no top
@@ -15,8 +17,10 @@ const SANDBOX =
 
 /**
  * Input inside a cross-origin frame never reaches this page, so while the
- * member works in the preview the frame reports activity itself. Preview
- * traffic (HMR, polling) never counts.
+ * member works in the preview the frame reports activity itself: only while
+ * this window has focus, and for at most half an hour after focus entered
+ * the frame, so an unattended preview still lets the workspace idle-stop.
+ * Preview traffic (HMR, polling) never counts.
  */
 function usePreviewKeepalive(
   frame: RefObject<HTMLIFrameElement | null>,
@@ -24,20 +28,29 @@ function usePreviewKeepalive(
 ) {
   useEffect(() => {
     if (!active) return;
+    let since: number | null = null;
     const report = () => {
-      if (
+      const focused =
         document.visibilityState === "visible" &&
+        document.hasFocus() &&
         frame.current !== null &&
-        document.activeElement === frame.current
-      )
+        document.activeElement === frame.current;
+      since = focused ? (since ?? Date.now()) : null;
+      if (since !== null && Date.now() - since < KEEPALIVE_LIMIT_MS)
         window.dispatchEvent(new Event(WORKSPACE_ACTIVITY_EVENT));
     };
-    // Focus lands in the frame just after the window blurs.
+    // Focus lands in the frame just after the window blurs, and comes back
+    // to this page with the window's focus event.
     const entered = () => setTimeout(report, 0);
+    const left = () => {
+      since = null;
+    };
     window.addEventListener("blur", entered);
+    window.addEventListener("focus", left);
     const interval = setInterval(report, KEEPALIVE_MS);
     return () => {
       window.removeEventListener("blur", entered);
+      window.removeEventListener("focus", left);
       clearInterval(interval);
     };
   }, [active, frame]);

@@ -31,6 +31,11 @@ function serve(ports: () => PortsReply, sessions: string[] = []) {
   });
 }
 
+const mints = () =>
+  vi
+    .mocked(fetch)
+    .mock.calls.filter(([url]) => String(url).endsWith("/preview")).length;
+
 const listening = (...ports: number[]): PortsReply => ({
   available: true,
   reason: null,
@@ -101,6 +106,51 @@ describe("WorkspaceBrowserPane", () => {
     renderPane();
     await settle();
     expect(screen.getByText(copy)).toBeInTheDocument();
+  });
+
+  it("opens nothing, typed or restored, while the guest cannot serve previews", async () => {
+    sessionStorage.setItem(
+      `codev-gen2-preview:${workspaceId}`,
+      JSON.stringify({ port: 3000, path: "/" }),
+    );
+    serve(() => ({ available: false, reason: "image_update", ports: [] }));
+    renderPane({ request: { id: "r1", port: 3000, path: "/" } });
+    await settle();
+    expect(
+      screen.getByText("Update this workspace to use the browser"),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Preview address")).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Reload preview" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Open in new tab" }),
+    ).toBeDisabled();
+    await settle(60_000);
+    expect(mints()).toBe(0);
+  });
+
+  it("shows fixed copy when an edge error page replaces the JSON", async () => {
+    const page = (status: number) =>
+      new Response("<!DOCTYPE html><title>Error</title>", {
+        status,
+        headers: { "content-type": "text/html" },
+      });
+    vi.mocked(fetch).mockResolvedValue(page(524));
+    renderPane();
+    await settle();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Couldn’t check for dev servers.",
+    );
+    serve(() => listening(3000));
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await settle();
+    vi.mocked(fetch).mockResolvedValue(page(502));
+    fireEvent.click(screen.getByRole("button", { name: ":3000" }));
+    await settle();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Couldn’t open the preview.",
+    );
   });
 
   it("says when no dev server is running, and when the guest is busy", async () => {
@@ -244,6 +294,51 @@ describe("WorkspaceBrowserPane", () => {
     );
   });
 
+  it("lists again after a reconnect instead of trusting the old ports", async () => {
+    let reply = listening(3000);
+    serve(() => reply);
+    const { rerender, props } = renderPane({
+      request: { id: "r1", port: 3000, path: "/" },
+    });
+    await settle();
+    expect(mints()).toBe(1);
+    rerender(<WorkspaceBrowserPane {...props} connected={false} />);
+    await settle();
+    // The restarted guest has not started the dev server again yet.
+    reply = listening();
+    rerender(<WorkspaceBrowserPane {...props} connected />);
+    await settle();
+    expect(screen.getByText("Waiting for :3000…")).toBeInTheDocument();
+    expect(mints()).toBe(1);
+    reply = listening(3000);
+    await settle(2_000);
+    expect(screen.getByTitle("Workspace preview")).toHaveAttribute(
+      "src",
+      sessionUrl(3000, "t2"),
+    );
+  });
+
+  it("reports the last listing while hidden, and forgets it on disconnect", async () => {
+    serve(() => listening(3000, 8080));
+    const { rerender, props } = renderPane();
+    await settle();
+    const reported = (listeningPorts: number[] | null) =>
+      expect(props.onStateChange).toHaveBeenLastCalledWith({
+        port: null,
+        path: "/",
+        listeningPorts,
+      });
+    reported([3000, 8080]);
+    rerender(<WorkspaceBrowserPane {...props} visible={false} />);
+    await settle();
+    reported([3000, 8080]);
+    rerender(
+      <WorkspaceBrowserPane {...props} visible={false} connected={false} />,
+    );
+    await settle();
+    reported(null);
+  });
+
   it("restores the last address of this tab session", async () => {
     sessionStorage.setItem(
       `codev-gen2-preview:${workspaceId}`,
@@ -277,6 +372,20 @@ describe("WorkspaceBrowserPane", () => {
     frame.focus();
     await settle(60_000);
     expect(activity).toHaveBeenCalled();
+
+    // Another app has the member's attention; the frame only kept focus.
+    const hasFocus = vi.spyOn(document, "hasFocus").mockReturnValue(false);
+    activity.mockClear();
+    await settle(60_000);
+    expect(activity).not.toHaveBeenCalled();
+    hasFocus.mockRestore();
+
+    // A focused but unattended preview stops counting after half an hour.
+    await settle(30 * 60_000);
+    expect(activity).toHaveBeenCalled();
+    activity.mockClear();
+    await settle(2 * 60_000);
+    expect(activity).not.toHaveBeenCalled();
     window.removeEventListener(WORKSPACE_ACTIVITY_EVENT, activity);
   });
 });

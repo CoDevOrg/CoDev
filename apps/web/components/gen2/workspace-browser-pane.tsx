@@ -4,12 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import type { Gen2PreviewPortsResponse } from "@codev/contracts";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { mintPreviewSession } from "./mint-preview-session";
 import { formatPreviewAddress, parsePreviewAddress } from "./preview-address";
 import { useBrowserPreview, type PreviewPhase } from "./use-browser-preview";
-import {
-  mintPreviewSession,
-  usePreviewSessionRefresh,
-} from "./use-preview-session";
+import { usePreviewSessionRefresh } from "./use-preview-session";
 import { WorkspaceBrowserFrame } from "./workspace-browser-frame";
 import {
   WorkspaceBrowserState,
@@ -125,7 +123,7 @@ function usePaneControls(props: WorkspaceBrowserPaneProps, preview: Preview) {
       return true;
     },
     async openTab() {
-      if (!target) return;
+      if (!target || preview.blocked) return;
       setNotice("");
       try {
         const url = await mintPreviewSession(workspaceId, target);
@@ -192,15 +190,45 @@ function BrowserStage({
   );
 }
 
+/** The toolbar, wired to the preview; it cannot open what the guest cannot serve. */
+function PaneToolbar({
+  props,
+  preview,
+  controls,
+}: {
+  props: WorkspaceBrowserPaneProps;
+  preview: Preview;
+  controls: ReturnType<typeof usePaneControls>;
+}) {
+  const { target, ports } = preview;
+  const busy = ports.ports?.reason === "busy";
+  return (
+    <WorkspaceBrowserToolbar
+      address={target ? formatPreviewAddress(target.port, target.path) : ""}
+      disabled={!props.connected || !props.canEdit}
+      canOpen={!preview.blocked}
+      hasTarget={target !== null}
+      ports={ports.ports?.ports ?? null}
+      portsStatus={ports.loading ? "loading" : busy ? "busy" : "ready"}
+      expanded={controls.expanded}
+      onNavigate={controls.navigate}
+      onPortsOpen={() => void ports.refresh()}
+      onSelectPort={(port) => preview.open({ port, path: "/" })}
+      onReload={() => target && void preview.mint(target)}
+      onToggleExpand={controls.toggleExpand}
+      onOpenTab={() => void controls.openTab()}
+    />
+  );
+}
+
 /**
  * The inspector's Browser tab: previews a dev server running in the
  * workspace through the guest's preview proxy, on a separate site.
  */
 export function WorkspaceBrowserPane(props: WorkspaceBrowserPaneProps) {
   const preview = useBrowserPreview(props);
-  const { target, ports } = preview;
   const controls = usePaneControls(props, preview);
-  useReportedState(props.onStateChange, preview, ports.ports);
+  useReportedState(props.onStateChange, preview, preview.ports.ports);
   return (
     <TooltipProvider delayDuration={300}>
       <section
@@ -210,26 +238,7 @@ export function WorkspaceBrowserPane(props: WorkspaceBrowserPaneProps) {
         hidden={!props.visible}
         className="gen2-ide-panel gen2-browser"
       >
-        <WorkspaceBrowserToolbar
-          address={target ? formatPreviewAddress(target.port, target.path) : ""}
-          disabled={!props.connected || !props.canEdit}
-          hasTarget={target !== null}
-          ports={ports.ports?.ports ?? null}
-          portsStatus={
-            ports.loading
-              ? "loading"
-              : ports.ports?.reason === "busy"
-                ? "busy"
-                : "ready"
-          }
-          expanded={controls.expanded}
-          onNavigate={controls.navigate}
-          onPortsOpen={() => void ports.refresh()}
-          onSelectPort={(port) => preview.open({ port, path: "/" })}
-          onReload={() => target && void preview.mint(target)}
-          onToggleExpand={controls.toggleExpand}
-          onOpenTab={() => void controls.openTab()}
-        />
+        <PaneToolbar props={props} preview={preview} controls={controls} />
         {controls.notice ? (
           <p
             className="gen2-superset-notice gen2-superset-notice-error"

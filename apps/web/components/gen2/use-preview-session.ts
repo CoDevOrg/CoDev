@@ -1,40 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { gen2PreviewSessionResponseSchema } from "@codev/contracts";
 
-import { boundedJsonRequest } from "@/lib/gen2/bounded-request";
+import { mintPreviewSession } from "./mint-preview-session";
 
-export type PreviewTarget = { port: number; path: string };
-
-const REQUEST_TIMEOUT_MS = 20_000;
 /** Guest session cookies last five minutes; refresh a minute early. */
 const REFRESH_MS = 4 * 60_000;
 const RETRY_MS = 60_000;
 const CHECK_MS = 30_000;
-
-/** A single-use session URL for one port; the guest turns it into a cookie. */
-export async function mintPreviewSession(
-  workspaceId: string,
-  target: PreviewTarget,
-) {
-  const { response, payload } = await boundedJsonRequest<unknown>(
-    `/api/gen2/workspaces/${encodeURIComponent(workspaceId)}/preview`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(target),
-      cache: "no-store",
-    },
-    REQUEST_TIMEOUT_MS,
-  );
-  const parsed = gen2PreviewSessionResponseSchema.safeParse(payload);
-  if (response.ok && parsed.success) return parsed.data.url;
-  const error = (payload as { error?: unknown } | null)?.error;
-  throw new Error(
-    typeof error === "string" ? error : "Couldn’t open the preview.",
-  );
-}
 
 function isProxySession(url: string | null) {
   try {

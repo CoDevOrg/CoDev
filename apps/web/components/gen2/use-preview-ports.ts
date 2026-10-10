@@ -11,75 +11,112 @@ import { boundedJsonRequest } from "@/lib/gen2/bounded-request";
 const REQUEST_TIMEOUT_MS = 15_000;
 /** How often a pane waiting for a dev server checks again. */
 export const PREVIEW_PORT_POLL_MS = 2_000;
+const FAILED = "Couldn’t check for dev servers.";
 
 async function readPorts(workspaceId: string) {
-  const { response, payload } = await boundedJsonRequest<unknown>(
+  // Edge error pages are HTML; their parse errors mean nothing to members.
+  const reply = await boundedJsonRequest<unknown>(
     `/api/gen2/workspaces/${encodeURIComponent(workspaceId)}/preview/ports`,
     { cache: "no-store" },
     REQUEST_TIMEOUT_MS,
-  );
-  const parsed = gen2PreviewPortsResponseSchema.safeParse(payload);
-  if (response.ok && parsed.success) return parsed.data;
-  const error = (payload as { error?: unknown } | null)?.error;
-  throw new Error(
-    typeof error === "string" ? error : "Couldn’t check for dev servers.",
-  );
+  ).catch(() => null);
+  const parsed = gen2PreviewPortsResponseSchema.safeParse(reply?.payload);
+  if (reply?.response.ok && parsed.success) return parsed.data;
+  const error = (reply?.payload as { error?: unknown } | null | undefined)
+    ?.error;
+  throw new Error(typeof error === "string" ? error : FAILED);
 }
 
-/**
- * The guest's previewable dev servers: read when the pane becomes usable,
- * on demand (the port menu), and every two seconds while `poll` is on and
- * the page is visible. The server reads them without counting as activity.
- */
-export function usePreviewPorts(
-  workspaceId: string,
-  enabled: boolean,
-  poll: boolean,
-) {
-  const [ports, setPorts] = useState<Gen2PreviewPortsResponse | null>(null);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const inFlight = useRef<Promise<void> | null>(null);
+/** Not configured, or a guest that cannot serve previews: nothing to mint. */
+export function previewsUnavailable(ports: Gen2PreviewPortsResponse | null) {
+  return ports !== null && !ports.available && ports.reason !== "busy";
+}
 
+type Listing = {
+  epoch: number;
+  ports: Gen2PreviewPortsResponse | null;
+  error: string;
+};
+
+/** The newest listing of the current `epoch`; answers to older ones lose. */
+function useListing(workspaceId: string, epoch: number) {
+  const [listing, setListing] = useState<Listing>({
+    epoch,
+    ports: null,
+    error: "",
+  });
+  const [loading, setLoading] = useState(false);
+  const inFlight = useRef<{ epoch: number; request: Promise<void> } | null>(
+    null,
+  );
   const refresh = useCallback(() => {
-    if (inFlight.current) return inFlight.current;
+    if (inFlight.current?.epoch === epoch) return inFlight.current.request;
     setLoading(true);
+    const settle = (next: Partial<Listing>) =>
+      setListing((previous) => {
+        if (previous.epoch > epoch) return previous;
+        const kept = previous.epoch === epoch ? previous.ports : null;
+        return { ports: kept, error: "", ...next, epoch };
+      });
     const request = readPorts(workspaceId)
       .then(
-        (next) => {
-          setPorts(next);
-          setError("");
-        },
+        (ports) => settle({ ports }),
         (caught: unknown) =>
-          setError(
-            caught instanceof Error && caught.message
-              ? caught.message
-              : "Couldn’t check for dev servers.",
-          ),
+          settle({ error: caught instanceof Error ? caught.message : FAILED }),
       )
       .finally(() => {
+        if (inFlight.current?.request !== request) return;
         inFlight.current = null;
         setLoading(false);
       });
-    inFlight.current = request;
+    inFlight.current = { epoch, request };
     return request;
-  }, [workspaceId]);
+  }, [workspaceId, epoch]);
+  const current = listing.epoch === epoch ? listing : null;
+  return {
+    ports: current?.ports ?? null,
+    error: current?.error ?? "",
+    loading,
+    refresh,
+  };
+}
 
+/**
+ * The guest's previewable dev servers: read when the pane becomes live, on
+ * demand (the port menu), and every two seconds while `poll` is on and the
+ * page is visible. The last listing outlives a hidden tab (the agent's
+ * snapshot reports it) but not a disconnect, since a restarted guest serves
+ * nothing until listed again. The server reads them without counting as
+ * activity.
+ */
+export function usePreviewPorts(input: {
+  workspaceId: string;
+  usable: boolean;
+  live: boolean;
+  poll: boolean;
+}) {
+  const { workspaceId, usable, live, poll } = input;
+  const scope = usable ? workspaceId : null;
+  const [connection, setConnection] = useState({ scope, epoch: 0 });
+  if (connection.scope !== scope)
+    setConnection({ scope, epoch: connection.epoch + 1 });
+  const listing = useListing(workspaceId, connection.epoch);
+  const { ports, refresh } = listing;
   useEffect(() => {
-    if (!enabled) return;
+    if (!live) return;
     const timer = setTimeout(() => void refresh(), 0);
     return () => clearTimeout(timer);
-  }, [enabled, refresh]);
+  }, [live, refresh]);
 
   // A guest without the preview proxy will not grow one while we wait.
-  const settled = ports !== null && !ports.available && ports.reason !== "busy";
+  const settled = previewsUnavailable(ports);
   useEffect(() => {
-    if (!enabled || !poll || settled) return;
+    if (!live || !poll || settled) return;
     const interval = setInterval(() => {
       if (document.visibilityState === "visible") void refresh();
     }, PREVIEW_PORT_POLL_MS);
     return () => clearInterval(interval);
-  }, [enabled, poll, settled, refresh]);
+  }, [live, poll, settled, refresh]);
 
-  return { ports: enabled ? ports : null, error, loading, refresh };
+  return usable ? listing : { ...listing, ports: null, error: "" };
 }
