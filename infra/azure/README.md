@@ -399,6 +399,53 @@ Enable `ARM_WORKSPACE_BOOT_ENABLED` only after promoting a compatible immutable
 image and verifying startup, saved-disk reopen, and OS reboot. The legacy path
 remains available for rollback with the previous image pin.
 
+### Workspace preview proxy
+
+Baked images hold `127.0.0.1:5261` with `codev-arm-preview.socket` from early
+boot, so no workspace process can bind the port that preview hostnames reach.
+The socket starts `codev-arm-preview.service`, a dependency-free Node proxy
+(`start-arm-workspace-preview.mjs`) running as a systemd `DynamicUser`. It
+cannot read `/workspace`, `/var/lib/codev`, or `/etc/codev`, and it can
+connect only to loopback. Its only input file is
+`/etc/codev-preview/identity.json` (mode 0644): the workspace ID, generation,
+and public verification key, written by `codev-activate-arm-boot`. That
+directory is persistent, unlike `/run`, because activation runs once per VM and
+OS reboots go through `codev-arm-boot` only. Until the identity exists the
+proxy answers 503. The verified boot restarts it once the identity exists and
+`/workspace` is mounted.
+
+The control plane signs a single-use Ed25519 token valid for at most 60
+seconds for one host, `p<port>-<sha256(workspaceId)[0:20]>-g<generation>.<zone>`.
+Its claims are `iss: "codev-control-plane"`, `aud` (the exact host),
+`scope: "preview"`, `workspaceId`, `generation`, `port`, `sub`, `appOrigin`,
+`jti`, `iat`, and `exp`. `GET /__codev/preview/session?token=…&next=…` trades
+the token for a `__Host-codev-preview` cookie (`Secure; HttpOnly;
+SameSite=None; Partitioned`). The cookie is HMAC-signed with a per-process key
+and lasts 5 minutes; it renews after half that time, up to a 30-minute cap.
+The response then redirects through `/__codev/preview/check`, which explains
+blocked embedded cookies and offers `document.requestStorageAccess()`. Every
+other request needs:
+
+- that cookie for the exact host;
+- an `Origin` exactly matching `https://<host>` when present, and always for
+  non-GET requests and WebSocket upgrades;
+- no cross-site `Sec-Fetch-Site` except on navigations;
+- a port whose every LISTEN row in `/proc/net/tcp{,6}` belongs to uid 2000 or
+  above, and that is not reserved (9, 4879, 5252, 5260, 5261, 20241–20245).
+
+The proxy connects only to that row's loopback address. It rewrites `Host`,
+`Origin`, and `Referer` to `localhost:<port>`, and drops its own cookie and
+client forwarding headers. It streams bodies, pipes WebSocket upgrades raw,
+and rewrites localhost `Location` headers. Every response gets
+`Cloudflare-CDN-Cache-Control: no-store`, `Cache-Control: private`, and
+`frame-ancestors <appOrigin>`.
+
+The legacy CustomScript connection path does not install the proxy, so
+previews need baked boot. Proxy changes ship only in an image release. A change
+to `provision-arm-workspace-image.sh` on `main` starts `release-arm-image.yml`
+automatically. Image validation smoke-tests the socket, the dynamic user, and
+the 503 response that the proxy returns without an identity.
+
 ### Shared ARM workspace network
 
 Each workspace start creates only a public IP and NIC. They join the
