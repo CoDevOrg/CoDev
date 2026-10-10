@@ -7,6 +7,7 @@ import {
 import { reduceCursorTurn } from "./cursor-turn-events";
 import { reduceClaudeTurn } from "./claude-turn-events";
 import { reduceCodexTurn } from "./turn-events";
+import { extractGen2WorkspaceActions } from "./workspace-action-extract";
 
 /**
  * One output parser per provider, chosen by the provider a turn was started
@@ -23,11 +24,16 @@ const REDUCERS: Record<
   cursor: reduceCursorTurn,
 };
 
+/**
+ * The turn as every reader sees it. Workspace action blocks are lifted out
+ * of the agent's messages here, so the live view, the reply the server saves
+ * and later history all agree on them.
+ */
 export function reduceGen2Turn(
   provider: Gen2AgentProviderName,
   output: string,
 ): Gen2TurnState {
-  return REDUCERS[provider](output);
+  return extractGen2WorkspaceActions(REDUCERS[provider](output));
 }
 
 function labelFor(provider: Gen2AgentProviderName) {
