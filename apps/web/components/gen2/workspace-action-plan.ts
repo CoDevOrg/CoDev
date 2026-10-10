@@ -14,6 +14,18 @@ export type LiveWorkspaceTurn = {
 const WAITS_FOR_COMMAND = "Opens after you run the command";
 const OFF_SCREEN = "Arrived while you were in another chat";
 
+/** The turn's valid items that carry its nonce; nothing else is ever acted on. */
+function trustedActions({ items, actionNonce: nonce }: LiveWorkspaceTurn) {
+  return items.flatMap((item) =>
+    item.kind === "workspaceAction" &&
+    item.action &&
+    nonce &&
+    item.token === nonce
+      ? [{ itemId: item.id, action: item.action, token: nonce }]
+      : [],
+  );
+}
+
 /**
  * What to do with the workspace actions this tab has not seen yet. Only
  * valid items carrying the turn's nonce count; the rest are remembered as
@@ -30,15 +42,7 @@ export function planWorkspaceActions(
   const fresh = live.items.filter(
     (item) => item.kind === "workspaceAction" && !known.has(keyOf(item.id)),
   );
-  const nonce = live.actionNonce;
-  const trusted = live.items.flatMap((item) =>
-    item.kind === "workspaceAction" &&
-    item.action &&
-    nonce &&
-    item.token === nonce
-      ? [{ itemId: item.id, action: item.action, token: nonce }]
-      : [],
-  );
+  const trusted = trustedActions(live);
   const runsCommand = trusted.some(
     (entry) => entry.action.type === "run_in_terminal",
   );

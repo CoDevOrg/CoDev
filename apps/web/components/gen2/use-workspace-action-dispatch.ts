@@ -101,6 +101,24 @@ function settle(
 type UpdatePending = ReturnType<typeof usePendingActions>[1];
 type AgentRef = RefObject<WorkspaceAgentContextValue | null>;
 
+/**
+ * Runs one navigation action for the member; what failed waits as a request.
+ * Resolves with the announcement, or "" when nothing ran.
+ */
+async function runOnce(
+  entry: StoredPendingAction,
+  controller: WorkspaceAgentContextValue["controller"],
+  updatePending: UpdatePending,
+) {
+  const result = await controller.run(entry.action);
+  if (!result.ok) {
+    updatePending((list) => [...list, { ...entry, blocker: result.message }]);
+    return "";
+  }
+  settle(entry, "auto", result.message);
+  return `Agent ${lowerFirst(workspaceActionCopy(entry.action).done)}`;
+}
+
 /** Handles each new item of the live turn once: run it, queue it, or ignore it. */
 function useLiveActions(
   workspaceId: string,
@@ -137,16 +155,9 @@ function useLiveActions(
       writePendingActions(workspaceId, turnChat, [...stored, ...queued]);
     } else if (queued.length) updatePending((list) => [...list, ...queued]);
     for (const entry of next.auto) {
-      void controller.run(entry.action).then((result) => {
-        if (!result.ok) {
-          const blocked = { ...entry, blocker: result.message };
-          updatePending((list) => [...list, blocked]);
-          return;
-        }
-        settle(entry, "auto", result.message);
-        const done = workspaceActionCopy(entry.action).done;
-        setAnnouncement(`Agent ${lowerFirst(done)}`);
-      });
+      void runOnce(entry, controller, updatePending).then(
+        (text) => text && setAnnouncement(text),
+      );
     }
   }, [
     items,
