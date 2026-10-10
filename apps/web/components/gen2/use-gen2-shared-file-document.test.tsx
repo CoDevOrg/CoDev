@@ -173,4 +173,78 @@ describe("useGen2SharedFileDocument", () => {
     );
     vi.useRealTimers();
   });
+
+  it("shows saving until the server writes the file, without a notice", () => {
+    vi.useFakeTimers();
+    const { result } = renderDocument();
+    const socket = MockWebSocket.instances[0]!;
+    act(() => socket.welcome());
+    act(() =>
+      socket.receive({
+        type: "sync",
+        path: "index.ts",
+        update: emptyUpdate,
+        stateVector: emptyUpdate,
+        revision: "rev-1",
+      }),
+    );
+    act(() => result.current.text!.insert(0, "hi"));
+    expect(result.current.saving).toBe(true);
+    vi.advanceTimersByTime(1_000);
+    act(() =>
+      socket.receive({
+        type: "reconciled",
+        worktreeId: "main",
+        path: "index.ts",
+        revision: "rev-2",
+        source: "collaboration",
+      }),
+    );
+    expect(result.current.saving).toBe(false);
+    expect(result.current.notice).toBeNull();
+    vi.useRealTimers();
+  });
+
+  it("leaves conflict for every editor once someone resolves it", () => {
+    const { result } = renderDocument();
+    const socket = MockWebSocket.instances[0]!;
+    act(() => socket.welcome());
+    act(() =>
+      socket.receive({
+        type: "sync",
+        path: "index.ts",
+        update: emptyUpdate,
+        stateVector: emptyUpdate,
+        revision: "rev-1",
+      }),
+    );
+    act(() =>
+      socket.receive({
+        type: "conflict",
+        worktreeId: "main",
+        path: "index.ts",
+        snapshotRevision: "rev-1",
+        filesystemRevision: "rev-2",
+        message: "Choose which version to keep.",
+      }),
+    );
+    expect(result.current.state).toBe("conflict");
+    act(() => result.current.resolveConflict("workspace"));
+    expect(socket.sent.at(-1)).toEqual({
+      type: "resolve",
+      worktreeId: "main",
+      path: "index.ts",
+      keep: "workspace",
+    });
+    act(() =>
+      socket.receive({
+        type: "reconciled",
+        worktreeId: "main",
+        path: "index.ts",
+        revision: "rev-3",
+        source: "filesystem",
+      }),
+    );
+    expect(result.current.state).toBe("connected");
+  });
 });

@@ -21,6 +21,10 @@ vi.mock("./collaboration-redis", async () => {
   return { DocumentBusyError, withDocumentLock: mocks.lock };
 });
 vi.mock("../platform/observability", () => ({ logEvent: vi.fn() }));
+vi.mock("./collaboration-autosave", () => ({
+  announceWrite: vi.fn(),
+  writeSharedFile: vi.fn(),
+}));
 
 import { DocumentBusyError } from "./collaboration-redis";
 import { reconcileGen2CollaborationPaths } from "./collaboration-events";
@@ -73,6 +77,7 @@ describe("reconcileGen2CollaborationPaths", () => {
       "feature-auth",
       snapshot.path,
       expect.any(Function),
+      { waitMs: 5_000 },
     );
     expect(mocks.publish).toHaveBeenCalledWith(`gen2:${workspaceId}`, {
       type: "reconciled",

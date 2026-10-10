@@ -78,16 +78,28 @@ export class DocumentBusyError extends Error {
   }
 }
 
+const LOCK_RETRY_MS = 40;
+
+/**
+ * Runs `callback` holding the document's cross-instance lock. With `waitMs`
+ * a busy lock is retried until it frees up; without it, busy fails at once.
+ */
 export async function withDocumentLock<T>(
   workspaceId: string,
   worktreeId: string,
   path: string,
   callback: () => Promise<T>,
+  options: { waitMs?: number } = {},
 ) {
   const key = documentLockKey(workspaceId, worktreeId, path);
   const token = randomUUID();
   const client = redisClient();
-  const acquired = await client.set(key, token, "PX", LOCK_TTL_MS, "NX");
+  const deadline = Date.now() + (options.waitMs ?? 0);
+  let acquired = await client.set(key, token, "PX", LOCK_TTL_MS, "NX");
+  while (!acquired && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, LOCK_RETRY_MS));
+    acquired = await client.set(key, token, "PX", LOCK_TTL_MS, "NX");
+  }
   if (!acquired) throw new DocumentBusyError();
   try {
     return await callback();

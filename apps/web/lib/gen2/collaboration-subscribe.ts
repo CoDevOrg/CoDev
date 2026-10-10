@@ -17,6 +17,9 @@ import {
   reconcileGen2Document,
 } from "./collaboration-documents";
 import { gen2CollaborationRoom } from "./collaboration-events";
+import { announceWrite, writeSharedFile } from "./collaboration-autosave";
+
+const LOCK_WAIT_MS = 10_000;
 
 export async function subscribe(
   workspaceId: string,
@@ -31,17 +34,35 @@ export async function subscribe(
     return;
   }
   const roomKey = gen2CollaborationRoom(workspaceId);
-  const result = await withDocumentLock(roomKey, worktreeId, path, async () => {
-    const snapshot =
-      (await loadGen2Document(workspaceId, worktreeId, path)) ??
-      (await initializeGen2Document(
+  const result = await withDocumentLock(
+    roomKey,
+    worktreeId,
+    path,
+    async () => {
+      const snapshot =
+        (await loadGen2Document(workspaceId, worktreeId, path)) ??
+        (await initializeGen2Document(
+          workspaceId,
+          connection.user.id,
+          worktreeId,
+          path,
+        ));
+      const reconciled = await reconcileGen2Document(
         workspaceId,
         connection.user.id,
-        worktreeId,
-        path,
-      ));
-    return reconcileGen2Document(workspaceId, connection.user.id, snapshot);
-  });
+        snapshot,
+      );
+      const written =
+        reconciled.event?.type === "reconciled" && reconciled.event.needsWrite
+          ? await writeSharedFile(
+              { workspaceId, worktreeId, path },
+              connection.user.id,
+            )
+          : null;
+      return { ...reconciled, written };
+    },
+    { waitMs: LOCK_WAIT_MS },
+  );
   if (connection.worktreeId !== worktreeId) return;
   connection.subscriptions.add(path);
   connection.activePath = path;
@@ -55,6 +76,7 @@ export async function subscribe(
       update: result.event.update,
       range: result.event.range,
     });
+    await announceWrite({ workspaceId, worktreeId, path }, result.written);
   } else if (result.event?.type === "conflict") {
     await publish(roomKey, {
       type: "conflict",
