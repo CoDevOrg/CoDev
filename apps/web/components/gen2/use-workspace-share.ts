@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Gen2WorkspaceMember, Gen2WorkspaceRole } from "@codev/contracts";
 
+import {
+  addWorkspaceMember,
+  listWorkspaceMembers,
+} from "./workspace-share-client";
+
 export type ShareNotice = { text: string; type: "success" | "error" };
 
 type MembersResponse = { members?: Gen2WorkspaceMember[]; error?: string };
@@ -59,18 +64,18 @@ export function useWorkspaceShare({
   const refreshMembers = useCallback(async () => {
     setMembersError("");
     try {
-      const { ok, data } = await sendJson(`${base}/members`);
-      if (!ok || !data.members) {
-        setMembersError(data.error ?? "Couldn’t load people with access.");
+      const result = await listWorkspaceMembers(workspaceId);
+      if (!result.ok || !result.members) {
+        setMembersError(result.error ?? "Couldn’t load people with access.");
         return;
       }
-      setMembers(data.members);
-      if (data.ownerId) setOwnerId(data.ownerId);
+      setMembers(result.members);
+      if (result.ownerId) setOwnerId(result.ownerId);
       setMembersReady(true);
     } catch {
       setMembersError("Couldn’t reach CoDev to load people with access.");
     }
-  }, [base]);
+  }, [workspaceId]);
 
   const refreshLink = useCallback(
     async (role?: Gen2WorkspaceRole) => {
@@ -128,11 +133,16 @@ export function useWorkspaceShare({
 
   async function addMember(emailOrLogin: string, role: Gen2WorkspaceRole) {
     setNotice(null);
-    const error = await mutate(
-      `${base}/members`,
-      json("POST", { emailOrLogin, role }),
-      "Couldn’t add this person.",
-    );
+    let error: string | null = null;
+    try {
+      const result = await addWorkspaceMember(workspaceId, emailOrLogin, role);
+      if (result.ok && result.members) {
+        setMembers(result.members);
+        setMembersReady(true);
+      } else error = result.error ?? "Couldn’t add this person.";
+    } catch {
+      error = "Couldn’t reach CoDev. Check your connection and try again.";
+    }
     setNotice(
       error
         ? { text: error, type: "error" }

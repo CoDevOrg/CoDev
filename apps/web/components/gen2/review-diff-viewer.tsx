@@ -1,8 +1,19 @@
 "use client";
 
-import { Component, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  Component,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { parsePatchFiles, type CodeViewItem } from "@pierre/diffs";
-import { CodeView, type CodeViewReactOptions } from "@pierre/diffs/react";
+import {
+  CodeView,
+  type CodeViewHandle,
+  type CodeViewReactOptions,
+} from "@pierre/diffs/react";
 
 /**
  * Virtualized git-patch viewer. `@pierre/diffs` 1.3.6 matches vendor/superset
@@ -12,11 +23,16 @@ import { CodeView, type CodeViewReactOptions } from "@pierre/diffs/react";
 export function ReviewDiffViewer({
   patch,
   layout,
+  focusPath,
 }: {
   patch: string;
   layout: "unified" | "split";
+  /** Scrolls to this file's diff once per `id`, when the patch has it. */
+  focusPath?: { path: string; id: number } | null | undefined;
 }) {
   const themeType = useWorkspaceThemeType();
+  const viewRef = useRef<CodeViewHandle<undefined>>(null);
+  const focusedRef = useRef<number | null>(null);
   const parsed = useMemo(() => {
     try {
       return parsePatchFiles(patch, "workspace-review", true);
@@ -56,6 +72,21 @@ export function ReviewDiffViewer({
     [layout, themeType],
   );
 
+  useEffect(() => {
+    if (!focusPath || focusedRef.current === focusPath.id) return;
+    const item = items.find(
+      (entry) =>
+        entry.type === "diff" && entry.fileDiff.name === focusPath.path,
+    );
+    if (!item) return;
+    // After the virtualized view has laid out the patch.
+    const frame = requestAnimationFrame(() => {
+      focusedRef.current = focusPath.id;
+      viewRef.current?.scrollTo({ type: "item", id: item.id, align: "start" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focusPath, items]);
+
   if (items.length === 0) {
     return <FallbackPatch patch={patch} />;
   }
@@ -63,6 +94,7 @@ export function ReviewDiffViewer({
   return (
     <DiffErrorBoundary patch={patch}>
       <CodeView
+        ref={viewRef}
         items={items}
         options={options}
         disableWorkerPool

@@ -19,6 +19,18 @@ vi.mock("@xterm/xterm", () => ({
       this.onDataHandler = handler;
     }
 
+    buffer = {
+      active: {
+        length: 3,
+        getLine: (y: number) =>
+          [
+            { isWrapped: false, translateToString: () => "$ npm test" },
+            { isWrapped: false, translateToString: () => "1 passed" },
+            { isWrapped: false, translateToString: () => "" },
+          ][y],
+      },
+    };
+
     attachCustomKeyEventHandler() {}
 
     loadAddon() {}
@@ -220,5 +232,47 @@ describe("Gen2TerminalPane", () => {
     expect(
       screen.queryByText("Waiting for the workspace"),
     ).not.toBeInTheDocument();
+  });
+
+  it("types a queued command once into its own new session, and exposes the screen", async () => {
+    const inputCalls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const request = JSON.parse(String(init?.body ?? "{}")) as {
+          action?: string;
+          data?: string;
+        };
+        if (request.action === "start") {
+          return new Response(JSON.stringify({ sessionId: "terminal-run" }), {
+            status: 201,
+          });
+        }
+        if (request.action === "input") inputCalls.push(request.data ?? "");
+        if (request.action === "poll") return new Promise<Response>(() => {});
+        return new Response(null, { status: 204 });
+      }),
+    );
+    const readers: Array<(() => string) | null> = [];
+    const queuedInput = { id: "run-1", text: "npm test\r" };
+    const props = {
+      workspaceId,
+      visible: true,
+      canStart: true,
+      autoStart: true,
+      onExit: vi.fn(),
+      onTailReader: (read: (() => string) | null) => readers.push(read),
+    };
+
+    const { rerender, unmount } = render(
+      <Gen2TerminalPane {...props} queuedInput={queuedInput} />,
+    );
+    await waitFor(() => expect(inputCalls).toEqual(["npm test\r"]));
+    rerender(<Gen2TerminalPane {...props} queuedInput={{ ...queuedInput }} />);
+    await waitFor(() => expect(readers.at(-1)).toBeTypeOf("function"));
+    expect(readers.at(-1)?.()).toBe("$ npm test\n1 passed");
+    expect(inputCalls).toEqual(["npm test\r"]);
+    unmount();
+    expect(readers.at(-1)).toBeNull();
   });
 });

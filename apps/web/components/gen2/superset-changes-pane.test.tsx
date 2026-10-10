@@ -1,9 +1,17 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./review-diff-viewer", () => ({
-  ReviewDiffViewer: ({ patch }: { patch: string }) => (
-    <pre data-testid="review-diff">{patch}</pre>
+  ReviewDiffViewer: ({
+    patch,
+    focusPath,
+  }: {
+    patch: string;
+    focusPath?: { path: string } | null;
+  }) => (
+    <pre data-testid="review-diff" data-focus={focusPath?.path}>
+      {patch}
+    </pre>
   ),
 }));
 
@@ -142,5 +150,41 @@ describe("SupersetChangesPane", () => {
     expect(
       await screen.findByText("New files have no diff until Git tracks them."),
     ).toBeInTheDocument();
+  });
+
+  it("re-reads Git when asked while showing, and hands Review the file to focus", async () => {
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) =>
+      gitResponse(
+        String(input).includes("operation=status")
+          ? "## main\n M src/login.ts\n"
+          : "diff --git a/src/login.ts b/src/login.ts\n",
+      ),
+    );
+    const props = {
+      workspaceId,
+      worktreeId: "main",
+      visible: true,
+      mode: "review" as const,
+    };
+    const { rerender } = render(
+      <SupersetChangesPane {...props} refreshToken={0} />,
+    );
+    await screen.findByTestId("review-diff");
+    const reads = vi.mocked(fetch).mock.calls.length;
+
+    rerender(
+      <SupersetChangesPane
+        {...props}
+        refreshToken={1}
+        focusPath={{ path: "src/login.ts", id: 1 }}
+      />,
+    );
+    await waitFor(() =>
+      expect(vi.mocked(fetch).mock.calls.length).toBeGreaterThan(reads),
+    );
+    expect(screen.getByTestId("review-diff")).toHaveAttribute(
+      "data-focus",
+      "src/login.ts",
+    );
   });
 });
