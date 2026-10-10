@@ -73,6 +73,7 @@ export function Gen2ChatPanel(props: Gen2ChatPanelProps) {
     send: sender.send,
     busy,
     modelReady: (choice) => Boolean(modelFor(choice)),
+    chatId,
     switchingChat: thread.switchingChat,
     agentContext,
     textareaRef,
@@ -93,7 +94,8 @@ export function Gen2ChatPanel(props: Gen2ChatPanelProps) {
   const { override } = draft;
 
   function onSettled(outcome: ChatTurnOutcome) {
-    continuation.onSettled(outcome);
+    // A queued follow-up goes first; Keep going waits for the next settle.
+    if (!draft.queued) continuation.onSettled(outcome);
     draft.onSettled(outcome);
   }
 

@@ -19,6 +19,7 @@ export function useChatDraft({
   send,
   busy,
   modelReady,
+  chatId,
   switchingChat,
   agentContext,
   textareaRef,
@@ -27,6 +28,7 @@ export function useChatDraft({
   send: (draft: ChatDraft) => Promise<boolean>;
   busy: boolean;
   modelReady: (override: Gen2AgentProviderName | null) => boolean;
+  chatId: string | null;
   switchingChat: boolean;
   agentContext: WorkspaceAgentContextValue | null;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
@@ -127,14 +129,14 @@ export function useChatDraft({
       if (last) fill(recallableChatText(last.body));
       return Boolean(last);
     },
-    /** A queued follow-up goes after a clean finish; otherwise it returns. */
+    /** A queued follow-up goes after a clean finish in the same chat;
+     *  otherwise it comes back to the composer. */
     onSettled(outcome: ChatTurnOutcome) {
       if (!queued) return;
-      if (outcome.status === "completed") setQueued({ ...queued, ready: true });
-      else {
-        setQueued(null);
-        restore(queued.draft);
-      }
+      if (outcome.status === "completed" && outcome.chatId === chatId)
+        return setQueued({ ...queued, ready: true });
+      setQueued(null);
+      restore(queued.draft);
     },
   };
 }

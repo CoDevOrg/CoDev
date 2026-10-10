@@ -1247,6 +1247,48 @@ describe("Gen2ChatPanel", () => {
     expect(agentPosts()[1].prompt).toBe("second");
   });
 
+  it("gives a queued follow-up back when the member switched chats", async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    stubFetch({
+      poll: () =>
+        held.then(() => ({
+          chunks: ndjson(
+            `{"type":"item.completed","item":{"id":"m1","type":"agent_message","text":"Done."}}`,
+            `{"type":"turn.completed"}`,
+          ),
+          nextSequence: 1,
+          exited: true,
+        })),
+    });
+    const view = renderPanel({ activeChatId: CHAT.id });
+    await screen.findByLabelText("Prompt");
+    type("first");
+    await sendReady();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByRole("button", { name: /Stop/ });
+    type("second");
+    fireEvent.keyDown(screen.getByLabelText("Prompt"), { key: "Enter" });
+    await screen.findByText("Queued");
+    view.rerender(
+      <Gen2ChatPanel
+        workspace={workspace}
+        onRunningChange={vi.fn()}
+        onFilesChanged={vi.fn()}
+        onOpenFile={vi.fn()}
+        onNeedsMachine={async () => true}
+        activeChatId="66666666-6666-4666-8666-666666666666"
+      />,
+    );
+    release();
+    await waitFor(() =>
+      expect(screen.getByLabelText("Prompt")).toHaveValue("second"),
+    );
+    expect(agentPosts()).toHaveLength(1);
+  });
+
   it("gives a queued follow-up back when it is cancelled", async () => {
     stubFetch({ poll: () => new Promise(() => undefined) });
     renderPanel();
