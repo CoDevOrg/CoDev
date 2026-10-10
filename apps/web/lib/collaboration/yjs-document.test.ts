@@ -84,11 +84,7 @@ describe("shared Yjs document primitives", () => {
     // Both changed the line "two": a person has to choose.
     doc.getText("content").insert(12, "2");
     expect(
-      mergeDocumentContents(
-        doc,
-        "one\ntwo\nTHREE\n",
-        "one\nTWO\nTHREE\n",
-      ),
+      mergeDocumentContents(doc, "one\ntwo\nTHREE\n", "one\nTWO\nTHREE\n"),
     ).toBeNull();
   });
 });
