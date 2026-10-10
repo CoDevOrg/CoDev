@@ -175,7 +175,10 @@ Each workspace tab keeps one collaboration socket (`collaboration-socket.ts`
 lifecycle, `collaboration-messages.ts` dispatch). Over it, `focus`
 (`collaboration-focus.ts`) reports where the member is, `subscribe` /
 `unsubscribe` (`collaboration-subscribe.ts`) open and close shared documents,
-and `update` / `awareness` carry edits and cursors. Presence
+and `update` / `awareness` carry edits and cursors. An edit is fanned out
+before it is persisted (`collaboration-update.ts` queues per socket and file),
+and `collaboration-autosave.ts` writes the workspace file shortly after typing
+pauses. Presence
 (`collaboration-presence.ts`) lives in Redis; a `presence.sync` stream entry
 tells other instances to re-read it, and running agents get entries of their
 own until their turn settles.

@@ -10,6 +10,10 @@ import {
   reconcileGen2Document,
 } from "./collaboration-documents";
 import { logEvent } from "../platform/observability";
+import { announceWrite, writeSharedFile } from "./collaboration-autosave";
+
+/** Waits out a member's in-flight edit instead of skipping the agent's. */
+const LOCK_WAIT_MS = 5_000;
 
 /** One workspace room carries events for all worktrees; fan-out filters them. */
 export function gen2CollaborationRoom(workspaceId: string) {
@@ -47,12 +51,25 @@ export async function reconcileGen2CollaborationPaths(input: {
           input.worktreeId,
           snapshot.path,
         );
-        return current
-          ? reconcileGen2Document(input.workspaceId, input.userId, current)
-          : null;
+        if (!current) return null;
+        const reconciled = await reconcileGen2Document(
+          input.workspaceId,
+          input.userId,
+          current,
+        );
+        // A merge with a member's edits goes to disk at once.
+        const written =
+          reconciled.event?.type === "reconciled" && reconciled.event.needsWrite
+            ? await writeSharedFile(
+                { ...input, path: snapshot.path },
+                input.userId,
+              )
+            : null;
+        return { ...reconciled, written };
       },
+      { waitMs: LOCK_WAIT_MS },
     ).catch((error) => {
-      // A member's edit holds the lock; their next update reconciles it.
+      // Still busy after waiting: the turn's final reconcile retries it.
       if (!(error instanceof DocumentBusyError)) throw error;
       logEvent("info", "gen2.collaboration.reconcile_skipped", {
         path: snapshot.path,
@@ -72,6 +89,7 @@ export async function reconcileGen2CollaborationPaths(input: {
         actor: input.actor,
         range: result.event.range,
       });
+      await announceWrite({ ...input, path: snapshot.path }, result.written);
     } else {
       await publish(room, {
         type: "conflict",
@@ -80,7 +98,7 @@ export async function reconcileGen2CollaborationPaths(input: {
         snapshotRevision: result.event.snapshotRevision,
         filesystemRevision: result.event.filesystemRevision,
         message:
-          "An agent changed this file while collaborative edits were pending. Neither version was overwritten.",
+          "An agent changed the same lines you were editing. Choose which version to keep.",
       });
     }
   }

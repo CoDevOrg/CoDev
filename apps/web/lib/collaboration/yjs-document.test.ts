@@ -5,6 +5,7 @@ import {
   classifyFilesystemReconciliation,
   docFromUpdate,
   encodedDocument,
+  mergeDocumentContents,
   replaceDocumentContents,
 } from "./yjs-document";
 
@@ -63,5 +64,27 @@ describe("shared Yjs document primitives", () => {
       { from: 2, to: 4 },
       { from: 8, to: 12 },
     ]);
+  });
+
+  it("merges an agent's file change into a document with a member's edits", () => {
+    const doc = new Y.Doc();
+    doc.getText("content").insert(0, "one\ntwo\nthree\n");
+    doc.getText("content").insert(0, "// mine\n");
+
+    const ranges = mergeDocumentContents(
+      doc,
+      "one\ntwo\nthree\n",
+      "one\ntwo\nTHREE\n",
+    );
+
+    expect(doc.getText("content").toString()).toBe(
+      "// mine\none\ntwo\nTHREE\n",
+    );
+    expect(ranges).toEqual([{ from: 16, to: 22 }]);
+    // Both changed the line "two": a person has to choose.
+    doc.getText("content").insert(12, "2");
+    expect(
+      mergeDocumentContents(doc, "one\ntwo\nTHREE\n", "one\nTWO\nTHREE\n"),
+    ).toBeNull();
   });
 });

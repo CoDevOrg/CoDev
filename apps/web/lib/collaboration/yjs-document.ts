@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 
 import * as Y from "yjs";
 
-import { diffTextHunks } from "./text-diff";
+import { diffTextHunks, type TextHunk } from "./text-diff";
+import { rebaseTextHunks } from "./text-merge";
 
 /** Browser- and runtime-agnostic Yjs document primitives shared by workspace adapters. */
 export function classifyFilesystemReconciliation(input: {
@@ -38,12 +39,11 @@ export function docFromUpdate(update: string) {
 }
 
 /**
- * Applies only the changed lines as one filesystem-origin transaction and
- * returns the changed spans in the new text, first to last.
+ * Applies hunks (ascending, in the current text's positions) as one
+ * filesystem-origin transaction and returns their spans in the new text.
  */
-export function replaceDocumentContents(doc: Y.Doc, contents: string) {
+function applyDocumentHunks(doc: Y.Doc, hunks: TextHunk[]) {
   const text = doc.getText("content");
-  const hunks = diffTextHunks(text.toString(), contents);
   doc.transact(() => {
     for (const hunk of [...hunks].reverse()) {
       if (hunk.to > hunk.from) text.delete(hunk.from, hunk.to - hunk.from);
@@ -56,6 +56,26 @@ export function replaceDocumentContents(doc: Y.Doc, contents: string) {
     shift += hunk.insert.length - (hunk.to - hunk.from);
     return { from, to: from + hunk.insert.length };
   });
+}
+
+/** Makes the shared text equal `contents`, touching only changed lines. */
+export function replaceDocumentContents(doc: Y.Doc, contents: string) {
+  const current = doc.getText("content").toString();
+  return applyDocumentHunks(doc, diffTextHunks(current, contents));
+}
+
+/**
+ * Brings a file change (`base` to `theirs`) into a document that has edits
+ * of its own, keeping both. Null when both changed the same lines.
+ */
+export function mergeDocumentContents(
+  doc: Y.Doc,
+  base: string,
+  theirs: string,
+) {
+  const ours = doc.getText("content").toString();
+  const hunks = rebaseTextHunks(base, ours, theirs);
+  return hunks ? applyDocumentHunks(doc, hunks) : null;
 }
 
 export function encodedDocument(doc: Y.Doc) {

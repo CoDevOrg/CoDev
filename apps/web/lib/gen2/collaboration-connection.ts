@@ -26,6 +26,17 @@ export interface Connection {
   replayedPaths: Set<string>;
   lastSeenAt: number;
   canEdit: boolean;
+  /** Edits not yet persisted, per `${worktreeId}\0${path}`, in arrival order. */
+  pendingUpdates: Map<string, string[]>;
+  /** Files written to the workspace shortly after their last edit. */
+  autosaves: Map<
+    string,
+    {
+      timer: ReturnType<typeof setTimeout>;
+      firstAt: number;
+      run: () => Promise<void>;
+    }
+  >;
 }
 
 export function send(

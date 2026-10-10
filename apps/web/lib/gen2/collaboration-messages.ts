@@ -20,6 +20,7 @@ import { applyUpdate } from "./collaboration-update";
 import { publishAwareness } from "./collaboration-awareness";
 import { applyFocus, relayTyping, switchWorktree } from "./collaboration-focus";
 import { requireGen2Member } from "./workspaces";
+import { resolveConflict } from "./collaboration-resolve";
 import { gen2CollaborationRoom } from "./collaboration-events";
 
 function parseMessage(connection: Connection, socketMessage: WebSocketMessage) {
@@ -115,7 +116,8 @@ function isStale(connection: Connection, message: CollaborationClientMessage) {
   return (
     (message.type === "update" ||
       message.type === "awareness" ||
-      message.type === "unsubscribe") &&
+      message.type === "unsubscribe" ||
+      message.type === "resolve") &&
     message.worktreeId !== undefined &&
     message.worktreeId !== connection.worktreeId
   );
@@ -156,6 +158,13 @@ async function dispatch(
       return applyFocus(workspaceId, connection, message);
     case "typing":
       return relayTyping(workspaceId, connection, message.chatId);
+    case "resolve":
+      return resolveConflict(
+        workspaceId,
+        connection,
+        message.path,
+        message.keep,
+      );
     case "heartbeat":
       return refreshPresence(gen2CollaborationRoom(workspaceId), connection);
   }

@@ -102,6 +102,16 @@ const focusMessageSchema = z
   })
   .strict();
 
+/** Ends a conflict: keep the shared document's text, or the workspace file's. */
+const resolveMessageSchema = z
+  .object({
+    type: z.literal("resolve"),
+    worktreeId: collaborationWorktreeIdSchema.optional(),
+    path: collaborationPathSchema,
+    keep: z.enum(["editor", "workspace"]),
+  })
+  .strict();
+
 const typingMessageSchema = z
   .object({
     type: z.literal("typing"),
@@ -124,6 +134,7 @@ export const collaborationClientMessageSchema = z.discriminatedUnion("type", [
   unsubscribeMessageSchema,
   focusMessageSchema,
   typingMessageSchema,
+  resolveMessageSchema,
 ]);
 
 const welcomeMessageSchema = z.object({

@@ -88,8 +88,19 @@ carries Yjs document updates for every open file (`subscribe` /
 reports where its member is with `focus` (worktree, area, file, chat, away),
 which drives the top-bar avatar stack, file-tree dots and follow mode.
 
-Filesystem writes remain explicit, revision-checked saves. The Yjs snapshot is
-recoverability and collaboration state, not a replacement durable filesystem.
+Shared files **autosave**, as in other collaborative editors. Each edit fans
+out to everyone first, then this socket persists its edits in order under the
+document lock, which waits rather than refusing a busy document. About a second
+after typing pauses (at most five seconds while it continues),
+`collaboration-autosave.ts` writes the text to the workspace file with
+`expectedRevision`, then tells editors with a `reconciled` (`source:
+"collaboration"`) message. When an agent writes a file that has edits not yet
+on disk, `lib/collaboration/text-merge.ts` merges the two by line, like Git,
+and writes the merged text back. Only edits to the same lines become a conflict,
+never an overwrite. The editor then offers "Keep editor version" or "Use
+workspace version" (a `resolve` socket message), and the choice clears the
+conflict for everyone. Members see "Saving…/Saved", with no Save button and no
+save-or-discard prompt. The Yjs snapshot remains the recovery state.
 A reconcile replaces only the changed lines, so collaborators' cursors survive
 it. A concurrent member edit still becomes a visible non-destructive conflict.
 

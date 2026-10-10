@@ -10,6 +10,7 @@ import {
   docFromUpdate,
   encodeBase64,
   encodedDocument,
+  mergeDocumentContents,
   replaceDocumentContents,
 } from "../collaboration/yjs-document";
 import { getDatabase } from "../platform/database";
@@ -197,7 +198,12 @@ export async function reconcileGen2Document(
   });
   if (reconciliation === "unchanged") return { snapshot, event: null };
 
-  if (reconciliation === "conflict") {
+  // A file change over unsaved shared edits merges when the lines differ.
+  const ranges =
+    reconciliation === "conflict"
+      ? mergeDocumentContents(doc, snapshot.filesystemContents, file.contents)
+      : replaceDocumentContents(doc, file.contents);
+  if (!ranges) {
     await saveGen2Document(snapshot, file.revision);
     return {
       snapshot: { ...snapshot, hasConflict: true },
@@ -209,8 +215,6 @@ export async function reconcileGen2Document(
       },
     };
   }
-
-  const ranges = replaceDocumentContents(doc, file.contents);
   const delta = Y.encodeStateAsUpdate(doc, decodeBase64(snapshot.stateVector));
   const reconciled: Gen2DocumentSnapshot = {
     ...snapshot,
@@ -233,6 +237,8 @@ export async function reconcileGen2Document(
       range: ranges.length
         ? { from: ranges[0]!.from, to: ranges[ranges.length - 1]!.to }
         : undefined,
+      /** Merged text the workspace file does not have yet. */
+      needsWrite: reconciliation === "conflict",
     },
   };
 }

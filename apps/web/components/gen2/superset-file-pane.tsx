@@ -286,9 +286,18 @@ export function SupersetFilePane({
     onContentsChange: (next) => {
       contentsRef.current = next;
       setContents(next);
+      // The shared document autosaves, so it is never "unsaved" here: no
+      // Save button, and no save-or-discard prompt when switching away.
+      const file = openFileRef.current;
+      if (!file || file.contents === next) return;
+      openFileRef.current = { ...file, contents: next };
+      setOpenFile(openFileRef.current);
     },
   });
 
+  // Edits go through the shared document and autosave; no Save button.
+  const sharedEditing =
+    sharedDocument.state === "connected" && sharedDocument.text !== null;
   const { byPath } = useWorkspacePresence(worktreeId);
   const agentPulses = useAgentFilePulses(worktreeId);
   const remoteCursors = useRemoteCursors({
@@ -931,33 +940,37 @@ export function SupersetFilePane({
                 role="status"
                 aria-live="polite"
               >
-                {sharedDocument.state === "connected"
-                  ? sharedDocument.members.length > 1
-                    ? `${sharedDocument.members.length - 1} collaborator${sharedDocument.members.length === 2 ? "" : "s"} editing`
-                    : "Shared editing"
+                {sharedEditing
+                  ? `${
+                      sharedDocument.members.length > 1
+                        ? `${sharedDocument.members.length - 1} collaborator${sharedDocument.members.length === 2 ? "" : "s"} editing`
+                        : "Shared editing"
+                    } · ${sharedDocument.saving ? "Saving…" : "Saved"}`
                   : sharedDocument.state === "conflict"
                     ? "Resolve conflict"
                     : "Syncing collaboration…"}
               </span>
             ) : null}
-            <WorkspaceButton
-              tone="secondary"
-              type="button"
-              className="gen2-superset-save"
-              disabled={
-                !canEdit ||
-                !workspaceReady ||
-                !dirty ||
-                saving ||
-                Boolean(openingPath) ||
-                stale ||
-                sharedDocument.readOnly ||
-                sharedDocument.state === "conflict"
-              }
-              onClick={() => void save()}
-            >
-              {saving ? "Saving…" : "Save"}
-            </WorkspaceButton>
+            {sharedEditing ? null : (
+              <WorkspaceButton
+                tone="secondary"
+                type="button"
+                className="gen2-superset-save"
+                disabled={
+                  !canEdit ||
+                  !workspaceReady ||
+                  !dirty ||
+                  saving ||
+                  Boolean(openingPath) ||
+                  stale ||
+                  sharedDocument.readOnly ||
+                  sharedDocument.state === "conflict"
+                }
+                onClick={() => void save()}
+              >
+                {saving ? "Saving…" : "Save"}
+              </WorkspaceButton>
+            )}
             <Tooltip>
               <TooltipTrigger asChild>
                 <WorkspaceButton
@@ -1024,13 +1037,34 @@ export function SupersetFilePane({
           ) : null}
         </div>
       ) : null}
-      {sharedDocument.notice ? (
+      {sharedDocument.notice || sharedDocument.state === "conflict" ? (
         <div
           className="gen2-superset-notice gen2-superset-notice-info"
           role={sharedDocument.state === "conflict" ? "alert" : "status"}
           aria-live="polite"
         >
-          <span>{sharedDocument.notice}</span>
+          <span>
+            {sharedDocument.notice ??
+              "This file and the shared editor disagree. Choose which to keep."}
+          </span>
+          {sharedDocument.state === "conflict" && canEdit ? (
+            <span className="gen2-superset-notice-actions">
+              <WorkspaceButton
+                tone="ghost"
+                type="button"
+                onClick={() => sharedDocument.resolveConflict("editor")}
+              >
+                Keep editor version
+              </WorkspaceButton>
+              <WorkspaceButton
+                tone="ghost"
+                type="button"
+                onClick={() => sharedDocument.resolveConflict("workspace")}
+              >
+                Use workspace version
+              </WorkspaceButton>
+            </span>
+          ) : null}
         </div>
       ) : null}
       {openingPath ? (

@@ -23,6 +23,7 @@ import {
   removePresence,
 } from "./collaboration-presence";
 import { handleMessage } from "./collaboration-messages";
+import { flushAutosaves } from "./collaboration-autosave";
 import { gen2CollaborationRoom } from "./collaboration-events";
 
 export const gen2CollaborationSocketMaxPayload = MAX_SOCKET_PAYLOAD_BYTES;
@@ -51,6 +52,8 @@ function roomConnection(
     replayedPaths: new Set(),
     lastSeenAt: Date.now(),
     canEdit,
+    pendingUpdates: new Map(),
+    autosaves: new Map(),
   };
 }
 
@@ -106,9 +109,10 @@ async function connectCollaborationSocket(
       clearInterval(heartbeat);
       if (room) {
         room.connections.delete(connection);
-        void removePresence(roomKey, connection).finally(() =>
-          collaborationContext.getStore()?.redis?.disconnect(),
-        );
+        // Pending file writes go first; they need this socket's Redis client.
+        void flushAutosaves(connection)
+          .then(() => removePresence(roomKey, connection))
+          .finally(() => collaborationContext.getStore()?.redis?.disconnect());
         closeRoomIfEmpty(roomKey, room);
       }
     }),
