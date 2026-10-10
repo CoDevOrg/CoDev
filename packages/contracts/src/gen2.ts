@@ -815,6 +815,11 @@ export type Gen2OwnerComputeSummary = {
   armBootMinutesCount: boolean;
   budget: Gen2OwnerBudgetSummary | null;
 };
+/** What the workspace home polls to stay current without a reload. */
+export type Gen2HomeSnapshot = {
+  workspaces: Gen2Workspace[];
+  compute: Gen2OwnerComputeSummary;
+};
 export type Gen2ComputeSwitchResponse = {
   accepted: boolean;
   workspaceId: string;

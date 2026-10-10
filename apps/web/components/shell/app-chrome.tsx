@@ -33,6 +33,7 @@ export function Brand({ isAdminHost = false }: { isAdminHost?: boolean }) {
 type AppChromeUser = {
   id?: string;
   name?: string | null;
+  email?: string | null;
   githubLogin?: string;
   image?: string | null;
 };
@@ -50,6 +51,14 @@ export async function AppChrome({
   const isAdminHost = isAdminHostname(requestHeaders.get("host"));
   const showConnectGitHub = !user.githubLogin && isGitHubAuthConfigured();
   const showAdmin = user.id ? await isUserAdmin(user.id) : false;
+  // Pick fields: the session user also carries credential-derived data that
+  // must not be serialized into a client component's props.
+  const profile = {
+    name: user.name,
+    email: user.email,
+    githubLogin: user.githubLogin,
+    image: user.image,
+  };
 
   if (sidebar) {
     return (
@@ -63,7 +72,8 @@ export async function AppChrome({
             <div className="app-sidebar-footer">
               <ThemeToggle compact />
               <ProfileMenu
-                user={user}
+                user={profile}
+                side="top"
                 showConnectGitHub={showConnectGitHub}
                 isAdminHost={isAdminHost}
               />
@@ -87,7 +97,7 @@ export async function AppChrome({
         <div className="user-menu">
           <ThemeToggle />
           <ProfileMenu
-            user={user}
+            user={profile}
             showConnectGitHub={showConnectGitHub}
             isAdminHost={isAdminHost}
           />

@@ -101,7 +101,7 @@ describe("CreateGen2WorkspaceForm", () => {
       screen.getByRole("button", { name: "Create workspace" }),
     ).toBeDisabled();
     expect(screen.getByRole("status")).toHaveTextContent(
-      "You own 1 of 1 Gen 2 workspaces. Delete one or change plans to create another.",
+      "You own 1 of 1 workspaces. Delete one or change plans to create another.",
     );
   });
 
