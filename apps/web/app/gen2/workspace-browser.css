@@ -1,0 +1,5 @@
+/*
+ * Browser preview pane in the inspector.
+ * Unlayered like workspace.css (loaded after it); see
+ * docs/design/superset-workspace-ui.md §7 and §11.
+ */

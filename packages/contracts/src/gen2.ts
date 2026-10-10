@@ -1,6 +1,25 @@
 import { z } from "zod";
 
 import { identifierSchema, timestampSchema } from "./domain";
+import {
+  GEN2_AGENT_PROVIDERS,
+  gen2AgentProviderSchema,
+  gen2BranchNameSchema,
+  gen2SupersetWorktreeIdSchema,
+  gen2WorkspaceRoleSchema,
+} from "./gen2-identifiers";
+import {
+  gen2ChatGoalSchema,
+  gen2WorkspaceActionSchema,
+} from "./gen2-workspace-agent";
+
+export {
+  GEN2_AGENT_PROVIDERS,
+  gen2AgentProviderSchema,
+  gen2BranchNameSchema,
+  gen2SupersetWorktreeIdSchema,
+  gen2WorkspaceRoleSchema,
+};
 
 export const gen2WorkspaceStatusSchema = z.enum([
   "pending",
@@ -37,8 +56,6 @@ export const gen2RuntimeOperationResponseSchema = z.object({
   operationId: identifierSchema.nullable(),
   workspace: z.lazy(() => gen2WorkspaceSchema),
 });
-
-export const gen2WorkspaceRoleSchema = z.enum(["owner", "editor", "viewer"]);
 
 export const gen2WorkspaceCreateRequestSchema = z
   .object({
@@ -113,22 +130,6 @@ export const gen2JoinRequestSchema = z.object({
   token: z.string().min(1),
 });
 
-/** The agents a Gen 2 turn can run, in the order the composer lists them.
- *  A registry test holds this list to the providers whose credentials the
- *  `gen2` executor can run, so it cannot drift from what settings shows. */
-export const GEN2_AGENT_PROVIDERS = [
-  { id: "codex", label: "Codex" },
-  { id: "claude", label: "Claude" },
-  { id: "cursor", label: "Cursor" },
-] as const;
-
-export const gen2AgentProviderSchema = z.enum(
-  GEN2_AGENT_PROVIDERS.map((provider) => provider.id) as [
-    (typeof GEN2_AGENT_PROVIDERS)[number]["id"],
-    ...(typeof GEN2_AGENT_PROVIDERS)[number]["id"][],
-  ],
-);
-
 export const gen2ModelInfoSchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
@@ -164,10 +165,30 @@ export const gen2AgentStartRequestSchema = z.object({
   model: z.string().trim().min(1).max(128).optional(),
   /** The active run a member chose to start alongside after a duplicate warning. */
   acknowledgedDuplicateOf: z.string().uuid().optional(),
+  /**
+   * What the member currently sees (`gen2WorkspaceContextSchema`). Parsed
+   * leniently by the server: an invalid snapshot is dropped, never a reason
+   * to refuse the turn. Never persisted and never used for authorization.
+   */
+  workspaceContext: z.unknown().optional(),
 });
 
 export const gen2AgentStartResponseSchema = z.object({
   sessionId: z.string().min(1).max(80),
+  /** Marks this turn's workspace-action blocks; see gen2-workspace-agent.ts. */
+  actionNonce: z
+    .string()
+    .regex(/^[a-z0-9]{10}$/)
+    .optional(),
+  /** The Superset path's logical agent session. */
+  agentSessionId: z.string().min(1).max(80).optional(),
+  /** Set when the requested model was swapped for one the workspace CLI runs. */
+  fallback: z.object({ from: z.string(), to: z.string() }).optional(),
+});
+
+/** The reply to `/goal clear` or `/goal done`: no agent runs. */
+export const gen2AgentGoalUpdateResponseSchema = z.object({
+  goal: gen2ChatGoalSchema.nullable(),
 });
 
 export const gen2AgentPollRequestSchema = z.object({
@@ -190,6 +211,8 @@ export const gen2AgentPollResponseSchema = z.object({
   reply: z.string().nullable().default(null),
   persistedMessageId: identifierSchema.nullable().default(null),
   error: z.string().optional(),
+  /** A fallback re-run of this turn that the browser should follow. */
+  continuedAs: z.string().min(1).max(80).nullable().optional(),
 });
 
 export const gen2AgentCancelRequestSchema = z.object({
@@ -261,6 +284,15 @@ export const gen2TurnItemSchema = z.discriminatedUnion("kind", [
     kind: z.literal("toolCall"),
     server: z.string(),
     tool: z.string(),
+  }),
+  z.object({
+    ...turnItemBase,
+    kind: z.literal("workspaceAction"),
+    /** The fence's turn token; only the turn's own nonce is acted on. */
+    token: z.string().max(20).nullable(),
+    /** Null when the block was not a valid action; see `error`. */
+    action: gen2WorkspaceActionSchema.nullable(),
+    error: z.string().max(300).nullable(),
   }),
 ]);
 
@@ -421,13 +453,6 @@ export const gen2FileUploadRequestSchema = z.object({
  * guestd contracts because the Superset host selects an explicit worktree and
  * reports external host-side changes onto the shared document stream.
  */
-/** Matches the guest's safe worktree directory identifier. */
-export const gen2SupersetWorktreeIdSchema = z
-  .string()
-  .min(1)
-  .max(64)
-  .regex(/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/);
-
 export const gen2SupersetFileEntrySchema = z.object({
   path: gen2FilePathSchema,
   kind: z.literal("file"),
@@ -566,19 +591,7 @@ export const gen2SupersetWorktreeCreateRequestSchema = z.object({
     (value) => value !== "main",
     "The primary worktree already exists.",
   ),
-  branch: z
-    .string()
-    .min(1)
-    .max(255)
-    .refine(
-      (value) =>
-        !value.startsWith("-") &&
-        !value.includes("..") &&
-        !/[~^:?*[\\\s]/.test(value) &&
-        !value.endsWith(".") &&
-        !value.endsWith("/"),
-      "Branch name is invalid.",
-    ),
+  branch: gen2BranchNameSchema,
   baseRef: z.string().min(1).max(255).optional(),
 });
 
@@ -733,6 +746,12 @@ export type Gen2UpdateMemberRoleRequest = z.infer<
 export type Gen2AgentProviderName = z.infer<typeof gen2AgentProviderSchema>;
 export type Gen2AgentStartRequest = z.infer<typeof gen2AgentStartRequestSchema>;
 export type Gen2AgentPollResponse = z.infer<typeof gen2AgentPollResponseSchema>;
+export type Gen2AgentStartResponse = z.infer<
+  typeof gen2AgentStartResponseSchema
+>;
+export type Gen2AgentGoalUpdateResponse = z.infer<
+  typeof gen2AgentGoalUpdateResponseSchema
+>;
 export type Gen2Chat = z.infer<typeof gen2ChatSchema>;
 export type Gen2ChatMessage = z.infer<typeof gen2ChatMessageSchema>;
 export type Gen2ChatDetail = z.infer<typeof gen2ChatDetailSchema>;

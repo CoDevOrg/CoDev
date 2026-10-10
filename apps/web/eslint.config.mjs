@@ -12,6 +12,10 @@ export default defineConfig([
       "components/gen2/chat-panel.tsx",
       "components/gen2/turn-activity.tsx",
       "components/gen2/terminal-pane.tsx",
+      "components/gen2/chat-*.tsx",
+      "components/gen2/workspace-action-*.tsx",
+      "components/gen2/workspace-browser-*.tsx",
+      "components/gen2/workspace-terminal-*.tsx",
     ],
     rules: {
       "no-restricted-imports": [

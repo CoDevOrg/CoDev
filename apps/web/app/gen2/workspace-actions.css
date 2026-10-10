@@ -1,0 +1,5 @@
+/*
+ * Agent workspace actions: activity rows, decision cards, terminal tabs.
+ * Unlayered like workspace.css (loaded after it); see
+ * docs/design/superset-workspace-ui.md §8.1 and §11.
+ */

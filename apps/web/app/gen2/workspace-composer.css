@@ -1,0 +1,5 @@
+/*
+ * Chat composer: typeahead menu, chips, dictation, goal bar, empty state.
+ * Unlayered like workspace.css (loaded after it); see
+ * docs/design/superset-workspace-ui.md §8.1 and §11.
+ */
