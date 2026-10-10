@@ -1,10 +1,10 @@
 import "server-only";
 
-import { signArmControlPlaneToken } from "./arm-control-plane-token";
 import { ArmWorkspaceRuntimeError } from "./arm-workspace-error";
 import {
   CLOUDFLARE_ACCOUNT_ID,
   cloudflareRequestDirect,
+  sha256Hex,
 } from "./arm-workspace-provider";
 
 /** The guest preview proxy's socket, owned by systemd from early boot. */
@@ -28,9 +28,19 @@ export type ArmWorkspacePreviewRoute = {
   workspaceId: string;
   generation: number;
   tunnelId: string;
+  /** The generation's gateway host, which its tunnel must already route. */
+  gatewayHost: string;
   port: number;
   zone: string;
   zoneId: string;
+};
+
+/** Checks the caller makes before this module spends shared Cloudflare budget. */
+export type ArmWorkspacePreviewGuards = {
+  /** Runs before any uncached Cloudflare request; throws to refuse. */
+  reserve(): Promise<void>;
+  /** Runs before the zone is routed to the guest; throws unless its proxy owns 5261. */
+  confirmProxy(): Promise<void>;
 };
 
 /** Cloudflare state this process already confirmed, so repeat mints are free. */
@@ -43,16 +53,6 @@ function isFresh(key: string) {
 function remember(key: string, lifetimeMs: number) {
   if (ensured.size >= 1_000) ensured.clear();
   ensured.set(key, Date.now() + lifetimeMs);
-}
-
-async function sha256Hex(value: string) {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(value),
-  );
-  return Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
 }
 
 /**
@@ -78,40 +78,49 @@ export function isArmWorkspacePreviewHost(name: string, zone: string) {
   );
 }
 
+const ingressKey = (route: ArmWorkspacePreviewRoute) =>
+  `ingress:${route.tunnelId}:${route.zone}`;
+
 /**
  * Lifecycle starts write a tunnel's ingress without previews, so the first
  * mint adds the wildcard rule. Every other rule stays, and the catch-all
  * stays last. A tunnel only receives hostnames whose CNAME points at it.
+ * The rule is only added once the guest showed its proxy owns 5261, so on
+ * any replica its presence vouches for this generation's guest.
  */
-async function ensureIngress(tunnelId: string, zone: string) {
-  const key = `ingress:${tunnelId}:${zone}`;
-  if (isFresh(key)) return;
-  const path = `/accounts/${CLOUDFLARE_ACCOUNT_ID}/cfd_tunnel/${tunnelId}/configurations`;
+async function ensureIngress(
+  route: ArmWorkspacePreviewRoute,
+  confirmProxy: ArmWorkspacePreviewGuards["confirmProxy"],
+) {
+  const path = `/accounts/${CLOUDFLARE_ACCOUNT_ID}/cfd_tunnel/${route.tunnelId}/configurations`;
   const current = await cloudflareRequestDirect<{
     config?: TunnelConfig | null;
   } | null>(path);
   const config = current?.config ?? {};
   const rules = config.ingress ?? [];
-  const hostname = `*.${zone}`;
+  const hostname = `*.${route.zone}`;
   if (
-    !rules.some(
+    rules.some(
       (rule) => rule.hostname === hostname && rule.service === PROXY_SERVICE,
     )
-  ) {
-    const routed = rules.filter(
-      (rule) => rule.hostname && rule.hostname !== hostname,
-    );
-    const fallback = rules.findLast((rule) => !rule.hostname) ?? {
-      service: "http_status:404",
-    };
-    await cloudflareRequestDirect(path, "PUT", {
-      config: {
-        ...config,
-        ingress: [...routed, { hostname, service: PROXY_SERVICE }, fallback],
-      },
-    });
-  }
-  remember(key, INGRESS_CACHE_MS);
+  )
+    return;
+  // A ready tunnel always routes its gateway; never rewrite one that does not.
+  if (!rules.some((rule) => rule.hostname === route.gatewayHost))
+    throw new ArmWorkspaceRuntimeError("CLOUDFLARE_TUNNEL_FAILED");
+  await confirmProxy();
+  const routed = rules.filter(
+    (rule) => rule.hostname && rule.hostname !== hostname,
+  );
+  const fallback = rules.findLast((rule) => !rule.hostname) ?? {
+    service: "http_status:404",
+  };
+  await cloudflareRequestDirect(path, "PUT", {
+    config: {
+      ...config,
+      ingress: [...routed, { hostname, service: PROXY_SERVICE }, fallback],
+    },
+  });
 }
 
 async function createRecord(zoneId: string, host: string, target: string) {
@@ -133,9 +142,11 @@ async function createRecord(zoneId: string, host: string, target: string) {
 }
 
 /** Keep at most `MAX_RECORDS` hosts per generation, replacing the oldest. */
-async function ensureRecord(route: ArmWorkspacePreviewRoute, suffix: string) {
-  const host = `p${route.port}${suffix}`;
-  if (isFresh(`dns:${host}`)) return host;
+async function ensureRecord(
+  route: ArmWorkspacePreviewRoute,
+  host: string,
+  suffix: string,
+) {
   const target = `${route.tunnelId}.cfargotunnel.com`;
   const records = (
     await cloudflareRequestDirect<DnsRecord[]>(
@@ -160,8 +171,6 @@ async function ensureRecord(route: ArmWorkspacePreviewRoute, suffix: string) {
     }
     await createRecord(route.zoneId, host, target);
   }
-  remember(`dns:${host}`, DNS_CACHE_MS);
-  return host;
 }
 
 /**
@@ -171,37 +180,24 @@ async function ensureRecord(route: ArmWorkspacePreviewRoute, suffix: string) {
  */
 export async function ensureArmWorkspacePreviewRoute(
   route: ArmWorkspacePreviewRoute,
+  guards: ArmWorkspacePreviewGuards,
 ) {
   const suffix = await armWorkspacePreviewSuffix(
     route.workspaceId,
     route.generation,
     route.zone,
   );
-  await ensureIngress(route.tunnelId, route.zone);
-  return ensureRecord(route, suffix);
-}
-
-/**
- * A single-use, 60-second session token for exactly one preview host. Its
- * `aud` and `scope` keep the gateway from accepting it, and gateway
- * capabilities from opening previews.
- */
-export function armWorkspacePreviewToken(input: {
-  host: string;
-  workspaceId: string;
-  generation: number;
-  port: number;
-  userId: string;
-  appOrigin: string;
-}) {
-  return signArmControlPlaneToken({
-    aud: input.host,
-    scope: "preview",
-    workspaceId: input.workspaceId,
-    generation: input.generation,
-    port: input.port,
-    sub: input.userId,
-    appOrigin: input.appOrigin,
-    jti: crypto.randomUUID(),
-  });
+  const host = `p${route.port}${suffix}`;
+  const [ingress, dns] = [ingressKey(route), `dns:${host}`];
+  if (isFresh(ingress) && isFresh(dns)) return host;
+  await guards.reserve();
+  if (!isFresh(ingress)) {
+    await ensureIngress(route, guards.confirmProxy);
+    remember(ingress, INGRESS_CACHE_MS);
+  }
+  if (!isFresh(dns)) {
+    await ensureRecord(route, host, suffix);
+    remember(dns, DNS_CACHE_MS);
+  }
+  return host;
 }

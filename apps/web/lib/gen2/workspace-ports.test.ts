@@ -96,6 +96,9 @@ describe("listing previewable ports", () => {
     expect((await listGen2WorkspacePorts("w", "u")).reason).toBe("busy");
     mocks.exec.mockRejectedValueOnce(new OrchestratorError("timed out", 408));
     expect((await listGen2WorkspacePorts("w", "u")).reason).toBe("busy");
+    // Cloudflare's HTML timeout page instead of the guest's JSON.
+    mocks.exec.mockRejectedValueOnce(new SyntaxError("Unexpected token '<'"));
+    expect((await listGen2WorkspacePorts("w", "u")).reason).toBe("busy");
     mocks.exec.mockRejectedValueOnce(new OrchestratorError("stopped", 409));
     expect((await listGen2WorkspacePorts("w", "u")).reason).toBe("not_ready");
     mocks.exec.mockRejectedValueOnce(new OrchestratorError("broken", 500));

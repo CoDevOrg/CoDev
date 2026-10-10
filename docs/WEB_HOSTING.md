@@ -306,15 +306,21 @@ In local development, `CODEV_PREVIEW_DEV_DIRECT=1` frames
 Each preview host is `p<port>-<sha256(workspace)[0:20]>-g<generation>.<zone>`:
 one origin per port, one level deep so Universal SSL covers it, and gone with
 the generation. Minting a session (`POST /api/gen2/workspaces/<id>/preview`,
-editors only, 30 per minute per member and workspace) adds a
-`*.<zone>` → `http://127.0.0.1:5261` rule before the tunnel's catch-all on
-first use and creates a proxied CNAME to the tunnel, keeping at most four
-hosts per generation. These calls run from the web app with the ARM runtime
-Cloudflare token, never in the lifecycle Workflow, so its request budget is
-unchanged. The every-minute reconcile route deletes preview records whose
-workspace generation is no longer ready (at most once every five minutes per
-replica, 20 deletes per run). Records left behind after previews are turned
-off point at deleted tunnels and can be removed by hand.
+editors only, 30 per minute per member and workspace, never for the guest's
+reserved ports) adds a `*.<zone>` → `http://127.0.0.1:5261` rule before the
+tunnel's catch-all on first use and creates a proxied CNAME to the tunnel,
+keeping at most four hosts per generation. The rule is added only after a
+guest exec shows systemd (uid 0) owns `127.0.0.1:5261`, so a busy guest
+cannot open its first preview until it answers; once present, the rule
+vouches for that generation on every replica. A tunnel whose ingress lacks
+its gateway host is never rewritten. These calls run from the web app with
+the ARM runtime Cloudflare token, never in the lifecycle Workflow, so its
+request budget is unchanged. That token is shared with workspace starts, so
+sessions that need Cloudflare work are also limited to 10 per minute per
+member across workspaces. The every-minute reconcile route deletes preview
+records whose workspace generation is no longer ready (at most once every
+five minutes per replica, 20 deletes per run). Records left behind after
+previews are turned off point at deleted tunnels and can be removed by hand.
 
 The session URL carries a 60-second, single-use Ed25519 token signed with
 `ARM_WORKSPACE_SIGNING_PRIVATE_KEY`: `scope: "preview"`, `aud` the exact
@@ -326,7 +332,8 @@ redeems it for a partitioned `__Host-codev-preview` cookie. Port listing reads
 activity. A preview is available only when `ARM_WORKSPACE_BOOT_ENABLED` is on
 and systemd (uid 0) owns `127.0.0.1:5261`; other guests show "Update this
 workspace to use the browser". Preview traffic never keeps a workspace
-awake; a focused preview reports member input from the page.
+awake; while the browser window has focus, a focused preview reports member
+input from the page for at most 30 minutes after focus entered it.
 
 The app CSP adds `frame-src 'self' https://*.<zone>` only when the zone is
 configured (development also allows localhost); `frame-ancestors 'none'` and
@@ -338,8 +345,12 @@ tunnels; a plan with enough DNS records (zones created on Free after
 2024-09-01 allow 200; Pro allows 3,500); a Cache Rule that bypasses cache for
 the whole zone, as defense in depth behind the proxy's
 `Cloudflare-CDN-Cache-Control: no-store`; no Worker routes; and DNS Write on
-the zone for the `codev-arm-runtime` token. Until the zone is on the Public
-Suffix List, previews of different workspaces are same-site with each other.
+the zone for the `codev-arm-runtime` token. Lower the zone's SOA record
+minimum TTL (DNS settings) to 60 seconds: the frame loads a host moments
+after its CNAME is created, and a resolver that asks before the record
+reaches every Cloudflare nameserver caches the miss for that TTL (1,800
+seconds by default). Until the zone is on the Public Suffix List, previews
+of different workspaces are same-site with each other.
 
 Roll out in this order:
 
@@ -348,8 +359,8 @@ Roll out in this order:
    workspace image** (`release-arm-image.yml`).
 3. Promote it with `ARM_WORKSPACE_IMAGE_VERSION_ID` and the matching
    `CODEX_CATALOG_CLIENT_VERSION`.
-4. Grant the `codev-arm-runtime` token DNS Write on the preview zone and add
-   the zone's Cache Rule.
+4. Grant the `codev-arm-runtime` token DNS Write on the preview zone, add
+   the zone's Cache Rule, and lower its SOA minimum TTL.
 5. Set the `CODEV_PREVIEW_ZONE` and `CODEV_PREVIEW_ZONE_ID` repository
    variables.
 6. Start a new CI run from `main`; a queued run deploys the old values.

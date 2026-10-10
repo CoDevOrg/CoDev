@@ -37,13 +37,15 @@ This module owns the communication and integration with external execution envir
 - `arm-control-plane-token.ts`: The one Ed25519 signer for control-plane tokens
   guests verify. Callers bind each token to one guest service with `aud` and
   `scope`: gateway capabilities (`capabilityToken`) and preview sessions.
-- `arm-workspace-preview-route.ts`, `arm-workspace-preview-sweep.ts`: Browser
-  preview hosts (`p<port>-<hash>-g<generation>.<zone>`), the tunnel's wildcard
-  ingress rule and per-host CNAMEs (added on demand from the web app, never in
-  the lifecycle Workflow), preview session tokens, and the reconcile cron's
-  bounded sweep of records whose generation is no longer ready. Membership,
-  the zone setting, and rate limits belong to `lib/gen2` (see
-  docs/WEB_HOSTING.md).
+- `arm-workspace-preview-route.ts`, `arm-workspace-preview-token.ts`,
+  `arm-workspace-preview-sweep.ts`: Browser preview hosts
+  (`p<port>-<hash>-g<generation>.<zone>`), the tunnel's wildcard ingress rule
+  and per-host CNAMEs (added on demand from the web app, never in the
+  lifecycle Workflow), preview session tokens, and the reconcile cron's
+  bounded sweep of records whose generation is no longer ready. The route
+  calls back before spending Cloudflare budget and before routing the zone to
+  a guest; membership, the zone setting, rate limits, and the guest proxy
+  check belong to `lib/gen2` (see docs/WEB_HOSTING.md).
 
 - `arm-workspace-config.ts`: Requires dedicated ARM Azure credentials and resource
   group; never reuses Firecracker credentials. The pinned gallery image may live

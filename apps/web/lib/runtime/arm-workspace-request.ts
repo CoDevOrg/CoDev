@@ -37,12 +37,7 @@ export async function armWorkspaceRequest(
     target.host,
     target.workspaceId,
     target.generation,
-    {
-      method,
-      path,
-      scope: "workspace",
-      body: encodedBody,
-    },
+    { method, path, scope: "workspace", body: encodedBody },
   );
   const { response, payload } = await ArmWorkflowIO.request("guest", () =>
     boundedJsonRequest<unknown>(

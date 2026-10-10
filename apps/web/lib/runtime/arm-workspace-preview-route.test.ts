@@ -1,14 +1,12 @@
-import { createHash, generateKeyPairSync, verify } from "node:crypto";
+import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   armWorkspacePreviewSuffix,
-  armWorkspacePreviewToken,
   ensureArmWorkspacePreviewRoute,
   isArmWorkspacePreviewHost,
 } from "./arm-workspace-preview-route";
 
-const { privateKey, publicKey } = generateKeyPairSync("ed25519");
 const zone = "codev-preview.dev";
 const zoneId = "0123456789abcdef0123456789abcdef";
 const hash = (value: string) =>
@@ -62,13 +60,27 @@ function fakeCloudflare(ingress: Rule[], records: DnsRecord[] = []) {
   return state;
 }
 
+/** The rule every ready generation's tunnel already has. */
+const gateway = {
+  hostname: "codev-gateway-g3.trycodev.com",
+  service: "http://127.0.0.1:5260",
+};
+const catchAll = { service: "http_status:404" };
+const wildcard = { hostname: `*.${zone}`, service: "http://127.0.0.1:5261" };
+
 const route = (workspaceId: string, port = 3000) => ({
   workspaceId,
   generation: 3,
   tunnelId: `tunnel-${workspaceId}`,
+  gatewayHost: gateway.hostname,
   port,
   zone,
   zoneId,
+});
+
+const guards = () => ({
+  reserve: vi.fn(async () => {}),
+  confirmProxy: vi.fn(async () => {}),
 });
 
 beforeEach(() => {
@@ -81,12 +93,8 @@ beforeEach(() => {
     ARM_WORKSPACE_IMAGE_VERSION_ID:
       "/subscriptions/subscription/resourceGroups/codev-arm-workspace-test/providers/Microsoft.Compute/galleries/gallery/images/image/versions/1.0.10",
     ARM_WORKSPACE_SSH_PUBLIC_KEY: "ssh-ed25519 fixture",
-    ARM_WORKSPACE_SIGNING_PRIVATE_KEY: privateKey
-      .export({ format: "der", type: "pkcs8" })
-      .toString("base64"),
-    ARM_WORKSPACE_SIGNING_PUBLIC_KEY: publicKey
-      .export({ format: "pem", type: "spki" })
-      .toString(),
+    ARM_WORKSPACE_SIGNING_PRIVATE_KEY: "fixture",
+    ARM_WORKSPACE_SIGNING_PUBLIC_KEY: "-----BEGIN PUBLIC KEY-----fixture",
     CLOUDFLARE_API_TOKEN: "fixture",
   };
   Object.entries(values).forEach(([name, value]) => vi.stubEnv(name, value));
@@ -109,18 +117,14 @@ describe("preview hosts", () => {
 
 describe("preview routes", () => {
   it("adds the wildcard ingress once, keeping other rules and the catch-all last", async () => {
-    const runtime = {
-      hostname: "codev-x-g3.trycodev.com",
-      service: "http://127.0.0.1:5260",
-    };
-    const state = fakeCloudflare([runtime, { service: "http_status:404" }]);
-    const host = await ensureArmWorkspacePreviewRoute(route("ws-ingress"));
+    const state = fakeCloudflare([gateway, catchAll]);
+    const checks = guards();
+    const host = await ensureArmWorkspacePreviewRoute(
+      route("ws-ingress"),
+      checks,
+    );
     expect(host).toBe(`p3000-${hash("ws-ingress")}-g3.${zone}`);
-    expect(state.ingress).toEqual([
-      runtime,
-      { hostname: `*.${zone}`, service: "http://127.0.0.1:5261" },
-      { service: "http_status:404" },
-    ]);
+    expect(state.ingress).toEqual([gateway, wildcard, catchAll]);
     expect(state.records).toEqual([
       expect.objectContaining({
         type: "CNAME",
@@ -129,22 +133,57 @@ describe("preview routes", () => {
         proxied: true,
       }),
     ]);
+    expect(checks.reserve).toHaveBeenCalledTimes(1);
+    expect(checks.confirmProxy).toHaveBeenCalledTimes(1);
     const calls = state.calls.length;
-    await ensureArmWorkspacePreviewRoute(route("ws-ingress"));
+    await ensureArmWorkspacePreviewRoute(route("ws-ingress"), checks);
     expect(state.calls).toHaveLength(calls);
+    expect(checks.reserve).toHaveBeenCalledTimes(1);
   });
 
-  it("does not rewrite a tunnel that already routes previews", async () => {
-    const state = fakeCloudflare([
-      { hostname: `*.${zone}`, service: "http://127.0.0.1:5261" },
-      { service: "http_status:404" },
-    ]);
-    await ensureArmWorkspacePreviewRoute(route("ws-routed"));
+  it("trusts a tunnel that already routes previews without asking the guest", async () => {
+    const state = fakeCloudflare([gateway, wildcard, catchAll]);
+    const checks = guards();
+    await ensureArmWorkspacePreviewRoute(route("ws-routed"), checks);
     expect(state.calls.filter((call) => call.startsWith("PUT"))).toEqual([]);
+    expect(checks.confirmProxy).not.toHaveBeenCalled();
+  });
+
+  it("routes nothing to a guest whose proxy does not own its port", async () => {
+    const state = fakeCloudflare([gateway, catchAll]);
+    const checks = guards();
+    checks.confirmProxy.mockRejectedValueOnce(new Error("no proxy"));
+    await expect(
+      ensureArmWorkspacePreviewRoute(route("ws-legacy"), checks),
+    ).rejects.toThrow("no proxy");
+    expect(state.ingress).toEqual([gateway, catchAll]);
+    expect(state.calls).toEqual([
+      expect.stringMatching(/^GET .*\/configurations$/),
+    ]);
+  });
+
+  it("never rewrites a tunnel that does not route its gateway", async () => {
+    const state = fakeCloudflare([catchAll]);
+    const checks = guards();
+    await expect(
+      ensureArmWorkspacePreviewRoute(route("ws-foreign"), checks),
+    ).rejects.toThrow("CLOUDFLARE_TUNNEL_FAILED");
+    expect(state.calls.filter((call) => !call.startsWith("GET"))).toEqual([]);
+    expect(checks.confirmProxy).not.toHaveBeenCalled();
+  });
+
+  it("spends no Cloudflare budget once the member's reserve refuses", async () => {
+    const state = fakeCloudflare([gateway, catchAll]);
+    const checks = guards();
+    checks.reserve.mockRejectedValueOnce(new Error("too many"));
+    await expect(
+      ensureArmWorkspacePreviewRoute(route("ws-budget"), checks),
+    ).rejects.toThrow("too many");
+    expect(state.calls).toEqual([]);
   });
 
   it("treats a record a concurrent mint created as success", async () => {
-    const state = fakeCloudflare([]);
+    const state = fakeCloudflare([gateway, wildcard, catchAll]);
     state.failCreate = true;
     const host = `p3000-${hash("ws-race")}-g3.${zone}`;
     state.records.push({
@@ -166,14 +205,14 @@ describe("preview routes", () => {
       return original(input, init);
     });
     await expect(
-      ensureArmWorkspacePreviewRoute(route("ws-race")),
+      ensureArmWorkspacePreviewRoute(route("ws-race"), guards()),
     ).resolves.toBe(host);
   });
 
   it("replaces the oldest of four hosts in a generation and refuses foreign targets", async () => {
     const suffix = `-${hash("ws-cap")}-g3.${zone}`;
     const state = fakeCloudflare(
-      [],
+      [gateway, wildcard, catchAll],
       [4001, 4002, 4003, 4004].map((port, index) => ({
         id: `old-${port}`,
         name: `p${port}${suffix}`,
@@ -181,7 +220,7 @@ describe("preview routes", () => {
         created_on: `2026-10-0${4 - index}T00:00:00Z`,
       })),
     );
-    await ensureArmWorkspacePreviewRoute(route("ws-cap"));
+    await ensureArmWorkspacePreviewRoute(route("ws-cap"), guards());
     expect(state.records.map((record) => record.name).sort()).toEqual(
       [4001, 4002, 4003, 3000].map((port) => `p${port}${suffix}`).sort(),
     );
@@ -189,58 +228,7 @@ describe("preview routes", () => {
       { id: "x", name: `p5000${suffix}`, content: "elsewhere", created_on: "" },
     ];
     await expect(
-      ensureArmWorkspacePreviewRoute(route("ws-cap", 5000)),
+      ensureArmWorkspacePreviewRoute(route("ws-cap", 5000), guards()),
     ).rejects.toThrow("CLOUDFLARE_DNS_CONFLICT");
-  });
-});
-
-describe("preview tokens", () => {
-  it("signs a one-minute, single-use token bound to one host, port and member", async () => {
-    const host = `p3000-${hash("ws-a")}-g3.${zone}`;
-    const token = await armWorkspacePreviewToken({
-      host,
-      workspaceId: "ws-a",
-      generation: 3,
-      port: 3000,
-      userId: "user-1",
-      appOrigin: "https://www.trycodev.com",
-    });
-    const [header, payload, signature] = token.split(".");
-    const claims = JSON.parse(Buffer.from(payload!, "base64url").toString());
-    expect(JSON.parse(Buffer.from(header!, "base64url").toString())).toEqual({
-      alg: "EdDSA",
-      typ: "JWT",
-    });
-    expect(claims).toEqual({
-      iss: "codev-control-plane",
-      aud: host,
-      scope: "preview",
-      workspaceId: "ws-a",
-      generation: 3,
-      port: 3000,
-      sub: "user-1",
-      appOrigin: "https://www.trycodev.com",
-      jti: expect.stringMatching(/^[0-9a-f-]{36}$/),
-      iat: expect.any(Number),
-      exp: claims.iat + 60,
-    });
-    expect(claims).not.toHaveProperty("method");
-    expect(
-      verify(
-        null,
-        Buffer.from(`${header}.${payload}`),
-        publicKey,
-        Buffer.from(signature!, "base64url"),
-      ),
-    ).toBe(true);
-    const again = await armWorkspacePreviewToken({
-      host,
-      workspaceId: "ws-a",
-      generation: 3,
-      port: 3000,
-      userId: "user-1",
-      appOrigin: "https://www.trycodev.com",
-    });
-    expect(again).not.toBe(token);
   });
 });

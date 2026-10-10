@@ -10,7 +10,10 @@ vi.mock("@upstash/ratelimit", () => ({
 vi.mock("@upstash/redis", () => ({ Redis: class {} }));
 vi.mock("../platform/rate-limit", () => ({ consumeRateLimit: mocks.consume }));
 
-import { allowGen2PreviewSession } from "./preview-rate-limit";
+import {
+  allowGen2PreviewRoute,
+  allowGen2PreviewSession,
+} from "./preview-rate-limit";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -44,6 +47,22 @@ it("falls back to the TCP limiter without REST credentials", async () => {
     "user-1:workspace-1",
     "gen2-preview-session",
     30,
+    60,
+  );
+});
+
+it("limits each member's new preview hosts across every workspace", async () => {
+  expect(await allowGen2PreviewRoute("user-1")).toBe(true);
+  expect(mocks.limit).toHaveBeenCalledWith("user-1");
+  mocks.limit.mockResolvedValueOnce({ success: true, reason: "timeout" });
+  expect(await allowGen2PreviewRoute("user-1")).toBe(false);
+  vi.stubEnv("KV_REST_API_URL", "");
+  mocks.consume.mockResolvedValue({ allowed: false });
+  expect(await allowGen2PreviewRoute("user-1")).toBe(false);
+  expect(mocks.consume).toHaveBeenCalledWith(
+    "user-1",
+    "gen2-preview-route",
+    10,
     60,
   );
 });

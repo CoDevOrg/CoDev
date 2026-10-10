@@ -48,7 +48,8 @@ function listeningSockets(output: string): ListeningSocket[] {
   });
 }
 
-function reserved(port: number) {
+/** Ports the guest proxy never forwards, whether or not they listen. */
+export function isGen2PreviewReservedPort(port: number) {
   return (
     RESERVED.has(port) ||
     (port >= RESERVED_RANGE[0] && port <= RESERVED_RANGE[1])
@@ -74,7 +75,7 @@ export function readGen2PreviewPorts(output: string) {
   const ports = [...byPort]
     .filter(
       ([port, rows]) =>
-        !reserved(port) &&
+        !isGen2PreviewReservedPort(port) &&
         rows.every(({ uid }) => uid >= MEMBER_UID) &&
         rows.some(({ address }) => address !== "other"),
     )

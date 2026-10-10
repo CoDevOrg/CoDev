@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { readGen2PreviewPorts } from "./workspace-ports-parse";
+import {
+  isGen2PreviewReservedPort,
+  readGen2PreviewPorts,
+} from "./workspace-ports-parse";
 
 const header =
   "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode";
@@ -59,6 +62,15 @@ describe("guest listening sockets", () => {
     expect(
       readGen2PreviewPorts("cat: /proc/net/tcp6: No such file\r\n"),
     ).toEqual({ proxy: false, ports: [] });
+  });
+
+  it("reserves guest service ports whether or not they listen", () => {
+    [9, 4879, 5252, 5260, 5261, 20241, 20245].forEach((port) =>
+      expect(isGen2PreviewReservedPort(port)).toBe(true),
+    );
+    [3000, 5173, 20240, 20246].forEach((port) =>
+      expect(isGen2PreviewReservedPort(port)).toBe(false),
+    );
   });
 
   it("caps the list and keeps ports in order", () => {

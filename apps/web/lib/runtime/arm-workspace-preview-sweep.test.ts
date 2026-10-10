@@ -7,10 +7,15 @@ vi.mock("../platform/database", () => ({
     select: () => ({ from: () => ({ where: mocks.rows }) }),
   }),
 }));
-vi.mock("./arm-workspace-provider", () => ({
-  CLOUDFLARE_ACCOUNT_ID: "account",
-  cloudflareRequestDirect: mocks.request,
-}));
+vi.mock("./arm-workspace-provider", async () => {
+  const { createHash } = await import("node:crypto");
+  return {
+    CLOUDFLARE_ACCOUNT_ID: "account",
+    cloudflareRequestDirect: mocks.request,
+    sha256Hex: async (value: string) =>
+      createHash("sha256").update(value).digest("hex"),
+  };
+});
 
 import { sweepArmWorkspacePreviewRoutes } from "./arm-workspace-preview-sweep";
 

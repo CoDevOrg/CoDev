@@ -3,20 +3,32 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   access: vi.fn(),
   allow: vi.fn(),
+  allowRoute: vi.fn(),
   target: vi.fn(),
   ensure: vi.fn(),
   token: vi.fn(),
+  config: vi.fn(),
+  exec: vi.fn(),
 }));
 vi.mock("./preview-access", () => ({ gen2PreviewAccess: mocks.access }));
 vi.mock("./preview-rate-limit", () => ({
   allowGen2PreviewSession: mocks.allow,
+  allowGen2PreviewRoute: mocks.allowRoute,
 }));
 vi.mock("../runtime/workspace-runtime-target", () => ({
   runtimeTargetFromRow: mocks.target,
 }));
 vi.mock("../runtime/arm-workspace-preview-route", () => ({
   ensureArmWorkspacePreviewRoute: mocks.ensure,
+}));
+vi.mock("../runtime/arm-workspace-preview-token", () => ({
   armWorkspacePreviewToken: mocks.token,
+}));
+vi.mock("../runtime/arm-workspace-config", () => ({
+  readArmWorkspaceConfig: mocks.config,
+}));
+vi.mock("../runtime/orchestrator-files", () => ({
+  executeInSandbox: mocks.exec,
 }));
 
 import { Gen2AccessError } from "./errors";
@@ -31,12 +43,27 @@ const access = {
   host: "codev-x-g5.trycodev.com",
   tunnelId: "tunnel-1",
 };
-const input = (origin: string | null = "https://www.trycodev.com") => ({
+const input = (
+  origin: string | null = "https://www.trycodev.com",
+  port = 5173,
+) => ({
   workspaceId: "w",
   userId: "u",
   origin,
-  request: { port: 5173, path: "/app?tab=1#top" },
+  request: { port, path: "/app?tab=1#top" },
 });
+const proxyRow =
+  "   0: 0100007F:148D 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 1 1";
+
+type Guards = {
+  reserve(): Promise<void>;
+  confirmProxy(): Promise<void>;
+};
+/** Mints once and hands back the checks it gave the Cloudflare route. */
+async function guardsOfOneMint() {
+  await createGen2PreviewSession(input());
+  return mocks.ensure.mock.calls.at(-1)![1] as Guards;
+}
 
 describe("creating a preview session", () => {
   beforeEach(() => {
@@ -46,6 +73,9 @@ describe("creating a preview session", () => {
     vi.stubEnv("CODEV_PREVIEW_ZONE_ID", zoneId);
     mocks.access.mockResolvedValue(access);
     mocks.allow.mockResolvedValue(true);
+    mocks.allowRoute.mockResolvedValue(true);
+    mocks.config.mockReturnValue({ bootEnabled: true });
+    mocks.exec.mockResolvedValue({ output: `${proxyRow}\n`, exitCode: 0 });
     mocks.target.mockResolvedValue({
       workspaceId: "w",
       generation: 5,
@@ -65,14 +95,18 @@ describe("creating a preview session", () => {
     expect(url.searchParams.get("next")).toBe("/app?tab=1#top");
     expect(url.hash).toBe("");
     expect(Date.parse(session.expiresAt)).toBeGreaterThan(Date.now());
-    expect(mocks.ensure).toHaveBeenCalledWith({
-      workspaceId: "w",
-      generation: 5,
-      tunnelId: "tunnel-1",
-      port: 5173,
-      zone: "codev-preview.dev",
-      zoneId,
-    });
+    expect(mocks.ensure).toHaveBeenCalledWith(
+      {
+        workspaceId: "w",
+        generation: 5,
+        tunnelId: "tunnel-1",
+        gatewayHost: access.host,
+        port: 5173,
+        zone: "codev-preview.dev",
+        zoneId,
+      },
+      { reserve: expect.any(Function), confirmProxy: expect.any(Function) },
+    );
     expect(mocks.token).toHaveBeenCalledWith({
       host: "p5173-abc-g5.codev-preview.dev",
       workspaceId: "w",
@@ -117,6 +151,55 @@ describe("creating a preview session", () => {
       expect(mocks.token).not.toHaveBeenCalled();
     },
   );
+
+  it("refuses reserved guest ports before the rate limit", async () => {
+    await expect(
+      createGen2PreviewSession(input(undefined, 5261)),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(mocks.allow).not.toHaveBeenCalled();
+    expect(mocks.ensure).not.toHaveBeenCalled();
+  });
+
+  it("never routes previews to a legacy-boot guest", async () => {
+    mocks.config.mockReturnValue({ bootEnabled: false });
+    await expect(createGen2PreviewSession(input())).rejects.toMatchObject({
+      status: 409,
+      message: "Update this workspace to use the browser.",
+    });
+    expect(mocks.ensure).not.toHaveBeenCalled();
+  });
+
+  it("confirms the guest's proxy owns its port before routing the zone to it", async () => {
+    const { confirmProxy } = await guardsOfOneMint();
+    await expect(confirmProxy()).resolves.toBeUndefined();
+    expect(mocks.exec).toHaveBeenCalledWith(
+      "w",
+      {
+        command: ["cat", "/proc/net/tcp", "/proc/net/tcp6"],
+        timeoutSeconds: 8,
+      },
+      expect.objectContaining({ recordActivity: false }),
+    );
+    mocks.exec.mockResolvedValueOnce({ output: "", exitCode: 0 });
+    await expect(confirmProxy()).rejects.toMatchObject({
+      status: 409,
+      message: "Update this workspace to use the browser.",
+    });
+    // A Cloudflare error page instead of the guest's JSON.
+    mocks.exec.mockRejectedValueOnce(new SyntaxError("Unexpected token '<'"));
+    await expect(confirmProxy()).rejects.toMatchObject({
+      status: 503,
+      message: "Workspace is busy — try again.",
+    });
+  });
+
+  it("limits each member's new preview hosts across workspaces", async () => {
+    const { reserve } = await guardsOfOneMint();
+    await expect(reserve()).resolves.toBeUndefined();
+    expect(mocks.allowRoute).toHaveBeenCalledWith("u");
+    mocks.allowRoute.mockResolvedValueOnce(false);
+    await expect(reserve()).rejects.toMatchObject({ status: 429 });
+  });
 
   it("needs a guest with a tunnel, and hides Cloudflare failures", async () => {
     mocks.access.mockResolvedValueOnce({ ...access, tunnelId: null });
