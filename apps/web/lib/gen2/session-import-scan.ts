@@ -6,9 +6,10 @@ import {
 } from "./session-import-summary";
 
 /**
- * Lists the agent sessions in a folder the member grants through the
- * browser's File System Access API (Chrome and Edge). Everything here runs in
- * the browser: files are only read to describe them, and nothing leaves the
+ * Lists the agent sessions in a folder the member grants: through the File
+ * System Access API where the browser has it (Chrome, Edge), otherwise through
+ * a folder input (Firefox, Safari, Brave). Everything here runs in the
+ * browser: files are only read to describe them, and nothing leaves the
  * machine until the member picks one to upload.
  */
 
@@ -25,6 +26,10 @@ const MAX_DEPTH = 4;
 const READ_BATCH = 8;
 // Sub-agent transcripts and tool output live beside Claude sessions.
 const SKIPPED_FOLDERS = new Set(["subagents", "tool-results"]);
+const SESSIONS_FOLDER: Record<Gen2SessionImportProvider, string> = {
+  codex: "sessions",
+  claude: "projects",
+};
 
 type DirectoryHandle = FileSystemDirectoryHandle & {
   values(): AsyncIterable<FileSystemDirectoryHandle | FileSystemFileHandle>;
@@ -41,8 +46,16 @@ function directoryPicker(): DirectoryPicker | null {
   return picker ? picker.bind(window) : null;
 }
 
-export function canBrowseLocalSessions() {
-  return directoryPicker() !== null;
+/** How this browser can list a folder, if at all. */
+export function localSessionAccess(): "picker" | "input" | null {
+  if (directoryPicker()) return "picker";
+  if (
+    typeof HTMLInputElement !== "undefined" &&
+    "webkitdirectory" in HTMLInputElement.prototype
+  ) {
+    return "input";
+  }
+  return null;
 }
 
 /** Asks for the folder; null when the member cancels. */
@@ -88,9 +101,10 @@ async function sessionsRoot(
   directory: DirectoryHandle,
   provider: Gen2SessionImportProvider,
 ) {
-  const child = provider === "codex" ? "sessions" : "projects";
   try {
-    return (await directory.getDirectoryHandle(child)) as DirectoryHandle;
+    return (await directory.getDirectoryHandle(
+      SESSIONS_FOLDER[provider],
+    )) as DirectoryHandle;
   } catch {
     return directory;
   }
@@ -109,27 +123,57 @@ async function describe(
   return summary ? { ...summary, file, modifiedAt: file.lastModified } : null;
 }
 
-/** The most recently used sessions in the folder, newest first. */
-export async function scanLocalSessions(
-  directory: DirectoryHandle,
+/** The most recently used sessions among the files, newest first. */
+async function describeLatest(
+  files: File[],
   provider: Gen2SessionImportProvider,
 ): Promise<LocalSession[]> {
-  const root = await sessionsRoot(directory, provider);
-  const handles = await listSessionFiles(root);
-  const files = (await Promise.all(handles.map((h) => h.getFile()))).sort(
-    (a, b) => b.lastModified - a.lastModified,
-  );
+  const newest = [...files].sort((a, b) => b.lastModified - a.lastModified);
   const sessions: LocalSession[] = [];
   for (
     let start = 0;
-    start < files.length && sessions.length < MAX_SESSIONS;
+    start < newest.length && sessions.length < MAX_SESSIONS;
     start += READ_BATCH
   ) {
-    const batch = files.slice(start, start + READ_BATCH);
+    const batch = newest.slice(start, start + READ_BATCH);
     const described = await Promise.all(
       batch.map((f) => describe(provider, f)),
     );
     sessions.push(...described.filter((s): s is LocalSession => s !== null));
   }
   return sessions.slice(0, MAX_SESSIONS);
+}
+
+export async function scanLocalSessions(
+  directory: DirectoryHandle,
+  provider: Gen2SessionImportProvider,
+): Promise<LocalSession[]> {
+  const root = await sessionsRoot(directory, provider);
+  const handles = await listSessionFiles(root);
+  const files = await Promise.all(handles.map((h) => h.getFile()));
+  return describeLatest(files, provider);
+}
+
+/**
+ * The same listing for a folder chosen with `<input webkitdirectory>`, which
+ * hands over every file in it with its path below the chosen folder.
+ */
+export function scanSelectedFolder(
+  selected: Iterable<File>,
+  provider: Gen2SessionImportProvider,
+): Promise<LocalSession[]> {
+  const sessions = [...selected].flatMap((file) => {
+    const parts = file.webkitRelativePath.split("/");
+    return file.name.endsWith(".jsonl") &&
+      !parts.some((part) => SKIPPED_FOLDERS.has(part))
+      ? [{ file, parts }]
+      : [];
+  });
+  // parts[0] is the chosen folder; prefer its sessions folder when the
+  // member chose the agent's home instead.
+  const inSessions = sessions.filter(
+    ({ parts }) => parts[1] === SESSIONS_FOLDER[provider],
+  );
+  const files = (inSessions.length ? inSessions : sessions).map((s) => s.file);
+  return describeLatest(files, provider);
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { FolderOpen, Loader2 } from "lucide-react";
 
 import type { Gen2SessionImportProvider } from "@codev/contracts";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import {
   pickSessionFolder,
   scanLocalSessions,
+  scanSelectedFolder,
   type LocalSession,
 } from "@/lib/gen2/session-import-scan";
 
@@ -18,38 +19,44 @@ function describeSession(session: LocalSession) {
     dateStyle: "medium",
     timeStyle: "short",
   });
-  const size = `${(session.file.size / (1024 * 1024)).toFixed(1)} MB`;
+  const kb = session.file.size / 1024;
+  const size =
+    kb < 1024
+      ? `${Math.max(1, Math.round(kb))} KB`
+      : `${(kb / 1024).toFixed(1)} MB`;
   return [session.branch, when, size].filter(Boolean).join(" · ");
 }
 
 /**
  * Lists the sessions in the agent's folder once the member grants it, so
  * they pick a conversation by name instead of hunting for a dated file.
- * Only the chosen session is uploaded.
+ * Only the chosen session is uploaded. `access` is how the browser lets a
+ * page read a folder: the folder picker, or a folder input as the fallback.
  */
 export function SessionImportBrowser({
   provider,
   folder,
+  access,
   disabled,
   onPick,
 }: {
   provider: Gen2SessionImportProvider;
   folder: string;
+  access: "picker" | "input";
   disabled: boolean;
   onPick: (file: File) => void;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
   const [sessions, setSessions] = useState<LocalSession[] | null>(null);
   const [scanning, setScanning] = useState(false);
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
 
-  async function browse() {
+  async function list(scan: () => Promise<LocalSession[]>) {
     setError("");
+    setScanning(true);
     try {
-      const directory = await pickSessionFolder(provider);
-      if (!directory) return;
-      setScanning(true);
-      const found = await scanLocalSessions(directory, provider);
+      const found = await scan();
       if (!found.length) {
         setError(`No sessions found there. Choose ${folder}.`);
       }
@@ -61,6 +68,41 @@ export function SessionImportBrowser({
     }
   }
 
+  async function browse() {
+    if (access === "input") {
+      inputRef.current?.click();
+      return;
+    }
+    const directory = await pickSessionFolder(provider).catch(() => {
+      setError("Couldn't open that folder. Choose it again.");
+      return null;
+    });
+    if (directory) await list(() => scanLocalSessions(directory, provider));
+  }
+
+  // React has no prop for `webkitdirectory`, so it is set on the element.
+  const folderInput =
+    access === "input" ? (
+      <input
+        ref={(element) => {
+          inputRef.current = element;
+          element?.setAttribute("webkitdirectory", "");
+        }}
+        type="file"
+        multiple
+        className="sr-only"
+        tabIndex={-1}
+        aria-hidden="true"
+        onChange={(event) => {
+          const files = [...(event.target.files ?? [])];
+          event.target.value = "";
+          if (files.length) {
+            void list(() => scanSelectedFolder(files, provider));
+          }
+        }}
+      />
+    ) : null;
+
   const needle = query.trim().toLowerCase();
   const visible = (sessions ?? []).filter((session) =>
     `${session.title} ${session.branch ?? ""}`.toLowerCase().includes(needle),
@@ -69,6 +111,7 @@ export function SessionImportBrowser({
   if (!sessions) {
     return (
       <div className="gen2-session-import-browse">
+        {folderInput}
         <WorkspaceButton
           tone="secondary"
           disabled={disabled || scanning}
@@ -92,6 +135,7 @@ export function SessionImportBrowser({
 
   return (
     <div className="gen2-session-import-browse">
+      {folderInput}
       <div className="gen2-session-import-browse-bar">
         <Input
           value={query}

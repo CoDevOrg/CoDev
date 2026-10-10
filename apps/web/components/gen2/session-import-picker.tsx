@@ -11,7 +11,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { canBrowseLocalSessions } from "@/lib/gen2/session-import-scan";
+import { localSessionAccess } from "@/lib/gen2/session-import-scan";
 
 import { ProviderLogo } from "./provider-logos";
 import { SessionImportBrowser } from "./session-import-browser";
@@ -40,7 +40,8 @@ export function SessionImportPicker({
   const platform = currentPlatform();
   const source = SESSION_SOURCES[provider];
   const folder = source.folder[platform];
-  const browsable = canBrowseLocalSessions();
+  const access = localSessionAccess();
+  const browsable = access !== null;
 
   return (
     <FieldGroup>
@@ -66,12 +67,17 @@ export function SessionImportPicker({
           <FieldLabel>Your {source.label} sessions</FieldLabel>
           <FieldDescription>
             Choose the folder once to list its sessions. Only the session you
-            pick is uploaded. {PICKER_TIP[platform]}
+            pick is uploaded
+            {access === "input"
+              ? ", even if your browser asks to upload the folder."
+              : "."}{" "}
+            {PICKER_TIP[platform]}
           </FieldDescription>
           <SessionImportBrowser
             key={provider}
             provider={provider}
             folder={folder}
+            access={access}
             disabled={pending}
             onPick={onFile}
           />

@@ -1119,6 +1119,24 @@ export function SupersetWorkspaceShell({
                     </TooltipTrigger>
                     <TooltipContent side="right">New Chat</TooltipContent>
                   </Tooltip>
+
+                  {activeWorkspace.role !== "viewer" ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <WorkspaceButton
+                          size="icon"
+                          className="gen2-sidebar-compact-btn"
+                          onClick={() => setImportOpen(true)}
+                          aria-label="Import a local session"
+                        >
+                          <Upload aria-hidden="true" />
+                        </WorkspaceButton>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">
+                        Import a Codex or Claude Code session
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : null}
                 </div>
               ) : (
                 <div className="gen2-sidebar-section">
@@ -1265,6 +1283,24 @@ export function SupersetWorkspaceShell({
                     </TooltipTrigger>
                     <TooltipContent side="right">New Chat</TooltipContent>
                   </Tooltip>
+
+                  {activeWorkspace.role !== "viewer" ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <WorkspaceButton
+                          size="icon"
+                          className="gen2-sidebar-compact-btn"
+                          onClick={() => setImportOpen(true)}
+                          aria-label="Import a local session"
+                        >
+                          <Upload aria-hidden="true" />
+                        </WorkspaceButton>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">
+                        Import a Codex or Claude Code session
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : null}
 
                   <div className="gen2-sidebar-compact-divider" />
 
