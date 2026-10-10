@@ -26,7 +26,9 @@ export type ComposerMenuAction =
   | { type: "send"; prompt: string }
   | { type: "override"; provider: Gen2AgentProviderName }
   | { type: "connect"; provider: Gen2AgentProviderName }
-  | { type: "notice"; message: string };
+  | { type: "notice"; message: string }
+  /** Loads the menu's GitHub branches again after a failure. */
+  | { type: "retry" };
 
 export type ComposerMenuIcon =
   | "plan"
@@ -59,6 +61,8 @@ export type ComposerMenuItem = {
   detail?: string | undefined;
   icon: ComposerMenuIcon;
   provider?: Gen2AgentProviderName | null | undefined;
+  /** Shown for context but never chosen; its action is a notice. */
+  disabled?: boolean | undefined;
   action: ComposerMenuAction;
 };
 
@@ -131,8 +135,8 @@ export function useComposerTypeahead(text: string, enabled: boolean) {
     const keys: Record<string, () => void> = {
       ArrowDown: () => setActive({ key, index: (index + 1) % count }),
       ArrowUp: () => setActive({ key, index: (index - 1 + count) % count }),
-      Enter: () => select(chosen),
-      Tab: () => select(chosen),
+      Enter: () => chosen.disabled || select(chosen),
+      Tab: () => chosen.disabled || select(chosen),
       Escape: () => setDismissed(anchor),
     };
     const handler = keys[event.key];

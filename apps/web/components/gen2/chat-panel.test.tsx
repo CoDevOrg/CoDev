@@ -12,10 +12,42 @@ import type {
 } from "@codev/contracts";
 
 import { Gen2ChatPanel, type Gen2ChatPanelProps } from "./chat-panel";
+import type { PendingWorkspaceAction } from "./use-workspace-action-dispatch";
 import {
   WorkspaceAgentContext,
   type WorkspaceAgentContextValue,
 } from "./workspace-controller";
+
+/** What the panel hands the action dispatcher, and what it gets back. */
+const dispatch = vi.hoisted(() => ({
+  calls: [] as Array<{ chatId: string | null; live: unknown }>,
+  pending: [] as unknown[],
+  announcement: "",
+}));
+
+vi.mock("./use-workspace-action-dispatch", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  useWorkspaceActionDispatch: (input: {
+    chatId: string | null;
+    live: unknown;
+  }) => {
+    dispatch.calls.push({ chatId: input.chatId, live: input.live });
+    return {
+      pending: dispatch.pending,
+      resolve: () => undefined,
+      outcomeFor: () => null,
+      announcement: dispatch.announcement,
+    };
+  },
+}));
+
+vi.mock("./workspace-action-cards", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  WorkspaceActionCards: ({ pending }: { pending: unknown[] }) =>
+    pending.length ? (
+      <div data-testid="action-cards">{pending.length} proposals</div>
+    ) : null,
+}));
 
 const workspace: Gen2WorkspaceDetail = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -117,7 +149,7 @@ function agentContext(
   };
 }
 
-function renderPanel(
+function panelElement(
   props: Partial<Gen2ChatPanelProps> = {},
   context: WorkspaceAgentContextValue | null = null,
 ) {
@@ -131,15 +163,51 @@ function renderPanel(
       {...props}
     />
   );
-  return render(
-    context ? (
-      <WorkspaceAgentContext.Provider value={context}>
-        {panel}
-      </WorkspaceAgentContext.Provider>
-    ) : (
-      panel
-    ),
+  return context ? (
+    <WorkspaceAgentContext.Provider value={context}>
+      {panel}
+    </WorkspaceAgentContext.Provider>
+  ) : (
+    panel
   );
+}
+
+function renderPanel(
+  props: Partial<Gen2ChatPanelProps> = {},
+  context: WorkspaceAgentContextValue | null = null,
+) {
+  return render(panelElement(props, context));
+}
+
+const OTHER_CHAT = "66666666-6666-4666-8666-666666666666";
+
+const DONE_CHUNKS = ndjson(
+  `{"type":"item.completed","item":{"id":"m1","type":"agent_message","text":"Done."}}`,
+  `{"type":"turn.completed"}`,
+);
+
+/** A stand-in for the Web Speech API; without `availability`, cloud only. */
+function stubSpeech(availability?: string) {
+  const instances: Array<{
+    start: ReturnType<typeof vi.fn>;
+    abort: ReturnType<typeof vi.fn>;
+  }> = [];
+  class Recognition {
+    static available = availability
+      ? vi.fn(async () => availability)
+      : undefined;
+    onresult = null;
+    onerror = null;
+    onend = null;
+    start = vi.fn();
+    stop = vi.fn();
+    abort = vi.fn();
+    constructor() {
+      instances.push(this);
+    }
+  }
+  vi.stubGlobal("SpeechRecognition", Recognition);
+  return instances;
 }
 
 function agentPosts() {
@@ -166,6 +234,9 @@ describe("Gen2ChatPanel", () => {
   beforeEach(() => {
     sessionStorage.clear();
     vi.stubGlobal("localStorage", memoryStorage());
+    dispatch.calls.length = 0;
+    dispatch.pending = [];
+    dispatch.announcement = "";
   });
 
   function stubFetch(handlers: {
@@ -1577,6 +1648,303 @@ describe("Gen2ChatPanel", () => {
       fireEvent.click(mic);
       expect(instances[0]!.stop).toHaveBeenCalled();
       expect(mic).toHaveAttribute("aria-pressed", "false");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("hands the live turn to the action dispatcher only while it runs here", async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    stubFetch({
+      start: () =>
+        Response.json({ sessionId: "session-1", actionNonce: "abcde12345" }),
+      poll: () =>
+        held.then(() => ({
+          chunks: DONE_CHUNKS,
+          nextSequence: 1,
+          exited: true,
+        })),
+    });
+    const proposal: PendingWorkspaceAction = {
+      key: "k1",
+      chatId: CHAT.id,
+      action: { type: "open_settings" },
+      blocker: null,
+    };
+    dispatch.pending = [proposal];
+    dispatch.announcement = "Agent opened src/app.ts in Files";
+    renderPanel();
+    await screen.findByLabelText("Prompt");
+    expect(dispatch.calls.every((call) => call.live === null)).toBe(true);
+    type("open the app");
+    await sendReady();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByRole("button", { name: /Stop/ });
+    await waitFor(() =>
+      expect(dispatch.calls.at(-1)).toEqual({
+        chatId: CHAT.id,
+        live: { sessionId: "session-1", actionNonce: "abcde12345", items: [] },
+      }),
+    );
+    // Proposals sit at the top of the dock, above the notices.
+    const cards = screen.getByTestId("action-cards");
+    expect(cards.parentElement).toHaveClass("gen2-chat-dock");
+    expect(cards.parentElement!.firstElementChild).toBe(cards);
+    expect(
+      screen.getByText("Agent opened src/app.ts in Files"),
+    ).toHaveAttribute("aria-live", "polite");
+    release();
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /Stop/ })).toBeNull(),
+    );
+    expect(dispatch.calls.at(-1)!.live).toBeNull();
+  });
+
+  it("keeps a running turn out of another chat's transcript and actions", async () => {
+    stubFetch({
+      start: () =>
+        Response.json({ sessionId: "session-1", actionNonce: "abcde12345" }),
+      poll: () => new Promise(() => undefined),
+      history: [
+        {
+          id: "u-0",
+          role: "user",
+          body: "earlier",
+          createdAt: "2026-09-20T20:00:00.000Z",
+        },
+        {
+          id: "a-0",
+          role: "assistant",
+          body: "Earlier reply.",
+          createdAt: "2026-09-20T20:01:00.000Z",
+        },
+      ],
+    });
+    const view = renderPanel({ activeChatId: CHAT.id });
+    await screen.findByText("Earlier reply.");
+    type("next");
+    await sendReady();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByText("Thinking…")).toBeInTheDocument();
+    await waitFor(() => expect(dispatch.calls.at(-1)!.live).not.toBeNull());
+    view.rerender(panelElement({ activeChatId: OTHER_CHAT }));
+    await waitFor(() =>
+      expect(dispatch.calls.at(-1)).toEqual({ chatId: OTHER_CHAT, live: null }),
+    );
+    expect(screen.queryByText("Thinking…")).toBeNull();
+    // The turn still runs, so it can still be stopped.
+    expect(screen.getByRole("button", { name: /Stop/ })).toBeInTheDocument();
+  });
+
+  it("closes the menu and ends dictation on a chat switch or a lost connection", async () => {
+    const speech = stubSpeech("available");
+    try {
+      stubFetch({});
+      const view = renderPanel({ activeChatId: CHAT.id });
+      await screen.findByLabelText("Prompt");
+      fireEvent.click(screen.getByRole("button", { name: "Dictation" }));
+      await waitFor(() => expect(speech).toHaveLength(1));
+      type("/");
+      await screen.findByRole("listbox");
+      view.rerender(panelElement({ activeChatId: OTHER_CHAT }));
+      await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
+      expect(speech[0]!.abort).toHaveBeenCalled();
+      type("");
+      type("/");
+      await screen.findByRole("listbox");
+      fireEvent.click(screen.getByRole("button", { name: "Dictation" }));
+      await waitFor(() => expect(speech).toHaveLength(2));
+      view.rerender(
+        panelElement({
+          activeChatId: OTHER_CHAT,
+          workspace: { ...workspace, status: "stopped" },
+        }),
+      );
+      await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
+      expect(speech[1]!.abort).toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("stops Keep going when the connection drops, without waking the machine", async () => {
+    stubFetch({
+      history: [
+        {
+          id: "u-1",
+          role: "user",
+          body: "/goal Ship the login page",
+          createdAt: "2026-09-20T20:00:00.000Z",
+        },
+        {
+          id: "a-1",
+          role: "assistant",
+          body: "Started on it.",
+          createdAt: "2026-09-20T20:01:00.000Z",
+        },
+      ],
+      poll: () => ({ chunks: DONE_CHUNKS, nextSequence: 1, exited: true }),
+    });
+    const onNeedsMachine = vi.fn(async () => true);
+    const view = renderPanel({ activeChatId: CHAT.id, onNeedsMachine });
+    await screen.findByRole("region", { name: "Chat goal" });
+    fireEvent.click(screen.getByRole("switch", { name: "Keep going" }));
+    type("Start with the form");
+    await sendReady();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByText("Continuing in 5s")).toBeInTheDocument();
+    view.rerender(
+      panelElement({
+        activeChatId: CHAT.id,
+        onNeedsMachine,
+        workspace: { ...workspace, status: "stopped" },
+      }),
+    );
+    await waitFor(() => expect(screen.queryByText(/Continuing in/)).toBeNull());
+    expect(agentPosts()).toHaveLength(1);
+    expect(onNeedsMachine).not.toHaveBeenCalled();
+  });
+
+  it("runs the typed branch's own row on Enter, once GitHub has answered", async () => {
+    stubFetch({});
+    let answer!: () => void;
+    const answered = new Promise<void>((resolve) => {
+      answer = resolve;
+    });
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (url, init) => {
+      if (String(url).endsWith("/branches")) await answered;
+      return original(url, init);
+    });
+    const context = agentContext();
+    renderPanel({}, context);
+    const prompt = await screen.findByLabelText("Prompt");
+    type("/branch feat");
+    const loading = await screen.findByRole("option", {
+      name: /Loading branches from GitHub/,
+    });
+    expect(loading).toHaveAttribute("aria-disabled", "true");
+    fireEvent.keyDown(prompt, { key: "Enter" });
+    expect(prompt).toHaveValue("/branch feat");
+    expect(context.controller.run).not.toHaveBeenCalled();
+    answer();
+    const create = await screen.findByRole("option", {
+      name: /Create branch feat/,
+    });
+    // Ahead of the worktree whose name merely contains it.
+    expect(prompt).toHaveAttribute("aria-activedescendant", create.id);
+    fireEvent.keyDown(prompt, { key: "Enter" });
+    await waitFor(() =>
+      expect(context.controller.run).toHaveBeenCalledWith({
+        type: "create_branch",
+        branch: "feat",
+      }),
+    );
+    expect(context.controller.run).toHaveBeenCalledTimes(1);
+  });
+
+  it("puts a workspace command back when it fails", async () => {
+    stubFetch({});
+    const context = agentContext();
+    vi.mocked(context.controller.run).mockResolvedValue({
+      ok: false,
+      message: "That branch couldn’t be created.",
+    });
+    renderPanel({}, context);
+    const prompt = await screen.findByLabelText("Prompt");
+    type("/branch feat");
+    await screen.findByRole("option", { name: /Create branch feat/ });
+    fireEvent.keyDown(prompt, { key: "Enter" });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "That branch couldn’t be created.",
+    );
+    expect(prompt).toHaveValue("/branch feat");
+  });
+
+  it("leaves a follow-up in the composer while the turn is still starting", async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    stubFetch({
+      start: () => held.then(() => Response.json({ sessionId: "session-1" })),
+    });
+    renderPanel();
+    await screen.findByLabelText("Prompt");
+    type("first");
+    await sendReady();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(agentPosts()).toHaveLength(1));
+    type("second");
+    fireEvent.keyDown(screen.getByLabelText("Prompt"), { key: "Enter" });
+    expect(screen.queryByText("Queued")).toBeNull();
+    expect(screen.getByLabelText("Prompt")).toHaveValue("second");
+    release();
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /Stop/ })).toBeNull(),
+    );
+    expect(agentPosts()).toHaveLength(1);
+    expect(screen.getByLabelText("Prompt")).toHaveValue("second");
+  });
+
+  it("puts a cancelled follow-up back above what was typed since", async () => {
+    stubFetch({ poll: () => new Promise(() => undefined) });
+    renderPanel();
+    await screen.findByLabelText("Prompt");
+    type("first");
+    await sendReady();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByRole("button", { name: /Stop/ });
+    type("second");
+    fireEvent.keyDown(screen.getByLabelText("Prompt"), { key: "Enter" });
+    await screen.findByText("Queued");
+    type("third");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Cancel queued message" }),
+    );
+    expect(screen.getByLabelText("Prompt")).toHaveValue("second\n\nthird");
+  });
+
+  it("refuses a prompt that its mention tokens push past the limit", async () => {
+    stubFetch({});
+    const text = "x".repeat(19_970);
+    const context = agentContext(
+      {},
+      {
+        draftRequest: {
+          id: "long",
+          text: `${text} @[src/api.ts](file:src%2Fapi.ts)`,
+        },
+      },
+    );
+    renderPanel({}, context);
+    const prompt = await screen.findByLabelText("Prompt");
+    await waitFor(() => expect(prompt).toHaveValue(`${text} @src/api.ts`));
+    await sendReady();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "This message is 3 characters too long",
+    );
+    expect(agentPosts()).toHaveLength(0);
+    expect(prompt).toHaveValue(`${text} @src/api.ts`);
+  });
+
+  it("asks aloud before dictation sends audio to a speech service", async () => {
+    const speech = stubSpeech();
+    try {
+      stubFetch({});
+      renderPanel();
+      await screen.findByLabelText("Prompt");
+      fireEvent.click(screen.getByRole("button", { name: "Dictation" }));
+      const question = await screen.findByText(/sends audio to Google\/Apple/);
+      expect(question.closest('[role="status"]')).not.toBeNull();
+      expect(speech).toHaveLength(0);
+      fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+      await waitFor(() => expect(speech).toHaveLength(1));
+      expect(speech[0]!.start).toHaveBeenCalled();
     } finally {
       vi.unstubAllGlobals();
     }

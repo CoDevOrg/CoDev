@@ -24,7 +24,10 @@ import { buildChatTurnContext } from "./chat-turn-context";
 import type { StoredChatTurn } from "./chat-turn-storage";
 import type { ChatAttachment } from "./use-chat-attachments";
 import type { ChatThread } from "./use-chat-thread";
-import type { ComposerMention } from "./use-composer-mentions";
+import {
+  MAX_PROMPT_CHARS,
+  type ComposerMention,
+} from "./use-composer-mentions";
 import type { WorkspaceAgentContextValue } from "./workspace-controller";
 
 /** Everything one message carries, as the composer held it. */
@@ -60,14 +63,24 @@ export type ChatSendInput = {
   setPossibleDuplicate: (duplicate: Gen2PossibleDuplicateTask | null) => void;
 };
 
-function missingText({ text, attachments }: ChatDraft) {
+/** Mention tokens and the file list can push a full draft past the cap. */
+function overLimit(prompt: string) {
+  const over = prompt.length - MAX_PROMPT_CHARS;
+  return over > 0
+    ? `This message is ${over.toLocaleString()} characters too long once its mentions and files are added. Shorten it and try again.`
+    : "";
+}
+
+/** Why a draft can't go as written, before anything is woken or created. */
+function draftProblem({ text, mentions, attachments }: ChatDraft) {
   const parsed = parseGen2PromptCommand(text.trim());
   const command = GEN2_PROMPT_COMMANDS.find(
     (entry) => entry.id === parsed.command,
   );
-  return command?.requiresText && !parsed.text && attachments.length === 0
-    ? `Add ${command.argHint} after /${command.id}.`
-    : "";
+  if (command?.requiresText && !parsed.text && attachments.length === 0)
+    return `Add ${command.argHint} after /${command.id}.`;
+  const body = serializeGen2Mentions(parsed.text, mentions);
+  return overLimit(withGen2PromptCommand(parsed.command, body));
 }
 
 async function wake(input: ChatSendInput, setWaking: (on: boolean) => void) {
@@ -90,15 +103,14 @@ async function composePrompt(input: ChatSendInput, draft: ChatDraft) {
   try {
     const files = draft.attachments.map((attachment) => attachment.file);
     const uploaded = await uploadChatAttachments(input.workspaceId, files);
-    if (uploaded.error) {
-      input.setError(uploaded.error);
-      return null;
-    }
-    input.onFilesChanged();
-    return withGen2PromptCommand(
+    const prompt = withGen2PromptCommand(
       command,
       formatGen2AttachmentPrompt(uploaded.paths, body),
     );
+    if (uploaded.paths.length > 0) input.onFilesChanged();
+    const problem = uploaded.error ?? overLimit(prompt);
+    if (problem) input.setError(problem);
+    return problem ? null : prompt;
   } catch {
     input.setError("Couldn't upload those files. Try again.");
     return null;
@@ -205,9 +217,9 @@ export function useChatSend(input: ChatSendInput) {
     const empty = !draft.text.trim() && draft.attachments.length === 0;
     const blocked = input.running || starting || sendingRef.current;
     if (empty || blocked || !target.model) return false;
-    const missing = missingText(draft);
-    if (missing) {
-      input.setError(missing);
+    const problem = draftProblem(draft);
+    if (problem) {
+      input.setError(problem);
       return false;
     }
     sendingRef.current = true;

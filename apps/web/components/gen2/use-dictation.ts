@@ -79,6 +79,78 @@ async function localMode(
     : "cloud";
 }
 
+type RecognitionEvents = {
+  onFinal: (text: string) => void;
+  onInterim: (text: string) => void;
+  onError: (error: string) => void;
+  onEnd: (recognition: Recognition) => void;
+};
+
+/** A continuous recognizer in the page's language, wired to `events`. */
+function createRecognition(
+  Recognizer: RecognitionConstructor,
+  local: boolean,
+  events: RecognitionEvents,
+) {
+  const recognition = new Recognizer();
+  recognition.lang = navigator.language || "en-US";
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  if (local) recognition.processLocally = true;
+  recognition.onresult = (event) => {
+    const results = Array.from(event.results).slice(event.resultIndex);
+    const text = (final: boolean) =>
+      results
+        .filter((result) => result.isFinal === final)
+        .map((result) => result[0]?.transcript ?? "")
+        .join(final ? " " : "");
+    // One call per event, so phrases that land together insert together.
+    const heard = text(true).replace(/\s+/g, " ").trim();
+    if (heard) events.onFinal(heard);
+    events.onInterim(text(false));
+  };
+  recognition.onerror = (event) => events.onError(event.error);
+  recognition.onend = () => events.onEnd(recognition);
+  return recognition;
+}
+
+/** Whole seconds since `active` last turned on; 0 while it is off. */
+function useElapsed(active: boolean) {
+  const [elapsed, setElapsed] = useState(0);
+  const [was, setWas] = useState(active);
+  if (was !== active) {
+    setWas(active);
+    setElapsed(0);
+  }
+  useEffect(() => {
+    if (!active) return;
+    const started = Date.now();
+    const timer = window.setInterval(
+      () => setElapsed(Math.floor((Date.now() - started) / 1000)),
+      1000,
+    );
+    return () => window.clearInterval(timer);
+  }, [active]);
+  return elapsed;
+}
+
+/** Whether to recognize on this device, downloading its model if needed. */
+async function chooseMode(
+  Recognizer: RecognitionConstructor,
+  onInstalling: () => void,
+  current: () => boolean,
+) {
+  const options = {
+    langs: [navigator.language || "en-US"],
+    processLocally: true,
+  };
+  const mode = await localMode(Recognizer, options);
+  if (mode !== "install" || !current()) return mode;
+  onInstalling();
+  const installed = await Recognizer.install?.(options).catch(() => false);
+  return installed ? "local" : "cloud";
+}
+
 /**
  * Dictation through the Web Speech API. It prefers on-device recognition,
  * downloading the language model when the browser offers one; sending audio
@@ -100,24 +172,13 @@ export function useDictation({
   const [phase, setPhase] = useState<DictationPhase>("idle");
   const [interim, setInterim] = useState("");
   const [mode, setMode] = useState<"local" | "cloud" | null>(null);
-  const [elapsed, setElapsed] = useState(0);
+  const elapsed = useElapsed(phase === "listening");
   const recognitionRef = useRef<Recognition | null>(null);
   const runRef = useRef(0);
   const handlers = useRef({ onFinal, onError });
   useEffect(() => {
     handlers.current = { onFinal, onError };
   });
-
-  useEffect(() => {
-    if (phase !== "listening") return;
-    const started = Date.now();
-    const timer = window.setInterval(
-      () => setElapsed(Math.floor((Date.now() - started) / 1000)),
-      1000,
-    );
-    return () => window.clearInterval(timer);
-  }, [phase]);
-
   useEffect(
     () => () => {
       runRef.current += 1;
@@ -126,39 +187,27 @@ export function useDictation({
     [],
   );
 
-  function listen(local: boolean) {
-    const Recognizer = recognitionConstructor();
-    if (!Recognizer) return;
-    const recognition = new Recognizer();
-    recognition.lang = navigator.language || "en-US";
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    if (local) recognition.processLocally = true;
-    recognition.onresult = (event) => {
-      const results = Array.from(event.results).slice(event.resultIndex);
-      const text = (final: boolean) =>
-        results
-          .filter((result) => result.isFinal === final)
-          .map((result) => result[0]?.transcript ?? "")
-          .join(final ? " " : "");
-      // One call per event, so phrases that land together insert together.
-      const heard = text(true).replace(/\s+/g, " ").trim();
-      if (heard) handlers.current.onFinal(heard);
-      setInterim(text(false));
-    };
-    recognition.onerror = (event) => {
-      const message = ERRORS[event.error];
+  const events: RecognitionEvents = {
+    onFinal: (text) => handlers.current.onFinal(text),
+    onInterim: setInterim,
+    onError: (error) => {
+      const message = ERRORS[error];
       if (message) handlers.current.onError(message);
-    };
-    recognition.onend = () => {
+    },
+    onEnd: (recognition) => {
       if (recognitionRef.current !== recognition) return;
       recognitionRef.current = null;
       setPhase("idle");
       setInterim("");
-    };
+    },
+  };
+
+  function listen(local: boolean) {
+    const Recognizer = recognitionConstructor();
+    if (!Recognizer) return;
+    const recognition = createRecognition(Recognizer, local, events);
     recognitionRef.current = recognition;
     setMode(local ? "local" : "cloud");
-    setElapsed(0);
     setPhase("listening");
     try {
       recognition.start();
@@ -173,18 +222,14 @@ export function useDictation({
     const Recognizer = recognitionConstructor();
     if (!Recognizer || phase !== "idle") return;
     const run = (runRef.current += 1);
-    const options = {
-      langs: [navigator.language || "en-US"],
-      processLocally: true,
-    };
+    const current = () => runRef.current === run;
     setPhase("checking");
-    let local = await localMode(Recognizer, options);
-    if (local === "install" && runRef.current === run) {
-      setPhase("installing");
-      const installed = await Recognizer.install?.(options).catch(() => false);
-      local = installed ? "local" : "cloud";
-    }
-    if (runRef.current !== run) return;
+    const local = await chooseMode(
+      Recognizer,
+      () => setPhase("installing"),
+      current,
+    );
+    if (!current()) return;
     if (local === "cloud" && !storedConsent()) return setPhase("consent");
     listen(local === "local");
   }

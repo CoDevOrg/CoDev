@@ -98,6 +98,11 @@
   background: var(--ws-surface-hover);
 }
 
+.gen2-composer-menu-option[aria-disabled="true"] {
+  color: var(--ws-text-muted);
+  cursor: default;
+}
+
 .gen2-composer-menu-option > svg {
   width: 16px;
   height: 16px;
@@ -113,10 +118,14 @@
 }
 
 .gen2-composer-menu-detail {
+  max-width: 50%;
   margin-left: auto;
   padding-left: 8px;
   flex-shrink: 0;
+  overflow: hidden;
   color: var(--ws-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 12px;
   line-height: 16px;
 }

@@ -3,58 +3,36 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import type { Gen2AgentProviderName, Gen2ChatMessage } from "@codev/contracts";
 
+import { MAX_GEN2_CHAT_ATTACHMENTS } from "@/lib/gen2/chat-attachments";
 import { recallableChatText } from "./chat-recall";
 import { useChatAttachments } from "./use-chat-attachments";
 import type { ChatDraft } from "./use-chat-send";
 import type { ChatTurnOutcome } from "./use-chat-turn";
-import { useComposerMentions } from "./use-composer-mentions";
+import {
+  useComposerMentions,
+  type ComposerMentions,
+} from "./use-composer-mentions";
 import type { WorkspaceAgentContextValue } from "./workspace-controller";
 
-/**
- * The message being written: text and mentions, attachments, a one-message
- * agent switch, and one follow-up queued while a turn runs. A draft that
- * fails to start comes back unless the member has typed a new one.
- */
-export function useChatDraft({
-  send,
-  busy,
-  modelReady,
-  chatId,
-  switchingChat,
-  agentContext,
-  textareaRef,
-  setError,
-}: {
+type DraftInput = {
   send: (draft: ChatDraft) => Promise<boolean>;
+  /** A turn is starting, waking the machine, or running. */
   busy: boolean;
+  /** A turn is running; only then can one follow-up queue behind it. */
+  running: boolean;
   modelReady: (override: Gen2AgentProviderName | null) => boolean;
   chatId: string | null;
   switchingChat: boolean;
   agentContext: WorkspaceAgentContextValue | null;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
   setError: (message: string) => void;
-}) {
-  const text = useComposerMentions();
-  const files = useChatAttachments(setError);
-  const [override, setOverride] = useState<Gen2AgentProviderName | null>(null);
-  const [queued, setQueued] = useState<{
-    draft: ChatDraft;
-    ready: boolean;
-  } | null>(null);
+};
 
-  // Send the queued follow-up once the turn before it has settled.
-  const flush = queued?.ready && !busy ? queued.draft : null;
-  useEffect(() => {
-    if (!flush) return;
-    const timer = window.setTimeout(() => {
-      setQueued(null);
-      void sendDraft(flush);
-    }, 0);
-    return () => window.clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flush]);
-
-  // Prefill from a start_chat handoff once the chat it opened has loaded.
+/** Prefills from a start_chat handoff once the chat it opened has loaded. */
+function useDraftHandoff(
+  { agentContext, switchingChat, textareaRef }: DraftInput,
+  text: ComposerMentions,
+) {
   const request = agentContext?.draftRequest ?? null;
   const [applied, setApplied] = useState<string | null>(null);
   if (request && request.id !== applied && !switchingChat) {
@@ -70,35 +48,80 @@ export function useChatDraft({
     consumeRef.current?.(applied);
     textareaRef.current?.focus();
   }, [applied, textareaRef]);
+}
 
-  function restore(saved: ChatDraft) {
-    text.replace((current) =>
-      current.text ? current : { text: saved.text, mentions: saved.mentions },
-    );
-    files.setAttachments((current) =>
-      current.length ? current : saved.attachments,
-    );
-    setOverride((current) => current ?? saved.override);
-  }
+/** The draft's text, files and agent switch, and putting a saved one back. */
+function useDraftParts(setError: (message: string) => void) {
+  const text = useComposerMentions();
+  const files = useChatAttachments(setError);
+  const [override, setOverride] = useState<Gen2AgentProviderName | null>(null);
+  return {
+    text,
+    files,
+    override,
+    setOverride,
+    /** The draft as written, leaving the composer empty. */
+    take(): ChatDraft {
+      const draft: ChatDraft = {
+        text: text.text,
+        mentions: text.mentions,
+        attachments: files.attachments,
+        override,
+      };
+      text.clear();
+      files.setAttachments([]);
+      setOverride(null);
+      return draft;
+    },
+    /** Puts a draft back; anything typed since stays, below it. */
+    restore(saved: ChatDraft) {
+      text.restore(saved);
+      files.setAttachments((current) =>
+        [...saved.attachments, ...current].slice(0, MAX_GEN2_CHAT_ATTACHMENTS),
+      );
+      setOverride((current) => current ?? saved.override);
+    },
+  };
+}
+
+/**
+ * The message being written: text and mentions, attachments, a one-message
+ * agent switch, and one follow-up queued while a turn runs. A draft that
+ * fails to start comes back, above anything typed since.
+ */
+export function useChatDraft(input: DraftInput) {
+  const { send, busy, running, chatId } = input;
+  const parts = useDraftParts(input.setError);
+  const { text, files, override } = parts;
+  const [queued, setQueued] = useState<{
+    draft: ChatDraft;
+    ready: boolean;
+  } | null>(null);
+  useDraftHandoff(input, text);
+
+  // Send the queued follow-up once the turn before it has settled.
+  const flush = queued?.ready && !busy ? queued.draft : null;
+  useEffect(() => {
+    if (!flush) return;
+    const timer = window.setTimeout(() => {
+      setQueued(null);
+      void sendDraft(flush);
+    }, 0);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flush]);
 
   async function sendDraft(saved: ChatDraft) {
-    if (!(await send(saved))) restore(saved);
+    if (!(await send(saved))) parts.restore(saved);
   }
 
-  /** Sends the draft, or queues it as the one follow-up while busy. */
+  /** Sends the draft, or queues it as the one follow-up while a turn runs.
+   *  While a turn is still starting, Enter waits and the text stays. */
   function submit() {
-    const saved: ChatDraft = {
-      text: text.text,
-      mentions: text.mentions,
-      attachments: files.attachments,
-      override,
-    };
-    if (!saved.text.trim() && saved.attachments.length === 0) return;
-    if (busy ? queued !== null : !modelReady(override)) return;
-    text.replace({ text: "", mentions: [] });
-    files.setAttachments([]);
-    setOverride(null);
-    if (busy) setQueued({ draft: saved, ready: false });
+    if (!text.text.trim() && files.attachments.length === 0) return;
+    if (running ? queued !== null : busy || !input.modelReady(override)) return;
+    const saved = parts.take();
+    if (running) setQueued({ draft: saved, ready: false });
     else void sendDraft(saved);
   }
 
@@ -106,7 +129,7 @@ export function useChatDraft({
   function fill(value: string) {
     text.fill(value);
     window.setTimeout(() => {
-      const element = textareaRef.current;
+      const element = input.textareaRef.current;
       element?.focus();
       element?.setSelectionRange(element.value.length, element.value.length);
     }, 0);
@@ -116,10 +139,10 @@ export function useChatDraft({
     text,
     files,
     override,
-    setOverride,
+    setOverride: parts.setOverride,
     queued: queued !== null,
     cancelQueued() {
-      if (queued) restore(queued.draft);
+      if (queued) parts.restore(queued.draft);
       setQueued(null);
     },
     submit,
@@ -136,7 +159,7 @@ export function useChatDraft({
       if (outcome.status === "completed" && outcome.chatId === chatId)
         return setQueued({ ...queued, ready: true });
       setQueued(null);
-      restore(queued.draft);
+      parts.restore(queued.draft);
     },
   };
 }

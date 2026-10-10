@@ -14,7 +14,8 @@ export type ComposerMention = Gen2Mention & { excerpt?: string | undefined };
 
 export type ComposerText = { text: string; mentions: ComposerMention[] };
 
-const MAX_PROMPT_CHARS = 20_000;
+/** The longest prompt the server takes (`gen2AgentStartRequestSchema`). */
+export const MAX_PROMPT_CHARS = 20_000;
 
 /** The label exactly as its token carries it (and the textarea shows it). */
 function tokenLabel(mention: Gen2Mention) {
@@ -32,6 +33,18 @@ function labelIndex(text: string, mention: Gen2Mention) {
   return serialized === text
     ? -1
     : serialized.indexOf(formatGen2MentionToken(mention));
+}
+
+/** Saved text above what was typed since; both keep their mentions. */
+function mergeText(saved: ComposerText, current: ComposerText): ComposerText {
+  if (!current.text.trim()) return saved;
+  const text = `${saved.text}\n\n${current.text}`.slice(0, MAX_PROMPT_CHARS);
+  const labels = new Set(saved.mentions.map((entry) => entry.label));
+  const mentions = [
+    ...saved.mentions,
+    ...current.mentions.filter((entry) => !labels.has(entry.label)),
+  ];
+  return { text, mentions: mentions.filter((entry) => present(text, entry)) };
 }
 
 /**
@@ -88,6 +101,11 @@ export function useComposerMentions() {
     });
   }
 
+  /** Puts saved text back above whatever was typed since, keeping both. */
+  function restore(saved: ComposerText) {
+    if (saved.text) setDraft((current) => mergeText(saved, current));
+  }
+
   return {
     text: draft.text,
     mentions: draft.mentions,
@@ -95,8 +113,8 @@ export function useComposerMentions() {
     insertMention,
     removeMention,
     fill,
-    /** Swaps in a saved draft (to restore one after a failed start). */
-    replace: setDraft,
+    restore,
+    clear: () => setDraft({ text: "", mentions: [] }),
   };
 }
 

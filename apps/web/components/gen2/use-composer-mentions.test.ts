@@ -81,4 +81,15 @@ describe("useComposerMentions", () => {
     act(() => result.current.setText("x".repeat(20_050)));
     expect(result.current.text).toHaveLength(20_000);
   });
+
+  it("puts a restored draft above text typed since, keeping both", () => {
+    const { result } = renderHook(() => useComposerMentions());
+    const saved = { text: "Fix @src/api.ts", mentions: [api] };
+    act(() => result.current.restore(saved));
+    expect(result.current.text).toBe("Fix @src/api.ts");
+    act(() => result.current.setText("and the tests"));
+    act(() => result.current.restore(saved));
+    expect(result.current.text).toBe("Fix @src/api.ts\n\nand the tests");
+    expect(result.current.mentions).toEqual([api]);
+  });
 });

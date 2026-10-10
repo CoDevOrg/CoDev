@@ -16,7 +16,11 @@ function clock(seconds: number) {
 export function ChatDictationStatus({ dictation }: { dictation: Dictation }) {
   if (dictation.phase === "consent")
     return (
-      <div className="gen2-composer-dictation" data-phase="consent">
+      <div
+        className="gen2-composer-dictation"
+        role="status"
+        data-phase="consent"
+      >
         <span>
           Dictation in this browser sends audio to Google/Apple speech services.
           Continue?

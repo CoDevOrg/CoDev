@@ -1,15 +1,6 @@
 "use client";
 
-import {
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type KeyboardEvent,
-  type ReactNode,
-  type RefObject,
-} from "react";
+import { useId, type ReactNode, type RefObject } from "react";
 import type { Gen2AgentProviderName } from "@codev/contracts";
 
 import { parseGen2PromptCommand } from "@/lib/gen2/prompt-command";
@@ -20,11 +11,12 @@ import { ChatDictationStatus } from "./chat-dictation-status";
 import { ChatTypeaheadMenu, composerOptionId } from "./chat-typeahead-menu";
 import type { ChatAttachment } from "./use-chat-attachments";
 import { useComposerDrop } from "./use-composer-drop";
-import { useComposerMenu, type ComposerMenuInput } from "./use-composer-menu";
-import type { ComposerMentions } from "./use-composer-mentions";
-import { useDictation } from "./use-dictation";
-
-export const MAX_COMPOSER_CHARS = 20_000;
+import { useComposerInput } from "./use-composer-input";
+import type { ComposerMenu, ComposerMenuInput } from "./use-composer-menu";
+import {
+  MAX_PROMPT_CHARS,
+  type ComposerMentions,
+} from "./use-composer-mentions";
 
 export type ChatComposerProps = {
   draft: ComposerMentions;
@@ -61,92 +53,64 @@ function placeholder(dragging: boolean, running: boolean, agent: string) {
   return "Ask anything — / for commands, @ to mention";
 }
 
+type FieldProps = Pick<
+  ChatComposerProps,
+  "draft" | "textareaRef" | "hero" | "running" | "agentLabel"
+> & {
+  menu: ComposerMenu;
+  listboxId: string;
+  dragging: boolean;
+  onKeyDown: ReturnType<typeof useComposerInput>["onKeyDown"];
+};
+
+/** The prompt field, which drives the menu through aria-activedescendant. */
+function ComposerField({
+  draft,
+  textareaRef,
+  hero,
+  running,
+  agentLabel,
+  menu,
+  listboxId,
+  dragging,
+  onKeyDown,
+}: FieldProps) {
+  return (
+    <textarea
+      ref={textareaRef}
+      value={draft.text}
+      maxLength={MAX_PROMPT_CHARS}
+      rows={hero ? 3 : 2}
+      className="gen2-chat-composer-input"
+      aria-label="Prompt"
+      aria-autocomplete="list"
+      aria-controls={menu.open ? listboxId : undefined}
+      aria-activedescendant={
+        menu.open ? composerOptionId(listboxId, menu.activeIndex) : undefined
+      }
+      placeholder={placeholder(dragging, running, agentLabel)}
+      onChange={(event) => {
+        draft.setText(event.target.value);
+        menu.setCaret(event.target.selectionStart ?? event.target.value.length);
+      }}
+      onSelect={(event) =>
+        menu.setCaret(event.currentTarget.selectionStart ?? 0)
+      }
+      onKeyDown={onKeyDown}
+    />
+  );
+}
+
 /**
  * The chat composer: one field with its context chips, the `/` and `@`
  * menu, dictation, attachments and the agent picker. Typing stays allowed
  * while a turn runs; Enter then queues one follow-up.
  */
 export function ChatComposer(props: ChatComposerProps) {
-  const { draft, textareaRef } = props;
+  const { draft } = props;
   const listboxId = useId();
-  const menu = useComposerMenu({
-    ...props.menu,
-    draft,
-    textareaRef,
-    enabled: props.connected,
-    onOverride: props.onOverride,
-    onError: props.onError,
-  });
-  const dictation = useDictation({
-    onFinal: insertText,
-    onError: props.onError,
-  });
+  const { menu, dictation, ...input } = useComposerInput(props);
   const drop = useComposerDrop(props.onQueueFiles);
-  const stopDictation = useRef(dictation.stop);
-  useEffect(() => {
-    stopDictation.current = dictation.stop;
-  });
-  // Switching chats or losing the connection ends dictation and the menu.
-  // A chat's first load (or a first turn creating it) is not a switch.
-  const [chat, setChat] = useState({ id: props.menu.chatId, switches: 0 });
-  if (chat.id !== props.menu.chatId) {
-    const switched = chat.id !== null;
-    setChat({ id: props.menu.chatId, switches: chat.switches + +switched });
-    if (switched) menu.dismiss();
-  }
-  useEffect(() => {
-    stopDictation.current(true);
-  }, [chat.switches, props.connected]);
-
-  useLayoutEffect(() => {
-    const element = textareaRef.current;
-    if (!element) return;
-    element.style.height = "auto";
-    element.style.height = `${element.scrollHeight}px`;
-  }, [draft.text, textareaRef]);
-
-  function insertText(insert: string) {
-    const element = textareaRef.current;
-    const start = element?.selectionStart ?? draft.text.length;
-    const before = draft.text.slice(0, start);
-    const spaced = before && !/\s$/.test(before) ? ` ${insert}` : insert;
-    draft.setText(
-      before + spaced + draft.text.slice(element?.selectionEnd ?? start),
-    );
-    menu.placeCaret(start + spaced.length);
-  }
-
-  function insertTrigger(trigger: "/" | "@") {
-    if (trigger === "@") insertText("@");
-    else {
-      // Commands only work at the start of the prompt.
-      if (!draft.text.startsWith("/")) draft.setText(`/${draft.text}`);
-      menu.placeCaret(1);
-    }
-    textareaRef.current?.focus();
-  }
-
-  function submit() {
-    stopDictation.current(true);
-    if (menu.intercept(draft.text)) return;
-    props.onSubmit();
-  }
-
-  function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (menu.handleKey(event)) return;
-    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      submit();
-    } else if (
-      event.key === "ArrowUp" &&
-      !draft.text &&
-      event.currentTarget.selectionStart === 0 &&
-      props.onRecall()
-    ) {
-      event.preventDefault();
-    }
-  }
 
   return (
     <div className="gen2-chat-composer-wrap">
@@ -166,7 +130,7 @@ export function ChatComposer(props: ChatComposerProps) {
           data-dragging={drop.dragging || undefined}
           onSubmit={(event) => {
             event.preventDefault();
-            submit();
+            input.submit();
           }}
           {...drop.handlers}
         >
@@ -184,35 +148,16 @@ export function ChatComposer(props: ChatComposerProps) {
             queued={props.queued}
             onCancelQueued={props.onCancelQueued}
           />
-          <textarea
-            ref={textareaRef}
-            value={draft.text}
-            maxLength={MAX_COMPOSER_CHARS}
-            rows={props.hero ? 3 : 2}
-            className="gen2-chat-composer-input"
-            aria-label="Prompt"
-            aria-autocomplete="list"
-            aria-controls={menu.open ? listboxId : undefined}
-            aria-activedescendant={
-              menu.open
-                ? composerOptionId(listboxId, menu.activeIndex)
-                : undefined
-            }
-            placeholder={placeholder(
-              drop.dragging,
-              props.running,
-              props.agentLabel,
-            )}
-            onChange={(event) => {
-              draft.setText(event.target.value);
-              menu.setCaret(
-                event.target.selectionStart ?? event.target.value.length,
-              );
-            }}
-            onSelect={(event) =>
-              menu.setCaret(event.currentTarget.selectionStart ?? 0)
-            }
-            onKeyDown={onKeyDown}
+          <ComposerField
+            draft={draft}
+            textareaRef={props.textareaRef}
+            hero={props.hero}
+            running={props.running}
+            agentLabel={props.agentLabel}
+            menu={menu}
+            listboxId={listboxId}
+            dragging={drop.dragging}
+            onKeyDown={input.onKeyDown}
           />
           <ChatDictationStatus dictation={dictation} />
           <ChatComposerToolbar
@@ -229,7 +174,7 @@ export function ChatComposer(props: ChatComposerProps) {
       <ChatComposerHints
         triggered={menu.open}
         dictation={dictation.supported}
-        onInsert={insertTrigger}
+        onInsert={input.insertTrigger}
       />
     </div>
   );

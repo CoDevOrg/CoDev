@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  buildSlashItems,
-  parseWorkspaceCommand,
-  type SlashContext,
-} from "./chat-slash-commands";
+import { buildSlashItems, type SlashContext } from "./chat-slash-commands";
 import type { ComposerTrigger } from "./use-composer-typeahead";
 
 const context: SlashContext = {
@@ -18,6 +14,8 @@ const context: SlashContext = {
     { id: "feat-login", branch: "feat/login" },
   ],
   remoteBranches: ["main", "feat/login", "feat/remote"],
+  remoteError: null,
+  repositoryPrivate: false,
   files: [
     { path: "src/app.ts", kind: "file", size: 1 },
     { path: "src", kind: "directory" },
@@ -83,25 +81,65 @@ describe("buildSlashItems", () => {
     });
   });
 
-  it("lists other worktrees, unopened GitHub branches, then a new branch", () => {
+  it("puts the typed name's own row first, then other matches", () => {
     const items = buildSlashItems(slash("feat", "branch"), context);
     expect(labels(items)).toEqual([
+      "Create branch feat",
       "Switch to feat/login",
       "Open feat/remote",
-      "Create branch feat",
     ]);
     expect(items[0]!.action).toEqual({
       type: "run",
-      action: { type: "switch_worktree", worktreeId: "feat-login" },
+      action: { type: "create_branch", branch: "feat" },
+    });
+    const withOld = {
+      ...context,
+      worktrees: [...context.worktrees, { id: "old", branch: "main-old" }],
+    };
+    const current = buildSlashItems(slash("main", "branch"), withOld);
+    expect(labels(current)).toEqual(["Already on main", "Switch to main-old"]);
+    expect(current[0]).toMatchObject({ disabled: true });
+  });
+
+  it("never offers to create a branch that exists or isn't valid", () => {
+    const items = buildSlashItems(slash("feat/remote", "branch"), context);
+    expect(labels(items)).toEqual(["Open feat/remote"]);
+    const invalid = buildSlashItems(slash("bad..name", "branch"), context);
+    expect(labels(invalid)).toEqual(["Not a valid branch name"]);
+    expect(invalid[0]).toMatchObject({ disabled: true });
+  });
+
+  it("waits for GitHub's branches before offering to create one", () => {
+    const loading = { ...context, remoteBranches: null };
+    const items = buildSlashItems(slash("feat/remote", "branch"), loading);
+    expect(labels(items)).toEqual(["Loading branches from GitHub…"]);
+    expect(items[0]).toMatchObject({ disabled: true });
+    // A worktree that matches exactly is known without GitHub.
+    expect(
+      labels(buildSlashItems(slash("feat/login", "branch"), loading)),
+    ).toEqual(["Switch to feat/login", "Loading branches from GitHub…"]);
+    const failed = {
+      ...loading,
+      remoteError: "GitHub took too long to answer.",
+    };
+    const retry = buildSlashItems(slash("feat", "branch"), failed)[0]!;
+    expect(retry).toMatchObject({
+      label: "Couldn’t load GitHub branches · Retry",
+      action: { type: "retry" },
     });
   });
 
-  it("puts an exact branch first and never offers to create one that exists", () => {
-    const items = buildSlashItems(slash("feat/remote", "branch"), context);
-    expect(labels(items)).toEqual(["Open feat/remote"]);
-    expect(
-      labels(buildSlashItems(slash("bad..name", "branch"), context)),
-    ).toEqual([]);
+  it("can't open GitHub branches of a private repository", () => {
+    const items = buildSlashItems(slash("feat/remote", "branch"), {
+      ...context,
+      repositoryPrivate: true,
+    });
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      label: "Open feat/remote",
+      disabled: true,
+      action: { type: "notice" },
+    });
   });
 
   it("opens files by path, falling back to the typed path when unlisted", () => {
@@ -120,91 +158,5 @@ describe("buildSlashItems", () => {
     expect(
       buildSlashItems(slash("../etc", "open"), { ...context, files: null }),
     ).toEqual([]);
-  });
-});
-
-describe("parseWorkspaceCommand", () => {
-  it("runs commands without an argument", () => {
-    expect(parseWorkspaceCommand(" /changes ", context)).toEqual({
-      type: "run",
-      action: { type: "show_changes" },
-    });
-    expect(parseWorkspaceCommand("/new", context)).toEqual({
-      type: "workspace",
-      command: "new",
-    });
-  });
-
-  it("leaves agent commands, prose and unknown commands to the agent", () => {
-    expect(parseWorkspaceCommand("/goal clear", context)).toBeNull();
-    expect(parseWorkspaceCommand("/plan the login", context)).toBeNull();
-    expect(
-      parseWorkspaceCommand("/changes please explain them", context),
-    ).toBeNull();
-    expect(parseWorkspaceCommand("/deploy", context)).toBeNull();
-    expect(parseWorkspaceCommand("/changes\nand more", context)).toBeNull();
-    expect(
-      parseWorkspaceCommand("/changes", { ...context, workspace: false }),
-    ).toBeNull();
-  });
-
-  it("matches /branch exactly: switch, open, create or explain", () => {
-    expect(parseWorkspaceCommand("/branch feat/login", context)).toEqual({
-      type: "run",
-      action: { type: "switch_worktree", worktreeId: "feat-login" },
-    });
-    expect(parseWorkspaceCommand("/branch feat/remote", context)).toEqual({
-      type: "run",
-      action: { type: "open_branch", branch: "feat/remote" },
-    });
-    expect(parseWorkspaceCommand("/branch feat", context)).toEqual({
-      type: "run",
-      action: { type: "create_branch", branch: "feat" },
-    });
-    expect(parseWorkspaceCommand("/branch main", context)).toMatchObject({
-      type: "notice",
-    });
-    expect(parseWorkspaceCommand("/branch a..b", context)).toMatchObject({
-      type: "notice",
-    });
-  });
-
-  it("explains a command whose argument is missing or invalid", () => {
-    expect(parseWorkspaceCommand("/open", context)).toEqual({
-      type: "notice",
-      message: "Name a file to open, like /open src/app.ts.",
-    });
-    expect(parseWorkspaceCommand("/open /etc/passwd", context)).toMatchObject({
-      type: "notice",
-    });
-    expect(parseWorkspaceCommand("/rename", context)).toMatchObject({
-      type: "notice",
-    });
-  });
-
-  it("passes the argument of /share, /rename and /preview", () => {
-    expect(parseWorkspaceCommand("/share ada@example.com", context)).toEqual({
-      type: "run",
-      action: { type: "open_share", emailOrLogin: "ada@example.com" },
-    });
-    expect(parseWorkspaceCommand("/share", context)).toEqual({
-      type: "run",
-      action: { type: "open_share" },
-    });
-    expect(parseWorkspaceCommand("/rename Login flow", context)).toEqual({
-      type: "run",
-      action: { type: "rename_chat", title: "Login flow" },
-    });
-    const preview = { ...context, previewEnabled: true };
-    expect(parseWorkspaceCommand("/preview 5173", preview)).toEqual({
-      type: "run",
-      action: { type: "open_preview", port: 5173 },
-    });
-    expect(parseWorkspaceCommand("/preview", preview)).toMatchObject({
-      type: "notice",
-    });
-    expect(parseWorkspaceCommand("/preview 99999", preview)).toMatchObject({
-      type: "notice",
-    });
   });
 });

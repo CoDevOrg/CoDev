@@ -67,10 +67,45 @@ export function composerOptionId(listboxId: string, index: number) {
 }
 
 function ItemIcon({ item }: { item: ComposerMenuItem }) {
-  if (item.provider && (item.icon === "provider" || item.icon === "chat"))
-    return <ProviderLogo provider={item.provider} size={14} />;
+  if (item.provider) return <ProviderLogo provider={item.provider} size={14} />;
   const Icon = ICONS[item.icon === "provider" ? "agent" : item.icon];
   return <Icon aria-hidden="true" />;
+}
+
+function MenuOption({
+  item,
+  id,
+  index,
+  active,
+  onSelect,
+  onActiveChange,
+}: {
+  item: ComposerMenuItem;
+  id: string;
+  index: number;
+  active: boolean;
+  onSelect: (item: ComposerMenuItem) => void;
+  onActiveChange: (index: number) => void;
+}) {
+  return (
+    <div
+      id={id}
+      role="option"
+      aria-selected={active}
+      aria-disabled={item.disabled || undefined}
+      data-index={index}
+      className="gen2-composer-menu-option"
+      onMouseDown={(event) => event.preventDefault()}
+      onMouseMove={() => active || onActiveChange(index)}
+      onClick={() => item.disabled || onSelect(item)}
+    >
+      <ItemIcon item={item} />
+      <span className="gen2-composer-menu-label">{item.label}</span>
+      {item.detail ? (
+        <span className="gen2-composer-menu-detail">{item.detail}</span>
+      ) : null}
+    </div>
+  );
 }
 
 function groupItems(items: ComposerMenuItem[]) {
@@ -145,23 +180,15 @@ function MenuList({
             {group.name}
           </div>
           {group.entries.map(([item, index]) => (
-            <div
+            <MenuOption
               key={item.id}
+              item={item}
               id={composerOptionId(listboxId, index)}
-              role="option"
-              aria-selected={index === activeIndex}
-              data-index={index}
-              className="gen2-composer-menu-option"
-              onMouseDown={(event) => event.preventDefault()}
-              onMouseMove={() => index !== activeIndex && onActiveChange(index)}
-              onClick={() => onSelect(item)}
-            >
-              <ItemIcon item={item} />
-              <span className="gen2-composer-menu-label">{item.label}</span>
-              {item.detail ? (
-                <span className="gen2-composer-menu-detail">{item.detail}</span>
-              ) : null}
-            </div>
+              index={index}
+              active={index === activeIndex}
+              onSelect={onSelect}
+              onActiveChange={onActiveChange}
+            />
           ))}
         </div>
       ))}

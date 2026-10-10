@@ -174,4 +174,40 @@ describe("useChatMentionItems", () => {
       ]),
     );
   });
+
+  it("lists active agents without a listed chat, but not this chat's", async () => {
+    const run = (id: string, chatId: string | null, status: string) => ({
+      id,
+      chatId,
+      provider: "claude" as const,
+      status,
+      worktreeId: "w",
+      branch: id === "run-new" ? "feat/new" : null,
+    });
+    const { result } = render(
+      "",
+      context({
+        agentRuns: [
+          run("run-new", null, "creating"),
+          run("run-mine", "current", "running"),
+          run("run-done", null, "exited"),
+          run("run-other", "unlisted", "running"),
+        ],
+      }),
+    );
+    await waitFor(() => expect(labels(result.current)).toContain("src"));
+    const agents = result.current.filter((item) => item.icon === "agent");
+    expect(agents).toEqual([
+      expect.objectContaining({
+        label: "Claude agent",
+        detail: "Starting · feat/new",
+        provider: "claude",
+        action: {
+          type: "mention",
+          mention: { kind: "agent", ref: "run-new", label: "Claude agent" },
+        },
+      }),
+      expect.objectContaining({ id: "agent-run-other", detail: "Running" }),
+    ]);
+  });
 });
