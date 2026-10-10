@@ -20,6 +20,7 @@ import {
   summarizeGen2Command,
   unwrapShellCommand,
 } from "@/lib/gen2/turn-labels";
+import { WorkspaceActionRows } from "./workspace-action-row";
 import { WorkspaceButton } from "./workspace-button";
 
 export function Gen2TurnActivity({
@@ -27,15 +28,36 @@ export function Gen2TurnActivity({
   onOpenFile,
   live = false,
   settled = false,
+  chatId,
+  actionToken,
 }: {
   items: Gen2TurnItem[];
   onOpenFile: (path: string) => void;
   live?: boolean;
   settled?: boolean;
+  /** The chat the turn belongs to, for this tab's action outcomes. */
+  chatId?: string | null | undefined;
+  /** The live turn's action nonce; null or absent for saved messages. */
+  actionToken?: string | null | undefined;
 }) {
-  const visible = useMemo(
-    () => items.filter((item) => item.kind !== "message"),
+  // Workspace actions stay visible below the summary, never collapsed with
+  // the steps: a member may still need to act on them after the turn ends.
+  const { visible, actions } = useMemo(
+    () => ({
+      visible: items.filter(
+        (item) => item.kind !== "message" && item.kind !== "workspaceAction",
+      ),
+      actions: items.filter((item) => item.kind === "workspaceAction"),
+    }),
     [items],
+  );
+  const actionRows = (
+    <WorkspaceActionRows
+      items={actions}
+      chatId={chatId}
+      actionToken={actionToken}
+      live={live}
+    />
   );
   const itemRunning = visible.some((item) => item.status === "running");
   const active = !settled && (live || itemRunning);
@@ -63,7 +85,11 @@ export function Gen2TurnActivity({
     return () => window.clearInterval(id);
   }, [visible.length, active]);
 
-  if (visible.length === 0) return null;
+  if (visible.length === 0) {
+    return actions.length ? (
+      <div className="gen2-turn">{actionRows}</div>
+    ) : null;
+  }
 
   const durationText = active
     ? `Working for ${elapsed > 0 ? `${elapsed}s` : "a moment"}`
@@ -118,6 +144,7 @@ export function Gen2TurnActivity({
           {open ? steps : null}
         </div>
       )}
+      {actionRows}
     </div>
   );
 }
