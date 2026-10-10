@@ -55,6 +55,48 @@ MemoryMax=256M
 WantedBy=multi-user.target
 UNIT
 
+# The preview socket holds 127.0.0.1:5261 from early boot so no workspace
+# process can bind the port the tunnel's preview hostnames reach. The proxy is
+# an unprivileged dynamic user that can reach only loopback listeners and
+# never sees workspace files or the VM's private identity and tunnel token.
+cat >/etc/systemd/system/codev-arm-preview.socket <<'UNIT'
+[Unit]
+Description=Hold the CoDev workspace preview port
+[Socket]
+ListenStream=127.0.0.1:5261
+FreeBind=yes
+NoDelay=true
+[Install]
+WantedBy=sockets.target
+UNIT
+cat >/etc/systemd/system/codev-arm-preview.service <<'UNIT'
+[Unit]
+Description=CoDev workspace preview proxy
+Requires=codev-arm-preview.socket
+After=codev-arm-preview.socket
+# A start rate limit would fail the socket and release the port.
+StartLimitIntervalSec=0
+[Service]
+ExecStart=/usr/bin/node /usr/local/lib/codev/start-arm-workspace-preview.mjs
+Restart=always
+RestartSec=1
+DynamicUser=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectProc=invisible
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost
+InaccessiblePaths=/workspace /var/lib/codev /etc/codev
+ReadOnlyPaths=-/etc/codev-preview
+MemoryMax=256M
+UNIT
+systemctl enable codev-arm-preview.socket >/dev/null
+
 cat >/etc/systemd/system/codev-arm-boot.service <<'UNIT'
 [Unit]
 Description=Initialize the fenced ARM workspace locally

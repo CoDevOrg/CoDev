@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import {
+  mkdtemp,
+  readFile,
+  realpath,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -172,4 +179,147 @@ test("baked boot verifies the disk before mounting and turns subsequent boots in
   assert.match(activation, /O_NOFOLLOW/);
   assert.match(activation, /systemctl start codev-arm-boot/);
   assert.match(installer, /--token-file \/etc\/codev\/tunnel-token/);
+});
+
+function unitBody(script, name) {
+  const body = script.match(
+    new RegExp(
+      `cat >/etc/systemd/system/${name} <<'UNIT'\\n([\\s\\S]*?)\\nUNIT`,
+    ),
+  )?.[1];
+  assert.ok(body, `${name} must be written by a heredoc`);
+  return body.split("\n");
+}
+
+test("the preview proxy runs as a dynamic user behind a socket held from early boot", () => {
+  const installer = read("./scripts/install-arm-workspace-boot.sh");
+  const socket = unitBody(installer, "codev-arm-preview.socket");
+  for (const line of [
+    "ListenStream=127.0.0.1:5261",
+    "FreeBind=yes",
+    "NoDelay=true",
+    "WantedBy=sockets.target",
+  ])
+    assert.ok(socket.includes(line), line);
+  const service = unitBody(installer, "codev-arm-preview.service");
+  for (const line of [
+    "ExecStart=/usr/bin/node /usr/local/lib/codev/start-arm-workspace-preview.mjs",
+    "Requires=codev-arm-preview.socket",
+    "StartLimitIntervalSec=0",
+    "Restart=always",
+    "DynamicUser=yes",
+    "NoNewPrivileges=yes",
+    "ProtectSystem=strict",
+    "ProtectHome=yes",
+    "PrivateTmp=yes",
+    "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6",
+    "IPAddressDeny=any",
+    "IPAddressAllow=localhost",
+    "InaccessiblePaths=/workspace /var/lib/codev /etc/codev",
+    "ReadOnlyPaths=-/etc/codev-preview",
+    "MemoryMax=256M",
+  ])
+    assert.ok(service.includes(line), line);
+  // A fixed uid could be 0, 1000 or 2000; ProcSubset=pid would hide /proc/net.
+  for (const line of service)
+    assert.doesNotMatch(line, /^(?:User|Group|ProcSubset|PrivateNetwork)=/);
+  assert.match(installer, /^systemctl enable codev-arm-preview\.socket/m);
+});
+
+test("activation writes only the public preview identity, readable despite umask 077", async (t) => {
+  const script = read("./scripts/activate-arm-workspace-boot.sh");
+  const code = script.match(/python3 -c '\n([\s\S]*?)\n'\n/)?.[1];
+  assert.ok(code, "activation must keep its inline Python");
+  const root = await mkdtemp(join(tmpdir(), "codev-activate-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const program = join(root, "activate.py");
+  await writeFile(
+    program,
+    code
+      .replaceAll("/etc/codev-preview", join(root, "preview"))
+      .replaceAll("/etc/codev", join(root, "codev")),
+  );
+  const verificationKey =
+    "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAexample\n-----END PUBLIC KEY-----\n";
+  const input = {
+    workspaceId: "8a1f2c9e-0d4b-4f53-9a51-3b0f7f0a4c11",
+    generation: 3,
+    audience: "codev-0123456789abcdef0123-g3.trycodev.com",
+    diskUuid: "7ddb1948-b876-4f47-80fe-7b9c8e0b6fad",
+    verificationKey,
+    tunnelToken: "tunnel-secret",
+    diskMode: "new",
+  };
+  await new Promise((resolve, reject) => {
+    const child = execFile(
+      "bash",
+      ["-c", 'umask 077 && exec python3 "$0"', program],
+      (error) => (error ? reject(error) : resolve()),
+    );
+    child.stdin.end(JSON.stringify(input));
+  });
+  const mode = async (path) => (await stat(join(root, path))).mode & 0o777;
+  assert.equal(await mode("preview"), 0o755);
+  assert.equal(await mode("preview/identity.json"), 0o644);
+  assert.equal(await mode("codev/arm-runtime.json"), 0o600);
+  assert.equal(await mode("codev/tunnel-token"), 0o600);
+  assert.deepEqual(
+    JSON.parse(await readFile(join(root, "preview/identity.json"), "utf8")),
+    {
+      workspaceId: input.workspaceId,
+      generation: 3,
+      verificationPublicKey: verificationKey,
+    },
+  );
+});
+
+test("the verified boot restarts the preview proxy only once its identity exists", () => {
+  const script = read("./scripts/prepare-arm-workspace-disk.sh");
+  const services = script.indexOf(
+    "systemctl start codev-guestd codev-superset-host",
+  );
+  const preview = script.indexOf("systemctl start codev-arm-preview.socket");
+  const gateway = script.indexOf("systemctl start codev-arm-gateway");
+  assert.ok(services < preview && preview < gateway);
+  assert.match(
+    script,
+    /-f \/etc\/systemd\/system\/codev-arm-preview\.socket &&\s+-f \/etc\/codev-preview\/identity\.json/,
+  );
+  assert.match(script, /systemctl try-restart codev-arm-preview\.service/);
+});
+
+test("every module a guest entrypoint imports ships in the image and is validated", () => {
+  const build = read("../azure/build-arm-workspace-image.sh");
+  const provision = read("./scripts/provision-arm-workspace-image.sh");
+  const validate = read("./scripts/validate-arm-workspace-image.sh");
+  const listed = (text) =>
+    text.match(/for script in ([^;]+); do/)?.[1].split(/\s+/) ?? [];
+  const modules = (entry, seen = new Set()) => {
+    seen.add(entry);
+    for (const [, name] of read(`./scripts/${entry}`).matchAll(
+      /from "\.\/([\w-]+\.mjs)"/g,
+    ))
+      if (!seen.has(name)) modules(name, seen);
+    return seen;
+  };
+  for (const entry of [
+    "start-arm-workspace-gateway.mjs",
+    "start-arm-workspace-preview.mjs",
+  ])
+    for (const name of modules(entry)) {
+      assert.ok(listed(build).includes(name), `${name} is uploaded`);
+      assert.ok(listed(provision).includes(name), `${name} is installed`);
+    }
+  for (const name of modules("start-arm-workspace-preview.mjs"))
+    assert.ok(validate.includes(name), `${name} is validated`);
+  assert.match(
+    provision,
+    /^rm -f .*\/var\/tmp\/start-arm-workspace-preview\.mjs/m,
+  );
+  assert.match(
+    validate,
+    /systemd-analyze verify \/etc\/systemd\/system\/codev-arm-\{boot,gateway,tunnel,preview\}\.service \\\n\s+\/etc\/systemd\/system\/codev-arm-preview\.socket/,
+  );
+  assert.match(validate, /test ! -e \/etc\/codev-preview\/identity\.json/);
+  assert.match(validate, /systemctl is-enabled codev-arm-preview\.socket/);
 });

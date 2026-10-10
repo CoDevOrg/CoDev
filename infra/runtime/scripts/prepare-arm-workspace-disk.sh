@@ -106,6 +106,14 @@ UNIT
 systemctl daemon-reload
 systemctl start 'var-lib-codev-codev\x2dsuperset.mount'
 systemctl start codev-guestd codev-superset-host
+# Baked images hold the preview port from early boot. Restart a proxy that
+# started before activation wrote its identity or before /workspace mounted,
+# so it serves this generation and its namespace hides the mounted disk.
+if [[ -f /etc/systemd/system/codev-arm-preview.socket &&
+      -f /etc/codev-preview/identity.json ]]; then
+  systemctl start codev-arm-preview.socket
+  systemctl try-restart codev-arm-preview.service
+fi
 if [[ -f /etc/systemd/system/codev-arm-tunnel.service ]]; then
   systemctl start codev-arm-gateway codev-arm-tunnel
 fi

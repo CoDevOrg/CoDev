@@ -12,10 +12,23 @@ cloudflared --version
 test -x /usr/local/sbin/codev-arm-boot
 test -x /usr/local/sbin/codev-activate-arm-boot
 test -f /usr/local/lib/codev/arm-workspace-gateway.mjs
+for module in arm-workspace-preview-token.mjs arm-workspace-preview-upstream.mjs arm-workspace-preview.mjs start-arm-workspace-preview.mjs; do
+  test -f "/usr/local/lib/codev/${module}"
+done
 test ! -e /etc/codev/arm-runtime.json
 test ! -e /etc/codev/arm-boot.json
 test ! -e /etc/codev/tunnel-token
-systemd-analyze verify /etc/systemd/system/codev-arm-{boot,gateway,tunnel}.service
+test ! -e /etc/codev-preview/identity.json
+systemd-analyze verify /etc/systemd/system/codev-arm-{boot,gateway,tunnel,preview}.service \
+  /etc/systemd/system/codev-arm-preview.socket
+test "$(systemctl is-enabled codev-arm-preview.socket)" = enabled
+# Without an identity the proxy holds the port and answers 503. This proves its
+# modules load inside the hardened unit and that it runs as a dynamic user.
+systemctl start codev-arm-preview.socket
+test "$(curl --max-time 5 -s -o /dev/null -w '%{http_code}' http://127.0.0.1:5261/)" = 503
+preview_pid="$(systemctl show -p MainPID --value codev-arm-preview.service)"
+test "$(stat -c %u "/proc/${preview_pid}")" -ge 61184
+systemctl stop codev-arm-preview.service codev-arm-preview.socket
 test "$(getent passwd codev-shell | cut -d: -f3)" = 2000
 systemctl cat codev-superset-host.service | grep -qx 'ProtectProc=invisible'
 systemctl cat codev-superset-host.service | grep -qx 'ProcSubset=pid'
