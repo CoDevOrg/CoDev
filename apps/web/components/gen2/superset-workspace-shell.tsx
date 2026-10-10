@@ -48,6 +48,7 @@ import {
   SupersetFileApiError,
 } from "./superset-file-client";
 import { SupersetFilePane } from "./superset-file-pane";
+import { openRemoteBranch } from "./open-remote-branch";
 import { SupersetChangesPane } from "./superset-changes-pane";
 import {
   SupersetWorkspacesBoard,
@@ -156,11 +157,13 @@ async function readGit(
 export function SupersetWorkspaceShell({
   workspace,
   workspaceId,
+  currentUserId,
   canEdit,
   runtimeEnabled,
 }: {
   workspace?: Gen2WorkspaceDetail | undefined;
   workspaceId: string;
+  currentUserId?: string | undefined;
   canEdit: boolean;
   runtimeEnabled: boolean;
 }) {
@@ -777,9 +780,31 @@ export function SupersetWorkspaceShell({
           : `Created ${created.branch}. Your current unsaved changes were preserved.`,
       );
     } catch (error) {
-      setNotice(errorMessage(error, "Couldn’t create this branch."));
+      setNotice(errorMessage(error, "Couldn’t create this worktree."));
     } finally {
       setCreating(false);
+    }
+  }
+
+  // Opens a branch from the top bar: switch to its worktree if one exists,
+  // otherwise check it out from origin into a worktree of its own.
+  async function openBranch(branch: string) {
+    const existing = worktrees.find((worktree) => worktree.branch === branch);
+    if (existing) {
+      selectWorktree(existing.worktreeId);
+      return;
+    }
+    setNotice(`Opening ${branch}…`);
+    try {
+      const created = await openRemoteBranch(workspaceId, branch, worktrees);
+      setWorktrees((current) => [...current, created]);
+      setNotice(
+        selectWorktree(created.worktreeId)
+          ? `Opened ${created.branch} in a new worktree.`
+          : `Opened ${created.branch}. Your current unsaved changes were preserved.`,
+      );
+    } catch (error) {
+      setNotice(errorMessage(error, `Couldn’t open ${branch}.`));
     }
   }
 
@@ -828,12 +853,17 @@ export function SupersetWorkspaceShell({
           workspaceName={activeWorkspace.name}
           repositoryName={activeWorkspace.repository?.fullName}
           branchMenu={{
+            workspaceId,
+            repositoryPrivate: activeWorkspace.repository?.private ?? false,
             branches: worktrees,
             selected,
             getStatus: getBranchStatus,
             loadError: Boolean(branchLoadError),
             onRetry: () => void refreshWorktrees(),
             onSelect: selectWorktree,
+            onOpenRemote: canEdit
+              ? (branch) => void openBranch(branch)
+              : undefined,
             onCreate: canEdit
               ? () => {
                   collapseSidebarByUser(false);
@@ -897,7 +927,7 @@ export function SupersetWorkspaceShell({
                       </WorkspaceButton>
                     </TooltipTrigger>
                     <TooltipContent side="right">
-                      {`Active worktree: ${selected?.branch ?? "main"} (${worktrees.length} branches)`}
+                      {`Active worktree: ${selected?.branch ?? "main"} (${worktrees.length} ${worktrees.length === 1 ? "worktree" : "worktrees"})`}
                     </TooltipContent>
                   </Tooltip>
 
@@ -1001,7 +1031,7 @@ export function SupersetWorkspaceShell({
                         </WorkspaceButton>
                       </TooltipTrigger>
                       <TooltipContent side="right">
-                        {`Active worktree: ${selected?.branch ?? "main"} (${worktrees.length} branches)`}
+                        {`Active worktree: ${selected?.branch ?? "main"} (${worktrees.length} ${worktrees.length === 1 ? "worktree" : "worktrees"})`}
                       </TooltipContent>
                     </Tooltip>
                     <div
@@ -1233,10 +1263,9 @@ export function SupersetWorkspaceShell({
                                     setShowCreate((current) => !current);
                                     setWorktreeDropdownOpen(false);
                                   }}
-                                  aria-label="New branch"
                                 >
                                   <Plus size={13} />
-                                  <span>New branch</span>
+                                  <span>New worktree</span>
                                 </WorkspaceButton>
                               </div>
                             ) : null}
@@ -1948,6 +1977,7 @@ export function SupersetWorkspaceShell({
           workspaceId={workspaceId}
           workspaceName={activeWorkspace.name}
           currentUserRole={activeWorkspace.role}
+          currentUserId={currentUserId}
           initialMembers={activeWorkspace.members}
         />
 

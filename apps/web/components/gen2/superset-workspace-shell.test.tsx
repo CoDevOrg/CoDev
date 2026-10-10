@@ -319,8 +319,8 @@ describe("SupersetWorkspaceShell", () => {
         runtimeEnabled
       />,
     );
-    await screen.findByRole("button", { name: "New branch" });
-    fireEvent.click(screen.getByRole("button", { name: "New branch" }));
+    await screen.findByRole("button", { name: "New worktree" });
+    fireEvent.click(screen.getByRole("button", { name: "New worktree" }));
     fireEvent.change(screen.getByLabelText("Worktree ID"), {
       target: { value: "fix-login" },
     });

@@ -242,7 +242,7 @@ Focus: 2px `--ws-accent` outline, 1px offset, `:focus-visible` only. Hover: 120m
 
 Implemented in `workspace-top-bar.tsx` and `workspace-branch-menu.tsx`. 12px side padding, 8px gaps. Three zones. Right zone `flex-shrink: 0`. Center truncates first. Left truncates next.
 
-1. **Left:** one home link to `/gen2` that is the 22×22 CoDev mark (`/brand/codev-mark.svg`, ice blue `#00bde8` in both themes; no separate back arrow), the sidebar toggle, then a shadcn `Breadcrumb`: workspace name / repository / branch menu. No trailing separator. The branch menu is the last crumb and the only branch control in the bar.
+1. **Left:** one home link to `/gen2` that is the 22×22 CoDev mark (`/brand/codev-mark.svg`, ice blue `#00bde8` in both themes; no separate back arrow), the sidebar toggle, then a shadcn `Breadcrumb`: workspace name / repository / branch menu. No trailing separator. The branch menu is the last crumb and the only branch control in the bar. It lists the branches open in worktrees, then the repository's GitHub branches (filterable); choosing a remote branch opens it in its own worktree. Private repositories reach the machine without their other branches, so those are listed but disabled with a note.
    - 1024–1279px: hide the repository crumb.
    - ≤1023px: hide the workspace and repository crumbs and every separator; only the branch remains.
    - ≤768px: hide the branch name and status; keep the pill as an icon button.
@@ -259,7 +259,7 @@ Do not add extra badges. The branch status pill appears only once the file count
 
 ### Left rail (288 / 56)
 
-- Worktree trigger is the only branch control in the rail.
+- Worktree trigger is the only worktree control in the rail; its create action is "New worktree", not "New branch".
 - New Chat is a secondary (outline) button. Nothing in the rail is a filled primary.
 - Recent chats: transparent rows, hover = surface-hover, current = surface-active **or** accent-soft, not both. `aria-current` on the current chat. Rename sits at the row’s right edge (visible on hover, focus, or touch) and on double-click. The row pads so the time stays clear of the control. Enter saves only after the server accepts the title; Escape cancels. A rejected rename keeps the previous title.
 - Empty and zero states are quiet. With no chats, show one shadcn `Empty` ("No chats yet. Start one with New Chat.") instead of a heading and dashed box per provider. A provider group appears only once it has chats. Count badges show only above zero, and the branch count shows only with more than one branch. The branch status pill renders nothing while the file count is unknown; never a placeholder dash.
@@ -277,7 +277,7 @@ Five columns, `min-width: 260px`, horizontal scroll with a visible scrollbar. Br
 
 ### Share
 
-`.gen2-workspace-surface`, 12px radius, `WorkspaceButton` close via `DialogClose asChild`. Invite field 32px. Native role select `.gen2-workspace-select`. Adding a person, changing editor/viewer access, copying a share link, and transferring ownership are separate. Transfer and remove use `AlertDialog` and do not claim success before the response. Restore focus to the control that opened the dialog.
+`.gen2-workspace-surface`, 12px radius, `WorkspaceButton` close via `DialogClose asChild`. Invite field 32px. Native role select `.gen2-workspace-select`. Adding a person, changing editor/viewer access, copying a share link, and transferring ownership are separate. Transfer and remove sit in a per-member "More actions" menu beside the inline role select, use `AlertDialog`, and do not claim success before the response. Both revoke the share link on the server, so the dialog loads a fresh one. No count chip on "People with access". Restore focus to the control that opened the dialog.
 
 ---
 

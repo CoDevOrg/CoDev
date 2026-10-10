@@ -5,6 +5,13 @@ import type { Gen2WorkspaceMember } from "@codev/contracts";
 
 import { WorkspaceShareDialog } from "./workspace-share-dialog";
 
+function openMemberMenu(login: string) {
+  fireEvent.pointerDown(
+    screen.getByRole("button", { name: `More actions for ${login}` }),
+    { button: 0, ctrlKey: false },
+  );
+}
+
 const initialMembers: Gen2WorkspaceMember[] = [
   {
     userId: "user-1",
@@ -112,12 +119,14 @@ describe("WorkspaceShareDialog", () => {
       />,
     );
 
-    expect(screen.getByText('Share "Frontend Redesign"')).toBeInTheDocument();
+    expect(screen.getByText("Share “Frontend Redesign”")).toBeInTheDocument();
     expect(screen.getByText(/Alice Owner/)).toBeInTheDocument();
     expect(screen.getByText("(you)")).toBeInTheDocument();
     expect(screen.getByText("Bob Editor")).toBeInTheDocument();
     expect(screen.getByText("Carol Viewer")).toBeInTheDocument();
     expect(screen.getByText("Anyone with the link")).toBeInTheDocument();
+    // Counts that restate the visible list are omitted (design contract §6).
+    expect(screen.queryByText("3 people")).not.toBeInTheDocument();
   });
 
   it("invites a new user with a chosen role", async () => {
@@ -201,8 +210,11 @@ describe("WorkspaceShareDialog", () => {
       />,
     );
 
-    const removeBtn = screen.getByLabelText("Remove access for carol");
-    fireEvent.click(removeBtn);
+    openMemberMenu("carol");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Remove access…" }));
+    expect(screen.getByRole("alertdialog")).toHaveTextContent(
+      "The current share link also stops working",
+    );
     expect(fetch).not.toHaveBeenCalledWith(
       expect.stringContaining("/members/user-3"),
       expect.objectContaining({ method: "DELETE" }),
@@ -218,6 +230,15 @@ describe("WorkspaceShareDialog", () => {
         }),
       );
     });
+    // Removing someone revokes the link on the server, so a fresh one loads.
+    await waitFor(() =>
+      expect(
+        vi
+          .mocked(fetch)
+          .mock.calls.filter(([url]) => String(url).endsWith("/share")),
+      ).toHaveLength(2),
+    );
+    expect(await screen.findByText("Removed member access.")).toBeVisible();
   });
 
   it("loads the reusable link without resetting its access role", async () => {
@@ -238,7 +259,9 @@ describe("WorkspaceShareDialog", () => {
         expect.objectContaining({ method: "POST", body: "{}" }),
       ),
     );
-    expect(screen.getByText(/everyone can join/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Can join as the selected role/i),
+    ).toBeInTheDocument();
   });
 
   it("copies the invite link to the clipboard", async () => {
@@ -284,8 +307,9 @@ describe("WorkspaceShareDialog", () => {
       />,
     );
 
+    openMemberMenu("bob");
     fireEvent.click(
-      screen.getAllByRole("button", { name: "Transfer ownership" })[0]!,
+      screen.getByRole("menuitem", { name: "Transfer ownership…" }),
     );
     expect(fetch).not.toHaveBeenCalledWith(
       expect.stringContaining("/members/user-2"),
@@ -334,7 +358,40 @@ describe("WorkspaceShareDialog", () => {
     opener.focus();
     fireEvent.click(opener);
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
     await waitFor(() => expect(opener).toHaveFocus());
+  });
+
+  it("shows viewers who has access without invite or link controls", async () => {
+    render(
+      <WorkspaceShareDialog
+        open={true}
+        onOpenChange={vi.fn()}
+        workspaceId="ws-123"
+        workspaceName="Frontend Redesign"
+        currentUserRole="viewer"
+        currentUserId="user-3"
+        initialMembers={initialMembers}
+      />,
+    );
+
+    expect(screen.getByText("Bob Editor")).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Add people by email or username"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Copy link/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Change role for bob"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Only editors and the owner can share a link."),
+    ).toBeInTheDocument();
+    const urls = () => vi.mocked(fetch).mock.calls.map(([url]) => String(url));
+    await waitFor(() =>
+      expect(urls()).toContain("/api/gen2/workspaces/ws-123/members"),
+    );
+    expect(urls().some((url) => url.endsWith("/share"))).toBe(false);
   });
 });

@@ -586,6 +586,17 @@ export const gen2SupersetWorktreeCreateResponseSchema = z.object({
   worktree: gen2SupersetWorktreeSchema,
 });
 
+/** The connected repository's branches on GitHub, as the caller can see them. */
+export const gen2RemoteBranchListSchema = z.object({
+  branches: z.array(z.object({ name: z.string().min(1).max(255) })),
+  defaultBranch: z.string().nullable(),
+  /** More branches exist than were listed. */
+  truncated: z.boolean(),
+  unavailable: z
+    .enum(["no-repository", "github-not-connected", "github-no-access"])
+    .nullable(),
+});
+
 export const gen2GitOperationSchema = z.enum(["status", "diff", "show"]);
 
 export const gen2GitResponseSchema = z.object({ output: z.string() });
@@ -697,6 +708,7 @@ export type Gen2AgentSessionFollowUpRequest = z.infer<
 
 export type Gen2Repository = z.infer<typeof gen2RepositorySchema>;
 export type Gen2WorkspaceStatus = z.infer<typeof gen2WorkspaceStatusSchema>;
+export type Gen2RemoteBranchList = z.infer<typeof gen2RemoteBranchListSchema>;
 export type Gen2RuntimeProvider = z.infer<typeof gen2RuntimeProviderSchema>;
 export type Gen2RuntimeStatus = z.infer<typeof gen2RuntimeStatusSchema>;
 export type Gen2RuntimeOperationKind = z.infer<
