@@ -11,12 +11,13 @@ billing return URLs, workspace shares, and CLI sign-in links.
 This removes the 10 ms Worker CPU limit from app execution. It does not guarantee
 zero outages: database, Redis, runtime tunnels, and Azure can still fail.
 
-| Service                           | Ownership                                                                                                                                                        | Release configuration                                              |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `codev-azure-edge` Worker         | `trycodev.com`, `www.trycodev.com`, `admins.trycodev.com/*`; streams requests and dispatches the two every-minute maintenance routes to Azure                    | `apps/web/wrangler.azure-edge.jsonc`                               |
-| `codev-web-origin` Container App  | Next.js HTTP server and authorized Gen 2 WebSockets; two warm 1 CPU/2 GiB replicas, autoscaling to six at 20 concurrent HTTP requests or 70% CPU                 | `infra/azure/web-app.bicep`, `web.Containerfile`, `deploy-web.mjs` |
-| `codev-cloudflare-preview` Worker | Retained ARM lifecycle Workflows and authenticated workflow bridge on its `admins-84a.workers.dev` URL; no public domains or cron when `AZURE_WEB_ORIGIN` is set | `apps/web/wrangler.arm-lifecycle.jsonc`                            |
-| Vercel `codev` project            | Existing Vercel deployment URLs and previews; no public production traffic depends on its hosting allocation                                                     | `.github/workflows/deploy-web.yml`                                 |
+| Service                             | Ownership                                                                                                                                                        | Release configuration                                              |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `codev-azure-edge` Worker           | `trycodev.com`, `www.trycodev.com`, `admins.trycodev.com/*`; streams requests and dispatches the two every-minute maintenance routes to Azure                    | `apps/web/wrangler.azure-edge.jsonc`                               |
+| `codev-web-origin` Container App    | Next.js HTTP server and authorized Gen 2 WebSockets; two warm 1 CPU/2 GiB replicas, autoscaling to six at 20 concurrent HTTP requests or 70% CPU                 | `infra/azure/web-app.bicep`, `web.Containerfile`, `deploy-web.mjs` |
+| `codev-cloudflare-preview` Worker   | Retained ARM lifecycle Workflows and authenticated workflow bridge on its `admins-84a.workers.dev` URL; no public domains or cron when `AZURE_WEB_ORIGIN` is set | `apps/web/wrangler.arm-lifecycle.jsonc`                            |
+| Vercel `codev` project              | Existing Vercel deployment URLs and previews; no public production traffic depends on its hosting allocation                                                     | `.github/workflows/deploy-web.yml`                                 |
+| Preview zone (`CODEV_PREVIEW_ZONE`) | Per-port workspace preview hosts, routed by each workspace's own tunnel to the guest preview proxy; no Worker routes                                             | `apps/web/lib/runtime/arm-workspace-preview-route.ts`              |
 
 `https://www.trycodev.com` is the canonical public origin; generated links,
 metadata, and default service URLs use it. A zone Redirect Rule (phase
@@ -70,7 +71,8 @@ per-member workspace compute allowances. Replica capacity is bounded at six.
   the GitHub `CLOUDFLARE_API_TOKEN` for Tunnel/DNS setup. The production Worker's
   binding with that name uses the separate account-owned `codev-arm-runtime`
   token: Cloudflare Tunnel Write on the runtime account and DNS Write restricted
-  to the `trycodev.com` zone. It has no Worker deployment permission.
+  to the `trycodev.com` zone, plus the preview zone once browser previews are
+  enabled (see below). It has no Worker deployment permission.
 - **Vercel project:** application environment variables for the Vercel build
   and deployment are configured in Vercel. The deploy workflow pulls the
   selected production or preview environment before building.
@@ -285,6 +287,86 @@ metadata. It refuses requests without service authorization and refuses executio
 on Workers to prevent relay loops. No new secrets or paid Cloudflare services are
 required; keep that Vercel production alias available and deploy Vercel before
 enabling a Worker build that depends on the catalog service.
+
+## Browser previews
+
+The workspace Browser tab frames a member's dev server from a separate
+registrable domain, never from an app host. `CODEV_PREVIEW_ZONE` (the zone
+name) and `CODEV_PREVIEW_ZONE_ID` (its Cloudflare zone ID) are non-secret
+GitHub repository variables. CI overlays them onto the Azure origin through
+`infra/azure/deploy-web.mjs`. Both must be valid or previews stay off, and
+a zone equal to or under `trycodev.com` is refused: a subdomain would be
+same-site with the app and receive its SameSite cookies. Sessions are minted
+only for pages on `trycodev.com` or `www.trycodev.com` (localhost outside
+production), which the guest allows as the frame ancestor, so leave the
+variables unset on Vercel. The lifecycle Worker needs neither variable.
+In local development, `CODEV_PREVIEW_DEV_DIRECT=1` frames
+`http://localhost:<port>` directly instead.
+
+Each preview host is `p<port>-<sha256(workspace)[0:20]>-g<generation>.<zone>`:
+one origin per port, one level deep so Universal SSL covers it, and gone with
+the generation. Minting a session (`POST /api/gen2/workspaces/<id>/preview`,
+editors only, 30 per minute per member and workspace, never for the guest's
+reserved ports) adds a `*.<zone>` → `http://127.0.0.1:5261` rule before the
+tunnel's catch-all on first use and creates a proxied CNAME to the tunnel,
+keeping at most four hosts per generation. The rule is added only after a
+guest exec shows systemd (uid 0) owns `127.0.0.1:5261`, so a busy guest
+cannot open its first preview until it answers; once present, the rule
+vouches for that generation on every replica. A tunnel whose ingress lacks
+its gateway host is never rewritten. These calls run from the web app with
+the ARM runtime Cloudflare token, never in the lifecycle Workflow, so its
+request budget is unchanged. That token is shared with workspace starts, so
+sessions that need Cloudflare work are also limited to 10 per minute per
+member across workspaces. The every-minute reconcile route deletes preview
+records whose workspace generation is no longer ready (at most once every
+five minutes per replica, 20 deletes per run). Records left behind after
+previews are turned off point at deleted tunnels and can be removed by hand.
+
+The session URL carries a 60-second, single-use Ed25519 token signed with
+`ARM_WORKSPACE_SIGNING_PRIVATE_KEY`: `scope: "preview"`, `aud` the exact
+preview host, the port, member, workspace, generation, a `jti`, and the
+framing app origin. Gateway capabilities and preview tokens never verify for
+each other. The guest preview proxy, which ships only in a signed ARM image,
+redeems it for a partitioned `__Host-codev-preview` cookie. Port listing reads
+`/proc/net/tcp{,6}` through the guest exec without counting as member
+activity. A preview is available only when `ARM_WORKSPACE_BOOT_ENABLED` is on
+and systemd (uid 0) owns `127.0.0.1:5261`; other guests show "Update this
+workspace to use the browser". Preview traffic never keeps a workspace
+awake; while the browser window has focus, a focused preview reports member
+input from the page for at most 30 minutes after focus entered it.
+
+The app CSP adds `frame-src 'self' https://*.<zone>` only when the zone is
+configured (development also allows localhost); `frame-ancestors 'none'` and
+`X-Frame-Options: DENY` are unchanged. `Permissions-Policy` allows the app's
+own microphone for dictation; previews are framed with an empty `allow` list.
+
+Cloudflare requirements for the zone: the same account as the runtime
+tunnels; a plan with enough DNS records (zones created on Free after
+2024-09-01 allow 200; Pro allows 3,500); a Cache Rule that bypasses cache for
+the whole zone, as defense in depth behind the proxy's
+`Cloudflare-CDN-Cache-Control: no-store`; no Worker routes; and DNS Write on
+the zone for the `codev-arm-runtime` token. Lower the zone's SOA record
+minimum TTL (DNS settings) to 60 seconds: the frame loads a host moments
+after its CNAME is created, and a resolver that asks before the record
+reaches every Cloudflare nameserver caches the miss for that TTL (1,800
+seconds by default). Until the zone is on the Public Suffix List, previews
+of different workspaces are same-site with each other.
+
+Roll out in this order:
+
+1. Deploy the web app without the variables; previews stay inert.
+2. Release a guest image with the preview proxy through **Release ARM
+   workspace image** (`release-arm-image.yml`).
+3. Promote it with `ARM_WORKSPACE_IMAGE_VERSION_ID` and the matching
+   `CODEX_CATALOG_CLIENT_VERSION`.
+4. Grant the `codev-arm-runtime` token DNS Write on the preview zone, add
+   the zone's Cache Rule, and lower its SOA minimum TTL.
+5. Set the `CODEV_PREVIEW_ZONE` and `CODEV_PREVIEW_ZONE_ID` repository
+   variables.
+6. Start a new CI run from `main`; a queued run deploys the old values.
+
+Existing VMs keep their image until they restart on the promoted one. To turn
+previews off, clear the variables and start a new run.
 
 ## Browser security and session rollout
 

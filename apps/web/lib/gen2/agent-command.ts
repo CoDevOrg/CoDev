@@ -15,7 +15,12 @@ type History = Array<{ role: "user" | "assistant"; body: string }>;
  */
 const COMMAND_BUILDERS: Record<
   Gen2AgentProviderName,
-  (prompt: string, history: History, model?: string) => string[]
+  (
+    prompt: string,
+    history: History,
+    model?: string,
+    context?: string | undefined,
+  ) => string[]
 > = {
   codex: buildGen2CodexCommand,
   claude: buildGen2ClaudeCommand,
@@ -27,6 +32,8 @@ export function buildGen2AgentCommand(
   prompt: string,
   history: History = [],
   model?: string,
+  /** Turn context blocks (`agent-turn-context.ts`); the prompt stays last. */
+  context?: string | undefined,
 ) {
-  return COMMAND_BUILDERS[provider](prompt, history, model);
+  return COMMAND_BUILDERS[provider](prompt, history, model, context);
 }

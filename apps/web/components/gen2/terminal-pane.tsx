@@ -8,6 +8,11 @@ import {
   attachTerminalTransport,
   type TerminalTransport,
 } from "./terminal-transport";
+import {
+  useWorkspaceTerminalIo,
+  type TerminalQueuedInput,
+  type TerminalTailReader,
+} from "./use-workspace-terminal-io";
 import { WorkspaceButton } from "./workspace-button";
 import { WorkspaceLoading } from "./workspace-loading";
 
@@ -80,6 +85,8 @@ export function Gen2TerminalPane({
   workspaceConnection = "ready",
   onExit,
   onResumeWorkspace,
+  queuedInput,
+  onTailReader,
 }: {
   workspaceId: string;
   worktreeId?: string | undefined;
@@ -89,6 +96,10 @@ export function Gen2TerminalPane({
   workspaceConnection?: "ready" | "waking" | "asleep" | "blocked" | undefined;
   onExit: () => void;
   onResumeWorkspace?: (() => Promise<boolean>) | undefined;
+  /** Typed once when this pane's own new session is live. */
+  queuedInput?: TerminalQueuedInput | null | undefined;
+  /** Receives a reader for the visible lines while the session is live. */
+  onTailReader?: ((read: TerminalTailReader | null) => void) | undefined;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -105,6 +116,15 @@ export function Gen2TerminalPane({
   );
   const [error, setError] = useState("");
   const [workspacePaused, setWorkspacePaused] = useState(false);
+
+  useWorkspaceTerminalIo({
+    live: status === "live",
+    termRef,
+    transportRef,
+    pendingInputRef,
+    queuedInput,
+    onTailReader,
+  });
 
   const markWorkspacePaused = useCallback(() => {
     sessionRef.current = null;

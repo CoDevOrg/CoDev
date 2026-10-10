@@ -11,6 +11,7 @@ import { forwardedRequest } from "@/lib/http/forwarded-request";
 import { auth as nextAuth } from "@/auth";
 import { clearLegacySessionCookies } from "@/lib/auth/clear-legacy-session-cookies";
 import { securityHeaders } from "@/lib/platform/security-headers";
+import { readGen2PreviewConfig } from "@/lib/gen2/preview-config";
 import {
   apiEdgeLimiter,
   retryAfterSeconds,
@@ -142,6 +143,7 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     nonce,
     process.env.NODE_ENV === "production",
     new URL(publicRequest.url).origin,
+    readGen2PreviewConfig()?.zone ?? null,
   );
   const headers = new Headers(request.headers);
   headers.set("x-nonce", nonce);

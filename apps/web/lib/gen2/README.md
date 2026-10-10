@@ -60,6 +60,59 @@ polls has to keep it. The poll route appends to `gen2_agent_turns` and writes
 the assistant message when the process exits, which is why a reply survives a
 closed tab and why the other members of a shared workspace can see the turn.
 
+## Turn context, commands and goals
+
+A turn's prompt can start with an agent command (`/plan`, `/ask`, `/goal`,
+`/review`, `/init`) and carry `@[label](kind:ref)` mention tokens for files,
+folders, chats, agent runs, the editor selection and terminal output. Both
+stay in the persisted user message, so history, CLI-fallback continuations
+and restarts keep them; `prompt-command.ts` and `prompt-mentions.ts` parse
+them on the client and the server alike (no `server-only`).
+
+`agent-turn-preflight.ts` runs a start's checks together and calls
+`buildGen2TurnContext` (`agent-turn-context.ts`) once. The context sits
+between the workspace contract and the conversation
+(`formatGen2WorkspaceAgentPrompt`), and each provider builder takes it as an
+optional 4th argument; argv shapes never change, so this ships with a web
+deploy. In order: the action protocol (only when the member's
+`workspaceContext` snapshot parsed — it is dropped, never rejected, when it
+does not), the chat goal, the command's mode block, the member's workspace
+view, and resolved mentions (`prompt-mention-context.ts`, with
+`chat-excerpt.ts` reading one workspace-scoped, bounded excerpt per mentioned
+chat). Everything injected is quoted as data in one place (`prompt-quote.ts`)
+and capped at 8,000 characters; role and permissions come from membership,
+never from the snapshot. Modes are instructions, not sandboxes.
+
+A chat's goal is derived from its transcript (`chat-goal.ts`): the latest
+`/goal <text>` sets it, `/goal clear` ends it, and `/goal done` or the agent's
+`update_goal` action marks it achieved. `agent-goal-control.ts` answers
+`/goal clear|done` by saving the message and returning `{ goal }` without
+running an agent. No column holds the goal, so a turn the server settles with
+no browser open still updates it.
+
+## Agent workspace actions
+
+Agents ask the workspace to do things through fenced blocks in their reply,
+opened by "```codev-action <nonce>" with one JSON
+`gen2WorkspaceActionSchema`object.`workspace-action-instructions.ts`generates the protocol text from the contract (one entry per action type),
+with a fresh 10-character nonce per turn returned as`actionNonce`.
+`workspace-action-extract.ts`runs inside`reduceGen2Turn`, so the live view,
+the persisted body and history agree: it lifts complete blocks (never ones
+inside another fence or a quote) into `workspaceAction` items, removes them
+from the reply, and keeps the fence's token on each item.
+
+The browser acts only on the live turn's own nonce, and only in the tab that
+drove the turn (`components/gen2/use-workspace-action-dispatch.ts`).
+Navigation (open a file or range, changes, review, terminal, preview, chat
+rename) may run without a click when it cannot lose the member's state;
+everything else is a proposal card the member confirms. Saved items are
+read-only records with "Open" buttons. Codex and Cursor number message items
+from zero every turn, so per-item client state is keyed by the turn's nonce,
+not by item id alone. Proposals reuse the member's own authenticated routes:
+invites add new members only and never change roles or rotate the share
+link, and `run_in_terminal` opens a new terminal tab instead of typing into
+an existing session.
+
 ## Imported sessions
 
 Editors can import a local Codex rollout or Claude Code transcript as a chat
@@ -121,6 +174,24 @@ the repository on GitHub learns no branch names. Public repositories are cloned
 with every remote branch, so the top bar opens one as a worktree from
 `origin/<branch>`; private repositories arrive as a one-commit snapshot without
 a remote, so their other branches are listed but cannot be opened yet.
+
+## Browser preview
+
+The inspector's Browser tab previews a dev server running on the guest. Its
+content is untrusted, so it is served from per-port hosts
+`p<port>-<sha256(workspaceId)[0:20]>-g<generation>.<CODEV_PREVIEW_ZONE>`, a
+separate registrable domain (`preview-config.ts` refuses the app's own), by a
+non-root guest proxy that ships only with an ARM image release
+(`infra/runtime/scripts/arm-workspace-preview*.mjs`). `workspace-ports.ts`
+lists listening ports with one read-only guest exec (`recordActivity: false`)
+and reports the preview available only when the baked boot path is on and
+systemd (uid 0) holds `127.0.0.1:5261`. `workspace-preview.ts` mints a
+session: `preview-access.ts` checks editor membership and the route in one
+query, `preview-rate-limit.ts` limits mints, and
+`lib/runtime/arm-workspace-preview-route.ts` ensures the tunnel's wildcard
+rule and the host's DNS record before signing a 60-second token with
+`lib/runtime/arm-control-plane-token.ts` (scope `preview`, audience the exact
+host). See docs/WEB_HOSTING.md for the zone, rollout and limits.
 
 ## Layout
 

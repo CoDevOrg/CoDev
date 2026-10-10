@@ -307,6 +307,65 @@ describe("gen2 Superset agent runtime adapter", () => {
     expect(mocks.start).not.toHaveBeenCalled();
   });
 
+  it("restarts a session with its task's mode but no action protocol", async () => {
+    restartableSession();
+    mocks.getAgentSession.mockResolvedValue({
+      id: "session-1",
+      workspaceId,
+      chatId,
+      createdBy: userId,
+      task: "/plan Repair the test.",
+      worktreeId: "agent-1",
+      provider: "openai",
+    });
+
+    await restart();
+
+    const command = (mocks.start.mock.calls[0]?.[1] as { command: string[] })
+      .command;
+    expect(command.at(-1)).toContain("Mode: plan.");
+    expect(command.at(-1)).not.toContain("codev-action");
+    expect(command.at(-1)).toMatch(
+      /Current request:\n\/plan Repair the test\.$/,
+    );
+  });
+
+  it("restarts on the chat's current goal, not the one its task set", async () => {
+    restartableSession();
+    const goalSession = {
+      id: "session-1",
+      workspaceId,
+      chatId,
+      createdBy: userId,
+      task: "/goal Ship the parser",
+      worktreeId: "agent-1",
+      provider: "openai",
+    };
+    mocks.getAgentSession.mockResolvedValue(goalSession);
+    const started = [
+      { role: "user", body: "/goal Ship the parser" },
+      { role: "assistant", body: "Working." },
+    ];
+    mocks.listMessages.mockResolvedValue(started);
+    await restart();
+    const active = (mocks.start.mock.calls[0]?.[1] as { command: string[] })
+      .command;
+    expect(active.at(-1)).toContain("Chat goal (set by a member");
+    expect(active.at(-1)).toContain("Mode: goal.");
+
+    mocks.start.mockClear();
+    mocks.listMessages.mockResolvedValue([
+      ...started,
+      { role: "user", body: "/goal clear" },
+    ]);
+    await restart();
+    const cleared = (mocks.start.mock.calls[0]?.[1] as { command: string[] })
+      .command;
+    expect(cleared.at(-1)).not.toContain("Chat goal");
+    expect(cleared.at(-1)).not.toContain("Mode: goal.");
+    expect(cleared.at(-1)).toMatch(/Current request:\n\/goal Ship the parser$/);
+  });
+
   it("monitors live runs and renews their seats without browser polling", async () => {
     mocks.listMonitorable.mockResolvedValue([RUN]);
     mocks.checkRecovery.mockResolvedValue({
@@ -763,7 +822,7 @@ describe("gen2 Superset agent turn (Phase 4 browser-facing delegate)", () => {
     );
   });
 
-  const sessionTask = (overrides: { model?: string } = {}) =>
+  const sessionTask = (overrides: { model?: string; task?: string } = {}) =>
     createGen2AgentSessionTask({
       workspaceId,
       userId,
@@ -1017,6 +1076,65 @@ describe("gen2 Superset agent turn (Phase 4 browser-facing delegate)", () => {
     );
     expect(worktrees).toHaveLength(2);
     expect(worktrees[0]).not.toBe(worktrees[1]);
+  });
+
+  it("launches with the context and history its caller built", async () => {
+    mocks.register.mockResolvedValue({
+      runId,
+      status: "creating",
+      created: true,
+    });
+    mocks.start.mockResolvedValue({
+      hostWorkspaceId: "host-ws-1",
+      hostTerminalId: "term-1",
+      hostAgentSessionId: "agent-1",
+    });
+
+    const result = await startGen2SupersetAgentTurn({
+      workspaceId,
+      userId,
+      chatId,
+      prompt: "hello",
+      provider: "codex",
+      idempotencyKey: "key-1",
+      model: "gpt-5.6-luna",
+      verified: true,
+      history: [{ role: "user", body: "earlier" }],
+      context: "Workspace actions:\n```codev-action abcdefghij",
+      actionNonce: "abcdefghij",
+    });
+
+    expect(mocks.listMessages).not.toHaveBeenCalled();
+    const command = (mocks.start.mock.calls[0]?.[1] as { command: string[] })
+      .command;
+    expect(command.at(-1)).toContain("```codev-action abcdefghij");
+    expect(command.at(-1)).toContain("User: earlier");
+    expect(command.at(-1)?.endsWith("Current request:\nhello")).toBe(true);
+    expect(result).toEqual({
+      sessionId: runId,
+      agentSessionId: "session-1",
+      actionNonce: "abcdefghij",
+    });
+  });
+
+  it("gives a direct agent task its mode without the action protocol", async () => {
+    mocks.register.mockResolvedValue({
+      runId,
+      status: "creating",
+      created: true,
+    });
+    mocks.start.mockResolvedValue({
+      hostWorkspaceId: "host-ws-1",
+      hostTerminalId: "term-1",
+      hostAgentSessionId: "agent-1",
+    });
+
+    await sessionTask({ task: "/ask Why is CI red?" });
+
+    const command = (mocks.start.mock.calls[0]?.[1] as { command: string[] })
+      .command;
+    expect(command.at(-1)).toContain("Mode: ask.");
+    expect(command.at(-1)).not.toContain("codev-action");
   });
 
   it("returns logical and process ids when creating an agent task", async () => {

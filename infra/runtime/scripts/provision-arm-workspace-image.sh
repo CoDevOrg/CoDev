@@ -284,14 +284,14 @@ UNIT
 
 ln -s ../codev-local-api-guard.service /etc/systemd/system/multi-user.target.wants/codev-local-api-guard.service
 
-for script in arm-workspace-capability.mjs arm-workspace-gateway.mjs arm-workspace-bootstrap.mjs start-arm-workspace-gateway.mjs; do
+for script in arm-workspace-capability.mjs arm-workspace-gateway.mjs arm-workspace-bootstrap.mjs start-arm-workspace-gateway.mjs arm-workspace-preview-token.mjs arm-workspace-preview-upstream.mjs arm-workspace-preview-upgrade.mjs arm-workspace-preview.mjs start-arm-workspace-preview.mjs; do
   install -m 0644 "/var/tmp/${script}" "/usr/local/lib/codev/${script}"
 done
 install -m 0755 /var/tmp/boot-arm-workspace.sh /usr/local/sbin/codev-arm-boot
 install -m 0755 /var/tmp/activate-arm-workspace-boot.sh /usr/local/sbin/codev-activate-arm-boot
 install -m 0755 /var/tmp/prepare-arm-workspace-disk.sh /usr/local/sbin/codev-prepare-arm-disk
 bash /var/tmp/install-arm-workspace-boot.sh
-rm -f /var/tmp/arm-workspace-*.mjs /var/tmp/start-arm-workspace-gateway.mjs /var/tmp/*arm-workspace-boot.sh /var/tmp/boot-arm-workspace.sh /var/tmp/prepare-arm-workspace-disk.sh
+rm -f /var/tmp/arm-workspace-*.mjs /var/tmp/start-arm-workspace-gateway.mjs /var/tmp/start-arm-workspace-preview.mjs /var/tmp/*arm-workspace-boot.sh /var/tmp/boot-arm-workspace.sh /var/tmp/prepare-arm-workspace-disk.sh
 
 systemctl daemon-reload
 systemctl start codev-local-api-guard.service

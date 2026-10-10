@@ -151,6 +151,43 @@ explicit launch or later-phase gates:
 review does not approve production enablement; Phase 3 and the launch gates above
 remain outstanding. The agreed $6.50 direct workspace budget is unchanged.
 
+## Later addition: workspace preview proxy
+
+Added after this review. The proxy is not covered by the canary evidence above.
+Baked images add a second loopback service for the Browser preview. It stays
+inert until an image built with it is released and promoted.
+
+- `codev-arm-preview.socket` holds `127.0.0.1:5261` from early boot.
+  `codev-arm-preview.service` (`start-arm-workspace-preview.mjs`) runs as a
+  `DynamicUser` without access to `/workspace`, `/var/lib/codev`, or
+  `/etc/codev`. It can connect only to loopback. It is never uid 0, 1000, or
+  2000, so the local caller firewall also keeps it away from guestd.
+- Activation writes only a public identity to
+  `/etc/codev-preview/identity.json`: workspace ID, generation, and
+  verification key. The proxy reuses the control plane's Ed25519 key. Tokens
+  carry `scope: "preview"` and a preview-host audience, so neither the gateway
+  nor the proxy accepts the other's tokens. Tokens are single-use and last at
+  most 60 seconds. The resulting session cookie is HMAC-signed with a
+  per-process key, lasts 5 minutes, and has a 30-minute cap.
+- Requests reach only ports whose every LISTEN row is owned by uid 2000 or
+  above, excluding the guest's reserved ports. Origin and `Sec-Fetch-*` checks
+  run before the localhost rewrite. Every response is marked `private` and
+  `Cloudflare-CDN-Cache-Control: no-store`. WebSocket bytes flow only after
+  the dev server answers 101; any other answer becomes a 502.
+- Tests live in `infra/runtime/arm-workspace-preview.test.mjs`. They cover the
+  token matrix, the cookie flow and its cap, the check page, open redirects,
+  Origin rules, owner and reserved-port rules, address families, header
+  rewrites, chunked bodies, a real HTTP upstream, and a raw-socket WebSocket
+  pipe. Image validation verifies the units and smoke-tests the socket. A
+  preview start failure during the verified boot stops the proxy service and
+  lets the workspace boot continue.
+
+A removed member keeps an open preview for up to 30 minutes while it stays in
+use, or 5 minutes after it goes idle, because each proxied request past half
+the TTL renews the cookie. A fresh mint checks membership again and starts a
+new 30-minute cap. Ending the generation ends every session. The legacy
+connection path does not install the proxy.
+
 ## References
 
 - [Cloudflare run parameters](https://developers.cloudflare.com/tunnel/reference/run-parameters/)

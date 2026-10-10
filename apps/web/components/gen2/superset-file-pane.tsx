@@ -58,6 +58,11 @@ import {
   DEFAULT_SUPERSET_WORKTREE_ID,
 } from "./superset-file-client";
 import { useGen2SharedFileDocument } from "./use-gen2-shared-file-document";
+import type {
+  FileRequestOutcome,
+  FileRevealRange,
+} from "./use-workspace-file-request";
+import type { EditorSelectionText } from "./superset-code-editor";
 
 const SupersetCodeEditor = dynamic(
   () =>
@@ -194,6 +199,9 @@ export function SupersetFilePane({
   onOpenFile,
   requestedPath,
   onRequestedPathConsumed,
+  requestedRange,
+  onRangeRevealed,
+  onSelectionText,
 }: {
   workspaceId: string;
   canEdit: boolean;
@@ -204,7 +212,15 @@ export function SupersetFilePane({
   portalTarget?: HTMLElement | null | undefined;
   onOpenFile?: ((file: Gen2SupersetFile | null) => void) | undefined;
   requestedPath?: string | null | undefined;
-  onRequestedPathConsumed?: (() => void) | undefined;
+  /** Says whether the request opened a file, was dropped while busy, or declined. */
+  onRequestedPathConsumed?: ((outcome: FileRequestOutcome) => void) | undefined;
+  /** Lines to reveal once their file is open. */
+  requestedRange?: FileRevealRange | null | undefined;
+  /** The range was shown; it is never applied again, even on reopening. */
+  onRangeRevealed?: ((id: number) => void) | undefined;
+  onSelectionText?:
+    | ((selection: (EditorSelectionText & { path: string }) | null) => void)
+    | undefined;
 }) {
   const [files, setFiles] = useState<Gen2SupersetEntry[]>([]);
   const [openFile, setOpenFile] = useState<Gen2SupersetFile | null>(null);
@@ -244,6 +260,7 @@ export function SupersetFilePane({
   const contentsRef = useRef(contents);
   const savingRef = useRef(false);
   const openRequestId = useRef(0);
+  const wasRequested = useRef(false);
   const listRequestId = useRef(0);
   const dirty = openFile !== null && contents !== openFile.contents;
   const sharedDocument = useGen2SharedFileDocument({
@@ -338,7 +355,13 @@ export function SupersetFilePane({
         if (signal?.aborted || requestId !== listRequestId.current) return;
         const visibleFiles = nextFiles.filter((file) => file.path !== ".git");
         setFiles(visibleFiles);
-        if (selectFirst && !openFileRef.current && visibleFiles.length > 0) {
+        // Only a fresh pane picks a file itself; never over a requested one.
+        if (
+          selectFirst &&
+          !openFileRef.current &&
+          !wasRequested.current &&
+          visibleFiles.length > 0
+        ) {
           const preferred =
             visibleFiles.find(
               (file) =>
@@ -607,31 +630,30 @@ export function SupersetFilePane({
   }
 
   const selectFile = useCallback(
-    (path: string) => {
-      if (
-        savingRef.current ||
-        openingPath ||
-        path === openFileRef.current?.path
-      )
-        return;
+    (path: string): FileRequestOutcome => {
+      if (path === openFileRef.current?.path) return "same";
+      if (savingRef.current || openingPath) return "busy";
       const current = openFileRef.current;
       if (
         current &&
         contentsRef.current !== current.contents &&
         !window.confirm("Discard your unsaved changes and open another file?")
       )
-        return;
+        return "declined";
       void openPath(path);
+      return "opened";
     },
     [openingPath, openPath],
   );
 
+  // Answer each request once, even as `selectFile` changes while it opens.
+  const answeredPath = useRef<string | null>(null);
   useEffect(() => {
+    if (answeredPath.current === requestedPath) return;
+    answeredPath.current = requestedPath ?? null;
     if (!requestedPath) return;
-    if (requestedPath !== openFileRef.current?.path) {
-      selectFile(requestedPath);
-    }
-    onRequestedPathConsumed?.();
+    wasRequested.current = true;
+    onRequestedPathConsumed?.(selectFile(requestedPath));
   }, [requestedPath, selectFile, onRequestedPathConsumed]);
 
   async function copyText(value: string, label: string) {
@@ -986,6 +1008,15 @@ export function SupersetFilePane({
             if (!stale) setNotice(null);
           }}
           onSelectionChange={sharedDocument.updateCursor}
+          onSelectionText={(selection) =>
+            onSelectionText?.(
+              selection && { path: openFile.path, ...selection },
+            )
+          }
+          revealRange={
+            requestedRange?.path === openFile.path ? requestedRange : null
+          }
+          onRangeRevealed={onRangeRevealed}
           onSave={() => void save()}
         />
       ) : workspaceReady ? (

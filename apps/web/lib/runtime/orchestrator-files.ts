@@ -3,6 +3,8 @@ import "server-only";
 import { z } from "zod";
 
 import { OrchestratorError, orchestratorRequest } from "./orchestrator-request";
+import type { ArmWorkspaceRequestOptions } from "./arm-workspace-request";
+import type { WorkspaceRuntimeTarget } from "./workspace-runtime-target";
 
 export interface SandboxExecInput {
   command: string[];
@@ -12,6 +14,13 @@ export interface SandboxExecInput {
   columns?: number | undefined;
   worktreeId?: string | undefined;
 }
+
+export type SandboxExecOptions = ArmWorkspaceRequestOptions & {
+  /** Fail fast instead of waiting out a guest that is busy with a turn. */
+  timeoutMs?: number | undefined;
+  /** A route the caller just read with its own membership check. */
+  target?: WorkspaceRuntimeTarget | undefined;
+};
 
 export async function readSandboxFile(
   workspaceId: string,
@@ -65,6 +74,7 @@ export async function writeSandboxFile(
 export async function executeInSandbox(
   workspaceId: string,
   input: SandboxExecInput,
+  { timeoutMs, target, ...options }: SandboxExecOptions = {},
 ) {
   // The guest exec endpoint uses a PTY. Give non-interactive commands a wide
   // viewport so file paths, Git porcelain, and search matches are not wrapped
@@ -81,6 +91,9 @@ export async function executeInSandbox(
     "POST",
     `/v1/sandboxes/${workspaceId}/pty/exec`,
     command,
+    timeoutMs,
+    target,
+    options,
   );
   return z
     .object({

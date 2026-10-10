@@ -12,6 +12,9 @@ export const CONNECTION_CHECK_MS = 30_000;
 export const CONNECTION_RETRY_MS = 2_000;
 export const CONNECTION_PROBE_MS = 5_000;
 export const RECENT_ACTIVITY_MS = 60_000;
+/** Input the page cannot see (a focused preview frame) reports itself with this. */
+export const WORKSPACE_ACTIVITY_EVENT = "codev:workspace-activity";
+const INPUT_EVENTS = ["keydown", "pointerdown", "wheel", "input"];
 
 export function useWorkspaceConnection(
   workspaceId: string,
@@ -258,7 +261,7 @@ export function useWorkspaceConnection(
       void check();
       void probeStartup();
     };
-    for (const event of ["keydown", "pointerdown", "wheel", "input"])
+    for (const event of [...INPUT_EVENTS, WORKSPACE_ACTIVITY_EVENT])
       window.addEventListener(event, activity, {
         capture: true,
         passive: true,
@@ -282,7 +285,7 @@ export function useWorkspaceConnection(
       clearInterval(timer);
       clearInterval(probeTimer);
       clearTimeout(retryTimer);
-      for (const event of ["keydown", "pointerdown", "wheel", "input"])
+      for (const event of [...INPUT_EVENTS, WORKSPACE_ACTIVITY_EVENT])
         window.removeEventListener(event, activity, true);
       document.removeEventListener("visibilitychange", visible);
       window.removeEventListener("online", visible);

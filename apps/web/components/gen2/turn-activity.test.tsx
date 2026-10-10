@@ -1,10 +1,51 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
-import type { Gen2TurnItem } from "@codev/contracts";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Gen2TurnItem, Gen2WorkspaceAction } from "@codev/contracts";
 
 import { Gen2TurnActivity } from "./turn-activity";
+import { writeStoredActionOutcome } from "./workspace-action-storage";
+import {
+  WorkspaceAgentContext,
+  type WorkspaceAgentContextValue,
+} from "./workspace-controller";
 
 const noop = () => undefined;
+
+const NONCE = "k3y9q2m4x7";
+
+function actionItem(
+  id: string,
+  action: Gen2WorkspaceAction | null,
+  token: string | null = NONCE,
+  error: string | null = null,
+): Gen2TurnItem {
+  return {
+    id,
+    kind: "workspaceAction",
+    status: "completed",
+    token,
+    action,
+    error,
+  };
+}
+
+function withAgent(children: ReactNode, canEdit = true) {
+  const run = vi.fn(async () => ({ ok: true, message: "Done" }));
+  const value = {
+    controller: {
+      autoRunBlocker: () => "You have unsaved changes in api.ts",
+      run,
+    },
+    canEdit,
+  } as unknown as WorkspaceAgentContextValue;
+  const view = render(
+    <WorkspaceAgentContext.Provider value={value}>
+      {children}
+    </WorkspaceAgentContext.Provider>,
+  );
+  return { run, ...view };
+}
 
 describe("Gen2TurnActivity", () => {
   it("collapses steps behind a Worked summary and reveals command detail on demand", () => {
@@ -197,5 +238,144 @@ describe("Gen2TurnActivity", () => {
       <Gen2TurnActivity items={[]} onOpenFile={noop} />,
     );
     expect(container).toBeEmptyDOMElement();
+  });
+
+  describe("workspace actions", () => {
+    beforeEach(() => window.sessionStorage.clear());
+
+    const command: Gen2TurnItem = {
+      id: "c1",
+      kind: "command",
+      status: "completed",
+      command: "pnpm test",
+      output: "",
+      exitCode: 0,
+    };
+    const invite: Gen2WorkspaceAction = {
+      type: "invite_members",
+      people: ["ada", "bob"],
+      role: "editor",
+    };
+
+    it("keeps a settled turn's requests visible without expanding its steps", () => {
+      withAgent(
+        <Gen2TurnActivity
+          settled
+          chatId="chat-1"
+          items={[command, actionItem("m:action:0", invite)]}
+          onOpenFile={noop}
+        />,
+      );
+      expect(screen.queryByText("Ran pnpm")).not.toBeInTheDocument();
+      expect(
+        screen.getByText("Suggested: invite ada and bob as editors"),
+      ).toBeInTheDocument();
+      // A saved proposal is a record, not a button.
+      expect(
+        screen.queryByRole("button", { name: "Send invites" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("offers Open for navigation that did not run here, with the reason", async () => {
+      const open = { type: "open_file", path: "src/api.ts", line: 4 } as const;
+      const { run } = withAgent(
+        <Gen2TurnActivity
+          settled
+          chatId="chat-1"
+          items={[actionItem("m:action:0", open)]}
+          onOpenFile={noop}
+        />,
+      );
+      expect(
+        screen.getByText("Suggested: open src/api.ts:4 in Files"),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText("You have unsaved changes in api.ts"),
+      ).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Open" }));
+      await waitFor(() => expect(run).toHaveBeenCalledWith(open));
+    });
+
+    it("shows what this tab did, live and saved", () => {
+      const open = { type: "open_file", path: "src/app.ts" } as const;
+      const item = actionItem("m:action:0", open);
+      const inviteItem = actionItem("m:action:1", invite);
+      const ref = { chatId: "chat-1", token: NONCE };
+      writeStoredActionOutcome(
+        { ...ref, itemId: "m:action:0", action: open },
+        { state: "auto", message: "Opened src/app.ts in Files" },
+      );
+      writeStoredActionOutcome(
+        { ...ref, itemId: "m:action:1", action: invite },
+        { state: "done", message: "Invited 2" },
+      );
+      withAgent(
+        <Gen2TurnActivity
+          live
+          chatId="chat-1"
+          actionToken={NONCE}
+          items={[item, inviteItem]}
+          onOpenFile={noop}
+        />,
+      );
+      expect(
+        screen.getByText("Opened src/app.ts in Files"),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Open" }),
+      ).not.toBeInTheDocument();
+      expect(screen.getByText("Invited 2")).toBeInTheDocument();
+    });
+
+    it("keeps another turn's outcome off a row with the same item id", () => {
+      const open = { type: "open_file", path: "src/app.ts" } as const;
+      writeStoredActionOutcome(
+        {
+          chatId: "chat-1",
+          itemId: "item_1:action:0",
+          token: NONCE,
+          action: open,
+        },
+        { state: "auto", message: "Opened src/app.ts in Files" },
+      );
+      withAgent(
+        <Gen2TurnActivity
+          chatId="chat-1"
+          items={[actionItem("item_1:action:0", open, "nexttoken0")]}
+          onOpenFile={noop}
+        />,
+      );
+      expect(
+        screen.getByText("Suggested: open src/app.ts in Files"),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Open" })).toBeInTheDocument();
+    });
+
+    it("mutes invalid and foreign blocks, and states a reached goal", () => {
+      withAgent(
+        <Gen2TurnActivity
+          live
+          chatId="chat-1"
+          actionToken={NONCE}
+          items={[
+            actionItem("m:action:0", null, NONCE, "Invalid JSON."),
+            actionItem("m:action:1", { type: "open_terminal" }, "copiedtoken"),
+            actionItem("m:action:2", {
+              type: "update_goal",
+              status: "achieved",
+            }),
+          ]}
+          onOpenFile={noop}
+        />,
+      );
+      expect(
+        screen.getByText("Ignored a workspace action (Invalid JSON.)"),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText("Ignored a workspace action (not from this turn)"),
+      ).toBeInTheDocument();
+      expect(screen.getByText("Marked the goal achieved")).toBeInTheDocument();
+      expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    });
   });
 });

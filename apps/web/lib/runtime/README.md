@@ -31,7 +31,21 @@ This module owns the communication and integration with external execution envir
   transaction through the transport to resolve the route on the live connection.
 - `arm-workspace-activity.ts`, `arm-workspace-member-activity.ts`: Observe live
   guest agent work and record successful member mutations without counting
-  reads, connection checks, or polls as input.
+  reads, connection checks, or polls as input. Read-only guest commands that
+  go through `/v1/pty/exec` (preview port listing) pass `recordActivity: false`
+  through `executeInSandbox`, `orchestratorRequest`, and `armWorkspaceRequest`.
+- `arm-control-plane-token.ts`: The one Ed25519 signer for control-plane tokens
+  guests verify. Callers bind each token to one guest service with `aud` and
+  `scope`: gateway capabilities (`capabilityToken`) and preview sessions.
+- `arm-workspace-preview-route.ts`, `arm-workspace-preview-token.ts`,
+  `arm-workspace-preview-sweep.ts`: Browser preview hosts
+  (`p<port>-<hash>-g<generation>.<zone>`), the tunnel's wildcard ingress rule
+  and per-host CNAMEs (added on demand from the web app, never in the
+  lifecycle Workflow), preview session tokens, and the reconcile cron's
+  bounded sweep of records whose generation is no longer ready. The route
+  calls back before spending Cloudflare budget and before routing the zone to
+  a guest; membership, the zone setting, rate limits, and the guest proxy
+  check belong to `lib/gen2` (see docs/WEB_HOSTING.md).
 
 - `arm-workspace-config.ts`: Requires dedicated ARM Azure credentials and resource
   group; never reuses Firecracker credentials. The pinned gallery image may live

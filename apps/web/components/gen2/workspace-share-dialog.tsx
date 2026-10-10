@@ -27,6 +27,8 @@ export interface WorkspaceShareDialogProps {
   currentUserRole: Gen2WorkspaceRole;
   currentUserId?: string | undefined;
   initialMembers?: Gen2WorkspaceMember[];
+  /** Fills the invite field when the dialog opens for this request. */
+  initialInvite?: { id: number; emailOrLogin: string } | null | undefined;
 }
 
 export function WorkspaceShareDialog({
@@ -37,6 +39,7 @@ export function WorkspaceShareDialog({
   currentUserRole,
   currentUserId,
   initialMembers,
+  initialInvite,
 }: WorkspaceShareDialogProps) {
   const share = useWorkspaceShare({
     workspaceId,
@@ -62,6 +65,11 @@ export function WorkspaceShareDialog({
       share.setNotice(null);
       setInviteInput("");
     }
+  }
+  const [prefilled, setPrefilled] = useState<number | null>(null);
+  if (open && initialInvite && initialInvite.id !== prefilled) {
+    setPrefilled(initialInvite.id);
+    setInviteInput(initialInvite.emailOrLogin.slice(0, 256));
   }
 
   const self = share.members.find((member) => member.userId === currentUserId);

@@ -1,8 +1,53 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Gen2WorkspaceDetail } from "@codev/contracts";
+import type {
+  Gen2WorkspaceContext,
+  Gen2WorkspaceDetail,
+} from "@codev/contracts";
 
-import { Gen2ChatPanel } from "./chat-panel";
+import { Gen2ChatPanel, type Gen2ChatPanelProps } from "./chat-panel";
+import type { PendingWorkspaceAction } from "./use-workspace-action-dispatch";
+import {
+  WorkspaceAgentContext,
+  type WorkspaceAgentContextValue,
+} from "./workspace-controller";
+
+/** What the panel hands the action dispatcher, and what it gets back. */
+const dispatch = vi.hoisted(() => ({
+  calls: [] as Array<{ chatId: string | null; live: unknown }>,
+  pending: [] as unknown[],
+  announcement: "",
+}));
+
+vi.mock("./use-workspace-action-dispatch", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  useWorkspaceActionDispatch: (input: {
+    chatId: string | null;
+    live: unknown;
+  }) => {
+    dispatch.calls.push({ chatId: input.chatId, live: input.live });
+    return {
+      pending: dispatch.pending,
+      resolve: () => undefined,
+      outcomeFor: () => null,
+      announcement: dispatch.announcement,
+    };
+  },
+}));
+
+vi.mock("./workspace-action-cards", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  WorkspaceActionCards: ({ pending }: { pending: unknown[] }) =>
+    pending.length ? (
+      <div data-testid="action-cards">{pending.length} proposals</div>
+    ) : null,
+}));
 
 const workspace: Gen2WorkspaceDetail = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -31,15 +76,175 @@ function ndjson(...lines: string[]) {
 
 const CHAT = { id: "33333333-3333-4333-8333-333333333333", title: "New chat" };
 
+/** In-memory storage: Node's own localStorage global would shadow jsdom's. */
+function memoryStorage(): Storage {
+  const values = new Map<string, string>();
+  return {
+    get length() {
+      return values.size;
+    },
+    clear: () => values.clear(),
+    getItem: (key) => values.get(key) ?? null,
+    key: (index) => [...values.keys()][index] ?? null,
+    removeItem: (key) => void values.delete(key),
+    setItem: (key, value) => void values.set(key, String(value)),
+  };
+}
+
+const SNAPSHOT: Gen2WorkspaceContext = {
+  view: { mode: "ide", inspector: "files", terminalOpen: false, narrow: false },
+  worktree: {
+    id: "main",
+    branch: "main",
+    changedFiles: 2,
+    unsavedEdits: false,
+  },
+  worktrees: [
+    { id: "main", branch: "main" },
+    { id: "feat-login", branch: "feat/login" },
+  ],
+  openFile: null,
+  preview: null,
+  listeningPorts: null,
+  members: [{ login: "ada", role: "owner" }],
+  agents: [],
+  excerpts: [],
+  previewEnabled: false,
+};
+
+function agentContext(
+  overrides: Partial<WorkspaceAgentContextValue["sources"]> = {},
+  extra: Partial<WorkspaceAgentContextValue> = {},
+): WorkspaceAgentContextValue {
+  return {
+    controller: {
+      autoRunBlocker: vi.fn(() => null),
+      run: vi.fn(async () => ({ ok: true, message: "" })),
+      newChat: vi.fn(async () => undefined),
+      openSettings: vi.fn(),
+      openImport: vi.fn(),
+      setViewMode: vi.fn(),
+    },
+    getSnapshot: () => SNAPSHOT,
+    canEdit: true,
+    previewEnabled: false,
+    sources: {
+      chats: [],
+      activeChatId: null,
+      worktreeId: "main",
+      agentRuns: [],
+      refreshRuns: vi.fn(),
+      listFiles: vi.fn(async () => [
+        { path: "src/app.ts", kind: "file" as const, size: 10 },
+        { path: "src/api.ts", kind: "file" as const, size: 10 },
+      ]),
+      invalidateFiles: vi.fn(),
+      selection: () => null,
+      terminalTail: () => null,
+      ...overrides,
+    },
+    draftRequest: null,
+    consumeDraftRequest: vi.fn(),
+    ...extra,
+  };
+}
+
+function panelElement(
+  props: Partial<Gen2ChatPanelProps> = {},
+  context: WorkspaceAgentContextValue | null = null,
+) {
+  const panel = (
+    <Gen2ChatPanel
+      workspace={workspace}
+      onRunningChange={vi.fn()}
+      onFilesChanged={vi.fn()}
+      onOpenFile={vi.fn()}
+      onNeedsMachine={async () => true}
+      {...props}
+    />
+  );
+  return context ? (
+    <WorkspaceAgentContext.Provider value={context}>
+      {panel}
+    </WorkspaceAgentContext.Provider>
+  ) : (
+    panel
+  );
+}
+
+function renderPanel(
+  props: Partial<Gen2ChatPanelProps> = {},
+  context: WorkspaceAgentContextValue | null = null,
+) {
+  return render(panelElement(props, context));
+}
+
+const OTHER_CHAT = "66666666-6666-4666-8666-666666666666";
+
+const DONE_CHUNKS = ndjson(
+  `{"type":"item.completed","item":{"id":"m1","type":"agent_message","text":"Done."}}`,
+  `{"type":"turn.completed"}`,
+);
+
+/** A stand-in for the Web Speech API; without `availability`, cloud only. */
+function stubSpeech(availability?: string) {
+  const instances: Array<{
+    start: ReturnType<typeof vi.fn>;
+    abort: ReturnType<typeof vi.fn>;
+  }> = [];
+  class Recognition {
+    static available = availability
+      ? vi.fn(async () => availability)
+      : undefined;
+    onresult = null;
+    onerror = null;
+    onend = null;
+    start = vi.fn();
+    stop = vi.fn();
+    abort = vi.fn();
+    constructor() {
+      instances.push(this);
+    }
+  }
+  vi.stubGlobal("SpeechRecognition", Recognition);
+  return instances;
+}
+
+function agentPosts() {
+  return vi
+    .mocked(fetch)
+    .mock.calls.filter(
+      ([url, init]) =>
+        String(url).endsWith("/agent") && init?.method === "POST",
+    )
+    .map(([, init]) => JSON.parse(String(init?.body)));
+}
+
+function type(value: string) {
+  fireEvent.change(screen.getByLabelText("Prompt"), { target: { value } });
+}
+
+async function sendReady() {
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Send" })).toBeEnabled(),
+  );
+}
+
 describe("Gen2ChatPanel", () => {
   beforeEach(() => {
     sessionStorage.clear();
+    vi.stubGlobal("localStorage", memoryStorage());
+    dispatch.calls.length = 0;
+    dispatch.pending = [];
+    dispatch.announcement = "";
   });
 
   function stubFetch(handlers: {
     start?: () => Response | Promise<Response>;
     poll?: () => unknown | Promise<unknown>;
     messages?: unknown[];
+    /** Messages the chat holds before this test's turns. */
+    history?: unknown[];
     provider?: {
       connected: boolean;
       via: string | null;
@@ -74,10 +279,20 @@ describe("Gen2ChatPanel", () => {
           return json({
             chat: {
               ...CHAT,
-              messages: turnFinished ? (handlers.messages ?? []) : [],
+              messages: [
+                ...(handlers.history ?? []),
+                ...(turnFinished ? (handlers.messages ?? []) : []),
+              ],
             },
           });
         }
+        if (path.endsWith("/branches"))
+          return json({
+            branches: [{ name: "main" }, { name: "feat/remote" }],
+            defaultBranch: "main",
+            truncated: false,
+            unavailable: null,
+          });
         if (path.includes("/api/gen2/providers")) {
           if (path.includes("provider=all") && handlers.allProviders) {
             return json(handlers.allProviders);
@@ -657,7 +872,7 @@ describe("Gen2ChatPanel", () => {
     expect(onFilesChanged).toHaveBeenCalled();
   });
 
-  it("fills the prompt from an empty-state suggestion without sending", async () => {
+  it("fills the prompt from an empty-state card without sending", async () => {
     stubFetch({});
     render(
       <Gen2ChatPanel
@@ -673,11 +888,9 @@ describe("Gen2ChatPanel", () => {
       await screen.findByRole("heading", { name: "What should we build?" }),
     ).toBeInTheDocument();
     fireEvent.click(
-      screen.getByRole("button", { name: /Scaffold Next.js App/ }),
+      screen.getByRole("button", { name: /Plan before building/ }),
     );
-    expect(screen.getByLabelText("Prompt")).toHaveValue(
-      "Scaffold a small Next.js app",
-    );
+    expect(screen.getByLabelText("Prompt")).toHaveValue("/plan ");
     expect(
       vi
         .mocked(fetch)
@@ -838,5 +1051,902 @@ describe("Gen2ChatPanel", () => {
         model: "composer-2.5",
       });
     });
+  });
+  it("moves through the slash menu with the keyboard and inserts a mode", async () => {
+    stubFetch({});
+    renderPanel();
+    const prompt = await screen.findByLabelText("Prompt");
+    type("/");
+    const listbox = await screen.findByRole("listbox", { name: "Commands" });
+    const options = screen.getAllByRole("option");
+    expect(options.map((option) => option.textContent)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("/plan"),
+        expect.stringContaining("/ask"),
+      ]),
+    );
+    // Without the workspace shell there are no workspace commands.
+    expect(screen.queryByText("/changes")).toBeNull();
+    expect(prompt).toHaveAttribute("aria-controls", listbox.id);
+    expect(prompt).toHaveAttribute("aria-activedescendant", options[0]!.id);
+    fireEvent.keyDown(prompt, { key: "ArrowDown" });
+    expect(prompt).toHaveAttribute("aria-activedescendant", options[1]!.id);
+    // Enter during IME composition is the input method's, not the menu's.
+    fireEvent.keyDown(prompt, { key: "Enter", isComposing: true });
+    expect(prompt).toHaveValue("/");
+    fireEvent.keyDown(prompt, { key: "Enter" });
+    expect(prompt).toHaveValue("/ask ");
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Remove Ask mode" }),
+    ).toBeInTheDocument();
+    expect(agentPosts()).toHaveLength(0);
+  });
+
+  it("teaches / and @ until the member uses one", async () => {
+    stubFetch({});
+    renderPanel();
+    await screen.findByLabelText("Prompt");
+    fireEvent.click(screen.getByRole("button", { name: "@ Mention" }));
+    expect(screen.getByLabelText("Prompt")).toHaveValue("@");
+    fireEvent.change(screen.getByLabelText("Prompt"), {
+      target: { value: "" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "/ Commands" }));
+    expect(screen.getByLabelText("Prompt")).toHaveValue("/");
+    expect(
+      await screen.findByRole("listbox", { name: "Commands" }),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "/ Commands" })).toBeNull(),
+    );
+    expect(localStorage.getItem("codev-gen2-composer-hints-used")).toBe("1");
+  });
+
+  it("closes the menu on Escape until a new trigger starts", async () => {
+    stubFetch({});
+    renderPanel();
+    const prompt = await screen.findByLabelText("Prompt");
+    type("/");
+    await screen.findByRole("listbox");
+    fireEvent.keyDown(prompt, { key: "Escape" });
+    expect(screen.queryByRole("listbox")).toBeNull();
+    type("/p");
+    expect(screen.queryByRole("listbox")).toBeNull();
+    type("");
+    type("/");
+    expect(await screen.findByRole("listbox")).toBeInTheDocument();
+  });
+
+  it("does not send while an input method is composing", async () => {
+    stubFetch({});
+    renderPanel();
+    const prompt = await screen.findByLabelText("Prompt");
+    type("hello");
+    await sendReady();
+    fireEvent.keyDown(prompt, { key: "Enter", isComposing: true });
+    fireEvent.keyDown(prompt, { key: "Enter", keyCode: 229 });
+    expect(agentPosts()).toHaveLength(0);
+  });
+
+  it("runs a typed workspace command instead of starting a turn", async () => {
+    stubFetch({});
+    const context = agentContext();
+    renderPanel({}, context);
+    const prompt = await screen.findByLabelText("Prompt");
+    type("/changes");
+    await screen.findByRole("listbox");
+    fireEvent.keyDown(prompt, { key: "Escape" });
+    // With the menu closed, Enter still runs the command.
+    fireEvent.keyDown(prompt, { key: "Enter" });
+    await waitFor(() =>
+      expect(context.controller.run).toHaveBeenCalledWith({
+        type: "show_changes",
+      }),
+    );
+    expect(prompt).toHaveValue("");
+    expect(agentPosts()).toHaveLength(0);
+  });
+
+  it("runs a command with an argument from the Send button", async () => {
+    stubFetch({});
+    const context = agentContext();
+    renderPanel({}, context);
+    await screen.findByLabelText("Prompt");
+    type("/rename Login flow");
+    expect(
+      await screen.findByRole("option", { name: /Rename this chat/ }),
+    ).toBeInTheDocument();
+    fireEvent.submit(screen.getByLabelText("Prompt").closest("form")!);
+    await waitFor(() =>
+      expect(context.controller.run).toHaveBeenCalledWith({
+        type: "rename_chat",
+        title: "Login flow",
+      }),
+    );
+    expect(agentPosts()).toHaveLength(0);
+  });
+
+  it("lists worktrees, GitHub branches and a new branch for /branch", async () => {
+    stubFetch({});
+    const context = agentContext();
+    renderPanel({}, context);
+    await screen.findByLabelText("Prompt");
+    type("/branch feat");
+    expect(
+      await screen.findByRole("option", { name: /Switch to feat\/login/ }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole("option", { name: /Open feat\/remote/ }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("option", { name: /Create branch feat/ }));
+    await waitFor(() =>
+      expect(context.controller.run).toHaveBeenCalledWith({
+        type: "create_branch",
+        branch: "feat",
+      }),
+    );
+  });
+
+  it("explains a workspace command that needs an argument", async () => {
+    stubFetch({});
+    const context = agentContext();
+    renderPanel({}, context);
+    const prompt = await screen.findByLabelText("Prompt");
+    type("/open");
+    fireEvent.keyDown(prompt, { key: "Escape" });
+    fireEvent.keyDown(prompt, { key: "Enter" });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Name a file to open",
+    );
+    expect(prompt).toHaveValue("/open");
+    expect(context.controller.run).not.toHaveBeenCalled();
+  });
+
+  it("shows @label in the composer and sends a mention token", async () => {
+    stubFetch({});
+    const context = agentContext();
+    renderPanel({}, context);
+    await screen.findByLabelText("Prompt");
+    type("Check @ap");
+    fireEvent.click(
+      await screen.findByRole("option", { name: /src\/api\.ts/ }),
+    );
+    expect(screen.getByLabelText("Prompt")).toHaveValue("Check @src/api.ts ");
+    expect(
+      screen.getByRole("button", { name: "Remove mention src/api.ts" }),
+    ).toBeInTheDocument();
+    type("Check @src/api.ts please");
+    await sendReady();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(agentPosts()).toHaveLength(1));
+    expect(agentPosts()[0]).toMatchObject({
+      prompt: "Check @[src/api.ts](file:src%2Fapi.ts) please",
+      workspaceContext: { ...SNAPSHOT, excerpts: [] },
+    });
+  });
+
+  it("drops a mention whose label was edited away", async () => {
+    stubFetch({});
+    renderPanel({}, agentContext());
+    await screen.findByLabelText("Prompt");
+    type("@ap");
+    fireEvent.click(
+      await screen.findByRole("option", { name: /src\/api\.ts/ }),
+    );
+    type("@src/ap please");
+    expect(
+      screen.queryByRole("button", { name: "Remove mention src/api.ts" }),
+    ).toBeNull();
+  });
+
+  it("sends the mentioned selection as an excerpt with that turn", async () => {
+    stubFetch({});
+    const selection = {
+      path: "src/api.ts",
+      startLine: 3,
+      endLine: 5,
+      text: "const a = 1;",
+    };
+    renderPanel({}, agentContext({ selection: () => selection }));
+    await screen.findByLabelText("Prompt");
+    type("@");
+    fireEvent.click(
+      await screen.findByRole("option", { name: /Selection \(api\.ts:3-5\)/ }),
+    );
+    type(
+      `${(screen.getByLabelText("Prompt") as HTMLTextAreaElement).value}explain`,
+    );
+    await sendReady();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(agentPosts()).toHaveLength(1));
+    expect(agentPosts()[0].prompt).toBe(
+      "@[api.ts:3-5](selection:src%2Fapi.ts%23L3-5) explain",
+    );
+    expect(agentPosts()[0].workspaceContext.excerpts).toEqual([
+      { kind: "selection", ref: "src/api.ts#L3-5", text: "const a = 1;" },
+    ]);
+  });
+
+  it("switches the agent for one message without changing the chat's", async () => {
+    stubFetch({
+      allProviders: {
+        codex: {
+          connected: true,
+          via: "api-key",
+          models: [{ id: "gpt-5.6-luna", label: "GPT-5.6 Luna" }],
+        },
+        claude: {
+          connected: true,
+          via: "api-key",
+          models: [{ id: "sonnet", label: "Sonnet" }],
+        },
+      },
+    });
+    const onActiveProviderChange = vi.fn();
+    renderPanel(
+      {
+        activeProvider: "codex",
+        connectedProviders: ["codex", "claude"],
+        onActiveProviderChange,
+      },
+      agentContext(),
+    );
+    await screen.findByLabelText("Prompt");
+    type("@cl");
+    fireEvent.click(
+      await screen.findByRole("option", {
+        name: "Use Claude for this message",
+      }),
+    );
+    expect(screen.getByText("→ Claude · Sonnet")).toBeInTheDocument();
+    type("review the auth flow");
+    await sendReady();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(agentPosts()).toHaveLength(1));
+    expect(agentPosts()[0]).toMatchObject({
+      provider: "claude",
+      model: "sonnet",
+    });
+    expect(onActiveProviderChange).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /Stop/ })).toBeNull(),
+    );
+    expect(screen.queryByText("→ Claude · Sonnet")).toBeNull();
+    type("and the tests");
+    await sendReady();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(agentPosts()).toHaveLength(2));
+    expect(agentPosts()[1]).toMatchObject({ provider: "codex" });
+  });
+
+  it("queues one follow-up while a turn runs and sends it after", async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    stubFetch({
+      poll: () =>
+        held.then(() => ({
+          chunks: ndjson(
+            `{"type":"item.completed","item":{"id":"m1","type":"agent_message","text":"Done."}}`,
+            `{"type":"turn.completed"}`,
+          ),
+          nextSequence: 1,
+          exited: true,
+        })),
+    });
+    renderPanel();
+    await screen.findByLabelText("Prompt");
+    type("first");
+    await sendReady();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByRole("button", { name: /Stop/ });
+    // Drafting stays open while the agent works; Enter queues.
+    type("second");
+    // The docked composer replaced the empty state's.
+    fireEvent.keyDown(screen.getByLabelText("Prompt"), { key: "Enter" });
+    expect(await screen.findByText("Queued")).toBeInTheDocument();
+    expect(screen.getByLabelText("Prompt")).toHaveValue("");
+    expect(agentPosts()).toHaveLength(1);
+    release();
+    await waitFor(() => expect(agentPosts()).toHaveLength(2));
+    expect(agentPosts()[1].prompt).toBe("second");
+  });
+
+  it("gives a queued follow-up back when the member switched chats", async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    stubFetch({
+      poll: () =>
+        held.then(() => ({
+          chunks: ndjson(
+            `{"type":"item.completed","item":{"id":"m1","type":"agent_message","text":"Done."}}`,
+            `{"type":"turn.completed"}`,
+          ),
+          nextSequence: 1,
+          exited: true,
+        })),
+    });
+    const view = renderPanel({ activeChatId: CHAT.id });
+    await screen.findByLabelText("Prompt");
+    type("first");
+    await sendReady();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByRole("button", { name: /Stop/ });
+    type("second");
+    fireEvent.keyDown(screen.getByLabelText("Prompt"), { key: "Enter" });
+    await screen.findByText("Queued");
+    view.rerender(
+      <Gen2ChatPanel
+        workspace={workspace}
+        onRunningChange={vi.fn()}
+        onFilesChanged={vi.fn()}
+        onOpenFile={vi.fn()}
+        onNeedsMachine={async () => true}
+        activeChatId="66666666-6666-4666-8666-666666666666"
+      />,
+    );
+    release();
+    await waitFor(() =>
+      expect(screen.getByLabelText("Prompt")).toHaveValue("second"),
+    );
+    expect(agentPosts()).toHaveLength(1);
+  });
+
+  it("gives a queued follow-up back when it is cancelled", async () => {
+    stubFetch({ poll: () => new Promise(() => undefined) });
+    renderPanel();
+    await screen.findByLabelText("Prompt");
+    type("first");
+    await sendReady();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByRole("button", { name: /Stop/ });
+    type("second");
+    fireEvent.keyDown(screen.getByLabelText("Prompt"), { key: "Enter" });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Cancel queued message" }),
+    );
+    expect(screen.getByLabelText("Prompt")).toHaveValue("second");
+    expect(screen.queryByText("Queued")).toBeNull();
+  });
+
+  it("keeps the turn's action token for a rejoin", async () => {
+    stubFetch({
+      start: () =>
+        Response.json({ sessionId: "session-1", actionNonce: "abcde12345" }),
+      poll: () => new Promise(() => undefined),
+    });
+    renderPanel();
+    await screen.findByLabelText("Prompt");
+    type("open the app");
+    await sendReady();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByRole("button", { name: /Stop/ });
+    await waitFor(() =>
+      expect(
+        JSON.parse(sessionStorage.getItem(`codev-gen2-turn:${workspace.id}`)!),
+      ).toMatchObject({ sessionId: "session-1", actionNonce: "abcde12345" }),
+    );
+  });
+
+  it("shows the chat goal and sends goal controls without polling", async () => {
+    const history = [
+      {
+        id: "u-1",
+        role: "user",
+        body: "/goal Ship the login page",
+        createdAt: "2026-09-20T20:00:00.000Z",
+      },
+      {
+        id: "a-1",
+        role: "assistant",
+        body: "Started on it.",
+        createdAt: "2026-09-20T20:01:00.000Z",
+      },
+    ];
+    stubFetch({
+      history,
+      start: () => {
+        history.push({
+          id: "u-2",
+          role: "user",
+          body: "/goal done",
+          createdAt: "2026-09-20T20:02:00.000Z",
+        });
+        return Response.json({
+          goal: {
+            text: "Ship the login page",
+            status: "achieved",
+            summary: null,
+          },
+        });
+      },
+    });
+    renderPanel({ activeChatId: CHAT.id });
+    const bar = await screen.findByRole("region", { name: "Chat goal" });
+    expect(bar).toHaveTextContent("Ship the login page");
+    expect(bar).toHaveTextContent("Active");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Mark done" })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Mark done" }));
+    await waitFor(() => expect(bar).toHaveTextContent("Achieved"));
+    expect(agentPosts()[0].prompt).toBe("/goal done");
+    expect(
+      vi
+        .mocked(fetch)
+        .mock.calls.some(([url]) => String(url).endsWith("/agent/poll")),
+    ).toBe(false);
+  });
+
+  it("offers next steps under a plan reply", async () => {
+    stubFetch({
+      history: [
+        {
+          id: "u-1",
+          role: "user",
+          body: "/plan add sign in",
+          createdAt: "2026-09-20T20:00:00.000Z",
+        },
+        {
+          id: "a-1",
+          role: "assistant",
+          body: "1. Add a route",
+          createdAt: "2026-09-20T20:01:00.000Z",
+        },
+      ],
+    });
+    renderPanel({ activeChatId: CHAT.id });
+    // The bubble shows the mode as a chip, not the raw command.
+    expect(await screen.findByText("add sign in")).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Refine plan" }));
+    expect(screen.getByLabelText("Prompt")).toHaveValue("/plan ");
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Implement this plan" }),
+      ).toBeEnabled(),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Implement this plan" }),
+    );
+    await waitFor(() => expect(agentPosts()).toHaveLength(1));
+    expect(agentPosts()[0].prompt).toBe("Implement the plan above.");
+  });
+
+  it("recalls the last message with Up in an empty composer", async () => {
+    stubFetch({
+      history: [
+        {
+          id: "u-1",
+          role: "user",
+          body: "/plan Attached files on this machine:\n- `.codev/uploads/a.ts`\n\nfix @[src/a.ts](file:src%2Fa.ts)",
+          createdAt: "2026-09-20T20:00:00.000Z",
+        },
+      ],
+    });
+    renderPanel({ activeChatId: CHAT.id });
+    await screen.findByText(/fix/);
+    const prompt = screen.getByLabelText("Prompt") as HTMLTextAreaElement;
+    prompt.setSelectionRange(0, 0);
+    fireEvent.keyDown(prompt, { key: "ArrowUp" });
+    expect(prompt).toHaveValue("/plan fix @src/a.ts");
+    expect(
+      screen.getByRole("button", { name: "Remove mention src/a.ts" }),
+    ).toBeInTheDocument();
+  });
+
+  it("prefills a handed-off draft once and consumes it", async () => {
+    stubFetch({});
+    const context = agentContext(
+      {},
+      {
+        draftRequest: {
+          id: "draft-1",
+          text: "Continue from @[Old chat](chat:44444444-4444-4444-8444-444444444444) ",
+        },
+      },
+    );
+    renderPanel({}, context);
+    await waitFor(() =>
+      expect(screen.getByLabelText("Prompt")).toHaveValue(
+        "Continue from @Old chat ",
+      ),
+    );
+    expect(context.consumeDraftRequest).toHaveBeenCalledWith("draft-1");
+    expect(agentPosts()).toHaveLength(0);
+  });
+
+  it("ranks empty-state cards from the workspace and fills, never sends", async () => {
+    stubFetch({});
+    renderPanel({ connectedProviders: ["codex"] }, agentContext());
+    await screen.findByRole("heading", { name: "What should we build?" });
+    expect(
+      screen.getByText(
+        /it can open files, review changes, create branches, and invite teammates\./,
+      ),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: /Review my 2 changed files/ }),
+    );
+    expect(screen.getByLabelText("Prompt")).toHaveValue("/review ");
+    fireEvent.click(screen.getByRole("button", { name: /Invite teammates/ }));
+    expect(screen.getByLabelText("Prompt")).toHaveValue("Invite ");
+    expect(agentPosts()).toHaveLength(0);
+  });
+
+  it("explains instead of offering a composer to a viewer", async () => {
+    stubFetch({});
+    renderPanel({ workspace: { ...workspace, role: "viewer" } });
+    expect(
+      await screen.findByText(/You can view this workspace/),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Prompt")).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /Plan before building/ }),
+    ).toBeNull();
+  });
+
+  it("asks for a plan's text instead of sending an empty /plan", async () => {
+    stubFetch({});
+    renderPanel();
+    const prompt = await screen.findByLabelText("Prompt");
+    type("/plan ");
+    await sendReady();
+    fireEvent.keyDown(prompt, { key: "Enter" });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Add what to plan after /plan.",
+    );
+    expect(agentPosts()).toHaveLength(0);
+    expect(prompt).toHaveValue("/plan ");
+  });
+
+  it("inserts dictated words into the prompt", async () => {
+    const instances: Array<{
+      onresult: ((event: unknown) => void) | null;
+      start: () => void;
+      stop: () => void;
+      processLocally?: boolean;
+    }> = [];
+    class Recognition {
+      static available = vi.fn(async () => "available");
+      lang = "";
+      continuous = false;
+      interimResults = false;
+      processLocally = false;
+      onresult: ((event: unknown) => void) | null = null;
+      onerror = null;
+      onend = null;
+      start = vi.fn();
+      stop = vi.fn();
+      abort = vi.fn();
+      constructor() {
+        instances.push(this);
+      }
+    }
+    vi.stubGlobal("SpeechRecognition", Recognition);
+    try {
+      stubFetch({});
+      renderPanel();
+      const prompt = await screen.findByLabelText("Prompt");
+      type("Please");
+      const mic = screen.getByRole("button", { name: "Dictation" });
+      expect(mic).toHaveAttribute("aria-pressed", "false");
+      fireEvent.click(mic);
+      await waitFor(() => expect(instances).toHaveLength(1));
+      expect(instances[0]!.processLocally).toBe(true);
+      expect(mic).toHaveAttribute("aria-pressed", "true");
+      const result = Object.assign([{ transcript: "fix the header" }], {
+        isFinal: true,
+      });
+      act(() =>
+        instances[0]!.onresult?.({ resultIndex: 0, results: [result] }),
+      );
+      expect(prompt).toHaveValue("Please fix the header");
+      fireEvent.click(mic);
+      expect(instances[0]!.stop).toHaveBeenCalled();
+      expect(mic).toHaveAttribute("aria-pressed", "false");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("hands the live turn to the action dispatcher only while it runs here", async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    stubFetch({
+      start: () =>
+        Response.json({ sessionId: "session-1", actionNonce: "abcde12345" }),
+      poll: () =>
+        held.then(() => ({
+          chunks: DONE_CHUNKS,
+          nextSequence: 1,
+          exited: true,
+        })),
+    });
+    const proposal: PendingWorkspaceAction = {
+      key: "k1",
+      chatId: CHAT.id,
+      action: { type: "open_settings" },
+      blocker: null,
+    };
+    dispatch.pending = [proposal];
+    dispatch.announcement = "Agent opened src/app.ts in Files";
+    renderPanel();
+    await screen.findByLabelText("Prompt");
+    expect(dispatch.calls.every((call) => call.live === null)).toBe(true);
+    type("open the app");
+    await sendReady();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByRole("button", { name: /Stop/ });
+    await waitFor(() =>
+      expect(dispatch.calls.at(-1)).toEqual({
+        chatId: CHAT.id,
+        live: { sessionId: "session-1", actionNonce: "abcde12345", items: [] },
+      }),
+    );
+    // Proposals sit at the top of the dock, above the notices.
+    const cards = screen.getByTestId("action-cards");
+    expect(cards.parentElement).toHaveClass("gen2-chat-dock");
+    expect(cards.parentElement!.firstElementChild).toBe(cards);
+    expect(
+      screen.getByText("Agent opened src/app.ts in Files"),
+    ).toHaveAttribute("aria-live", "polite");
+    release();
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /Stop/ })).toBeNull(),
+    );
+    expect(dispatch.calls.at(-1)!.live).toBeNull();
+  });
+
+  it("keeps a running turn out of another chat's transcript and actions", async () => {
+    stubFetch({
+      start: () =>
+        Response.json({ sessionId: "session-1", actionNonce: "abcde12345" }),
+      poll: () => new Promise(() => undefined),
+      history: [
+        {
+          id: "u-0",
+          role: "user",
+          body: "earlier",
+          createdAt: "2026-09-20T20:00:00.000Z",
+        },
+        {
+          id: "a-0",
+          role: "assistant",
+          body: "Earlier reply.",
+          createdAt: "2026-09-20T20:01:00.000Z",
+        },
+      ],
+    });
+    const view = renderPanel({ activeChatId: CHAT.id });
+    await screen.findByText("Earlier reply.");
+    type("next");
+    await sendReady();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByText("Thinking…")).toBeInTheDocument();
+    await waitFor(() => expect(dispatch.calls.at(-1)!.live).not.toBeNull());
+    view.rerender(panelElement({ activeChatId: OTHER_CHAT }));
+    await waitFor(() =>
+      expect(dispatch.calls.at(-1)).toEqual({ chatId: OTHER_CHAT, live: null }),
+    );
+    expect(screen.queryByText("Thinking…")).toBeNull();
+    // The turn still runs, so it can still be stopped.
+    expect(screen.getByRole("button", { name: /Stop/ })).toBeInTheDocument();
+  });
+
+  it("closes the menu and ends dictation on a chat switch or a lost connection", async () => {
+    const speech = stubSpeech("available");
+    try {
+      stubFetch({});
+      const view = renderPanel({ activeChatId: CHAT.id });
+      await screen.findByLabelText("Prompt");
+      fireEvent.click(screen.getByRole("button", { name: "Dictation" }));
+      await waitFor(() => expect(speech).toHaveLength(1));
+      type("/");
+      await screen.findByRole("listbox");
+      view.rerender(panelElement({ activeChatId: OTHER_CHAT }));
+      await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
+      expect(speech[0]!.abort).toHaveBeenCalled();
+      type("");
+      type("/");
+      await screen.findByRole("listbox");
+      fireEvent.click(screen.getByRole("button", { name: "Dictation" }));
+      await waitFor(() => expect(speech).toHaveLength(2));
+      view.rerender(
+        panelElement({
+          activeChatId: OTHER_CHAT,
+          workspace: { ...workspace, status: "stopped" },
+        }),
+      );
+      await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
+      expect(speech[1]!.abort).toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("stops Keep going when the connection drops, without waking the machine", async () => {
+    stubFetch({
+      history: [
+        {
+          id: "u-1",
+          role: "user",
+          body: "/goal Ship the login page",
+          createdAt: "2026-09-20T20:00:00.000Z",
+        },
+        {
+          id: "a-1",
+          role: "assistant",
+          body: "Started on it.",
+          createdAt: "2026-09-20T20:01:00.000Z",
+        },
+      ],
+      poll: () => ({ chunks: DONE_CHUNKS, nextSequence: 1, exited: true }),
+    });
+    const onNeedsMachine = vi.fn(async () => true);
+    const view = renderPanel({ activeChatId: CHAT.id, onNeedsMachine });
+    await screen.findByRole("region", { name: "Chat goal" });
+    fireEvent.click(screen.getByRole("switch", { name: "Keep going" }));
+    type("Start with the form");
+    await sendReady();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByText("Continuing in 5s")).toBeInTheDocument();
+    view.rerender(
+      panelElement({
+        activeChatId: CHAT.id,
+        onNeedsMachine,
+        workspace: { ...workspace, status: "stopped" },
+      }),
+    );
+    await waitFor(() => expect(screen.queryByText(/Continuing in/)).toBeNull());
+    expect(agentPosts()).toHaveLength(1);
+    expect(onNeedsMachine).not.toHaveBeenCalled();
+  });
+
+  it("runs the typed branch's own row on Enter, once GitHub has answered", async () => {
+    stubFetch({});
+    let answer!: () => void;
+    const answered = new Promise<void>((resolve) => {
+      answer = resolve;
+    });
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (url, init) => {
+      if (String(url).endsWith("/branches")) await answered;
+      return original(url, init);
+    });
+    const context = agentContext();
+    renderPanel({}, context);
+    const prompt = await screen.findByLabelText("Prompt");
+    type("/branch feat");
+    const loading = await screen.findByRole("option", {
+      name: /Loading branches from GitHub/,
+    });
+    expect(loading).toHaveAttribute("aria-disabled", "true");
+    fireEvent.keyDown(prompt, { key: "Enter" });
+    expect(prompt).toHaveValue("/branch feat");
+    expect(context.controller.run).not.toHaveBeenCalled();
+    answer();
+    const create = await screen.findByRole("option", {
+      name: /Create branch feat/,
+    });
+    // Ahead of the worktree whose name merely contains it.
+    expect(prompt).toHaveAttribute("aria-activedescendant", create.id);
+    fireEvent.keyDown(prompt, { key: "Enter" });
+    await waitFor(() =>
+      expect(context.controller.run).toHaveBeenCalledWith({
+        type: "create_branch",
+        branch: "feat",
+      }),
+    );
+    expect(context.controller.run).toHaveBeenCalledTimes(1);
+  });
+
+  it("puts a workspace command back when it fails", async () => {
+    stubFetch({});
+    const context = agentContext();
+    vi.mocked(context.controller.run).mockResolvedValue({
+      ok: false,
+      message: "That branch couldn’t be created.",
+    });
+    renderPanel({}, context);
+    const prompt = await screen.findByLabelText("Prompt");
+    type("/branch feat");
+    await screen.findByRole("option", { name: /Create branch feat/ });
+    fireEvent.keyDown(prompt, { key: "Enter" });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "That branch couldn’t be created.",
+    );
+    expect(prompt).toHaveValue("/branch feat");
+  });
+
+  it("leaves a follow-up in the composer while the turn is still starting", async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    stubFetch({
+      start: () => held.then(() => Response.json({ sessionId: "session-1" })),
+    });
+    renderPanel();
+    await screen.findByLabelText("Prompt");
+    type("first");
+    await sendReady();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(agentPosts()).toHaveLength(1));
+    type("second");
+    fireEvent.keyDown(screen.getByLabelText("Prompt"), { key: "Enter" });
+    expect(screen.queryByText("Queued")).toBeNull();
+    expect(screen.getByLabelText("Prompt")).toHaveValue("second");
+    release();
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /Stop/ })).toBeNull(),
+    );
+    expect(agentPosts()).toHaveLength(1);
+    expect(screen.getByLabelText("Prompt")).toHaveValue("second");
+  });
+
+  it("puts a cancelled follow-up back above what was typed since", async () => {
+    stubFetch({ poll: () => new Promise(() => undefined) });
+    renderPanel();
+    await screen.findByLabelText("Prompt");
+    type("first");
+    await sendReady();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByRole("button", { name: /Stop/ });
+    type("second");
+    fireEvent.keyDown(screen.getByLabelText("Prompt"), { key: "Enter" });
+    await screen.findByText("Queued");
+    type("third");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Cancel queued message" }),
+    );
+    expect(screen.getByLabelText("Prompt")).toHaveValue("second\n\nthird");
+  });
+
+  it("refuses a prompt that its mention tokens push past the limit", async () => {
+    stubFetch({});
+    const text = "x".repeat(19_970);
+    const context = agentContext(
+      {},
+      {
+        draftRequest: {
+          id: "long",
+          text: `${text} @[src/api.ts](file:src%2Fapi.ts)`,
+        },
+      },
+    );
+    renderPanel({}, context);
+    const prompt = await screen.findByLabelText("Prompt");
+    await waitFor(() => expect(prompt).toHaveValue(`${text} @src/api.ts`));
+    await sendReady();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "This message is 3 characters too long",
+    );
+    expect(agentPosts()).toHaveLength(0);
+    expect(prompt).toHaveValue(`${text} @src/api.ts`);
+  });
+
+  it("asks aloud before dictation sends audio to a speech service", async () => {
+    const speech = stubSpeech();
+    try {
+      stubFetch({});
+      renderPanel();
+      await screen.findByLabelText("Prompt");
+      fireEvent.click(screen.getByRole("button", { name: "Dictation" }));
+      const question = await screen.findByText(/sends audio to Google\/Apple/);
+      expect(question.closest('[role="status"]')).not.toBeNull();
+      expect(speech).toHaveLength(0);
+      fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+      await waitFor(() => expect(speech).toHaveLength(1));
+      expect(speech[0]!.start).toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

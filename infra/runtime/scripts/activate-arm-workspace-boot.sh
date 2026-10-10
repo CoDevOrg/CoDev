@@ -19,5 +19,14 @@ for path, value in [("arm-runtime.json", json.dumps(identity)), ("tunnel-token",
     with os.fdopen(fd, "w") as out:
         out.write(value)
     os.chmod("/etc/codev/" + path, 0o600)
+# The unprivileged preview proxy reads only this public identity. umask 077
+# masks the modes passed to makedirs and open, so set them explicitly.
+preview = {"workspaceId": data["workspaceId"], "generation": data["generation"], "verificationPublicKey": data["verificationKey"]}
+os.makedirs("/etc/codev-preview", mode=0o755, exist_ok=True)
+os.chmod("/etc/codev-preview", 0o755)
+fd = os.open("/etc/codev-preview/identity.json", os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o644)
+with os.fdopen(fd, "w") as out:
+    out.write(json.dumps(preview))
+os.chmod("/etc/codev-preview/identity.json", 0o644)
 '
 systemctl start codev-arm-boot.service

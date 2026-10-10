@@ -51,6 +51,22 @@ describe("tasksLookAlike", () => {
   ])("%p vs %p → %p", (left, right, expected) => {
     expect(tasksLookAlike(left, right)).toBe(expected);
   });
+
+  it("compares the member's words, not mention tokens or a leading command", () => {
+    const mention =
+      "@[Fix login flow token refresh](chat:55555555-5555-4555-8555-555555555555)";
+    // Only the mentions and the command overlap.
+    expect(
+      tasksLookAlike(
+        `/plan Write docs for ${mention}`,
+        `/plan Benchmark the queue like ${mention}`,
+      ),
+    ).toBe(false);
+    // A stored task's mention label does not match the new prompt's words.
+    expect(
+      tasksLookAlike("Fix the login flow token refresh", `Review ${mention}`),
+    ).toBe(false);
+  });
 });
 
 describe("findPossibleDuplicateTask", () => {
@@ -89,6 +105,20 @@ describe("findPossibleDuplicateTask", () => {
     mocks.runs.mockResolvedValue([activeRun(overrides)]);
 
     expect(await findPossibleDuplicateTask(input)).toBeUndefined();
+  });
+
+  it("shows the matched task with mentions as @labels and no command", async () => {
+    mocks.sessions.mockResolvedValue([
+      {
+        id: "session-1",
+        task: "/plan Fix the token refresh bug in auth middleware per @[Auth notes](chat:55555555-5555-4555-8555-555555555555)",
+      },
+    ]);
+    mocks.runs.mockResolvedValue([activeRun()]);
+
+    expect((await findPossibleDuplicateTask(input))?.task).toBe(
+      "Fix the token refresh bug in auth middleware per @Auth notes",
+    );
   });
 
   it("is off unless coordination is enabled, and fails open", async () => {

@@ -1,7 +1,7 @@
 # Gen 2 workspace
 
 **Status:** Current  
-**Date:** 2026-09-30
+**Date:** 2026-10-10
 
 Gen 2 is CoDev's active workspace implementation. The product is:
 
@@ -41,6 +41,20 @@ the file the agent just edited.
 - Upload a local file onto the machine
 - A workbench beside the chat — file tree with Git status, a CodeMirror 6
   editor with revision-checked saves, a shell, and a live Git status/diff
+- A composer with agent commands (`/plan`, `/ask`, `/goal`, `/review`,
+  `/init`), instant workspace commands (`/open`, `/changes`, `/diff`,
+  `/terminal`, `/branch`, `/share`, `/preview`, `/new`, …), `@` mentions of
+  files, folders, chats, agent runs, the editor selection and terminal
+  output, a per-message agent switch, a chat goal with an opt-in bounded
+  "Keep going", and browser dictation (on-device first)
+- Agents see a bounded snapshot of what the member sees and ask the workspace
+  to act through `codev-action` blocks: navigation (open a file or range,
+  changes, review, terminal, preview) runs in the member's tab; invites,
+  branches, worktree switches, terminal commands and new chats are proposals
+  the member confirms (`apps/web/lib/gen2/README.md`)
+- A Browser tab that previews a dev server on the guest through a separate
+  preview domain and a guest proxy; it stays off until the preview zone is
+  configured and the guest image ships the proxy (docs/WEB_HOSTING.md)
 
 ## No start button
 
@@ -146,9 +160,10 @@ Concurrent agents: native turns (every Cursor turn, and Codex or Claude when
 (`start_codex_exec` waits on `codex_busy`). Superset agent sessions, on in
 production, run Codex and Claude concurrently, each in its own worktree.
 
-Not yet built here: a browser/preview tab (live port forwarding is deferred in
-`lib/runtime/preview.ts` and needs guest networking), Git staging and commit
-from the UI, and realtime fan-out between members. The feature-flagged
+Not yet built here: Git staging and commit from the UI, and realtime fan-out
+between members. Agent commands are prompt-level modes; native CLI plan/goal
+flags would need the Superset argv allowlist, an image release and
+`agent-cli-compat.test.ts` cases. The feature-flagged
 `/superset` page supports nested file/folder creation, rename, and permanent
 delete through the Superset host filesystem service; that page is separate from
 the shared CodeMirror/Yjs editor and two people using it still see each other's

@@ -1,0 +1,175 @@
+/*
+ * Browser preview pane in the inspector.
+ * Unlayered like workspace.css (loaded after it); see
+ * docs/design/superset-workspace-ui.md §7 and §11.
+ */
+
+.gen2-browser {
+  height: 100%;
+  min-width: 0;
+  background: var(--ws-surface-1);
+}
+
+.gen2-browser-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--ws-border-subtle);
+  background: var(--ws-surface-2);
+}
+
+.gen2-browser-address {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  margin: 0;
+}
+
+.gen2-browser-address [data-slot="input"] {
+  box-sizing: border-box;
+  width: 100%;
+  height: 28px;
+  margin: 0;
+  padding: 0 10px;
+  border: 1px solid var(--ws-border-medium);
+  border-radius: 6px;
+  background: var(--ws-surface-1);
+  box-shadow: none;
+  color: var(--ws-text-primary);
+  font-family: var(--font-geist-mono, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.gen2-browser-address [data-slot="input"]::placeholder {
+  color: var(--ws-text-muted);
+}
+
+.gen2-browser-address [data-slot="input"]:focus-visible {
+  border-color: var(--ws-border-focus);
+  outline: 2px solid var(--ws-accent);
+  outline-offset: 1px;
+  box-shadow: none;
+}
+
+.gen2-browser-address [data-slot="input"][aria-invalid="true"] {
+  border-color: var(--ws-status-error);
+}
+
+.gen2-browser-address [data-slot="input"]:disabled {
+  opacity: 0.45;
+}
+
+.gen2-browser-stage {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.gen2-browser-frame {
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  border: 0;
+  /* A browser's default canvas: pages without a background stay readable. */
+  background: #ffffff;
+}
+
+.gen2-browser-frame[hidden] {
+  display: none;
+}
+
+.gen2-browser-refresh {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border: 0;
+  visibility: hidden;
+}
+
+.gen2-browser-state[data-slot="empty"] {
+  flex: 1;
+  gap: 12px;
+  padding: 24px 16px;
+  color: var(--ws-text-secondary);
+}
+
+.gen2-browser-state[data-overlay] {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: var(--ws-surface-1);
+}
+
+.gen2-browser-state [data-slot="empty-header"] {
+  max-width: 28rem;
+  gap: 4px;
+}
+
+.gen2-browser-state [data-slot="empty-title"] {
+  margin: 0;
+  color: var(--ws-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.gen2-browser-state [data-slot="empty-description"] {
+  margin: 0;
+  color: var(--ws-text-muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.gen2-browser-state[role="alert"] [data-slot="empty-title"] {
+  color: var(--ws-status-error);
+}
+
+.gen2-browser-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.gen2-browser-ports[data-slot="dropdown-menu-content"] {
+  min-width: 200px;
+  padding: 4px;
+}
+
+.gen2-browser-ports [data-slot="dropdown-menu-label"] {
+  padding: 8px 8px 4px;
+  color: var(--ws-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.gen2-browser-ports [data-slot="dropdown-menu-item"] {
+  min-height: 32px;
+  padding: 0 8px;
+  gap: 8px;
+  color: var(--ws-text-primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.gen2-browser-ports [data-slot="dropdown-menu-item"][data-disabled] {
+  color: var(--ws-text-muted);
+  cursor: default;
+}
+
+.gen2-browser-port {
+  flex: 1;
+  font-family: var(--font-geist-mono, ui-monospace, monospace);
+  font-size: 12px;
+}
+
+.gen2-browser-port-scope {
+  color: var(--ws-text-muted);
+  font-size: 12px;
+}

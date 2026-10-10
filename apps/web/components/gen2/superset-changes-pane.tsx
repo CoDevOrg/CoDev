@@ -57,6 +57,8 @@ export function SupersetChangesPane({
   mode,
   onOpenFile,
   overlapFor,
+  refreshToken,
+  focusPath,
 }: {
   workspaceId: string;
   worktreeId: string;
@@ -65,6 +67,10 @@ export function SupersetChangesPane({
   onOpenFile?: (path: string) => void;
   /** Who else is changing a path, when another active agent is. */
   overlapFor?: (path: string) => string | undefined;
+  /** Bumped to re-read Git while the pane is already showing. */
+  refreshToken?: number | undefined;
+  /** A file for Review to scroll to; `id` repeats a request for one path. */
+  focusPath?: { path: string; id: number } | null | undefined;
 }) {
   const [status, setStatus] = useState("");
   const [diff, setDiff] = useState("");
@@ -111,7 +117,7 @@ export function SupersetChangesPane({
       void refresh();
     }, 0);
     return () => clearTimeout(timeout);
-  }, [visible, refresh]);
+  }, [visible, refresh, refreshToken]);
 
   const files = changedPaths(status);
   const untracked = files.filter((file) => file.code === "??");
@@ -251,7 +257,11 @@ export function SupersetChangesPane({
         ) : null}
         {mode === "review" && diff.trim() ? (
           <div className="gen2-review-diff">
-            <ReviewDiffViewer patch={diff} layout={layout} />
+            <ReviewDiffViewer
+              patch={diff}
+              layout={layout}
+              focusPath={focusPath}
+            />
           </div>
         ) : null}
         {mode === "changes" && loaded && !files.length && !error ? (

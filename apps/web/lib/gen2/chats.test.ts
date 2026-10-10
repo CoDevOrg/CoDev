@@ -14,6 +14,17 @@ describe("gen2 chat transcript", () => {
     expect(gen2ChatTitleFromPrompt("")).toBe(GEN2_NEW_CHAT_TITLE);
   });
 
+  it("titles a chat from what the member wrote, not the command or tokens", () => {
+    expect(
+      gen2ChatTitleFromPrompt(
+        "/plan Refactor @[auth.ts](file:src%2Fauth.ts) to use hooks",
+      ),
+    ).toBe("Refactor @auth.ts to use hooks");
+    expect(gen2ChatTitleFromPrompt("/review")).toBe("Review");
+    expect(gen2ChatTitleFromPrompt("/goal clear")).toBe(GEN2_NEW_CHAT_TITLE);
+    expect(gen2ChatTitleFromPrompt("/goal done")).toBe(GEN2_NEW_CHAT_TITLE);
+  });
+
   it("sends prior turns with the next Codex exec instead of resuming a CLI thread", () => {
     expect(formatGen2TurnPrompt("Add tests", [])).toBe("Add tests");
     expect(

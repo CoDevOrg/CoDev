@@ -21,6 +21,18 @@ describe("Cursor workspace command", () => {
     expect(command.at(-1)).toContain("Earlier request");
     expect(command).not.toContain("--api-key");
   });
+  it("keeps the prompt last when the turn has context", () => {
+    const command = buildGen2CursorCommand(
+      "inspect README",
+      [],
+      "account-model",
+      "Mode: ask. Answer the member's question.",
+    );
+    expect(command).toHaveLength(10);
+    expect(command.at(-1)).toMatch(
+      /Mode: ask\.[^]*\n\nCurrent request:\ninspect README$/,
+    );
+  });
   it("does not force a hard-coded model when no override is supplied", () => {
     expect(buildGen2CursorCommand("hello")).not.toContain("--model");
   });

@@ -1,0 +1,240 @@
+/*
+ * Agent workspace actions: activity rows, decision cards, terminal tabs.
+ * Unlayered like workspace.css (loaded after it); see
+ * docs/design/superset-workspace-ui.md §8.1 and §11.
+ */
+
+/* Activity rows: always visible under a turn's summary. */
+.gen2-action-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gen2-action-row {
+  display: flex;
+  min-width: 0;
+  min-height: 24px;
+  align-items: center;
+  gap: 6px;
+  color: var(--ws-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.gen2-action-row[data-muted] {
+  color: var(--ws-text-muted);
+}
+
+.gen2-action-row-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gen2-action-row-reason {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  color: var(--ws-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gen2-action-row-reason::before {
+  content: "· ";
+}
+
+.gen2-action-row
+  .gen2-action-row-button.gen2-workspace-button[data-slot="button"] {
+  height: 24px;
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+/* Decision cards: the dock above the composer, like the duplicate notice. */
+.gen2-action-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 8px;
+}
+
+.gen2-action-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--ws-border-subtle);
+  border-left: 3px solid var(--ws-accent);
+  border-radius: 8px;
+  background: var(--ws-surface-3);
+  color: var(--ws-text-primary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.gen2-action-card[data-done] {
+  border-left-color: var(--ws-status-ready);
+}
+
+.gen2-action-card-body {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 240px;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gen2-action-card-body p {
+  margin: 0;
+}
+
+.gen2-action-card-meta,
+.gen2-action-card-detail {
+  color: var(--ws-text-secondary);
+}
+
+.gen2-action-card-title {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.gen2-action-card-quote {
+  max-height: 120px;
+  margin: 0;
+  padding: 4px 8px;
+  overflow: auto;
+  border: 1px solid var(--ws-border-subtle);
+  border-radius: 6px;
+  background: var(--ws-surface-1);
+  color: var(--ws-text-primary);
+  font-family: var(--font-geist-mono, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.gen2-action-card-result p[data-ok="false"],
+.gen2-action-card-result li[data-ok="false"] {
+  color: var(--ws-status-error);
+}
+
+.gen2-action-card-result ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gen2-action-card-result li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.gen2-action-card-person {
+  font-family: var(--font-geist-mono, ui-monospace, monospace);
+}
+
+.gen2-action-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* Terminal tabs: one row under the dock bar when there is more than one session. */
+.gen2-terminal-tabs {
+  display: flex;
+  height: 32px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--ws-border-subtle);
+  background: var(--ws-surface-2);
+}
+
+.gen2-terminal-tab {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+}
+
+.gen2-terminal-tab-button {
+  height: 24px;
+  max-width: 200px;
+  padding: 0 8px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ws-text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-family: var(--font-geist-mono, ui-monospace, monospace);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background-color 120ms ease;
+}
+
+.gen2-terminal-tab-button:hover {
+  background: var(--ws-surface-hover);
+}
+
+.gen2-terminal-tab-button[aria-selected="true"] {
+  background: var(--ws-surface-3);
+  color: var(--ws-text-primary);
+}
+
+.gen2-terminal-tab-button:focus-visible {
+  outline: 2px solid var(--ws-accent);
+  outline-offset: 1px;
+}
+
+.gen2-terminal-tab
+  .gen2-terminal-tab-close.gen2-workspace-button[data-slot="button"] {
+  width: 20px;
+  height: 20px;
+}
+
+.gen2-terminal-tab
+  .gen2-terminal-tab-close.gen2-workspace-button[data-slot="button"]
+  svg {
+  width: 12px;
+  height: 12px;
+}
+
+.gen2-terminal-panel {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.gen2-terminal-panel[hidden] {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gen2-terminal-tab-button {
+    transition: none;
+  }
+}

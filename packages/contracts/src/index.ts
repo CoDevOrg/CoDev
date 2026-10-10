@@ -15,3 +15,4 @@ export * from "@codev/shared-types";
 export * from "./github";
 export * from "./account-deletion";
 export * from "./agent-coordination";
+export * from "./gen2-workspace-agent";
