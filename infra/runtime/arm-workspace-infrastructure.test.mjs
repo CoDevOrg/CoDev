@@ -288,6 +288,46 @@ test("the verified boot restarts the preview proxy only once its identity exists
   assert.match(script, /systemctl try-restart codev-arm-preview\.service/);
 });
 
+test("a preview start failure stops only the preview, never the verified boot", async (t) => {
+  const script = read("./scripts/prepare-arm-workspace-disk.sh");
+  const block = script.match(
+    /\nif \[\[ -f \/etc\/systemd\/system\/codev-arm-preview\.socket[\s\S]*?\nfi\n/,
+  )?.[0];
+  assert.ok(block, "the preview block must be one guarded if");
+  const root = await mkdtemp(join(tmpdir(), "codev-preview-boot-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(join(root, "socket"), "");
+  await writeFile(join(root, "identity"), "");
+  const boot = async (failing) => {
+    const program = [
+      "set -euo pipefail",
+      `systemctl() { echo "systemctl $*"; [[ "$*" != '${failing}' ]]; }`,
+      block
+        .replace(
+          "/etc/systemd/system/codev-arm-preview.socket",
+          join(root, "socket"),
+        )
+        .replace("/etc/codev-preview/identity.json", join(root, "identity")),
+      "echo BOOT_CONTINUES",
+    ].join("\n");
+    const { stdout } = await promisify(execFile)("bash", ["-c", program]);
+    return stdout.trim().split("\n");
+  };
+  assert.deepEqual(await boot("none"), [
+    "systemctl start codev-arm-preview.socket",
+    "systemctl try-restart codev-arm-preview.service",
+    "BOOT_CONTINUES",
+  ]);
+  for (const failing of [
+    "start codev-arm-preview.socket",
+    "try-restart codev-arm-preview.service",
+  ]) {
+    const calls = await boot(failing);
+    assert.equal(calls.at(-1), "BOOT_CONTINUES", failing);
+    assert.equal(calls.at(-2), "systemctl stop codev-arm-preview.service");
+  }
+});
+
 test("every module a guest entrypoint imports ships in the image and is validated", () => {
   const build = read("../azure/build-arm-workspace-image.sh");
   const provision = read("./scripts/provision-arm-workspace-image.sh");
