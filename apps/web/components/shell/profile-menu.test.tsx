@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/image", () => ({
@@ -33,28 +33,39 @@ vi.mock("@/app/actions/github", () => ({
 
 import { ProfileMenu } from "./profile-menu";
 
+function openMenu() {
+  const trigger = screen.getByRole("button", { name: /^Account menu for/ });
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
+  return trigger;
+}
+
 describe("ProfileMenu", () => {
-  it("exposes settings and sign out for the account avatar", () => {
-    const { container } = render(
+  it("exposes settings, billing, and sign out from the account avatar", () => {
+    const submit = vi
+      .spyOn(HTMLFormElement.prototype, "requestSubmit")
+      .mockImplementation(() => {});
+    render(
       <ProfileMenu
         compact
         user={{ name: "Ada", githubLogin: "ada", image: null }}
       />,
     );
 
-    expect(
-      container.querySelector("details.profile-menu-compact"),
-    ).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute(
+    expect(openMenu()).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("menuitem", { name: "Settings" })).toHaveAttribute(
       "href",
       "/settings",
     );
     expect(
-      screen.queryByRole("link", { name: "Profile" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Sign out" }),
+      screen.getByRole("menuitem", { name: "Billing" }),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: "Profile" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("menuitem", { name: "Sign out" }));
+    expect(submit).toHaveBeenCalledOnce();
+    submit.mockRestore();
   });
 
   it("shows the member's real name over their GitHub login when both are known", () => {
@@ -80,10 +91,22 @@ describe("ProfileMenu", () => {
     );
   });
 
+  it("identifies the account by email inside the menu", () => {
+    render(
+      <ProfileMenu
+        user={{ name: "Ada", email: "ada@example.com", image: null }}
+      />,
+    );
+    openMenu();
+
+    expect(screen.getByRole("menu")).toHaveTextContent("ada@example.com");
+  });
+
   it("sends settings to the public host from the admin host", () => {
     render(<ProfileMenu isAdminHost user={{ name: "Ada", image: null }} />);
+    openMenu();
 
-    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute(
+    expect(screen.getByRole("menuitem", { name: "Settings" })).toHaveAttribute(
       "href",
       "https://www.trycodev.com/settings",
     );

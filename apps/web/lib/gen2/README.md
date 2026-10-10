@@ -25,6 +25,13 @@ workspace's selected guest. Gen 2 workspace membership is checked before
 the control plane calls the orchestrator. Historical Gen 1 data and database
 migrations are preserved; its application code has been removed.
 
+## Workspace home
+
+`home-snapshot.ts` reads a member's workspaces and compute usage together for
+the home page and its `GET /api/gen2/home` poll. It reads the database only, so
+polling never wakes a guest or counts as activity. The poll stays off
+`/api/gen2/workspaces`, whose per-IP edge rate limit also guards creation.
+
 ## Codex chats
 
 Each workspace has many chats. Transcripts live in `gen2_chats` /

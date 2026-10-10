@@ -13,14 +13,7 @@ import type {
 import { GithubMark } from "@/components/settings/github-mark";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/platform/utils";
@@ -217,32 +210,21 @@ export function CreateGen2WorkspaceForm({
       : "Creates an empty workspace.";
 
   return (
-    <Card id="new-workspace">
+    <Card className="border-0 bg-transparent" id="new-workspace">
       <form
         onSubmit={(event) => {
           event.preventDefault();
           if (canCreate) void create();
         }}
       >
-        <CardHeader className="flex-row items-start justify-between gap-4 px-6 pt-6">
-          <div className="space-y-1.5">
-            <CardTitle className="text-base">New workspace</CardTitle>
-            <CardDescription>
-              Pick a starting point. Nothing is created until you press Create.
-            </CardDescription>
-          </div>
-          <Badge
-            aria-label={`You own ${ownedWorkspaceCount} of ${workspaceLimit} workspaces`}
-            variant={atWorkspaceLimit ? "default" : "muted"}
-          >
-            {ownedWorkspaceCount} of {workspaceLimit} used
-          </Badge>
-        </CardHeader>
-
-        <CardContent className="space-y-5 px-6 pt-5 pb-5">
+        <CardContent className="space-y-5 px-0 pt-1 pb-5">
           <fieldset className="mx-0 min-w-0 space-y-2 border-0 p-0">
             <legend className="mb-2 p-0 text-sm font-medium">Start from</legend>
-            <div className="grid gap-2 sm:grid-cols-2" role="radiogroup">
+            <div
+              aria-label="Start from"
+              className="grid gap-2 sm:grid-cols-2"
+              role="radiogroup"
+            >
               {(
                 [
                   {
@@ -492,8 +474,8 @@ export function CreateGen2WorkspaceForm({
 
           {atWorkspaceLimit ? (
             <p className="text-sm text-muted-foreground" role="status">
-              You own {ownedWorkspaceCount} of {workspaceLimit} Gen 2
-              workspaces. Delete one or change plans to create another.
+              You own {ownedWorkspaceCount} of {workspaceLimit} workspaces.
+              Delete one or change plans to create another.
             </p>
           ) : null}
 
@@ -504,8 +486,17 @@ export function CreateGen2WorkspaceForm({
           ) : null}
         </CardContent>
 
-        <CardFooter className="justify-between gap-4 border-t border-border px-6 py-4">
-          <p className="text-sm text-muted-foreground">{summary}</p>
+        <CardFooter className="gap-3 border-t border-border px-0 pt-4 pb-0">
+          <p className="min-w-0 truncate text-sm text-muted-foreground">
+            {summary}
+          </p>
+          <Badge
+            aria-label={`You own ${ownedWorkspaceCount} of ${workspaceLimit} workspaces`}
+            className="ml-auto shrink-0"
+            variant={atWorkspaceLimit ? "default" : "muted"}
+          >
+            {ownedWorkspaceCount} of {workspaceLimit} used
+          </Badge>
           <Button disabled={!canCreate} type="submit">
             {busy ? (
               <>

@@ -7,12 +7,6 @@ import {
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ refresh: vi.fn() }));
-
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: mocks.refresh }),
-}));
-
 import type { Gen2Workspace } from "@codev/contracts";
 
 import { Gen2WorkspaceList } from "./workspace-list";
@@ -41,8 +35,11 @@ describe("Gen2WorkspaceList", () => {
     );
   });
 
-  it("confirms permanent deletion and refreshes the owner count", async () => {
-    render(<Gen2WorkspaceList workspaces={[ownerWorkspace]} />);
+  it("confirms permanent deletion with a press-and-hold and reports it", async () => {
+    const onDeleted = vi.fn();
+    render(
+      <Gen2WorkspaceList workspaces={[ownerWorkspace]} onDeleted={onDeleted} />,
+    );
     fireEvent.click(screen.getByRole("button", { name: "Delete Studio" }));
     expect(screen.getByRole("alertdialog")).toHaveTextContent(
       "permanently deletes the workspace",
@@ -66,8 +63,9 @@ describe("Gen2WorkspaceList", () => {
         { method: "DELETE" },
       ),
     );
-    expect(mocks.refresh).toHaveBeenCalledOnce();
-    expect(screen.getByText("No workspaces yet.")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(onDeleted).toHaveBeenCalledWith(ownerWorkspace, false),
+    );
   });
 
   it("shows interrupted deletion as retryable and not openable", () => {
@@ -86,5 +84,51 @@ describe("Gen2WorkspaceList", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Deletion did not finish. Retry deletion to continue.",
     );
+  });
+
+  it("labels a stopping workspace and blocks deleting it mid-change", () => {
+    render(
+      <Gen2WorkspaceList
+        workspaces={[
+          {
+            ...ownerWorkspace,
+            runtimeProvider: "azure_arm",
+            status: "provisioning",
+            runtimeStatus: "stopping",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Stopping")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Delete Studio" }),
+    ).toBeDisabled();
+  });
+
+  it("names each member's role and lists newest activity first", () => {
+    render(
+      <Gen2WorkspaceList
+        viewMode="grid"
+        workspaces={[
+          ownerWorkspace,
+          {
+            ...ownerWorkspace,
+            id: "33333333-3333-4333-8333-333333333333",
+            name: "Shared docs",
+            role: "viewer",
+            updatedAt: "2026-09-22T20:00:00.000Z",
+          },
+        ]}
+      />,
+    );
+
+    const links = screen.getAllByRole("link");
+    expect(links[0]).toHaveTextContent("Shared docs");
+    expect(links[0]).toHaveTextContent("Viewer");
+    expect(links[1]).toHaveTextContent("Owner");
+    expect(
+      screen.queryByRole("button", { name: "Delete Shared docs" }),
+    ).toBeNull();
   });
 });

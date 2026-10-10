@@ -101,11 +101,16 @@ describe("CoDev product theme", () => {
     expect(settingsTheme).not.toContain("#060a17");
   });
 
-  it("keeps every profile menu action legible on the light product surface", () => {
-    expect(appTheme).toContain(
-      ".app-page .profile-menu-link,\n.app-page .profile-menu-action {",
+  it("themes the portaled profile menu from root swatches, not page tokens", () => {
+    // The menu renders in <body>, outside `.app-page`, where --ink/--muted
+    // are undefined; it must read the root --brand-* swatches instead.
+    const menu = globals.slice(
+      globals.indexOf(".profile-menu-content {"),
+      globals.indexOf(".profile-menu-divider {"),
     );
-    expect(appTheme).toContain("color: var(--muted);");
+    expect(menu).toContain("background: var(--brand-paper-bright);");
+    expect(menu).toContain("color: var(--brand-ink-2);");
+    expect(menu).not.toMatch(/var\(--(ink|muted|surface-2|line)\)/);
   });
 
   it("extends the product theme to unauthenticated pages", () => {
