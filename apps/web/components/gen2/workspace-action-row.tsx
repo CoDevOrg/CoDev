@@ -54,15 +54,11 @@ function subscribe(onChange: () => void) {
 
 /** This tab's outcome for the item, re-read whenever one is recorded. */
 function useOutcome(chatId: string | null | undefined, item: ActionItem) {
-  const raw = useSyncExternalStore(
+  return useSyncExternalStore(
     subscribe,
-    () =>
-      chatId
-        ? JSON.stringify(readWorkspaceActionOutcome(chatId, item))
-        : "null",
-    () => "null",
+    () => (chatId ? readWorkspaceActionOutcome(chatId, item) : null),
+    () => null,
   );
-  return JSON.parse(raw) as WorkspaceActionOutcome | null;
 }
 
 function Row({

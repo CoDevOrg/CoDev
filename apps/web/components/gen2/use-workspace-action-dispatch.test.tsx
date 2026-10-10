@@ -188,6 +188,58 @@ describe("useWorkspaceActionDispatch", () => {
     expect(result.current.pending).toEqual([]);
   });
 
+  it("waits for the turn's last command before opening its preview", async () => {
+    const { controller, wrapper } = setup((action) =>
+      action.type === "open_preview"
+        ? "Nothing is listening on :3000 yet"
+        : isWorkspaceNavigation(action)
+          ? null
+          : "Waits for you to confirm",
+    );
+    const preview = { type: "open_preview", port: 3000 } as const;
+    const command = (text: string) =>
+      ({ type: "run_in_terminal", command: text }) as const;
+    const { result } = render(
+      {
+        items: [
+          item("m1:action:0", command("npm install")),
+          item("m1:action:1", command("npm run dev")),
+          item("m1:action:2", preview),
+        ],
+      },
+      wrapper,
+    );
+    act(() => result.current.resolve("s1:m1:action:0", "done"));
+    expect(controller.run).not.toHaveBeenCalled();
+    expect(result.current.pending).toHaveLength(2);
+    act(() => result.current.resolve("s1:m1:action:1", "done"));
+    await waitFor(() => expect(controller.run).toHaveBeenCalledWith(preview));
+    expect(result.current.pending).toEqual([]);
+  });
+
+  it("files a turn's actions under its own chat when the member switched", () => {
+    const { controller, wrapper } = setup();
+    const view = render({ items: [] }, wrapper);
+    view.rerender({
+      items: [
+        item("m1:action:0", { type: "rename_chat", title: "Login" }),
+        item("m1:action:1", INVITE),
+      ],
+      chatId: "chat-2",
+    });
+    expect(controller.run).not.toHaveBeenCalled();
+    expect(view.result.current.pending).toEqual([]);
+    view.rerender({ items: null, chatId: CHAT });
+    expect(view.result.current.pending).toEqual([
+      expect.objectContaining({
+        chatId: CHAT,
+        action: { type: "rename_chat", title: "Login" },
+        blocker: "Arrived while you were in another chat",
+      }),
+      expect.objectContaining({ chatId: CHAT, action: INVITE }),
+    ]);
+  });
+
   it("offers navigation that failed to run as a request", async () => {
     const { controller, wrapper } = setup();
     controller.run.mockResolvedValueOnce({

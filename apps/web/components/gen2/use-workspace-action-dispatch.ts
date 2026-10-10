@@ -9,8 +9,11 @@ import {
 } from "react";
 import type { Gen2TurnItem, Gen2WorkspaceAction } from "@codev/contracts";
 
-import { isWorkspaceNavigation } from "./workspace-action-blocker";
 import { workspaceActionCopy } from "./workspace-action-copy";
+import {
+  planWorkspaceActions,
+  type LiveWorkspaceTurn,
+} from "./workspace-action-plan";
 import {
   readPendingActions,
   readSeenActionKeys,
@@ -23,7 +26,6 @@ import {
 import {
   useWorkspaceAgent,
   type WorkspaceAgentContextValue,
-  type WorkspaceController,
 } from "./workspace-controller";
 
 export type PendingWorkspaceAction = {
@@ -38,13 +40,7 @@ export type WorkspaceActionOutcome = {
   message: string;
 };
 
-type Live = {
-  sessionId: string;
-  actionNonce: string | null;
-  items: Gen2TurnItem[];
-};
-
-const WAITS_FOR_COMMAND = "Opens after you run the command";
+type Live = LiveWorkspaceTurn;
 
 /** What this tab did with an action item, if anything; null when unknown. */
 export function readWorkspaceActionOutcome(
@@ -52,60 +48,12 @@ export function readWorkspaceActionOutcome(
   item: Gen2TurnItem,
 ): WorkspaceActionOutcome | null {
   if (item.kind !== "workspaceAction" || !item.action) return null;
-  return readStoredActionOutcome(chatId, item.id, item.action);
+  const { id: itemId, token, action } = item;
+  return readStoredActionOutcome({ chatId, itemId, token, action });
 }
 
 function lowerFirst(text: string) {
   return text.charAt(0).toLowerCase() + text.slice(1);
-}
-
-/**
- * What to do with the workspace actions this tab has not seen yet. Only
- * valid items carrying the turn's nonce count; the rest are remembered as
- * seen and never acted on.
- */
-function planLiveActions(
-  live: Live,
-  chatId: string,
-  known: Set<string>,
-  controller: WorkspaceController,
-) {
-  const fresh = live.items.filter(
-    (item) =>
-      item.kind === "workspaceAction" &&
-      !known.has(`${live.sessionId}:${item.id}`),
-  );
-  const trusted = live.items.flatMap((item) =>
-    item.kind === "workspaceAction" &&
-    item.action &&
-    live.actionNonce &&
-    item.token === live.actionNonce
-      ? [{ itemId: item.id, action: item.action }]
-      : [],
-  );
-  const runsCommand = trusted.some(
-    (entry) => entry.action.type === "run_in_terminal",
-  );
-  const plan = trusted
-    .filter(
-      ({ itemId, action }) =>
-        fresh.some((item) => item.id === itemId) &&
-        action.type !== "update_goal",
-    )
-    .map(({ itemId, action }) => {
-      let blocker = controller.autoRunBlocker(action);
-      if (action.type === "open_preview" && blocker && runsCommand)
-        blocker = WAITS_FOR_COMMAND;
-      const key = `${live.sessionId}:${itemId}`;
-      return { key, chatId, action, blocker, itemId, turn: live.sessionId };
-    });
-  const runs = (entry: StoredPendingAction) =>
-    isWorkspaceNavigation(entry.action) && entry.blocker === null;
-  return {
-    seen: fresh.map((item) => `${live.sessionId}:${item.id}`),
-    auto: plan.filter(runs),
-    queued: plan.filter((entry) => !runs(entry)),
-  };
 }
 
 /** Holds a chat's proposals, mirrored to this tab's sessionStorage. */
@@ -147,10 +95,7 @@ function settle(
     state === "dismissed"
       ? "Dismissed"
       : workspaceActionCopy(entry.action).done;
-  writeStoredActionOutcome(entry.chatId, entry.itemId, entry.action, {
-    state,
-    message: message ?? fallback,
-  });
+  writeStoredActionOutcome(entry, { state, message: message ?? fallback });
 }
 
 type UpdatePending = ReturnType<typeof usePendingActions>[1];
@@ -166,6 +111,8 @@ function useLiveActions(
 ) {
   const [announcement, setAnnouncement] = useState("");
   const seen = useRef<Set<string> | null>(null);
+  // The chat each turn started in; the member may switch chats mid-turn.
+  const turnChats = useRef(new Map<string, string>());
   const items = live?.items;
   const sessionId = live?.sessionId;
   const actionNonce = live?.actionNonce ?? null;
@@ -173,12 +120,22 @@ function useLiveActions(
     const controller = agentRef.current?.controller;
     if (!items || !sessionId || !chatId || !controller) return;
     seen.current ??= new Set(readSeenActionKeys(workspaceId));
-    const turn = { sessionId, actionNonce, items };
-    const next = planLiveActions(turn, chatId, seen.current, controller);
+    const turnChat = turnChats.current.get(sessionId) ?? chatId;
+    turnChats.current.set(sessionId, turnChat);
+    const onScreen = turnChat === chatId;
+    const next = planWorkspaceActions(
+      { sessionId, actionNonce, items },
+      { chatId: turnChat, onScreen },
+      seen.current,
+      controller,
+    );
     next.seen.forEach((key) => seen.current?.add(key));
     rememberSeenActionKeys(workspaceId, next.seen);
     const { queued } = next;
-    if (queued.length) updatePending((list) => [...list, ...queued]);
+    if (queued.length && !onScreen) {
+      const stored = readPendingActions(workspaceId, turnChat);
+      writePendingActions(workspaceId, turnChat, [...stored, ...queued]);
+    } else if (queued.length) updatePending((list) => [...list, ...queued]);
     for (const entry of next.auto) {
       void controller.run(entry.action).then((result) => {
         if (!result.ok) {
@@ -213,13 +170,20 @@ function useResolve(
     (key: string, outcome: "done" | "dismissed", message?: string) => {
       const entry = pending.find((candidate) => candidate.key === key);
       if (!entry) return;
+      const ofTurn = (type: Gen2WorkspaceAction["type"]) =>
+        pending.filter(
+          (other) =>
+            other.key !== key &&
+            other.turn === entry.turn &&
+            other.action.type === type,
+        );
+      // The preview waits for the last of the turn's commands (the server
+      // usually comes after the installs), not the first one accepted.
       const linked =
-        outcome === "done" && entry.action.type === "run_in_terminal"
-          ? pending.filter(
-              (other) =>
-                other.turn === entry.turn &&
-                other.action.type === "open_preview",
-            )
+        outcome === "done" &&
+        entry.action.type === "run_in_terminal" &&
+        !ofTurn("run_in_terminal").length
+          ? ofTurn("open_preview")
           : [];
       const settledKeys = new Set([key, ...linked.map((other) => other.key)]);
       updatePending((list) =>

@@ -210,7 +210,7 @@ describe("runWorkspaceAction", () => {
     const result = await run(
       {
         type: "invite_members",
-        people: ["@alice", "Bob@Example.com", "carol", "nobody"],
+        people: ["@alice", "Bob@Example.com", "@carol", "nobody"],
         role: "editor",
       },
       makeOps(),
@@ -222,6 +222,7 @@ describe("runWorkspaceAction", () => {
     const posted = fetchMock.mock.calls
       .filter(([, init]) => init?.method === "POST")
       .map(([, init]) => JSON.parse(String(init!.body)));
+    // A handle written as @login is sent bare, as CoDev looks logins up.
     expect(posted).toEqual([
       { emailOrLogin: "carol", role: "editor" },
       { emailOrLogin: "nobody", role: "editor" },
@@ -236,7 +237,7 @@ describe("runWorkspaceAction", () => {
           ok: true,
           message: "Already has access as viewer",
         },
-        { person: "carol", ok: true, message: "Added as editor" },
+        { person: "@carol", ok: true, message: "Added as editor" },
         { person: "nobody", ok: false, message: "No CoDev account" },
       ],
     });

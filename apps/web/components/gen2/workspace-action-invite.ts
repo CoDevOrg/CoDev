@@ -36,7 +36,9 @@ async function inviteOne(
     return { detail: { person, ok: true, message }, members };
   }
   try {
-    const result = await addWorkspaceMember(workspaceId, person, role);
+    // Agents write GitHub handles as @login; CoDev looks logins up bare.
+    const emailOrLogin = person.replace(/^@/, "");
+    const result = await addWorkspaceMember(workspaceId, emailOrLogin, role);
     if (result.ok && result.members) {
       const detail = { person, ok: true, message: `Added as ${role}` };
       return { detail, members: result.members };

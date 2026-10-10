@@ -300,14 +300,15 @@ describe("Gen2TurnActivity", () => {
       const open = { type: "open_file", path: "src/app.ts" } as const;
       const item = actionItem("m:action:0", open);
       const inviteItem = actionItem("m:action:1", invite);
-      writeStoredActionOutcome("chat-1", "m:action:0", open, {
-        state: "auto",
-        message: "Opened src/app.ts in Files",
-      });
-      writeStoredActionOutcome("chat-1", "m:action:1", invite, {
-        state: "done",
-        message: "Invited 2",
-      });
+      const ref = { chatId: "chat-1", token: NONCE };
+      writeStoredActionOutcome(
+        { ...ref, itemId: "m:action:0", action: open },
+        { state: "auto", message: "Opened src/app.ts in Files" },
+      );
+      writeStoredActionOutcome(
+        { ...ref, itemId: "m:action:1", action: invite },
+        { state: "done", message: "Invited 2" },
+      );
       withAgent(
         <Gen2TurnActivity
           live
@@ -324,6 +325,30 @@ describe("Gen2TurnActivity", () => {
         screen.queryByRole("button", { name: "Open" }),
       ).not.toBeInTheDocument();
       expect(screen.getByText("Invited 2")).toBeInTheDocument();
+    });
+
+    it("keeps another turn's outcome off a row with the same item id", () => {
+      const open = { type: "open_file", path: "src/app.ts" } as const;
+      writeStoredActionOutcome(
+        {
+          chatId: "chat-1",
+          itemId: "item_1:action:0",
+          token: NONCE,
+          action: open,
+        },
+        { state: "auto", message: "Opened src/app.ts in Files" },
+      );
+      withAgent(
+        <Gen2TurnActivity
+          chatId="chat-1"
+          items={[actionItem("item_1:action:0", open, "nexttoken0")]}
+          onOpenFile={noop}
+        />,
+      );
+      expect(
+        screen.getByText("Suggested: open src/app.ts in Files"),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Open" })).toBeInTheDocument();
     });
 
     it("mutes invalid and foreign blocks, and states a reached goal", () => {

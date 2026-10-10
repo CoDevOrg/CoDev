@@ -23,21 +23,40 @@ const LIMIT = 200;
 const OUTCOMES = "codev-gen2-action-outcomes";
 export const WORKSPACE_ACTION_OUTCOME_EVENT = "codev:workspace-action-outcome";
 
+/** An action item as this tab records what happened to it. */
+export type WorkspaceActionRef = {
+  chatId: string;
+  itemId: string;
+  /** The turn's nonce; item ids repeat across turns, nonces do not. */
+  token: string | null;
+  action: Gen2WorkspaceAction;
+};
+
 /** A proposal plus what this tab needs to settle it later. */
 export type StoredPendingAction = PendingWorkspaceAction & {
   itemId: string;
+  token: string;
   /** The turn's session id; links an open_preview to its run_in_terminal. */
   turn: string;
 };
 
-function read(key: string): unknown {
+function rawItem(key: string) {
   try {
-    const raw = window.sessionStorage.getItem(key);
+    return window.sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function parse(raw: string | null): unknown {
+  try {
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
 }
+
+const read = (key: string) => parse(rawItem(key));
 
 function write(key: string, value: unknown) {
   try {
@@ -58,10 +77,14 @@ function canonical(value: unknown): string {
   return JSON.stringify(value) ?? "null";
 }
 
-/** A short hash of the action, so a reused item id never inherits an outcome. */
-export function fingerprintWorkspaceAction(action: Gen2WorkspaceAction) {
+/**
+ * A short hash of the action and its turn's nonce. Codex and Cursor number
+ * their messages from zero every turn, so the same item id and action recur
+ * in one chat; only the nonce tells those turns apart.
+ */
+function fingerprint(token: string | null, action: Gen2WorkspaceAction) {
   let hash = 0x811c9dc5;
-  for (const char of canonical(action)) {
+  for (const char of canonical({ token, action })) {
     hash ^= char.charCodeAt(0);
     hash = Math.imul(hash, 0x01000193) >>> 0;
   }
@@ -92,6 +115,7 @@ function isStoredPending(value: unknown): value is StoredPendingAction {
     typeof entry.key === "string" &&
     typeof entry.chatId === "string" &&
     typeof entry.itemId === "string" &&
+    typeof entry.token === "string" &&
     typeof entry.turn === "string" &&
     (entry.blocker === null || typeof entry.blocker === "string") &&
     gen2WorkspaceActionSchema.safeParse(entry.action).success
@@ -111,42 +135,49 @@ export function writePendingActions(
   write(pendingKey(workspaceId, chatId), pending.slice(-LIMIT));
 }
 
-const outcomeKey = (
-  chatId: string,
-  itemId: string,
-  action: Gen2WorkspaceAction,
-) => `${chatId}:${itemId}:${fingerprintWorkspaceAction(action)}`;
+const outcomeKey = ({ chatId, itemId, token, action }: WorkspaceActionRef) =>
+  `${chatId}:${itemId}:${fingerprint(token, action)}`;
 
-function readOutcomes(): Array<[string, WorkspaceActionOutcome]> {
-  const value = read(OUTCOMES);
-  return Array.isArray(value)
-    ? value.filter(
-        (entry): entry is [string, WorkspaceActionOutcome] =>
-          Array.isArray(entry) &&
-          typeof entry[0] === "string" &&
-          typeof entry[1]?.message === "string" &&
-          ["done", "dismissed", "auto"].includes(entry[1]?.state),
-      )
-    : [];
+function isOutcome(entry: unknown): entry is [string, WorkspaceActionOutcome] {
+  const [key, outcome] = Array.isArray(entry) ? entry : [];
+  return (
+    typeof key === "string" &&
+    typeof outcome?.message === "string" &&
+    ["done", "dismissed", "auto"].includes(outcome?.state)
+  );
 }
 
+// Every action row reads its outcome on each render; parse the stored list
+// only when it changed, and hand out the same objects until then.
+let cache: {
+  raw: string | null;
+  outcomes: Map<string, WorkspaceActionOutcome>;
+} | null = null;
+
+function readOutcomes() {
+  const raw = rawItem(OUTCOMES);
+  if (cache?.raw === raw) return cache.outcomes;
+  const value = parse(raw);
+  const entries = Array.isArray(value) ? value.filter(isOutcome) : [];
+  cache = { raw, outcomes: new Map(entries) };
+  return cache.outcomes;
+}
+
+/** The same object for as long as the outcome is unchanged. */
 export function readStoredActionOutcome(
-  chatId: string,
-  itemId: string,
-  action: Gen2WorkspaceAction,
+  ref: WorkspaceActionRef,
 ): WorkspaceActionOutcome | null {
-  const key = outcomeKey(chatId, itemId, action);
-  return readOutcomes().find(([entry]) => entry === key)?.[1] ?? null;
+  return readOutcomes().get(outcomeKey(ref)) ?? null;
 }
 
 export function writeStoredActionOutcome(
-  chatId: string,
-  itemId: string,
-  action: Gen2WorkspaceAction,
+  ref: WorkspaceActionRef,
   outcome: WorkspaceActionOutcome,
 ) {
-  const key = outcomeKey(chatId, itemId, action);
-  const rest = readOutcomes().filter(([entry]) => entry !== key);
-  write(OUTCOMES, [...rest, [key, outcome]].slice(-LIMIT));
+  const key = outcomeKey(ref);
+  const outcomes = new Map(readOutcomes());
+  outcomes.delete(key);
+  outcomes.set(key, outcome);
+  write(OUTCOMES, [...outcomes].slice(-LIMIT));
   window.dispatchEvent(new Event(WORKSPACE_ACTION_OUTCOME_EVENT));
 }
