@@ -963,33 +963,22 @@
 
 .gen2-ide-agent-sessions {
   border-bottom: 1px solid var(--ws-border-subtle);
-  padding: 8px 12px;
-}
-
-.gen2-ide-agent-sessions-heading {
-  color: var(--ws-text-secondary);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.gen2-ide-agent-sessions-empty {
-  color: var(--ws-text-muted);
-  font-size: 12px;
-  margin: 4px 0 0;
+  padding: 4px 12px;
 }
 
 .gen2-ide-agent-sessions-list {
   display: grid;
-  gap: 4px;
-  margin: 6px 0 0;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .gen2-ide-agent-session-row {
   align-items: center;
   display: flex;
   gap: 4px;
+  min-width: 0;
 }
 
 .gen2-ide-agent-session-select {
@@ -998,9 +987,33 @@
   min-width: 0;
 }
 
-.gen2-ide-agent-session-select span:last-child {
+.gen2-ide-agent-session-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gen2-ide-agent-session-branch {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
   color: var(--ws-text-muted);
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gen2-ide-agent-session-status {
+  flex-shrink: 0;
   margin-left: auto;
+  color: var(--ws-status-working);
+  font-size: 12px;
+}
+
+.gen2-ide-agent-session-status[data-status="recovery_required"] {
+  color: var(--ws-status-error);
 }
 
 .gen2-ide-agent-overlap-trigger {
@@ -1816,6 +1829,11 @@
   white-space: nowrap;
 }
 
+/* The worktree's name, shown when its branch alone is ambiguous. */
+.gen2-worktree-name-detail {
+  color: var(--ws-text-muted);
+}
+
 .gen2-worktree-dropdown-item-right {
   display: flex;
   align-items: center;
@@ -2266,6 +2284,36 @@
   color: var(--ss-muted-foreground);
   font-size: 0.6875rem;
   font-weight: 500;
+}
+
+.gen2-ide-branch-form select {
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--ss-border);
+  border-radius: 6px;
+  background: var(--ss-background);
+  color: var(--ss-foreground);
+  font-size: 0.75rem;
+}
+
+.gen2-ide-branch-form select:focus-visible {
+  outline: 2px solid var(--ss-highlight);
+  outline-offset: 2px;
+}
+
+.gen2-worktree-form-hint,
+.gen2-worktree-form-error {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.gen2-worktree-form-hint {
+  color: var(--ws-text-muted);
+}
+
+.gen2-worktree-form-error {
+  color: var(--ws-status-error);
 }
 
 .gen2-ide-branch-form input {

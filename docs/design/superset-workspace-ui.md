@@ -259,7 +259,10 @@ Do not add extra badges. The branch status pill appears only once the file count
 
 ### Left rail (288 / 56)
 
-- Worktree trigger is the only worktree control in the rail; its create action is "New worktree", not "New branch".
+- Worktree trigger is the only worktree control in the rail; its create action is "New worktree", not "New branch". The form asks for a **Branch** first (a select: "New branch…" or a GitHub branch not already open; a branch can be open in one worktree at a time, so open ones are left out and typing one explains where it is open), then, for a new branch, its name and **Start from** (this worktree, another worktree's branch, or the default branch on GitHub), then an optional folder name derived from the branch.
+- Worktrees read as their branch; the worktree's name follows in muted text (`main · yousefs`) only when the branch alone is ambiguous. A detached primary checkout reads `detached HEAD · primary`.
+- The strip above the chat lists only agents working in **other** chats (provider logo, chat title, branch, status, Stop); clicking one opens that chat and worktree. It renders nothing otherwise.
+- The page URL carries the current worktree, chat, inspector tab, open file, board view and terminal state (defaults omitted), so a refresh or a shared link restores them.
 - New Chat is a secondary (outline) button. Nothing in the rail is a filled primary.
 - Recent chats: transparent rows, hover = surface-hover, current = surface-active **or** accent-soft, not both. `aria-current` on the current chat. Rename sits at the row’s right edge (visible on hover, focus, or touch) and on double-click. The row pads so the time stays clear of the control. Enter saves only after the server accepts the title; Escape cancels. A rejected rename keeps the previous title.
 - Empty and zero states are quiet. With no chats, show one shadcn `Empty` ("No chats yet. Start one with New Chat.") instead of a heading and dashed box per provider. A provider group appears only once it has chats. Count badges show only above zero, and the branch count shows only with more than one branch. The branch status pill renders nothing while the file count is unknown; never a placeholder dash.

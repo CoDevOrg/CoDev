@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 
 import { SupersetWorkspaceShell } from "@/components/gen2/superset-workspace-shell";
+import { readWorkspaceView } from "@/components/gen2/workspace-view-url";
 import { requireUser } from "@/lib/auth/session";
 import { Gen2AccessError, Gen2LifecycleError } from "@/lib/gen2/errors";
 import { isGen2PreviewEnabled } from "@/lib/gen2/preview-config";
@@ -12,8 +13,10 @@ export const metadata: Metadata = { title: "Workspace" };
 
 export default async function Gen2WorkspacePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ workspaceId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { workspaceId } = await params;
   const user = await requireUser(`/gen2/${workspaceId}`);
@@ -36,6 +39,7 @@ export default async function Gen2WorkspacePage({
       canEdit={workspace.role !== "viewer"}
       runtimeEnabled={isGen2SupersetRuntimeEnabled()}
       previewEnabled={isGen2PreviewEnabled()}
+      initialView={readWorkspaceView(await searchParams)}
     />
   );
 }

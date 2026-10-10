@@ -44,9 +44,12 @@ export function parseCoDevWorktrees(output: string, primaryRoot: string) {
 		)
 			continue;
 		const branchRef = values.get("branch") ?? "";
-		if (!branchRef.startsWith("refs/heads/")) continue;
+		// A detached checkout (the primary is cloned at a commit) is still a
+		// worktree the member works in; Git's own name for its position is HEAD.
+		const detached = values.has("detached");
+		if (!branchRef.startsWith("refs/heads/") && !detached) continue;
 		seen.add(worktreeId);
-		entries.push({ worktreeId, branch: branchRef.slice(11), path });
+		entries.push({ worktreeId, branch: detached ? "HEAD" : branchRef.slice(11), path });
 	}
 	return entries.sort((left, right) =>
 		left.worktreeId.localeCompare(right.worktreeId),
