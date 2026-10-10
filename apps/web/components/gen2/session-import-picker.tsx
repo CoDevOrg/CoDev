@@ -86,6 +86,9 @@ export function SessionImportPicker({
           <code>{source.file[platform]}</code>.
           {provider === "claude" ? " Skip files in subagents folders." : ""}
           {browsable ? "" : ` ${PICKER_TIP[platform]}`} Up to 64 MB.
+          {browsable
+            ? ""
+            : " To pick from a list of your sessions instead, open CoDev in Chrome or Edge."}
         </FieldDescription>
         <label
           htmlFor="session-import-file"

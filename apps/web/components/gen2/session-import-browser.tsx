@@ -18,7 +18,11 @@ function describeSession(session: LocalSession) {
     dateStyle: "medium",
     timeStyle: "short",
   });
-  const size = `${(session.file.size / (1024 * 1024)).toFixed(1)} MB`;
+  const kb = session.file.size / 1024;
+  const size =
+    kb < 1024
+      ? `${Math.max(1, Math.round(kb))} KB`
+      : `${(kb / 1024).toFixed(1)} MB`;
   return [session.branch, when, size].filter(Boolean).join(" · ");
 }
 
