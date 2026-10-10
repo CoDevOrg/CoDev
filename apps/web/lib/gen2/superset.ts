@@ -39,6 +39,10 @@ import {
 import { recordGen2DocumentSave } from "./collaboration-documents";
 import { isGen2SupersetRuntimeEnabled } from "./superset-runtime-feature";
 import { requireGen2Member } from "./workspaces";
+import {
+  publishGen2FilesChanged,
+  publishGen2WorkspaceEvent,
+} from "./workspace-events";
 
 const healthSchema = z.object({ status: z.literal("ok") });
 
@@ -153,8 +157,14 @@ export async function createGen2SupersetEntry(
     input,
     35_000,
   );
-  return gen2SupersetCreateEntryResponseSchema.parse(await response.json())
-    .entry;
+  const entry = gen2SupersetCreateEntryResponseSchema.parse(
+    await response.json(),
+  ).entry;
+  await publishGen2FilesChanged(workspaceId, input.worktreeId, [entry.path], {
+    kind: "user",
+    userId,
+  });
+  return entry;
 }
 
 export async function moveGen2SupersetEntry(
@@ -180,7 +190,16 @@ export async function moveGen2SupersetEntry(
     input,
     35_000,
   );
-  return gen2SupersetMoveEntryResponseSchema.parse(await response.json()).entry;
+  const entry = gen2SupersetMoveEntryResponseSchema.parse(
+    await response.json(),
+  ).entry;
+  await publishGen2FilesChanged(
+    workspaceId,
+    input.worktreeId,
+    [input.path, entry.path],
+    { kind: "user", userId },
+  );
+  return entry;
 }
 
 export async function deleteGen2SupersetEntry(
@@ -201,8 +220,14 @@ export async function deleteGen2SupersetEntry(
     input,
     35_000,
   );
-  return gen2SupersetDeleteEntryResponseSchema.parse(await response.json())
-    .path;
+  const path = gen2SupersetDeleteEntryResponseSchema.parse(
+    await response.json(),
+  ).path;
+  await publishGen2FilesChanged(workspaceId, input.worktreeId, [path], {
+    kind: "user",
+    userId,
+  });
+  return path;
 }
 
 export async function readGen2SupersetFile(
@@ -257,6 +282,10 @@ export async function saveGen2SupersetFile(
       contents: file.contents,
       revision: file.revision,
     }).catch(() => undefined);
+    await publishGen2FilesChanged(workspaceId, input.worktreeId, [file.path], {
+      kind: "user",
+      userId,
+    });
     return file;
   } catch (error) {
     if (error instanceof OrchestratorError && error.status === 409) {
@@ -315,7 +344,9 @@ export async function createGen2SupersetWorktree(
       403,
     );
   }
-  return gen2SupersetWorktreeCreateResponseSchema.parse({
+  const created = gen2SupersetWorktreeCreateResponseSchema.parse({
     worktree: await createSupersetWorktree(workspaceId, input),
   }).worktree;
+  await publishGen2WorkspaceEvent(workspaceId, { kind: "worktrees.changed" });
+  return created;
 }

@@ -4,6 +4,7 @@ import {
   collaborationServerMessageSchema,
   type CollaborationServerMessage,
   type CollaborationUser,
+  type Gen2WorkspaceView,
 } from "@codev/contracts";
 import type { ServerWebSocket } from "../platform/websocket";
 
@@ -17,6 +18,10 @@ export interface Connection {
   subscriptions: Set<string>;
   activePath: string | null;
   cursor: { anchor: number; head: number } | null;
+  view: Gen2WorkspaceView | null;
+  chatId: string | null;
+  away: boolean;
+  lastTypingAt: number;
   resumeFrom: string | null;
   replayedPaths: Set<string>;
   lastSeenAt: number;
@@ -27,9 +32,14 @@ export function send(
   connection: Connection,
   message: CollaborationServerMessage,
 ) {
-  if (connection.socket.readyState !== connection.socket.openState) return;
   const payload = collaborationServerMessageSchema.parse(message);
-  connection.socket.send(JSON.stringify(payload));
+  sendSerialized(connection, JSON.stringify(payload));
+}
+
+/** Sends an already validated message, so a broadcast serializes it once. */
+export function sendSerialized(connection: Connection, payload: string) {
+  if (connection.socket.readyState !== connection.socket.openState) return;
+  connection.socket.send(payload);
 }
 
 export function sendError(

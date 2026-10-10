@@ -2410,6 +2410,14 @@ export const gen2ChatMessages = pgTable(
      * messages and for replies saved before this column existed.
      */
     items: jsonb("items"),
+    /**
+     * The member who sent a user message. Null for assistant replies, for
+     * messages saved before this column existed, and after the member's
+     * account is deleted.
+     */
+    authorUserId: uuid("author_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),

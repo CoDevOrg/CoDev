@@ -279,6 +279,8 @@ describe("gen2 Codex agent", () => {
       }),
     );
     expect(mocks.appendMessage).toHaveBeenCalledWith({
+      workspaceId,
+      authorUserId: userId,
       chatId,
       role: "user",
       body: "List the files",
@@ -693,6 +695,8 @@ describe("gen2 Codex agent", () => {
       goal: { text: "Ship the parser", status: "achieved", summary: null },
     });
     expect(mocks.appendMessage).toHaveBeenCalledWith({
+      workspaceId,
+      authorUserId: userId,
       chatId,
       role: "user",
       body: "/goal done",

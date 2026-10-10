@@ -7,11 +7,22 @@ import { ChatGoalBar } from "./chat-goal-bar";
 import { ChatTranscript, type ChatLiveTurn } from "./chat-transcript";
 import type { ChatPanelState } from "./use-chat-panel";
 import { WorkspaceActionCards } from "./workspace-action-cards";
+import { ChatTypingIndicator } from "./chat-typing-indicator";
 
 /** The live turn's bubble, shown only in the chat that turn belongs to. */
 function liveTurn(panel: ChatPanelState): ChatLiveTurn | null {
-  const { turn, sender, messages } = panel;
-  if (!(turn.running && panel.ownsTurn) && !sender.starting) return null;
+  const { turn, sender, messages, observedTurn } = panel;
+  if (!(turn.running && panel.ownsTurn) && !sender.starting)
+    return observedTurn
+      ? {
+          items: observedTurn.items,
+          reply: observedTurn.reply,
+          starting: false,
+          // Another tab's turn: its actions are shown, never run here.
+          actionToken: null,
+          ownerId: observedTurn.userId,
+        }
+      : null;
   return {
     items: turn.items,
     reply: turn.liveReply,
@@ -75,7 +86,12 @@ export function ChatPanelFilled({
             onSend={panel.sendText}
           />
         ) : null}
-        {composer ?? <p className="gen2-chat-viewer">{CHAT_VIEWER_COPY}</p>}
+        {composer ?? (
+          <>
+            <ChatTypingIndicator chatId={panel.thread.chatId} />
+            <p className="gen2-chat-viewer">{CHAT_VIEWER_COPY}</p>
+          </>
+        )}
       </div>
     </div>
   );

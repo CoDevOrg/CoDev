@@ -547,6 +547,13 @@
       "when": 1791589786801,
       "tag": "0077_account_security",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1791626598032,
+      "tag": "0078_gen2_chat_message_author",
+      "breakpoints": true
     }
   ]
 }

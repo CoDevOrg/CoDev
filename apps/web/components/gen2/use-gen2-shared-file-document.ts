@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  collaborationServerMessageSchema,
-  type CollaborationPresenceEntry,
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type {
+  CollaborationClientMessage,
+  CollaborationServerMessage,
+  Gen2WorkspaceMember,
 } from "@codev/contracts";
 import {
   applyAwarenessUpdate,
@@ -12,28 +13,38 @@ import {
 } from "y-protocols/awareness";
 import * as Y from "yjs";
 
-const REMOTE_ORIGIN = "codev-remote";
+import { useWorkspaceRealtime } from "./use-workspace-realtime";
+import {
+  isAgentEditOrigin,
+  type AgentEditOrigin,
+} from "./codemirror-yjs-binding";
+import { memberColor } from "./member-color";
+import { agentLabel } from "./agent-label";
+import { decodeBase64, encodeBase64 } from "./workspace-realtime-socket";
 
-function encodeBase64(bytes: Uint8Array) {
-  let value = "";
-  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
-    value += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
-  }
-  return btoa(value);
-}
+export const REMOTE_ORIGIN = "codev-remote";
 
-function decodeBase64(value: string) {
-  const decoded = atob(value);
-  return Uint8Array.from(decoded, (character) => character.charCodeAt(0));
-}
+const isRemoteOrigin = (origin: unknown) =>
+  origin === REMOTE_ORIGIN || isAgentEditOrigin(origin);
 
-function socketUrl(workspaceId: string) {
-  const url = new URL(
-    `/api/gen2/workspaces/${encodeURIComponent(workspaceId)}/collaboration`,
-    window.location.href,
-  );
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-  return url.toString();
+/** An agent's edit carries who made it, so the editor can type it out. */
+function agentOrigin(
+  message: Reconciled,
+  members: Gen2WorkspaceMember[],
+): AgentEditOrigin | null {
+  const actor = message.actor;
+  if (actor?.kind !== "agent") return null;
+  return {
+    agent: true,
+    id: actor.sessionId,
+    label: agentLabel(
+      actor.provider,
+      members.find((member) => member.userId === actor.ownerUserId)?.name ??
+        members.find((member) => member.userId === actor.ownerUserId)?.login ??
+        "A member",
+    ),
+    color: memberColor(actor.sessionId).color,
+  };
 }
 
 export type Gen2DocumentConnectionState =
@@ -44,10 +55,48 @@ export type Gen2DocumentConnectionState =
   | "disconnected"
   | "conflict";
 
+type Reconciled = Extract<CollaborationServerMessage, { type: "reconciled" }>;
+
+interface OpenDocument {
+  key: string;
+  doc: Y.Doc;
+  text: Y.Text;
+  awareness: Awareness;
+}
+
+/** Sends local edits and cursor moves once the document has synced. */
+function bindLocal(
+  open: OpenDocument,
+  path: string,
+  worktreeId: string,
+  send: (message: CollaborationClientMessage) => void,
+  synced: () => boolean,
+) {
+  const onUpdate = (update: Uint8Array, origin: unknown) => {
+    if (isRemoteOrigin(origin) || !synced()) return;
+    send({ type: "update", worktreeId, path, update: encodeBase64(update) });
+  };
+  const onAwareness = (
+    changes: { added: number[]; updated: number[]; removed: number[] },
+    origin: unknown,
+  ) => {
+    const clients = [...changes.added, ...changes.updated, ...changes.removed];
+    if (isRemoteOrigin(origin) || !synced() || !clients.length) return;
+    const update = encodeAwarenessUpdate(open.awareness, clients);
+    send({ type: "awareness", worktreeId, path, update: encodeBase64(update) });
+  };
+  open.doc.on("update", onUpdate);
+  open.awareness.on("update", onAwareness);
+  return () => {
+    open.doc.off("update", onUpdate);
+    open.awareness.off("update", onAwareness);
+  };
+}
+
 /**
- * Browser-safe CoDev adapter for one open Gen 2 file. Superset's shared-file
- * interaction model stays above this hook; all desktop host and store
- * dependencies stop here.
+ * Browser-safe CoDev adapter for one open Gen 2 file, multiplexed over the
+ * workspace tab's realtime socket. Superset's shared-file interaction model
+ * stays above this hook; all desktop host and store dependencies stop here.
  */
 export function useGen2SharedFileDocument(input: {
   workspaceId: string;
@@ -56,223 +105,189 @@ export function useGen2SharedFileDocument(input: {
   canEdit: boolean;
   onContentsChange: (contents: string) => void;
 }) {
-  const [text, setText] = useState<Y.Text | null>(null);
-  const [awareness, setAwareness] = useState<Awareness | null>(null);
-  const [state, setState] = useState<Gen2DocumentConnectionState>("idle");
-  const [notice, setNotice] = useState<string | null>(null);
-  const [members, setMembers] = useState<CollaborationPresenceEntry[]>([]);
-  const onContentsChangeRef = useRef(input.onContentsChange);
-  const socketRef = useRef<WebSocket | null>(null);
+  const realtime = useWorkspaceRealtime();
+  const { send, listen, generation, status, presence } = realtime;
+  const { worktreeId, path, canEdit } = input;
+  const key = path ? `${worktreeId}\0${path}` : null;
+  const [open, setOpen] = useState<OpenDocument | null>(null);
+  const [synced, setSynced] = useState<{ key: string; generation: number }>();
+  const [conflictKey, setConflictKey] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ key: string; text: string } | null>(
+    null,
+  );
   const syncedRef = useRef(false);
-
+  const callbacks = useRef(input);
+  const membersRef = useRef(realtime.members);
   useEffect(() => {
-    onContentsChangeRef.current = input.onContentsChange;
-  }, [input.onContentsChange]);
+    callbacks.current = input;
+    membersRef.current = realtime.members;
+  });
 
-  // This effect creates the Yjs resource keyed by the selected file, so its
-  // initial state must publish the newly created external resource handle.
-  // Subsequent state changes come from socket/document callbacks.
+  // The Yjs resource is keyed by file; publishing its handle is the point.
   useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect */
-    if (!input.path) {
-      setText(null);
-      setAwareness(null);
-      setState("idle");
-      setNotice(null);
-      setMembers([]);
-      return;
-    }
-
-    let disposed = false;
-    let reconnectTimer: number | null = null;
-    let heartbeatTimer: number | null = null;
-    let retryCount = 0;
+    if (!key) return;
     const doc = new Y.Doc();
-    const nextText = doc.getText("content");
-    const nextAwareness = new Awareness(doc);
-    const path = input.path;
-    const worktreeId = input.worktreeId;
+    const text = doc.getText("content");
+    const next = { key, doc, text, awareness: new Awareness(doc) };
+    const onText = () => callbacks.current.onContentsChange(text.toString());
+    text.observe(onText);
     syncedRef.current = false;
-    setText(nextText);
-    setAwareness(nextAwareness);
-    setState("connecting");
-    setNotice(null);
-    setMembers([]);
-
-    const send = (message: unknown) => {
-      const socket = socketRef.current;
-      if (socket?.readyState === WebSocket.OPEN)
-        socket.send(JSON.stringify(message));
-    };
-    const onDocumentUpdate = (update: Uint8Array, origin: unknown) => {
-      if (origin === REMOTE_ORIGIN || !syncedRef.current) return;
-      send({ type: "update", path, update: encodeBase64(update) });
-    };
-    const onTextChange = () => onContentsChangeRef.current(nextText.toString());
-    const onAwarenessUpdate = (
-      changes: { added: number[]; updated: number[]; removed: number[] },
-      origin: unknown,
-    ) => {
-      if (origin === REMOTE_ORIGIN || !syncedRef.current) return;
-      const clients = [
-        ...changes.added,
-        ...changes.updated,
-        ...changes.removed,
-      ];
-      if (clients.length > 0) {
-        send({
-          type: "awareness",
-          path,
-          update: encodeBase64(encodeAwarenessUpdate(nextAwareness, clients)),
-        });
-      }
-    };
-    doc.on("update", onDocumentUpdate);
-    nextText.observe(onTextChange);
-    nextAwareness.on("update", onAwarenessUpdate);
-
-    const connect = () => {
-      if (disposed) return;
-      setState(syncedRef.current ? "syncing" : "connecting");
-      const socket = new WebSocket(socketUrl(input.workspaceId));
-      socketRef.current = socket;
-      socket.onerror = () => {
-        // Error handling will flow through onclose
-      };
-      socket.onopen = () => send({ type: "join", worktreeId });
-      socket.onmessage = (event) => {
-        if (typeof event.data !== "string") return;
-        let payload: unknown;
-        try {
-          payload = JSON.parse(event.data);
-        } catch {
-          return;
-        }
-        const parsed = collaborationServerMessageSchema.safeParse(payload);
-        if (!parsed.success) return;
-        const message = parsed.data;
-        if (message.type === "welcome") {
-          setState("syncing");
-          if (heartbeatTimer !== null) {
-            window.clearInterval(heartbeatTimer);
-          }
-          heartbeatTimer = window.setInterval(
-            () => send({ type: "heartbeat" }),
-            Math.max(1_000, Math.floor(message.heartbeatIntervalMs / 2)),
-          );
-          send({ type: "subscribe", path });
-        } else if (message.type === "sync" && message.path === path) {
-          Y.applyUpdate(doc, decodeBase64(message.update), REMOTE_ORIGIN);
-          syncedRef.current = true;
-          retryCount = 0;
-          setState("connected");
-          setNotice(null);
-        } else if (
-          message.type === "update" &&
-          message.worktreeId === worktreeId &&
-          message.path === path
-        ) {
-          Y.applyUpdate(doc, decodeBase64(message.update), REMOTE_ORIGIN);
-        } else if (
-          message.type === "awareness" &&
-          message.worktreeId === worktreeId &&
-          message.path === path
-        ) {
-          applyAwarenessUpdate(
-            nextAwareness,
-            decodeBase64(message.update),
-            REMOTE_ORIGIN,
-          );
-        } else if (message.type === "presence") {
-          setMembers(
-            message.members.filter(
-              (member) =>
-                member.worktreeId === worktreeId && member.path === path,
-            ),
-          );
-        } else if (
-          message.type === "reconciled" &&
-          message.worktreeId === worktreeId &&
-          message.path === path
-        ) {
-          if (message.update) {
-            Y.applyUpdate(doc, decodeBase64(message.update), REMOTE_ORIGIN);
-          }
-          setNotice("An agent updated this file from the workspace.");
-        } else if (
-          message.type === "conflict" &&
-          message.worktreeId === worktreeId &&
-          message.path === path
-        ) {
-          setState("conflict");
-          setNotice(message.message);
-        } else if (
-          message.type === "error" &&
-          (!message.path || message.path === path)
-        ) {
-          setNotice(message.message);
-          if (message.code === "conflict") setState("conflict");
-        }
-      };
-      socket.onclose = () => {
-        if (heartbeatTimer !== null) {
-          window.clearInterval(heartbeatTimer);
-          heartbeatTimer = null;
-        }
-        if (socketRef.current === socket) socketRef.current = null;
-        if (disposed) return;
-        setState("disconnected");
-        retryCount += 1;
-        if (syncedRef.current) {
-          if (retryCount <= 3) {
-            setNotice("Collaboration disconnected. Reconnecting…");
-          } else {
-            setNotice("Working offline · Changes save to workspace");
-          }
-        } else {
-          // Never established a collaborative session (single-user or offline);
-          // don't present an alarming disconnected notice when local editing works.
-          setNotice(null);
-        }
-        const delay = Math.min(
-          1000 * Math.pow(2, Math.min(retryCount - 1, 4)),
-          15_000,
-        );
-        reconnectTimer = window.setTimeout(connect, delay);
-      };
-    };
-    connect();
-
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setOpen(next);
     return () => {
-      disposed = true;
-      if (reconnectTimer) window.clearTimeout(reconnectTimer);
-      if (heartbeatTimer !== null) window.clearInterval(heartbeatTimer);
-      socketRef.current?.close();
-      socketRef.current = null;
-      doc.off("update", onDocumentUpdate);
-      nextText.unobserve(onTextChange);
-      nextAwareness.off("update", onAwarenessUpdate);
-      nextAwareness.destroy();
+      text.unobserve(onText);
+      next.awareness.destroy();
       doc.destroy();
     };
-    /* eslint-enable react-hooks/set-state-in-effect */
-  }, [input.workspaceId, input.worktreeId, input.path]);
+  }, [key]);
+
+  useEffect(() => {
+    if (!open || open.key !== key || !path) return;
+    const unbind = bindLocal(
+      open,
+      path,
+      worktreeId,
+      send,
+      () => syncedRef.current,
+    );
+    const unlisten = listen((message) => {
+      if (!("path" in message) || message.path !== path) return;
+      if ("worktreeId" in message && message.worktreeId !== worktreeId) return;
+      applyDocumentMessage(open, message, {
+        synced: () => {
+          syncedRef.current = true;
+          setSynced({ key: open.key, generation });
+          setNotice(null);
+        },
+        conflict: () => setConflictKey(open.key),
+        notice: (text) => setNotice({ key: open.key, text }),
+        originFor: (edit) =>
+          agentOrigin(edit, membersRef.current) ?? REMOTE_ORIGIN,
+        sendMissing: (update) => {
+          if (canEdit) send({ type: "update", worktreeId, path, update });
+        },
+      });
+    });
+    return () => {
+      unlisten();
+      unbind();
+    };
+  }, [open, key, path, worktreeId, generation, canEdit, send, listen]);
+
+  // Every (re)connect resubscribes, sending what this tab already holds.
+  useEffect(() => {
+    if (!open || open.key !== key || !path || status !== "open") return;
+    send({
+      type: "subscribe",
+      worktreeId,
+      path,
+      stateVector: syncedRef.current
+        ? encodeBase64(Y.encodeStateVector(open.doc))
+        : undefined,
+    });
+    return () => send({ type: "unsubscribe", worktreeId, path });
+  }, [open, key, path, worktreeId, status, generation, send]);
 
   const updateCursor = useCallback(
-    (cursor: { anchor: number; head: number } | null) => {
-      if (!awareness) return;
-      awareness.setLocalStateField("cursor", cursor);
-    },
-    [awareness],
+    (cursor: { anchor: number; head: number } | null) =>
+      open?.awareness.setLocalStateField("cursor", cursor),
+    [open],
   );
 
+  const members = useMemo(
+    () =>
+      presence.filter(
+        (member) =>
+          !member.agent &&
+          member.worktreeId === worktreeId &&
+          member.path === path,
+      ),
+    [presence, worktreeId, path],
+  );
+
+  const current = open && open.key === key ? open : null;
+  const state = documentState({
+    open: Boolean(current),
+    conflict: Boolean(current && conflictKey === current.key),
+    socketOpen: status === "open",
+    synced: Boolean(current && synced?.key === current.key),
+    current: synced?.generation === generation,
+  });
+  const disconnectedNotice =
+    state === "disconnected"
+      ? "Collaboration disconnected. Reconnecting…"
+      : null;
   return {
-    text,
-    awareness,
+    text: current?.text ?? null,
+    awareness: current?.awareness ?? null,
     state,
-    notice,
+    notice:
+      disconnectedNotice ??
+      (current && notice?.key === current.key ? notice.text : null),
     members,
     updateCursor,
-    readOnly: !input.canEdit || state !== "connected",
+    readOnly: !canEdit || state !== "connected",
   };
+}
+
+function documentState(input: {
+  open: boolean;
+  conflict: boolean;
+  socketOpen: boolean;
+  synced: boolean;
+  current: boolean;
+}): Gen2DocumentConnectionState {
+  if (!input.open) return "idle";
+  if (input.conflict) return "conflict";
+  if (!input.socketOpen) return input.synced ? "disconnected" : "connecting";
+  if (!input.synced) return "connecting";
+  return input.current ? "connected" : "syncing";
+}
+
+/** Applies one server message for this document to the local Yjs state. */
+function applyDocumentMessage(
+  open: OpenDocument,
+  message: CollaborationServerMessage,
+  on: {
+    synced: () => void;
+    conflict: () => void;
+    notice: (text: string) => void;
+    originFor: (message: Reconciled) => unknown;
+    sendMissing: (update: string) => void;
+  },
+) {
+  if (message.type === "sync") {
+    Y.applyUpdate(open.doc, decodeBase64(message.update), REMOTE_ORIGIN);
+    on.synced();
+    // Edits made while disconnected that the server never received.
+    const missing = Y.encodeStateAsUpdate(
+      open.doc,
+      decodeBase64(message.stateVector),
+    );
+    if (missing.length > 2) on.sendMissing(encodeBase64(missing));
+  } else if (message.type === "update" || message.type === "reconciled") {
+    const origin =
+      message.type === "reconciled" ? on.originFor(message) : REMOTE_ORIGIN;
+    if (message.update)
+      Y.applyUpdate(open.doc, decodeBase64(message.update), origin);
+    if (message.type === "reconciled") on.notice(reconciledNotice(origin));
+  } else if (message.type === "awareness") {
+    applyAwarenessUpdate(
+      open.awareness,
+      decodeBase64(message.update),
+      REMOTE_ORIGIN,
+    );
+  } else if (message.type === "conflict") {
+    on.conflict();
+    on.notice(message.message);
+  } else if (message.type === "error") {
+    on.notice(message.message);
+    if (message.code === "conflict") on.conflict();
+  }
+}
+
+function reconciledNotice(origin: unknown) {
+  return isAgentEditOrigin(origin)
+    ? `${origin.label} updated this file.`
+    : "This file changed in the workspace.";
 }

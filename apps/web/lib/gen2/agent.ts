@@ -137,12 +137,15 @@ export async function startGen2AgentTurn(input: Gen2AgentTurnInput) {
     try {
       if (!input.continuation)
         await appendGen2ChatMessage({
+          workspaceId: input.workspaceId,
+          authorUserId: input.userId,
           chatId: input.chatId,
           role: "user",
           body: input.prompt,
         });
       if (fallbackNote)
         await appendGen2ChatMessage({
+          workspaceId: input.workspaceId,
           chatId: input.chatId,
           role: "assistant",
           body: fallbackNote,

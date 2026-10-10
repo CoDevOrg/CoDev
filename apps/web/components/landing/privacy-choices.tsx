@@ -19,11 +19,11 @@ function hasPrivacySignal() {
   );
 }
 
-// Full-screen workspaces keep their bottom edge clear; consent stays reachable elsewhere.
-const WORKSPACE_PATH = /^\/(gen2\/(?!join\/)[^/]+|rooms\/[^/]+)/;
+// After a choice, the reopen button lives only on the cookie notice.
+const COOKIE_NOTICE_PATH = "/legal/cookies";
 
 export function PrivacyChoices() {
-  const inWorkspace = WORKSPACE_PATH.test(usePathname() ?? "");
+  const onCookieNotice = usePathname() === COOKIE_NOTICE_PATH;
   const [allowed, setAllowed] = useState(false);
   const [show, setShow] = useState(false);
   const [signal, setSignal] = useState(false);
@@ -99,7 +99,7 @@ export function PrivacyChoices() {
             </Button>
           </div>
         </section>
-      ) : inWorkspace ? null : (
+      ) : !onCookieNotice ? null : (
         <Button
           className="privacy-reopen"
           variant="outline"

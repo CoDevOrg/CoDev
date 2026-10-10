@@ -96,6 +96,7 @@ export function WorkspaceTopBar({
   sessionTitle,
   sessionProvider,
   agentRunning,
+  presence,
   connectionState,
   viewMode,
   sidebarCollapsed,
@@ -115,6 +116,8 @@ export function WorkspaceTopBar({
   /** Set only while the active agent is connected. */
   sessionProvider: SupportedAiProvider | null;
   agentRunning: boolean;
+  /** Who else is here; sits between the status and Share. */
+  presence?: React.ReactNode;
   connectionState: ConnectionState;
   viewMode: "ide" | "board";
   sidebarCollapsed: boolean;
@@ -215,6 +218,7 @@ export function WorkspaceTopBar({
             <span className="gen2-topbar-action-label">Reconnect</span>
           </WorkspaceButton>
         ) : null}
+        {presence}
 
         <WorkspaceButton
           tone="primary"

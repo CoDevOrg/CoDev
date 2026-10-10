@@ -65,6 +65,14 @@ import { withPrimaryWorktree, worktreeDisplay } from "./worktree-display";
 import { WorktreeName } from "./worktree-name";
 import { WorkspaceWorktreeForm } from "./workspace-worktree-form";
 import { useWorkspaceViewUrl } from "./use-workspace-view-url";
+import { useRealtimeFocus } from "./use-realtime-focus";
+import { useWorkspaceRealtime } from "./use-workspace-realtime";
+import { useWorkspacePresence } from "./use-workspace-presence";
+import { WorkspacePresenceStack } from "./workspace-presence-stack";
+import { useShellLiveUpdates } from "./use-shell-live-updates";
+import { useWorkspaceFollow } from "./use-workspace-follow";
+import { WorkspaceFollowFrame } from "./workspace-follow-frame";
+import { useWorkspaceActivityToasts } from "./use-workspace-activity-toasts";
 import type { WorkspaceView } from "./workspace-view-url";
 import { SupersetAgentOverlapMenu } from "./superset-agent-overlap-menu";
 import {
@@ -383,7 +391,7 @@ export function SupersetWorkspaceShell({
         );
         if (!response.ok) return null;
         const { chat } = (await response.json()) as { chat: Gen2Chat };
-        setChats((prev) => [chat, ...prev]);
+        setChats((prev) => [chat, ...prev.filter((c) => c.id !== chat.id)]);
         setSelectedChatId(chat.id);
         setActiveProvider(provider);
         recordChatProvider(chat.id, provider);
@@ -589,8 +597,10 @@ export function SupersetWorkspaceShell({
     const worktree = worktrees.find((wt) => wt.worktreeId === id);
     return worktree ? worktreeDisplay(worktree).text : id;
   };
+  const realtime = useWorkspaceRealtime();
+  const presence = useWorkspacePresence(worktreeId);
   const memberLabel = (userId: string) => {
-    const member = activeWorkspace.members.find((m) => m.userId === userId);
+    const member = realtime.members.find((m) => m.userId === userId);
     return member?.name ?? member?.login ?? "a member";
   };
   const overlapsInWorktree = (id: string) =>
@@ -900,7 +910,7 @@ export function SupersetWorkspaceShell({
     connectedProviders: connectedChatProviders.map((provider) => provider.id),
     createChat,
     handleNewChat,
-    members: activeWorkspace.members,
+    members: realtime.members,
     runs: activeRuns,
     refreshRuns: () => void refreshRuns(),
     setShareOpen,
@@ -908,18 +918,57 @@ export function SupersetWorkspaceShell({
     setImportOpen,
   });
   const { files, inspector, terminals } = agent.requests;
+  useShellLiveUpdates({
+    currentUserId,
+    role: activeWorkspace.role,
+    refreshChanges: inspector.refreshChanges,
+    refreshCounts: () => void refreshCounts(worktrees),
+    refreshWorktrees: () => void refreshWorktrees(),
+    refreshRuns: () => void refreshRuns(),
+  });
+  const follow = useWorkspaceFollow({
+    people: presence.people,
+    agents: presence.agents,
+    worktreeId,
+    dirty,
+    selectWorktree: (id) => void selectWorktree(id),
+    openFile: (path) => {
+      setViewMode("ide");
+      setInspectorCollapsed(false);
+      if (inspector.openFilePath !== path) openFile(path);
+    },
+    showTab: (next) => {
+      setViewMode("ide");
+      setInspectorCollapsed(false);
+      setTab(next);
+    },
+    selectChat: setSelectedChatId,
+    onStopped: setNotice,
+  });
+  useWorkspaceActivityToasts({
+    people: presence.people,
+    currentChatId: selectedChatId ?? activeChat?.id ?? null,
+    branchFor,
+    onViewChanges: () => {
+      setViewMode("ide");
+      setTab("changes");
+      setInspectorCollapsed(false);
+    },
+  });
   const inspectorSize = useWorkspaceInspectorSize(tab === "browser");
   const openFile = (path: string) =>
     void agent.value.controller.run({ type: "open_file", path });
 
-  useWorkspaceViewUrl({
+  const view = {
     worktreeId,
     chatId: selectedChatId ?? activeChat?.id ?? null,
     tab,
     file: inspector.openFilePath,
     board: viewMode === "board",
     terminal: terminalExpanded,
-  });
+  };
+  useWorkspaceViewUrl(view);
+  useRealtimeFocus({ ...view, inspectorCollapsed });
   // A worktree named in the link that no longer exists falls back to main.
   const worktreeMissing =
     worktreesLoaded &&
@@ -992,6 +1041,14 @@ export function SupersetWorkspaceShell({
               : null
           }
           agentRunning={agentRunning}
+          presence={
+            <WorkspacePresenceStack
+              people={presence.people}
+              agents={presence.agents}
+              branchFor={branchFor}
+              onFollow={follow.follow}
+            />
+          }
           connectionState={connection.state}
           viewMode={viewMode}
           sidebarCollapsed={sidebarCollapsed}
@@ -1968,6 +2025,7 @@ export function SupersetWorkspaceShell({
                           onSelectionText={
                             agent.requests.readers.onSelectionText
                           }
+                          followCursorId={follow.position?.cursorId ?? null}
                         />
                       </div>
                       <SupersetChangesPane
@@ -2014,6 +2072,13 @@ export function SupersetWorkspaceShell({
           </main>
         )}
 
+        {follow.position ? (
+          <WorkspaceFollowFrame
+            position={follow.position}
+            onStop={follow.stop}
+          />
+        ) : null}
+
         {/* Share Dialog */}
         <WorkspaceShareDialog
           open={shareOpen}
@@ -2022,7 +2087,7 @@ export function SupersetWorkspaceShell({
           workspaceName={activeWorkspace.name}
           currentUserRole={activeWorkspace.role}
           currentUserId={currentUserId}
-          initialMembers={activeWorkspace.members}
+          initialMembers={realtime.members}
           initialInvite={agent.requests.chat.shareInvite}
         />
 

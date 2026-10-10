@@ -72,6 +72,12 @@ function documentLockKey(
   return `codev:collaboration:${workspaceId}:${worktreeId}:lock:${Buffer.from(path).toString("base64url")}`;
 }
 
+export class DocumentBusyError extends Error {
+  constructor() {
+    super("Document is busy; retry the update.");
+  }
+}
+
 export async function withDocumentLock<T>(
   workspaceId: string,
   worktreeId: string,
@@ -82,7 +88,7 @@ export async function withDocumentLock<T>(
   const token = randomUUID();
   const client = redisClient();
   const acquired = await client.set(key, token, "PX", LOCK_TTL_MS, "NX");
-  if (!acquired) throw new Error("Document is busy; retry the update.");
+  if (!acquired) throw new DocumentBusyError();
   try {
     return await callback();
   } finally {

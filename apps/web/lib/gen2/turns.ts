@@ -14,7 +14,11 @@ import { logEvent } from "../platform/observability";
 import { appendGen2ChatMessage } from "./chats";
 import { settleGen2Turn } from "./turn-reducer";
 import type { SupersetAgentPollChunk } from "./superset-agent-orchestrator-client";
-import { reconcileGen2CollaborationPaths } from "./collaboration-events";
+import {
+  announceGen2TurnStarted,
+  broadcastGen2TurnPolls,
+  type Gen2TurnPoll,
+} from "./turn-broadcast";
 
 /**
  * Server-side accumulation of a running Codex turn.
@@ -99,6 +103,7 @@ export async function createGen2Turn(input: {
     .insert(schema.gen2AgentTurns)
     .values(input)
     .onConflictDoNothing();
+  await announceGen2TurnStarted(input);
 }
 
 /**
@@ -148,12 +153,20 @@ export async function recordGen2SupersetRunOutput(input: {
       ? capTurnOutput(latest[latest.length - 1]!.data)
       : turn.output;
 
+    const poll = (message: Gen2TurnPoll["message"]): Gen2TurnPoll => ({
+      turn,
+      output,
+      exited: input.exited,
+      exitCode: input.exitCode,
+      message,
+    });
     if (!input.exited) {
       if (output === turn.output) return null;
       await database
         .update(schema.gen2AgentTurns)
         .set({ output, updatedAt: new Date() })
         .where(eq(schema.gen2AgentTurns.sessionId, input.sessionId));
+      await broadcastGen2TurnPolls([poll(null)]);
       return null;
     }
 
@@ -175,25 +188,10 @@ export async function recordGen2SupersetRunOutput(input: {
     if (!claimed) return null;
 
     const state = settleTurn(turn, output, input.exitCode);
-    const changedPaths = state.items.flatMap((item) =>
-      item.kind === "fileChange"
-        ? item.changes.map((change) => change.path)
-        : [],
-    );
-    if (changedPaths.length > 0) {
-      await reconcileGen2CollaborationPaths({
-        workspaceId: turn.workspaceId,
-        userId: turn.userId,
-        paths: changedPaths,
-      }).catch((error) => {
-        logEvent("error", "gen2.collaboration.reconcile_failed", {
-          detail: error instanceof Error ? error.message : "unknown",
-        });
-      });
-    }
     const body = state.reply || state.error || "";
     const message = body
       ? await appendGen2ChatMessage({
+          workspaceId: turn.workspaceId,
           chatId: turn.chatId,
           role: "assistant",
           body,
@@ -206,6 +204,8 @@ export async function recordGen2SupersetRunOutput(input: {
         .set({ replyMessageId: message.id })
         .where(eq(schema.gen2AgentTurns.sessionId, input.sessionId));
     }
+    // Reconciles the files it changed and tells members the turn ended.
+    await broadcastGen2TurnPolls([poll(message)]);
     return message ? { reply: message.body, messageId: message.id } : null;
   } catch (error) {
     logEvent("error", "gen2.turn.record_failed", {

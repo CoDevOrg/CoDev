@@ -374,6 +374,73 @@ describe("collaboration contracts", () => {
       }).type,
     ).toBe("conflict");
   });
+
+  it("carries focus, presence, and workspace events without client identities", () => {
+    expect(
+      collaborationClientMessageSchema.parse({
+        type: "focus",
+        worktreeId: "main",
+        path: null,
+        view: "chat",
+        chatId: id,
+        away: false,
+      }).type,
+    ).toBe("focus");
+    expect(() =>
+      collaborationClientMessageSchema.parse({
+        type: "typing",
+        chatId: id,
+        userId: id,
+      }),
+    ).toThrow();
+
+    const presence = collaborationServerMessageSchema.parse({
+      type: "presence",
+      members: [
+        {
+          connectionId: "c1",
+          user: { id, login: "octo", name: null, avatarUrl: null },
+          path: null,
+          lastSeenAt: "2026-07-28T12:00:00.000Z",
+        },
+      ],
+    });
+    expect(presence).toMatchObject({
+      members: [{ agent: null, view: null, away: false, cursor: null }],
+    });
+
+    expect(
+      collaborationServerMessageSchema.parse({
+        type: "event",
+        streamId: "1-0",
+        at: "2026-07-28T12:00:00.000Z",
+        event: {
+          kind: "files.changed",
+          worktreeId: "main",
+          paths: ["src/index.ts"],
+          truncated: false,
+          actor: {
+            kind: "agent",
+            sessionId: "s1",
+            provider: "claude",
+            ownerUserId: id,
+            chatId: id,
+          },
+        },
+      }).type,
+    ).toBe("event");
+    expect(() =>
+      collaborationServerMessageSchema.parse({
+        type: "event",
+        streamId: "1-0",
+        at: "2026-07-28T12:00:00.000Z",
+        event: {
+          kind: "members.changed",
+          members: [{ userId: id, login: "o", name: null, role: "boss" }],
+        },
+      }),
+    ).toThrow();
+  });
 });
 
 describe("agent coordination contracts", () => {

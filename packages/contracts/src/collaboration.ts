@@ -1,6 +1,12 @@
 import { z } from "zod";
 
 import { identifierSchema, timestampSchema } from "./domain";
+import {
+  gen2RealtimeActorSchema,
+  gen2RealtimeEventSchema,
+  gen2WorkspaceViewSchema,
+} from "./collaboration-events";
+import { gen2AgentProviderSchema } from "./gen2-identifiers";
 
 export const collaborationPathSchema = z
   .string()
@@ -52,6 +58,7 @@ const joinMessageSchema = z
 const subscribeMessageSchema = z
   .object({
     type: z.literal("subscribe"),
+    worktreeId: collaborationWorktreeIdSchema.optional(),
     path: collaborationPathSchema,
     stateVector: yjsUpdateBase64Schema.optional(),
   })
@@ -60,6 +67,7 @@ const subscribeMessageSchema = z
 const updateMessageSchema = z
   .object({
     type: z.literal("update"),
+    worktreeId: collaborationWorktreeIdSchema.optional(),
     path: collaborationPathSchema,
     update: yjsUpdateBase64Schema,
   })
@@ -68,8 +76,36 @@ const updateMessageSchema = z
 const awarenessMessageSchema = z
   .object({
     type: z.literal("awareness"),
+    worktreeId: collaborationWorktreeIdSchema.optional(),
     path: collaborationPathSchema,
     update: yjsUpdateBase64Schema,
+  })
+  .strict();
+
+const unsubscribeMessageSchema = z
+  .object({
+    type: z.literal("unsubscribe"),
+    worktreeId: collaborationWorktreeIdSchema.optional(),
+    path: collaborationPathSchema,
+  })
+  .strict();
+
+/** Where a member is in the workspace; drives presence and follow mode. */
+const focusMessageSchema = z
+  .object({
+    type: z.literal("focus"),
+    worktreeId: collaborationWorktreeIdSchema,
+    path: collaborationPathSchema.nullable(),
+    view: gen2WorkspaceViewSchema,
+    chatId: identifierSchema.nullable(),
+    away: z.boolean(),
+  })
+  .strict();
+
+const typingMessageSchema = z
+  .object({
+    type: z.literal("typing"),
+    chatId: identifierSchema,
   })
   .strict();
 
@@ -85,6 +121,9 @@ export const collaborationClientMessageSchema = z.discriminatedUnion("type", [
   updateMessageSchema,
   awarenessMessageSchema,
   heartbeatMessageSchema,
+  unsubscribeMessageSchema,
+  focusMessageSchema,
+  typingMessageSchema,
 ]);
 
 const welcomeMessageSchema = z.object({
@@ -120,6 +159,14 @@ const serverAwarenessMessageSchema = awarenessMessageSchema.extend({
   streamId: z.string().min(1),
 });
 
+const presenceAgentSchema = z
+  .object({
+    sessionId: z.string().min(1).max(200),
+    provider: gen2AgentProviderSchema,
+    chatId: identifierSchema,
+  })
+  .strict();
+
 export const collaborationPresenceEntrySchema = z.object({
   connectionId: z.string().min(1),
   user: collaborationUserSchema,
@@ -133,6 +180,11 @@ export const collaborationPresenceEntrySchema = z.object({
     .nullable()
     .default(null),
   worktreeId: collaborationWorktreeIdSchema.nullable().default(null),
+  /** Set for a running agent; `user` is then the member who started it. */
+  agent: presenceAgentSchema.nullable().default(null),
+  view: gen2WorkspaceViewSchema.nullable().default(null),
+  chatId: identifierSchema.nullable().default(null),
+  away: z.boolean().default(false),
   lastSeenAt: timestampSchema,
 });
 
@@ -148,6 +200,23 @@ const reconciledMessageSchema = z.object({
   revision: z.string().min(1),
   source: z.enum(["collaboration", "filesystem"]),
   update: yjsUpdateBase64Schema.optional(),
+  /** Who changed the file, so editors can animate an agent's edit. */
+  actor: gen2RealtimeActorSchema.optional(),
+  /** The changed span in the new document text. */
+  range: z
+    .object({
+      from: z.number().int().nonnegative(),
+      to: z.number().int().nonnegative(),
+    })
+    .strict()
+    .optional(),
+});
+
+const eventMessageSchema = z.object({
+  type: z.literal("event"),
+  event: gen2RealtimeEventSchema,
+  streamId: z.string().min(1),
+  at: timestampSchema,
 });
 
 const conflictMessageSchema = z.object({
@@ -185,6 +254,7 @@ export const collaborationServerMessageSchema = z.discriminatedUnion("type", [
   reconciledMessageSchema,
   conflictMessageSchema,
   errorMessageSchema,
+  eventMessageSchema,
 ]);
 
 export type CollaborationClientMessage = z.infer<

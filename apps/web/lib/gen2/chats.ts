@@ -4,21 +4,24 @@ import { and, count, desc, eq, inArray, isNull } from "drizzle-orm";
 
 import {
   gen2ChatDetailSchema,
-  gen2ChatMessageSchema,
   gen2ChatSchema,
   type Gen2AgentProviderName,
   type Gen2Chat,
   type Gen2ChatDetail,
-  type Gen2ChatMessage,
-  type Gen2TurnItem,
 } from "@codev/contracts";
 import { schema } from "@codev/db";
 
 import { getDatabase } from "../platform/database";
 import { Gen2AccessError } from "./errors";
-import { GEN2_NEW_CHAT_TITLE, gen2ChatTitleFromPrompt } from "./chats-format";
+import { GEN2_NEW_CHAT_TITLE } from "./chats-format";
 import { requireGen2Member } from "./workspaces";
+import {
+  appendGen2ChatMessage,
+  toGen2ChatMessage as toMessage,
+} from "./chat-append";
+import { publishGen2WorkspaceEvent } from "./workspace-events";
 
+export { appendGen2ChatMessage } from "./chat-append";
 export {
   formatGen2TurnPrompt,
   GEN2_NEW_CHAT_TITLE,
@@ -44,26 +47,6 @@ function toChat(row: {
     createdAt: toIso(row.createdAt),
     updatedAt: toIso(row.updatedAt),
     messageCount: row.messageCount ?? undefined,
-  });
-}
-
-function toMessage(row: {
-  id: string;
-  role: string;
-  body: string;
-  items?: unknown;
-  createdAt: Date;
-}): Gen2ChatMessage {
-  return gen2ChatMessageSchema.parse({
-    id: row.id,
-    role: row.role,
-    body: row.body,
-    // Replies saved before activity cards existed have no items; a shape we
-    // no longer recognise is dropped rather than failing the whole thread.
-    items:
-      gen2ChatMessageSchema.shape.items.safeParse(row.items ?? null).data ??
-      null,
-    createdAt: toIso(row.createdAt),
   });
 }
 
@@ -124,7 +107,9 @@ export async function createGen2Chat(
   if (!created) {
     throw new Gen2AccessError("Couldn't create a chat.", 500);
   }
-  return toChat(created);
+  const chat = toChat(created);
+  await publishGen2WorkspaceEvent(workspaceId, { kind: "chat.created", chat });
+  return chat;
 }
 
 export async function renameGen2Chat(
@@ -148,7 +133,9 @@ export async function renameGen2Chat(
   if (!updated) {
     throw new Gen2AccessError("Chat not found.");
   }
-  return toChat(updated);
+  const chat = toChat(updated);
+  await publishGen2WorkspaceEvent(workspaceId, { kind: "chat.updated", chat });
+  return chat;
 }
 
 /**
@@ -197,6 +184,7 @@ export async function listGen2ChatMessages(chatId: string) {
       role: schema.gen2ChatMessages.role,
       body: schema.gen2ChatMessages.body,
       items: schema.gen2ChatMessages.items,
+      authorUserId: schema.gen2ChatMessages.authorUserId,
       createdAt: schema.gen2ChatMessages.createdAt,
     })
     .from(schema.gen2ChatMessages)
@@ -263,80 +251,9 @@ export async function saveGen2AssistantReply(input: {
     return last;
   }
   return appendGen2ChatMessage({
+    workspaceId: input.workspaceId,
     chatId: input.chatId,
     role: "assistant",
     body,
   });
-}
-
-type ChatTransaction = Parameters<
-  Parameters<ReturnType<typeof getDatabase>["transaction"]>[0]
->[0];
-
-export async function appendGen2ChatMessage(
-  input: {
-    chatId: string;
-    role: "user" | "assistant";
-    body: string;
-    items?: Gen2TurnItem[];
-  },
-  existingTransaction?: ChatTransaction,
-) {
-  const body = input.body.trim();
-  if (!body) {
-    return null;
-  }
-  const save = async (transaction: ChatTransaction) => {
-    if (input.role === "assistant") {
-      const existing = await transaction
-        .select({
-          id: schema.gen2ChatMessages.id,
-          role: schema.gen2ChatMessages.role,
-          body: schema.gen2ChatMessages.body,
-          items: schema.gen2ChatMessages.items,
-          createdAt: schema.gen2ChatMessages.createdAt,
-        })
-        .from(schema.gen2ChatMessages)
-        .where(eq(schema.gen2ChatMessages.chatId, input.chatId))
-        .orderBy(desc(schema.gen2ChatMessages.createdAt))
-        .limit(1);
-      const last = existing[0];
-      if (last && last.role === "assistant" && last.body === body) {
-        return toMessage(last);
-      }
-    }
-    const [created] = await transaction
-      .insert(schema.gen2ChatMessages)
-      .values({
-        chatId: input.chatId,
-        role: input.role,
-        body,
-        items: input.items ?? null,
-      })
-      .returning();
-    if (!created) {
-      throw new Gen2AccessError("Couldn't save that message.", 500);
-    }
-    const patch: { updatedAt: Date; title?: string } = {
-      updatedAt: new Date(),
-    };
-    if (input.role === "user") {
-      const [chat] = await transaction
-        .select({ title: schema.gen2Chats.title })
-        .from(schema.gen2Chats)
-        .where(eq(schema.gen2Chats.id, input.chatId))
-        .limit(1);
-      if (chat?.title === GEN2_NEW_CHAT_TITLE) {
-        patch.title = gen2ChatTitleFromPrompt(body);
-      }
-    }
-    await transaction
-      .update(schema.gen2Chats)
-      .set(patch)
-      .where(eq(schema.gen2Chats.id, input.chatId));
-    return toMessage(created);
-  };
-  return existingTransaction
-    ? save(existingTransaction)
-    : getDatabase().transaction(save);
 }

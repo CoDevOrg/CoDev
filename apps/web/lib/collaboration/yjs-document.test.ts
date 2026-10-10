@@ -45,4 +45,23 @@ describe("shared Yjs document primitives", () => {
 
     expect(doc.getText("content").toString()).toBe("after");
   });
+
+  it("touches only the changed lines and reports their new spans", () => {
+    const doc = new Y.Doc();
+    const text = doc.getText("content");
+    text.insert(0, "a\nb\nc\nd\ne\n");
+    const deletes: number[] = [];
+    text.observe((event) =>
+      event.delta.forEach((op) => op.delete && deletes.push(op.delete)),
+    );
+
+    const ranges = replaceDocumentContents(doc, "a\nB\nc\nd\nE\nf\n");
+
+    expect(text.toString()).toBe("a\nB\nc\nd\nE\nf\n");
+    expect(deletes).toEqual([2, 2]);
+    expect(ranges).toEqual([
+      { from: 2, to: 4 },
+      { from: 8, to: 12 },
+    ]);
+  });
 });

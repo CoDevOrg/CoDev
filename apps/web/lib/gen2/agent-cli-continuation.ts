@@ -43,6 +43,7 @@ async function startOnFallback(
   });
   if (!("sessionId" in started) || !started.sessionId) return null;
   await appendGen2ChatMessage({
+    workspaceId: turn.workspaceId,
     chatId: turn.chatId,
     role: "assistant",
     body: fallbackNote({ provider, from: turn.model, to, requirement }),
@@ -85,6 +86,7 @@ export async function continueOnFallbackModel(
   });
   if (!continued) {
     await appendGen2ChatMessage({
+      workspaceId: turn.workspaceId,
       chatId: turn.chatId,
       role: "assistant",
       body: fallbackNote({

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { and, eq } from "drizzle-orm";
+import type { Gen2ChatMessage } from "@codev/contracts";
 import { schema } from "@codev/db";
 import { getDatabase } from "../platform/database";
 import { logEvent } from "../platform/observability";
@@ -16,7 +17,7 @@ import {
   cliModelRequirement,
   type CliModelRequirement,
 } from "./agent-cli-fallback";
-import { reconcileGen2CollaborationPaths } from "./collaboration-events";
+import { broadcastGen2TurnPolls, type Gen2TurnPoll } from "./turn-broadcast";
 
 type Database = ReturnType<typeof getDatabase>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -56,25 +57,6 @@ async function savePoll(
   return Boolean(saved);
 }
 
-async function reconcilePaths(
-  turn: Turn,
-  state: ReturnType<typeof settleTurn>,
-) {
-  const paths = state.items.flatMap((item) =>
-    item.kind === "fileChange" ? item.changes.map((change) => change.path) : [],
-  );
-  if (!paths.length) return;
-  await reconcileGen2CollaborationPaths({
-    workspaceId: turn.workspaceId,
-    userId: turn.userId,
-    paths,
-  }).catch((error) => {
-    logEvent("error", "gen2.collaboration.reconcile_failed", {
-      detail: error instanceof Error ? error.message : "unknown",
-    });
-  });
-}
-
 async function persistReply(
   database: Database | Transaction,
   turn: Turn,
@@ -83,7 +65,6 @@ async function persistReply(
   transaction?: Transaction,
 ) {
   const state = settleTurn(turn, output, input.exitCode);
-  await reconcilePaths(turn, state);
   // A CLI too old for the model is not the member's failure: after this commits,
   // the poller re-runs the turn on a fallback model and writes the note.
   const cliRequirement = turn.model
@@ -102,13 +83,39 @@ async function persistReply(
     .update(schema.gen2AgentTurns)
     .set({ replyMessageId: message.id })
     .where(eq(schema.gen2AgentTurns.sessionId, input.sessionId));
-  return { reply: message.body, messageId: message.id };
+  return { reply: message.body, messageId: message.id, message };
 }
 
-/** Commit output and its acknowledgement together when the ARM poller supplies a transaction. */
+function turnPoll(
+  turn: Turn,
+  input: Input,
+  output: string,
+  message: Gen2ChatMessage | null,
+): Gen2TurnPoll {
+  return {
+    turn: {
+      workspaceId: turn.workspaceId,
+      chatId: turn.chatId,
+      sessionId: turn.sessionId,
+      userId: turn.userId,
+      provider: turn.provider,
+      worktreeId: turn.worktreeId,
+    },
+    output,
+    exited: input.exited,
+    exitCode: input.exitCode,
+    message,
+  };
+}
+
+/**
+ * Commit output and its acknowledgement together when the ARM poller supplies
+ * a transaction; that poller then broadcasts `sink` after it commits.
+ */
 export async function recordGen2TurnChunks(
   input: Input,
   transaction?: Transaction,
+  sink?: Gen2TurnPoll[],
 ): Promise<{
   reply: string;
   messageId: string | null;
@@ -127,12 +134,16 @@ export async function recordGen2TurnChunks(
       input.chunks,
     );
     const output = capTurnOutput(turn.output + decoded.text);
-    if (
-      !(await savePoll(database, input, output, decoded.pending)) ||
-      !input.exited
-    )
+    if (!(await savePoll(database, input, output, decoded.pending)))
       return null;
-    return await persistReply(database, turn, input, output, transaction);
+    const persisted = input.exited
+      ? await persistReply(database, turn, input, output, transaction)
+      : null;
+    const poll = turnPoll(turn, input, output, persisted?.message ?? null);
+    if (transaction) sink?.push(poll);
+    else await broadcastGen2TurnPolls([poll]);
+    if (!persisted || !("message" in persisted)) return persisted;
+    return { reply: persisted.reply, messageId: persisted.messageId };
   } catch (error) {
     logEvent("error", "gen2.turn.record_failed", {
       detail: error instanceof Error ? error.message : "unknown",

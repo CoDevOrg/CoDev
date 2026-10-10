@@ -31,6 +31,17 @@ import type * as Y from "yjs";
 
 import { gen2LanguageExtension } from "./editor-languages";
 import {
+  applyViewUpdate,
+  isRemoteUpdate,
+  observeSharedText,
+} from "./codemirror-yjs-binding";
+import {
+  remoteCursors as remoteCursorsExtension,
+  setRemoteCursors,
+  type RemoteCursor,
+} from "./codemirror-remote-cursors";
+import { agentTyping } from "./codemirror-agent-typing";
+import {
   supersetEditorTheme,
   supersetHighlighting,
 } from "./superset-editor-theme";
@@ -90,6 +101,8 @@ export function SupersetCodeEditor({
   onSelectionText,
   revealRange,
   onRangeRevealed,
+  remoteCursors,
+  followPosition,
 }: {
   path: string;
   value: string;
@@ -107,6 +120,10 @@ export function SupersetCodeEditor({
   revealRange?: EditorRevealRange | null | undefined;
   /** Called once a range is shown, so its request can be cleared. */
   onRangeRevealed?: ((id: number) => void) | undefined;
+  /** Other members' and agents' cursors in this file. */
+  remoteCursors?: RemoteCursor[] | undefined;
+  /** A followed member's caret: scrolled to, never selected. */
+  followPosition?: number | null | undefined;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -160,6 +177,8 @@ export function SupersetCodeEditor({
           EditorView.editable.of(!readOnly),
           supersetEditorTheme,
           supersetHighlighting,
+          agentTyping,
+          remoteCursorsExtension,
           language.of([]),
           keymap.of([
             {
@@ -190,50 +209,16 @@ export function SupersetCodeEditor({
               onChangeRef.current(update.state.doc.toString());
               return;
             }
-            sharedText.doc?.transact(() => {
-              let offset = 0;
-              update.changes.iterChanges(
-                (fromA, toA, _fromB, _toB, inserted) => {
-                  const from = fromA + offset;
-                  const deleted = toA - fromA;
-                  const insertedText = inserted.toString();
-                  if (deleted > 0) sharedText.delete(from, deleted);
-                  if (insertedText) sharedText.insert(from, insertedText);
-                  offset += insertedText.length - deleted;
-                },
-              );
-            }, "codev-editor");
+            if (!isRemoteUpdate(update)) applyViewUpdate(sharedText, update);
           }),
         ],
       }),
     });
     viewRef.current = view;
 
-    const applySharedChanges = (event: Y.YTextEvent) => {
-      onChangeRef.current(sharedText?.toString() ?? view.state.doc.toString());
-      if (event.transaction.origin === "codev-editor") return;
-      syncingValueRef.current = true;
-      try {
-        let position = 0;
-        for (const delta of event.delta) {
-          if (typeof delta.retain === "number") {
-            position += delta.retain;
-          } else if (typeof delta.delete === "number") {
-            view.dispatch({
-              changes: { from: position, to: position + delta.delete },
-            });
-          } else if (typeof delta.insert === "string") {
-            view.dispatch({
-              changes: { from: position, insert: delta.insert },
-            });
-            position += delta.insert.length;
-          }
-        }
-      } finally {
-        syncingValueRef.current = false;
-      }
-    };
-    if (sharedText) sharedText.observe(applySharedChanges);
+    const unobserve = sharedText
+      ? observeSharedText(view, sharedText, (text) => onChangeRef.current(text))
+      : null;
 
     let cancelled = false;
     void gen2LanguageExtension(path).then((extension) => {
@@ -244,7 +229,7 @@ export function SupersetCodeEditor({
 
     return () => {
       cancelled = true;
-      if (sharedText) sharedText.unobserve(applySharedChanges);
+      unobserve?.();
       viewRef.current = null;
       view.destroy();
     };
@@ -270,6 +255,19 @@ export function SupersetCodeEditor({
     revealLines(view, last.range);
     revealedRef.current = { ...last, view };
   }, [revealRange, path, sharedText]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: setRemoteCursors.of(remoteCursors ?? []),
+    });
+  }, [remoteCursors, path, sharedText]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || followPosition == null) return;
+    const at = Math.min(followPosition, view.state.doc.length);
+    view.dispatch({ effects: EditorView.scrollIntoView(at, { y: "center" }) });
+  }, [followPosition, path, sharedText]);
 
   useEffect(() => {
     const view = viewRef.current;

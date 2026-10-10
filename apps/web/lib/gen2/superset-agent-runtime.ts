@@ -905,6 +905,8 @@ export async function startGen2SupersetAgentTurn(input: {
     (async () => {
       try {
         await appendGen2ChatMessage({
+          workspaceId: input.workspaceId,
+          authorUserId: input.userId,
           chatId: input.chatId,
           role: "user",
           body: input.prompt,

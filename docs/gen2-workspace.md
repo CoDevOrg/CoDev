@@ -80,20 +80,51 @@ rail and has three tabs: Files (tree + editor), Terminal, and Git. It is
 modelled on an agent UI, not an IDE: the chat is where the work is directed,
 and the workbench is how you watch and intervene.
 
-### Shared editor (implemented, pending two-member verification)
+### Shared editor and live multiplayer (implemented, pending two-member verification)
 
-The open Superset-style file editor now uses a CoDev-backed Yjs document rather
-than browser polling for filesystem changes. A Gen 2-scoped authenticated
-WebSocket carries document updates, awareness/presence, reconnects, and
-conflicts. CodeMirror binds directly to the document; the editor shows shared,
-syncing, and conflict state.
+Each workspace tab keeps **one** authenticated collaboration WebSocket. It
+carries Yjs document updates for every open file (`subscribe` /
+`unsubscribe`), awareness (cursors), presence, and workspace events. The tab
+reports where its member is with `focus` (worktree, area, file, chat, away),
+which drives the top-bar avatar stack, file-tree dots and follow mode.
 
 Filesystem writes remain explicit, revision-checked saves. The Yjs snapshot is
 recoverability and collaboration state, not a replacement durable filesystem.
-When Codex reports that it changed an open file at turn completion, CoDev
-reconciles the shared document with the saved file; a concurrent member edit
-becomes a visible non-destructive conflict. Remote cursor decorations and
-richer member presence remain follow-up work.
+A reconcile replaces only the changed lines, so collaborators' cursors survive
+it. A concurrent member edit still becomes a visible non-destructive conflict.
+
+Agents are visible while they work. Each poll of a turn
+(`lib/gen2/turn-broadcast.ts`) finds files the agent newly reported changing,
+reconciles any that are open **in the turn's worktree**, and places the
+agent's presence (and labelled, dashed cursor) at its latest edit. Editors
+type an agent's edit out (up to 2,000 characters in three hunks; larger edits
+and reduced motion show at once with a flash). The document is final
+immediately; only the display animates.
+
+### Realtime fan-out
+
+Workspace events (`lib/gen2/workspace-events.ts`) go through the room's Redis
+stream, so every instance delivers them. They are published after the change
+commits and never fail it:
+
+| Event                                                             | Published by                          |
+| ----------------------------------------------------------------- | ------------------------------------- |
+| `chat.created`, `chat.updated`, `chat.message`                    | `chats.ts`, `chat-append.ts`          |
+| `turn.started`, `turn.progress` (≤1/s, compacted), `turn.settled` | `turns.ts`, `turn-broadcast.ts`       |
+| `files.changed` (user or agent actor)                             | `superset.ts`, `turn-file-sync.ts`    |
+| `worktrees.changed`, `members.changed` (no emails)                | `superset.ts`, `workspaces.ts`        |
+| `typing`                                                          | the socket, editors only, ≤1 per 1.5s |
+
+Every delivery revalidates membership, in one query per broadcast. Presence
+changes add an internal `presence.sync` stream entry so other instances
+re-read it. Events are capped at 64 KB; a longer message is pushed as a
+pointer the client refetches. Events are not replayed: after a reconnect the
+client reloads chats, the thread, files and changes.
+
+A turn's output is only recorded while something polls it. If the tab that
+started a turn goes quiet for 15 s, the lowest-numbered visible editor tab
+calls `POST /agent/drive`, which polls as the turn's owner (as the ARM cron
+does), so the reply and agent edits still reach everyone.
 
 ## The guest serialises some calls behind a running turn
 
@@ -160,14 +191,12 @@ Concurrent agents: native turns (every Cursor turn, and Codex or Claude when
 (`start_codex_exec` waits on `codex_busy`). Superset agent sessions, on in
 production, run Codex and Claude concurrently, each in its own worktree.
 
-Not yet built here: Git staging and commit from the UI, and realtime fan-out
-between members. Agent commands are prompt-level modes; native CLI plan/goal
+Not yet built here: Git staging and commit from the UI. Agent commands are prompt-level modes; native CLI plan/goal
 flags would need the Superset argv allowlist, an image release and
 `agent-cli-compat.test.ts` cases. The feature-flagged
 `/superset` page supports nested file/folder creation, rename, and permanent
-delete through the Superset host filesystem service; that page is separate from
-the shared CodeMirror/Yjs editor and two people using it still see each other's
-writes only on refresh.
+delete through the Superset host filesystem service; each change refreshes
+other members' file trees through a `files.changed` event.
 
 The Superset host artifact and private guest bridge are real guest-side reuse,
 not a browser mock. Future Superset work must extend that host service to

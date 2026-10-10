@@ -1,12 +1,14 @@
 import "server-only";
 
 import { schema } from "@codev/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import * as Y from "yjs";
 
 import {
   classifyFilesystemReconciliation,
+  decodeBase64,
   docFromUpdate,
+  encodeBase64,
   encodedDocument,
   replaceDocumentContents,
 } from "../collaboration/yjs-document";
@@ -26,35 +28,46 @@ export interface Gen2DocumentSnapshot {
   conflictFilesystemRevision: string | null;
 }
 
+const snapshotColumns = {
+  workspaceId: schema.gen2YjsDocuments.workspaceId,
+  worktreeId: schema.gen2YjsDocuments.worktreeId,
+  path: schema.gen2YjsDocuments.path,
+  revision: schema.gen2YjsDocuments.revision,
+  update: schema.gen2YjsDocuments.update,
+  stateVector: schema.gen2YjsDocuments.stateVector,
+  filesystemContents: schema.gen2YjsDocuments.filesystemContents,
+  filesystemRevision: schema.gen2YjsDocuments.filesystemRevision,
+  hasConflict: schema.gen2YjsDocuments.hasConflict,
+  conflictFilesystemRevision:
+    schema.gen2YjsDocuments.conflictFilesystemRevision,
+};
+
 export async function loadGen2Document(
   workspaceId: string,
   worktreeId: string,
   path: string,
 ): Promise<Gen2DocumentSnapshot | null> {
-  const [snapshot] = await getDatabase()
-    .select({
-      workspaceId: schema.gen2YjsDocuments.workspaceId,
-      worktreeId: schema.gen2YjsDocuments.worktreeId,
-      path: schema.gen2YjsDocuments.path,
-      revision: schema.gen2YjsDocuments.revision,
-      update: schema.gen2YjsDocuments.update,
-      stateVector: schema.gen2YjsDocuments.stateVector,
-      filesystemContents: schema.gen2YjsDocuments.filesystemContents,
-      filesystemRevision: schema.gen2YjsDocuments.filesystemRevision,
-      hasConflict: schema.gen2YjsDocuments.hasConflict,
-      conflictFilesystemRevision:
-        schema.gen2YjsDocuments.conflictFilesystemRevision,
-    })
+  const [snapshot] = await loadGen2Documents(workspaceId, worktreeId, [path]);
+  return snapshot ?? null;
+}
+
+/** The shared documents that exist for `paths`, in one query. */
+export async function loadGen2Documents(
+  workspaceId: string,
+  worktreeId: string,
+  paths: string[],
+): Promise<Gen2DocumentSnapshot[]> {
+  if (!paths.length) return [];
+  return getDatabase()
+    .select(snapshotColumns)
     .from(schema.gen2YjsDocuments)
     .where(
       and(
         eq(schema.gen2YjsDocuments.workspaceId, workspaceId),
         eq(schema.gen2YjsDocuments.worktreeId, worktreeId),
-        eq(schema.gen2YjsDocuments.path, path),
+        inArray(schema.gen2YjsDocuments.path, [...new Set(paths)]),
       ),
-    )
-    .limit(1);
-  return snapshot ?? null;
+    );
 }
 
 export async function saveGen2Document(
@@ -197,7 +210,8 @@ export async function reconcileGen2Document(
     };
   }
 
-  replaceDocumentContents(doc, file.contents);
+  const ranges = replaceDocumentContents(doc, file.contents);
+  const delta = Y.encodeStateAsUpdate(doc, decodeBase64(snapshot.stateVector));
   const reconciled: Gen2DocumentSnapshot = {
     ...snapshot,
     ...encodedDocument(doc),
@@ -214,7 +228,11 @@ export async function reconcileGen2Document(
       type: "reconciled" as const,
       path: snapshot.path,
       revision: file.revision,
-      update: reconciled.update,
+      // Only what changed: clients already hold the previous state.
+      update: encodeBase64(delta),
+      range: ranges.length
+        ? { from: ranges[0]!.from, to: ranges[ranges.length - 1]!.to }
+        : undefined,
     },
   };
 }

@@ -13,6 +13,8 @@ import {
   useGoalContinuation,
 } from "./use-goal-continuation";
 import { useWorkspaceActionDispatch } from "./use-workspace-action-dispatch";
+import { useObservedTurns } from "./use-observed-turns";
+import { useTurnDriveElection } from "./use-turn-drive-election";
 import { useWorkspaceAgent } from "./workspace-controller";
 
 export type ChatPanelInput = Omit<
@@ -95,6 +97,14 @@ export function useChatPanel(props: ChatPanelInput) {
     chatId,
     live,
   });
+  // Other members' turns: shown read-only, and kept moving if their tab left.
+  const observedTurns = useObservedTurns(turn.live?.sessionId ?? null);
+  useTurnDriveElection({
+    workspaceId: workspace.id,
+    canEdit,
+    turns: observedTurns,
+  });
+  const observedTurn = chatId ? (observedTurns.get(chatId) ?? null) : null;
 
   function onSettled(outcome: ChatTurnOutcome) {
     // A queued follow-up goes first; Keep going waits for the next settle.
@@ -120,6 +130,7 @@ export function useChatPanel(props: ChatPanelInput) {
     continuation,
     dispatch,
     ownsTurn,
+    observedTurn,
     sendText,
   };
 }

@@ -36,6 +36,7 @@ describe("goal control", () => {
     });
     expect(mocks.requireChat).toHaveBeenCalledWith(workspaceId, chatId);
     expect(mocks.append).toHaveBeenCalledWith({
+      workspaceId,
       chatId,
       role: "user",
       body: "/goal done",
