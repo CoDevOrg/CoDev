@@ -42,6 +42,10 @@ const values = {
   CODEV_SUPERSET_CURSOR_AGENTS_ENABLED:
     process.env.CODEV_SUPERSET_CURSOR_AGENTS_ENABLED ??
     base.CODEV_SUPERSET_CURSOR_AGENTS_ENABLED,
+  // Browser previews stay off until both the zone and its Cloudflare id are set.
+  CODEV_PREVIEW_ZONE: process.env.CODEV_PREVIEW_ZONE ?? base.CODEV_PREVIEW_ZONE,
+  CODEV_PREVIEW_ZONE_ID:
+    process.env.CODEV_PREVIEW_ZONE_ID ?? base.CODEV_PREVIEW_ZONE_ID,
   // A non-secret repository variable promotes images without rewriting the
   // write-only ARM credential bundle; the bundle's pin is the fallback.
   ...(process.env.ARM_WORKSPACE_IMAGE_VERSION_ID && {

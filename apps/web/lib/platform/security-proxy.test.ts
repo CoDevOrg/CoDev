@@ -141,3 +141,17 @@ it.each([undefined, "https://runtime.trycodev.com"])(
     expect(response.headers.get("x-frame-options")).toBe("DENY");
   },
 );
+
+it("passes only a valid preview zone into the frame policy", async () => {
+  const policy = async () =>
+    (
+      await proxy(new NextRequest("https://www.trycodev.com/gen2/w"), event)
+    ).headers.get("content-security-policy");
+  vi.stubEnv("CODEV_PREVIEW_ZONE_ID", "0123456789abcdef0123456789abcdef");
+  vi.stubEnv("CODEV_PREVIEW_ZONE", "codev-preview.dev");
+  expect(await policy()).toContain(
+    "frame-src 'self' https://*.codev-preview.dev",
+  );
+  vi.stubEnv("CODEV_PREVIEW_ZONE", "previews.trycodev.com");
+  expect(await policy()).not.toContain("frame-src");
+});

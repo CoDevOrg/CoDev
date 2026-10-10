@@ -6,6 +6,7 @@ import {
   CONNECTION_PROBE_MS,
   CONNECTION_RETRY_MS,
   CONNECTION_TIMEOUT_MS,
+  WORKSPACE_ACTIVITY_EVENT,
 } from "./use-workspace-connection";
 
 const mocks = vi.hoisted(() => ({ connect: vi.fn() }));
@@ -158,6 +159,16 @@ describe("workspace connection", () => {
     });
     expect(vi.mocked(fetch).mock.lastCall?.[1]?.method).toBe("POST");
     editor.remove();
+  });
+
+  it("counts input inside a focused preview frame, which reports itself", async () => {
+    renderHook(() => useWorkspaceConnection("w", true, vi.fn()));
+    await flush();
+    act(() => window.dispatchEvent(new Event(WORKSPACE_ACTIVITY_EVENT)));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(CONNECTION_CHECK_MS);
+    });
+    expect(vi.mocked(fetch).mock.lastCall?.[1]?.method).toBe("POST");
   });
 
   it("keeps an active workspace open through one failed health check", async () => {
