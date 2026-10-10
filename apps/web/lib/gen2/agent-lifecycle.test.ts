@@ -36,6 +36,11 @@ vi.mock("../billing/gate", () => ({
   requireWorkspaceOwnerPlan: async () => undefined,
 }));
 
+const duplicates = vi.hoisted(() => ({ find: vi.fn() }));
+vi.mock("./duplicate-task-check", () => ({
+  findPossibleDuplicateTask: (...args: unknown[]) => duplicates.find(...args),
+}));
+
 const mocks = vi.hoisted(() => ({
   requireMember: vi.fn(),
   requireChat: vi.fn(),
@@ -142,6 +147,27 @@ const turn = {
   prompt: "List the files",
   idempotencyKey: "turn-1234",
 };
+
+const workspaceContext = {
+  view: { mode: "ide", inspector: null, terminalOpen: false, narrow: false },
+  worktree: {
+    id: "main",
+    branch: "main",
+    changedFiles: 0,
+    unsavedEdits: false,
+  },
+  worktrees: [],
+  openFile: null,
+  preview: null,
+  listeningPorts: null,
+  members: [{ login: "octocat", role: "owner" }],
+  agents: [],
+  excerpts: [],
+  previewEnabled: false,
+};
+
+const launchedPrompt = () =>
+  (mocks.start.mock.calls.at(-1)?.[1] as { command: string[] }).command.at(-1);
 
 describe("gen2 Codex agent", () => {
   beforeEach(() => {
@@ -651,6 +677,120 @@ describe("gen2 Codex agent", () => {
         sessionId: "codex-1-1",
       });
       expect(mocks.close).toHaveBeenCalledWith(workspaceId, "codex-1-1");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("records `/goal done` without checking models or running an agent", async () => {
+    mocks.listMessages.mockResolvedValue([
+      { role: "user", body: "/goal Ship the parser" },
+      { role: "assistant", body: "Working on it." },
+    ]);
+    await expect(
+      startGen2AgentTurn({ ...turn, prompt: "/goal done" }),
+    ).resolves.toEqual({
+      goal: { text: "Ship the parser", status: "achieved", summary: null },
+    });
+    expect(mocks.appendMessage).toHaveBeenCalledWith({
+      chatId,
+      role: "user",
+      body: "/goal done",
+    });
+    expect(fallback.avoid).not.toHaveBeenCalled();
+    expect(mocks.resolveCredential).not.toHaveBeenCalled();
+    expect(mocks.start).not.toHaveBeenCalled();
+    expect(superset.start).not.toHaveBeenCalled();
+    expect(mocks.createTurn).not.toHaveBeenCalled();
+  });
+
+  it("refuses a viewer's goal change before touching the chat", async () => {
+    mocks.requireMember.mockResolvedValue({ status: "ready", role: "viewer" });
+    await expect(
+      startGen2AgentTurn({ ...turn, prompt: "/goal clear" }),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(mocks.appendMessage).not.toHaveBeenCalled();
+  });
+
+  it("sets no goal when a `/goal` turn stops at a duplicate warning", async () => {
+    duplicates.find.mockResolvedValue({ runId: "run-1", chatTitle: "Other" });
+    await expect(
+      startGen2AgentTurn({ ...turn, prompt: "/goal Ship the parser" }),
+    ).resolves.toEqual({
+      possibleDuplicate: { runId: "run-1", chatTitle: "Other" },
+    });
+    // The goal is read from the persisted prompt, so nothing was written.
+    expect(mocks.appendMessage).not.toHaveBeenCalled();
+    expect(mocks.start).not.toHaveBeenCalled();
+  });
+
+  it("gives a turn with the member's view the action protocol and its nonce", async () => {
+    const result = await startGen2AgentTurn({ ...turn, workspaceContext });
+    expect(result).toMatchObject({
+      sessionId: "session-1",
+      actionNonce: expect.stringMatching(/^[a-z0-9]{10}$/),
+    });
+    const prompt = launchedPrompt();
+    const { actionNonce } = result as { actionNonce: string };
+    expect(prompt).toContain(`\`\`\`codev-action ${actionNonce}`);
+    expect(prompt).toContain("- Member role: owner");
+    // The member's words stay last, after the marker the fake guest reads.
+    expect(prompt?.endsWith("Current request:\nList the files")).toBe(true);
+  });
+
+  it("starts a turn whose view does not parse, without actions", async () => {
+    const result = await startGen2AgentTurn({
+      ...turn,
+      workspaceContext: { ...workspaceContext, members: "everyone" },
+    });
+    expect(result).toEqual({ sessionId: "session-1" });
+    expect(launchedPrompt()).not.toContain("codev-action");
+  });
+
+  it("re-runs a continuation with its mode but without the protocol", async () => {
+    const result = await startGen2AgentTurn({
+      ...turn,
+      prompt: "/plan Add caching",
+      model: "sonnet",
+      workspaceContext,
+      continuation: { history: [{ role: "user", body: "earlier" }] },
+    });
+    expect(result).toEqual({ sessionId: "session-1" });
+    const prompt = launchedPrompt();
+    expect(prompt).toContain("Mode: plan.");
+    expect(prompt).not.toContain("codev-action");
+    expect(prompt).not.toContain("Workspace view");
+  });
+
+  it("hands the Superset path the context, history and nonce it built", async () => {
+    vi.stubEnv("CODEV_SUPERSET_AGENT_SESSIONS_ENABLED", "true");
+    superset.start.mockImplementation(
+      async (input: { actionNonce?: string }) => ({
+        sessionId: "run-1",
+        agentSessionId: "session-1",
+        actionNonce: input.actionNonce,
+      }),
+    );
+    try {
+      const result = await startGen2AgentTurn({
+        ...turn,
+        prompt: "/review",
+        workspaceContext,
+      });
+      const input = superset.start.mock.calls[0]?.[0] as {
+        context: string;
+        actionNonce: string;
+        history: unknown[];
+        verified: boolean;
+      };
+      expect(input.verified).toBe(true);
+      expect(input.history).toEqual([]);
+      expect(input.actionNonce).toMatch(/^[a-z0-9]{10}$/);
+      expect(input.context).toContain(`codev-action ${input.actionNonce}`);
+      expect(input.context).toContain("Mode: review.");
+      expect(result).toMatchObject({ actionNonce: input.actionNonce });
+      expect(mocks.listMessages).toHaveBeenCalledTimes(1);
+      expect(mocks.start).not.toHaveBeenCalled();
     } finally {
       vi.unstubAllEnvs();
     }

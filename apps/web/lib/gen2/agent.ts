@@ -31,6 +31,12 @@ import {
   requireGen2Chat,
 } from "./chats";
 import { buildGen2AgentCommand } from "./agent-command";
+import { applyGen2GoalControl } from "./agent-goal-control";
+import {
+  buildGen2TurnContext,
+  type Gen2TurnHistory,
+} from "./agent-turn-context";
+import { parseGen2PromptCommand } from "./prompt-command";
 import {
   createGen2Turn,
   getGen2TurnProvider,
@@ -81,10 +87,10 @@ export async function startGen2AgentTurn(input: {
   worktreeId?: string | undefined;
   model?: string | undefined;
   acknowledgedDuplicateOf?: string | undefined;
+  /** What the member sees; parsed leniently, never persisted or trusted. */
+  workspaceContext?: unknown;
   /** A re-run of the latest prompt on a fallback model, with its history. */
-  continuation?: {
-    history: Array<{ role: "user" | "assistant"; body: string }>;
-  };
+  continuation?: { history: Gen2TurnHistory };
 }) {
   const membership = await requireReadyMember(input.workspaceId, input.userId);
   if (membership.role === "viewer")
@@ -92,15 +98,19 @@ export async function startGen2AgentTurn(input: {
       "Edit permission is required to run agents.",
       403,
     );
+  if (!input.continuation && parseGen2PromptCommand(input.prompt).goalControl)
+    return applyGen2GoalControl(input);
   // Every database trip crosses the country, so independent checks run
-  // together instead of one after another.
-  const [, possibleDuplicate, models] = await Promise.all([
+  // together instead of one after another. The history is used only once the
+  // chat is known to be in this workspace.
+  const [, possibleDuplicate, models, history] = await Promise.all([
     requireWorkspaceOwnerPlan(input.workspaceId),
     requireGen2Chat(input.workspaceId, input.chatId).then(async () => {
       await claimGen2ChatProvider(input.chatId, input.provider);
       return input.continuation ? null : findPossibleDuplicateTask(input);
     }),
     loadGen2AgentModels(input.provider, input.userId),
+    input.continuation?.history ?? listGen2ChatMessages(input.chatId),
   ]);
   if (
     possibleDuplicate &&
@@ -117,15 +127,33 @@ export async function startGen2AgentTurn(input: {
     : await avoidBlockedCliModel(input.provider, requested, models);
   if (!model) throw new Gen2LifecycleError(fallbackNote!, 409);
 
+  // A fallback re-run rebuilds its mode, goal and mentions from the persisted
+  // prompt; the member's view and the action protocol belong to the original.
+  const context = await buildGen2TurnContext({
+    workspaceId: input.workspaceId,
+    chatId: input.chatId,
+    prompt: input.prompt,
+    role: membership.role,
+    history,
+    workspaceContext: input.continuation ? undefined : input.workspaceContext,
+    includeProtocol: !input.continuation,
+  });
+  const actionNonce = context.actionNonce ?? undefined;
+
   if (
     isGen2SupersetAgentSessionsEnabled() &&
     (input.provider !== "cursor" || isGen2SupersetCursorAgentsEnabled())
   ) {
-    return startGen2AgentTurnViaSuperset({ ...input, model, verified: true });
+    return startGen2AgentTurnViaSuperset({
+      ...input,
+      model,
+      verified: true,
+      history,
+      context: context.blocks,
+      actionNonce,
+    });
   }
 
-  const history =
-    input.continuation?.history ?? (await listGen2ChatMessages(input.chatId));
   const provider = input.provider;
   const credential = await resolveGen2Credential(input.userId, provider);
 
@@ -149,7 +177,13 @@ export async function startGen2AgentTurn(input: {
       throw new Gen2LifecycleError(describeSeatHolder(claim.holder), 409);
     }
   }
-  const command = buildGen2AgentCommand(provider, input.prompt, history, model);
+  const command = buildGen2AgentCommand(
+    provider,
+    input.prompt,
+    history,
+    model,
+    context.blocks,
+  );
   const execInput = {
     ...(isGen2AgentCoordinationEnabled(input.workspaceId)
       ? {
@@ -224,6 +258,7 @@ export async function startGen2AgentTurn(input: {
     }
     return {
       sessionId,
+      ...(actionNonce ? { actionNonce } : {}),
       ...(fallbackNote ? { fallback: { from: requested, to: model } } : {}),
     };
   } catch (error) {
@@ -258,17 +293,9 @@ export async function startGen2AgentTurn(input: {
  * credential claim, worktree selection, durable run row, and chat/turn
  * persistence -- see superset-agent-runtime.ts).
  */
-async function startGen2AgentTurnViaSuperset(input: {
-  workspaceId: string;
-  userId: string;
-  chatId: string;
-  prompt: string;
-  idempotencyKey: string;
-  provider: Gen2AgentProvider;
-  worktreeId?: string | undefined;
-  model?: string | undefined;
-  verified?: boolean;
-}) {
+async function startGen2AgentTurnViaSuperset(
+  input: Parameters<typeof startGen2SupersetAgentTurn>[0],
+) {
   try {
     return await startGen2SupersetAgentTurn(input);
   } catch (error) {

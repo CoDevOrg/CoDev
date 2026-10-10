@@ -23,6 +23,7 @@ export const POST = withUser<Params>(
         worktreeId: input.worktreeId,
         model: input.model,
         acknowledgedDuplicateOf: input.acknowledgedDuplicateOf,
+        workspaceContext: input.workspaceContext,
       }),
     );
   },

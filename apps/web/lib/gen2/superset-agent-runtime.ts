@@ -20,6 +20,10 @@ import {
   requireGen2Chat,
 } from "./chats";
 import { buildGen2AgentCommand } from "./agent-command";
+import {
+  buildGen2TurnContext,
+  type Gen2TurnHistory,
+} from "./agent-turn-context";
 import { avoidBlockedCliModel } from "./agent-cli-fallback";
 import { loadGen2AgentModels, requireGen2AgentModel } from "./agent-model";
 import { Gen2AccessError, Gen2LifecycleError } from "./errors";
@@ -513,6 +517,15 @@ export async function restartGen2AgentSession(input: {
     models.some((entry) => entry.id === lastModel) ? lastModel! : undefined,
     models,
   );
+  // The task keeps its command and mentions; the protocol needs a live view.
+  const context = await buildGen2TurnContext({
+    workspaceId: input.workspaceId,
+    chatId: session.chatId,
+    prompt: session.task,
+    role: member.role,
+    history,
+    includeProtocol: false,
+  });
   await updateGen2AgentSessionStatus({
     sessionId: session.id,
     status: "queued",
@@ -525,7 +538,13 @@ export async function restartGen2AgentSession(input: {
       userId: input.userId,
       chatId: session.chatId,
       worktreeId: session.worktreeId,
-      command: buildGen2AgentCommand(provider, session.task, history, model),
+      command: buildGen2AgentCommand(
+        provider,
+        session.task,
+        history,
+        model,
+        context.blocks,
+      ),
       provider,
       idempotencyKey: `restart:${session.id}:${randomUUID()}`,
     },
@@ -754,7 +773,8 @@ async function ensureGen2SupersetAgentWorktree(
 /**
  * The checks `startGen2AgentTurn` runs before it delegates here, for callers
  * that reach this path directly: only owners and editors start agents, and
- * only on a model the member's live catalog offers. Returns that model.
+ * only on a model the member's live catalog offers. Returns that model and
+ * the member's role.
  */
 async function verifyTurnStart(input: {
   workspaceId: string;
@@ -774,7 +794,10 @@ async function verifyTurnStart(input: {
     requireGen2Chat(input.workspaceId, input.chatId),
     loadGen2AgentModels(input.provider, input.userId),
   ]);
-  return runnableModel(input.provider, input.model, models);
+  return {
+    model: await runnableModel(input.provider, input.model, models),
+    role: membership.role,
+  };
 }
 
 /**
@@ -815,16 +838,42 @@ export async function startGen2SupersetAgentTurn(input: {
   model?: string | undefined;
   /** `startGen2AgentTurn` already checked membership, the chat and the plan. */
   verified?: boolean;
+  /** The chat's history and turn context `startGen2AgentTurn` built. */
+  history?: Gen2TurnHistory | undefined;
+  context?: string | undefined;
+  actionNonce?: string | undefined;
 }) {
   requireEnabled();
-  const model = input.verified ? input.model : await verifyTurnStart(input);
+  const checked = input.verified ? null : await verifyTurnStart(input);
+  const model = checked ? checked.model : input.model;
   const [history, worktreeId] = await Promise.all([
-    listGen2ChatMessages(input.chatId),
+    input.history ?? listGen2ChatMessages(input.chatId),
     input.worktreeId ??
       ensureGen2SupersetAgentWorktree(input.workspaceId, input.idempotencyKey),
   ]);
+  // A direct start (the agent sessions panel) has no view to act on, so it
+  // gets the mode, goal and mentions without the action protocol. A verified
+  // caller already refused viewers.
+  const context =
+    input.context ??
+    (
+      await buildGen2TurnContext({
+        workspaceId: input.workspaceId,
+        chatId: input.chatId,
+        prompt: input.prompt,
+        role: checked?.role ?? "editor",
+        history,
+        includeProtocol: false,
+      })
+    ).blocks;
   const provider = input.provider;
-  const command = buildGen2AgentCommand(provider, input.prompt, history, model);
+  const command = buildGen2AgentCommand(
+    provider,
+    input.prompt,
+    history,
+    model,
+    context,
+  );
 
   const logicalSession = await createGen2AgentSession({
     workspaceId: input.workspaceId,
@@ -879,7 +928,11 @@ export async function startGen2SupersetAgentTurn(input: {
       worktreeId: worktreeId === "main" ? null : worktreeId,
     }),
   ]);
-  return { sessionId: session.runId, agentSessionId: logicalSession.id };
+  return {
+    sessionId: session.runId,
+    agentSessionId: logicalSession.id,
+    ...(input.actionNonce ? { actionNonce: input.actionNonce } : {}),
+  };
 }
 
 /** Creates a logical session and its first Superset process in one request. */
