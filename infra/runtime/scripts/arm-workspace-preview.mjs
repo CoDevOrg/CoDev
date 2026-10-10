@@ -1,6 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { STATUS_CODES, createServer, request as httpRequest } from "node:http";
-import { connect } from "node:net";
+import { createServer, request as httpRequest } from "node:http";
 import { pipeline } from "node:stream";
 import {
   createPreviewSessions,
@@ -8,6 +7,7 @@ import {
   previewHostPort,
   verifyPreviewToken,
 } from "./arm-workspace-preview-token.mjs";
+import { proxyPreviewUpgrade } from "./arm-workspace-preview-upgrade.mjs";
 import {
   downstreamResponseHeaders,
   previewUpstream,
@@ -37,15 +37,6 @@ function reply(response, status, message, headers = {}) {
 function redirect(response, location, headers = {}) {
   response.writeHead(303, { ...NO_STORE, Location: location, ...headers });
   response.end();
-}
-
-function refuse(socket, status, message) {
-  socket.end(
-    `HTTP/1.1 ${status} ${STATUS_CODES[status]}\r\n` +
-      "Content-Type: text/plain; charset=utf-8\r\n" +
-      "Cache-Control: no-store\r\nCloudflare-CDN-Cache-Control: no-store\r\n" +
-      `Connection: close\r\nContent-Length: ${Buffer.byteLength(message)}\r\n\r\n${message}`,
-  );
 }
 
 // Resolve `next` on this preview origin and emit only its path, query and hash,
@@ -212,36 +203,6 @@ async function handle(request, response, context) {
   forward(request, response, target);
 }
 
-// After the same admission as HTTP, WebSocket bytes are piped untouched.
-async function upgrade(request, socket, head, context) {
-  socket.on("error", () => socket.destroy());
-  if (request.method !== "GET" || !/^websocket$/i.test(request.headers.upgrade))
-    return refuse(socket, 400, "Only WebSocket upgrades are supported.");
-  const target = await admit(request, context, true);
-  if (target.status) return refuse(socket, target.status, target.message);
-  const upstream = connect({ host: target.address, port: target.port });
-  let piped = false;
-  upstream.once("connect", () => {
-    const headers = upstreamRequestHeaders(request.rawHeaders, {
-      ...target,
-      upgrade: true,
-    });
-    let lines = `${request.method} ${request.url} HTTP/1.1\r\n`;
-    for (let at = 0; at < headers.length; at += 2)
-      lines += `${headers[at]}: ${headers[at + 1]}\r\n`;
-    upstream.write(`${lines}\r\n`);
-    if (head.length) upstream.write(head);
-    piped = true;
-    socket.pipe(upstream).pipe(socket);
-  });
-  upstream.on("error", () => {
-    if (piped) return socket.destroy();
-    refuse(socket, 502, `Nothing is answering on port ${target.port}.`);
-  });
-  upstream.on("close", () => piped && socket.destroy());
-  socket.on("close", () => upstream.destroy());
-}
-
 export function createWorkspacePreviewProxy({
   identity,
   verifyKey,
@@ -266,7 +227,10 @@ export function createWorkspacePreviewProxy({
     });
   });
   server.on("upgrade", (request, socket, head) => {
-    upgrade(request, socket, head, context).catch(() => socket.destroy());
+    const admitUpgrade = () => admit(request, context, true);
+    proxyPreviewUpgrade(request, socket, head, admitUpgrade).catch(() =>
+      socket.destroy(),
+    );
   });
   server.maxConnections = MAX_SOCKETS;
   server.headersTimeout = 30_000;

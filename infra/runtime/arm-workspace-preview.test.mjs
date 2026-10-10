@@ -626,6 +626,45 @@ test("proxies a member's dev server with rewritten, streamed requests and respon
   assert.equal(redirected.headers["cloudflare-cdn-cache-control"], "no-store");
 });
 
+test("chunked bodies stay framed for every method, so none smuggles a second request", async (t) => {
+  const seen = [];
+  const upstream = await startUpstream(t, async (request, response) => {
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
+    const body = Buffer.concat(chunks).toString();
+    seen.push(`${request.method} ${request.url} ${body}`);
+    response.end(body);
+  });
+  const port = upstream.address().port;
+  const host = hostFor(port);
+  const proxy = await startProxy(t, {
+    sockets: [{ address: "127.0.0.1", port, uid: 2000 }],
+  });
+  const cookie = await login(proxy, port);
+  const smuggled = "GET /smuggled HTTP/1.1\r\nHost: localhost\r\n\r\n";
+  for (const method of ["DELETE", "OPTIONS", "GET", "POST"]) {
+    const response = await send(proxy, {
+      host,
+      method,
+      path: "/api/x",
+      headers: {
+        cookie,
+        origin: `https://${host}`,
+        "transfer-encoding": "chunked",
+      },
+      body: smuggled,
+    });
+    assert.equal(response.status, 200, method);
+    assert.equal(response.body, smuggled, method);
+  }
+  assert.deepEqual(
+    seen,
+    ["DELETE", "OPTIONS", "GET", "POST"].map(
+      (method) => `${method} /api/x ${smuggled}`,
+    ),
+  );
+});
+
 test("cross-origin and cross-site requests are refused before anything is rewritten", async (t) => {
   let calls = 0;
   const upstream = await startUpstream(t, (_request, response) => {
@@ -812,9 +851,11 @@ test("port listing failures fail closed without detail", async (t) => {
   assert.equal(response.body, "Preview is unavailable.");
 });
 
-function exchange(proxy, lines) {
+function exchange(proxy, lines, early = Buffer.alloc(0)) {
   const socket = connect(proxy.address().port, "127.0.0.1");
-  socket.write(`${lines.join("\r\n")}\r\n\r\n`);
+  socket.write(
+    Buffer.concat([Buffer.from(`${lines.join("\r\n")}\r\n\r\n`), early]),
+  );
   let received = Buffer.alloc(0);
   const waiters = [];
   socket.on("data", (chunk) => {
@@ -916,6 +957,67 @@ test("a WebSocket upgrade to a listener that is gone answers 502 and closes", as
   ]).ended;
   assert.match(reply, /^HTTP\/1\.1 502 /);
   assert.match(reply, /Nothing is answering on port \d+\.$/);
+});
+
+test("only a 101 from the dev server reaches the browser, and early bytes wait for it", async (t) => {
+  const early = [];
+  const upstream = await startUpstream(t, () => {});
+  upstream.on("upgrade", (request, socket, head) => {
+    if (request.url === "/cached")
+      return socket.end(
+        "HTTP/1.1 200 OK\r\nCache-Control: public, max-age=31536000, immutable\r\n" +
+          "X-Frame-Options: DENY\r\nContent-Length: 2\r\n\r\nok",
+      );
+    if (request.url === "/silent") return socket.end();
+    early.push(head.length);
+    socket.write(
+      "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n" +
+        "Set-Cookie: __Host-codev-preview=planted; Path=/; Secure\r\nSet-Cookie: hmr=1\r\n\r\n",
+    );
+    socket.pipe(socket);
+  });
+  const port = upstream.address().port;
+  const host = hostFor(port);
+  const proxy = await startProxy(t, {
+    sockets: [{ address: "127.0.0.1", port, uid: 2000 }],
+  });
+  const cookie = await login(proxy, port);
+  const handshake = (path, extra = []) => [
+    `GET ${path} HTTP/1.1`,
+    `Host: ${host}`,
+    "Upgrade: websocket",
+    "Connection: Upgrade",
+    `Origin: https://${host}`,
+    `Cookie: ${cookie}`,
+    ...extra,
+  ];
+  for (const path of ["/cached", "/silent"]) {
+    const reply = await exchange(proxy, handshake(path)).ended;
+    assert.match(reply, /^HTTP\/1\.1 502 /, path);
+    assert.match(reply, /\r\nCache-Control: no-store\r\n/, path);
+    assert.match(reply, /\r\nCloudflare-CDN-Cache-Control: no-store\r\n/, path);
+    assert.doesNotMatch(reply, /public|immutable|X-Frame-Options|\r\n\r\nok$/i);
+  }
+  const frame = Buffer.from([0x82, 0x02, 0x68, 0x69]);
+  const live = exchange(proxy, handshake("/hmr"), frame);
+  const received = await live.until((data) => {
+    const end = data.indexOf("\r\n\r\n");
+    return end >= 0 && data.length >= end + 4 + frame.length;
+  });
+  const end = received.indexOf("\r\n\r\n");
+  const head = received.subarray(0, end).toString();
+  assert.match(head, /^HTTP\/1\.1 101 /);
+  assert.match(head, /\r\nSet-Cookie: hmr=1$/);
+  assert.doesNotMatch(head, /codev-preview/);
+  assert.deepEqual(received.subarray(end + 4), frame);
+  assert.deepEqual(early, [0]);
+  live.socket.destroy();
+  for (const extra of [["Content-Length: 5"], ["Transfer-Encoding: chunked"]])
+    assert.match(
+      await exchange(proxy, handshake("/hmr", extra)).ended,
+      /^HTTP\/1\.1 400 /,
+    );
+  assert.equal(early.length, 1);
 });
 
 test("the proxy bounds sockets and header time", async (t) => {

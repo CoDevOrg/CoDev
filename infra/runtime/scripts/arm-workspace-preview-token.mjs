@@ -23,7 +23,7 @@ export function previewHostPort(host, identity) {
   return match[2] === hash.slice(0, 20) && port <= 65_535 ? port : null;
 }
 
-export function isAppOrigin(value) {
+function isAppOrigin(value) {
   if (typeof value !== "string" || value.length > 255) return false;
   try {
     const url = new URL(value);
@@ -107,7 +107,7 @@ export function createTokenReplayGuard(limit = MAX_USED_TOKENS) {
   };
 }
 
-export function previewCookieValues(header) {
+function previewCookieValues(header) {
   if (typeof header !== "string") return [];
   return header
     .split(";")

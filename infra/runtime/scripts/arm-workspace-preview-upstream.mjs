@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { PREVIEW_COOKIE } from "./arm-workspace-preview-token.mjs";
 
 // Guest services, the dummy Superset API port and cloudflared's metrics range.
-export const RESERVED_PREVIEW_PORTS = new Set([
+const RESERVED_PREVIEW_PORTS = new Set([
   9, 4879, 5252, 5260, 5261, 20241, 20242, 20243, 20244, 20245,
 ]);
 // Terminals run as codev-shell (2000) and agents above it. Root, the image
@@ -47,7 +47,7 @@ function ipv6(hex) {
   return groups.map((g) => g.toString(16)).join(":");
 }
 
-export function parseListeningSockets(text, family) {
+function parseListeningSockets(text, family) {
   return text
     .split("\n")
     .slice(1)
@@ -159,6 +159,10 @@ export function upstreamRequestHeaders(rawHeaders, target) {
     if (rewritten !== null) result.push(name, rewritten);
   }
   if (target.upgrade) result.push("Connection", "Upgrade");
+  // Node frames GET, DELETE and OPTIONS bodies only when told to; unframed
+  // bytes would reach the dev server as a second, unrewritten request.
+  else if (headers.some(([name]) => name === "transfer-encoding"))
+    result.push("Transfer-Encoding", "chunked");
   return result;
 }
 

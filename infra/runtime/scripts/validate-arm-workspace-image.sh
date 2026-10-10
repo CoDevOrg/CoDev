@@ -12,7 +12,7 @@ cloudflared --version
 test -x /usr/local/sbin/codev-arm-boot
 test -x /usr/local/sbin/codev-activate-arm-boot
 test -f /usr/local/lib/codev/arm-workspace-gateway.mjs
-for module in arm-workspace-preview-token.mjs arm-workspace-preview-upstream.mjs arm-workspace-preview.mjs start-arm-workspace-preview.mjs; do
+for module in arm-workspace-preview-token.mjs arm-workspace-preview-upstream.mjs arm-workspace-preview-upgrade.mjs arm-workspace-preview.mjs start-arm-workspace-preview.mjs; do
   test -f "/usr/local/lib/codev/${module}"
 done
 test ! -e /etc/codev/arm-runtime.json

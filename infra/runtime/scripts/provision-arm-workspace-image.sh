@@ -284,7 +284,7 @@ UNIT
 
 ln -s ../codev-local-api-guard.service /etc/systemd/system/multi-user.target.wants/codev-local-api-guard.service
 
-for script in arm-workspace-capability.mjs arm-workspace-gateway.mjs arm-workspace-bootstrap.mjs start-arm-workspace-gateway.mjs arm-workspace-preview-token.mjs arm-workspace-preview-upstream.mjs arm-workspace-preview.mjs start-arm-workspace-preview.mjs; do
+for script in arm-workspace-capability.mjs arm-workspace-gateway.mjs arm-workspace-bootstrap.mjs start-arm-workspace-gateway.mjs arm-workspace-preview-token.mjs arm-workspace-preview-upstream.mjs arm-workspace-preview-upgrade.mjs arm-workspace-preview.mjs start-arm-workspace-preview.mjs; do
   install -m 0644 "/var/tmp/${script}" "/usr/local/lib/codev/${script}"
 done
 install -m 0755 /var/tmp/boot-arm-workspace.sh /usr/local/sbin/codev-arm-boot

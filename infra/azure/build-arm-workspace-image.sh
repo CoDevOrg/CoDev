@@ -78,7 +78,7 @@ readonly image_version_id="$(jq -er '.imageVersionId.value' <<<"${deployment_jso
   printf 'cat >/var/tmp/codev-local-api-guard <<\x27CODEV_LOCAL_GUARD\x27\n'
   cat "${repo_root}/infra/runtime/scripts/restrict-arm-workspace-local-api.sh"
   printf '\nCODEV_LOCAL_GUARD\n'
-  for script in arm-workspace-capability.mjs arm-workspace-gateway.mjs arm-workspace-bootstrap.mjs start-arm-workspace-gateway.mjs arm-workspace-preview-token.mjs arm-workspace-preview-upstream.mjs arm-workspace-preview.mjs start-arm-workspace-preview.mjs install-arm-workspace-boot.sh activate-arm-workspace-boot.sh boot-arm-workspace.sh prepare-arm-workspace-disk.sh; do
+  for script in arm-workspace-capability.mjs arm-workspace-gateway.mjs arm-workspace-bootstrap.mjs start-arm-workspace-gateway.mjs arm-workspace-preview-token.mjs arm-workspace-preview-upstream.mjs arm-workspace-preview-upgrade.mjs arm-workspace-preview.mjs start-arm-workspace-preview.mjs install-arm-workspace-boot.sh activate-arm-workspace-boot.sh boot-arm-workspace.sh prepare-arm-workspace-disk.sh; do
     printf 'cat >/var/tmp/%s <<\x27CODEV_BOOT_ARTIFACT\x27\n' "${script}"
     cat "${repo_root}/infra/runtime/scripts/${script}"
     printf '\nCODEV_BOOT_ARTIFACT\n'
