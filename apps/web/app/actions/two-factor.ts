@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { verifyRecentAuthentication } from "@/lib/auth/recent-authentication";
+import { confirmCurrentPassword } from "@/lib/auth/current-password";
 import { requireUser } from "@/lib/auth/session";
 import {
   confirmTwoFactorSetup,
@@ -60,11 +60,13 @@ export async function confirmTwoFactorAction(
   formData: FormData,
 ): Promise<TwoFactorActionState> {
   const user = await requireUser();
-  const reauthentication = await verifyRecentAuthentication(
-    user,
+  // Turning 2FA on re-confirms the password: otherwise a stolen session
+  // could add its own authenticator and lock the owner out.
+  const current = await confirmCurrentPassword(
+    user.id,
     String(formData.get("password") ?? ""),
   );
-  if (reauthentication) return { status: "error", message: reauthentication };
+  if (!current.ok) return { status: "error", message: current.message };
   const state = await run(async () => {
     const recoveryCodes = await confirmTwoFactorSetup(user.id, code(formData));
     revalidatePath(SECURITY_PATH);

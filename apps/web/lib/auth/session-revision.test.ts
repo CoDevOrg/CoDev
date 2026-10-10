@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   config: null as unknown as {
     callbacks: { jwt: (input: Record<string, unknown>) => Promise<JWT | null> };
   },
+  execute: vi.fn(async () => undefined),
   rows: [] as {
     id: string;
     passwordHash: string | null;
@@ -50,6 +51,7 @@ vi.mock("../platform/database", () => ({
         }),
     }),
     delete: () => ({ where: async () => undefined }),
+    execute: mocks.execute,
     update: () => ({ set: () => ({ where: () => Promise.resolve() }) }),
   }),
 }));
@@ -204,5 +206,30 @@ describe("credential-bound sessions", () => {
         session: { rotation: "forged.value" },
       }),
     ).toBeNull();
+  });
+  it("moves a pre-tracking cookie onto its own row and accepts rotations for it", async () => {
+    const legacy = () => ({
+      localUserId: "u",
+      jti: "cookie-1",
+      githubLogin: "ada",
+      credentialRevision: sessionRevision("old-hash"),
+    });
+    const adopted = await jwt(legacy());
+    expect(adopted?.sid).toMatch(/^[0-9a-f-]{36}$/);
+    expect(mocks.execute).toHaveBeenCalled();
+    // The same cookie read again maps to the same row.
+    expect((await jwt(legacy()))?.sid).toBe(adopted?.sid);
+    mocks.rows = [
+      { id: "u", passwordHash: "new-hash", sessionId: adopted!.sid! },
+    ];
+    const rotation = sealSessionRotation({
+      userId: "u",
+      fromSessionId: adopted!.sid!,
+      toSessionId: adopted!.sid!,
+      credentialRevision: sessionRevision("new-hash"),
+    });
+    expect(
+      await jwt(legacy(), { trigger: "update", session: { rotation } }),
+    ).toMatchObject({ credentialRevision: sessionRevision("new-hash") });
   });
 });

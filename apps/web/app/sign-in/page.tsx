@@ -11,7 +11,10 @@ import { Brand } from "@/components/shell/app-chrome";
 import { ThemeToggle } from "@/components/shell/theme-toggle";
 import { CredentialsSignInForm } from "@/components/auth/credentials-sign-in-form";
 import { assertCanRegister, RegistrationError } from "@/lib/auth/registration";
-import { twoFactorChallengePath } from "@/lib/auth/two-factor-challenge";
+import {
+  safeCallbackPath,
+  twoFactorChallengePath,
+} from "@/lib/auth/two-factor-challenge";
 
 const INVITE_ONLY_MESSAGE =
   "New accounts are paused while CoDev is on the waitlist. Existing members can sign in below; join the waitlist to hear when registration opens.";
@@ -87,10 +90,7 @@ export default async function SignInPage({
   }>;
 }) {
   const { callbackUrl, error, reset, deleted, code } = await searchParams;
-  const safeCallback =
-    callbackUrl?.startsWith("/") && !callbackUrl.startsWith("//")
-      ? callbackUrl
-      : "/gen2";
+  const safeCallback = safeCallbackPath(callbackUrl);
   // A direct POST to the credentials callback lands here with this code.
   if (code === "two_factor_required")
     redirect(twoFactorChallengePath(safeCallback));
@@ -147,7 +147,13 @@ export default async function SignInPage({
           </div>
         ) : null}
 
-        {inviteMessage ? (
+        {error === "TwoFactorLink" ? (
+          <div className="inline-alert error" role="alert">
+            That email belongs to a CoDev account with two-factor
+            authentication, so Google or GitHub cannot be attached to it by
+            email. Sign in the way you usually do.
+          </div>
+        ) : inviteMessage ? (
           <div className="inline-alert error" role="alert">
             {inviteMessage} <Link href="/">Join the waitlist</Link>.
           </div>

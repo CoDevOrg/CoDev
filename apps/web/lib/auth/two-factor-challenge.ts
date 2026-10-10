@@ -120,13 +120,22 @@ export async function completeTwoFactorSignIn(code: unknown) {
   };
 }
 
-/** Same-site relative paths only, so the code step cannot become an open redirect. */
+/**
+ * Same-site paths only, so a callback can never become an open redirect.
+ * Parsing (not prefix checks) is what browsers do: they drop tabs and
+ * newlines and treat `\` like `/`, so `/\t/evil.com` means `//evil.com`.
+ */
 export function safeCallbackPath(value: string | null | undefined) {
-  return value?.startsWith("/") &&
-    !value.startsWith("//") &&
-    !value.includes("\\")
-    ? value
-    : "/gen2";
+  if (!value?.startsWith("/")) return "/gen2";
+  const base = "https://codev.invalid";
+  try {
+    const url = new URL(value, base);
+    return url.origin === base
+      ? `${url.pathname}${url.search}${url.hash}`
+      : "/gen2";
+  } catch {
+    return "/gen2";
+  }
 }
 
 export function twoFactorChallengePath(callbackUrl: string | null | undefined) {

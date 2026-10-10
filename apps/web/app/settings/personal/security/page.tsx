@@ -127,6 +127,14 @@ export default async function PersonalSecurityPage({
               </AlertDescription>
             </Alert>
           ) : null}
+          {params.github === "two-factor" ? (
+            <Alert role="alert" variant="destructive">
+              <AlertDescription>
+                That GitHub account belongs to another CoDev account with
+                two-factor authentication, so it was not connected.
+              </AlertDescription>
+            </Alert>
+          ) : null}
           <SettingsConnectionRow
             connected={accounts.google.connected}
             icon={<GoogleMark className="size-5" />}

@@ -13,6 +13,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 
+import { EmailPasswordLinkButton } from "./email-password-link-button";
 import { RecoveryCodes } from "./recovery-codes";
 import { useSettingsNotify } from "./settings-feedback";
 import { TwoFactorCodeDialog } from "./two-factor-code-dialog";
@@ -57,7 +58,6 @@ export function TwoFactorPanel({
   if (view.kind === "setup")
     return (
       <TwoFactorSetup
-        hasPassword={hasPassword}
         onCancel={() => setView({ kind: "status" })}
         onDone={() => {
           notify?.("Two-factor authentication is on.");
@@ -69,6 +69,17 @@ export function TwoFactorPanel({
     );
   if (view.kind === "codes")
     return <RecoveryCodes codes={view.codes} onDone={finish} />;
+
+  if (!enabled && !hasPassword)
+    return (
+      <div className="flex flex-col gap-3">
+        <p className="m-0 text-sm text-muted-foreground">
+          Turning this on confirms your password, so a stolen session cannot
+          lock you out. Create a password first.
+        </p>
+        <EmailPasswordLinkButton label="Email me a link to create a password" />
+      </div>
+    );
 
   if (!enabled)
     return (

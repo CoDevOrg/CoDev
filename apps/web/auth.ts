@@ -15,6 +15,7 @@ import {
   sessionTokenIsCurrent,
   signInMethodFor,
 } from "@/lib/auth/session-token";
+import { isTwoFactorEnabled } from "@/lib/auth/two-factor";
 import {
   beginTwoFactorChallenge,
   completeTwoFactorSignIn,
@@ -121,6 +122,18 @@ async function oauthCallbackPath() {
   } catch {
     return null;
   }
+}
+
+/**
+ * Google and GitHub sign-ins link to an existing account with the same email.
+ * For a 2FA account that would let whoever controls the mailbox attach their
+ * own identity (and token) before any code is asked, so it is refused; the
+ * member signs in the usual way instead.
+ */
+const TWO_FACTOR_LINK_REFUSED = "/sign-in?error=TwoFactorLink";
+
+async function refusesEmailLink(userId: string | undefined) {
+  return Boolean(userId && (await isTwoFactorEnabled(userId)));
 }
 
 /** For an account with 2FA, swap a finished OAuth sign-in for the code step. */
@@ -246,6 +259,8 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
               .where(eq(schema.users.email, googleProfile.email))
               .limit(1);
         const existingId = existingByGoogle?.id ?? existingByEmail?.id;
+        if (!existingByGoogle && (await refusesEmailLink(existingByEmail?.id)))
+          return TWO_FACTOR_LINK_REFUSED;
 
         if (existingId) {
           const [localUser] = await database
@@ -334,6 +349,15 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
         }
 
         const canonicalUserId = existingByGithub?.id ?? linkTarget.id;
+        // Merging into another account protected by 2FA happens before any
+        // code could be asked, so it is refused outright.
+        if (
+          canonicalUserId !== linkTarget.id &&
+          (await refusesEmailLink(canonicalUserId))
+        ) {
+          await clearGithubLinkCookie();
+          return "/settings/personal/security?github=two-factor";
+        }
         if (canonicalUserId !== linkTarget.id) {
           await mergeUserIntoCanonical(
             database,
@@ -363,6 +387,8 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
               .limit(1)
           : [];
         const existingId = existingByGithub?.id ?? existingByEmail?.id;
+        if (!existingByGithub && (await refusesEmailLink(existingByEmail?.id)))
+          return TWO_FACTOR_LINK_REFUSED;
 
         if (existingId) {
           [localUser] = await database
@@ -448,9 +474,15 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
       // other GitHub sign-in to a 2FA account needs its code.
       const linkedSignedInAccount =
         githubLinkState && localUser.id === githubLinkState.userId;
-      return linkedSignedInAccount
-        ? true
-        : oauthSecondFactor(localUser.id, "github");
+      if (!linkedSignedInAccount)
+        return oauthSecondFactor(localUser.id, "github");
+      // This sign-in replaces the browser's cookie; end the session it held.
+      if (githubLinkState?.sessionId)
+        await revokeUserSession(
+          githubLinkState.userId,
+          githubLinkState.sessionId,
+        );
+      return true;
     },
     async jwt({ token, account, profile, user, trigger, session }) {
       // Settings refreshes the shown display name after an edit. Only the name
@@ -466,16 +498,18 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
         if (!user.credentialRevision) return null;
         token.localUserId = user.id;
         token.credentialRevision = user.credentialRevision;
-      } else if (
-        account?.provider === "google" &&
-        !token.localUserId &&
-        token.email
-      ) {
-        const [localUser] = await getDatabase()
-          .select({ id: schema.users.id })
-          .from(schema.users)
-          .where(eq(schema.users.email, token.email))
-          .limit(1);
+      } else if (account?.provider === "google" && !token.localUserId) {
+        // The same identity the signIn callback approved (and checked for
+        // 2FA): emails are not unique, so never resolve the account by email.
+        const googleProfile = profile as GoogleProfile | undefined;
+        const googleUserId = googleProfile?.sub ?? googleProfile?.id;
+        const [localUser] = googleUserId
+          ? await getDatabase()
+              .select({ id: schema.users.id })
+              .from(schema.users)
+              .where(eq(schema.users.googleUserId, googleUserId))
+              .limit(1)
+          : [];
 
         if (localUser) token.localUserId = localUser.id;
       } else {

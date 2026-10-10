@@ -26,7 +26,7 @@ export async function GET() {
   const cookieStore = await cookies();
   cookieStore.set(
     GITHUB_LINK_COOKIE,
-    createGithubLinkState(user.id, destination),
+    createGithubLinkState(user.id, destination, user.sessionId),
     {
       httpOnly: true,
       maxAge: 10 * 60,

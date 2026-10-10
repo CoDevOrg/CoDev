@@ -13,6 +13,9 @@ describe("two-factor challenge paths", () => {
     );
     expect(safeCallbackPath("//evil.example")).toBe("/gen2");
     expect(safeCallbackPath("/\\evil.example")).toBe("/gen2");
+    expect(safeCallbackPath("/\t/evil.example")).toBe("/gen2");
+    expect(safeCallbackPath("/%09/evil.example")).toBe("/%09/evil.example");
+    expect(safeCallbackPath("/gen2?tab=chat#x")).toBe("/gen2?tab=chat#x");
     expect(safeCallbackPath("https://evil.example")).toBe("/gen2");
     expect(safeCallbackPath(undefined)).toBe("/gen2");
   });

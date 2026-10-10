@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import { after } from "next/server";
-import { and, desc, eq, gt, isNull, lt, ne, or } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, lt, ne, or, sql } from "drizzle-orm";
 
 import { schema } from "@codev/db";
 
@@ -16,17 +16,44 @@ const TOUCH_INTERVAL_MS = 5 * 60 * 1000;
 
 type Database = ReturnType<typeof getDatabase>;
 
+function uuidFromSeed(seed: string) {
+  const hex = createHash("sha256").update(seed).digest("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
+
 /**
- * Cookies issued before session tracking carry no session id. They all map
- * to one deterministic row per member, which exists only once revoked, so
- * "sign out other sessions" reaches them without signing anyone out at
- * deploy time.
+ * Cookies issued before session tracking carry no session id. One
+ * deterministic row per member, which exists only once revoked, is their
+ * kill switch: "sign out other sessions" and password changes reach them
+ * without signing anyone out at deploy time.
  */
 export function legacySessionId(userId: string) {
-  const hex = createHash("sha256")
-    .update(`codev-legacy-session:${userId}`)
-    .digest("hex");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+  return uuidFromSeed(`codev-legacy-session:${userId}`);
+}
+
+/**
+ * Moves a pre-tracking cookie onto its own listed, revocable row the first
+ * time it is seen. The row id comes from the cookie's JWT id, so repeated
+ * reads of a cookie a Server Component cannot rewrite reuse one row. Nothing
+ * is created once the member's legacy sessions were revoked.
+ */
+export function adoptedSessionId(userId: string, jwtId: string) {
+  return uuidFromSeed(`codev-legacy-cookie:${userId}:${jwtId}`);
+}
+
+export async function adoptLegacySession(userId: string, jwtId: string) {
+  const id = adoptedSessionId(userId, jwtId);
+  const { userAgent, ipAddress } = await readRequestContext();
+  await getDatabase().execute(sql`
+    insert into ${schema.userSessions}
+      (id, user_id, sign_in_method, user_agent, ip_address)
+    select ${id}::uuid, ${userId}::uuid, 'session', ${userAgent}, ${ipAddress}
+    where not exists (
+      select 1 from ${schema.userSessions}
+      where id = ${legacySessionId(userId)}::uuid and revoked_at is not null
+    )
+    on conflict (id) do nothing`);
+  return id;
 }
 
 export async function createUserSession(

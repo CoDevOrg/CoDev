@@ -5,7 +5,12 @@ import type { JWT } from "next-auth/jwt";
 
 import { sessionRevision } from "./session-revision";
 import { openTicket, sealTicket } from "./signed-ticket";
-import { readSessionState, touchUserSession } from "./user-sessions";
+import {
+  adoptedSessionId,
+  adoptLegacySession,
+  readSessionState,
+  touchUserSession,
+} from "./user-sessions";
 
 const ROTATION_PURPOSE = "session-rotation";
 
@@ -39,12 +44,14 @@ export function applySessionRotation(token: JWT, payload: unknown) {
     ROTATION_PURPOSE,
     (payload as { rotation?: unknown } | undefined)?.rotation,
   );
-  if (
-    !rotation ||
-    rotation.userId !== token.localUserId ||
-    rotation.fromSessionId !== (token.sid ?? null)
-  )
-    return;
+  if (!rotation || rotation.userId !== token.localUserId) return;
+  // A pre-tracking cookie may not carry its adopted row id yet.
+  const currentSessionId =
+    token.sid ??
+    (typeof token.jti === "string"
+      ? adoptedSessionId(rotation.userId, token.jti)
+      : null);
+  if (rotation.fromSessionId !== currentSessionId) return;
   token.sid = rotation.toSessionId;
   token.credentialRevision = rotation.credentialRevision;
 }
@@ -58,6 +65,8 @@ export async function sessionTokenIsCurrent(
   adoptRevision: boolean,
 ) {
   if (!token.localUserId) return true;
+  if (!token.sid && typeof token.jti === "string")
+    token.sid = await adoptLegacySession(token.localUserId, token.jti);
   const state = await readSessionState(token.localUserId, token.sid);
   if (!state?.usable) return false;
   const revision = sessionRevision(state.passwordHash);

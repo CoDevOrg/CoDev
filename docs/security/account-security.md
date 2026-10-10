@@ -16,10 +16,13 @@ the session on its next request; workspace sockets recheck every 15 seconds.
 - Signing out revokes the row (Auth.js `events.signOut`), so a copied cookie
   stops working instead of living out its 30 days.
 - Settings → Sessions lists live rows and signs out one or all others.
-- Cookies issued before session tracking have no `sid`. They map to one
-  deterministic "legacy" row per member that exists only once revoked, so
-  deploying this did not sign anyone out, and "sign out other sessions" or a
-  password change still reaches them.
+- Cookies issued before session tracking have no `sid`. On first use each one
+  is adopted onto its own listed row, keyed by the cookie's JWT id so repeat
+  reads reuse it, so deploying this signed nobody out. One deterministic
+  "legacy" row per member, which exists only once revoked, stops any not yet
+  adopted after "sign out other sessions" or a password change.
+- Linking GitHub from Settings replaces the browser's cookie; the session it
+  held is revoked.
 - A server action that re-issues the current cookie (password change, sign
   out others) passes a signed, one-minute rotation ticket through
   `unstable_update`; client `update()` payloads cannot move a cookie to a new
@@ -52,11 +55,15 @@ and ten single-use recovery codes stored as SHA-256 hashes.
   CoDev sets a ten-minute, httpOnly challenge cookie instead of a session; the
   `two-factor` credentials provider exchanges it plus a code for the session.
   Linking GitHub from an already signed-in account does not ask again.
+- Google and GitHub sign-ins never attach themselves by email to an account
+  with 2FA (that would happen before any code is asked), and the session user
+  is resolved by the provider identity the callback approved, never by email
+  (emails are not unique).
 - Codes are single-use: the accepted step is stored with a compare-and-swap,
   and recovery codes are consumed the same way. Six attempts per 15 minutes.
-- Turning 2FA on re-authenticates (current password, or a sign-in within the
-  last 15 minutes for OAuth-only accounts), so a stolen session cannot lock
-  the owner out with its own authenticator. Turning it off or regenerating
+- Turning 2FA on requires the current password, so a stolen session cannot
+  lock the owner out with its own authenticator; OAuth-only accounts create a
+  password first through the emailed link. Turning it off or regenerating
   recovery codes requires a current code.
 
 ## Notifications and history

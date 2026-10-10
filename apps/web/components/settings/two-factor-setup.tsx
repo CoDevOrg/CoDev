@@ -18,14 +18,11 @@ import { RecoveryCodes } from "./recovery-codes";
 export function TwoFactorSetup({
   secret,
   qrSvg,
-  hasPassword,
   onCancel,
   onDone,
 }: {
   secret: string;
   qrSvg: string;
-  /** Turning 2FA on re-confirms the password, so a stolen session cannot. */
-  hasPassword: boolean;
   onCancel: () => void;
   onDone: () => void;
 }) {
@@ -73,18 +70,16 @@ export function TwoFactorSetup({
             <AlertDescription>{state.message}</AlertDescription>
           </Alert>
         ) : null}
-        {hasPassword ? (
-          <Field className="max-w-xs">
-            <FieldLabel htmlFor="totp-password">Current password</FieldLabel>
-            <Input
-              autoComplete="current-password"
-              id="totp-password"
-              name="password"
-              required
-              type="password"
-            />
-          </Field>
-        ) : null}
+        <Field className="max-w-xs">
+          <FieldLabel htmlFor="totp-password">Current password</FieldLabel>
+          <Input
+            autoComplete="current-password"
+            id="totp-password"
+            name="password"
+            required
+            type="password"
+          />
+        </Field>
         <Field className="max-w-xs">
           <FieldLabel htmlFor="totp-confirm">Code from your app</FieldLabel>
           <Input
