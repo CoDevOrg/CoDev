@@ -257,6 +257,7 @@ export function SupersetFilePane({
   const contentsRef = useRef(contents);
   const savingRef = useRef(false);
   const openRequestId = useRef(0);
+  const wasRequested = useRef(false);
   const listRequestId = useRef(0);
   const dirty = openFile !== null && contents !== openFile.contents;
   const sharedDocument = useGen2SharedFileDocument({
@@ -355,7 +356,7 @@ export function SupersetFilePane({
         if (
           selectFirst &&
           !openFileRef.current &&
-          openRequestId.current === 0 &&
+          !wasRequested.current &&
           visibleFiles.length > 0
         ) {
           const preferred =
@@ -647,7 +648,9 @@ export function SupersetFilePane({
   useEffect(() => {
     if (answeredPath.current === requestedPath) return;
     answeredPath.current = requestedPath ?? null;
-    if (requestedPath) onRequestedPathConsumed?.(selectFile(requestedPath));
+    if (!requestedPath) return;
+    wasRequested.current = true;
+    onRequestedPathConsumed?.(selectFile(requestedPath));
   }, [requestedPath, selectFile, onRequestedPathConsumed]);
 
   async function copyText(value: string, label: string) {

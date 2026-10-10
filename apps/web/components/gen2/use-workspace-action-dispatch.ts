@@ -123,9 +123,15 @@ function usePendingActions(workspaceId: string, chatId: string | null) {
     if (state.chatId)
       writePendingActions(workspaceId, state.chatId, state.list);
   }, [state, workspaceId]);
+  // A late result for another chat (the member switched) never lands here.
   const update = useCallback(
     (change: (current: StoredPendingAction[]) => StoredPendingAction[]) =>
-      setState((current) => ({ ...current, list: change(current.list) })),
+      setState((current) => ({
+        ...current,
+        list: change(current.list).filter(
+          (entry) => entry.chatId === current.chatId,
+        ),
+      })),
     [],
   );
   return [list, update] as const;
