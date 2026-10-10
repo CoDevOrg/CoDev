@@ -2150,12 +2150,6 @@ footer > span {
   border-radius: 50%;
 }
 
-.profile-menu-compact .profile-menu-popover {
-  right: 0;
-  left: auto;
-  z-index: 120;
-}
-
 .profile-menu-trigger {
   display: inline-flex;
   min-height: 38px;
@@ -2164,25 +2158,29 @@ footer > span {
   gap: 9px;
   border: 1px solid transparent;
   border-radius: 999px;
+  background: transparent;
   color: var(--ink);
   cursor: pointer;
-  list-style: none;
-}
-
-.profile-menu-trigger::-webkit-details-marker {
-  display: none;
 }
 
 .profile-menu-trigger:hover,
-.profile-menu[open] .profile-menu-trigger {
+.profile-menu-trigger[data-state="open"] {
   border-color: var(--line-strong);
   background: var(--surface-2);
+}
+
+.profile-menu-trigger:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
 }
 
 .profile-menu-trigger img,
 .profile-menu-trigger .user-fallback {
   width: 30px;
   height: 30px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  object-fit: cover;
 }
 
 .profile-menu-name {
@@ -2193,76 +2191,113 @@ footer > span {
 }
 
 .profile-menu-chevron {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
   color: var(--muted);
-  font-size: 15px;
-  line-height: 1;
-  transform: translateY(-2px);
 }
 
-.profile-menu-popover {
-  position: absolute;
-  z-index: 30;
-  top: calc(100% + 10px);
-  right: 0;
+/* The menu is portaled to <body>, outside `.app-page`, so it reads the
+   root `--brand-*` swatches rather than the page-scoped tokens. */
+.profile-menu-content {
+  z-index: 200;
   display: grid;
-  width: 220px;
-  padding: 8px;
-  gap: 3px;
-  border: 1px solid var(--line-strong);
-  border-radius: 14px;
-  background: var(--surface-2);
-  box-shadow: 0 18px 45px rgba(23, 59, 45, 0.18);
+  width: max(var(--radix-dropdown-menu-trigger-width, 0px), 236px);
+  max-width: calc(100vw - 24px);
+  padding: 6px;
+  gap: 2px;
+  border: 1px solid rgba(var(--brand-ink-rgb), 0.14);
+  border-radius: 12px;
+  background: var(--brand-paper-bright);
+  box-shadow:
+    0 18px 48px rgba(6, 10, 23, 0.24),
+    0 2px 6px rgba(6, 10, 23, 0.1);
+  color: var(--brand-ink);
+  font-family: var(--font-geist-sans), Arial, sans-serif;
+  font-size: 13px;
+  transform-origin: var(--radix-dropdown-menu-content-transform-origin);
+  animation: profile-menu-in 140ms ease-out;
+}
+
+/* Opened upward from the sidebar footer: exactly the trigger's width, so the
+   menu stays inside the sidebar instead of spilling over the page. */
+.profile-menu-content[data-side="top"] {
+  width: var(--radix-dropdown-menu-trigger-width);
+  min-width: 180px;
+}
+
+@keyframes profile-menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
 }
 
 .profile-menu-heading {
   display: grid;
-  padding: 9px 10px 11px;
-  gap: 4px;
-  border-bottom: 1px solid var(--line);
+  min-width: 0;
+  padding: 8px 10px;
+  gap: 2px;
 }
 
+.profile-menu-heading strong,
 .profile-menu-heading span {
-  color: var(--muted-2);
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 9px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.profile-menu-heading strong {
   overflow: hidden;
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.profile-menu-link,
-.profile-menu-action {
+.profile-menu-heading strong {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.profile-menu-heading span {
+  color: var(--brand-ink-muted);
+  font-size: 12px;
+}
+
+.profile-menu-item {
   display: flex;
-  width: 100%;
   min-height: 36px;
   padding: 0 10px;
   align-items: center;
-  border: 0;
+  gap: 10px;
   border-radius: 8px;
-  background: transparent;
-  color: var(--muted);
-  font-size: 12px;
-  text-align: left;
+  color: var(--brand-ink-2);
+  cursor: pointer;
+  font-size: 13px;
+  outline: none;
+  text-decoration: none;
+  user-select: none;
 }
 
-.profile-menu-link:hover,
-.profile-menu-action:hover {
-  background: var(--teal-soft);
-  color: var(--ink);
+.profile-menu-item svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--brand-ink-muted);
+}
+
+.profile-menu-item[data-highlighted] {
+  background: rgba(var(--brand-ink-rgb), 0.09);
+  color: var(--brand-ink);
+}
+
+.profile-menu-item[data-highlighted] svg {
+  color: var(--brand-ink);
 }
 
 .profile-menu-divider {
   height: 1px;
   margin: 4px 2px;
-  background: var(--line);
+  background: rgba(var(--brand-ink-rgb), 0.1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-menu-content {
+    animation: none;
+  }
 }
 
 .workspace-cards {
@@ -3129,10 +3164,6 @@ footer > span {
 @media (max-width: 640px) {
   .profile-menu-name {
     display: none;
-  }
-
-  .profile-menu-popover {
-    right: -4px;
   }
 
   .workspace-create-modal {

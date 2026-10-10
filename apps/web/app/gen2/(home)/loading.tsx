@@ -17,14 +17,15 @@ export default function Gen2HomeLoading() {
         <Skeleton className="h-9 w-72" />
         <Skeleton className="h-4 w-96 max-w-full" />
       </div>
-      <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[0, 1, 2, 3].map((key) => (
-          <Skeleton key={key} className="h-20" />
+          <Skeleton key={key} className="h-24 rounded-[14px]" />
         ))}
       </div>
-      <div className="mt-8 grid gap-3">
+      <Skeleton className="mt-8 h-9 w-80 max-w-full" />
+      <div className="mt-6 grid gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
         {[0, 1, 2].map((key) => (
-          <Skeleton key={key} className="h-16" />
+          <Skeleton key={key} className="h-[168px] rounded-2xl" />
         ))}
       </div>
     </main>
